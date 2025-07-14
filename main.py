@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Union
 import subprocess
 
+import llm
 from config import SolveigConfig
 from schemas import Request, Requirement, FileRequirement, CommandRequirement, FileResult, CommandResult, LLMResponse, FinalResponse
 
@@ -25,20 +26,16 @@ def confirm(prompt: str) -> bool:
     can_run_command = input(f"{prompt} (y/N): ").strip().lower()
     return can_run_command in ["y", "yes"]
 
-def main_loop(config: SolveigConfig, prompt):
-    # Example initial data
-    available_paths = [str(Path.home() / "Documents"), str(Path.home() / "Downloads")]
-    prompt = "Tell me which files I changed this afternoon?"
-
-    instructor = Instructor(api_url="http://localhost:5001")  # koboldcpp local API assumed
-    instructor = None
+def main_loop(config: SolveigConfig, prompt: str = None):
+    prompt = prompt or config.prompt # koboldcpp local API assumed
+    instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
     request = Request(prompt=prompt, available_paths=config.allowed_dirs)
-
     current_input = request.dict()
 
     while True:
         # Send request and get LLM response with schema validation
+        print("Sending: " + str(current_input))
         llm_response: LLMResponse = instructor.complete(
             current_input,
             response_schema=LLMResponse,
@@ -84,5 +81,5 @@ def main_loop(config: SolveigConfig, prompt):
 
 
 if __name__ == "__main__":
-    args = SolveigConfig.parse_config()
+    args: SolveigConfig = SolveigConfig.parse_config()
     main_loop(args)

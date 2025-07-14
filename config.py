@@ -2,7 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from llm import APIType
 
@@ -13,10 +13,12 @@ DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 class SolveigConfig:
     allowed_dirs: List[Path] = field(default_factory=lambda: [Path.home()])
     url: str = "http://localhost:5001/v1/chat/completions"
-    model_type: str = APIType.OPENAI
+    api_type: APIType = APIType.OPENAI
+    api_key: str = ""
     allow_commands: bool = False
     allow_file_write: bool = False
     verbose: bool = False
+    prompt: str = "" # Only here for typing, obviously don't include in config files
 
     @classmethod
     def parse_from_file(cls, config_path: Path|str=DEFAULT_CONFIG_PATH):
@@ -36,7 +38,9 @@ class SolveigConfig:
         parser.add_argument("--allow-commands", action="store_true")
         parser.add_argument("--allow-file-write", action="store_true")
         parser.add_argument("--verbose", action="store_true")
-        parser.add_argument("--allow-dirs", type=str, nargs="*", help="Directories the LLM can access")
+        parser.add_argument("--allow-dirs", type=str, nargs="*", help="Directories Solveig can access")
+
+        parser.add_argument("prompt", type=str, help="User prompt")
 
         args = parser.parse_args(cli_args)
 
@@ -48,6 +52,7 @@ class SolveigConfig:
         # Merge config from file and CLI
         merged_config = {**file_config}
         cli_overrides = {
+            "prompt": args.prompt,
             "url": args.url,
             "model_type": args.model_type,
             "allow_commands": args.allow_commands,
