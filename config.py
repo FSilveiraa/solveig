@@ -2,7 +2,9 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Tuple
+
+from openai import api_type
 
 from llm import APIType
 
@@ -11,14 +13,42 @@ DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
 @dataclass()
 class SolveigConfig:
-    allowed_dirs: List[Path] = field(default_factory=lambda: [Path.home()])
+    # write paths in the format of /path/to/file:permissions
+    # ex: "/home/francisco/Documents:w" means every file in ~/Documents can be read/written
+    # permissions:
+    # m: (default) read metadata only
+    # r: read file and metadata
+    # w: read and write
+    # n: negate (useful for denying access to sub-paths contained in another allowed path)
+    allowed_paths: List[Tuple[Path, str]] = field(default_factory=list)
     url: str = "http://localhost:5001/v1/chat/completions"
     api_type: APIType = APIType.OPENAI
     api_key: str = ""
     allow_commands: bool = False
-    allow_file_write: bool = False
     verbose: bool = False
-    prompt: str = "" # Only here for typing, obviously don't include in config files
+
+    def __post_init__(self):
+        # convert API type to enum
+        if self.api_type and isinstance(api_type, str):
+            self.api_type = APIType(self.api_type)
+
+        # split allowed paths in (path, mode)
+        allowed_paths = []
+        for raw_path in self.allowed_paths:
+            if isinstance(raw_path, str):
+                path_split = raw_path.split(":")
+                if len(path_split) >= 2:
+                    path = str.join(":", path_split[0:-1])
+                    permissions = path_split[-1].lower()
+                    assert permissions in ["m", "r", "w", "n"], f"{permissions} is not a valid path permission"
+                else:
+                    path = raw_path
+                    permissions = "m"
+                    print(f"{raw_path} does not contain permissions, assuming metadata-only mode")
+                allowed_paths.append((Path(path).expanduser(), permissions))
+            else:
+                allowed_paths.append(raw_path)
+            self.allowed_paths = allowed_paths
 
     @classmethod
     def parse_from_file(cls, config_path: Path|str=DEFAULT_CONFIG_PATH):
@@ -30,15 +60,14 @@ class SolveigConfig:
             return json.loads(config_path.read_text())
 
     @classmethod
-    def parse_config(cls, cli_args=None):
+    def parse_config_and_prompt(cls, cli_args=None) -> Tuple:
         parser = argparse.ArgumentParser()
         parser.add_argument("--config", type=str, help="Path to config file")
         parser.add_argument("--url", type=str)
         parser.add_argument("--model-type", type=str)
         parser.add_argument("--allow-commands", action="store_true")
-        parser.add_argument("--allow-file-write", action="store_true")
+        parser.add_argument("--allowed-path", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
         parser.add_argument("--verbose", action="store_true")
-        parser.add_argument("--allow-dirs", type=str, nargs="*", help="Directories Solveig can access")
 
         parser.add_argument("prompt", type=str, help="User prompt")
 
@@ -52,21 +81,15 @@ class SolveigConfig:
         # Merge config from file and CLI
         merged_config = {**file_config}
         cli_overrides = {
-            "prompt": args.prompt,
             "url": args.url,
             "model_type": args.model_type,
             "allow_commands": args.allow_commands,
-            "allow_file_write": args.allow_file_write,
+            "allowed_paths": args.allowed_paths,
             "verbose": args.verbose,
-            "allowed_dirs": [Path(p).expanduser() for p in args.allow_dirs] if args.allow_dirs else None
         }
 
         for k, v in cli_overrides.items():
             if v is not None:
                 merged_config[k] = v
 
-        # convert API type to enum
-        if "model_type" in merged_config:
-            merged_config["model_type"] = APIType(merged_config["model_type"])
-
-        return cls(**merged_config)
+        return (cls(**merged_config), args.prompt)
