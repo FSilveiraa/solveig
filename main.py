@@ -1,11 +1,12 @@
 from instructor import Instructor
+from instructor.exceptions import InstructorRetryException
 import subprocess
 from pathlib import Path
 import llm
 
 
 from config import SolveigConfig
-from schemas import Request, Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, FileResult, CommandResult, LLMResponse, FinalResponse
+from schemas import Request, Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, FileResult, CommandResult, Response
 
 
 def read_file_safe(path: str) -> str:
@@ -24,29 +25,39 @@ def confirm(prompt: str) -> bool:
     can_run_command = input(f"{prompt} (y/N): ").strip().lower()
     return can_run_command in ["y", "yes"]
 
-def main_loop(config: SolveigConfig, prompt: str):
-    print(config)
-    print(prompt)
-    exit(0)
-
+def main_loop(config: SolveigConfig, user_prompt: str):
     client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
-    request = Request(prompt=prompt, available_paths=config.allowed_dirs)
-    current_input = request.dict()
+    # request = Request(prompt=user_prompt, available_paths=config.allowed_paths)
+    # current_input = request.dict()
+    current_input = [
+        { "role": "system", "content": config.to_system_prompt() },
+        { "role": "user",   "content": user_prompt }
+    ]
 
     while True:
         # Send request and get LLM response with schema validation
         print("Sending: " + str(current_input))
-        llm_response: LLMResponse = client.chat.completions.create(
-            current_input,
-            response_schema=LLMResponse,
-            temperature=0.5,
-            max_tokens=512,
-        )
+        try:
+            llm_response: Response = client.chat.completions.create(
+                messages=current_input,
+                response_model=Response,
+                model="llama3",
+                strict=False
+                # temperature=0.5,
+                # max_tokens=512,
+            )
+        except InstructorRetryException as e:
+            print(e)
+            for output in e.last_completion.choices:
+                print(output.message.content)
 
         if isinstance(llm_response, list):
             # It's a list of requirements
             results = []
+
+            print(llm_response)
+            exit(0)
 
             for req in llm_response:
                 if isinstance(req, Requirement):
@@ -70,10 +81,10 @@ def main_loop(config: SolveigConfig, prompt: str):
                             results.append(CommandResult(requirement=req, output=""))
 
                 # Send results back
-                current_input = {"previous_results": [r.dict() for r in results], "prompt": prompt, "available_paths": available_paths}
+                current_input = {"previous_results": [r.dict() for r in results], "prompt": prompt, "available_paths": ""}
 
-        elif isinstance(llm_response, FinalResponse):
-            # FinalResponse received
+        elif isinstance(llm_response, Response):
+            # Response received
             print("\n=== FINAL RESPONSE ===")
             if llm_response.comment:
                 print(f"Comment: {llm_response.comment}\n")
@@ -82,5 +93,5 @@ def main_loop(config: SolveigConfig, prompt: str):
 
 
 if __name__ == "__main__":
-    args, prompt  = SolveigConfig.parse_config_and_prompt()
-    main_loop(args, prompt)
+    config, prompt  = SolveigConfig.parse_config_and_prompt()
+    main_loop(config, prompt)

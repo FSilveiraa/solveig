@@ -1,38 +1,33 @@
-import pathlib
-
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from pathlib import Path
 from typing import List, Optional, Literal, Union
 
-from config import SolveigConfig
-
 
 class Request(BaseModel):
-    prompt: str
-    available_paths: List[Path]  # using str for easier JSON handling
+    user_prompt: str
 
 
 # Base class for things the LLM can request
 class Requirement(BaseModel):
     type: str
-    comment: Optional[str]
+    comment: str
 
-    def is_possible(self, config: SolveigConfig) -> bool:
+    def is_possible(self, config) -> bool:
         raise NotImplementedError()
 
 
 class FileRequirement(Requirement):
     location: str
 
-    def is_possible(self, config: SolveigConfig) -> bool:
+    def is_possible(self, config) -> bool:
         possible = False
         negator = False
-        for path, mode in config.allowed_paths:
-            # TODO: make the variable itself be a Path instead of str
+        for path in config.allowed_paths:
+            # TODO: make the `location` variable itself be a Path instead of str
             if Path(self.location).is_relative_to(path):
-                if self.mode_allowed(mode):
+                if self.mode_allowed(path.mode):
                     possible = True
-                elif mode == "n":
+                elif path.mode == "n":
                     negator = True
         return possible and not negator
 
@@ -42,16 +37,15 @@ class FileRequirement(Requirement):
 
 
 class FileReadRequirement(FileRequirement):
-    type: Literal["read"]
+    type: Literal["read"] = "read"
 
     @staticmethod
     def mode_allowed(mode: str) -> bool:
         return mode in {"r", "w"}
 
 
-class FileMetadataRequirement(Requirement):
-    type: Literal["metadata"]
-    location: str
+class FileMetadataRequirement(FileRequirement):
+    type: Literal["metadata"] = "metadata"
 
     @staticmethod
     def mode_allowed(mode: str) -> bool:
@@ -59,7 +53,7 @@ class FileMetadataRequirement(Requirement):
 
 
 class CommandRequirement(Requirement):
-    type: Literal["command"]
+    type: Literal["command"] = "command"
     command: str
 
 
@@ -76,13 +70,10 @@ class CommandResult(RequirementResult):
     output: str
 
 
-# Final response from LLM with its answer
-class FinalResponse(BaseModel):
-    comment: Optional[str]
-    answer: str  # The final output text or structured answer
-
-
 # The LLM's response can be:
 # - either a list of Requirements asking for more info
-# - or a FinalResponse with the final answer
-LLMResponse = Union[List[Requirement], FinalResponse]
+# - or a response with the final answer
+class Response(BaseModel):
+    type: Literal["response"] = "response"
+    comment: Optional[str] = None
+    requirements: Optional[List[FileReadRequirement|FileMetadataRequirement|CommandRequirement]] = None
