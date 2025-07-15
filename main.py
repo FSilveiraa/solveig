@@ -31,8 +31,6 @@ def confirm(prompt: str) -> bool:
 def main_loop(config: SolveigConfig, user_prompt: str):
     client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
-    # request = Request(prompt=user_prompt, available_paths=config.allowed_paths)
-    # current_input = request.dict()
     message_history = MessageHistory(system_prompt=SYSTEM_PROMPT)
     current_response: UserMessage = UserMessage(comment=user_prompt)
 
@@ -41,14 +39,12 @@ def main_loop(config: SolveigConfig, user_prompt: str):
         print("Sending: " + str(current_response))
         message_history.add_message(current_response)
         try:
-            # chat_history = message_history.to_openai()
-            # chat_history.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
             llm_response: LLMResponse = client.chat.completions.create(
                 messages=message_history.to_openai(),
                 response_model=LLMMessage,
                 model="llama3",
                 strict=False,
-                # temperature=0.5,
+                temperature=0.7,
                 # max_tokens=512,
             )
         except InstructorRetryException as e:

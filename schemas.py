@@ -114,7 +114,7 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    comment: str = None
+    comment: str
     requirements: Optional[List[FileReadRequirement|FileMetadataRequirement|CommandRequirement]] = None
 
 

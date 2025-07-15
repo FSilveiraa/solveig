@@ -14,12 +14,15 @@ You may also request to run certain commands and inspect their output if you thi
 Any time you ask the user to execute anything, always explain why you need it, what each flag does, what you expect it to do and what the expected output is.
 Put the safety and integrity of user's system above everything else, do not suggest dangerous/destructive commands unless it's absolutely necessary.
 
-Output your response strictly following the LLMessage format.
-Request as few as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
+Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
 Prioritize asking for files explicitly over running a command to read that file since it's safer for the user.
 Use commands only when necessary for access or performance reasons.
 If you believe your solution will require multiple steps in sequence, ask only for what is necessary at this moment.
 Assume the user will keep interacting with you until their problem is solved.
+
+Output your response strictly following the `LLMessage` format described below.
+Important: Your response must always be a JSON object with these fields: `comment` (string) and `requirements` (array of requirement objects, optional).
+Do not return a raw list of requirements, or a single requirement. Wrap the array of requirements in an object.
 """
 
 CONVERSATION_EXAMPLES = []
@@ -27,7 +30,7 @@ CONVERSATION_EXAMPLES = []
 joke_chat = MessageHistory(system_prompt="") # we don't want system prompt for a chat history that itself will be used in our system prompt
 CONVERSATION_EXAMPLES.append(joke_chat)
 joke_chat.add_message(UserMessage(comment="Tell me a joke"))
-joke_chat.add_message(LLMMessage(comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs."))
+joke_chat.add_message(LLMMessage(comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.", requirements=[]))
 
 script_chat = MessageHistory(system_prompt="")
 CONVERSATION_EXAMPLES.append(script_chat)
@@ -47,7 +50,7 @@ script_chat.add_message(LLMMessage(comment="""
 This script initializes a project workspace.
 This script creates logs/ and tmp/, makes an empty logs/app.log, and writes “Project initialized.” to tmp/init.flag.
 It’s safe—no deletions or overwrites.
-""".strip()))
+""".strip(), requirements=[]))
 
 SYSTEM_PROMPT = (_SYSTEM_PROMPT_BASE
                  + "\n\nUse the following conversation examples to guide your expected output format\n"
