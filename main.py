@@ -2,11 +2,14 @@ from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 import subprocess
 from pathlib import Path
+import json
+
+
 import llm
-
-
 from config import SolveigConfig
-from schemas import Request, Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, FileResult, CommandResult, Response
+from schemas import Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, \
+    CommandResult, MessageHistory, UserMessage, LLMMessage
+from system_prompt import SYSTEM_PROMPT
 
 
 def read_file_safe(path: str) -> str:
@@ -30,20 +33,21 @@ def main_loop(config: SolveigConfig, user_prompt: str):
 
     # request = Request(prompt=user_prompt, available_paths=config.allowed_paths)
     # current_input = request.dict()
-    current_input = [
-        { "role": "system", "content": config.to_system_prompt() },
-        { "role": "user",   "content": user_prompt }
-    ]
+    message_history = MessageHistory(system_prompt=SYSTEM_PROMPT)
+    current_response: UserMessage = UserMessage(comment=user_prompt)
 
     while True:
-        # Send request and get LLM response with schema validation
-        print("Sending: " + str(current_input))
+        # cycle starts with the last user response being finished, but not added to messages or sent yet
+        print("Sending: " + str(current_response))
+        message_history.add_message(current_response)
         try:
-            llm_response: Response = client.chat.completions.create(
-                messages=current_input,
-                response_model=Response,
+            # chat_history = message_history.to_openai()
+            # chat_history.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+            llm_response: LLMResponse = client.chat.completions.create(
+                messages=message_history.to_openai(),
+                response_model=LLMMessage,
                 model="llama3",
-                strict=False
+                strict=False,
                 # temperature=0.5,
                 # max_tokens=512,
             )
@@ -51,6 +55,7 @@ def main_loop(config: SolveigConfig, user_prompt: str):
             print(e)
             for output in e.last_completion.choices:
                 print(output.message.content)
+            continue
 
         if isinstance(llm_response, list):
             # It's a list of requirements
@@ -83,7 +88,7 @@ def main_loop(config: SolveigConfig, user_prompt: str):
                 # Send results back
                 current_input = {"previous_results": [r.dict() for r in results], "prompt": prompt, "available_paths": ""}
 
-        elif isinstance(llm_response, Response):
+        elif isinstance(llm_response, LLMResponse):
             # Response received
             print("\n=== FINAL RESPONSE ===")
             if llm_response.comment:
