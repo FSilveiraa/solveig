@@ -1,6 +1,15 @@
 # Solveig
 
-Solveig analyzes your shell and git history to generate 
+Solveig analyzes your system to answer any questions or solve any issues you may have.
+
+Generate a summary of your day based on your browser history.
+
+Find the latest file changed in a directory tree.
+
+Create a commit message based on your git diff.
+
+Diagnose problems by sharing logs and getting commands you can audit.
+
 This tool analyzes your shell history, git activity and other sources of data
 to generate daily summaries, commit message suggestions and whatever else using an LLM.
 
@@ -23,7 +32,7 @@ the `setup.sh` script.
 
 This will make your bash history use timestamps:
 
-```commandline
+```
  1001  2025-07-13 21:48:15 vim ~/.bashrc 
  1002  2025-07-13 23:05:30 source ~/.bashrc 
  1003  2025-07-13 23:05:37 history
