@@ -8,8 +8,15 @@ from schema.requirement import *
 
 
 class BaseMessage(BaseModel):
+    comment: str
+
     def to_openai(self) -> dict:
         return self.model_dump()
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def strip_name(cls, comment):
+        return comment.strip()
 
 # The user's message will contain
 # - either the inital prompt or optionally more prompting
@@ -30,7 +37,6 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    comment: str
     requirements: Optional[List[FileReadRequirement|FileMetadataRequirement|CommandRequirement]] = None
 
 

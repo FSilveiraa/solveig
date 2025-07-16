@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pathlib import Path
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 
 
 
@@ -11,6 +11,11 @@ class Requirement(BaseModel):
 
     def is_possible(self, config) -> bool:
         raise NotImplementedError()
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def strip_name(cls, comment):
+        return comment.strip()
 
 
 class FileRequirement(Requirement):
@@ -77,8 +82,9 @@ class FileMetadataResult(RequirementResult):
 
 
 class CommandResult(RequirementResult):
-    stdout: str
-    stderr: str
+    success: bool
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
 
     def to_openai(self):
         data = super().to_openai()

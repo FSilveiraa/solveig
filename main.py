@@ -29,7 +29,7 @@ def truncate_output(content: str, max_size: int) -> str:
 
 def prompt_for_file_access(requirement: FileRequirement, config: SolveigConfig) -> FileReadResult|FileMetadataResult|None:
     print(f"  \"{requirement.comment}\"")
-    print(f"   (type={requirement.type}, path={requirement.path}")
+    print(f"    (type={requirement.type}, path={requirement.path})")
     content = metadata = None
     if input("  Allow file access? (y/N)").strip().lower() in YES:
         with open(requirement.path, "r") as fd:
@@ -40,39 +40,40 @@ def prompt_for_file_access(requirement: FileRequirement, config: SolveigConfig) 
 
 def prompt_for_command(requirement: CommandRequirement) -> CommandResult|None:
     print(f"  \"{requirement.comment}\"")
-    print(f"   (type={requirement.type}, path={requirement.path}")
+    print(f"    (type={requirement.type}, command='{requirement.command}')")
     if input("  Allow running command? (y/N)").strip().lower() in YES:
-        to_return = { "success": False }
+        success = False
         try:
             result = subprocess.run(requirement.command, shell=True, capture_output=True, text=True, timeout=10)
             output = result.stdout.strip()
             error = result.stderr.strip() if result.stderr else ""
-            to_return["success"] = True
+            success = True
         except Exception as e:
-            to_return["error"] = str(e)
-            return to_return
+            output = None
+            error = str(e)
+            print(error)
 
         print("  Output: " + truncate_output(output, config.max_file_output))
         if error:
             print("  Error: " + truncate_output(error, config.max_file_output))
         if input("  Allow sending output?").strip().lower() in YES:
-            to_return["output"] = output
-            to_return["error"] = error
-        return to_return
+            return CommandResult(requirement=requirement, stdout=output, stderr=error, success=success)
 
 
 def main_loop(config: SolveigConfig, user_prompt: str = None):
     client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
-    message_history = MessageHistory(system_prompt=system_prompt.get_system_prompt(config))
-    if not user_prompt:
-        user_prompt = prompt_user()
-    current_response: UserMessage = UserMessage(comment=user_prompt)
+    sys_prompt = system_prompt.get_system_prompt(config)
+    if config.verbose:
+        print(f"System prompt:\n{sys_prompt}\n\n")
+    message_history = MessageHistory(system_prompt=sys_prompt)
+    user_response: UserMessage = UserMessage(comment=user_prompt if user_prompt else prompt_user())
 
     while True:
         # cycle starts with the last user response being finished, but not added to messages or sent yet
-        print("Sending: " + str(current_response))
-        message_history.add_message(current_response)
+        print("Sending: " + str(user_response))
+        message_history.add_message(user_response)
+        results = []
         try:
             llm_response: LLMMessage = client.chat.completions.create(
                 messages=message_history.to_openai(),
@@ -84,23 +85,27 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
             )
         except InstructorRetryException as e:
             print(e)
-            for output in e.last_completion.choices:
-                print(output.message.content)
-            exit(1)
+            if e.last_completion:
+                for output in e.last_completion.choices:
+                    print(output.message.content)
 
-        print(llm_response.comment)
-        results = []
-        if llm_response.requirements:
-            print("Requirements:")
-            for requirement in llm_response.requirements:
-                if isinstance(requirement, FileRequirement):
-                    result = prompt_for_file_access(requirement, config)
-                    if result:
-                        results.append(result)
-                elif isinstance(requirement, CommandRequirement):
-                    result = prompt_for_command(requirement)
-                    if result:
-                        results.append(result)
+        else:
+            message_history.add_message(llm_response)
+
+            print(llm_response.comment)
+            if llm_response.requirements:
+                print("Requirements:")
+                for requirement in llm_response.requirements:
+                    if isinstance(requirement, FileRequirement):
+                        result = prompt_for_file_access(requirement, config)
+                        if result:
+                            results.append(result)
+                    elif isinstance(requirement, CommandRequirement):
+                        result = prompt_for_command(requirement)
+                        if result:
+                            results.append(result)
+
+        user_response = UserMessage(comment=prompt_user(), results=results)
 
 
 

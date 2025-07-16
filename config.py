@@ -77,7 +77,7 @@ class SolveigConfig:
         parser.add_argument("--add-examples", "--ex", action="store_true", default=None, help="Include chat examples in the system prompt to help the LLM understand the response format")
         parser.add_argument("--add-os-info", "--os", action="store_true", default=None, help="Include helpful OS information in the system prompt")
         parser.add_argument("--exclude-username", "--no-user", action="store_true", default=None, help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)")
-        parser.add_argument("--verbose", action="store_true")
+        parser.add_argument("--verbose", "-v", action="store_true")
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
         args = parser.parse_args(cli_args)
