@@ -1,6 +1,5 @@
 import os
 import platform
-import json
 
 from config import SolveigConfig
 
@@ -9,8 +8,8 @@ try:
 except ImportError:
     distro = None
 
-from schemas import *
-
+from schema.requirement import *
+from schema.message import *
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.

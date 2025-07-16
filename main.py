@@ -1,37 +1,72 @@
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 import subprocess
-from pathlib import Path
-import json
-
 
 import llm
 from config import SolveigConfig
-from schemas import Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, \
-    CommandResult, MessageHistory, UserMessage, LLMMessage
+from schema.requirement import Requirement, FileRequirement, FileReadRequirement, FileReadResult, FileMetadataResult, CommandRequirement, \
+    CommandResult
+from schema.message import MessageHistory, UserMessage, LLMMessage
 import system_prompt
 
 
-def read_file_safe(path: str) -> str:
-    with open(path, "r") as fd:
-        return fd.read()
 
-def run_command_safe(cmd: str) -> str:
-    # if cmd in safe_commands or something
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
-        return result.stdout.strip() + ("\n" + result.stderr.strip() if result.stderr else "")
-    except Exception as e:
-        return f"Error running command: {e}"
+YES = { "y", "yes" }
+TRUNCATE_JOIN = "(...)"
 
-def confirm(prompt: str) -> bool:
-    can_run_command = input(f"{prompt} (y/N): ").strip().lower()
-    return can_run_command in ["y", "yes"]
 
-def main_loop(config: SolveigConfig, user_prompt: str):
+def prompt_user() -> str:
+    return input("> ").strip()
+
+
+def truncate_output(content: str, max_size: int) -> str:
+    content_to_print = content
+    if len(content) > max_size:
+        size_of_each_side = int((max_size - len(TRUNCATE_JOIN)) / 2)
+        content_to_print = content[:size_of_each_side] + TRUNCATE_JOIN + content[size_of_each_side:]
+    return content_to_print
+
+
+def prompt_for_file_access(requirement: FileRequirement, config: SolveigConfig) -> FileReadResult|FileMetadataResult|None:
+    print(f"  \"{requirement.comment}\"")
+    print(f"   (type={requirement.type}, path={requirement.path}")
+    content = metadata = None
+    if input("  Allow file access? (y/N)").strip().lower() in YES:
+        with open(requirement.path, "r") as fd:
+            content = fd.read()
+        print("  Content: " + truncate_output(content, config.max_file_output))
+        if input("  Allow sending file data? (Y/N").strip().lower() in YES:
+            return FileReadResult(requirement=requirement, content=content)
+
+def prompt_for_command(requirement: CommandRequirement) -> CommandResult|None:
+    print(f"  \"{requirement.comment}\"")
+    print(f"   (type={requirement.type}, path={requirement.path}")
+    if input("  Allow running command? (y/N)").strip().lower() in YES:
+        to_return = { "success": False }
+        try:
+            result = subprocess.run(requirement.command, shell=True, capture_output=True, text=True, timeout=10)
+            output = result.stdout.strip()
+            error = result.stderr.strip() if result.stderr else ""
+            to_return["success"] = True
+        except Exception as e:
+            to_return["error"] = str(e)
+            return to_return
+
+        print("  Output: " + truncate_output(output, config.max_file_output))
+        if error:
+            print("  Error: " + truncate_output(error, config.max_file_output))
+        if input("  Allow sending output?").strip().lower() in YES:
+            to_return["output"] = output
+            to_return["error"] = error
+        return to_return
+
+
+def main_loop(config: SolveigConfig, user_prompt: str = None):
     client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
     message_history = MessageHistory(system_prompt=system_prompt.get_system_prompt(config))
+    if not user_prompt:
+        user_prompt = prompt_user()
     current_response: UserMessage = UserMessage(comment=user_prompt)
 
     while True:
@@ -39,7 +74,7 @@ def main_loop(config: SolveigConfig, user_prompt: str):
         print("Sending: " + str(current_response))
         message_history.add_message(current_response)
         try:
-            llm_response: LLMResponse = client.chat.completions.create(
+            llm_response: LLMMessage = client.chat.completions.create(
                 messages=message_history.to_openai(),
                 response_model=LLMMessage,
                 model="llama3",
@@ -51,46 +86,22 @@ def main_loop(config: SolveigConfig, user_prompt: str):
             print(e)
             for output in e.last_completion.choices:
                 print(output.message.content)
-            continue
+            exit(1)
 
-        if isinstance(llm_response, list):
-            # It's a list of requirements
-            results = []
+        print(llm_response.comment)
+        results = []
+        if llm_response.requirements:
+            print("Requirements:")
+            for requirement in llm_response.requirements:
+                if isinstance(requirement, FileRequirement):
+                    result = prompt_for_file_access(requirement, config)
+                    if result:
+                        results.append(result)
+                elif isinstance(requirement, CommandRequirement):
+                    result = prompt_for_command(requirement)
+                    if result:
+                        results.append(result)
 
-            print(llm_response)
-            exit(0)
-
-            for req in llm_response:
-                if isinstance(req, Requirement):
-                    if isinstance(req, FileReadRequirement):
-                        print(f"LLM requests file: {req.location}")
-                        if confirm(f"Allow reading file {req.location}?"):
-                            with open(req.location, "r") as fd:
-                                content = fd.read()
-                                results.append(FileResult(requirement=req, content=content))
-                        else:
-                            print("Denied reading file, sending empty content.")
-                            results.append(FileResult(requirement=req, content=""))
-
-                    elif isinstance(req, CommandRequirement) and config.allow_commands:
-                        print(f"LLM requests command: {req.command}")
-                        if confirm(f"Allow running command '{req.command}'?"):
-                            output = run_command_safe(req.command)
-                            results.append(CommandResult(requirement=req, output=output))
-                        else:
-                            print("Denied running command, sending empty output.")
-                            results.append(CommandResult(requirement=req, output=""))
-
-                # Send results back
-                current_input = {"previous_results": [r.dict() for r in results], "prompt": prompt, "available_paths": ""}
-
-        elif isinstance(llm_response, LLMResponse):
-            # Response received
-            print("\n=== FINAL RESPONSE ===")
-            if llm_response.comment:
-                print(f"Comment: {llm_response.comment}\n")
-            print(llm_response.answer)
-            break
 
 
 if __name__ == "__main__":
