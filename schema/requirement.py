@@ -62,13 +62,15 @@ class FileReadRequirement(FileRequirement):
         return mode in {"r", "w"}
 
     def solve(self, config) -> FileReadResult|None:
-        print(f"  \"{self.comment}\"")
-        print(f"    (type={self.type}, path={self.path})")
-        if input("  Allow file access? (y/N)").strip().lower() in YES:
+        print("  [ File ]")
+        print(f"    {self.comment}")
+        print(f"      path: {self.path}")
+        if input("  ? Allow reading file? [y/N]: ").strip().lower() in YES:
             with open(self.path, "r") as fd:
                 content = fd.read()
-            print("  Content: " + truncate_output(content, config.max_file_output))
-            if input("  Allow sending file data? (Y/N").strip().lower() in YES:
+            print("    [ Content ]")
+            print("      " + truncate_output(content, config.max_file_output))
+            if input("  ? Allow sending file data? [y/N]: ").strip().lower() in YES:
                 return FileReadResult(requirement=self, content=content)
 
 
@@ -88,9 +90,11 @@ class CommandRequirement(Requirement):
     command: str
 
     def solve(self, config) -> CommandResult|None:
-        print(f"  \"{self.comment}\"")
-        print(f"    (type={self.type}, command='{self.command}')")
-        if input("  Allow running command? (y/N)").strip().lower() in YES:
+        print(f"  [ Command ]")
+        print(f"    {self.comment}")
+        print(f"      command: {self.command}")
+        #print(f"    (type={self.type}, command='{self.command}')")
+        if input("    ? Allow running command? [y/N]: ").strip().lower() in YES:
             success = False
             try:
                 result = subprocess.run(self.command, shell=True, capture_output=True, text=True, timeout=10)
@@ -102,10 +106,12 @@ class CommandRequirement(Requirement):
                 error = str(e)
                 print(error)
 
-            print("  Output: " + truncate_output(output, config.max_file_output))
+            print("    [ Output ]")
+            print("      " + truncate_output(output, config.max_file_output))
             if error:
-                print("  Error: " + truncate_output(error, config.max_file_output))
-            if input("  Allow sending output?").strip().lower() in YES:
+                print("    [ Error ]")
+                print("      " + truncate_output(error, config.max_file_output))
+            if input("    ? Allow sending output? [y/N]: ").strip().lower() in YES:
                 return CommandResult(requirement=self, stdout=output, stderr=error, success=success)
 
 
