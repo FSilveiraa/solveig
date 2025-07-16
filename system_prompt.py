@@ -15,25 +15,25 @@ from schema.message import *
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.
-Your goal is to be as helpful to the user as possible.
+Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
 
 To assist the user, you may request to access either the metadata or the contents for any path (file or directory) you think is necessary.
-If you ask to read a directory's content or its metadata, in both cases the user will provide the information equivalent of `ls -la`.
+If you ask to read a directory's content or its metadata, you will receive the information equivalent of `ls -la`.
 Any time that you require access to a path, always explain why it's necessary.
 
 You may also request to run certain commands and inspect their output if you think it will help you solve user's issue.
 Any time you ask the user to execute anything, always explain why you need it, what each flag does, what you expect it to do and what the expected output is.
 Put the safety and integrity of user's system above everything else, do not suggest dangerous/destructive commands unless it's absolutely necessary.
 
+The user will analyze your requirements and accept or deny each, then provide the results.
+You will then analyze their response and respond to it, asking for more requirements if necessary.
+You will continue this process until the user's issue is solved.
 Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
-Prioritize asking for files explicitly over running a command to read that file since it's safer for the user.
+Prioritize asking for a file over running a command to read that file since it's safer for the user.
 Use commands only when necessary for access or performance reasons.
 If you believe your solution will require multiple steps in sequence, ask only for what is necessary at this moment.
-Assume the user will keep interacting with you until their problem is solved.
 
 Output your response strictly following the `LLMessage` format described below.
-Important: Your response must always be a JSON object with these fields: `comment` (string) and `requirements` (array of requirement objects, optional).
-Do not return a raw list of requirements, or a single requirement. Wrap the array of requirements in an object.
 """
 
 SYSTEM_PROMPT_OS_INFO = """
@@ -93,13 +93,7 @@ USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
 jdoe        8421 95.7  4.2 905312 342816 ?       Rl   09:13  10:44 /opt/firefox/firefox
 jdoe        9154 28.9  1.8 732448 146232 ?       Sl   09:26   2:12 /usr/bin/python3 /home/jdoe/projects/scraper.py
 root        1203 18.4  0.9 255280  72012 ?       Ssl  07:45   7:03 /usr/lib/Xorg vt1 -displayfd 3
-jdoe        9772 11.6  0.5 214560  41288 ?       Sl   09:38   0:58 /usr/lib/code/code
-jdoe        9805  8.3  0.4 163820  33728 pts/1    S+   09:39   0:12 htop
-jdoe        8810  6.9  0.6 289104  51244 ?       Sl   09:18   0:47 /usr/lib/virtualbox/VirtualBoxVM --startvm UbuntuDev
-root        1357  4.7  0.3 180400  28212 ?       Ssl  07:45   4:20 /usr/bin/pipewire
-root        1408  3.1  0.2  36864   7900 ?       Ss   07:45   0:21 /usr/sbin/cron -f
-jdoe        9924  2.4  0.1 125700  14200 ?       Sl   09:41   0:09 /usr/bin/gnome-terminal-server
-jdoe        9501  1.9  0.3 204560  27712 ?       Sl   09:24   0:18 /usr/lib/thunderbird/thunderbird
+(...)
 """,
             success=True
         ),

@@ -26,10 +26,10 @@ class APIType(Enum):
 def get_instructor_client(api_type: APIType, api_key: str = None, url: str = None, skip_instructor_system_prompt=True) -> instructor.Instructor:
     if api_type == APIType.OPENAI:
         client = OpenAI(api_key=api_key, base_url=url)
-        return instructor.from_openai(client)
+        return instructor.from_openai(client, mode=instructor.Mode.JSON)
     elif api_type == APIType.KOBOLDCPP:
         client = OpenAI(api_key=api_key, base_url=url)  # same OpenAI-compatible API
-        return instructor.from_openai(client)
+        return instructor.from_openai(client, mode=instructor.Mode.JSON)
     # elif api_type == APIType.CLAUDE:
     #     from claude import ClaudeClient
     #     client = ClaudeClient(api_key=api_key, base_url=base_url)
