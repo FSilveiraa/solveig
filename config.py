@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import List
 
 from llm import APIType
-from schemas import FileReadRequirement, MessageHistory, \
-    UserMessage, LLMMessage, FileReadResult
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
@@ -31,6 +29,9 @@ class SolveigConfig:
     api_key: str = ""
     allow_commands: bool = False
     verbose: bool = False
+    add_examples: bool = False
+    add_os_info: bool = False
+    exclude_username: bool = False
 
     def __post_init__(self):
         # convert API type to enum
@@ -72,11 +73,16 @@ class SolveigConfig:
         parser.add_argument("--model-type", type=str)
         parser.add_argument("--allow-commands", action="store_true")
         parser.add_argument("--allowed-path", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
+        parser.add_argument("--add-examples", "--ex", action="store_true", default=None, help="Include chat examples in the system prompt to help the LLM understand the response format")
+        parser.add_argument("--add-os-info", "--os", action="store_true", default=None, help="Include helpful OS information in the system prompt")
+        parser.add_argument("--exclude-username", "--no-user", action="store_true", default=None, help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)")
         parser.add_argument("--verbose", action="store_true")
 
         parser.add_argument("prompt", type=str, help="User prompt")
 
         args = parser.parse_args(cli_args)
+        args_dict = vars(args)
+        user_prompt = args_dict.pop("prompt")
 
         file_config = cls.parse_from_file(args.config)
         if not file_config:
@@ -85,16 +91,8 @@ class SolveigConfig:
 
         # Merge config from file and CLI
         merged_config = {**file_config}
-        cli_overrides = {
-            "url": args.url,
-            "model_type": args.model_type,
-            "allow_commands": args.allow_commands,
-            "allowed_paths": args.allowed_paths,
-            "verbose": args.verbose,
-        }
-
-        for k, v in cli_overrides.items():
+        for k, v in args_dict.items():
             if v is not None:
                 merged_config[k] = v
 
-        return (cls(**merged_config), args.prompt)
+        return (cls(**merged_config), user_prompt)

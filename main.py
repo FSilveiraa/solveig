@@ -9,7 +9,7 @@ import llm
 from config import SolveigConfig
 from schemas import Requirement, FileReadRequirement, FileMetadataRequirement, CommandRequirement, \
     CommandResult, MessageHistory, UserMessage, LLMMessage
-from system_prompt import SYSTEM_PROMPT
+import system_prompt
 
 
 def read_file_safe(path: str) -> str:
@@ -31,7 +31,7 @@ def confirm(prompt: str) -> bool:
 def main_loop(config: SolveigConfig, user_prompt: str):
     client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
 
-    message_history = MessageHistory(system_prompt=SYSTEM_PROMPT)
+    message_history = MessageHistory(system_prompt=system_prompt.get_system_prompt(config))
     current_response: UserMessage = UserMessage(comment=user_prompt)
 
     while True:

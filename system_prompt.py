@@ -1,8 +1,18 @@
+import os
+import platform
 import json
+
+from config import SolveigConfig
+
+try:
+    import distro  # optional, only needed for Linux distros
+except ImportError:
+    distro = None
+
 from schemas import *
 
 
-_SYSTEM_PROMPT_BASE = """
+SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.
 Your goal is to be as helpful to the user as possible.
 
@@ -25,6 +35,11 @@ Important: Your response must always be a JSON object with these fields: `commen
 Do not return a raw list of requirements, or a single requirement. Wrap the array of requirements in an object.
 """
 
+SYSTEM_PROMPT_OS_INFO = """
+You have access to the following information regarding the user's system:
+"""
+
+SYSTEM_PROMPT_EXAMPLES = "Use the following conversation examples to guide your expected output format"
 CONVERSATION_EXAMPLES = []
 
 joke_chat = MessageHistory(system_prompt="") # we don't want system prompt for a chat history that itself will be used in our system prompt
@@ -52,6 +67,30 @@ This script creates logs/ and tmp/, makes an empty logs/app.log, and writes “P
 It’s safe—no deletions or overwrites.
 """.strip(), requirements=[]))
 
-SYSTEM_PROMPT = (_SYSTEM_PROMPT_BASE
-                 + "\n\nUse the following conversation examples to guide your expected output format\n"
-                 + "\n\n".join([history.to_example() for history in CONVERSATION_EXAMPLES]))
+
+def get_basic_os_info(exclude_username=False):
+    info = {
+        "os_name": platform.system(),           # e.g., 'Linux', 'Windows', 'Darwin'
+        "os_release": platform.release(),       # e.g., '6.9.1-arch1-1'
+        "os_version": platform.version(),       # detailed kernel version
+    }
+    # Add username and home path
+    if not exclude_username:
+        info["username"] = os.getlogin() if hasattr(os, "getlogin") else os.environ.get("USER")
+        info["home_dir"] = os.path.expanduser("~")
+    # Add distro info if we're in Linux
+    if info["os_name"] == "Linux" and distro:
+        info["linux_distribution"] = distro.name(pretty=True)  # e.g. 'Manjaro Linux'
+    return info
+
+
+def get_system_prompt(config: SolveigConfig):
+    system_prompt = SYSTEM_PROMPT.strip()
+    if config.add_os_info:
+        os_info = get_basic_os_info(config.exclude_username)
+        system_prompt = (f"{system_prompt}\n\n{SYSTEM_PROMPT_OS_INFO.strip()}\n"
+                         + "\n ".join(f"{k}: {v}" for k, v in os_info.items())).strip()
+    if config.add_examples:
+        system_prompt = (f"{system_prompt}\n\n{SYSTEM_PROMPT_EXAMPLES.strip()}\n"
+                         + "\n\n".join([history.to_example() for history in CONVERSATION_EXAMPLES]))
+    return system_prompt.strip()
