@@ -1,8 +1,10 @@
+from dataclasses import dataclass, field
 from pydantic import Field
 from datetime import datetime, UTC
 
 from schema.requirement import *
-
+import utils.formatting
+from utils.formatting import count_tokens
 
 
 class BaseMessage(BaseModel):
@@ -38,19 +40,24 @@ class LLMMessage(BaseMessage):
     requirements: Optional[List[FileRequirement|CommandRequirement]] = None
 
 
-class MessageContainer(BaseModel):
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    role: Literal["user", "assistant"]
+@dataclass
+class MessageContainer:
     message: Union[UserMessage, LLMMessage]
+    content: str = field(init=False)
+    token_count: int = field(init=False)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    role: Literal["user", "assistant"] = field(init=False)
+
+    def __init__(self, message: LLMMessage|UserMessage):
+        self.message = message
+        self.role = "user" if isinstance(message, UserMessage) else "assistant"
+        self.content = json.dumps(message.to_openai())
+        self.token_count = utils.formatting.count_tokens(self.content)
 
     def to_openai(self) -> dict:
-        # Dump all fields (including defaults)
-        # Separate role from everything else
-        # role = data.pop("role")
-        # inner_content = data  # everything except role
         return {
             "role": self.role,
-            "content": json.dumps(self.message.to_openai())
+            "content": self.content,
         }
 
     def to_example(self) -> str:
@@ -58,20 +65,34 @@ class MessageContainer(BaseModel):
         return f"{data['role']}: {data['content']}"
 
 
-class MessageHistory(BaseModel):
-    messages: List[MessageContainer] = Field(default_factory=list)
-    system_prompt: str
+@dataclass
+class MessageHistory:
+    system_prompt: Optional[str] = None
+    max_context: int = -1
+    messages: List[MessageContainer] = field(default_factory=list)
+    message_cache: List[dict] = field(default_factory=list)
 
-    def add_message(self, message: UserMessage|LLMMessage):
-        self.messages.append(MessageContainer(role=("user" if isinstance(message, UserMessage) else "assistant"), message=message))
+    def get_token_count(self):
+        count = count_tokens(self.system_prompt) if self.system_prompt else 0
+        return count + sum(message["content"] for message in self.message_cache)
+
+    def prune_message_cache(self):
+        if self.max_context >= 0:
+            while self.get_token_count() > self.max_context:
+                self.message_cache.pop(0)
+
+    def add_message(self, message: UserMessage | LLMMessage):
+        message_container = MessageContainer(message)
+        self.messages.append(message_container)
+        self.message_cache.append(message_container.to_openai())
+        self.prune_message_cache()
 
     def to_openai(self):
         history = []
         if self.system_prompt:
             history.append({ "role": "system", "content": self.system_prompt })
-        # TODO: have to do reverse adding, from the end and checking the token size at each one
         history.extend(message.to_openai() for message in self.messages)
-        return history
+        return history + self.message_cache
 
     def to_example(self):
         return "\n".join(message.to_example() for message in self.messages)
