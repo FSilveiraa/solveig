@@ -31,20 +31,21 @@ python ./main.py -u "http://localhost:5001" "Tell me a joke"
 Solveig is a terminal‑based AI helper. Instead of just chatting, it can request access to files and command outputs
 to actually solve problems on your machine.
 
-### Why use Solveig instead of plain ChatGPT?
+### Is Solveig an LLM like ChatGPT?
 
-Solveig isn't an LLM service like ChatGPT or Gemini, it's a safe interface between those assistants and your computer. Solveig *can use* ChagGPT.
+Solveig isn't an LLM, it's a safe interface between those services and your computer. Solveig *can use* ChagGPT.
+
+### Why use Solveig instead of a plain LLM?
 
 By itself, an LLM can only guess based on what you type.
-If you ask ChatGPT a question and it asks you for something else,
-it becomes your job to understand those requirements and manually attach them.
+If you ask ChatGPT a question and it needs something else, it becomes your job to understand those requirements and manually attach them.
 Solveig handles all of that for you. It can make your LLM understand what you need,
 what resources it has available and how to help you - safely, automatically and without copy-pasting.
 
 ### Why use Solveig over other LLM‑to‑shell assistants?
 
 All the software that acts as a layer between your LLM and a shell terminal can't be compared in terms of "what can it do?"
-because the answer to all of them is "everything". What Solveig offers comes more from how it prevents itself from doing
+because the answer to all of them is "everything". Instead, Solveig's value comes more from how it prevents itself from doing
 dangerous things through an explicit access system to both commands and files. It tries to minimize risk by allowing
 direct file access over arbitrary commands, as well as enforcing explicit user consent.
 
