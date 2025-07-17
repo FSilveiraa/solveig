@@ -1,6 +1,6 @@
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
-import subprocess
+
 import json
 import shutil
 
@@ -30,6 +30,8 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
     message_history = MessageHistory(system_prompt=sys_prompt)
     user_response: UserMessage = UserMessage(comment=user_prompt if user_prompt else prompt_user())
 
+    terminal_width = shutil.get_terminal_size((80, 20)).columns
+
     while True:
         # cycle starts with the last user response being finished, but not added to messages or sent yet
         if config.verbose:
@@ -47,19 +49,16 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
                 # max_tokens=512,
             )
         except InstructorRetryException as e:
-            if config.verbose:
-                print("[ Error ]")
-                print("Failed to parse message:")
-                if e.last_completion:
-                    for output in e.last_completion.choices:
-                        print(output.message.content)
+            print("[ Error ]")
+            print("Failed to parse message:")
+            if config.verbose and e.last_completion:
+                for output in e.last_completion.choices:
+                    print(output.message.content)
 
         else:
-            width = shutil.get_terminal_size((80, 20)).columns
-            print(f"""\n{"-" * width}\n""")
-
             message_history.add_message(llm_response)
 
+            print(f"""\n{ "-" * terminal_width }\n""")
             print("Assistant:")
             print(llm_response.comment.strip() + "\n")
             if llm_response.requirements:
@@ -72,7 +71,7 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
                     except Exception as e:
                         print(e)
 
-        print(f"""\n{ "-" * width }\n""")
+        print(f"""\n{ "-" * terminal_width }\n""")
         user_response = UserMessage(comment=prompt_user(), results=results)
 
 

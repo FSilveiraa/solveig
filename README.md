@@ -43,3 +43,92 @@ Add the following line to your `~/.bashrc`:
 ```bash
 export HISTTIMEFORMAT="%F %T "
 ```
+
+
+## Examples
+
+All of these were obtained using [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
+I'm kind of impressed at how good an 8B model is at suggesting commands and solving problems
+
+Ask for the time:
+```
+User:
+ > What time is it now?
+
+[ Sending ]
+{
+  "comment": "What time is it now?",
+  "results": null
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Assistant:
+I can't check the current time because I don't have direct access to your system's clock.
+
+[ Requirements (1) ]
+  [ Command ]
+    I need to run a command to get the current system time.
+      command: date
+    ? Allow running command? [y/N]: y
+    [ Output ]
+      Thu Jul 17 03:26:57 AM EEST 2025
+    ? Allow sending output? [y/N]: y
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+User:
+ > Here you go
+
+[ Sending ]
+{
+  "comment": "Here you go",
+  "results": [
+    {
+      "success": true,
+      "stdout": "Thu Jul 17 03:26:57 AM EEST 2025",
+      "stderr": "",
+      "command": "date"
+    }
+  ]
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Assistant:
+Based on the system time, it's currently July 17, 2025, at 3:26 AM.
+
+```
+
+```
+User:
+ > How many user are currently logged into my operating system?
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Assistant:
+To determine how many users are logged in, I need to run the 'who' command to list all logged-in users.
+
+[ Requirements (1) ]
+  [ Command ]
+    Run this command to see who's currently logged in.
+      command: who
+    ? Allow running command? [y/N]: y
+    [ Output ]
+jdoe seat0        2025-07-01 12:18
+jdoe tty2         2025-07-01 12:18
+    ? Allow sending output? [y/N]: y
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+User:
+ > Here!
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Assistant:
+Based on the 'who' command output, only one user 'jdoe' is logged in. However, note that this command typically shows users logged into the system, which may include remote users if they are connected via SSH or other methods. To get a more comprehensive view, you can check the number of user sessions using 'loginctl list-sessions' or look at /var/log/wtmp for historical login records. But for now, it seems only one user is currently logged in.
+
+```

@@ -1,23 +1,17 @@
 from __future__ import annotations
 
+import json
+import os.path
 import subprocess
+
 from pydantic import BaseModel, field_validator
 from pathlib import Path
-from typing import Literal, Union, Optional
+from typing import Literal, Union, Optional, List
 
 from config import SolveigConfig
+import utils.file
+from utils.formatting import ask_yes, truncate_output
 
-
-YES = { "y", "yes" }
-TRUNCATE_JOIN = "(...)"
-
-
-def truncate_output(content: str, max_size: int) -> str:
-    content_to_print = content
-    if len(content) > max_size:
-        size_of_each_side = int((max_size - len(TRUNCATE_JOIN)) / 2)
-        content_to_print = content[:size_of_each_side] + TRUNCATE_JOIN + content[size_of_each_side:]
-    return content_to_print
 
 
 # Base class for things the LLM can request
@@ -35,7 +29,9 @@ class Requirement(BaseModel):
 
 
 class FileRequirement(Requirement):
+    type: Literal["file"] = "file"
     path: str
+    action: Literal["read", "metadata"]
 
     def is_possible(self, config: SolveigConfig) -> bool:
         possible = False
@@ -53,36 +49,36 @@ class FileRequirement(Requirement):
     def mode_allowed(mode: str) -> bool:
         raise NotImplementedError()
 
+    def solve(self, config) -> FileResult|None:
+        abs_path = os.path.abspath(os.path.expanduser(self.path))
+        exists = os.path.exists(abs_path)
+        is_dir = os.path.isdir(abs_path)
 
-class FileReadRequirement(FileRequirement):
-    type: Literal["read"] = "read"
-
-    @staticmethod
-    def mode_allowed(mode: str) -> bool:
-        return mode in {"r", "w"}
-
-    def solve(self, config) -> FileReadResult|None:
         print("  [ File ]")
         print(f"    {self.comment}")
-        print(f"      path: {self.path}")
-        if input("  ? Allow reading file? [y/N]: ").strip().lower() in YES:
-            with open(self.path, "r") as fd:
-                content = fd.read()
-            print("    [ Content ]")
-            print("      " + truncate_output(content, config.max_file_output))
-            if input("  ? Allow sending file data? [y/N]: ").strip().lower() in YES:
-                return FileReadResult(requirement=self, content=content)
+        print(f"      path: {self.path} (dir={is_dir})")
 
+        if not exists:
+            print("    This path does not exist.")
 
-class FileMetadataRequirement(FileRequirement):
-    type: Literal["metadata"] = "metadata"
-
-    @staticmethod
-    def mode_allowed(mode: str) -> bool:
-        return mode in {"m", "r", "w"}
-
-    def solve(self, config) -> FileMetadataResult|None:
-        return None
+        else:
+            if is_dir:
+                if ask_yes("    ? Allow reading directory listing and metadata? [y/N] "):
+                    metadata, entries = utils.file.read_metadata_and_entries(abs_path)
+                    return FileResult(requirement=self, metadata=metadata, directory_listing=entries)
+            else:
+                choice_read_file = input("    ? Read file? [y=contents+metadata / m=metadata / N=skip]: ").strip().lower()
+                if choice_read_file in { "m", "y" }:
+                    print("    [ Metadata ]")
+                    content = None
+                    metadata, _ = utils.file.read_metadata_and_entries(abs_path)
+                    print("      " + truncate_output(json.dumps(metadata), max_size=config.max_file_output))
+                    if choice_read_file == "y":
+                        content, encoding = utils.file.read_file(abs_path)
+                        print("    [ Content ]")
+                        print("      " + ("(Base64)" if encoding == "base64" else truncate_output(content, config.max_file_output)))
+                    if ask_yes("    ? Allow sending file data? [y/N]: "):
+                        return FileResult(requirement=self, metadata=metadata, content=content)
 
 
 class CommandRequirement(Requirement):
@@ -94,7 +90,7 @@ class CommandRequirement(Requirement):
         print(f"    {self.comment}")
         print(f"      command: {self.command}")
         #print(f"    (type={self.type}, command='{self.command}')")
-        if input("    ? Allow running command? [y/N]: ").strip().lower() in YES:
+        if ask_yes("    ? Allow running command? [y/N]: "):
             success = False
             try:
                 result = subprocess.run(self.command, shell=True, capture_output=True, text=True, timeout=10)
@@ -107,34 +103,36 @@ class CommandRequirement(Requirement):
                 print(error)
 
             print("    [ Output ]")
-            print("      " + truncate_output(output, config.max_file_output))
+            print(truncate_output(output, config.max_file_output))
             if error:
                 print("    [ Error ]")
-                print("      " + truncate_output(error, config.max_file_output))
-            if input("    ? Allow sending output? [y/N]: ").strip().lower() in YES:
+                print(truncate_output(error, config.max_file_output))
+            if ask_yes("    ? Allow sending output? [y/N]: "):
                 return CommandResult(requirement=self, stdout=output, stderr=error, success=success)
 
 
 # Base class for data returned for requirements
 class RequirementResult(BaseModel):
-    requirement: Union[FileReadRequirement|FileMetadataRequirement|CommandRequirement]
+    requirement: Union[FileRequirement|CommandRequirement]
 
     def to_openai(self):
         return self.model_dump()
 
 
-class FileReadResult(RequirementResult):
-    content: str
+class FileResult(RequirementResult):
+    # is_directory: bool
+    metadata: dict
+    # For files
+    content: Optional[str] = None
+    content_encoding: Optional[Literal["text", "base64"]] = None
+    # For directories
+    directory_listing: Optional[List[str]] = None
 
     def to_openai(self):
         data = super().to_openai()
         requirement = data.pop("requirement")
         data["path"] = requirement["path"]
         return data
-
-
-class FileMetadataResult(RequirementResult):
-    content: str
 
 
 class CommandResult(RequirementResult):

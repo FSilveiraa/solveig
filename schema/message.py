@@ -1,6 +1,4 @@
-from pydantic import BaseModel, Field
-import json
-from typing import List, Optional, Literal, Union
+from pydantic import Field
 from datetime import datetime, UTC
 
 from schema.requirement import *
@@ -23,7 +21,7 @@ class BaseMessage(BaseModel):
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
     comment: Optional[str] = None
-    results: Optional[List[FileReadResult|FileMetadataResult|CommandResult]] = None
+    results: Optional[List[FileResult|CommandResult]] = None
 
     def to_openai(self) -> dict:
         data = super().to_openai()
@@ -37,7 +35,7 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    requirements: Optional[List[FileReadRequirement|FileMetadataRequirement|CommandRequirement]] = None
+    requirements: Optional[List[FileRequirement|CommandRequirement]] = None
 
 
 class MessageContainer(BaseModel):

@@ -1,24 +1,21 @@
 import os
 import platform
 
-from click import command
-
-from config import SolveigConfig
-
 try:
     import distro  # optional, only needed for Linux distros
 except ImportError:
     distro = None
 
-from schema.requirement import *
 from schema.message import *
+
+
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.
 Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
+Always try to answer the user's question, no matter how redundant it may seem.
 
-To assist the user, you may request to access either the metadata or the contents for any path (file or directory) you think is necessary.
-If you ask to read a directory's content or its metadata, you will receive the information equivalent of `ls -la`.
+To assist the user, you may request access to either the metadata or the contents for any path (file or directory) you think is necessary.
 Any time that you require access to a path, always explain why it's necessary.
 
 You may also request to run certain commands and inspect their output if you think it will help you solve user's issue.
@@ -51,12 +48,16 @@ joke_chat.add_message(LLMMessage(comment="Sure! Here's a joke for you. Why do pr
 script_chat = MessageHistory(system_prompt="")
 CONVERSATION_EXAMPLES.append(script_chat)
 script_chat.add_message(UserMessage(comment="What does the script on ~/run.sh do?"))
-file_req1 = FileReadRequirement(
+file_req1 = FileRequirement(
+    action="read",
     path="~/run.sh",
     comment="To check what this script does, I need to read the contents of run.sh.",
 )
 script_chat.add_message(LLMMessage(comment="Of course, let's take a look", requirements=[ file_req1 ]))
-script_chat.add_message(UserMessage(comment="Ok here you go", results=[FileReadResult(requirement=file_req1, content="""
+script_chat.add_message(UserMessage(comment="Ok here you go", results=[FileResult(
+    requirement=file_req1,
+    metadata={ "path": "/home/user/run.sh", "size": 101, "mtime": "Thu Jul 17 02:54:43 2025", "is_directory": False },
+    content="""
 #!/usr/bin/env bash
 mkdir -p logs tmp
 touch logs/app.log
@@ -77,14 +78,14 @@ I'm using Linux
 """))
 cmd_req_cpu_usage = CommandRequirement(comment="Run this command to list processes sorted by CPU usage", command="ps aux --sort=-%cpu | head -n 10")
 cmd_req_disk_usage = CommandRequirement(comment="Run this to see overall disk usage per mounted filesystem", command="df -h")
-cmd_req_large_dirs = CommandRequirement(comment="If you also want to see which directories are largest in your home folder", command="du -h --max-depth=1 ~ | sort -hr | head -n 15")
-file_req2 = FileReadRequirement(comment="I need to access the log to analyze it", path="~/my_app.log")
+file_req_large_dirs = FileRequirement(comment="If you also want to see which directories are largest in your home folder", path="~", action="metadata")
+file_req_log = FileRequirement(comment="I need to access the log to analyze it", path="~/Documents/my_app.log", action="read")
 multiple_issues_chat.add_message(LLMMessage(
     comment="Sure! Let’s check these step by step.",
-    requirements=[ cmd_req_cpu_usage, cmd_req_disk_usage, cmd_req_large_dirs, file_req1 ]
+    requirements=[ cmd_req_cpu_usage, cmd_req_disk_usage, file_req_large_dirs, file_req_log ]
 ))
 multiple_issues_chat.add_message(UserMessage(
-    comment="Here you go. I don't think it's necessary to run the 3rd command",
+    comment="Here you go. I don't think it's necessary to get the metadata for my home folder, but you can have the rest",
     results=[
         CommandResult(
             requirement=cmd_req_cpu_usage,
@@ -111,8 +112,9 @@ tmpfs           784M   48K  784M   1% /run/user/1000
 """,
             success=True
         ),
-        FileReadResult(
-            requirement=file_req2,
+        FileResult(
+            requirement=file_req_log,
+            metadata={ "path": "/home/user/Documents/my_app.log", "size": 11180, "mtime": "Wed Jul 16 12:59:44 2025", "is_directory": False },
             content="""
 2025-07-16 09:12:03 INFO  [app] Starting web server on port 8080
 2025-07-16 09:12:04 INFO  [db] Connection established to postgres://localhost:5432/mydb

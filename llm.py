@@ -1,5 +1,4 @@
 import instructor
-from typing import List
 from enum import Enum
 from urllib.parse import urlunparse
 from openai import OpenAI
