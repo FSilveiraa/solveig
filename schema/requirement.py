@@ -10,7 +10,7 @@ from typing import Literal, Union, Optional, List
 
 from config import SolveigConfig
 import utils.file
-from utils.formatting import ask_yes, truncate_output
+from utils.misc import ask_yes, format_output
 
 
 
@@ -72,11 +72,11 @@ class FileRequirement(Requirement):
                     print("    [ Metadata ]")
                     content = None
                     metadata, _ = utils.file.read_metadata_and_entries(abs_path)
-                    print("      " + truncate_output(json.dumps(metadata), max_size=config.max_file_output))
+                    print(format_output(json.dumps(metadata), indent=4, max_lines=config.max_output_lines, max_chars=config.max_output_size))
                     if choice_read_file == "y":
                         content, encoding = utils.file.read_file(abs_path)
                         print("    [ Content ]")
-                        print("      " + ("(Base64)" if encoding == "base64" else truncate_output(content, config.max_file_output)))
+                        print("      " + ("(Base64)" if encoding == "base64" else format_output(content, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size)))
                     if ask_yes("    ? Allow sending file data? [y/N]: "):
                         return FileResult(requirement=self, metadata=metadata, content=content)
 
@@ -103,10 +103,10 @@ class CommandRequirement(Requirement):
                 print(error)
 
             print("    [ Output ]")
-            print(truncate_output(output, config.max_file_output))
+            print(format_output(output, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
             if error:
                 print("    [ Error ]")
-                print(truncate_output(error, config.max_file_output))
+                print(format_output(error, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
             if ask_yes("    ? Allow sending output? [y/N]: "):
                 return CommandResult(requirement=self, stdout=output, stderr=error, success=success)
 

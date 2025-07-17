@@ -4,7 +4,7 @@ from instructor.exceptions import InstructorRetryException
 import json
 
 import llm
-import utils.formatting
+import utils.misc
 from config import SolveigConfig
 from schema.message import MessageHistory, UserMessage, LLMMessage
 import system_prompt
@@ -39,11 +39,11 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
         print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
 
-    utils.formatting.print_line("User")
+    utils.misc.print_line("User")
     if user_prompt:
-        print(f"{utils.formatting.INPUT_PROMPT}{user_prompt}")
+        print(f"{utils.misc.INPUT_PROMPT}{user_prompt}")
     else:
-        user_prompt = utils.formatting.prompt_user()
+        user_prompt = utils.misc.prompt_user()
     user_response = UserMessage(comment=user_prompt)
     message_history.add_message(user_response)
 
@@ -75,24 +75,21 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
 
             # we can either try the same message again with the same comment and results
             # or create a completely new message
-            if not utils.formatting.ask_yes(f"  ? Re-send previous message{ " and results" if user_response.results else "" }? [y/N]"):
-                user_response = UserMessage(comment=utils.formatting.prompt_user())
+            if not utils.misc.ask_yes(f"  ? Re-send previous message{ " and results" if user_response.results else "" }? [y/N] "):
+                user_response = UserMessage(comment=utils.misc.prompt_user())
                 message_history.add_message(user_response)
 
         else:
             message_history.add_message(llm_response)
 
-            utils.formatting.print_line("Assistant")
-            # print(f"""\n{ "-" * terminal_width }\n""")
-            # print("Assistant:")
+            utils.misc.print_line("Assistant")
             print(llm_response.comment.strip())
 
             if llm_response.requirements:
                 print(f"\n[ Requirements ({ len(llm_response.requirements) }) ]")
                 summarize_requirements(llm_response)
 
-            # print(f"""\n{"-" * terminal_width}\n""")
-            utils.formatting.print_line("User")
+            utils.misc.print_line("User")
 
             if llm_response.requirements:
                 print(f"[ Requirement Results ({ len(llm_response.requirements) }) ]")
@@ -105,7 +102,7 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
                         print(e)
                 print()
 
-            user_response = UserMessage(comment=utils.formatting.prompt_user(), results=results)
+            user_response = UserMessage(comment=utils.misc.prompt_user(), results=results)
             message_history.add_message(user_response)
 
 

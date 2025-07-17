@@ -1,10 +1,9 @@
 from dataclasses import dataclass, field
-from pydantic import Field
 from datetime import datetime, UTC
 
 from schema.requirement import *
-import utils.formatting
-from utils.formatting import count_tokens
+import utils.misc
+from utils.misc import count_tokens
 
 
 class BaseMessage(BaseModel):
@@ -52,7 +51,7 @@ class MessageContainer:
         self.message = message
         self.role = "user" if isinstance(message, UserMessage) else "assistant"
         self.content = json.dumps(message.to_openai())
-        self.token_count = utils.formatting.count_tokens(self.content)
+        self.token_count = utils.misc.count_tokens(self.content)
 
     def to_openai(self) -> dict:
         return {

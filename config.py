@@ -6,6 +6,7 @@ from typing import List
 
 from llm import APIType
 
+
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
 
@@ -41,7 +42,9 @@ class SolveigConfig:
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
-    max_file_output: int = 100
+    max_output_lines: int = 6
+    max_output_size: int = 100
+
 
     def __post_init__(self):
         # convert API type to enum
@@ -87,6 +90,8 @@ class SolveigConfig:
         parser.add_argument("--add-examples", "--ex", action="store_true", default=None, help="Include chat examples in the system prompt to help the LLM understand the response format")
         parser.add_argument("--add-os-info", "--os", action="store_true", default=None, help="Include helpful OS information in the system prompt")
         parser.add_argument("--exclude-username", "--no-user", action="store_true", default=None, help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)")
+        parser.add_argument("--max-output-lines", type=int, help="The maximum number of lines of file content or command output to print")
+        parser.add_argument("--max-output-size", type=int, help="The maximum characters of file content or command output to print")
         parser.add_argument("--verbose", "-v", action="store_true")
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
