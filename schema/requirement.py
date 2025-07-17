@@ -37,7 +37,6 @@ class FileRequirement(Requirement):
         possible = False
         negator = False
         for path in config.allowed_paths:
-            # TODO: make the `path` variable itself be a Path instead of str
             if Path(self.path).is_relative_to(path):
                 if self.mode_allowed(path.mode):
                     possible = True

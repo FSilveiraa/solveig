@@ -5,7 +5,7 @@ Solveig works as safe bridge between AI assistants and your computer.
 You ask questions and it translates the LLM's response into actionable requests that you can audit.
 
 * **Ask anything** - Solveig figures out what info it needs.
-* **File & shell context** - Let Solveig peek at contents and metadata, or run specific commands to help you.
+* **File & shell context** - Let Solveig peek at file contents and metadata, or run specific commands to help you.
 * **Explicit permissions** - You review every file or command request before anything is read, executed or sent.
 * **Minimal setup** - Works with any OpenAI‑compatible LLM endpoint - Claude+Gemini coming!
 * **Clean interface** - Simple and clear CLI (check out the [examples](#-examples)).
@@ -18,7 +18,7 @@ Assuming you have an OpenAI-compatible API running on http://localhost:5001:
 
 ```commandline
 pip install -r ./requirements.txt
-python ./main.py -u "http://localhost:5001" "Tell me a joke" 
+python ./main.py -u "http://localhost:5001/v1" "Tell me a joke" 
 ```
 
 ---
@@ -33,7 +33,7 @@ to actually solve problems on your machine.
 
 ### Is Solveig an LLM like ChatGPT?
 
-Solveig isn't an LLM, it's a safe interface between those services and your computer. Solveig *can use* ChagGPT.
+Solveig isn't an LLM, it's a safe interface between those services and your computer. Solveig *can use* ChatGPT.
 
 ### Why use Solveig instead of a plain LLM?
 
