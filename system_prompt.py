@@ -30,7 +30,7 @@ Prioritize asking for a file over running a command to read that file since it's
 Use commands only when necessary for access or performance reasons.
 If you believe your solution will require multiple steps in sequence, ask only for what is necessary at this moment.
 
-Output your response strictly following the `LLMessage` format described below.
+Output your response strictly following the `LLMMessage` format described below.
 """
 
 SYSTEM_PROMPT_OS_INFO = """

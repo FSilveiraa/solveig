@@ -1,5 +1,7 @@
 import os
 import time
+import pwd
+import grp
 import base64
 from pathlib import Path
 import mimetypes
@@ -12,11 +14,17 @@ def read_metadata_and_entries(path):
 
     stats = os.stat(path)
     is_dir = os.path.isdir(path)
+    # resolve uid/gid to names
+    owner_name = pwd.getpwuid(stats.st_uid).pw_name
+    group_name = grp.getgrgid(stats.st_gid).gr_name
+
     metadata = {
         "path": os.path.abspath(path),
         "size": stats.st_size,
         "mtime": time.ctime(stats.st_mtime),
         "is_directory": is_dir,
+        "owner": owner_name,
+        "group": group_name,
     }
     entries = None
 

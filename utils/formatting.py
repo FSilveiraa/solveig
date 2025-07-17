@@ -1,8 +1,12 @@
 import tiktoken
+import shutil
 
 
 YES = { "y", "yes" }
 TRUNCATE_JOIN = "(...)"
+INPUT_PROMPT = "Reply:\n > "
+
+terminal_width = shutil.get_terminal_size((80, 20)).columns
 
 
 def truncate_output(content: str, max_size: int) -> str:
@@ -13,14 +17,20 @@ def truncate_output(content: str, max_size: int) -> str:
     return content_to_print
 
 
+def prompt_user(prompt: str = "Reply:\n > ") -> str:
+    return input(prompt).strip()
+
+
 def ask_yes(prompt: str) -> bool:
-    return input(prompt).strip().lower() in YES
+    return prompt_user(prompt).lower() in YES
 
 
 def count_tokens(text: str) -> int:
-    encoding = None
-    try:
-        encoding = tiktoken.encoding_for_model("gpt-4o").encode(text)
-    except Exception as e:
-        print(e)
+    encoding = tiktoken.encoding_for_model("gpt-4o").encode(text)
     return len(encoding) if encoding else 0
+
+
+def print_line(title: str = ""):
+    if title:
+        title = f"--- { title.strip() } "
+    print(f"""\n{ title }{ "-" * (terminal_width - len(title)) }""")
