@@ -1,56 +1,72 @@
 # Solveig
 
-Solveig analyzes your system to answer any questions or solve any issues you may have.
+Solveig works as safe bridge between AI assistants and your computer.
 
-Generate a summary of your day based on your browser history.
+You ask questions and it translates the LLM's response into actionable requests that you can audit.
 
-Find the latest file changed in a directory tree.
+* **Ask anything** - Solveig figures out what info it needs.
+* **File & shell context** - Let Solveig peek at contents and metadata, or run specific commands to help you.
+* **Explicit permissions** - You review every file or command request before anything is read, executed or sent.
+* **Minimal setup** - Works with any OpenAI‑compatible LLM endpoint - Claude+Gemini coming!
+* **Clean interface** - Simple and clear CLI (check out the [examples](#-examples)).
 
-Create a commit message based on your git diff.
+---
 
-Diagnose problems by sharing logs and getting commands you can audit.
+## 🚀 Quick start
 
-This tool analyzes your shell history, git activity and other sources of data
-to generate daily summaries, commit message suggestions and whatever else using an LLM.
+Assuming you have an OpenAI-compatible API running on http://localhost:5001:
 
-Understand that this tool exposes a lot of your information to an AI, which can have potentially
-disastrous privacy consequences.
-Solveig will try to anonymize your data, but you're responsible for selecting data sources
-for Solveig and using AI services you trust.
-We suggest using a local model for sensitive data, and if you're starting out with a 3rd party
-LLM service then try out Solveig on a "dummy" system like a VM.
-
-## Setup
-
-Solveig parses your raw session data - your shell commands, your current git repo history,
-whatever else you wish to give it - and parses it into blocks that fit into a time range.
-So that when you ask "summarize my day" Solveig can look at your data for the previous ~18h.
-In order to do that, you need to perform some changes to your system. All of these can be done by executing
-the `setup.sh` script.
-
-### Enabling Bash History Timestamps
-
-This will make your bash history use timestamps:
-
-```
- 1001  2025-07-13 21:48:15 vim ~/.bashrc 
- 1002  2025-07-13 23:05:30 source ~/.bashrc 
- 1003  2025-07-13 23:05:37 history
+```commandline
+pip install -r ./requirements.txt
+python ./main.py -u "http://localhost:5001" "Tell me a joke" 
 ```
 
-Add the following line to your `~/.bashrc`:
+---
 
-```bash
-export HISTTIMEFORMAT="%F %T "
-```
+## ❓ FAQ
 
 
-## Examples
+### What is Solveig?
+
+Solveig is a terminal‑based AI helper. Instead of just chatting, it can request access to files and command outputs
+to actually solve problems on your machine.
+
+### Why use Solveig instead of plain ChatGPT?
+
+Solveig isn't an LLM service like ChatGPT or Gemini, it's a safe interface between those assistants and your computer. Solveig *can use* ChagGPT.
+
+By itself, an LLM can only guess based on what you type.
+If you ask ChatGPT a question and it asks you for something else,
+it becomes your job to understand those requirements and manually attach them.
+Solveig handles all of that for you. It can make your LLM understand what you need,
+what resources it has available and how to help you - safely, automatically and without copy-pasting.
+
+### Why use Solveig over other LLM‑to‑shell assistants?
+
+All the software that acts as a layer between your LLM and a shell terminal can't be compared in terms of "what can it do?"
+because the answer to all of them is "everything". What Solveig offers comes more from how it prevents itself from doing
+dangerous things through an explicit access system to both commands and files. It tries to minimize risk by allowing
+direct file access over arbitrary commands, as well as enforcing explicit user consent.
+
+Basically, it's much safer for an LLM to ask you for a file than to ask to run a `cat` command to read that file.
+
+### Is Solveig safe to run?
+
+The default configuration should prevent most problems, and to this day I've never seen Solveig generate actually unsafe code.
+But understand that a tool that pipes an often-hallucinating text generator into a BASH interpreter is **probably
+the most dangerous thing you could run on your computer**, and that it's your responsibility to be aware of the dangers
+and to deny any file or command request that you do not understand.
+
+---
+
+## 🎭 Examples
 
 All of these were obtained using [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
 I'm impressed with how good an 8B model is at suggesting commands and solving problems
 
-Ask for the time:
+<details>
+<summary><b>(expand) Ask for the time in different timezones</b></summary>
+
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 Reply:
@@ -100,6 +116,10 @@ Reply:
 Now I have the local time in EEST and the time in Hong Kong (Asia/Hong_Kong). The local time is July 17, 2025, 18:41:55 in EEST, and the Hong Kong time is July 17, 2025, 23:41:55 in +0800. I hope this helps!
 
 ```
+</details>
+
+<details>
+<summary><b>(expand) How many users are logged in and who owns this file?</b></summary>
 
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
@@ -140,3 +160,4 @@ Reply:
 Based on the 'who' command output, there are two users logged in: 'jdoe' on seat0 and 'jdoe' on tty2. The file ~/run.sh is owned by 'jdoe'.
 
 ```
+</details>

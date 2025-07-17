@@ -17,6 +17,7 @@ class BaseMessage(BaseModel):
     def strip_name(cls, comment):
         return comment.strip()
 
+
 # The user's message will contain
 # - either the inital prompt or optionally more prompting
 # - optionally the responses to results asked by the LLM
