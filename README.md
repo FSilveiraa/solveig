@@ -162,3 +162,11 @@ Based on the 'who' command output, there are two users logged in: 'jdoe' on seat
 
 ```
 </details>
+
+---
+
+## 🧩 Plugins
+
+Solveig can be extended by adding new communication capabilities.
+Just create a `Pydantic` model that extends `schema.requirement.BaseRequirement` that implements `solve()`
+- and likely a response that extends `schema.requirement.RequirementResult`.
