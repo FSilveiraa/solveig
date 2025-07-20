@@ -85,7 +85,7 @@ class SolveigConfig:
     @classmethod
     def parse_config_and_prompt(cls, cli_args=None):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to config file")
+        parser.add_argument("--config", "-c", type=str, default=DEFAULT_CONFIG_PATH, help="Path to config file")
         parser.add_argument("--url", "-u", type=str)
         parser.add_argument("--api-type", "-a", type=str, choices=set(api_type.name.lower() for api_type in APIType), help="Type of API to use (default: OpenAI)")
         parser.add_argument("--api-key", "-k", type=str)

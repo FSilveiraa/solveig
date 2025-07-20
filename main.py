@@ -3,8 +3,6 @@ from instructor.exceptions import InstructorRetryException
 
 import json
 
-from openai import api_key
-
 import llm
 import utils.misc
 from config import SolveigConfig
