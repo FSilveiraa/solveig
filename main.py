@@ -53,19 +53,22 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
         if config.verbose:
             print(f"[ Sending ]")
             print(json.dumps(user_response.to_openai(), indent=2))
+        else:
+            print("(Sending)")
 
         results = []
         try:
             llm_response: LLMMessage = client.chat.completions.create(
                 messages=message_history.to_openai(),
                 response_model=LLMMessage,
-                model="llama3",
                 strict=False,
-                temperature=0.7,
+                model=config.model,
+                temperature=config.temperature,
                 # max_tokens=512,
             )
         except InstructorRetryException as e:
             print("[ Error ]")
+            print("  " + str(e))
             print("  Failed to parse message")
             if config.verbose and e.last_completion:
                 print("  Output:")

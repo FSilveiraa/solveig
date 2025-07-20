@@ -13,12 +13,19 @@ You ask questions and it translates the LLM's response into actionable requests 
 ---
 
 ## 🚀 Quick start
-
-Assuming you have an OpenAI-compatible API running on http://localhost:5001:
-
+Install:
 ```commandline
 pip install -r ./requirements.txt
-python ./main.py -u "http://localhost:5001/v1" "Tell me a joke" 
+```
+
+Local model:
+```commandline
+python ./main.py -u "http://localhost:5001/v1" "Tell me a joke"
+```
+
+OpenRouter:
+```commandline
+python ./main.py -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
 ```
 
 ---
@@ -62,7 +69,7 @@ and to deny any file or command request that you do not understand.
 
 ## 🎭 Examples
 
-All of these were obtained using [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
+All of these were obtained using a local run of [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
 I'm impressed with how good an 8B model is at suggesting commands and solving problems
 
 <details>
@@ -72,6 +79,7 @@ I'm impressed with how good an 8B model is at suggesting commands and solving pr
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 Reply:
  > I need to check the current date and time
+(Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
 To check the current date and time, I can use the date command. Let me see what it outputs.
@@ -92,6 +100,7 @@ To check the current date and time, I can use the date command. Let me see what 
 
 Reply:
  > Can you also tell me the time in Hong Kong?
+ (Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
 The output from the date command shows the local time in EEST timezone. To get the time in Hong Kong, which is in the Asia/Hong_Kong timezone, I need to use the date command with the appropriate timezone set.
@@ -112,6 +121,7 @@ The output from the date command shows the local time in EEST timezone. To get t
 
 Reply:
  > 
+(Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
 Now I have the local time in EEST and the time in Hong Kong (Asia/Hong_Kong). The local time is July 17, 2025, 18:41:55 in EEST, and the Hong Kong time is July 17, 2025, 23:41:55 in +0800. I hope this helps!
@@ -168,5 +178,20 @@ Based on the 'who' command output, there are two users logged in: 'jdoe' on seat
 ## 🧩 Plugins
 
 Solveig can be extended by adding new communication capabilities.
-Just create a `Pydantic` model that extends `schema.requirement.BaseRequirement` that implements `solve()`
-- and likely a response that extends `schema.requirement.RequirementResult`.
+Just create a `Pydantic` model that extends `schema.requirement.BaseRequirement`,
+and likely a response extending `schema.requirement.RequirementResult`.
+
+---
+
+## 📆 Coming next
+
+I'm currently focused on strengthening Solveig's CLI capabilities, making it safer to audit and run commands.
+This is by automatically (and optionally) validating the commands Solveig generates for syntax errors, vulnerabilities and other concerns,
+using two optional complementing approaches:
+
+* [Semgrep](https://github.com/semgrep/semgrep) - a static code analyzer that can identify vulnerabilities
+(I'm also exploring their Semgrep AppSec Platform)
+* Double-check - requesting another LLM to validate the generated commands (either the main one or a secondary model focused on code safety)
+
+I'm also interested on adding other APIs like Gemini and Claude, but it's not a priority because there are countless
+platforms that normalize the API format (like OpenRouter) and local models don't benefit from it.
