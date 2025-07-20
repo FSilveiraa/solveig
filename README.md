@@ -69,11 +69,13 @@ and to deny any file or command request that you do not understand.
 
 ## 🎭 Examples
 
-All of these were obtained using a local run of [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
-I'm impressed with how good an 8B model is at suggesting commands and solving problems
+These were obtained a mixture of local runs of [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
+as well as [Kimi K2](https://openrouter.ai/moonshotai/kimi-k2) on OpenRouter.
+
+*click to expand:*
 
 <details>
-<summary><b>(expand) Ask for the time in different timezones</b></summary>
+<summary><b>Ask for the time in different timezones</b></summary>
 
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
@@ -130,7 +132,7 @@ Now I have the local time in EEST and the time in Hong Kong (Asia/Hong_Kong). Th
 </details>
 
 <details>
-<summary><b>(expand) How many users are logged in and who owns this file?</b></summary>
+<summary><b>How many users are logged in and who owns this file?</b></summary>
 
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
@@ -173,6 +175,273 @@ Based on the 'who' command output, there are two users logged in: 'jdoe' on seat
 ```
 </details>
 
+<details>
+
+<summary><b>Create a Dockerized FastAPI project in ~/my_app/</b></summary>
+
+Disclosure: the Files functionality isn't finished and doesn't yet implement writing, so if the LLM asked me to create a file
+with some initial contents, that wouldn't be possible. Because of that I added this to the prompt: `(Use only commands)`
+
+```
+--- User -----------------------------------------------------------------------------------------------------------------------------------
+Reply:
+ > Create a Dockerized FastAPI project in ~/my_app/ (Use only commands)
+(Sending)
+
+--- Assistant ------------------------------------------------------------------------------------------------------------------------------
+I'll create a Dockerized FastAPI project in ~/my_app/ using commands. This will involve creating the directory structure, Python files, Dockerfile, and docker-compose.yml.
+
+[ Requirements (7) ]
+  Commands:
+    mkdir -p ~/my_app/app
+    cat > ~/my_app/app/main.py << 'EOF'
+from fastapi import FastAPI
+
+app = FastAPI(title="My FastAPI App", version="1.0.0")
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello from FastAPI!"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+EOF
+    cat > ~/my_app/requirements.txt << 'EOF'
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+EOF
+    cat > ~/my_app/Dockerfile << 'EOF'
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EOF
+    cat > ~/my_app/docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+EOF
+    cat > ~/my_app/.dockerignore << 'EOF'
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+EOF
+    cat > ~/my_app/.gitignore << 'EOF'
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+EOF
+
+--- User -----------------------------------------------------------------------------------------------------------------------------------
+[ Requirement Results (7) ]
+  [ Command ]
+    Create the main project directory
+      command: mkdir -p ~/my_app/app
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create the main FastAPI application file
+      command: cat > ~/my_app/app/main.py << 'EOF'
+from fastapi import FastAPI
+
+app = FastAPI(title="My FastAPI App", version="1.0.0")
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello from FastAPI!"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create requirements.txt with FastAPI dependencies
+      command: cat > ~/my_app/requirements.txt << 'EOF'
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create Dockerfile for containerization
+      command: cat > ~/my_app/Dockerfile << 'EOF'
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create docker-compose.yml for easy development
+      command: cat > ~/my_app/docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create .dockerignore to optimize build context
+      command: cat > ~/my_app/.dockerignore << 'EOF'
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+  [ Command ]
+    Create .gitignore for version control
+      command: cat > ~/my_app/.gitignore << 'EOF'
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+EOF
+    ? Allow running command? [y/N]: y
+    [ Output ]
+
+    ? Allow sending output? [y/N]: y
+
+Reply:
+ > 
+
+```
+
+</details>
+
 ---
 
 ## 🧩 Plugins
@@ -185,7 +454,11 @@ and likely a response extending `schema.requirement.RequirementResult`.
 
 ## 📆 Coming next
 
-I'm currently focused on strengthening Solveig's CLI capabilities, making it safer to audit and run commands.
+My main priority is improving the File API and allow writing access with optional initial content.
+This is useful for requests that mostly involve writing static text to large trees, like asking it to set up
+an example NodeJS project.
+
+Besides that, I want to focus on strengthening Solveig's CLI capabilities, making it safer to audit and run commands.
 This is by automatically (and optionally) validating the commands Solveig generates for syntax errors, vulnerabilities and other concerns,
 using two optional complementing approaches:
 

@@ -3,6 +3,8 @@ from instructor.exceptions import InstructorRetryException
 
 import json
 
+from openai import api_key
+
 import llm
 import utils.misc
 from config import SolveigConfig
@@ -32,7 +34,7 @@ def summarize_requirements(message: LLMMessage):
 
 
 def main_loop(config: SolveigConfig, user_prompt: str = None):
-    client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url = config.url)
+    client: Instructor = llm.get_instructor_client(api_type=config.api_type, api_key=config.api_key, url=config.url)
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
