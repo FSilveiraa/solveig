@@ -1,8 +1,7 @@
 import argparse
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 from llm import APIType
 
@@ -39,8 +38,8 @@ class SolveigConfig:
     api_key: str = None
     model: str = None
     temperature: int = 0
-    allowed_commands: bool = False
-    allowed_paths: List[SolveigPath] = field(default_factory=list)
+    # allowed_commands: List[str] = field(default_factory=list)
+    # allowed_paths: List[SolveigPath] = field(default_factory=list)
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
@@ -55,6 +54,9 @@ class SolveigConfig:
             self.api_type = APIType[self.api_type]
 
         # split allowed paths in (path, mode)
+        # TODO: allowed paths
+        if True:
+            return
         allowed_paths = []
         for raw_path in self.allowed_paths:
             if isinstance(raw_path, str):
@@ -92,8 +94,8 @@ class SolveigConfig:
         parser.add_argument("--model", "-m", type=str, help="Model name or path (ex: gpt-4.1, moonshotai/kimi-k2:free)")
         parser.add_argument("--temperature", "-t", type=int, help="Temperature the model should use (default: 0.0)")
         # Don't add a shorthand flag for this one, it shouldn't be "easy" to do (plus unimplemented for now)
-        parser.add_argument("--allowed-commands", action="store", nargs="*", help="(dangerous) Commands that can automatically be ran and have their output shared")
-        parser.add_argument("--allowed-paths", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
+        # parser.add_argument("--allowed-commands", action="store", nargs="*", help="(dangerous) Commands that can automatically be ran and have their output shared")
+        # parser.add_argument("--allowed-paths", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
         parser.add_argument("--add-examples", "--ex", action="store_true", default=None, help="Include chat examples in the system prompt to help the LLM understand the response format")
         parser.add_argument("--add-os-info", "--os", action="store_true", default=None, help="Include helpful OS information in the system prompt")
         parser.add_argument("--exclude-username", "--no-user", action="store_true", default=None, help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)")

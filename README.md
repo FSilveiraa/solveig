@@ -69,8 +69,7 @@ and to deny any file or command request that you do not understand.
 
 ## 🎭 Examples
 
-These were obtained a mixture of local runs of [DeepSeek-R1-0528-Qwen3-8B-GGUF](https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/tree/main),
-as well as [Kimi K2](https://openrouter.ai/moonshotai/kimi-k2) on OpenRouter.
+These were obtained with [Kimi K2](https://openrouter.ai/moonshotai/kimi-k2) on OpenRouter.
 
 *click to expand:*
 
@@ -80,11 +79,11 @@ as well as [Kimi K2](https://openrouter.ai/moonshotai/kimi-k2) on OpenRouter.
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 Reply:
- > I need to check the current date and time
+ > What time is it?
 (Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
-To check the current date and time, I can use the date command. Let me see what it outputs.
+I can tell you the current time by checking the system clock. Let me run the date command to get the current time and date.
 
 [ Requirements (1) ]
   Commands:
@@ -93,347 +92,137 @@ To check the current date and time, I can use the date command. Let me see what 
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 [ Requirement Results (1) ]
   [ Command ]
-    Run this to show the current date and time.
-      command: date
+    comment: "Run the date command to display the current system time and date"
+    command: date
     ? Allow running command? [y/N]: y
     [ Output ]
-      Thu Jul 17 06:41:30 PM EEST 2025
+      Tue Jul 22 01:24:40 AM EEST 2025
     ? Allow sending output? [y/N]: y
 
 Reply:
- > Can you also tell me the time in Hong Kong?
- (Sending)
+ > Here you go. By the way, what's the conversion to Hong Kong?
+(Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
-The output from the date command shows the local time in EEST timezone. To get the time in Hong Kong, which is in the Asia/Hong_Kong timezone, I need to use the date command with the appropriate timezone set.
+The system shows 01:24 AM EEST (Eastern European Summer Time). Hong Kong is 5 hours ahead of EEST, so the time in Hong Kong is 06:24 AM HKT.
+
+```
+</details>
+
+<details>
+<summary><b>Does this file look dangerous?</b></summary>
+
+```
+--- User -----------------------------------------------------------------------------------------------------------------------------------
+Reply:
+ > I don't recognize the file ~/run.sh, is it dangerous?
+(Sending)
+
+--- Assistant ------------------------------------------------------------------------------------------------------------------------------
+I need to examine the ~/run.sh file to determine if it's dangerous. Let me check its contents and metadata to see what it does.
 
 [ Requirements (1) ]
-  Commands:
-    TZ=Asia/Hong_Kong date +'%Y-%m-%d %H:%M:%S %z'
+  Read:
+    ~/run.sh (content)
 
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 [ Requirement Results (1) ]
-  [ Command ]
-    Run this command to display the current time in Hong Kong (Asia/Hong_Kong timezone).
-      command: TZ=Asia/Hong_Kong date +'%Y-%m-%d %H:%M:%S %z'
-    ? Allow running command? [y/N]: y
-    [ Output ]
-      2025-07-17 23:41:55 +0800
-    ? Allow sending output? [y/N]: y
+  [ Read ]
+    comment: "I need to read the contents of ~/run.sh to analyze what commands it contains and determine if it could be harmful"
+    path: ~/run.sh (file)
+    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: y
+    [ Metadata ]
+      {"path": "/home/francisco/run.sh", "size": 1 (...) 01, "mtime": "Thu Jul 17 02:54:43 2025", "is_directory": false, "owner": "francisco", "group": "francisco"}
+    [ Content ]
+      (Base64)
+    ? Allow sending file content and metadata? [y/N]: y
 
 Reply:
  > 
 (Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
-Now I have the local time in EEST and the time in Hong Kong (Asia/Hong_Kong). The local time is July 17, 2025, 18:41:55 in EEST, and the Hong Kong time is July 17, 2025, 23:41:55 in +0800. I hope this helps!
+The ~/run.sh file appears to be safe. It's a simple initialization script that creates directories for logs and tmp files, creates an empty log file, and sets up a flag file indicating the project has been initialized. The commands are all basic file operations (mkdir, touch, echo) and don't contain any suspicious or dangerous operations.
 
 ```
 </details>
 
 <details>
-<summary><b>How many users are logged in and who owns this file?</b></summary>
+<summary><b>Create a Dockerized FastAPI example project</b></summary>
 
 ```
 --- User -----------------------------------------------------------------------------------------------------------------------------------
 Reply:
- > How many users are logged in and who owns ~/run.sh?
-
---- Assistant ------------------------------------------------------------------------------------------------------------------------------
-To determine how many users are logged in, I can check the output of the 'who' command. It will list all currently logged-in users and their details. Additionally, I need to know the owner of the file ~/run.sh, which can be found in the file's metadata.
-
-[ Requirements (2) ]
-  Files:
-    ~/run.sh (metadata)
-  Commands:
-    who
-
---- User -----------------------------------------------------------------------------------------------------------------------------------
-[ Requirement Results (2) ]
-  [ Command ]
-    Run this command to check how many users are logged in. The 'who' command lists all logged-in users, and we can count them from the output.
-      command: who
-    ? Allow running command? [y/N]: y
-    [ Output ]
-      jdoe seat0        2025-07-01 12:18
-      jdoe tty2         2025-07-01 12:18
-    ? Allow sending output? [y/N]: y
-  [ File ]
-    Run this to get the metadata of the file to find out who owns it.
-      path: ~/run.sh (dir=False)
-    ? Read file? [y=contents+metadata / m=metadata / N=skip]: m
-    [ Metadata ]
-    {"path": "/home/jdoe/run.sh", "size": 101 (...) , "mtime": "Thu Jul 17 02:54:43 2025", "is_directory": false, "owner": "jdoe", "group": "jdoe"}
-    ? Allow sending file data? [y/N]: y
-
-Reply:
- > Here you go!
-
---- Assistant ------------------------------------------------------------------------------------------------------------------------------
-Based on the 'who' command output, there are two users logged in: 'jdoe' on seat0 and 'jdoe' on tty2. The file ~/run.sh is owned by 'jdoe'.
-
-```
-</details>
-
-<details>
-
-<summary><b>Create a Dockerized FastAPI project in ~/my_app/</b></summary>
-
-Disclosure: the Files functionality isn't finished and doesn't yet implement writing, so if the LLM asked me to create a file
-with some initial contents, that wouldn't be possible. Because of that I added this to the prompt: `(Use only commands)`
-
-```
---- User -----------------------------------------------------------------------------------------------------------------------------------
-Reply:
- > Create a Dockerized FastAPI project in ~/my_app/ (Use only commands)
+ > Create a Dockerized FastAPI example project in ~/my_app/
 (Sending)
 
 --- Assistant ------------------------------------------------------------------------------------------------------------------------------
-I'll create a Dockerized FastAPI project in ~/my_app/ using commands. This will involve creating the directory structure, Python files, Dockerfile, and docker-compose.yml.
+I'll create a Dockerized FastAPI example project in ~/my_app/. This will include the FastAPI application code, requirements, Dockerfile, and docker-compose configuration.
 
-[ Requirements (7) ]
-  Commands:
-    mkdir -p ~/my_app/app
-    cat > ~/my_app/app/main.py << 'EOF'
-from fastapi import FastAPI
-
-app = FastAPI(title="My FastAPI App", version="1.0.0")
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello from FastAPI!"}
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-EOF
-    cat > ~/my_app/requirements.txt << 'EOF'
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-EOF
-    cat > ~/my_app/Dockerfile << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ ./app/
-
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-EOF
-    cat > ~/my_app/docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  web:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-EOF
-    cat > ~/my_app/.dockerignore << 'EOF'
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
-EOF
-    cat > ~/my_app/.gitignore << 'EOF'
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-EOF
+[ Requirements (6) ]
 
 --- User -----------------------------------------------------------------------------------------------------------------------------------
-[ Requirement Results (7) ]
-  [ Command ]
-    Create the main project directory
-      command: mkdir -p ~/my_app/app
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create the main FastAPI application file
-      command: cat > ~/my_app/app/main.py << 'EOF'
-from fastapi import FastAPI
-
-app = FastAPI(title="My FastAPI App", version="1.0.0")
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello from FastAPI!"}
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create requirements.txt with FastAPI dependencies
-      command: cat > ~/my_app/requirements.txt << 'EOF'
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create Dockerfile for containerization
-      command: cat > ~/my_app/Dockerfile << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ ./app/
-
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create docker-compose.yml for easy development
-      command: cat > ~/my_app/docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  web:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create .dockerignore to optimize build context
-      command: cat > ~/my_app/.dockerignore << 'EOF'
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
-  [ Command ]
-    Create .gitignore for version control
-      command: cat > ~/my_app/.gitignore << 'EOF'
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-EOF
-    ? Allow running command? [y/N]: y
-    [ Output ]
-
-    ? Allow sending output? [y/N]: y
+[ Requirement Results (6) ]
+  [ Write ]
+    comment: "Create the main project directory ~/my_app/"
+    path: ~/my_app/ (directory)
+    ! Warning: this path already exists !
+  [ Write ]
+    comment: "Create the FastAPI main application file"
+    path: ~/my_app/main.py (file)
+      [ Content ]
+        from fastapi import FastAPI
+        from p (...) ydantic import BaseModel
+        
+         (...) 
+        @app.get("/health")
+        async def health_check():
+            return {"status": "healthy"}
+    ? Allow writing file and contents? [y/N]: y
+  [ Write ]
+    comment: "Create requirements.txt with FastAPI dependencies"
+    path: ~/my_app/requirements.txt (file)
+      [ Content ]
+        fastapi==0.104.1
+        uvicorn[standard]==0.24.0
+        pydantic==2.5.0
+    ? Allow writing file and contents? [y/N]: y
+  [ Write ]
+    comment: "Create Dockerfile for containerizing the FastAPI app"
+    path: ~/my_app/Dockerfile (file)
+      [ Content ]
+        FROM python:3.11-slim
+        
+        WOR (...) KDIR /app
+         (...) 
+        EXPOSE 8000
+        
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ? Allow writing file and contents? [y/N]: y
+  [ Write ]
+    comment: "Create docker-compose.yml for easy development"
+    path: ~/my_app/docker-compose.yml (file)
+      [ Content ]
+        version: '3.8'
+        
+        services:
+ (...)          (...) 
+        
+        # volumes:
+        #   postgres_data:
+    ? Allow writing file and contents? [y/N]: y
+  [ Write ]
+    comment: "Create .dockerignore file to optimize build context"
+    path: ~/my_app/.dockerignore (file)
+      [ Content ]
+        __pycache__
+        *.pyc
+        *.pyo
+   (...)        (...) 
+        README.md
+        .env
+        .venv
+    ? Allow writing file and contents? [y/N]: y
 
 Reply:
  > 
@@ -447,7 +236,7 @@ Reply:
 ## 🧩 Plugins
 
 Solveig can be extended by adding new communication capabilities.
-Just create a `Pydantic` model that extends `schema.requirement.BaseRequirement`,
+Just create a `Pydantic` model that extends `schema.requirement.Requirement`,
 and likely a response extending `schema.requirement.RequirementResult`.
 
 ---

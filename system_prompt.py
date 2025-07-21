@@ -6,6 +6,7 @@ try:
 except ImportError:
     distro = None
 
+from config import SolveigConfig
 from schema.message import *
 
 
@@ -15,7 +16,8 @@ You are an AI assisting a user with whatever issues they may have with their com
 Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
 Always try to answer the user's question, no matter how redundant it may seem.
 
-To assist the user, you may request access to either the metadata or the contents for any path (file or directory) you think is necessary.
+To assist the user, you may request access to either the metadata or the contents+metadata for any path (file or directory) you think is necessary.
+You may also request the user to write a directory, or a file (optionally with content).
 Any time that you require access to a path, always explain why it's necessary.
 
 You may also request to run certain commands and inspect their output if you think it will help you solve user's issue.
@@ -26,9 +28,9 @@ The user will analyze your requirements and accept or deny each, then provide th
 You will then analyze their response and respond to it, asking for more requirements if necessary.
 You will continue this process until the user's issue is solved.
 Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
-Prioritize asking for a file over running a command to read that file since it's safer for the user.
+Prioritize asking for direct read/write requests over running commands file since it's safer for the user.
 Use commands only when necessary for access or performance reasons.
-If you believe your solution will require multiple steps in sequence, ask only for what is necessary at this moment.
+If you believe your solution will require multiple steps in sequence, ask only for what is necessary at the current stage.
 
 Output your response strictly following the `LLMMessage` format described below.
 """
@@ -48,15 +50,16 @@ joke_chat.add_message(LLMMessage(comment="Sure! Here's a joke for you. Why do pr
 script_chat = MessageHistory(system_prompt="")
 CONVERSATION_EXAMPLES.append(script_chat)
 script_chat.add_message(UserMessage(comment="What does the script on ~/run.sh do?"))
-file_req1 = FileRequirement(
-    action="read",
+file_req1 = ReadRequirement(
+    only_read_metadata=True,
     path="~/run.sh",
     comment="To check what this script does, I need to read the contents of run.sh.",
 )
 script_chat.add_message(LLMMessage(comment="Of course, let's take a look", requirements=[ file_req1 ]))
-script_chat.add_message(UserMessage(comment="Ok here you go", results=[FileResult(
+script_chat.add_message(UserMessage(comment="Ok here you go", results=[ReadResult(
     requirement=file_req1,
     metadata={ "path": "/home/user/run.sh", "size": 101, "mtime": "Thu Jul 17 02:54:43 2025", "is_directory": False },
+    accepted=True,
     content="""
 #!/usr/bin/env bash
 mkdir -p logs tmp
@@ -78,8 +81,8 @@ I'm using Linux
 """))
 cmd_req_cpu_usage = CommandRequirement(comment="Run this command to list processes sorted by CPU usage", command="ps aux --sort=-%cpu | head -n 10")
 cmd_req_disk_usage = CommandRequirement(comment="Run this to see overall disk usage per mounted filesystem", command="df -h")
-file_req_large_dirs = FileRequirement(comment="If you also want to see which directories are largest in your home folder", path="~", action="metadata")
-file_req_log = FileRequirement(comment="I need to access the log to analyze it", path="~/Documents/my_app.log", action="read")
+file_req_large_dirs = ReadRequirement(comment="If you also want to see which directories are largest in your home folder", path="~", only_read_metadata=True)
+file_req_log = ReadRequirement(comment="I need to access the log to analyze it", path="~/Documents/my_app.log", only_read_metadata=False)
 multiple_issues_chat.add_message(LLMMessage(
     comment="Sure! Let’s check these step by step.",
     requirements=[ cmd_req_cpu_usage, cmd_req_disk_usage, file_req_large_dirs, file_req_log ]
@@ -89,6 +92,7 @@ multiple_issues_chat.add_message(UserMessage(
     results=[
         CommandResult(
             requirement=cmd_req_cpu_usage,
+            accepted=True,
             stdout="""
 USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
 jdoe        8421 95.7  4.2 905312 342816 ?       Rl   09:13  10:44 /opt/firefox/firefox
@@ -100,6 +104,7 @@ root        1203 18.4  0.9 255280  72012 ?       Ssl  07:45   7:03 /usr/lib/Xorg
         ),
         CommandResult(
             requirement=cmd_req_disk_usage,
+            accepted=True,
             stdout="""
 Filesystem      Size  Used Avail Use% Mounted on
 tmpfs           784M  2.0M  782M   1% /run
@@ -112,8 +117,13 @@ tmpfs           784M   48K  784M   1% /run/user/1000
 """,
             success=True
         ),
-        FileResult(
+        ReadResult(
+            requirement=file_req_large_dirs,
+            accepted=False
+        ),
+        ReadResult(
             requirement=file_req_log,
+            accepted=True,
             metadata={ "path": "/home/user/Documents/my_app.log", "size": 11180, "mtime": "Wed Jul 16 12:59:44 2025", "is_directory": False },
             content="""
 2025-07-16 09:12:03 INFO  [app] Starting web server on port 8080

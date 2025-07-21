@@ -23,7 +23,7 @@ class BaseMessage(BaseModel):
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
     comment: Optional[str] = None
-    results: Optional[List[FileResult|CommandResult]] = None
+    results: Optional[List[ReadResult | WriteResult | CommandResult]] = None
 
     def to_openai(self) -> dict:
         data = super().to_openai()
@@ -37,7 +37,7 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    requirements: Optional[List[FileRequirement|CommandRequirement]] = None
+    requirements: Optional[List[ReadRequirement | WriteRequirement | CommandRequirement]] = None
 
 
 @dataclass

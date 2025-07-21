@@ -8,26 +8,32 @@ import utils.misc
 from config import SolveigConfig
 from schema.message import MessageHistory, UserMessage, LLMMessage
 import system_prompt
-from schema.requirement import FileRequirement, CommandRequirement
-
+from schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
 
 
 def summarize_requirements(message: LLMMessage):
-    file_requirements, command_requirements = [], []
+    reads, writes, commands = [], [], []
     for requirement in message.requirements:
-        if isinstance(requirement, FileRequirement):
-            file_requirements.append(requirement)
+        if isinstance(requirement, ReadRequirement):
+            reads.append(requirement)
+        elif isinstance(requirement, WriteRequirement):
+            writes.append(requirement)
         elif isinstance(requirement, CommandRequirement):
-            command_requirements.append(requirement)
+            commands.append(requirement)
 
-    if file_requirements:
-        print("  Files:")
-        for requirement in file_requirements:
-            print(f"    {requirement.path} ({requirement.action})")
+    if reads:
+        print("  Read:")
+        for requirement in reads:
+            print(f"    {requirement.path} ({"metadata" if requirement.only_read_metadata else "content"})")
 
-    if command_requirements:
+    if writes:
+        print("  Write:")
+        for requirement in writes:
+            print(f"    {requirement.path}")
+
+    if commands:
         print("  Commands:")
-        for requirement in command_requirements:
+        for requirement in commands:
             print(f"    {requirement.command}")
 
 
