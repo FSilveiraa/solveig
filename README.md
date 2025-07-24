@@ -235,7 +235,39 @@ Reply:
 
 ## 🧩 Plugins
 
-Solveig can be extended by adding new communication capabilities.
+Solveig can be extended by adding new communication capabilities or by interacting
+with existing messages. A plugin can work in one of two ways:
+
+* You can add a new message that describes a functionality available for the LLM. You can do this by creating a
+`Pydantic` model that extends `schema.requirement.Requirement` and returns a response extending
+`schema.requirement.RequirementResult`. **This functionality is not implemented yet since it requires figuring out
+a way to re-generate the schema sent to the LLM on runtime, after all plugins are registered**
+* You can interact with an existing message, either before or after it starts being resolved, by using the
+`@before/after(requirements=None)` hooks.
+
+
+### Examples:
+
+<details>
+<summary><b>Anonymize all paths before sending to LLM</b></summary>
+
+```python
+import re
+
+from config import SolveigConfig
+from plugins.hooks import after
+from schema.requirement import ReadRequirement, WriteRequirement, ReadResult, WriteResult
+
+@after(requirements=(ReadRequirement, WriteRequirement))
+def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
+    anonymous_path = result.real_path
+    anonymous_path = re.sub(r"/home/\w+?", "/home/jdoe/", anonymous_path)
+    anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
+    result.real_path = anonymous_path
+```
+</details>
+
+
 Just create a `Pydantic` model that extends `schema.requirement.Requirement`,
 and likely a response extending `schema.requirement.RequirementResult`.
 

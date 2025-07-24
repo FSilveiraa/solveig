@@ -55,8 +55,7 @@ class SolveigConfig:
 
         # split allowed paths in (path, mode)
         # TODO: allowed paths
-        if True:
-            return
+        """
         allowed_paths = []
         for raw_path in self.allowed_paths:
             if isinstance(raw_path, str):
@@ -74,6 +73,7 @@ class SolveigConfig:
             else:
                 allowed_paths.append(raw_path)
             self.allowed_paths = allowed_paths
+        """
 
     @classmethod
     def parse_from_file(cls, config_path: Path|str):

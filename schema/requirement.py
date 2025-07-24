@@ -9,6 +9,7 @@ from typing import Literal, Union, Optional, List
 
 import utils.file
 from utils.misc import ask_yes, format_output
+from plugins.hooks import HOOKS
 
 
 
@@ -21,7 +22,20 @@ class Requirement(BaseModel):
     def strip_name(cls, comment):
         return comment.strip()
 
-    def solve(self, config) -> RequirementResult:
+    def solve(self, config):
+        for (before_hook, requirements) in HOOKS.before:
+            if not requirements or type(self) in requirements:
+                before_hook(config, self)
+
+        result = self._actually_solve(config)
+
+        for (after_hook, requirements) in HOOKS.after:
+            if not requirements or type(self) in requirements:
+                after_hook(config, self, result)
+
+        return result
+
+    def _actually_solve(self, config) -> RequirementResult:
         raise NotImplementedError()
 
 
@@ -47,7 +61,7 @@ class FileRequirement(Requirement):
 class ReadRequirement(FileRequirement):
     only_read_metadata: bool
 
-    def solve(self, config) -> ReadResult:
+    def _actually_solve(self, config) -> ReadResult:
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir()
 
@@ -91,7 +105,7 @@ class WriteRequirement(FileRequirement):
     is_directory: bool
     content: Optional[str] = None
 
-    def solve(self, config) -> WriteResult:
+    def _actually_solve(self, config) -> WriteResult:
         abs_path = Path(self.path).expanduser().resolve()
 
         print("  [ Write ]")
@@ -132,7 +146,7 @@ class WriteRequirement(FileRequirement):
 class CommandRequirement(Requirement):
     command: str
 
-    def solve(self, config) -> CommandResult:
+    def _actually_solve(self, config) -> CommandResult:
         print(f"  [ Command ]")
         print(f"    comment: \"{self.comment}\"")
         print(f"    command: {self.command}")
@@ -176,7 +190,16 @@ class RequirementResult(BaseModel):
         return self.model_dump()
 
 
-class ReadResult(RequirementResult):
+class FileResult(RequirementResult):
+    # preserve the original path, the real path is in the metadata
+    def to_openai(self):
+        data = super().to_openai()
+        requirement = data.pop("requirement")
+        data["path"] = requirement["path"]
+        return data
+
+
+class ReadResult(FileResult):
     metadata: Optional[dict] = None
     # For files
     content: Optional[str] = None
@@ -184,20 +207,9 @@ class ReadResult(RequirementResult):
     # For directories
     directory_listing: Optional[List[dict]] = None
 
-    def to_openai(self):
-        data = super().to_openai()
-        requirement = data.pop("requirement")
-        data["path"] = requirement["path"]
-        return data
 
-
-class WriteResult(RequirementResult):
-    def to_openai(self):
-        data = super().to_openai()
-        requirement = data.pop("requirement")
-        data["path"] = requirement["path"]
-        data["is_directory"] = requirement["is_directory"]
-        return data
+class WriteResult(FileResult):
+    pass
 
 
 class CommandResult(RequirementResult):

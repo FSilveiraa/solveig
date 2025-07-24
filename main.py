@@ -10,6 +10,9 @@ from schema.message import MessageHistory, UserMessage, LLMMessage
 import system_prompt
 from schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
 
+from plugins.hooks import load_hooks
+load_hooks()
+
 
 def summarize_requirements(message: LLMMessage):
     reads, writes, commands = [], [], []
