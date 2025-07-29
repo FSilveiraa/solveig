@@ -22,16 +22,25 @@ class Requirement(BaseModel):
     def strip_name(cls, comment):
         return comment.strip()
 
+    def _print(self, config):
+        raise NotImplementedError()
+
     def solve(self, config):
+        self._print(config)
+
         for (before_hook, requirements) in HOOKS.before:
             if not requirements or type(self) in requirements:
-                before_hook(config, self)
+                before_result = before_hook(config, self)
+                if before_result:
+                    return before_result
 
         result = self._actually_solve(config)
 
         for (after_hook, requirements) in HOOKS.after:
             if not requirements or type(self) in requirements:
-                after_hook(config, self, result)
+                after_result = after_hook(config, self, result)
+                if after_result:
+                    return after_result
 
         return result
 
@@ -61,14 +70,16 @@ class FileRequirement(Requirement):
 class ReadRequirement(FileRequirement):
     only_read_metadata: bool
 
-    def _actually_solve(self, config) -> ReadResult:
+    def _print(self, config):
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir()
-
         print("  [ Read ]")
         print(f"    comment: \"{self.comment}\"")
         print(f"    path: {self.path} ({"directory" if is_dir else "file"})")
 
+    def _actually_solve(self, config) -> ReadResult:
+        abs_path = Path(self.path).expanduser().resolve()
+        is_dir = abs_path.is_dir()
         if not abs_path.exists():
             print("    Skipping - This path does not exist.")
             return ReadResult(requirement=self, accepted=False, error="This path doesn't exist")
@@ -105,18 +116,22 @@ class WriteRequirement(FileRequirement):
     is_directory: bool
     content: Optional[str] = None
 
-    def _actually_solve(self, config) -> WriteResult:
+    def _print(self, config):
         abs_path = Path(self.path).expanduser().resolve()
 
         print("  [ Write ]")
         print(f"    comment: \"{self.comment}\"")
         # TODO also list real path if it's different from the LLM's path (and also for ReadRequirement)
         print(f"    path: {self.path} ({"directory" if self.is_directory else "file"})")
+        print(f"    real path: {abs_path}")
         if self.content:
             print("      [ Content ]")
             formatted_content = format_output(self.content, indent=8, max_lines=config.max_output_lines, max_chars=config.max_output_size)
             # TODO: make this print optional, or in a `less`-like window, or it will get messy
             print(formatted_content)
+
+    def _actually_solve(self, config) -> WriteResult:
+        abs_path = Path(self.path).expanduser().resolve()
 
         if abs_path.exists():
             print(f"    ! Warning: this path already exists !")
@@ -146,11 +161,12 @@ class WriteRequirement(FileRequirement):
 class CommandRequirement(Requirement):
     command: str
 
-    def _actually_solve(self, config) -> CommandResult:
+    def _print(self, config):
         print(f"  [ Command ]")
         print(f"    comment: \"{self.comment}\"")
         print(f"    command: {self.command}")
-        #print(f"    (type={self.type}, command='{self.command}')")
+
+    def _actually_solve(self, config) -> CommandResult:
         if ask_yes("    ? Allow running command? [y/N]: "):
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
@@ -182,7 +198,7 @@ class CommandRequirement(Requirement):
 class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
-    requirement: Optional[Union[ReadRequirement | WriteRequirement | CommandRequirement]] = None
+    requirement: Optional[Union[ReadRequirement | WriteRequirement | CommandRequirement]]
     accepted: bool
     error: Optional[str] = None
 

@@ -60,10 +60,14 @@ Basically, it's much safer for an LLM to ask you for a file than to ask to run a
 
 ### Is Solveig safe to run?
 
-The default configuration should prevent most problems, and to this day I've never seen Solveig generate actually unsafe code.
-But understand that a tool that pipes an often-hallucinating text generator into a BASH interpreter is **probably
-the most dangerous thing you could run on your computer**, and that it's your responsibility to be aware of the dangers
-and to deny any file or command request that you do not understand.
+Solveig takes several steps to prevent unsafe commands or file access on your machine.
+For example, the Shellcheck plugin will confirm whether a command is correct bash, and I'm working on adding
+other means of security like a "second opinion" LLM or Semgrep's AppSec, as well as a proper test suite.
+
+To this day I've never seen Solveig ask to run actually unsafe code, but understand that a tool that pipes
+an often-hallucinating text generator into a BASH interpreter is **probably the most dangerous thing you
+could run on your computer**, and that it's your responsibility to be aware of the dangers and to deny any
+file or command request that you do not understand.
 
 ---
 
@@ -242,8 +246,8 @@ with existing messages. A plugin can work in one of two ways:
 `Pydantic` model that extends `schema.requirement.Requirement` and returns a response extending
 `schema.requirement.RequirementResult`. **This functionality is not implemented yet since it requires figuring out
 a way to re-generate the schema sent to the LLM on runtime, after all plugins are registered**
-* You can interact with an existing message, either before or after it starts being resolved, by using the
-`@before/after(requirements=None)` hooks.
+* You can interact with an existing requirement message, either before or after it starts being resolved, by using
+the `@before/after(requirements=None)` hooks. Check out the existing `Shellcheck` plugin or the examples below
 
 
 ### Examples:
@@ -266,10 +270,6 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
     result.real_path = anonymous_path
 ```
 </details>
-
-
-Just create a `Pydantic` model that extends `schema.requirement.Requirement`,
-and likely a response extending `schema.requirement.RequirementResult`.
 
 ---
 

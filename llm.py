@@ -23,6 +23,9 @@ class APIType(Enum):
         return urlunparse((self.scheme, netloc, self.endpoint, '', '', ''))
 
 def get_instructor_client(api_type: APIType, api_key: str = None, url: str = None, skip_instructor_system_prompt=True) -> instructor.Instructor:
+    # NoneType throws error, but we don't want to enforce having an API key for local runs
+    api_key = api_key or ""
+
     if api_type == APIType.OPENAI:
         client = OpenAI(api_key=api_key, base_url=url)
         return instructor.from_openai(client, mode=instructor.Mode.JSON)
