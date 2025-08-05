@@ -94,3 +94,10 @@ node_modules/
 # Python egg files
 *.egg
 *.egg-info/
+
+# Claude files
+.claudeignore
+CLAUDE.md
+.claude-conversations/
+.project-logs/
+

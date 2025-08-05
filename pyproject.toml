@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solveig"
+version = "0.1.0"
+description = "A safe bridge between AI assistants and your computer"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Francisco"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Tools",
+    "Topic :: Security",
+]
+keywords = ["ai", "automation", "security", "llm", "assistant"]
+requires-python = ">=3.8"
+dependencies = [
+    "distro==1.9.0",
+    "instructor==1.9.2", 
+    "openai==1.97.0",
+    "pydantic==2.11.7",
+    "tiktoken==0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/francisco/solveig"
+Repository = "https://github.com/francisco/solveig"
+Issues = "https://github.com/francisco/solveig/issues"
+
+[project.scripts]
+solveig = "solveig.main:cli_main"
+solveig-init = "solveig.scripts.init:main"
+
+[tool.setuptools.packages.find]
+include = ["solveig*"]
+
+# Development tool configurations for future use
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--cov=solveig", "--cov-report=term-missing"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501"]  # line too long, handled by black

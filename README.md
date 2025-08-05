@@ -1,3 +1,4 @@
+
 # Solveig
 
 Solveig works as safe bridge between AI assistants and your computer.
@@ -9,6 +10,11 @@ You ask questions and it translates the LLM's response into actionable requests 
 * **Explicit permissions** - You review every file or command request before anything is read, executed or sent.
 * **Minimal setup** - Works with any OpenAI‑compatible LLM endpoint - Claude+Gemini coming!
 * **Clean interface** - Simple and clear CLI (check out the [examples](#-examples)).
+
+---
+
+<a href="https://vshymanskyy.github.io/StandWithUkraine">
+	<img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
 
 ---
 
