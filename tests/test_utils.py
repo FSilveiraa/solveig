@@ -2,64 +2,179 @@
 
 from unittest.mock import Mock
 from solveig.schema.message import LLMMessage
+from solveig.schema.requirement import ReadRequirement, WriteRequirement, CommandRequirement
 
 
-def create_simple_mock_requirements():
-    """Create simple mock requirements for process_requirements tests."""
-    mock_req1 = Mock()
-    mock_req1.solve.return_value = "Read result"
+class MockReadRequirement(ReadRequirement):
+    """ReadRequirement subclass that allows mocking solve() method."""
     
-    mock_req2 = Mock()
-    mock_req2.solve.return_value = "Write result"
+    def __init__(self, solve_return="Read result", **kwargs):
+        super().__init__(**kwargs)
+        self._solve_return = solve_return
+        self._solve_mock = Mock(return_value=solve_return)
     
-    mock_req3 = Mock()
-    mock_req3.solve.return_value = "Command result"
+    def solve(self, config):
+        """Override solve method to return mock result."""
+        return self._solve_mock(config)
     
-    return [mock_req1, mock_req2, mock_req3]
+    @property
+    def solve_mock(self):
+        """Access to the underlying mock for assertions."""
+        return self._solve_mock
 
 
-def create_mock_llm_message_with_requirements():
-    """Create a mock LLM message with simple mock requirements."""
-    mock_message = Mock(spec=LLMMessage)
-    mock_message.comment = "I need to read a file, write another file, and run a command."
-    mock_message.requirements = create_simple_mock_requirements()
-    return mock_message
-
-
-def create_summarize_test_requirements():
-    """Create requirements that work with summarize_requirements function (need isinstance checks)."""
-    from solveig.schema.requirement import ReadRequirement, WriteRequirement, CommandRequirement
+class MockWriteRequirement(WriteRequirement):
+    """WriteRequirement subclass that allows mocking solve() method."""
     
-    # For summarize tests, we need real instances since isinstance() is used
-    read_req = ReadRequirement(
-        path="/test/file.txt",
-        only_read_metadata=False,
-        comment="I need to read file.txt"
-    )
+    def __init__(self, solve_return="Write result", **kwargs):
+        super().__init__(**kwargs)
+        self._solve_return = solve_return
+        self._solve_mock = Mock(return_value=solve_return)
     
-    write_req = WriteRequirement(
-        path="/test/output.txt",
-        content="test content",
-        comment="It's required to create an output.txt file",
-        is_directory=False
-    )
+    def solve(self, config):
+        """Override solve method to return mock result."""
+        return self._solve_mock(config)
     
-    command_req = CommandRequirement(
-        command="ls -la",
-        comment="After that let's see if all expected files are there"
-    )
+    @property
+    def solve_mock(self):
+        """Access to the underlying mock for assertions."""
+        return self._solve_mock
+
+
+class MockCommandRequirement(CommandRequirement):
+    """CommandRequirement subclass that allows mocking solve() method."""
     
-    return [read_req, write_req, command_req]
+    def __init__(self, solve_return="Command result", **kwargs):
+        super().__init__(**kwargs)
+        self._solve_return = solve_return
+        self._solve_mock = Mock(return_value=solve_return)
+    
+    def solve(self, config):
+        """Override solve method to return mock result."""
+        return self._solve_mock(config)
+    
+    @property
+    def solve_mock(self):
+        """Access to the underlying mock for assertions."""
+        return self._solve_mock
 
 
-def create_mock_llm_message_for_summarize():
-    """Create a LLM message for summarize tests."""
-    return LLMMessage(
-        comment="I need to read a file, write another file, and run a command.",
-        requirements=create_summarize_test_requirements()
-    )
+class RequirementFactory:
+    """Factory for creating requirements with mocked solve() methods."""
+    
+    @staticmethod
+    def create_read_requirement(solve_return="Read result", **kwargs):
+        """Create a ReadRequirement with mocked solve() method.
+        
+        Args:
+            solve_return: Return value for the solve() method
+            **kwargs: Additional arguments for ReadRequirement constructor
+            
+        Returns:
+            MockReadRequirement instance that passes isinstance(req, ReadRequirement)
+        """
+        defaults = {
+            "path": "/test/file.txt",
+            "only_read_metadata": False,
+            "comment": "I need to read file.txt"
+        }
+        defaults.update(kwargs)
+        
+        return MockReadRequirement(solve_return=solve_return, **defaults)
+    
+    @staticmethod
+    def create_write_requirement(solve_return="Write result", **kwargs):
+        """Create a WriteRequirement with mocked solve() method."""
+        defaults = {
+            "path": "/test/output.txt",
+            "content": "test content",
+            "comment": "It's required to create an output.txt file",
+            "is_directory": False
+        }
+        defaults.update(kwargs)
+        
+        return MockWriteRequirement(solve_return=solve_return, **defaults)
+    
+    @staticmethod
+    def create_command_requirement(solve_return="Command result", **kwargs):
+        """Create a CommandRequirement with mocked solve() method."""
+        defaults = {
+            "command": "ls -la",
+            "comment": "After that let's see if all expected files are there"
+        }
+        defaults.update(kwargs)
+        
+        return MockCommandRequirement(solve_return=solve_return, **defaults)
+    
+    @staticmethod
+    def create_mixed_requirements():
+        """Create a list of read, write, and command requirements."""
+        return [
+            RequirementFactory.create_read_requirement(),
+            RequirementFactory.create_write_requirement(),
+            RequirementFactory.create_command_requirement()
+        ]
+    
+    @staticmethod
+    def create_simple_mock_requirements():
+        """Create simple Mock objects (for tests that don't need isinstance checks)."""
+        mock_req1 = Mock()
+        mock_req1.solve.return_value = "Read result"
+        
+        mock_req2 = Mock()
+        mock_req2.solve.return_value = "Write result"
+        
+        mock_req3 = Mock()
+        mock_req3.solve.return_value = "Command result"
+        
+        return [mock_req1, mock_req2, mock_req3]
 
 
-# Pre-created instances for convenience
-DEFAULT_PROCESS_MESSAGE = create_mock_llm_message_with_requirements()
-DEFAULT_SUMMARIZE_MESSAGE = create_mock_llm_message_for_summarize()
+class MessageFactory:
+    """Factory for creating LLM messages with requirements."""
+    
+    @staticmethod
+    def create_llm_message_with_inheritance(comment="I need to read a file, write another file, and run a command.", 
+                                          requirements=None):
+        """Create an LLM message using inherited mock requirements.
+        
+        Args:
+            comment: Message comment
+            requirements: List of requirements (if None, creates mixed requirements)
+            
+        Returns:
+            Real LLMMessage with mock requirements that pass isinstance() checks
+        """
+        if requirements is None:
+            requirements = RequirementFactory.create_mixed_requirements()
+        
+        return LLMMessage(comment=comment, requirements=requirements)
+    
+    @staticmethod
+    def create_mock_message_simple(comment="I need to read a file, write another file, and run a command.", 
+                                  requirements=None):
+        """Create a mock LLM message with simple mock requirements.
+        
+        Args:
+            comment: Message comment  
+            requirements: List of requirements (if None, creates simple mocks)
+            
+        Returns:
+            Mock LLMMessage with simple mock requirements
+        """
+        if requirements is None:
+            requirements = RequirementFactory.create_simple_mock_requirements()
+        
+        mock_message = Mock(spec=LLMMessage)
+        mock_message.comment = comment
+        mock_message.requirements = requirements
+        return mock_message
+
+
+# Convenience instances - now both use the same approach!
+DEFAULT_MOCK_MESSAGE = MessageFactory.create_mock_message_simple()
+DEFAULT_INHERITANCE_MESSAGE = MessageFactory.create_llm_message_with_inheritance()
+
+# Use inheritance-based approach for both, since it works everywhere
+DEFAULT_PROCESS_MESSAGE = DEFAULT_INHERITANCE_MESSAGE  
+DEFAULT_SUMMARIZE_MESSAGE = DEFAULT_INHERITANCE_MESSAGE

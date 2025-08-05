@@ -16,7 +16,12 @@ from solveig.config import SolveigConfig
 import solveig.utils.misc
 from solveig.schema.message import UserMessage, LLMMessage, MessageHistory
 from instructor.exceptions import InstructorRetryException
-from tests.test_utils import DEFAULT_PROCESS_MESSAGE, DEFAULT_SUMMARIZE_MESSAGE
+from tests.test_utils import (
+    DEFAULT_PROCESS_MESSAGE, 
+    DEFAULT_SUMMARIZE_MESSAGE,
+    RequirementFactory,
+    MessageFactory
+)
 
 
 DEFAULT_CONFIG = SolveigConfig(
@@ -263,7 +268,7 @@ class TestProcessRequirements:
         
         # Verify each requirement's solve method was called
         for req in mock_message.requirements:
-            req.solve.assert_called_once_with(DEFAULT_CONFIG)
+            req.solve_mock.assert_called_once_with(DEFAULT_CONFIG)
         
         assert results == ["Read result", "Write result", "Command result"]
 
