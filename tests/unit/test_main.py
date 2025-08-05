@@ -15,8 +15,8 @@ from solveig.main import (
 from solveig.config import SolveigConfig
 import solveig.utils.misc
 from solveig.schema.message import UserMessage, LLMMessage, MessageHistory
-from solveig.schema.requirement import ReadRequirement, WriteRequirement, CommandRequirement
 from instructor.exceptions import InstructorRetryException
+from tests.test_utils import DEFAULT_PROCESS_MESSAGE, DEFAULT_SUMMARIZE_MESSAGE
 
 
 DEFAULT_CONFIG = SolveigConfig(
@@ -37,14 +37,7 @@ VERBOSE_CONFIG = SolveigConfig(
     verbose=True
 )
 
-MESSAGE_WITH_REQUIREMENTS = LLMMessage(
-    comment="I need to read a file, write another file, and run a command.",
-    requirements=[
-        ReadRequirement(path="/test/file.txt", only_read_metadata=False, comment="I need to read file.txt"),
-        WriteRequirement(path="/test/output.txt", content="test content", comment="It's requires to create an output.txt file", is_directory=False),
-        CommandRequirement(command="ls -la", comment="After that let's see if all expected files are there")
-    ]
-)
+
 
 INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
     "Test error",
@@ -54,20 +47,20 @@ INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
 )
 
 
+def init_mock_get_client(mock_get_client: Mock):
+    """Setup the mocked `get_instructor_client` function to return a mocked client."""
+    mock_get_client.return_value = Mock()
+
+
 class TestInitializeConversation:
     """Test the initialize_conversation function."""
-
-    @staticmethod
-    def _init_mock_get_client(mock_get_client: Mock):
-        """Setup the mocked `get_instructor_client` function to return a mocked client."""
-        mock_get_client.return_value = Mock()
     
     @patch('solveig.main.llm.get_instructor_client')
     @patch('solveig.main.system_prompt.get_system_prompt')
     def test_initialize_conversation(self, mock_get_prompt, mock_get_client):
         """Test successful conversation initialization."""
         # Setup
-        self._init_mock_get_client(mock_get_client)
+        init_mock_get_client(mock_get_client)
         mock_get_prompt.return_value = "Test system prompt"
         
         # Execute
@@ -88,7 +81,7 @@ class TestInitializeConversation:
     def test_initialize_conversation_verbose(self, mock_print, mock_get_prompt, mock_get_client):
         """Test conversation initialization with verbose output."""
         # Setup
-        self._init_mock_get_client(mock_get_client)
+        init_mock_get_client(mock_get_client)
         mock_get_prompt.return_value = "The quick brown fox jumps over the lazy dog"
         
         # Execute
@@ -139,53 +132,52 @@ class TestGetInitialUserMessage:
 
 class TestSendMessageToLLM:
     """Test the send_message_to_llm function."""
-    
-    def test_send_message_success(self):
+
+    @patch('solveig.main.handle_llm_error')
+    def test_send_message_success(self, mock_handle_error):
         """Test successful LLM message sending."""
         # Setup
         mock_client = Mock()
-        mock_history = Mock()
-        mock_user_response = UserMessage(comment="Test message")
+        message_history = MessageHistory()
+        user_message = UserMessage(comment="Test message")
+        llm_response = LLMMessage(comment="Test response")
+        mock_handle_error.side_effect = Exception("Should not be called")
         
-        mock_llm_response = Mock(spec=LLMMessage)
-        mock_client.chat.completions.create.return_value = mock_llm_response
-        mock_history.to_openai.return_value = ["test-messages"]
+        # Setup mock return values BEFORE execution
+        mock_client.chat.completions.create.return_value = llm_response
         
         # Execute
         with patch('builtins.print') as mock_print:
-            result = send_message_to_llm(mock_client, mock_history, mock_user_response, DEFAULT_CONFIG)
+            result = send_message_to_llm(mock_client, message_history, user_message, DEFAULT_CONFIG)
         
         # Verify
         mock_print.assert_called_once_with("(Sending)")
         mock_client.chat.completions.create.assert_called_once_with(
-            messages=["test-messages"],
+            messages=message_history.to_openai(),
             response_model=LLMMessage,
             strict=False,
             model="test-model",
             temperature=0.5
         )
-        assert result is mock_llm_response
+        assert result is llm_response
     
     @patch('solveig.main.handle_llm_error')
     def test_send_message_error(self, mock_handle_error):
         """Test LLM message sending with error."""
         # Setup
         mock_client = Mock()
-        mock_history = Mock()
-        mock_user_response = Mock()
-        mock_config = Mock()
-        mock_config.verbose = False
-        
-        error = InstructorRetryException("Test error", n_attempts=1, total_usage=None, last_completion=None)
-        mock_client.chat.completions.create.side_effect = error
-        mock_history.to_openai.return_value = ["test-messages"]
+        message_history = MessageHistory()
+        user_message = UserMessage(comment="Test message")
+
+        # Setup mock to raise error BEFORE execution
+        mock_client.chat.completions.create.side_effect = INSTRUCTOR_RETRY_ERROR
         
         # Execute
         with patch('builtins.print'):
-            result = send_message_to_llm(mock_client, mock_history, mock_user_response, mock_config)
+            result = send_message_to_llm(mock_client, message_history, user_message, DEFAULT_CONFIG)
         
         # Verify
-        mock_handle_error.assert_called_once_with(error, mock_config)
+        mock_handle_error.assert_called_once_with(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG)
         assert result is None
 
 
@@ -198,35 +190,31 @@ class TestDisplayLLMResponse:
     def test_display_response_with_requirements(self, mock_print, mock_summarize, mock_print_line):
         """Test displaying LLM response with requirements."""
         # Setup
-        mock_requirements = [Mock(), Mock()]
-        mock_response = Mock(spec=LLMMessage)
-        mock_response.comment = "  Test response  "
-        mock_response.requirements = mock_requirements
+        mock_message = DEFAULT_PROCESS_MESSAGE
         
         # Execute
-        display_llm_response(mock_response)
+        display_llm_response(mock_message)
         
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_any_call("Test response")
-        mock_print.assert_any_call(f"\n[ Requirements ({len(mock_requirements)}) ]")
-        mock_summarize.assert_called_once_with(mock_response)
+        mock_print.assert_any_call(mock_message.comment)
+        mock_print.assert_any_call(f"\n[ Requirements ({len(mock_message.requirements)}) ]")
+        mock_summarize.assert_called_once_with(mock_message)
     
     @patch('solveig.main.utils.misc.print_line')
     @patch('builtins.print')
     def test_display_response_no_requirements(self, mock_print, mock_print_line):
         """Test displaying LLM response without requirements."""
         # Setup
-        mock_response = Mock(spec=LLMMessage)
-        mock_response.comment = "Test response"
-        mock_response.requirements = None
+        comment = "To get across the road!"
+        llm_message = LLMMessage(comment=comment)
         
         # Execute
-        display_llm_response(mock_response)
+        display_llm_response(llm_message)
         
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_called_once_with("Test response")
+        mock_print.assert_called_once_with(comment)
 
 
 class TestSummarizeRequirements:
@@ -236,18 +224,7 @@ class TestSummarizeRequirements:
     def test_summarize_mixed_requirements(self, mock_print):
         """Test summarizing different types of requirements."""
         # Setup
-        read_req = Mock(spec=ReadRequirement)
-        read_req.path = "/test/file.txt"
-        read_req.only_read_metadata = False
-        
-        write_req = Mock(spec=WriteRequirement)
-        write_req.path = "/test/output.txt"
-        
-        cmd_req = Mock(spec=CommandRequirement)
-        cmd_req.command = "ls -la"
-        
-        mock_message = Mock()
-        mock_message.requirements = [read_req, write_req, cmd_req]
+        mock_message = DEFAULT_SUMMARIZE_MESSAGE
         
         # Execute
         summarize_requirements(mock_message)
@@ -274,30 +251,23 @@ class TestProcessRequirements:
     def test_process_requirements_success(self, mock_print, mock_print_line):
         """Test successful requirement processing."""
         # Setup
-        mock_req1 = Mock()
-        mock_req1.solve.return_value = "result1"
-        mock_req2 = Mock()
-        mock_req2.solve.return_value = "result2"
-        
-        mock_response = Mock(spec=LLMMessage)
-        mock_response.requirements = [mock_req1, mock_req2]
-        
-        mock_config = Mock()
+        mock_message = DEFAULT_PROCESS_MESSAGE
         
         # Execute
-        results = process_requirements(mock_response, mock_config)
+        results = process_requirements(mock_message, DEFAULT_CONFIG)
         
         # Verify
         mock_print_line.assert_called_once_with("User")
-        mock_print.assert_any_call("[ Requirement Results (2) ]")
+        mock_print.assert_any_call("[ Requirement Results (3) ]")
         mock_print.assert_any_call()  # Final empty print
         
-        mock_req1.solve.assert_called_once_with(mock_config)
-        mock_req2.solve.assert_called_once_with(mock_config)
+        # Verify each requirement's solve method was called
+        for req in mock_message.requirements:
+            req.solve.assert_called_once_with(DEFAULT_CONFIG)
         
-        assert results == ["result1", "result2"]
-    
-    @patch('solveig.main.utils.misc.print_line')  
+        assert results == ["Read result", "Write result", "Command result"]
+
+    @patch('solveig.main.utils.misc.print_line')
     @patch('builtins.print')
     def test_process_requirements_with_error(self, mock_print, mock_print_line):
         """Test requirement processing with errors."""
