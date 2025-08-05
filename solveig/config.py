@@ -37,7 +37,7 @@ class SolveigConfig:
     api_type: APIType = APIType.OPENAI
     api_key: str = None
     model: str = None
-    temperature: int = 0
+    temperature: float = 0
     # allowed_commands: List[str] = field(default_factory=list)
     # allowed_paths: List[SolveigPath] = field(default_factory=list)
     add_examples: bool = False
@@ -92,7 +92,7 @@ class SolveigConfig:
         parser.add_argument("--api-type", "-a", type=str, choices=set(api_type.name.lower() for api_type in APIType), help="Type of API to use (default: OpenAI)")
         parser.add_argument("--api-key", "-k", type=str)
         parser.add_argument("--model", "-m", type=str, help="Model name or path (ex: gpt-4.1, moonshotai/kimi-k2:free)")
-        parser.add_argument("--temperature", "-t", type=int, help="Temperature the model should use (default: 0.0)")
+        parser.add_argument("--temperature", "-t", type=float, help="Temperature the model should use (default: 0.0)")
         # Don't add a shorthand flag for this one, it shouldn't be "easy" to do (plus unimplemented for now)
         # parser.add_argument("--allowed-commands", action="store", nargs="*", help="(dangerous) Commands that can automatically be ran and have their output shared")
         # parser.add_argument("--allowed-paths", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")

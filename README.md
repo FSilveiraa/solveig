@@ -1,15 +1,14 @@
 
 # Solveig
 
-Solveig works as safe bridge between AI assistants and your computer.
+**A safe bridge between AI assistants and your computer.**
 
-You ask questions and it translates the LLM's response into actionable requests that you can audit.
+Solveig lets LLMs read files and run commands with explicit user approval for every operation.
 
-* **Ask anything** - Solveig figures out what info it needs.
-* **File & shell context** - Let Solveig peek at file contents and metadata, or run specific commands to help you.
-* **Explicit permissions** - You review every file or command request before anything is read, executed or sent.
-* **Minimal setup** - Works with any OpenAI‑compatible LLM endpoint - Claude+Gemini coming!
-* **Clean interface** - Simple and clear CLI (check out the [examples](#-examples)).
+* **Explicit consent** - Review every file or command request before execution
+* **Safety validation** - Shellcheck integration prevents dangerous commands
+* **Works anywhere** - Any OpenAI-compatible LLM endpoint (OpenRouter, local models)
+* **Simple setup** - Modern Python CLI with comprehensive testing
 
 ---
 
@@ -19,19 +18,33 @@ You ask questions and it translates the LLM's response into actionable requests 
 ---
 
 ## 🚀 Quick start
+
 Install:
-```commandline
-pip install -r ./requirements.txt
+```bash
+pip install -e .
 ```
 
 Local model:
-```commandline
-python ./main.py -u "http://localhost:5001/v1" "Tell me a joke"
+```bash
+solveig -u "http://localhost:5001/v1" "Tell me a joke"
 ```
 
 OpenRouter:
-```commandline
-python ./main.py -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
+```bash
+solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
+```
+
+## 🧪 Running Tests
+
+```bash
+# Unit tests only
+python -m pytest tests/unit/ -v
+
+# All tests with coverage
+python -m pytest tests/ --cov=solveig --cov-report=term-missing -v
+
+# Specific test class
+python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
 ```
 
 ---
@@ -41,39 +54,25 @@ python ./main.py -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai
 
 ### What is Solveig?
 
-Solveig is a terminal‑based AI helper. Instead of just chatting, it can request access to files and command outputs
-to actually solve problems on your machine.
+A terminal AI helper that can request file access and run commands with your explicit approval.
 
 ### Is Solveig an LLM like ChatGPT?
 
-Solveig isn't an LLM, it's a safe interface between those services and your computer. Solveig *can use* ChatGPT.
+No, it's a safe interface between LLM services and your computer. It can use ChatGPT, Claude, or any OpenAI-compatible service.
 
 ### Why use Solveig instead of a plain LLM?
 
-By itself, an LLM can only guess based on what you type.
-If you ask ChatGPT a question and it needs something else, it becomes your job to understand those requirements and manually attach them.
-Solveig handles all of that for you. It can make your LLM understand what you need,
-what resources it has available and how to help you - safely, automatically and without copy-pasting.
+LLMs can only work with what you manually provide. If ChatGPT needs a file or command output, you have to copy-paste it yourself. Solveig lets the LLM request exactly what it needs, and you just approve or deny each request.
 
 ### Why use Solveig over other LLM‑to‑shell assistants?
 
-All the software that acts as a layer between your LLM and a shell terminal can't be compared in terms of "what can it do?"
-because the answer to all of them is "everything". Instead, Solveig's value comes more from how it prevents itself from doing
-dangerous things through an explicit access system to both commands and files. It tries to minimize risk by allowing
-direct file access over arbitrary commands, as well as enforcing explicit user consent.
-
-Basically, it's much safer for an LLM to ask you for a file than to ask to run a `cat` command to read that file.
+Solveig focuses on preventing dangerous operations through explicit user consent and validation. It prefers direct file access over arbitrary commands when possible, and validates commands with Shellcheck before execution.
 
 ### Is Solveig safe to run?
 
-Solveig takes several steps to prevent unsafe commands or file access on your machine.
-For example, the Shellcheck plugin will confirm whether a command is correct bash, and I'm working on adding
-other means of security like a "second opinion" LLM or Semgrep's AppSec, as well as a proper test suite.
+Solveig requires your approval for every file read, write, or command execution. It uses Shellcheck to validate commands and catch dangerous patterns. However, you're ultimately responsible for reviewing and denying any request you don't understand.
 
-To this day I've never seen Solveig ask to run actually unsafe code, but understand that a tool that pipes
-an often-hallucinating text generator into a BASH interpreter is **probably the most dangerous thing you
-could run on your computer**, and that it's your responsibility to be aware of the dangers and to deny any
-file or command request that you do not understand.
+This is still a tool that connects an AI to your computer - always review what it wants to do.
 
 ---
 
@@ -279,19 +278,13 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
 
 ---
 
-## 📆 Coming next
+## 📈 Roadmap
 
-My main priority is improving the File API and allow writing access with optional initial content.
-This is useful for requests that mostly involve writing static text to large trees, like asking it to set up
-an example NodeJS project.
+**Next Steps:**
+- Additional file operations (copy, move, delete)
+- Enhanced command validation with Semgrep static analysis  
+- Second-opinion LLM validation for generated commands
 
-Besides that, I want to focus on strengthening Solveig's CLI capabilities, making it safer to audit and run commands.
-This is by automatically (and optionally) validating the commands Solveig generates for syntax errors, vulnerabilities and other concerns,
-using two optional complementing approaches:
-
-* [Semgrep](https://github.com/semgrep/semgrep) - a static code analyzer that can identify vulnerabilities
-(I'm also exploring their Semgrep AppSec Platform)
-* Double-check - requesting another LLM to validate the generated commands (either the main one or a secondary model focused on code safety)
-
-I'm also interested on adding other APIs like Gemini and Claude, but it's not a priority because there are countless
-platforms that normalize the API format (like OpenRouter) and local models don't benefit from it.
+**Future Ideas:**
+- Direct API integration for Claude/Gemini
+- Advanced plugin ecosystem with custom requirement types
