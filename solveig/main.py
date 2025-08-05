@@ -2,16 +2,17 @@ from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 
 import json
+import sys
 
-import llm
-import utils.misc
-from config import SolveigConfig
-from schema.message import MessageHistory, UserMessage, LLMMessage
-import system_prompt
-from schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
+from . import llm
+from . import utils
+from .config import SolveigConfig
+from .schema.message import MessageHistory, UserMessage, LLMMessage
+from . import system_prompt
+from .schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
 
-from plugins.hooks import load_hooks
-load_hooks()
+from . import plugins
+plugins.hooks.load_hooks()
 
 
 def summarize_requirements(message: LLMMessage):
@@ -118,7 +119,15 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
             message_history.add_message(user_response)
 
 
+def cli_main():
+    """Entry point for the solveig CLI command."""
+    try:
+        config, prompt = SolveigConfig.parse_config_and_prompt()
+        main_loop(config, prompt)
+    except KeyboardInterrupt:
+        print("\n\nGoodbye!")
+        sys.exit(0)
+
 
 if __name__ == "__main__":
-    config, prompt  = SolveigConfig.parse_config_and_prompt()
-    main_loop(config, prompt)
+    cli_main()

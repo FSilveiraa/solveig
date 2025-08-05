@@ -4,10 +4,9 @@ import os
 import subprocess
 import platform
 
-from config import SolveigConfig
-from plugins.hooks import before
-from schema.requirement import CommandRequirement, ReadRequirement, WriteRequirement, ReadResult, WriteResult, \
-    CommandResult
+from ...config import SolveigConfig
+from . import before
+from ...schema.requirement import CommandRequirement, CommandResult
 
 DANGEROUS_PATTERNS = [
     "rm -rf", "mkfs", ":(){",

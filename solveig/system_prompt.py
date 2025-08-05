@@ -6,8 +6,8 @@ try:
 except ImportError:
     distro = None
 
-from config import SolveigConfig
-from schema.message import *
+from .config import SolveigConfig
+from .schema.message import *
 
 
 

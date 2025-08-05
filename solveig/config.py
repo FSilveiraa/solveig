@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from llm import APIType
+from .llm import APIType
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"

@@ -7,9 +7,8 @@ from pydantic import BaseModel, field_validator
 from pathlib import Path
 from typing import Literal, Union, Optional, List
 
-import utils.file
-from utils.misc import ask_yes, format_output
-from plugins.hooks import HOOKS
+from .. import utils
+from .. import plugins
 
 
 
@@ -28,7 +27,7 @@ class Requirement(BaseModel):
     def solve(self, config):
         self._print(config)
 
-        for (before_hook, requirements) in HOOKS.before:
+        for (before_hook, requirements) in plugins.hooks.HOOKS.before:
             if not requirements or type(self) in requirements:
                 before_result = before_hook(config, self)
                 if before_result:
@@ -36,7 +35,7 @@ class Requirement(BaseModel):
 
         result = self._actually_solve(config)
 
-        for (after_hook, requirements) in HOOKS.after:
+        for (after_hook, requirements) in plugins.hooks.HOOKS.after:
             if not requirements or type(self) in requirements:
                 after_result = after_hook(config, self, result)
                 if after_result:
@@ -87,7 +86,7 @@ class ReadRequirement(FileRequirement):
         metadata = content = encoding = entries = None
         accepted = True
         if is_dir:
-            if ask_yes("    ? Allow reading directory listing and metadata? [y/N]: "):
+            if utils.misc.ask_yes("    ? Allow reading directory listing and metadata? [y/N]: "):
                 accepted = True
                 metadata, entries = utils.file.read_metadata_and_entries(abs_path)
             return ReadResult(requirement=self, accepted=accepted, metadata=metadata, directory_listing=entries)
@@ -101,12 +100,12 @@ class ReadRequirement(FileRequirement):
                 accepted = True
                 print("    [ Metadata ]")
                 metadata, _ = utils.file.read_metadata_and_entries(abs_path)
-                print(format_output(json.dumps(metadata), indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
+                print(utils.misc.format_output(json.dumps(metadata), indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
                 if choice_read_file == "y":
                     content, encoding = utils.file.read_file(abs_path)
                     print("    [ Content ]")
-                    print("      (Base64)" if encoding == "base64" else format_output(content, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
-                if not ask_yes(f"    ? Allow sending {"file content and " if content else ""}metadata? [y/N]: "):
+                    print("      (Base64)" if encoding == "base64" else utils.misc.format_output(content, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
+                if not utils.misc.ask_yes(f"    ? Allow sending {"file content and " if content else ""}metadata? [y/N]: "):
                     content = encoding = metadata = None
                     accepted = False
             return ReadResult(requirement=self, accepted=accepted, metadata=metadata, content=content, content_encoding=encoding)
@@ -126,7 +125,7 @@ class WriteRequirement(FileRequirement):
         print(f"    real path: {abs_path}")
         if self.content:
             print("      [ Content ]")
-            formatted_content = format_output(self.content, indent=8, max_lines=config.max_output_lines, max_chars=config.max_output_size)
+            formatted_content = utils.misc.format_output(self.content, indent=8, max_lines=config.max_output_lines, max_chars=config.max_output_size)
             # TODO: make this print optional, or in a `less`-like window, or it will get messy
             print(formatted_content)
 
@@ -141,18 +140,18 @@ class WriteRequirement(FileRequirement):
 
         accepted = False
         if self.is_directory:
-            if ask_yes("    ? Allow writing directory? [y/N]: "):
+            if utils.misc.ask_yes("    ? Allow writing directory? [y/N]: "):
                 accepted = True
                 abs_path.mkdir(parents=True, exist_ok=False)
             return WriteResult(requirement=self, accepted=accepted)
         else:
             if not abs_path.parent.exists():
                 print(f"    ! Warning: the parent directory '{abs_path.parent}' for this file does not exist")
-                if not ask_yes(f"    ? Allow writing directory? [y/N]: "):
+                if not utils.misc.ask_yes(f"    ? Allow writing directory? [y/N]: "):
                     return WriteResult(requirement=self, accepted=False)
                 abs_path.parent.mkdir(parents=True, exist_ok=False)
 
-            if ask_yes(f"    ? Allow writing file{" and contents" if self.content else ""}? [y/N]: "):
+            if utils.misc.ask_yes(f"    ? Allow writing file{" and contents" if self.content else ""}? [y/N]: "):
                 accepted=True
                 abs_path.write_text(self.content if self.content else "", encoding="utf-8")
             return WriteResult(requirement=self, accepted=accepted)
@@ -167,7 +166,7 @@ class CommandRequirement(Requirement):
         print(f"    command: {self.command}")
 
     def _actually_solve(self, config) -> CommandResult:
-        if ask_yes("    ? Allow running command? [y/N]: "):
+        if utils.misc.ask_yes("    ? Allow running command? [y/N]: "):
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
             #  or if anything at all is refused, maybe just say that in the error
@@ -182,13 +181,13 @@ class CommandRequirement(Requirement):
 
             if output:
                 print("    [ Output ]")
-                print(format_output(output, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
+                print(utils.misc.format_output(output, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
             else:
                 print("    [ No Output ]")
             if error:
                 print("    [ Error ]")
-                print(format_output(error, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
-            if not ask_yes("    ? Allow sending output? [y/N]: "):
+                print(utils.misc.format_output(error, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
+            if not utils.misc.ask_yes("    ? Allow sending output? [y/N]: "):
                 output = error = None
             return CommandResult(requirement=self, accepted=True, success=True, stdout=output, error=error)
         return CommandResult(requirement=self, accepted=False)

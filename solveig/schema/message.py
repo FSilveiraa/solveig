@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
-from schema.requirement import *
-import utils.misc
-from utils.misc import count_tokens
+from .requirement import *
+from .. import utils
 
 
 class BaseMessage(BaseModel):
@@ -73,7 +72,7 @@ class MessageHistory:
     message_cache: List[dict] = field(default_factory=list)
 
     def get_token_count(self):
-        count = count_tokens(self.system_prompt) if self.system_prompt else 0
+        count = utils.misc.count_tokens(self.system_prompt) if self.system_prompt else 0
         return count + sum(message["content"] for message in self.message_cache)
 
     def prune_message_cache(self):
