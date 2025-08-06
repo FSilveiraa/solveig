@@ -1,6 +1,12 @@
 
 # Solveig
 
+[![CI](https://github.com/FranciscoSilveira/solveig/workflows/CI/badge.svg)](https://github.com/FranciscoSilveira/solveig/actions)
+[![codecov](https://codecov.io/gh/FranciscoSilveira/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/FranciscoSilveira/solveig)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 **A safe bridge between AI assistants and your computer.**
 
 Solveig lets LLMs read files and run commands with explicit user approval for every operation.
@@ -20,9 +26,16 @@ Solveig lets LLMs read files and run commands with explicit user approval for ev
 
 ## 🚀 Quick start
 
-Install:
+Install from source:
 ```bash
+git clone https://github.com/FranciscoSilveira/solveig.git
+cd solveig
 pip install -e .
+```
+
+Or install from PyPI (once published):
+```bash
+pip install solveig
 ```
 
 Local model:
