@@ -263,8 +263,8 @@ Solveig has an extensible plugin system that automatically discovers and loads p
 2. **Schema extensions**: Create new requirement types that the LLM can request by extending `Requirement` and implementing `_actually_solve()`
 3. **Plugin tests**: Add comprehensive test suites in `tests/plugins/test_my_plugin.py`
 
-**Adding a Plugin:**
-1. Create a `.py` file in `solveig/plugins/hooks/` 
+**Adding a hook plugin:**
+1. Create a file in `solveig/plugins/hooks/my_plugin.py` 
 2. Use decorators: `@before(requirements=(CommandRequirement,))`, `@after()`, both, or neither
 3. Add tests in `tests/plugins/test_my_plugin.py` following the existing patterns
 4. Plugins auto-load when Solveig starts - no configuration needed!
@@ -353,7 +353,7 @@ All code is automatically checked on `main` and `develop` branches:
 pip install -e .[dev]
 
 # Run all checks locally (same as CI)
-black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest
+black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -v
 ```
 
 ---
