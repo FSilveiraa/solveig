@@ -16,11 +16,16 @@ from solveig.schema.message import UserMessage, LLMMessage, MessageHistory
 from instructor.exceptions import InstructorRetryException
 from tests.test_utils import DEFAULT_CONFIG, VERBOSE_CONFIG, DEFAULT_MESSAGE, RequirementFactory, MessageFactory
 
+
+mock_completion = Mock()
+mock_choice = Mock()
+mock_choice.message.content = "  Raw output  "
+mock_completion.choices = [mock_choice]
 INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
     "Test error",
     n_attempts=1,
     total_usage=0,
-    last_completion=None
+    last_completion=mock_completion
 )
 
 
@@ -166,17 +171,14 @@ class TestDisplayLLMResponse:
     @patch('builtins.print')
     def test_display_response_with_requirements(self, mock_print, mock_summarize, mock_print_line):
         """Test displaying LLM response with requirements."""
-        # Setup
-        mock_message = DEFAULT_MESSAGE
-        
         # Execute
-        display_llm_response(mock_message)
+        display_llm_response(DEFAULT_MESSAGE)
         
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_any_call(mock_message.comment)
-        mock_print.assert_any_call(f"\n[ Requirements ({len(mock_message.requirements)}) ]")
-        mock_summarize.assert_called_once_with(mock_message)
+        mock_print.assert_any_call(DEFAULT_MESSAGE.comment)
+        mock_print.assert_any_call(f"\n[ Requirements ({len(DEFAULT_MESSAGE.requirements)}) ]")
+        mock_summarize.assert_called_once_with(DEFAULT_MESSAGE)
     
     @patch('solveig.main.utils.misc.print_line')
     @patch('builtins.print')
@@ -200,11 +202,8 @@ class TestSummarizeRequirements:
     @patch('builtins.print')
     def test_summarize_mixed_requirements(self, mock_print):
         """Test summarizing different types of requirements."""
-        # Setup
-        mock_message = DEFAULT_MESSAGE
-        
         # Execute
-        summarize_requirements(mock_message)
+        summarize_requirements(DEFAULT_MESSAGE)
         
         # Verify print calls
         expected_calls = [
@@ -227,11 +226,8 @@ class TestProcessRequirements:
     @patch('builtins.print')
     def test_process_requirements_success(self, mock_print, mock_print_line):
         """Test successful requirement processing."""
-        # Setup
-        mock_message = DEFAULT_MESSAGE
-        
         # Execute
-        results = process_requirements(mock_message, DEFAULT_CONFIG)
+        results = process_requirements(DEFAULT_MESSAGE, DEFAULT_CONFIG)
         
         # Verify
         mock_print_line.assert_called_once_with("User")
@@ -239,7 +235,7 @@ class TestProcessRequirements:
         mock_print.assert_any_call()  # Final empty print
         
         # Verify each requirement's solve method was called
-        for req in mock_message.requirements:
+        for req in DEFAULT_MESSAGE.requirements:
             req.solve_mock.assert_called_once_with(DEFAULT_CONFIG)
         
         assert results == ["Read result", "Write result", "Command result"]
@@ -296,16 +292,8 @@ class TestHandleLLMError:
     @patch('builtins.print')
     def test_handle_error_verbose(self, mock_print):
         """Test error handling with verbose output."""
-        # Setup
-        mock_completion = Mock()
-        mock_choice = Mock()
-        mock_choice.message.content = "  Raw output  "
-        mock_completion.choices = [mock_choice]
-        
-        error = InstructorRetryException("Test error", n_attempts=1, total_usage=None, last_completion=mock_completion)
-        
         # Execute
-        handle_llm_error(error, VERBOSE_CONFIG)
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG)
         
         # Verify verbose output was included
         actual_calls = []
