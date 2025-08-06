@@ -37,6 +37,9 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 ## 🧪 Running Tests
 
 ```bash
+# Install with testing dependencies
+pip install -e .[dev]
+
 # Unit tests only
 python -m pytest tests/unit/ -v
 

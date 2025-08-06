@@ -26,14 +26,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -e ".[dev]"
     
     - name: Test with pytest
       run: |
         python -m pytest tests/ -v --tb=short
-    
-    - name: Success notification
-      if: success()
-      run: |
-        echo "✅ All tests passed!"
-        echo "Coverage: Check the test output above for details"

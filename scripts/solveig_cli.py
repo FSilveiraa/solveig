@@ -1,3 +1,6 @@
+"""
+Main CLI entry point for Solveig.
+"""
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 from typing import Optional, Tuple
@@ -5,14 +8,14 @@ from typing import Optional, Tuple
 import json
 import sys
 
-from . import llm
-from . import utils
-from .config import SolveigConfig
-from .schema.message import MessageHistory, UserMessage, LLMMessage
-from . import system_prompt
-from .schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
+from solveig import llm
+from solveig import utils
+from solveig.config import SolveigConfig
+from solveig.schema.message import MessageHistory, UserMessage, LLMMessage
+from solveig import system_prompt
+from solveig.schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
 
-from . import plugins
+from solveig import plugins
 plugins.hooks.load_hooks()
 
 

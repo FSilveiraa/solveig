@@ -26,7 +26,7 @@ Mocking philosophy:
   message = UserMessage(comment="Hello")
 
   # GOOD - Mock external dependency
-  @patch('solveig.main.llm.get_instructor_client')  # Network call
+  @patch('scripts.solveig_cli.llm.get_instructor_client')  # Network call
   @patch('builtins.print')                          # Side effect we want to verify
 
 

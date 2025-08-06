@@ -2,6 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from .llm import APIType
 
@@ -76,13 +77,15 @@ class SolveigConfig:
         """
 
     @classmethod
-    def parse_from_file(cls, config_path: Path|str):
+    def parse_from_file(cls, config_path: Path|str) -> Optional["SolveigConfig"]:
         if not config_path:
             return None
         if not isinstance(config_path, Path):
             config_path = Path(config_path)
+        config_path = config_path.expanduser()
         if config_path.exists():
             return json.loads(config_path.read_text())
+        return None
 
     @classmethod
     def parse_config_and_prompt(cls, cli_args=None):

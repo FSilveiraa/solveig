@@ -8,6 +8,6 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from . import hooks
+from solveig.plugins import hooks
 
 __all__ = ["hooks"]

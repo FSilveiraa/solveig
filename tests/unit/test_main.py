@@ -2,7 +2,7 @@
 import random
 from unittest.mock import Mock, patch, MagicMock
 
-from solveig.main import (
+from scripts.solveig_cli import (
     initialize_conversation,
     get_initial_user_message, 
     send_message_to_llm,
@@ -37,8 +37,8 @@ def init_mock_get_client(mock_get_client: Mock):
 class TestInitializeConversation:
     """Test the initialize_conversation function."""
     
-    @patch('solveig.main.llm.get_instructor_client')
-    @patch('solveig.main.system_prompt.get_system_prompt')
+    @patch('scripts.solveig_cli.llm.get_instructor_client')
+    @patch('scripts.solveig_cli.system_prompt.get_system_prompt')
     def test_initialize_conversation(self, mock_get_prompt, mock_get_client):
         """Test successful conversation initialization."""
         # Setup
@@ -57,8 +57,8 @@ class TestInitializeConversation:
         assert isinstance(message_history, MessageHistory)
         assert message_history.system_prompt == "Test system prompt"
     
-    @patch('solveig.main.llm.get_instructor_client')
-    @patch('solveig.main.system_prompt.get_system_prompt')
+    @patch('scripts.solveig_cli.llm.get_instructor_client')
+    @patch('scripts.solveig_cli.system_prompt.get_system_prompt')
     @patch('builtins.print')
     def test_initialize_conversation_verbose(self, mock_print, mock_get_prompt, mock_get_client):
         """Test conversation initialization with verbose output."""
@@ -76,8 +76,8 @@ class TestInitializeConversation:
 class TestGetInitialUserMessage:
     """Test the get_initial_user_message function."""
 
-    @patch('solveig.main.utils.misc.prompt_user')
-    @patch('solveig.main.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.prompt_user')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
     @patch('builtins.print')
     def test_get_initial_user_message_with_prompt(self, mock_print: MagicMock, mock_print_line: MagicMock, mock_prompt_user: MagicMock):
         """Test getting initial message when prompt is provided."""
@@ -94,8 +94,8 @@ class TestGetInitialUserMessage:
         assert isinstance(message, UserMessage)
         assert message.comment == test_prompt
     
-    @patch('solveig.main.utils.misc.print_line')
-    @patch('solveig.main.utils.misc.prompt_user')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.prompt_user')
     def test_get_initial_user_message_no_prompt(self, mock_prompt_user: MagicMock, mock_print_line: MagicMock):
         """Test getting initial message when no prompt is provided."""
         # Setup
@@ -115,7 +115,7 @@ class TestGetInitialUserMessage:
 class TestSendMessageToLLM:
     """Test the send_message_to_llm function."""
 
-    @patch('solveig.main.handle_llm_error')
+    @patch('scripts.solveig_cli.handle_llm_error')
     def test_send_message_success(self, mock_handle_error):
         """Test successful LLM message sending."""
         # Setup
@@ -143,7 +143,7 @@ class TestSendMessageToLLM:
         )
         assert result is llm_response
     
-    @patch('solveig.main.handle_llm_error')
+    @patch('scripts.solveig_cli.handle_llm_error')
     def test_send_message_error(self, mock_handle_error):
         """Test LLM message sending with error."""
         # Setup
@@ -166,8 +166,8 @@ class TestSendMessageToLLM:
 class TestDisplayLLMResponse:
     """Test the display_llm_response function."""
     
-    @patch('solveig.main.utils.misc.print_line')
-    @patch('solveig.main.summarize_requirements')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
+    @patch('scripts.solveig_cli.summarize_requirements')
     @patch('builtins.print')
     def test_display_response_with_requirements(self, mock_print, mock_summarize, mock_print_line):
         """Test displaying LLM response with requirements."""
@@ -180,7 +180,7 @@ class TestDisplayLLMResponse:
         mock_print.assert_any_call(f"\n[ Requirements ({len(DEFAULT_MESSAGE.requirements)}) ]")
         mock_summarize.assert_called_once_with(DEFAULT_MESSAGE)
     
-    @patch('solveig.main.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
     @patch('builtins.print')
     def test_display_response_no_requirements(self, mock_print, mock_print_line):
         """Test displaying LLM response without requirements."""
@@ -222,7 +222,7 @@ class TestSummarizeRequirements:
 class TestProcessRequirements:
     """Test the process_requirements function."""
     
-    @patch('solveig.main.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
     @patch('builtins.print')
     def test_process_requirements_success(self, mock_print, mock_print_line):
         """Test successful requirement processing."""
@@ -249,7 +249,7 @@ class TestProcessRequirements:
         assert 'WriteResult' in result_types  
         assert 'CommandResult' in result_types
 
-    @patch('solveig.main.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
     @patch('builtins.print')
     def test_process_requirements_with_error(self, mock_print, mock_print_line):
         """Test requirement processing with errors."""
@@ -271,7 +271,7 @@ class TestProcessRequirements:
         assert all(hasattr(result, 'accepted') for result in results)
         assert all(result.accepted for result in results)
     
-    @patch('solveig.main.utils.misc.print_line')
+    @patch('scripts.solveig_cli.utils.misc.print_line')
     def test_process_no_requirements(self, mock_print_line):
         """Test processing when no requirements exist."""
         # Setup

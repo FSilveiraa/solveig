@@ -4,10 +4,10 @@ import os
 import subprocess
 import platform
 
-from ...config import SolveigConfig
-from . import before
-from ...schema.requirement import CommandRequirement
-from ...schema.result import CommandResult
+from solveig.config import SolveigConfig
+from solveig.plugins.hooks import before
+from solveig.schema.requirement import CommandRequirement
+from solveig.schema.result import CommandResult
 
 DANGEROUS_PATTERNS = [
     "rm -rf", "mkfs", ":(){",
