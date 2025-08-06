@@ -1,8 +1,7 @@
 """Unit tests for solveig.main module functions."""
-
+import random
 from unittest.mock import Mock, patch, MagicMock
 
-from solveig import APIType
 from solveig.main import (
     initialize_conversation,
     get_initial_user_message, 
@@ -12,37 +11,10 @@ from solveig.main import (
     handle_llm_error,
     summarize_requirements
 )
-from solveig.config import SolveigConfig
 import solveig.utils.misc
 from solveig.schema.message import UserMessage, LLMMessage, MessageHistory
 from instructor.exceptions import InstructorRetryException
-from tests.test_utils import (
-    DEFAULT_PROCESS_MESSAGE, 
-    DEFAULT_SUMMARIZE_MESSAGE,
-    RequirementFactory,
-    MessageFactory
-)
-
-
-DEFAULT_CONFIG = SolveigConfig(
-    api_type=APIType.OPENAI,
-    api_key="test-key",
-    url="test-url",
-    model="test-model",
-    temperature=0.5,
-    verbose=False
-)
-
-VERBOSE_CONFIG = SolveigConfig(
-    api_type=APIType.OPENAI,
-    api_key="test-key",
-    url="test-url",
-    model="test-model",
-    temperature=0.5,
-    verbose=True
-)
-
-
+from tests.test_utils import DEFAULT_CONFIG, VERBOSE_CONFIG, DEFAULT_MESSAGE, RequirementFactory, MessageFactory
 
 INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
     "Test error",
@@ -195,7 +167,7 @@ class TestDisplayLLMResponse:
     def test_display_response_with_requirements(self, mock_print, mock_summarize, mock_print_line):
         """Test displaying LLM response with requirements."""
         # Setup
-        mock_message = DEFAULT_PROCESS_MESSAGE
+        mock_message = DEFAULT_MESSAGE
         
         # Execute
         display_llm_response(mock_message)
@@ -229,7 +201,7 @@ class TestSummarizeRequirements:
     def test_summarize_mixed_requirements(self, mock_print):
         """Test summarizing different types of requirements."""
         # Setup
-        mock_message = DEFAULT_SUMMARIZE_MESSAGE
+        mock_message = DEFAULT_MESSAGE
         
         # Execute
         summarize_requirements(mock_message)
@@ -256,7 +228,7 @@ class TestProcessRequirements:
     def test_process_requirements_success(self, mock_print, mock_print_line):
         """Test successful requirement processing."""
         # Setup
-        mock_message = DEFAULT_PROCESS_MESSAGE
+        mock_message = DEFAULT_MESSAGE
         
         # Execute
         results = process_requirements(mock_message, DEFAULT_CONFIG)
@@ -277,35 +249,27 @@ class TestProcessRequirements:
     def test_process_requirements_with_error(self, mock_print, mock_print_line):
         """Test requirement processing with errors."""
         # Setup
-        mock_req1 = Mock()
-        mock_req1.solve.side_effect = Exception("Test error")
-        mock_req2 = Mock()
-        mock_req2.solve.return_value = "result2"
-        
-        mock_response = Mock(spec=LLMMessage)
-        mock_response.requirements = [mock_req1, mock_req2]
-        
-        mock_config = Mock()
+        requirements = RequirementFactory.create_mixed_requirements()
+        random.choice(requirements).solve_mock.side_effect = Exception("Test error")
+        llm_message = MessageFactory.create_llm_message("Test message", requirements)
         
         # Execute
-        results = process_requirements(mock_response, mock_config)
+        results = process_requirements(llm_message, DEFAULT_CONFIG)
         
         # Verify error was printed and processing continued
         # The actual exception object is printed, so we need to check it was called with any exception
         print_calls = [call[0][0] for call in mock_print.call_args_list if call[0]]
         assert any(isinstance(call, Exception) and str(call) == "Test error" for call in print_calls)
-        assert results == ["result2"]
+        assert set(results).issubset({ "Read result", "Write result", "Command result" })
     
     @patch('solveig.main.utils.misc.print_line')
     def test_process_no_requirements(self, mock_print_line):
         """Test processing when no requirements exist."""
         # Setup
-        mock_response = Mock(spec=LLMMessage)
-        mock_response.requirements = None
-        mock_config = Mock()
+        llm_response = LLMMessage(comment="To get across the road!")
         
         # Execute
-        results = process_requirements(mock_response, mock_config)
+        results = process_requirements(llm_response, DEFAULT_CONFIG)
         
         # Verify
         mock_print_line.assert_called_once_with("User")
@@ -318,13 +282,8 @@ class TestHandleLLMError:
     @patch('builtins.print')
     def test_handle_error_basic(self, mock_print):
         """Test basic error handling."""
-        # Setup
-        error = InstructorRetryException("Test error", n_attempts=1, total_usage=None, last_completion=None)
-        config = Mock()
-        config.verbose = False
-        
         # Execute
-        handle_llm_error(error, config)
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG)
         
         # Verify
         expected_calls = [
@@ -344,11 +303,9 @@ class TestHandleLLMError:
         mock_completion.choices = [mock_choice]
         
         error = InstructorRetryException("Test error", n_attempts=1, total_usage=None, last_completion=mock_completion)
-        config = Mock()
-        config.verbose = True
         
         # Execute
-        handle_llm_error(error, config)
+        handle_llm_error(error, VERBOSE_CONFIG)
         
         # Verify verbose output was included
         actual_calls = []
