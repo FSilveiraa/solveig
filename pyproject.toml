@@ -14,10 +14,12 @@ authors = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Tools",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Security",
+    "Topic :: System :: Systems Administration",
 ]
 keywords = ["ai", "automation", "security", "llm", "assistant"]
 requires-python = ">=3.12"
