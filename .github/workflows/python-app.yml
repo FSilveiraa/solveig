@@ -5,7 +5,7 @@ name: Python application
 
 on:
   push:
-    branches: [ "main", "actions" ]  # Run on pushes to main and actions branches
+    branches: [ "main" ]  # Run on pushes to main and actions branches
   pull_request:
     branches: [ "main" ]              # Run on PRs to main
 
