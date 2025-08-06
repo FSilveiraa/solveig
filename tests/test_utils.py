@@ -1,5 +1,5 @@
 """Test utilities for creating mocked Solveig objects."""
-
+from typing import Optional
 from unittest.mock import Mock
 
 from solveig.config import SolveigConfig, APIType
@@ -30,13 +30,15 @@ VERBOSE_CONFIG = SolveigConfig(
 class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes."""
     
-    def __init__(self, *args, solve_return=None, **kwargs):
+    def __init__(self, *args, accepted:Optional[bool]=None, solve_return=None, **kwargs):
         super().__init__(**kwargs)
-        
+
         # Create realistic RequirementResult object if not provided
         if solve_return is None:
             solve_return = self._create_default_result()
             solve_return.requirement = self
+            if accepted is not None:
+                solve_return.accepted = accepted
         
         self._solve_mock = Mock(return_value=solve_return)
     
@@ -45,7 +47,7 @@ class MockRequirementMixin:
         # This will be overridden by subclasses to create appropriate result types
         raise NotImplementedError("Subclasses must implement _create_default_result")
     
-    def solve(self, config):
+    def _actually_solve(self, config):
         """Override solve method to return mock result."""
         return self._solve_mock(config)
 

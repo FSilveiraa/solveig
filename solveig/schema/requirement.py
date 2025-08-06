@@ -36,7 +36,7 @@ class Requirement(BaseModel):
 
         # Run before hooks - they validate and can throw exceptions
         for (before_hook, requirements) in plugins.hooks.HOOKS.before:
-            if not requirements or type(self) in requirements:
+            if not requirements or any(isinstance(self, requirement_type) for requirement_type in requirements):
                 try:
                     before_hook(config, self)
                 except ValidationError as e:
@@ -51,7 +51,7 @@ class Requirement(BaseModel):
         
         # Run after hooks - they can process/modify result or throw exceptions
         for (after_hook, requirements) in plugins.hooks.HOOKS.after:
-            if not requirements or type(self) in requirements:
+            if not requirements or any(isinstance(self, requirement_type) for requirement_type in requirements):
                 try:
                     after_hook(config, self, result)
                 except ProcessingError as e:
