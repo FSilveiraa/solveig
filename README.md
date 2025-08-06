@@ -48,7 +48,7 @@ Run tests:
 python -m pytest tests/unit/ -v
 
 # All tests with coverage
-python -m pytest tests/ --cov=solveig --cov-report=term-missing -v
+python -m pytest tests/ --cov=solveig --cov=scripts --cov-report=term-missing -v
 
 # Specific test class
 python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
