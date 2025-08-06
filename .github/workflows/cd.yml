@@ -72,18 +72,3 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         print: hash  # Print file hashes for verification
-    
-    - name: Create GitHub Release
-      if: steps.check_version.outputs.exists == 'false'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.get_version.outputs.version }}
-        name: Release v${{ steps.get_version.outputs.version }}
-        body: |
-          ## Changes in v${{ steps.get_version.outputs.version }}
-          
-          Auto-generated release from main branch.
-          
-          Install with: `pip install solveig==${{ steps.get_version.outputs.version }}`
-        draft: false
-        prerelease: false
