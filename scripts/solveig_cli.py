@@ -22,7 +22,7 @@ from solveig.schema.requirement import (
 
 def summarize_requirements(message: LLMMessage):
     reads, writes, commands = [], [], []
-    for requirement in message.requirements:
+    for requirement in message.requirements or []:
         if isinstance(requirement, ReadRequirement):
             reads.append(requirement)
         elif isinstance(requirement, WriteRequirement):
@@ -62,7 +62,7 @@ def initialize_conversation(config: SolveigConfig) -> tuple[Instructor, MessageH
     return client, message_history
 
 
-def get_initial_user_message(user_prompt: str = None) -> UserMessage:
+def get_initial_user_message(user_prompt: str | None = None) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
     utils.misc.print_line("User")
     if user_prompt:
@@ -185,7 +185,7 @@ def handle_network_error(
 def display_llm_response(llm_response: LLMMessage) -> None:
     """Display the LLM response and requirements summary."""
     utils.misc.print_line("Assistant")
-    print(llm_response.comment.strip())
+    print((llm_response.comment or "").strip())
 
     if llm_response.requirements:
         print(f"\n[ Requirements ({ len(llm_response.requirements) }) ]")
@@ -209,7 +209,7 @@ def process_requirements(llm_response: LLMMessage, config: SolveigConfig) -> lis
     return results
 
 
-def main_loop(config: SolveigConfig, user_prompt: str = None):
+def main_loop(config: SolveigConfig, user_prompt: str | None = None):
     client, message_history = initialize_conversation(config)
 
     user_response = get_initial_user_message(user_prompt)

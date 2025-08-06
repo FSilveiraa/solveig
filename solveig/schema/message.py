@@ -11,7 +11,7 @@ from .result import CommandResult, ReadResult, WriteResult
 
 
 class BaseMessage(BaseModel):
-    comment: str
+    comment: str | None
 
     def to_openai(self) -> dict:
         return self.model_dump()

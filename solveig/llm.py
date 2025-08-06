@@ -26,8 +26,8 @@ class APIType(Enum):
 
 def get_instructor_client(
     api_type: APIType,
-    api_key: str = None,
-    url: str = None,
+    api_key: str | None = None,
+    url: str | None = None,
     skip_instructor_system_prompt=True,
 ) -> instructor.Instructor:
     # NoneType throws error, but we don't want to enforce having an API key for local runs

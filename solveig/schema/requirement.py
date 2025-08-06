@@ -312,8 +312,8 @@ class CommandRequirement(Requirement):
                 result = subprocess.run(
                     self.command, shell=True, capture_output=True, text=True, timeout=10
                 )
-                output = result.stdout.strip()
-                error = result.stderr.strip() if result.stderr else ""
+                output: str | None = result.stdout.strip()
+                error: str | None = result.stderr.strip() if result.stderr else ""
             except Exception as e:
                 error = str(e)
                 print(error)
@@ -344,7 +344,8 @@ class CommandRequirement(Requirement):
                     )
                 )
             if not utils.misc.ask_yes("    ? Allow sending output? [y/N]: "):
-                output = error = None
+                output = None
+                error = None
             return CommandResult(
                 requirement=self,
                 accepted=True,

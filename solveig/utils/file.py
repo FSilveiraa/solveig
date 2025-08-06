@@ -29,7 +29,10 @@ def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
                 return int(size_notation)
             except ValueError:
                 try:
-                    size, unit = _SIZE_PATTERN.match(size_notation).groups()
+                    match_result = _SIZE_PATTERN.match(size_notation)
+                    if match_result is None:
+                        raise ValueError(f"'{size_notation}' is not a valid disk size")
+                    size, unit = match_result.groups()
                     unit = unit.strip().lower()
                     return int(float(size) * _SIZE_NOTATIONS[unit])
                 except KeyError:
@@ -100,7 +103,7 @@ def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
         if mime and mime.startswith("text"):
             return (read_file_as_text(path), "text")
         else:
-            raise UnicodeDecodeError("Fallback")
+            raise UnicodeDecodeError("utf-8", b"", 0, 1, "Fallback to base64")
     except (UnicodeDecodeError, Exception):
         return (read_file_as_base64(path), "base64")
 
@@ -130,7 +133,7 @@ def read_file_with_metadata(
     abs_path = Path(file_path).expanduser().resolve()
     is_dir = abs_path.is_dir()
 
-    result = {
+    result: dict[str, Any] = {
         "metadata": None,
         "content": None,
         "encoding": None,

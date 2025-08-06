@@ -38,8 +38,8 @@ class SolveigConfig:
     # n: negate (useful for denying access to sub-paths contained in another allowed path)
     url: str = "http://localhost:5001/v1/"
     api_type: APIType = APIType.OPENAI
-    api_key: str = None
-    model: str = None
+    api_key: str | None = None
+    model: str | None = None
     temperature: float = 0
     # allowed_commands: List[str] = field(default_factory=list)
     # allowed_paths: List[SolveigPath] = field(default_factory=list)

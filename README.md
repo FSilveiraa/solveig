@@ -26,37 +26,29 @@ Solveig lets LLMs read files and run commands with explicit user approval for ev
 
 ## 🚀 Quick start
 
-Install from source:
+
 ```bash
+# Install from source:
 git clone https://github.com/FranciscoSilveira/solveig.git
 cd solveig
 pip install -e .
-```
 
-Or install from PyPI (once published):
-```bash
+# Or install from PyPI (once published):
 pip install solveig
-```
 
-Local model:
-```bash
+# Run a local model:
 solveig -u "http://localhost:5001/v1" "Tell me a joke"
-```
 
-OpenRouter:
-```bash
+# Run from a remote API like OpenRouter:
 solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
 ```
 
 ## 🧪 Running Tests
 
-Install with testing dependencies:
 ```bash
+# Install with testing dependencies:
 pip install -e .[dev]
-```
 
-Run tests:
-```
 # Unit tests only
 python -m pytest tests/unit/ -v
 
@@ -333,6 +325,36 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
     result.metadata['path'] = anonymous_path
 ```
 </details>
+
+---
+
+## 🤝 Contributing
+
+We use modern Python tooling to maintain code quality and consistency:
+
+### Development Tools
+
+- **Black** - Automatic code formatting for consistent style across all contributors
+- **Ruff** - Fast linting that catches bugs, unused imports, and style issues (replaces ~10 older tools)
+- **MyPy** - Static type checking to prevent type-related runtime errors
+
+### Code Quality Workflow
+
+All code is automatically checked on `main` and `develop` branches:
+1. **Formatting**: `black .` - Ensures consistent code style
+2. **Linting**: `ruff check .` - Catches potential bugs and code quality issues  
+3. **Type checking**: `mypy solveig/ scripts/ --ignore-missing-imports` - Validates type hints
+4. **Testing**: `pytest` - Runs full test suite with coverage reporting
+
+### Setup for Contributors
+
+```bash
+# Install development dependencies
+pip install -e .[dev]
+
+# Run all checks locally (same as CI)
+black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest
+```
 
 ---
 

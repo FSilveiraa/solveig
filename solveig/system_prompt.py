@@ -4,7 +4,7 @@ import platform
 try:
     import distro  # optional, only needed for Linux distros
 except ImportError:
-    distro = None
+    distro = None  # type: ignore
 
 from .config import SolveigConfig
 from .schema.message import *
