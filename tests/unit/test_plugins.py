@@ -66,7 +66,7 @@ class TestPluginHookSystem:
         result = req.solve(config)
         
         assert not result.accepted
-        assert result.error == "Command validation failed"
+        assert result.error == "Pre-processing failed: Command validation failed"
         assert not result.success
     
     def test_before_hook_security_error(self):
@@ -83,7 +83,7 @@ class TestPluginHookSystem:
         result = req.solve(config)
         
         assert not result.accepted
-        assert result.error == "Dangerous command detected"
+        assert result.error == "Pre-processing failed: Dangerous command detected"
         assert not result.success
     
     def test_before_hook_success_continues(self):
