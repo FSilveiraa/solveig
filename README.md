@@ -14,6 +14,7 @@ Solveig lets LLMs read files and run commands with explicit user approval for ev
 
 <a href="https://vshymanskyy.github.io/StandWithUkraine">
 	<img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
+</a>
 
 ---
 
@@ -36,10 +37,13 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 ## 🧪 Running Tests
 
+Install with testing dependencies:
 ```bash
-# Install with testing dependencies
 pip install -e .[dev]
+```
 
+Run tests:
+```
 # Unit tests only
 python -m pytest tests/unit/ -v
 
@@ -266,9 +270,9 @@ the `@before/after(requirements=None)` hooks. Check out the existing `Shellcheck
 ```python
 import re
 
-from config import SolveigConfig
-from plugins.hooks import after
-from schema.requirement import ReadRequirement, WriteRequirement, ReadResult, WriteResult
+from solveig.config import SolveigConfig
+from solveig.plugins.hooks import after
+from solveig.schema.requirement import ReadRequirement, WriteRequirement, ReadResult, WriteResult
 
 @after(requirements=(ReadRequirement, WriteRequirement))
 def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
