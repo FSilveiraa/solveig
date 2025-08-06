@@ -7,7 +7,7 @@ name = "solveig"
 version = "0.1.0"
 description = "A safe bridge between AI assistants and your computer"
 readme = "README.md"
-license = "GPL-3.0-or-later"
+license = {file = "LICENSE"}
 authors = [
     {name = "Francisco"}
 ]
