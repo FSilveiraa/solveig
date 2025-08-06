@@ -15,8 +15,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        # Fetch full history to get the latest commit (including version bump)
+        # Fetch full history and pull latest changes
         fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Pull latest changes (including any git hook commits)
+      run: git pull origin main
     
     - name: Set up Python
       uses: actions/setup-python@v4
