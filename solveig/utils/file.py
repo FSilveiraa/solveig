@@ -7,7 +7,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Literal
 
 _SIZE_NOTATIONS = {
     "kib": 1024,
@@ -22,7 +22,7 @@ _SIZE_NOTATIONS = {
 _SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
 
 
-def parse_size_notation_into_bytes(size_notation: Optional[int | str]) -> int:
+def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
     if size_notation is not None:
         if not isinstance(size_notation, int):
             try:
@@ -39,9 +39,11 @@ def parse_size_notation_into_bytes(size_notation: Optional[int | str]) -> int:
                     ]
                     raise ValueError(
                         f"'{unit}' is not a valid disk size unit. Supported: {supported}"
-                    )
+                    ) from None
                 except (AttributeError, ValueError):
-                    raise ValueError(f"'{size_notation}' is not a valid disk size")
+                    raise ValueError(
+                        f"'{size_notation}' is not a valid disk size"
+                    ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
 
@@ -92,7 +94,7 @@ def read_file_as_text(path: str | Path) -> str:
         return fd.read()
 
 
-def read_file(path: str | Path) -> Tuple[str, Literal["text", "base64"]]:
+def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
     mime, _ = mimetypes.guess_type(path)
     try:
         if mime and mime.startswith("text"):
@@ -119,7 +121,7 @@ def validate_read_access(file_path: str | Path) -> None:
 
 def read_file_with_metadata(
     file_path: str | Path, include_content: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Read file/directory metadata and optionally content.
     Returns dict with 'metadata', 'content', 'encoding', 'directory_listing' keys.
@@ -154,8 +156,8 @@ def read_file_with_metadata(
 def validate_write_access(
     file_path: str | Path,
     is_directory: bool = False,
-    content: Optional[str] = None,
-    min_disk_size_left: Optional[str | int] = None,
+    content: str | None = None,
+    min_disk_size_left: str | int | None = None,
 ) -> None:
     """
     Validate write operation before attempting it.
@@ -199,7 +201,7 @@ def validate_write_access(
                     f"Insufficient disk space: After writing {content_size} bytes, only {available_after_write} bytes would be available, minimum configured is {min_disk_bytes_left} bytes"
                 )
         except OSError as e:
-            raise OSError(f"Cannot check disk space: {e}")
+            raise OSError(f"Cannot check disk space: {e}") from e
 
 
 def write_file_or_directory(

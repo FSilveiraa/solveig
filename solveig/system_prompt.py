@@ -198,7 +198,7 @@ multiple_issues_chat.add_message(
     LLMMessage(
         comment="""
 I understand. Based on the information you've shared, Firefox is using a lot of your CPU and could be responsible for it being slow.
-The file ~/my_app.log shows that someone tried to login as 'admin' around 09:12, but failed. Around the same time there was also a failed payment transaction. 
+The file ~/my_app.log shows that someone tried to login as 'admin' around 09:12, but failed. Around the same time there was also a failed payment transaction.
 """
     )
 )

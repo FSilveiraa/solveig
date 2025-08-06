@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, field_validator
 
@@ -219,7 +219,7 @@ class ReadRequirement(FileRequirement):
 
 class WriteRequirement(FileRequirement):
     is_directory: bool
-    content: Optional[str] = None
+    content: str | None = None
 
     def _print(self, config):
         abs_path = Path(self.path).expanduser().resolve()

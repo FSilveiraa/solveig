@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -26,8 +26,8 @@ class BaseMessage(BaseModel):
 # - either the inital prompt or optionally more prompting
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
-    comment: Optional[str] = None
-    results: Optional[List[ReadResult | WriteResult | CommandResult]] = None
+    comment: str | None = None
+    results: list[ReadResult | WriteResult | CommandResult] | None = None
 
     def to_openai(self) -> dict:
         data = super().to_openai()
@@ -43,14 +43,14 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    requirements: Optional[
-        List[ReadRequirement | WriteRequirement | CommandRequirement]
-    ] = None
+    requirements: (
+        list[ReadRequirement | WriteRequirement | CommandRequirement] | None
+    ) = None
 
 
 @dataclass
 class MessageContainer:
-    message: Union[UserMessage, LLMMessage]
+    message: UserMessage | LLMMessage
     content: str = field(init=False)
     token_count: int = field(init=False)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -75,10 +75,10 @@ class MessageContainer:
 
 @dataclass
 class MessageHistory:
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     max_context: int = -1
-    messages: List[MessageContainer] = field(default_factory=list)
-    message_cache: List[dict] = field(default_factory=list)
+    messages: list[MessageContainer] = field(default_factory=list)
+    message_cache: list[dict] = field(default_factory=list)
 
     def get_token_count(self):
         count = utils.misc.count_tokens(self.system_prompt) if self.system_prompt else 0

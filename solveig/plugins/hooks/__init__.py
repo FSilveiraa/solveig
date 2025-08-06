@@ -1,11 +1,11 @@
 import importlib
 import pkgutil
-from typing import Callable, List, Optional, Tuple, Type
+from collections.abc import Callable
 
 
 class HOOKS:
-    before: List[Tuple[Callable, Optional[Tuple[Type]]]] = []
-    after: List[Tuple[Callable, Optional[Tuple[Type]]]] = []
+    before: list[tuple[Callable, tuple[type] | None]] = []
+    after: list[tuple[Callable, tuple[type] | None]] = []
 
     # __init__ is called after instantiation, __new__ is called before
     def __new__(cls, *args, **kwargs):
@@ -21,7 +21,7 @@ def _announce_register(verb, fun: Callable, requirements):
     print(f"🔌 Registering plugin `{fun.__name__}` to run {verb} {req_types}")
 
 
-def before(requirements: Optional[Tuple[type]] = None):
+def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         _announce_register("before", fun, requirements)
         HOOKS.before.append((fun, requirements))
@@ -30,7 +30,7 @@ def before(requirements: Optional[Tuple[type]] = None):
     return register
 
 
-def after(requirements: Optional[Tuple[type]] = None):
+def after(requirements: tuple[type] | None = None):
     def register(fun):
         _announce_register("after", fun, requirements)
         HOOKS.after.append((fun, requirements))

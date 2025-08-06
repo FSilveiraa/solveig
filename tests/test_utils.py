@@ -1,6 +1,5 @@
 """Test utilities for creating mocked Solveig objects."""
 
-from typing import Optional
 from unittest.mock import Mock
 
 from solveig.config import APIType, SolveigConfig
@@ -35,7 +34,7 @@ class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes."""
 
     def __init__(
-        self, *args, accepted: Optional[bool] = None, solve_return=None, **kwargs
+        self, *args, accepted: bool | None = None, solve_return=None, **kwargs
     ):
         super().__init__(**kwargs)
 

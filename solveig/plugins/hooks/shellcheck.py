@@ -60,8 +60,7 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
         try:
             result = subprocess.run(
                 ["shellcheck", script_path, "--format=json", f"--shel={shell_name}"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
         except FileNotFoundError:
@@ -90,7 +89,7 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
                 )
         except json.JSONDecodeError as e:
             print(f"      Failed to parse shellcheck output: {e}")
-            raise ValidationError(f"Shellcheck output parsing failed: {e}")
+            raise ValidationError(f"Shellcheck output parsing failed: {e}") from e
 
     finally:
         os.remove(script_path)

@@ -4,7 +4,6 @@ Main CLI entry point for Solveig.
 
 import json
 import sys
-from typing import Optional, Tuple
 
 import httpx
 from instructor import Instructor
@@ -78,7 +77,7 @@ def send_message_to_llm(
     message_history: MessageHistory,
     user_response: UserMessage,
     config: SolveigConfig,
-) -> Optional[LLMMessage]:
+) -> LLMMessage | None:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
         print("[ Sending ]")
@@ -134,7 +133,7 @@ def send_message_to_llm_with_retry(
     message_history: MessageHistory,
     user_response: UserMessage,
     config: SolveigConfig,
-) -> Tuple[Optional[LLMMessage], UserMessage]:
+) -> tuple[LLMMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
         llm_response = send_message_to_llm(

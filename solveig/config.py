@@ -107,7 +107,7 @@ class SolveigConfig:
             "--api-type",
             "-a",
             type=str,
-            choices=set(api_type.name.lower() for api_type in APIType),
+            choices={api_type.name.lower() for api_type in APIType},
             help="Type of API to use (default: OpenAI)",
         )
         parser.add_argument("--api-key", "-k", type=str)

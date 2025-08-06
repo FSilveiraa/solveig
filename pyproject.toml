@@ -68,4 +68,7 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501"]  # line too long, handled by black
+ignore = ["E501", "E402"]  # E501: line too long (black), E402: module level import not at top (intentional plugin loading)
+
+[tool.ruff.lint.per-file-ignores]
+"solveig/system_prompt.py" = ["F403", "F405"]  # Star imports used intentionally for examples
