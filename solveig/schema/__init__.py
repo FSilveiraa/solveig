@@ -7,27 +7,27 @@ This module defines the data structures used for:
 - Results and error handling
 """
 
-from .message import LLMMessage, UserMessage, MessageHistory
+from .message import LLMMessage, MessageHistory, UserMessage
 from .requirement import (
-    Requirement,
-    ReadRequirement, 
-    WriteRequirement,
     CommandRequirement,
+    ReadRequirement,
+    Requirement,
+    WriteRequirement,
 )
 from .result import (
-    RequirementResult,
-    ReadResult,
-    WriteResult, 
     CommandResult,
+    ReadResult,
+    RequirementResult,
+    WriteResult,
 )
 
 __all__ = [
     "LLMMessage",
-    "UserMessage", 
+    "UserMessage",
     "MessageHistory",
     "Requirement",
     "ReadRequirement",
-    "WriteRequirement", 
+    "WriteRequirement",
     "CommandRequirement",
     "RequirementResult",
     "ReadResult",
@@ -44,4 +44,5 @@ RequirementResult.model_rebuild()
 
 # Auto-load plugins after schema is fully initialized
 from .. import plugins
+
 plugins.hooks.load_hooks()

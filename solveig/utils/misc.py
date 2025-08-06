@@ -1,15 +1,17 @@
-import tiktoken
 import shutil
 
+import tiktoken
 
-YES = { "y", "yes" }
+YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
 INPUT_PROMPT = "Reply:\n > "
 
 terminal_width = shutil.get_terminal_size((80, 20)).columns
 
 
-def format_output(content: str, indent=0, max_lines: int=-1, max_chars: int = 500) -> str:
+def format_output(
+    content: str, indent=0, max_lines: int = -1, max_chars: int = 500
+) -> str:
     lines = content.splitlines()
 
     if 0 < max_lines < len(lines):
@@ -18,7 +20,7 @@ def format_output(content: str, indent=0, max_lines: int=-1, max_chars: int = 50
         lines = lines[:keep_head] + [TRUNCATE_JOIN] + lines[-keep_tail:]
 
     if indent > 0:
-        lines = [ (" " * indent) + line for line in lines ]
+        lines = [(" " * indent) + line for line in lines]
     formatted = "\n".join(lines)
     if 0 < max_chars < len(formatted):
         keep_head = max_chars // 2

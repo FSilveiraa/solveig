@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Literal
+
 from pydantic import BaseModel
-from typing import Literal, Union, Optional, List, TYPE_CHECKING
 
 # Circular import fix:
 # - This module (result.py) needs Requirement classes for type hints
@@ -9,16 +10,16 @@ from typing import Literal, Union, Optional, List, TYPE_CHECKING
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from .requirement import ReadRequirement, WriteRequirement, CommandRequirement
+    from .requirement import CommandRequirement, ReadRequirement, WriteRequirement
 
 
 # Base class for data returned for requirements
 class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
-    requirement: Optional[Union[ReadRequirement, WriteRequirement, CommandRequirement]]
+    requirement: ReadRequirement | WriteRequirement | CommandRequirement | None
     accepted: bool
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_openai(self):
         return self.model_dump()
@@ -34,12 +35,12 @@ class FileResult(RequirementResult):
 
 
 class ReadResult(FileResult):
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
     # For files
-    content: Optional[str] = None
-    content_encoding: Optional[Literal["text", "base64"]] = None
+    content: str | None = None
+    content_encoding: Literal["text", "base64"] | None = None
     # For directories
-    directory_listing: Optional[List[dict]] = None
+    directory_listing: list[dict] | None = None
 
 
 class WriteResult(FileResult):
@@ -47,8 +48,8 @@ class WriteResult(FileResult):
 
 
 class CommandResult(RequirementResult):
-    success: Optional[bool] = None
-    stdout: Optional[str] = None
+    success: bool | None = None
+    stdout: str | None = None
     # use the `error` field for stderr
 
     def to_openai(self):
