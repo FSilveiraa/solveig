@@ -1,12 +1,13 @@
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from pydantic import BaseModel, field_validator
-from typing import List, Optional, Union, Literal
+from datetime import UTC, datetime
+from typing import List, Literal, Optional, Union
 
-from .requirement import ReadRequirement, WriteRequirement, CommandRequirement
-from .result import ReadResult, WriteResult, CommandResult
+from pydantic import BaseModel, field_validator
+
 from .. import utils
+from .requirement import CommandRequirement, ReadRequirement, WriteRequirement
+from .result import CommandResult, ReadResult, WriteResult
 
 
 class BaseMessage(BaseModel):
@@ -30,9 +31,11 @@ class UserMessage(BaseMessage):
 
     def to_openai(self) -> dict:
         data = super().to_openai()
-        data["results"] = [
-            result.to_openai() for result in self.results
-        ] if self.results is not None else None
+        data["results"] = (
+            [result.to_openai() for result in self.results]
+            if self.results is not None
+            else None
+        )
         return data
 
 
@@ -40,7 +43,9 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    requirements: Optional[List[ReadRequirement | WriteRequirement | CommandRequirement]] = None
+    requirements: Optional[
+        List[ReadRequirement | WriteRequirement | CommandRequirement]
+    ] = None
 
 
 @dataclass
@@ -51,7 +56,7 @@ class MessageContainer:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     role: Literal["user", "assistant"] = field(init=False)
 
-    def __init__(self, message: LLMMessage|UserMessage):
+    def __init__(self, message: LLMMessage | UserMessage):
         self.message = message
         self.role = "user" if isinstance(message, UserMessage) else "assistant"
         self.content = json.dumps(message.to_openai())
@@ -93,7 +98,7 @@ class MessageHistory:
     def to_openai(self):
         history = []
         if self.system_prompt:
-            history.append({ "role": "system", "content": self.system_prompt })
+            history.append({"role": "system", "content": self.system_prompt})
         history.extend(message.to_openai() for message in self.messages)
         return history + self.message_cache
 

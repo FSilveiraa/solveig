@@ -1,6 +1,7 @@
-import instructor
 from enum import Enum
 from urllib.parse import urlunparse
+
+import instructor
 from openai import OpenAI
 
 
@@ -20,9 +21,15 @@ class APIType(Enum):
     @property
     def url(self) -> str:
         netloc = f"{self.host}:{self.port}"
-        return urlunparse((self.scheme, netloc, self.endpoint, '', '', ''))
+        return urlunparse((self.scheme, netloc, self.endpoint, "", "", ""))
 
-def get_instructor_client(api_type: APIType, api_key: str = None, url: str = None, skip_instructor_system_prompt=True) -> instructor.Instructor:
+
+def get_instructor_client(
+    api_type: APIType,
+    api_key: str = None,
+    url: str = None,
+    skip_instructor_system_prompt=True,
+) -> instructor.Instructor:
     # NoneType throws error, but we don't want to enforce having an API key for local runs
     api_key = api_key or ""
 

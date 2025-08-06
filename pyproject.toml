@@ -60,10 +60,12 @@ addopts = ["--cov=solveig", "--cov-report=term-missing"]
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py312']
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py312"
 line-length = 88
+
+[tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
 ignore = ["E501"]  # line too long, handled by black

@@ -1,22 +1,24 @@
 """
 Main CLI entry point for Solveig.
 """
-from instructor import Instructor
-from instructor.exceptions import InstructorRetryException
-from typing import Optional, Tuple
-from openai import AuthenticationError, RateLimitError
-import httpx
 
 import json
 import sys
+from typing import Optional, Tuple
 
-from solveig import llm
-from solveig import utils
+import httpx
+from instructor import Instructor
+from instructor.exceptions import InstructorRetryException
+from openai import AuthenticationError, RateLimitError
+
+from solveig import llm, system_prompt, utils
 from solveig.config import SolveigConfig
-from solveig.schema.message import MessageHistory, UserMessage, LLMMessage
-from solveig import system_prompt
-from solveig.schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
-
+from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
+from solveig.schema.requirement import (
+    CommandRequirement,
+    ReadRequirement,
+    WriteRequirement,
+)
 
 
 def summarize_requirements(message: LLMMessage):
@@ -32,7 +34,9 @@ def summarize_requirements(message: LLMMessage):
     if reads:
         print("  Read:")
         for requirement in reads:
-            print(f"    {requirement.path} ({"metadata" if requirement.only_read_metadata else "content"})")
+            print(
+                f"    {requirement.path} ({'metadata' if requirement.only_read_metadata else 'content'})"
+            )
 
     if writes:
         print("  Write:")
@@ -48,16 +52,14 @@ def summarize_requirements(message: LLMMessage):
 def initialize_conversation(config: SolveigConfig) -> tuple[Instructor, MessageHistory]:
     """Initialize the LLM client and conversation state."""
     client: Instructor = llm.get_instructor_client(
-        api_type=config.api_type, 
-        api_key=config.api_key, 
-        url=config.url
+        api_type=config.api_type, api_key=config.api_key, url=config.url
     )
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
         print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
-    
+
     return client, message_history
 
 
@@ -71,11 +73,15 @@ def get_initial_user_message(user_prompt: str = None) -> UserMessage:
     return UserMessage(comment=user_prompt)
 
 
-def send_message_to_llm(client: Instructor, message_history: MessageHistory, 
-                       user_response: UserMessage, config: SolveigConfig) -> Optional[LLMMessage]:
+def send_message_to_llm(
+    client: Instructor,
+    message_history: MessageHistory,
+    user_response: UserMessage,
+    config: SolveigConfig,
+) -> Optional[LLMMessage]:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
-        print(f"[ Sending ]")
+        print("[ Sending ]")
         print(json.dumps(user_response.to_openai(), indent=2))
     else:
         print("(Sending)")
@@ -94,36 +100,54 @@ def send_message_to_llm(client: Instructor, message_history: MessageHistory,
         handle_llm_error(e, config)
         return None
     except AuthenticationError as e:
-        handle_network_error("Authentication failed: Invalid API key or unauthorized access", e, config)
+        handle_network_error(
+            "Authentication failed: Invalid API key or unauthorized access", e, config
+        )
         return None
     except RateLimitError as e:
-        handle_network_error("Rate limit exceeded: Please wait before making more requests", e, config)
+        handle_network_error(
+            "Rate limit exceeded: Please wait before making more requests", e, config
+        )
         return None
     except httpx.ConnectError as e:
-        handle_network_error("Connection failed: Unable to reach the LLM service", e, config)
+        handle_network_error(
+            "Connection failed: Unable to reach the LLM service", e, config
+        )
         return None
     except httpx.TimeoutException as e:
-        handle_network_error("Request timed out: The LLM service is not responding", e, config)
+        handle_network_error(
+            "Request timed out: The LLM service is not responding", e, config
+        )
         return None
     except httpx.HTTPStatusError as e:
-        handle_network_error(f"HTTP error {e.response.status_code}: {e.response.text}", e, config)
+        handle_network_error(
+            f"HTTP error {e.response.status_code}: {e.response.text}", e, config
+        )
         return None
     except Exception as e:
         handle_network_error(f"Unexpected error: {str(e)}", e, config)
         return None
 
 
-def send_message_to_llm_with_retry(client: Instructor, message_history: MessageHistory, 
-                                   user_response: UserMessage, config: SolveigConfig) -> Tuple[Optional[LLMMessage], UserMessage]:
+def send_message_to_llm_with_retry(
+    client: Instructor,
+    message_history: MessageHistory,
+    user_response: UserMessage,
+    config: SolveigConfig,
+) -> Tuple[Optional[LLMMessage], UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
-        llm_response = send_message_to_llm(client, message_history, user_response, config)
+        llm_response = send_message_to_llm(
+            client, message_history, user_response, config
+        )
         if llm_response is not None:
             return llm_response, user_response
-            
+
         # Error occurred, ask if user wants to retry or provide new input
         print("[ Error ]")
-        if not utils.misc.ask_yes(f"  ? Re-send previous message{ " and results" if user_response.results else "" }? [y/N] "):
+        if not utils.misc.ask_yes(
+            f"  ? Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
+        ):
             user_response = UserMessage(comment=utils.misc.prompt_user())
             message_history.add_message(user_response)
         # If they said yes to retry, the loop continues with the same user_response
@@ -140,15 +164,17 @@ def handle_llm_error(error: InstructorRetryException, config: SolveigConfig) -> 
         print()
 
 
-def handle_network_error(user_message: str, error: Exception, config: SolveigConfig) -> None:
+def handle_network_error(
+    user_message: str, error: Exception, config: SolveigConfig
+) -> None:
     """Display network error with user-friendly message and technical details."""
     print(f"  {user_message}")
     print("  Network connection failed")
-    
+
     if config.verbose:
         print(f"  Technical details: {error}")
         print(f"  Error type: {type(error).__name__}")
-    
+
     print("  Suggestions:")
     print("    • Check your internet connection")
     print("    • Verify the API endpoint URL is correct")
@@ -186,7 +212,7 @@ def process_requirements(llm_response: LLMMessage, config: SolveigConfig) -> lis
 
 def main_loop(config: SolveigConfig, user_prompt: str = None):
     client, message_history = initialize_conversation(config)
-    
+
     user_response = get_initial_user_message(user_prompt)
     message_history.add_message(user_response)
 
@@ -195,15 +221,15 @@ def main_loop(config: SolveigConfig, user_prompt: str = None):
         llm_response, user_response = send_message_to_llm_with_retry(
             client, message_history, user_response, config
         )
-        
+
         if llm_response is None:
             # This shouldn't happen with our retry logic, but just in case
             continue
-            
+
         # Successfully got LLM response
         message_history.add_message(llm_response)
         display_llm_response(llm_response)
-        
+
         # Process requirements and get next user input
         results = process_requirements(llm_response, config)
         user_response = UserMessage(comment=utils.misc.prompt_user(), results=results)

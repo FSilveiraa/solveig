@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
+
 from pydantic import BaseModel
-from typing import Literal, Union, Optional, List, TYPE_CHECKING
 
 # Circular import fix:
 # - This module (result.py) needs Requirement classes for type hints
@@ -9,7 +10,7 @@ from typing import Literal, Union, Optional, List, TYPE_CHECKING
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from .requirement import ReadRequirement, WriteRequirement, CommandRequirement
+    from .requirement import CommandRequirement, ReadRequirement, WriteRequirement
 
 
 # Base class for data returned for requirements
