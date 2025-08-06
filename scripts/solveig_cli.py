@@ -17,8 +17,6 @@ from solveig.schema.message import MessageHistory, UserMessage, LLMMessage
 from solveig import system_prompt
 from solveig.schema.requirement import ReadRequirement, CommandRequirement, WriteRequirement
 
-from solveig import plugins
-plugins.hooks.load_hooks()
 
 
 def summarize_requirements(message: LLMMessage):

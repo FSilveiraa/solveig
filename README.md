@@ -251,18 +251,50 @@ Reply:
 
 ## 🧩 Plugins
 
-Solveig can be extended by adding new communication capabilities or by interacting
-with existing messages. A plugin can work in one of two ways:
+Solveig has an extensible plugin system that automatically discovers and loads plugins on startup.
 
-* You can add a new message that describes a functionality available for the LLM. You can do this by creating a
-`Pydantic` model that extends `schema.requirement.Requirement` and returns a response extending
-`schema.requirement.RequirementResult`. **This functionality is not implemented yet since it requires figuring out
-a way to re-generate the schema sent to the LLM on runtime, after all plugins are registered**
-* You can interact with an existing requirement message, either before or after it starts being resolved, by using
-the `@before/after(requirements=None)` hooks. Check out the existing `Shellcheck` plugin or the examples below
+**Plugin Types:**
+1. **Hook into requirements**: Use `@before()` or `@after()` decorators to validate or process existing requirements (file/command operations)
+2. **Schema extensions**: Create new requirement types that the LLM can request by extending `Requirement` and implementing `_actually_solve()`
+3. **Plugin tests**: Add comprehensive test suites in `tests/plugins/test_my_plugin.py`
+
+**Adding a Plugin:**
+1. Create a `.py` file in `solveig/plugins/hooks/` 
+2. Use decorators: `@before(requirements=(CommandRequirement,))`, `@after()`, both, or neither
+3. Add tests in `tests/plugins/test_my_plugin.py` following the existing patterns
+4. Plugins auto-load when Solveig starts - no configuration needed!
+
+Check out `solveig/plugins/hooks/shellcheck.py` and `tests/plugins/test_shellcheck.py` for complete examples.
 
 
 ### Examples:
+
+*click to expand:*
+
+<details>
+<summary><b>Block dangerous commands with custom patterns</b></summary>
+
+```python
+from solveig.config import SolveigConfig
+from solveig.plugins.hooks import before
+from solveig.plugins.exceptions import SecurityError
+from solveig.schema.requirement import CommandRequirement
+
+@before(requirements=(CommandRequirement,))
+def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirement):
+    """Block commands that could be dangerous to system security."""
+    dangerous_patterns = [
+        "sudo chmod 777",
+        "wget http://",  # Block HTTP downloads
+        "curl http://",
+        "dd if=",        # Block disk operations
+    ]
+    
+    for pattern in dangerous_patterns:
+        if pattern in requirement.command:
+            raise SecurityError(f"Blocked dangerous command pattern: {pattern}")
+```
+</details>
 
 <details>
 <summary><b>Anonymize all paths before sending to LLM</b></summary>
@@ -272,14 +304,20 @@ import re
 
 from solveig.config import SolveigConfig
 from solveig.plugins.hooks import after
-from solveig.schema.requirement import ReadRequirement, WriteRequirement, ReadResult, WriteResult
+from solveig.plugins.exceptions import ProcessingError
+from solveig.schema.requirement import ReadRequirement, WriteRequirement
+from solveig.schema.result import ReadResult, WriteResult
 
 @after(requirements=(ReadRequirement, WriteRequirement))
 def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
-    anonymous_path = result.real_path
-    anonymous_path = re.sub(r"/home/\w+?", "/home/jdoe/", anonymous_path)
+    """Anonymize file paths in results before sending to LLM."""
+    try:
+        original_path = result.metadata['path']
+    except:
+        return
+    anonymous_path = re.sub(r"/home/\w+", "/home/jdoe", original_path)
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
-    result.real_path = anonymous_path
+    result.metadata['path'] = anonymous_path
 ```
 </details>
 

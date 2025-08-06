@@ -41,3 +41,7 @@ ReadResult.model_rebuild()
 WriteResult.model_rebuild()
 CommandResult.model_rebuild()
 RequirementResult.model_rebuild()
+
+# Auto-load plugins after schema is fully initialized
+from .. import plugins
+plugins.hooks.load_hooks()

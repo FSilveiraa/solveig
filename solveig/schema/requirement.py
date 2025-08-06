@@ -5,10 +5,11 @@ import subprocess
 
 from pydantic import BaseModel, field_validator
 from pathlib import Path
-from typing import Literal, Union, Optional, List, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from .. import utils, SolveigConfig
 from .. import plugins
+from ..plugins.exceptions import PluginException, ValidationError, ProcessingError
 
 if TYPE_CHECKING:
     from .result import RequirementResult, ReadResult, WriteResult, CommandResult
@@ -33,23 +34,40 @@ class Requirement(BaseModel):
     def solve(self, config):
         self._print(config)
 
+        # Run before hooks - they validate and can throw exceptions
         for (before_hook, requirements) in plugins.hooks.HOOKS.before:
             if not requirements or type(self) in requirements:
-                before_result = before_hook(config, self)
-                if before_result:
-                    return before_result
+                try:
+                    before_hook(config, self)
+                except ValidationError as e:
+                    # Plugin validation failed - return appropriate error result
+                    return self._create_error_result(f"Pre-processing failed: {e}", accepted=False)
+                except PluginException as e:
+                    # Other plugin error - return appropriate error result  
+                    return self._create_error_result(f"Plugin error: {e}", accepted=False)
 
+        # Run the actual requirement solving
         result = self._actually_solve(config)
-
+        
+        # Run after hooks - they can process/modify result or throw exceptions
         for (after_hook, requirements) in plugins.hooks.HOOKS.after:
             if not requirements or type(self) in requirements:
-                after_result = after_hook(config, self, result)
-                if after_result:
-                    return after_result
+                try:
+                    after_hook(config, self, result)
+                except ProcessingError as e:
+                    # Plugin processing failed - return error result
+                    return self._create_error_result(f"Post-processing failed: {e}", accepted=result.accepted)
+                except PluginException as e:
+                    # Other plugin error - return error result
+                    return self._create_error_result(f"Plugin error: {e}", accepted=result.accepted)
 
         return result
 
     def _actually_solve(self, config) -> RequirementResult:
+        raise NotImplementedError()
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> RequirementResult:
+        """Create appropriate error result for this requirement type."""
         raise NotImplementedError()
 
 
@@ -81,6 +99,10 @@ class ReadRequirement(FileRequirement):
         print("  [ Read ]")
         print(f"    comment: \"{self.comment}\"")
         print(f"    path: {self.path} ({"directory" if is_dir else "file"})")
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
+        """Create ReadResult with error."""
+        return ReadResult(requirement=self, accepted=accepted, error=error_message)
 
     def _actually_solve(self, config) -> "ReadResult":
         abs_path = Path(self.path).expanduser().resolve()
@@ -164,6 +186,10 @@ class WriteRequirement(FileRequirement):
             # TODO: make this print optional, or in a `less`-like window, or it will get messy
             print(formatted_content)
 
+    def _create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
+        """Create WriteResult with error."""
+        return WriteResult(requirement=self, accepted=accepted, error=error_message)
+
     def _actually_solve(self, config: SolveigConfig) -> "WriteResult":
         abs_path = Path(self.path).expanduser().resolve()
 
@@ -210,6 +236,10 @@ class CommandRequirement(Requirement):
         print(f"  [ Command ]")
         print(f"    comment: \"{self.comment}\"")
         print(f"    command: {self.command}")
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> "CommandResult":
+        """Create CommandResult with error."""
+        return CommandResult(requirement=self, accepted=accepted, success=False, error=error_message)
 
     def _actually_solve(self, config) -> "CommandResult":
         if utils.misc.ask_yes("    ? Allow running command? [y/N]: "):

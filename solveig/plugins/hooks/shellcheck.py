@@ -6,8 +6,8 @@ import platform
 
 from solveig.config import SolveigConfig
 from solveig.plugins.hooks import before
+from solveig.plugins.exceptions import ValidationError, SecurityError
 from solveig.schema.requirement import CommandRequirement
-from solveig.schema.result import CommandResult
 
 DANGEROUS_PATTERNS = [
     "rm -rf", "mkfs", ":(){",
@@ -33,8 +33,11 @@ def detect_shell(config: SolveigConfig) -> str:
 @before(requirements=(CommandRequirement,))
 def check_command(config: SolveigConfig, requirement: CommandRequirement):
     print("    [ Plugin: Shellcheck ]")
+    
+    # Check for obviously dangerous patterns first
     if is_obviously_dangerous(requirement.command):
-        print("      ! Warning: this command contains a dangerous pattern !")
+        print("      ! Security warning: this command contains dangerous patterns !")
+        raise SecurityError(f"Command contains dangerous pattern: {requirement.command}")
 
     shell_name = detect_shell(config)
 
@@ -61,13 +64,18 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
             print("      No problems found")
             return
 
-        output = json.loads(result.stdout)
-        warnings = [ f"[{item["level"]}] {item["message"]}" for item in output ]
-        if warnings:
-            print("      Failed to validate command:")
-            for warning in warnings:
-                print("        "+warning)
-            return CommandResult(requirement=requirement, success=False, accepted=False, error=f"Shellcheck failed to validate command: {warnings}")
+        # Parse shellcheck warnings and raise validation error
+        try:
+            output = json.loads(result.stdout)
+            warnings = [ f"[{item['level']}] {item['message']}" for item in output ]
+            if warnings:
+                print("      Failed to validate command:")
+                for warning in warnings:
+                    print("        "+warning)
+                raise ValidationError(f"Shellcheck validation failed: {'; '.join(warnings)}")
+        except json.JSONDecodeError as e:
+            print(f"      Failed to parse shellcheck output: {e}")
+            raise ValidationError(f"Shellcheck output parsing failed: {e}")
 
     finally:
         os.remove(script_path)

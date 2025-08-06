@@ -8,6 +8,7 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from solveig.plugins import hooks
+from . import hooks
+from .exceptions import PluginException, ValidationError, ProcessingError, SecurityError
 
-__all__ = ["hooks"]
+__all__ = ["hooks", "PluginException", "ValidationError", "ProcessingError", "SecurityError"]
