@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import time
 import pwd
@@ -7,6 +8,39 @@ import base64
 from pathlib import Path
 import mimetypes
 from typing import Tuple, Literal, Optional, Dict, Any
+
+
+
+_SIZE_NOTATIONS = {
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "tib": 1024**4,
+
+    "kb": 1000,
+    "mb": 1000**2,
+    "gb": 1000**3,
+    "tb": 1000**4,
+}
+_SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
+
+
+def parse_size_notation_into_bytes(size_notation: Optional[int | str]) -> int:
+    if size_notation is not None:
+        if not isinstance(size_notation, int):
+            try:
+                return int(size_notation)
+            except ValueError:
+                try:
+                    size, unit = _SIZE_PATTERN.match(size_notation).groups()
+                    unit = unit.strip().lower()
+                    return int(float(size) * _SIZE_NOTATIONS[unit])
+                except KeyError:
+                    supported = [ f"{supported_unit[0].upper()}{supported_unit[1:-1]}{supported_unit[-1].upper()}" for supported_unit in _SIZE_NOTATIONS]
+                    raise ValueError(f"'{unit}' is not a valid disk size unit. Supported: {supported}")
+                except (AttributeError, ValueError):
+                    raise ValueError(f"'{size_notation}' is not a valid disk size")
+    return 0 # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
 
 def read_metadata_and_entries(path):
@@ -111,12 +145,13 @@ def read_file_with_metadata(file_path: str | Path, include_content: bool = False
     return result
 
 
-def validate_write_access(file_path: str | Path, is_directory: bool = False, content: Optional[str] = None) -> None:
+def validate_write_access(file_path: str | Path, is_directory: bool = False, content: Optional[str] = None, min_disk_size_left: Optional[str|int] = None) -> None:
     """
     Validate write operation before attempting it.
     Raises appropriate exceptions if validation fails.
     """
     abs_path = Path(file_path).expanduser().resolve()
+    min_disk_bytes_left = parse_size_notation_into_bytes(min_disk_size_left)
     
     # Check if path already exists
     if abs_path.exists():
@@ -143,8 +178,9 @@ def validate_write_access(file_path: str | Path, is_directory: bool = False, con
             content_size = len(content.encode('utf-8'))
             available_space = shutil.disk_usage(parent_dir).free
             # Require at least 2x the content size for safety
-            if available_space < content_size * 2:
-                raise OSError(f"Insufficient disk space: Need {content_size * 2} bytes, only {available_space} available")
+            available_after_write = available_space - content_size
+            if available_after_write < min_disk_bytes_left:
+                raise OSError(f"Insufficient disk space: After writing {content_size} bytes, only {available_after_write} bytes would be available, minimum configured is {min_disk_bytes_left} bytes")
         except (OSError, IOError) as e:
             raise OSError(f"Cannot check disk space: {e}")
 
@@ -166,8 +202,6 @@ def write_file_or_directory(file_path: str | Path, is_directory: bool = False, c
         
         # Write file content
         abs_path.write_text(content, encoding="utf-8")
-
-
 
 
 def _check_can_create_parent(parent_dir: Path) -> bool:

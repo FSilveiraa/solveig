@@ -5,10 +5,16 @@ import subprocess
 
 from pydantic import BaseModel, field_validator
 from pathlib import Path
-from typing import Literal, Union, Optional, List
+from typing import Literal, Union, Optional, List, TYPE_CHECKING
 
-from .. import utils
+from .. import utils, SolveigConfig
 from .. import plugins
+
+if TYPE_CHECKING:
+    from .result import RequirementResult, ReadResult, WriteResult, CommandResult
+else:
+    # Runtime imports - needed for instantiation
+    from .result import ReadResult, WriteResult, CommandResult
 
 
 
@@ -76,7 +82,7 @@ class ReadRequirement(FileRequirement):
         print(f"    comment: \"{self.comment}\"")
         print(f"    path: {self.path} ({"directory" if is_dir else "file"})")
 
-    def _actually_solve(self, config) -> ReadResult:
+    def _actually_solve(self, config) -> "ReadResult":
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir()
         
@@ -158,7 +164,7 @@ class WriteRequirement(FileRequirement):
             # TODO: make this print optional, or in a `less`-like window, or it will get messy
             print(formatted_content)
 
-    def _actually_solve(self, config) -> WriteResult:
+    def _actually_solve(self, config: SolveigConfig) -> "WriteResult":
         abs_path = Path(self.path).expanduser().resolve()
 
         # Show warning if path exists
@@ -172,7 +178,12 @@ class WriteRequirement(FileRequirement):
         if utils.misc.ask_yes(f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "):
             try:
                 # Validate write access first
-                utils.file.validate_write_access(self.path, self.is_directory, self.content)
+                utils.file.validate_write_access(
+                    file_path=self.path,
+                    is_directory=self.is_directory,
+                    content=self.content,
+                    min_disk_size_left=config.min_disk_space_left
+                )
                 
                 # Perform the write operation
                 content = self.content if self.content else ""
@@ -200,7 +211,7 @@ class CommandRequirement(Requirement):
         print(f"    comment: \"{self.comment}\"")
         print(f"    command: {self.command}")
 
-    def _actually_solve(self, config) -> CommandResult:
+    def _actually_solve(self, config) -> "CommandResult":
         if utils.misc.ask_yes("    ? Allow running command? [y/N]: "):
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
@@ -228,6 +239,3 @@ class CommandRequirement(Requirement):
         return CommandResult(requirement=self, accepted=False)
 
 
-# Import Result classes from separate module for cleaner code organization
-# (result.py uses TYPE_CHECKING to import Requirement classes, avoiding circular imports)
-from .result import RequirementResult, ReadResult, WriteResult, CommandResult

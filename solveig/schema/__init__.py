@@ -34,3 +34,10 @@ __all__ = [
     "WriteResult",
     "CommandResult",
 ]
+
+# Rebuild Pydantic models to resolve forward references
+# This must be done after all classes are defined to fix circular import issues
+ReadResult.model_rebuild()
+WriteResult.model_rebuild()
+CommandResult.model_rebuild()
+RequirementResult.model_rebuild()

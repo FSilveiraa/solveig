@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from .llm import APIType
+from solveig.llm import APIType
+from solveig.utils.file import parse_size_notation_into_bytes
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
@@ -46,6 +47,7 @@ class SolveigConfig:
     exclude_username: bool = False
     max_output_lines: int = 6
     max_output_size: int = 100
+    min_disk_space_left: int = parse_size_notation_into_bytes("1GiB")
     verbose: bool = False
 
 
@@ -53,6 +55,7 @@ class SolveigConfig:
         # convert API type to enum
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = APIType[self.api_type]
+        self.min_disk_space_left = parse_size_notation_into_bytes(self.min_disk_space_left)
 
         # split allowed paths in (path, mode)
         # TODO: allowed paths
@@ -104,6 +107,7 @@ class SolveigConfig:
         parser.add_argument("--exclude-username", "--no-user", action="store_true", default=None, help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)")
         parser.add_argument("--max-output-lines", "-l", type=int, help="The maximum number of lines of file content or command output to print")
         parser.add_argument("--max-output-size", "-s", type=int, help="The maximum characters of file content or command output to print")
+        parser.add_argument("--min-disk-space-left", "-d", type=str, default="1GiB", help="The minimum disk space allowed for the system to use, either in bytes or size notation (1024, \"1.3 GB\", etc)")
         parser.add_argument("--verbose", "-v", action="store_true")
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
