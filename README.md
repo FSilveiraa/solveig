@@ -33,7 +33,7 @@ git clone https://github.com/FranciscoSilveira/solveig.git
 cd solveig
 pip install -e .
 
-# Or install from PyPI (once published):
+# Or install from PyPI:
 pip install solveig
 
 # Run a local model:
