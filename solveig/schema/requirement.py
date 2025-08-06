@@ -79,36 +79,65 @@ class ReadRequirement(FileRequirement):
     def _actually_solve(self, config) -> ReadResult:
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir()
-        if not abs_path.exists():
-            print("    Skipping - This path does not exist.")
-            return ReadResult(requirement=self, accepted=False, error="This path doesn't exist")
-
-        metadata = content = encoding = entries = None
-        accepted = True
+        
+        # Pre-flight validation 
+        try:
+            utils.file.validate_read_access(self.path)
+        except (FileNotFoundError, PermissionError) as e:
+            print(f"    Skipping - {e}")
+            return ReadResult(requirement=self, accepted=False, error=str(e))
+        
+        # Handle user interaction for different read types
         if is_dir:
             if utils.misc.ask_yes("    ? Allow reading directory listing and metadata? [y/N]: "):
-                accepted = True
-                metadata, entries = utils.file.read_metadata_and_entries(abs_path)
-            return ReadResult(requirement=self, accepted=accepted, metadata=metadata, directory_listing=entries)
+                try:
+                    file_data = utils.file.read_file_with_metadata(self.path, include_content=False)
+                    return ReadResult(requirement=self, accepted=True, 
+                                    metadata=file_data['metadata'], 
+                                    directory_listing=file_data['directory_listing'])
+                except (PermissionError, OSError) as e:
+                    return ReadResult(requirement=self, accepted=False, error=str(e))
+            else:
+                return ReadResult(requirement=self, accepted=False)
         else:
-            # TODO: print the file size here so the user can have some idea of how much data they're sending and
-            #  are about to print. If the LLM wants to read a 6GB .mkv file that should not be printed
+            # File reading with user choices
+            # TODO: print the file size here so the user can have some idea of how much data they're sending
             choice_read_file = input("    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: ").strip().lower()
-            if choice_read_file in { "m", "y" }:
-                # TODO: fix this messy flow, if the requirement is metadata-only then we shouldn't prompt user for contents,
-                # plus `accepted` has a value assigned 3 times
-                accepted = True
-                print("    [ Metadata ]")
-                metadata, _ = utils.file.read_metadata_and_entries(abs_path)
-                print(utils.misc.format_output(json.dumps(metadata), indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
-                if choice_read_file == "y":
-                    content, encoding = utils.file.read_file(abs_path)
-                    print("    [ Content ]")
-                    print("      (Base64)" if encoding == "base64" else utils.misc.format_output(content, indent=6, max_lines=config.max_output_lines, max_chars=config.max_output_size))
-                if not utils.misc.ask_yes(f"    ? Allow sending {"file content and " if content else ""}metadata? [y/N]: "):
-                    content = encoding = metadata = None
-                    accepted = False
-            return ReadResult(requirement=self, accepted=accepted, metadata=metadata, content=content, content_encoding=encoding)
+            
+            if choice_read_file not in {"m", "y"}:
+                return ReadResult(requirement=self, accepted=False)
+                
+            # Read metadata first
+            try:
+                file_data = utils.file.read_file_with_metadata(self.path, include_content=False)
+            except (PermissionError, OSError) as e:
+                return ReadResult(requirement=self, accepted=False, error=str(e))
+                
+            print("    [ Metadata ]")
+            print(utils.misc.format_output(json.dumps(file_data['metadata']), indent=6,
+                                         max_lines=config.max_output_lines, max_chars=config.max_output_size))
+            
+            content = encoding = None
+            if choice_read_file == "y":
+                # Read content
+                try:
+                    file_data = utils.file.read_file_with_metadata(self.path, include_content=True)
+                    content = file_data['content']
+                    encoding = file_data['encoding']
+                except (PermissionError, OSError, UnicodeDecodeError) as e:
+                    return ReadResult(requirement=self, accepted=False, error=str(e))
+                    
+                print("    [ Content ]")
+                print("      (Base64)" if encoding == "base64" else 
+                      utils.misc.format_output(content, indent=6, max_lines=config.max_output_lines, 
+                                             max_chars=config.max_output_size))
+            
+            # Final consent check
+            if utils.misc.ask_yes(f"    ? Allow sending {'file content and ' if content else ''}metadata? [y/N]: "):
+                return ReadResult(requirement=self, accepted=True, metadata=file_data['metadata'], 
+                                content=content, content_encoding=encoding)
+            else:
+                return ReadResult(requirement=self, accepted=False)
 
 
 class WriteRequirement(FileRequirement):
@@ -132,29 +161,35 @@ class WriteRequirement(FileRequirement):
     def _actually_solve(self, config) -> WriteResult:
         abs_path = Path(self.path).expanduser().resolve()
 
+        # Show warning if path exists
         if abs_path.exists():
             print(f"    ! Warning: this path already exists !")
-            # don't re-write directories
-            if self.is_directory:
-                return WriteResult(requirement=self, accepted=False, error="This directory already exists")
 
-        accepted = False
-        if self.is_directory:
-            if utils.misc.ask_yes("    ? Allow writing directory? [y/N]: "):
-                accepted = True
-                abs_path.mkdir(parents=True, exist_ok=False)
-            return WriteResult(requirement=self, accepted=accepted)
+        # Get user consent before attempting operation
+        operation_type = "directory" if self.is_directory else "file"
+        content_desc = " and contents" if not self.is_directory and self.content else ""
+        
+        if utils.misc.ask_yes(f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "):
+            try:
+                # Validate write access first
+                utils.file.validate_write_access(self.path, self.is_directory, self.content)
+                
+                # Perform the write operation
+                content = self.content if self.content else ""
+                utils.file.write_file_or_directory(self.path, self.is_directory, content)
+                
+                return WriteResult(requirement=self, accepted=True)
+                
+            except FileExistsError as e:
+                return WriteResult(requirement=self, accepted=False, error=str(e))
+            except PermissionError as e:
+                return WriteResult(requirement=self, accepted=False, error=str(e))
+            except OSError as e:
+                return WriteResult(requirement=self, accepted=False, error=str(e))
+            except UnicodeEncodeError as e:
+                return WriteResult(requirement=self, accepted=False, error=f"Encoding error: {e}")
         else:
-            if not abs_path.parent.exists():
-                print(f"    ! Warning: the parent directory '{abs_path.parent}' for this file does not exist")
-                if not utils.misc.ask_yes(f"    ? Allow writing directory? [y/N]: "):
-                    return WriteResult(requirement=self, accepted=False)
-                abs_path.parent.mkdir(parents=True, exist_ok=False)
-
-            if utils.misc.ask_yes(f"    ? Allow writing file{" and contents" if self.content else ""}? [y/N]: "):
-                accepted=True
-                abs_path.write_text(self.content if self.content else "", encoding="utf-8")
-            return WriteResult(requirement=self, accepted=accepted)
+            return WriteResult(requirement=self, accepted=False)
 
 
 class CommandRequirement(Requirement):

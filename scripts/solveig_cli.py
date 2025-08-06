@@ -4,6 +4,8 @@ Main CLI entry point for Solveig.
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 from typing import Optional, Tuple
+from openai import AuthenticationError, RateLimitError
+import httpx
 
 import json
 import sys
@@ -93,6 +95,24 @@ def send_message_to_llm(client: Instructor, message_history: MessageHistory,
     except InstructorRetryException as e:
         handle_llm_error(e, config)
         return None
+    except AuthenticationError as e:
+        handle_network_error("Authentication failed: Invalid API key or unauthorized access", e, config)
+        return None
+    except RateLimitError as e:
+        handle_network_error("Rate limit exceeded: Please wait before making more requests", e, config)
+        return None
+    except httpx.ConnectError as e:
+        handle_network_error("Connection failed: Unable to reach the LLM service", e, config)
+        return None
+    except httpx.TimeoutException as e:
+        handle_network_error("Request timed out: The LLM service is not responding", e, config)
+        return None
+    except httpx.HTTPStatusError as e:
+        handle_network_error(f"HTTP error {e.response.status_code}: {e.response.text}", e, config)
+        return None
+    except Exception as e:
+        handle_network_error(f"Unexpected error: {str(e)}", e, config)
+        return None
 
 
 def send_message_to_llm_with_retry(client: Instructor, message_history: MessageHistory, 
@@ -120,6 +140,23 @@ def handle_llm_error(error: InstructorRetryException, config: SolveigConfig) -> 
         for output in error.last_completion.choices:
             print(output.message.content.strip())
         print()
+
+
+def handle_network_error(user_message: str, error: Exception, config: SolveigConfig) -> None:
+    """Display network error with user-friendly message and technical details."""
+    print(f"  {user_message}")
+    print("  Network connection failed")
+    
+    if config.verbose:
+        print(f"  Technical details: {error}")
+        print(f"  Error type: {type(error).__name__}")
+    
+    print("  Suggestions:")
+    print("    • Check your internet connection")
+    print("    • Verify the API endpoint URL is correct")
+    print("    • Confirm your API key is valid")
+    print("    • Try again in a few moments")
+    print()
 
 
 def display_llm_response(llm_response: LLMMessage) -> None:

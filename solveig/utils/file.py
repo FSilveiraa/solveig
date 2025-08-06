@@ -1,11 +1,12 @@
 import os
+import shutil
 import time
 import pwd
 import grp
 import base64
 from pathlib import Path
 import mimetypes
-from typing import Tuple, Literal
+from typing import Tuple, Literal, Optional, Dict, Any
 
 
 def read_metadata_and_entries(path):
@@ -62,3 +63,121 @@ def read_file(path: str|Path) -> Tuple[str, Literal["text", "base64"]]:
             raise UnicodeDecodeError("Fallback")
     except (UnicodeDecodeError, Exception):
         return (read_file_as_base64(path), "base64")
+
+
+def validate_read_access(file_path: str | Path) -> None:
+    """
+    Validate that a file/directory can be read.
+    Raises appropriate exceptions if validation fails.
+    """
+    abs_path = Path(file_path).expanduser().resolve()
+    
+    if not abs_path.exists():
+        raise FileNotFoundError("This path doesn't exist")
+    
+    if not os.access(abs_path, os.R_OK):
+        raise PermissionError(f"Permission denied: Cannot read '{abs_path}'")
+
+
+def read_file_with_metadata(file_path: str | Path, include_content: bool = False) -> Dict[str, Any]:
+    """
+    Read file/directory metadata and optionally content.
+    Returns dict with 'metadata', 'content', 'encoding', 'directory_listing' keys.
+    Raises exceptions on errors - caller handles error wrapping.
+    """
+    abs_path = Path(file_path).expanduser().resolve()
+    is_dir = abs_path.is_dir()
+    
+    result = {
+        'metadata': None,
+        'content': None, 
+        'encoding': None,
+        'directory_listing': None
+    }
+    
+    if is_dir:
+        metadata, entries = read_metadata_and_entries(abs_path)
+        result['metadata'] = metadata
+        result['directory_listing'] = entries
+    else:
+        metadata, _ = read_metadata_and_entries(abs_path)
+        result['metadata'] = metadata
+        
+        if include_content:
+            content, encoding = read_file(abs_path)
+            result['content'] = content
+            result['encoding'] = encoding
+    
+    return result
+
+
+def validate_write_access(file_path: str | Path, is_directory: bool = False, content: Optional[str] = None) -> None:
+    """
+    Validate write operation before attempting it.
+    Raises appropriate exceptions if validation fails.
+    """
+    abs_path = Path(file_path).expanduser().resolve()
+    
+    # Check if path already exists
+    if abs_path.exists():
+        if is_directory:
+            raise FileExistsError("This directory already exists")
+        # For files, we might want to allow overwriting - let caller decide
+    
+    # Validate parent directory for both files and directories
+    parent_dir = abs_path.parent if not is_directory else abs_path.parent
+    
+    # Check parent directory exists and is writable
+    if not parent_dir.exists():
+        # Parent will be created, check if we can create it
+        if not _check_can_create_parent(parent_dir):
+            raise PermissionError(f"Cannot create parent directory '{parent_dir}': permission denied")
+    else:
+        # Parent exists, check if we can write to it
+        if not os.access(parent_dir, os.W_OK):
+            raise PermissionError(f"Permission denied: Cannot write to directory '{parent_dir}'")
+    
+    # Check available disk space for file writes
+    if not is_directory and content:
+        try:
+            content_size = len(content.encode('utf-8'))
+            available_space = shutil.disk_usage(parent_dir).free
+            # Require at least 2x the content size for safety
+            if available_space < content_size * 2:
+                raise OSError(f"Insufficient disk space: Need {content_size * 2} bytes, only {available_space} available")
+        except (OSError, IOError) as e:
+            raise OSError(f"Cannot check disk space: {e}")
+
+
+def write_file_or_directory(file_path: str | Path, is_directory: bool = False, content: str = "") -> None:
+    """
+    Write a file or create a directory.
+    Raises exceptions on errors - caller handles error wrapping.
+    """
+    abs_path = Path(file_path).expanduser().resolve()
+    
+    if is_directory:
+        # Create directory
+        abs_path.mkdir(parents=True, exist_ok=False)
+    else:
+        # Ensure parent directory exists
+        if not abs_path.parent.exists():
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write file content
+        abs_path.write_text(content, encoding="utf-8")
+
+
+
+
+def _check_can_create_parent(parent_dir: Path) -> bool:
+    """
+    Check if we can create a parent directory by walking up the tree
+    until we find an existing directory and checking its permissions.
+    """
+    current = parent_dir
+    while current != current.parent:  # Stop at root
+        if current.exists():
+            return os.access(current, os.W_OK)
+        current = current.parent
+    return False  # Reached root without finding writable directory
