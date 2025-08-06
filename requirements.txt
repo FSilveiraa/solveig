@@ -3,3 +3,4 @@ instructor==1.9.2
 openai==1.97.0
 pydantic==2.11.7
 tiktoken==0.9.0
+pytest==8.3.2
