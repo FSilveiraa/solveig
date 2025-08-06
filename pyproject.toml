@@ -15,16 +15,12 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Tools",
     "Topic :: Security",
 ]
 keywords = ["ai", "automation", "security", "llm", "assistant"]
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "distro==1.9.0",
     "instructor==1.9.2", 
