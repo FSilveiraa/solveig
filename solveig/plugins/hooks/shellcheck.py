@@ -6,7 +6,8 @@ import platform
 
 from ...config import SolveigConfig
 from . import before
-from ...schema.requirement import CommandRequirement, CommandResult
+from ...schema.requirement import CommandRequirement
+from ...schema.result import CommandResult
 
 DANGEROUS_PATTERNS = [
     "rm -rf", "mkfs", ":(){",

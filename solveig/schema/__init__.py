@@ -13,6 +13,8 @@ from .requirement import (
     ReadRequirement, 
     WriteRequirement,
     CommandRequirement,
+)
+from .result import (
     RequirementResult,
     ReadResult,
     WriteResult, 

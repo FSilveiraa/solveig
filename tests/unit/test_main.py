@@ -238,7 +238,16 @@ class TestProcessRequirements:
         for req in DEFAULT_MESSAGE.requirements:
             req.solve_mock.assert_called_once_with(DEFAULT_CONFIG)
         
-        assert results == ["Read result", "Write result", "Command result"]
+        # Verify we get actual RequirementResult objects
+        assert len(results) == 3
+        assert all(hasattr(result, 'accepted') for result in results)
+        assert all(result.accepted for result in results)
+        
+        # Verify the types of results we get
+        result_types = [type(result).__name__ for result in results]
+        assert 'ReadResult' in result_types
+        assert 'WriteResult' in result_types  
+        assert 'CommandResult' in result_types
 
     @patch('solveig.main.utils.misc.print_line')
     @patch('builtins.print')
@@ -256,7 +265,11 @@ class TestProcessRequirements:
         # The actual exception object is printed, so we need to check it was called with any exception
         print_calls = [call[0][0] for call in mock_print.call_args_list if call[0]]
         assert any(isinstance(call, Exception) and str(call) == "Test error" for call in print_calls)
-        assert set(results).issubset({ "Read result", "Write result", "Command result" })
+        # Verify that we get RequirementResult objects from successful requirements
+        # (the failed one will be excluded)
+        assert len(results) == 2  # One failed, two succeeded
+        assert all(hasattr(result, 'accepted') for result in results)
+        assert all(result.accepted for result in results)
     
     @patch('solveig.main.utils.misc.print_line')
     def test_process_no_requirements(self, mock_print_line):

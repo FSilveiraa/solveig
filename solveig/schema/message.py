@@ -1,7 +1,11 @@
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
+from pydantic import BaseModel, field_validator
+from typing import List, Optional, Union, Literal
 
-from .requirement import *
+from .requirement import ReadRequirement, WriteRequirement, CommandRequirement
+from .result import ReadResult, WriteResult, CommandResult
 from .. import utils
 
 

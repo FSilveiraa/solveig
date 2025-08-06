@@ -5,6 +5,7 @@ from unittest.mock import Mock
 from solveig.config import SolveigConfig, APIType
 from solveig.schema.message import LLMMessage
 from solveig.schema.requirement import ReadRequirement, WriteRequirement, CommandRequirement
+from solveig.schema.result import ReadResult, WriteResult, CommandResult
 
 
 DEFAULT_CONFIG = SolveigConfig(
@@ -30,13 +31,19 @@ class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes."""
     
     def __init__(self, *args, solve_return=None, **kwargs):
-        # Set a default solve_return based on class name if not provided
-        if solve_return is None:
-            class_name = self.__class__.__name__.replace('Mock', '').replace('Requirement', '')
-            solve_return = f"{class_name} result"
-        
         super().__init__(**kwargs)
+        
+        # Create realistic RequirementResult object if not provided
+        if solve_return is None:
+            solve_return = self._create_default_result()
+            solve_return.requirement = self
+        
         self._solve_mock = Mock(return_value=solve_return)
+    
+    def _create_default_result(self):
+        """Create a realistic RequirementResult for this requirement type."""
+        # This will be overridden by subclasses to create appropriate result types
+        raise NotImplementedError("Subclasses must implement _create_default_result")
     
     def solve(self, config):
         """Override solve method to return mock result."""
@@ -50,17 +57,40 @@ class MockRequirementMixin:
 
 class MockReadRequirement(MockRequirementMixin, ReadRequirement):
     """ReadRequirement subclass that allows mocking solve() method."""
-    pass
+    
+    def _create_default_result(self):
+        """Create a realistic ReadResult."""
+        return ReadResult(
+            requirement=None,  # Avoid circular reference in tests
+            accepted=True,
+            metadata={"path": str(self.path), "size": 1024, "mtime": "2024-01-01T00:00:00"},
+            content="Mock file content",
+            content_encoding="text"
+        )
 
 
 class MockWriteRequirement(MockRequirementMixin, WriteRequirement):
     """WriteRequirement subclass that allows mocking solve() method."""
-    pass
+    
+    def _create_default_result(self):
+        """Create a realistic WriteResult."""
+        return WriteResult(
+            requirement=None,  # Avoid circular reference in tests
+            accepted=True
+        )
 
 
 class MockCommandRequirement(MockRequirementMixin, CommandRequirement):
     """CommandRequirement subclass that allows mocking solve() method."""
-    pass
+    
+    def _create_default_result(self):
+        """Create a realistic CommandResult."""
+        return CommandResult(
+            requirement=None,  # Avoid circular reference in tests
+            accepted=True,
+            success=True,
+            stdout="Mock command output"
+        )
 
 
 class RequirementFactory:
@@ -148,6 +178,11 @@ class MessageFactory:
         
         return LLMMessage(comment=comment, requirements=requirements)
 
+
+# Rebuild Pydantic models to resolve forward references after all classes are defined
+ReadResult.model_rebuild()
+WriteResult.model_rebuild() 
+CommandResult.model_rebuild()
 
 # Single default message that works everywhere
 DEFAULT_MESSAGE = MessageFactory.create_llm_message()
