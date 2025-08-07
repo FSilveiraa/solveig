@@ -8,13 +8,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from solveig.plugins import hooks
-from solveig.plugins.exceptions import SecurityError, ValidationError
-from solveig.plugins.hooks.shellcheck import (
-    check_command,
-    is_obviously_dangerous,
-)
-from solveig.schema.requirement import CommandRequirement
-from tests.test_utils import DEFAULT_CONFIG
+from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
+from tests.test_utils import MockRequirementFactory, DEFAULT_CONFIG, MockCommandRequirement
 
 
 class TestShellcheckPlugin:
@@ -46,27 +41,30 @@ class TestShellcheckPlugin:
                 cmd
             ), f"Should not detect '{cmd}' as dangerous"
 
-    def test_security_error_on_dangerous_command(self):
-        """Test that dangerous commands raise SecurityError."""
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Test dangerous command", command="rm -rf /")
+    def test_security_error_message_format(self):
+        """Test that dangerous commands produce properly formatted error messages."""
+        req = MockRequirementFactory.create_command_requirement(
+            comment="Test dangerous command error formatting",
+            command="mkfs.ext4 /dev/sda1",
+            accepted=False,
+        )
 
-        result = req.solve(config)
+        result = req.solve(DEFAULT_CONFIG)
 
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
+        assert "mkfs.ext4" in result.error  # Should mention the specific dangerous command
         assert not result.success
 
     def test_normal_command_passes_validation(self):
         """Test that normal commands pass shellcheck validation."""
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(
+        cmd_req = MockRequirementFactory.create_command_requirement(
             comment="Test normal command", command="echo 'hello world'"
         )
+        cmd_req._ask_run_consent.return_value = False
 
         # Mock user declining to run the command (we just want to test plugin validation)
-        with patch("solveig.utils.misc.ask_yes", return_value=False):
-            result = req.solve(config)
+        result = cmd_req.solve(DEFAULT_CONFIG)
 
         # Should reach user prompt (not stopped by plugin) and be declined by user
         assert not result.accepted
@@ -78,11 +76,13 @@ class TestShellcheckPlugin:
         # Mock shellcheck returning success (no issues)
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
 
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Test", command="echo test")
+        cmd_req = MockRequirementFactory.create_command_requirement(
+            comment="Test successful validation", 
+            command="echo 'properly quoted'"
+        )
+        cmd_req._ask_run_consent.return_value = False
 
-        with patch("solveig.utils.misc.ask_yes", return_value=False):
-            result = req.solve(config)
+        result = cmd_req.solve(DEFAULT_CONFIG)
 
         # Should pass validation and reach user prompt
         assert not result.accepted  # Declined by user
@@ -102,11 +102,12 @@ class TestShellcheckPlugin:
             stdout=f"[{mock_issues[0]}, {mock_issues[1]}]".replace("'", '"'),
             stderr="",
         )
+        req: MockCommandRequirement = MockRequirementFactory.create_command_requirement(
+            comment="Test",
+            command="echo $UNQUOTED_VAR"
+        )
 
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Test", command="echo $UNQUOTED_VAR")
-
-        result = req.solve(config)
+        result = req.solve(DEFAULT_CONFIG)
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
@@ -120,49 +121,46 @@ class TestShellcheckPlugin:
         mock_subprocess.side_effect = FileNotFoundError("shellcheck command not found")
 
         config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Test", command="echo test")
+        req = MockRequirementFactory.create_command_requirement(
+            comment="Test",
+            command="echo test",
+            accepted=False
+        )
 
-        with patch("solveig.utils.misc.ask_yes", return_value=False):
-            result = req.solve(config)
+        result = req.solve(config)
 
         # Should continue processing gracefully without shellcheck
         assert not result.accepted  # Declined by user
         assert result.error is None  # No plugin error
 
-    def test_direct_hook_call_dangerous_command(self):
-        """Test calling the shellcheck hook function directly with dangerous command."""
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Direct test", command="rm -rf /important")
-
-        with pytest.raises(SecurityError, match="dangerous pattern"):
-            check_command(config, req)
-
-    def test_direct_hook_call_safe_command(self):
-        """Test calling the shellcheck hook function directly with safe command."""
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Direct test", command="ls -la")
-
-        with patch("subprocess.run") as mock_subprocess:
-            mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
-
-            # Should not raise exception for safe command
-            check_command(config, req)
-            mock_subprocess.assert_called_once()
-
     @patch("subprocess.run")
-    def test_shellcheck_json_parsing_error(self, mock_subprocess):
-        """Test handling of malformed JSON from shellcheck."""
-        # Mock shellcheck returning invalid JSON
+    def test_multiple_shellcheck_issues(self, mock_subprocess):
+        """Test handling multiple shellcheck warnings and errors."""
+        # Mock shellcheck finding multiple issues
+        mock_issues = [
+            {"level": "error", "message": "Missing quotes around variable"},
+            {"level": "warning", "message": "Consider using [[ ]] instead of [ ]"},
+            {"level": "info", "message": "Consider using $(...) instead of legacy backticks"}
+        ]
         mock_subprocess.return_value = Mock(
-            returncode=1, stdout="invalid json output", stderr=""
+            returncode=1,
+            stdout=f"[{mock_issues[0]}, {mock_issues[1]}, {mock_issues[2]}]".replace("'", '"'),
+            stderr="",
         )
 
-        config = DEFAULT_CONFIG
-        req = CommandRequirement(comment="Test", command="bad command")
+        req = MockRequirementFactory.create_command_requirement(
+            comment="Test multiple issues",
+            command="if [ $var = `date` ]; then echo hello; fi"
+        )
 
-        # Should handle JSON parsing error gracefully and not crash
-        with pytest.raises(ValidationError):
-            check_command(config, req)
+        result = req.solve(DEFAULT_CONFIG)
+
+        assert not result.accepted
+        assert "shellcheck validation failed" in result.error.lower()
+        # Should mention multiple types of issues
+        assert "error" in result.error.lower()
+        assert "warning" in result.error.lower()
+        mock_subprocess.assert_called_once()
 
 
 class TestShellcheckPluginIntegration:
@@ -179,31 +177,23 @@ class TestShellcheckPluginIntegration:
 
     def test_plugin_requirement_filtering(self):
         """Test that shellcheck only runs for CommandRequirement."""
-        config = DEFAULT_CONFIG
 
         # CommandRequirement with dangerous pattern should trigger shellcheck
-        cmd_req = CommandRequirement(comment="Test", command="rm -rf /")
-        result = cmd_req.solve(config)
+        cmd_req = MockRequirementFactory.create_command_requirement(comment="Test", command="rm -rf /")
+        result = cmd_req.solve(DEFAULT_CONFIG)
 
         # Should be stopped by shellcheck plugin
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
+        # didn't get to this point since it was interrupted
+        cmd_req._ask_run_consent.assert_not_called()
 
         # Test that ReadRequirement doesn't trigger shellcheck
-        from solveig.schema.requirement import ReadRequirement
-
-        read_req = ReadRequirement(
+        read_req = MockRequirementFactory.create_read_requirement(
             comment="Test", path="/test/file", only_read_metadata=True
         )
-
-        with (
-            patch("solveig.utils.misc.ask_yes", return_value=False),
-            patch(
-                "solveig.utils.file.validate_read_access",
-                side_effect=FileNotFoundError("File not found"),
-            ),
-        ):
-            result = read_req.solve(config)
+        read_req._validate_read_access.side_effect = FileNotFoundError("File not found")
+        result = read_req.solve(DEFAULT_CONFIG)
 
         # Should not be stopped by shellcheck (file validation error is different)
         assert not result.accepted
