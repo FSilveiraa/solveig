@@ -74,6 +74,7 @@ script_chat.add_message(
         results=[
             ReadResult(
                 requirement=file_req1,
+                path=file_req1.path,
                 metadata={
                     "path": "/home/user/run.sh",
                     "size": 101,
@@ -147,6 +148,7 @@ multiple_issues_chat.add_message(
         results=[
             CommandResult(
                 requirement=cmd_req_cpu_usage,
+                command=cmd_req_cpu_usage.command,
                 accepted=True,
                 stdout="""
 USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
@@ -159,6 +161,7 @@ root        1203 18.4  0.9 255280  72012 ?       Ssl  07:45   7:03 /usr/lib/Xorg
             ),
             CommandResult(
                 requirement=cmd_req_disk_usage,
+                command=cmd_req_disk_usage.command,
                 accepted=True,
                 stdout="""
 Filesystem      Size  Used Avail Use% Mounted on
@@ -172,9 +175,14 @@ tmpfs           784M   48K  784M   1% /run/user/1000
 """,
                 success=True,
             ),
-            ReadResult(requirement=file_req_large_dirs, accepted=False),
+            ReadResult(
+                requirement=file_req_large_dirs,
+                path=file_req_large_dirs.path,
+                accepted=False,
+            ),
             ReadResult(
                 requirement=file_req_log,
+                path=file_req_log.path,
                 accepted=True,
                 metadata={
                     "path": "/home/user/Documents/my_app.log",

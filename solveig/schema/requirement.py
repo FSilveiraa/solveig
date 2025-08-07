@@ -36,7 +36,10 @@ else:
 class Requirement(BaseModel):
     """
     Important: all statements that have side-effects (prints, network, filesystem operations)
-    must be inside separate methods that can be mocked in a MockRequirement class for tests
+    must be inside separate methods that can be mocked in a MockRequirement class for tests.
+    Avoid all fields that are not strictly necessary, even if they are useful - like an `abs_path`
+    computed from `path` for a ReadRequirement. These become part of the model and the LLM expects
+    to fill them in.
     """
 
     comment: str
@@ -116,13 +119,20 @@ class ReadRequirement(Requirement):
 
     def _create_error_result(self, error_message: str, accepted: bool) -> ReadResult:
         """Create ReadResult with error."""
-        return ReadResult(requirement=self, accepted=accepted, error=error_message)
+        return ReadResult(
+            requirement=self,
+            path=Path(self.path).expanduser().resolve(),
+            accepted=accepted,
+            error=error_message,
+        )
 
-    def _validate_read_access(self, path: str) -> None:
+    def _validate_read_access(self, path: str | Path) -> None:
         """Validate read access to path (OS interaction - can be mocked)."""
         utils.file.validate_read_access(path)
 
-    def _read_file_with_metadata(self, path: str, include_content: bool = True) -> dict:
+    def _read_file_with_metadata(
+        self, path: str | Path, include_content: bool = True
+    ) -> dict:
         """Read file with metadata (OS interaction - can be mocked)."""
         return utils.file.read_file_with_metadata(path, include_content=include_content)
 
@@ -154,10 +164,12 @@ class ReadRequirement(Requirement):
 
         # Pre-flight validation
         try:
-            self._validate_read_access(self.path)
+            self._validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
             print(f"    Skipping - {e}")
-            return ReadResult(requirement=self, accepted=False, error=str(e))
+            return ReadResult(
+                requirement=self, path=abs_path, accepted=False, error=str(e)
+            )
 
         # Handle user interaction for different read types
         if is_dir:
@@ -168,21 +180,24 @@ class ReadRequirement(Requirement):
                     )
                     return ReadResult(
                         requirement=self,
+                        path=abs_path,
                         accepted=True,
                         metadata=file_data["metadata"],
                         directory_listing=file_data["directory_listing"],
                     )
                 except (PermissionError, OSError) as e:
-                    return ReadResult(requirement=self, accepted=False, error=str(e))
+                    return ReadResult(
+                        requirement=self, path=abs_path, accepted=False, error=str(e)
+                    )
             else:
-                return ReadResult(requirement=self, accepted=False)
+                return ReadResult(requirement=self, path=abs_path, accepted=False)
         else:
             # File reading with user choices
             # TODO: print the file size here so the user can have some idea of how much data they're sending
             choice_read_file = self._ask_file_read_choice()
 
             if choice_read_file not in {"m", "y"}:
-                return ReadResult(requirement=self, accepted=False)
+                return ReadResult(requirement=self, path=abs_path, accepted=False)
 
             # Read metadata first
             try:
@@ -190,7 +205,9 @@ class ReadRequirement(Requirement):
                     self.path, include_content=False
                 )
             except (PermissionError, OSError) as e:
-                return ReadResult(requirement=self, accepted=False, error=str(e))
+                return ReadResult(
+                    requirement=self, path=abs_path, accepted=False, error=str(e)
+                )
 
             print("    [ Metadata ]")
             print(
@@ -212,7 +229,9 @@ class ReadRequirement(Requirement):
                     content = file_data["content"]
                     encoding = file_data["encoding"]
                 except (PermissionError, OSError, UnicodeDecodeError) as e:
-                    return ReadResult(requirement=self, accepted=False, error=str(e))
+                    return ReadResult(
+                        requirement=self, path=abs_path, accepted=False, error=str(e)
+                    )
 
                 print("    [ Content ]")
                 print(
@@ -230,13 +249,14 @@ class ReadRequirement(Requirement):
             if self._ask_final_consent(content is not None):
                 return ReadResult(
                     requirement=self,
+                    path=self.path,
                     accepted=True,
                     metadata=file_data["metadata"],
                     content=content,
                     content_encoding=encoding,
                 )
             else:
-                return ReadResult(requirement=self, accepted=False)
+                return ReadResult(requirement=self, path=abs_path, accepted=False)
 
 
 class WriteRequirement(Requirement):
@@ -265,9 +285,14 @@ class WriteRequirement(Requirement):
 
     def _create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
-        return WriteResult(requirement=self, accepted=accepted, error=error_message)
+        return WriteResult(
+            requirement=self,
+            path=Path(self.path).expanduser().resolve(),
+            accepted=accepted,
+            error=error_message,
+        )
 
-    def _resolve_path(self, path: str) -> Path:
+    def _resolve_path(self, path: str | Path) -> Path:
         """Resolve path (OS interaction - can be mocked)."""
         return Path(path).expanduser().resolve()
 
@@ -291,7 +316,7 @@ class WriteRequirement(Requirement):
         )
 
     def _write_file_or_directory(
-        self, path: str, is_directory: bool, content: str
+        self, path: str | Path, is_directory: bool, content: str
     ) -> None:
         """Write file or directory (OS interaction - can be mocked)."""
         utils.file.write_file_or_directory(path, is_directory, content)
@@ -314,22 +339,31 @@ class WriteRequirement(Requirement):
 
                 # Perform the write operation
                 content = self.content if self.content else ""
-                self._write_file_or_directory(self.path, self.is_directory, content)
+                self._write_file_or_directory(abs_path, self.is_directory, content)
 
-                return WriteResult(requirement=self, accepted=True)
+                return WriteResult(requirement=self, path=abs_path, accepted=True)
 
             except FileExistsError as e:
-                return WriteResult(requirement=self, accepted=False, error=str(e))
+                return WriteResult(
+                    requirement=self, path=abs_path, accepted=False, error=str(e)
+                )
             except PermissionError as e:
-                return WriteResult(requirement=self, accepted=False, error=str(e))
+                return WriteResult(
+                    requirement=self, path=abs_path, accepted=False, error=str(e)
+                )
             except OSError as e:
-                return WriteResult(requirement=self, accepted=False, error=str(e))
+                return WriteResult(
+                    requirement=self, path=abs_path, accepted=False, error=str(e)
+                )
             except UnicodeEncodeError as e:
                 return WriteResult(
-                    requirement=self, accepted=False, error=f"Encoding error: {e}"
+                    requirement=self,
+                    path=abs_path,
+                    accepted=False,
+                    error=f"Encoding error: {e}",
                 )
         else:
-            return WriteResult(requirement=self, accepted=False)
+            return WriteResult(requirement=self, path=abs_path, accepted=False)
 
 
 class CommandRequirement(Requirement):
@@ -343,7 +377,11 @@ class CommandRequirement(Requirement):
     def _create_error_result(self, error_message: str, accepted: bool) -> CommandResult:
         """Create CommandResult with error."""
         return CommandResult(
-            requirement=self, accepted=accepted, success=False, error=error_message
+            requirement=self,
+            command=self.command,
+            accepted=accepted,
+            success=False,
+            error=error_message,
         )
 
     def _ask_run_consent(self) -> bool:
@@ -374,7 +412,11 @@ class CommandRequirement(Requirement):
                 error_str = str(e)
                 print(error_str)
                 return CommandResult(
-                    requirement=self, accepted=True, success=False, error=error_str
+                    requirement=self,
+                    command=self.command,
+                    accepted=True,
+                    success=False,
+                    error=error_str,
                 )
 
             if output:
@@ -404,12 +446,13 @@ class CommandRequirement(Requirement):
                 error = None
             return CommandResult(
                 requirement=self,
+                command=self.command,
                 accepted=True,
                 success=True,
                 stdout=output,
                 error=error,
             )
-        return CommandResult(requirement=self, accepted=False)
+        return CommandResult(requirement=self, command=self.command, accepted=False)
 
 
 class MoveRequirement(Requirement):
@@ -433,8 +476,8 @@ class MoveRequirement(Requirement):
             requirement=self,
             accepted=accepted,
             error=error_message,
-            source_path=self.source_path,
-            dest_path=self.destination_path,
+            source_path=Path(self.source_path).expanduser().resolve(),
+            destination_path=Path(self.destination_path).expanduser().resolve(),
         )
 
     def _validate_move_access(self) -> None:
@@ -453,6 +496,9 @@ class MoveRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> MoveResult:
         # Pre-flight validation
+        abs_source_path = Path(self.source_path).expanduser().resolve()
+        abs_destination_path = Path(self.destination_path).expanduser().resolve()
+
         try:
             self._validate_move_access()
         except (FileNotFoundError, PermissionError, OSError) as e:
@@ -461,8 +507,8 @@ class MoveRequirement(Requirement):
                 requirement=self,
                 accepted=False,
                 error=str(e),
-                source_path=self.source_path,
-                dest_path=self.destination_path,
+                source_path=abs_source_path,
+                destination_path=abs_destination_path,
             )
 
         # Get user consent
@@ -473,23 +519,23 @@ class MoveRequirement(Requirement):
                 return MoveResult(
                     requirement=self,
                     accepted=True,
-                    source_path=self.source_path,
-                    dest_path=self.destination_path,
+                    source_path=abs_source_path,
+                    destination_path=abs_destination_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return MoveResult(
                     requirement=self,
                     accepted=False,
                     error=str(e),
-                    source_path=self.source_path,
-                    dest_path=self.destination_path,
+                    source_path=abs_source_path,
+                    destination_path=abs_destination_path,
                 )
         else:
             return MoveResult(
                 requirement=self,
                 accepted=False,
-                source_path=self.source_path,
-                dest_path=self.destination_path,
+                source_path=abs_source_path,
+                destination_path=abs_destination_path,
             )
 
 
@@ -514,8 +560,8 @@ class CopyRequirement(Requirement):
             requirement=self,
             accepted=accepted,
             error=error_message,
-            source_path=self.source_path,
-            dest_path=self.destination_path,
+            source_path=Path(self.source_path).resolve().expanduser(),
+            destination_path=Path(self.destination_path).resolve().expanduser(),
         )
 
     def _validate_copy_access(self) -> None:
@@ -534,6 +580,8 @@ class CopyRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> CopyResult:
         # Pre-flight validation
+        abs_source_path = Path(self.source_path).expanduser().resolve()
+        abs_destination_path = Path(self.destination_path).expanduser().resolve()
         try:
             self._validate_copy_access()
         except (FileNotFoundError, PermissionError, OSError) as e:
@@ -542,8 +590,8 @@ class CopyRequirement(Requirement):
                 requirement=self,
                 accepted=False,
                 error=str(e),
-                source_path=self.source_path,
-                dest_path=self.destination_path,
+                source_path=abs_source_path,
+                destination_path=abs_destination_path,
             )
 
         # Get user consent
@@ -554,31 +602,31 @@ class CopyRequirement(Requirement):
                 return CopyResult(
                     requirement=self,
                     accepted=True,
-                    source_path=self.source_path,
-                    dest_path=self.destination_path,
+                    source_path=abs_source_path,
+                    destination_path=abs_destination_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return CopyResult(
                     requirement=self,
                     accepted=False,
                     error=str(e),
-                    source_path=self.source_path,
-                    dest_path=self.destination_path,
+                    source_path=abs_source_path,
+                    destination_path=abs_destination_path,
                 )
         else:
             return CopyResult(
                 requirement=self,
                 accepted=False,
-                source_path=self.source_path,
-                dest_path=self.destination_path,
+                source_path=abs_source_path,
+                destination_path=abs_destination_path,
             )
 
 
 class DeleteRequirement(Requirement):
     path: str
 
-    def _print(self, config):
-        abs_path = Path(self.path).expanduser().resolve()
+    def _print(self, config, abs_path=None):
+        abs_path = abs_path if abs_path else Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir() if abs_path.exists() else False
 
         print("  [ Delete ]")
@@ -589,7 +637,12 @@ class DeleteRequirement(Requirement):
 
     def _create_error_result(self, error_message: str, accepted: bool) -> DeleteResult:
         """Create DeleteResult with error."""
-        return DeleteResult(requirement=self, accepted=accepted, error=error_message)
+        return DeleteResult(
+            requirement=self,
+            path=Path(self.path).expanduser().resolve(),
+            accepted=accepted,
+            error=error_message,
+        )
 
     def _validate_delete_access(self) -> None:
         """Validate delete access (OS interaction - can be mocked)."""
@@ -607,19 +660,24 @@ class DeleteRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> DeleteResult:
         # Pre-flight validation
+        abs_path = Path(self.path).expanduser().resolve()
         try:
             self._validate_delete_access()
         except (FileNotFoundError, PermissionError) as e:
             print(f"    Skipping - {e}")
-            return DeleteResult(requirement=self, accepted=False, error=str(e))
+            return DeleteResult(
+                requirement=self, accepted=False, error=str(e), path=abs_path
+            )
 
         # Get user consent (with extra warning)
         if self._ask_delete_consent():
             try:
                 # Perform the delete operation
                 self._delete_file_or_directory()
-                return DeleteResult(requirement=self, accepted=True)
+                return DeleteResult(requirement=self, path=abs_path, accepted=True)
             except (PermissionError, OSError) as e:
-                return DeleteResult(requirement=self, accepted=False, error=str(e))
+                return DeleteResult(
+                    requirement=self, accepted=False, error=str(e), path=abs_path
+                )
         else:
-            return DeleteResult(requirement=self, accepted=False)
+            return DeleteResult(requirement=self, accepted=False, path=abs_path)
