@@ -7,7 +7,7 @@ from solveig.plugins import hooks
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.test_utils import DEFAULT_CONFIG, MockRequirementMixin, RequirementFactory
+from tests.test_utils import DEFAULT_CONFIG, MockRequirementMixin, MockRequirementFactory
 
 
 class TestPluginExceptions:
@@ -63,7 +63,7 @@ class TestPluginHookSystem:
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
 
-        req = RequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="fail this command"
         )
 
@@ -84,7 +84,7 @@ class TestPluginHookSystem:
             if "rm -rf" in requirement.command:
                 raise SecurityError("Dangerous command detected")
 
-        req = RequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="rm -rf /important/data"
         )
 
@@ -105,7 +105,7 @@ class TestPluginHookSystem:
             # Just validate, don't throw
             assert requirement.command is not None
 
-        req = RequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test",
             command="echo hello",
             accepted=False,
@@ -132,7 +132,7 @@ class TestPluginHookSystem:
             if result.accepted:
                 raise ProcessingError("Post-processing failed")
 
-        req = RequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="echo hello"
         )
 
@@ -156,7 +156,7 @@ class TestPluginHookSystem:
         def second_validator(config, requirement):
             execution_order.append("second")
 
-        req = RequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="echo test"
         )
 
@@ -181,13 +181,13 @@ class TestPluginHookSystem:
 
         # Execute
         # Test with CommandRequirement
-        cmd_req = RequirementFactory.create_command_requirement(
+        cmd_req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="echo test"
         )
         cmd_req.solve(DEFAULT_CONFIG)
 
         # Test with ReadRequirement
-        read_req = RequirementFactory.create_read_requirement(
+        read_req = MockRequirementFactory.create_read_requirement(
             comment="Test", path="/test/file", only_read_metadata=True
         )
         read_req.solve(DEFAULT_CONFIG)
@@ -210,10 +210,10 @@ class TestPluginHookSystem:
             called.append(get_requirement_name(requirement))
 
         # Test with different requirement types
-        cmd_req = RequirementFactory.create_command_requirement(
+        cmd_req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="echo test"
         )
-        read_req = RequirementFactory.create_read_requirement(
+        read_req = MockRequirementFactory.create_read_requirement(
             comment="Test", path="/test/file", only_read_metadata=True
         )
 

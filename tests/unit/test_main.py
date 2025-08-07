@@ -21,7 +21,7 @@ from tests.test_utils import (
     DEFAULT_MESSAGE,
     VERBOSE_CONFIG,
     MessageFactory,
-    RequirementFactory,
+    MockRequirementFactory,
 )
 
 mock_completion = Mock()
@@ -263,9 +263,26 @@ class TestProcessRequirements:
         mock_print.assert_any_call("[ Requirement Results (3) ]")
         mock_print.assert_any_call()  # Final empty print
 
-        # Verify each requirement's solve method was called
-        for req in DEFAULT_MESSAGE.requirements:
-            req.solve_mock.assert_called_once_with(DEFAULT_CONFIG)
+        # Verify each requirement's mock methods were called (proving business logic executed)
+        read_req, write_req, command_req = DEFAULT_MESSAGE.requirements
+        
+        # ReadRequirement mocks should have been called
+        read_req._validate_read_access.assert_called_once()
+        read_req._ask_file_read_choice.assert_called_once()
+        read_req._read_file_with_metadata.assert_called()
+        read_req._ask_final_consent.assert_called_once()
+        
+        # WriteRequirement mocks should have been called
+        write_req._resolve_path.assert_called_once()
+        write_req._path_exists.assert_called_once()
+        write_req._ask_write_consent.assert_called_once()
+        write_req._validate_write_access.assert_called_once()
+        write_req._write_file_or_directory.assert_called_once()
+        
+        # CommandRequirement mocks should have been called
+        command_req._ask_run_consent.assert_called_once()
+        command_req._execute_command.assert_called_once()
+        command_req._ask_output_consent.assert_called_once()
 
         # Verify we get actual RequirementResult objects
         assert len(results) == 3
@@ -283,8 +300,9 @@ class TestProcessRequirements:
     def test_process_requirements_with_error(self, mock_print, mock_print_line):
         """Test requirement processing with errors."""
         # Setup
-        requirements = RequirementFactory.create_mixed_requirements()
-        random.choice(requirements).solve_mock.side_effect = Exception("Test error")
+        requirements = MockRequirementFactory.create_mixed_requirements()
+        # Make one of the requirements fail by making a mock method raise an exception
+        random.choice(requirements)._validate_read_access.side_effect = Exception("Test error")
         llm_message = MessageFactory.create_llm_message("Test message", requirements)
 
         # Execute

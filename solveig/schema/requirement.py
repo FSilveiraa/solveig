@@ -19,6 +19,10 @@ else:
 
 # Base class for things the LLM can request
 class Requirement(BaseModel):
+    """
+    Important: all statements that have side-effects (prints, network, filesystem operations)
+    must be inside separate methods that can be mocked in a MockRequirement class for tests
+    """
     comment: str
 
     @field_validator("comment", mode="before")
@@ -116,24 +120,52 @@ class ReadRequirement(FileRequirement):
         """Create ReadResult with error."""
         return ReadResult(requirement=self, accepted=accepted, error=error_message)
 
+    def _validate_read_access(self, path: str) -> None:
+        """Validate read access to path (OS interaction - can be mocked)."""
+        utils.file.validate_read_access(path)
+    
+    def _read_file_with_metadata(self, path: str, include_content: bool = True) -> dict:
+        """Read file with metadata (OS interaction - can be mocked)."""
+        return utils.file.read_file_with_metadata(path, include_content=include_content)
+    
+    def _ask_directory_consent(self) -> bool:
+        """Ask user consent for directory reading (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            "    ? Allow reading directory listing and metadata? [y/N]: "
+        )
+    
+    def _ask_file_read_choice(self) -> str:
+        """Ask user what type of file read to perform (user interaction - can be mocked)."""
+        return (
+            input(
+                "    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: "
+            )
+            .strip()
+            .lower()
+        )
+    
+    def _ask_final_consent(self, has_content: bool) -> bool:
+        """Ask final consent to send data (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            f"    ? Allow sending {'file content and ' if has_content else ''}metadata? [y/N]: "
+        )
+
     def _actually_solve(self, config) -> ReadResult:
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir()
 
         # Pre-flight validation
         try:
-            utils.file.validate_read_access(self.path)
+            self._validate_read_access(self.path)
         except (FileNotFoundError, PermissionError) as e:
             print(f"    Skipping - {e}")
             return ReadResult(requirement=self, accepted=False, error=str(e))
 
         # Handle user interaction for different read types
         if is_dir:
-            if utils.misc.ask_yes(
-                "    ? Allow reading directory listing and metadata? [y/N]: "
-            ):
+            if self._ask_directory_consent():
                 try:
-                    file_data = utils.file.read_file_with_metadata(
+                    file_data = self._read_file_with_metadata(
                         self.path, include_content=False
                     )
                     return ReadResult(
@@ -149,20 +181,14 @@ class ReadRequirement(FileRequirement):
         else:
             # File reading with user choices
             # TODO: print the file size here so the user can have some idea of how much data they're sending
-            choice_read_file = (
-                input(
-                    "    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: "
-                )
-                .strip()
-                .lower()
-            )
+            choice_read_file = self._ask_file_read_choice()
 
             if choice_read_file not in {"m", "y"}:
                 return ReadResult(requirement=self, accepted=False)
 
             # Read metadata first
             try:
-                file_data = utils.file.read_file_with_metadata(
+                file_data = self._read_file_with_metadata(
                     self.path, include_content=False
                 )
             except (PermissionError, OSError) as e:
@@ -182,7 +208,7 @@ class ReadRequirement(FileRequirement):
             if choice_read_file == "y":
                 # Read content
                 try:
-                    file_data = utils.file.read_file_with_metadata(
+                    file_data = self._read_file_with_metadata(
                         self.path, include_content=True
                     )
                     content = file_data["content"]
@@ -203,9 +229,7 @@ class ReadRequirement(FileRequirement):
                 )
 
             # Final consent check
-            if utils.misc.ask_yes(
-                f"    ? Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
-            ):
+            if self._ask_final_consent(content is not None):
                 return ReadResult(
                     requirement=self,
                     accepted=True,
@@ -244,34 +268,52 @@ class WriteRequirement(FileRequirement):
         """Create WriteResult with error."""
         return WriteResult(requirement=self, accepted=accepted, error=error_message)
 
+    def _resolve_path(self, path: str) -> Path:
+        """Resolve path (OS interaction - can be mocked)."""
+        return Path(path).expanduser().resolve()
+    
+    def _path_exists(self, abs_path: Path) -> bool:
+        """Check if path exists (OS interaction - can be mocked)."""
+        return abs_path.exists()
+    
+    def _ask_write_consent(self, operation_type: str, content_desc: str) -> bool:
+        """Ask user consent for write operation (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "
+        )
+    
+    def _validate_write_access(self, config: SolveigConfig) -> None:
+        """Validate write access (OS interaction - can be mocked)."""
+        utils.file.validate_write_access(
+            file_path=self.path,
+            is_directory=self.is_directory,
+            content=self.content,
+            min_disk_size_left=config.min_disk_space_left,
+        )
+    
+    def _write_file_or_directory(self, path: str, is_directory: bool, content: str) -> None:
+        """Write file or directory (OS interaction - can be mocked)."""
+        utils.file.write_file_or_directory(path, is_directory, content)
+
     def _actually_solve(self, config: SolveigConfig) -> WriteResult:
-        abs_path = Path(self.path).expanduser().resolve()
+        abs_path = self._resolve_path(self.path)
 
         # Show warning if path exists
-        if abs_path.exists():
+        if self._path_exists(abs_path):
             print("    ! Warning: this path already exists !")
 
         # Get user consent before attempting operation
         operation_type = "directory" if self.is_directory else "file"
         content_desc = " and contents" if not self.is_directory and self.content else ""
 
-        if utils.misc.ask_yes(
-            f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "
-        ):
+        if self._ask_write_consent(operation_type, content_desc):
             try:
                 # Validate write access first
-                utils.file.validate_write_access(
-                    file_path=self.path,
-                    is_directory=self.is_directory,
-                    content=self.content,
-                    min_disk_size_left=config.min_disk_space_left,
-                )
+                self._validate_write_access(config)
 
                 # Perform the write operation
                 content = self.content if self.content else ""
-                utils.file.write_file_or_directory(
-                    self.path, self.is_directory, content
-                )
+                self._write_file_or_directory(self.path, self.is_directory, content)
 
                 return WriteResult(requirement=self, accepted=True)
 
@@ -303,22 +345,35 @@ class CommandRequirement(Requirement):
             requirement=self, accepted=accepted, success=False, error=error_message
         )
 
+    def _ask_run_consent(self) -> bool:
+        """Ask user consent for running command (user interaction - can be mocked)."""
+        return utils.misc.ask_yes("    ? Allow running command? [y/N]: ")
+    
+    def _execute_command(self, command: str) -> tuple[str | None, str | None]:
+        """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
+        result = subprocess.run(
+            command, shell=True, capture_output=True, text=True, timeout=10
+        )
+        output = result.stdout.strip() if result.stdout else None
+        error = result.stderr.strip() if result.stderr else None
+        return output, error
+    
+    def _ask_output_consent(self) -> bool:
+        """Ask user consent for sending output (user interaction - can be mocked)."""
+        return utils.misc.ask_yes("    ? Allow sending output? [y/N]: ")
+
     def _actually_solve(self, config) -> CommandResult:
-        if utils.misc.ask_yes("    ? Allow running command? [y/N]: "):
+        if self._ask_run_consent():
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
             #  or if anything at all is refused, maybe just say that in the error
             try:
-                result = subprocess.run(
-                    self.command, shell=True, capture_output=True, text=True, timeout=10
-                )
-                output: str | None = result.stdout.strip()
-                error: str | None = result.stderr.strip() if result.stderr else ""
+                output, error = self._execute_command(self.command)
             except Exception as e:
-                error = str(e)
-                print(error)
+                error_str = str(e)
+                print(error_str)
                 return CommandResult(
-                    requirement=self, accepted=True, success=False, error=error
+                    requirement=self, accepted=True, success=False, error=error_str
                 )
 
             if output:
@@ -343,7 +398,7 @@ class CommandRequirement(Requirement):
                         max_chars=config.max_output_size,
                     )
                 )
-            if not utils.misc.ask_yes("    ? Allow sending output? [y/N]: "):
+            if not self._ask_output_consent():
                 output = None
                 error = None
             return CommandResult(
