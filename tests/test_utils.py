@@ -195,7 +195,7 @@ class MockRequirementFactory:
             "class": MockMoveRequirement,
             "defaults": {
                 "source_path": "/test/source.txt",
-                "dest_path": "/test/destination.txt",
+                "destination_path": "/test/destination.txt",
                 "comment": "I need to move the source file to destination",
             },
         },
@@ -203,7 +203,7 @@ class MockRequirementFactory:
             "class": MockCopyRequirement,
             "defaults": {
                 "source_path": "/test/original.txt",
-                "dest_path": "/test/copy.txt",
+                "destination_path": "/test/copy.txt",
                 "comment": "I need to copy the original file",
             },
         },
