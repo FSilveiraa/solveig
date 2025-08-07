@@ -35,12 +35,12 @@ class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes by mocking OS interactions only."""
 
     def __init__(
-        self, *args, accepted: bool | None = None, **kwargs
+        self, *args, accepted: bool = True, **kwargs
     ):
         super().__init__(**kwargs)
         self._setup_mocks(accepted)
 
-    def _setup_mocks(self, accepted: bool | None = None):
+    def _setup_mocks(self, accepted: bool = True):
         """Set up mocks for OS interaction methods. Override in subclasses."""
         pass
 
@@ -48,7 +48,7 @@ class MockRequirementMixin:
 class MockReadRequirement(MockRequirementMixin, ReadRequirement):
     """ReadRequirement subclass that mocks only OS interactions."""
 
-    def _setup_mocks(self, accepted: bool | None = None):
+    def _setup_mocks(self, accepted: bool = True):
         """Set up mocks for ReadRequirement OS interactions."""
         # Mock OS interactions
         self._validate_read_access = Mock()
@@ -62,51 +62,36 @@ class MockReadRequirement(MockRequirementMixin, ReadRequirement):
             "encoding": "text",
             "directory_listing": None,
         })
-        
         # Mock user interactions - default behavior based on accepted parameter
-        if accepted is False:
-            self._ask_directory_consent = Mock(return_value=False)
-            self._ask_file_read_choice = Mock(return_value="n")
-            self._ask_final_consent = Mock(return_value=False)
-        else:
-            self._ask_directory_consent = Mock(return_value=True)
-            self._ask_file_read_choice = Mock(return_value="y")
-            self._ask_final_consent = Mock(return_value=True)
+        self._ask_directory_consent = Mock(return_value=accepted)
+        self._ask_file_read_choice = Mock(return_value="y" if accepted else "n")
+        self._ask_final_consent = Mock(return_value=accepted)
 
 
 class MockWriteRequirement(MockRequirementMixin, WriteRequirement):
     """WriteRequirement subclass that mocks only OS interactions."""
 
-    def _setup_mocks(self, accepted: bool | None = None):
+    def _setup_mocks(self, accepted: bool = True):
         """Set up mocks for WriteRequirement OS interactions."""
         # Mock OS interactions
         self._resolve_path = Mock(return_value=Path(self.path))
         self._path_exists = Mock(return_value=False)  # Default: path doesn't exist
         self._validate_write_access = Mock()
         self._write_file_or_directory = Mock()
-        
         # Mock user interactions - default behavior based on accepted parameter
-        if accepted is False:
-            self._ask_write_consent = Mock(return_value=False)
-        else:
-            self._ask_write_consent = Mock(return_value=True)
+        self._ask_write_consent = Mock(return_value=accepted)
 
 
 class MockCommandRequirement(MockRequirementMixin, CommandRequirement):
     """CommandRequirement subclass that mocks only OS interactions."""
 
-    def _setup_mocks(self, accepted: bool | None = None):
+    def _setup_mocks(self, accepted: bool = True):
         """Set up mocks for CommandRequirement OS interactions."""
         # Mock OS interactions
         self._execute_command = Mock(return_value=("Mock command output", None))
-        
         # Mock user interactions - default behavior based on accepted parameter
-        if accepted is False:
-            self._ask_run_consent = Mock(return_value=False)
-            self._ask_output_consent = Mock(return_value=False)
-        else:
-            self._ask_run_consent = Mock(return_value=True)
-            self._ask_output_consent = Mock(return_value=True)
+        self._ask_run_consent = Mock(return_value=accepted)
+        self._ask_output_consent = Mock(return_value=accepted)
 
 
 class MockRequirementFactory:
@@ -141,36 +126,36 @@ class MockRequirementFactory:
     }
 
     @staticmethod
-    def _create_requirement(req_type, accepted=None, **kwargs):
+    def _create_requirement(req_type, **kwargs):
         """Generic requirement creation method."""
         config = MockRequirementFactory._REQUIREMENT_TYPES[req_type]
         defaults = config["defaults"].copy()
         defaults.update(kwargs)
 
-        return config["class"](accepted=accepted, **defaults)
+        return config["class"](**defaults)
 
     @staticmethod
-    def create_read_requirement(accepted=None, **kwargs):
+    def create_read_requirement(**kwargs):
         """Create a ReadRequirement with mocked OS interactions."""
-        return MockRequirementFactory._create_requirement("read", accepted, **kwargs)
+        return MockRequirementFactory._create_requirement("read", **kwargs)
 
     @staticmethod
-    def create_write_requirement(accepted=None, **kwargs):
+    def create_write_requirement(**kwargs):
         """Create a WriteRequirement with mocked OS interactions."""
-        return MockRequirementFactory._create_requirement("write", accepted, **kwargs)
+        return MockRequirementFactory._create_requirement("write", **kwargs)
 
     @staticmethod
-    def create_command_requirement(accepted=None, **kwargs):
+    def create_command_requirement(**kwargs):
         """Create a CommandRequirement with mocked OS interactions."""
-        return MockRequirementFactory._create_requirement("command", accepted, **kwargs)
+        return MockRequirementFactory._create_requirement("command", **kwargs)
 
     @staticmethod
-    def create_mixed_requirements():
+    def create_mixed_requirements(**kwargs):
         """Create a list of read, write, and command requirements."""
         return [
-            MockRequirementFactory.create_read_requirement(),
-            MockRequirementFactory.create_write_requirement(),
-            MockRequirementFactory.create_command_requirement(),
+            MockRequirementFactory.create_read_requirement(**kwargs),
+            MockRequirementFactory.create_write_requirement(**kwargs),
+            MockRequirementFactory.create_command_requirement(**kwargs),
         ]
 
 
@@ -181,6 +166,7 @@ class MessageFactory:
     def create_llm_message(
         comment="I need to read a file, write another file, and run a command.",
         requirements=None,
+        **kwargs
     ):
         """Create an LLM message with mock requirements.
 
@@ -192,7 +178,7 @@ class MessageFactory:
             Real LLMMessage with mock requirements that pass isinstance() checks
         """
         if requirements is None:
-            requirements = MockRequirementFactory.create_mixed_requirements()
+            requirements = MockRequirementFactory.create_mixed_requirements(**kwargs)
 
         return LLMMessage(comment=comment, requirements=requirements)
 

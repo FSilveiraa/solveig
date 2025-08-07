@@ -301,8 +301,9 @@ class TestProcessRequirements:
         """Test requirement processing with errors."""
         # Setup
         requirements = MockRequirementFactory.create_mixed_requirements()
+        read_req, write_req, command_req = requirements
         # Make one of the requirements fail by making a mock method raise an exception
-        random.choice(requirements)._validate_read_access.side_effect = Exception("Test error")
+        write_req._validate_write_access.side_effect = Exception("Test error")
         llm_message = MessageFactory.create_llm_message("Test message", requirements)
 
         # Execute
