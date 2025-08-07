@@ -23,6 +23,7 @@ class Requirement(BaseModel):
     Important: all statements that have side-effects (prints, network, filesystem operations)
     must be inside separate methods that can be mocked in a MockRequirement class for tests
     """
+
     comment: str
 
     @field_validator("comment", mode="before")
@@ -123,17 +124,17 @@ class ReadRequirement(FileRequirement):
     def _validate_read_access(self, path: str) -> None:
         """Validate read access to path (OS interaction - can be mocked)."""
         utils.file.validate_read_access(path)
-    
+
     def _read_file_with_metadata(self, path: str, include_content: bool = True) -> dict:
         """Read file with metadata (OS interaction - can be mocked)."""
         return utils.file.read_file_with_metadata(path, include_content=include_content)
-    
+
     def _ask_directory_consent(self) -> bool:
         """Ask user consent for directory reading (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             "    ? Allow reading directory listing and metadata? [y/N]: "
         )
-    
+
     def _ask_file_read_choice(self) -> str:
         """Ask user what type of file read to perform (user interaction - can be mocked)."""
         return (
@@ -143,7 +144,7 @@ class ReadRequirement(FileRequirement):
             .strip()
             .lower()
         )
-    
+
     def _ask_final_consent(self, has_content: bool) -> bool:
         """Ask final consent to send data (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
@@ -271,17 +272,17 @@ class WriteRequirement(FileRequirement):
     def _resolve_path(self, path: str) -> Path:
         """Resolve path (OS interaction - can be mocked)."""
         return Path(path).expanduser().resolve()
-    
+
     def _path_exists(self, abs_path: Path) -> bool:
         """Check if path exists (OS interaction - can be mocked)."""
         return abs_path.exists()
-    
+
     def _ask_write_consent(self, operation_type: str, content_desc: str) -> bool:
         """Ask user consent for write operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "
         )
-    
+
     def _validate_write_access(self, config: SolveigConfig) -> None:
         """Validate write access (OS interaction - can be mocked)."""
         utils.file.validate_write_access(
@@ -290,8 +291,10 @@ class WriteRequirement(FileRequirement):
             content=self.content,
             min_disk_size_left=config.min_disk_space_left,
         )
-    
-    def _write_file_or_directory(self, path: str, is_directory: bool, content: str) -> None:
+
+    def _write_file_or_directory(
+        self, path: str, is_directory: bool, content: str
+    ) -> None:
         """Write file or directory (OS interaction - can be mocked)."""
         utils.file.write_file_or_directory(path, is_directory, content)
 
@@ -348,7 +351,7 @@ class CommandRequirement(Requirement):
     def _ask_run_consent(self) -> bool:
         """Ask user consent for running command (user interaction - can be mocked)."""
         return utils.misc.ask_yes("    ? Allow running command? [y/N]: ")
-    
+
     def _execute_command(self, command: str) -> tuple[str | None, str | None]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         result = subprocess.run(
@@ -357,7 +360,7 @@ class CommandRequirement(Requirement):
         output = result.stdout.strip() if result.stdout else None
         error = result.stderr.strip() if result.stderr else None
         return output, error
-    
+
     def _ask_output_consent(self) -> bool:
         """Ask user consent for sending output (user interaction - can be mocked)."""
         return utils.misc.ask_yes("    ? Allow sending output? [y/N]: ")

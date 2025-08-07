@@ -1,6 +1,5 @@
 """Unit tests for solveig.main module functions."""
 
-import random
 from unittest.mock import MagicMock, Mock, patch
 
 from instructor.exceptions import InstructorRetryException
@@ -265,20 +264,20 @@ class TestProcessRequirements:
 
         # Verify each requirement's mock methods were called (proving business logic executed)
         read_req, write_req, command_req = DEFAULT_MESSAGE.requirements
-        
+
         # ReadRequirement mocks should have been called
         read_req._validate_read_access.assert_called_once()
         read_req._ask_file_read_choice.assert_called_once()
         read_req._read_file_with_metadata.assert_called()
         read_req._ask_final_consent.assert_called_once()
-        
+
         # WriteRequirement mocks should have been called
         write_req._resolve_path.assert_called_once()
         write_req._path_exists.assert_called_once()
         write_req._ask_write_consent.assert_called_once()
         write_req._validate_write_access.assert_called_once()
         write_req._write_file_or_directory.assert_called_once()
-        
+
         # CommandRequirement mocks should have been called
         command_req._ask_run_consent.assert_called_once()
         command_req._execute_command.assert_called_once()

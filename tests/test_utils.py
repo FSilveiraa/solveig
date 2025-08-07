@@ -34,9 +34,7 @@ VERBOSE_CONFIG = SolveigConfig(
 class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes by mocking OS interactions only."""
 
-    def __init__(
-        self, *args, accepted: bool = True, **kwargs
-    ):
+    def __init__(self, *args, accepted: bool = True, **kwargs):
         super().__init__(**kwargs)
         self._setup_mocks(accepted)
 
@@ -52,16 +50,18 @@ class MockReadRequirement(MockRequirementMixin, ReadRequirement):
         """Set up mocks for ReadRequirement OS interactions."""
         # Mock OS interactions
         self._validate_read_access = Mock()
-        self._read_file_with_metadata = Mock(return_value={
-            "metadata": {
-                "path": str(self.path),
-                "size": 1024,
-                "mtime": "2024-01-01T00:00:00",
-            },
-            "content": "Mock file content",
-            "encoding": "text",
-            "directory_listing": None,
-        })
+        self._read_file_with_metadata = Mock(
+            return_value={
+                "metadata": {
+                    "path": str(self.path),
+                    "size": 1024,
+                    "mtime": "2024-01-01T00:00:00",
+                },
+                "content": "Mock file content",
+                "encoding": "text",
+                "directory_listing": None,
+            }
+        )
         # Mock user interactions - default behavior based on accepted parameter
         self._ask_directory_consent = Mock(return_value=accepted)
         self._ask_file_read_choice = Mock(return_value="y" if accepted else "n")
@@ -166,7 +166,7 @@ class MessageFactory:
     def create_llm_message(
         comment="I need to read a file, write another file, and run a command.",
         requirements=None,
-        **kwargs
+        **kwargs,
     ):
         """Create an LLM message with mock requirements.
 
