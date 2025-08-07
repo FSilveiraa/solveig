@@ -1,6 +1,5 @@
 """Unit tests for solveig.main module functions."""
 
-import random
 from unittest.mock import MagicMock, Mock, patch
 
 from instructor.exceptions import InstructorRetryException
@@ -17,11 +16,11 @@ from scripts.solveig_cli import (
 )
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from tests.test_utils import (
+    ALL_REQUIREMENTS_MESSAGE,
     DEFAULT_CONFIG,
-    DEFAULT_MESSAGE,
     VERBOSE_CONFIG,
     MessageFactory,
-    MockRequirementFactory, ALL_REQUIREMENTS_MESSAGE,
+    MockRequirementFactory,
 )
 
 mock_completion = Mock()
@@ -236,14 +235,26 @@ class TestSummarizeRequirements:
 
         # Verify that all requirement types are printed
         call_args = [str(call) for call in mock_print.call_args_list]
-        
+
         # Check that we see output for all 6 requirement types
-        assert any("Read:" in call for call in call_args), "Should summarize ReadRequirement"
-        assert any("Write:" in call for call in call_args), "Should summarize WriteRequirement"
-        assert any("Commands:" in call for call in call_args), "Should summarize CommandRequirement"
-        assert any("Move:" in call for call in call_args), "Should summarize MoveRequirement"  
-        assert any("Copy:" in call for call in call_args), "Should summarize CopyRequirement"
-        assert any("Delete:" in call for call in call_args), "Should summarize DeleteRequirement"
+        assert any(
+            "Read:" in call for call in call_args
+        ), "Should summarize ReadRequirement"
+        assert any(
+            "Write:" in call for call in call_args
+        ), "Should summarize WriteRequirement"
+        assert any(
+            "Commands:" in call for call in call_args
+        ), "Should summarize CommandRequirement"
+        assert any(
+            "Move:" in call for call in call_args
+        ), "Should summarize MoveRequirement"
+        assert any(
+            "Copy:" in call for call in call_args
+        ), "Should summarize CopyRequirement"
+        assert any(
+            "Delete:" in call for call in call_args
+        ), "Should summarize DeleteRequirement"
 
 
 class TestProcessRequirements:
@@ -258,12 +269,16 @@ class TestProcessRequirements:
 
         # Verify
         mock_print_line.assert_called_once_with("User")
-        mock_print.assert_any_call(f"[ Requirement Results ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]")  # Now 6 requirements!
+        mock_print.assert_any_call(
+            f"[ Requirement Results ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]"
+        )  # Now 6 requirements!
         mock_print.assert_any_call()  # Final empty print
 
         # Verify that ALL requirements called _actually_solve (not blocked by plugins)
         for requirement in ALL_REQUIREMENTS_MESSAGE.requirements:
-            assert requirement.actually_solve_called, f"{type(requirement).__name__} should have called _actually_solve"
+            assert (
+                requirement.actually_solve_called
+            ), f"{type(requirement).__name__} should have called _actually_solve"
 
         # Verify we get actual RequirementResult objects
         assert len(results) == len(ALL_REQUIREMENTS_MESSAGE.requirements)
@@ -286,31 +301,36 @@ class TestProcessRequirements:
             # This will be blocked by shellcheck plugin
             MockRequirementFactory.create_command_requirement(command="rm -rf /"),
             # This will reach user but be declined
-            MockRequirementFactory.create_command_requirement(command="echo safe", accepted=False),
+            MockRequirementFactory.create_command_requirement(
+                command="echo safe", accepted=False
+            ),
             # This will succeed
             MockRequirementFactory.create_move_requirement(accepted=True),
         ]
-        
+
         message = MessageFactory.create_llm_message(
-            comment="Mixed success/failure scenario", 
-            requirements=requirements
+            comment="Mixed success/failure scenario", requirements=requirements
         )
-        
+
         results = process_requirements(message, DEFAULT_CONFIG)
-        
+
         # Verify the different failure modes
         dangerous_cmd, declined_cmd, move_req = requirements
-        
+
         # Dangerous command blocked by plugin - never reached _actually_solve
-        assert not dangerous_cmd.actually_solve_called, "Plugin should have blocked dangerous command"
+        assert (
+            not dangerous_cmd.actually_solve_called
+        ), "Plugin should have blocked dangerous command"
         assert not dangerous_cmd.actually_solve_called
-        
+
         # Safe command reached _actually_solve but user declined
-        assert declined_cmd.actually_solve_called, "Safe command should reach _actually_solve"
-        
+        assert (
+            declined_cmd.actually_solve_called
+        ), "Safe command should reach _actually_solve"
+
         # Move succeeded
         assert move_req.actually_solve_called, "Move should reach _actually_solve"
-        
+
         # Check results
         successful_results = [r for r in results if r.accepted]
         assert len(successful_results) == 1  # Only move succeeded
@@ -322,7 +342,7 @@ class TestProcessRequirements:
         # Setup - use ALL requirements and make one fail
         requirements = MockRequirementFactory.create_all_requirements()
         read_req, write_req, command_req, move_req, copy_req, delete_req = requirements
-        
+
         # Make one of the requirements fail by making a mock method raise an exception
         write_req._validate_write_access.side_effect = Exception("Test error")
         llm_message = MessageFactory.create_llm_message("Test message", requirements)
@@ -339,7 +359,9 @@ class TestProcessRequirements:
         )
         # Verify that we get RequirementResult objects from successful requirements
         # (the failed one will be excluded)
-        assert len(results) == len(ALL_REQUIREMENTS_MESSAGE.requirements) - 1 # One failed, four succeeded (was 5 total)
+        assert (
+            len(results) == len(ALL_REQUIREMENTS_MESSAGE.requirements) - 1
+        )  # One failed, four succeeded (was 5 total)
         assert all(hasattr(result, "accepted") for result in results)
         assert all(result.accepted for result in results)
 

@@ -7,11 +7,20 @@ from pydantic import BaseModel, field_validator
 
 from .. import utils
 from .requirement import (
-    CommandRequirement, CopyRequirement, DeleteRequirement, 
-    MoveRequirement, ReadRequirement, WriteRequirement
+    CommandRequirement,
+    CopyRequirement,
+    DeleteRequirement,
+    MoveRequirement,
+    ReadRequirement,
+    WriteRequirement,
 )
 from .result import (
-    CommandResult, CopyResult, DeleteResult, MoveResult, ReadResult, WriteResult
+    CommandResult,
+    CopyResult,
+    DeleteResult,
+    MoveResult,
+    ReadResult,
+    WriteResult,
 )
 
 
@@ -32,10 +41,17 @@ class BaseMessage(BaseModel):
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
     comment: str | None = None
-    results: list[
-        ReadResult | WriteResult | CommandResult | 
-        MoveResult | CopyResult | DeleteResult
-    ] | None = None
+    results: (
+        list[
+            ReadResult
+            | WriteResult
+            | CommandResult
+            | MoveResult
+            | CopyResult
+            | DeleteResult
+        ]
+        | None
+    ) = None
 
     def to_openai(self) -> dict:
         data = super().to_openai()
@@ -51,10 +67,17 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
-    requirements: list[
-        ReadRequirement | WriteRequirement | CommandRequirement |
-        MoveRequirement | CopyRequirement | DeleteRequirement
-    ] | None = None
+    requirements: (
+        list[
+            ReadRequirement
+            | WriteRequirement
+            | CommandRequirement
+            | MoveRequirement
+            | CopyRequirement
+            | DeleteRequirement
+        ]
+        | None
+    ) = None
 
 
 @dataclass

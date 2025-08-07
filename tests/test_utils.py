@@ -14,7 +14,12 @@ from solveig.schema.requirement import (
     WriteRequirement,
 )
 from solveig.schema.result import (
-    CommandResult, CopyResult, DeleteResult, MoveResult, ReadResult, WriteResult
+    CommandResult,
+    CopyResult,
+    DeleteResult,
+    MoveResult,
+    ReadResult,
+    WriteResult,
 )
 
 DEFAULT_CONFIG = SolveigConfig(
@@ -39,9 +44,7 @@ VERBOSE_CONFIG = SolveigConfig(
 class MockRequirementMixin:
     """Mixin to add mocking capabilities to requirement classes by mocking OS interactions only."""
 
-    def __init__(
-        self, *args, accepted: bool = True, **kwargs
-    ):
+    def __init__(self, *args, accepted: bool = True, **kwargs):
         super().__init__(**kwargs)
         # Add tracking for _actually_solve calls
         self._actually_solve_call_count = 0
@@ -76,16 +79,18 @@ class MockReadRequirement(MockRequirementMixin, ReadRequirement):
         """Set up mocks for ReadRequirement OS interactions."""
         # Mock OS interactions
         self._validate_read_access = Mock()
-        self._read_file_with_metadata = Mock(return_value={
-            "metadata": {
-                "path": str(self.path),
-                "size": 1024,
-                "mtime": "2024-01-01T00:00:00",
-            },
-            "content": "Mock file content",
-            "encoding": "text",
-            "directory_listing": None,
-        })
+        self._read_file_with_metadata = Mock(
+            return_value={
+                "metadata": {
+                    "path": str(self.path),
+                    "size": 1024,
+                    "mtime": "2024-01-01T00:00:00",
+                },
+                "content": "Mock file content",
+                "encoding": "text",
+                "directory_listing": None,
+            }
+        )
         # Mock user interactions - default behavior based on accepted parameter
         self._ask_directory_consent = Mock(return_value=accepted)
         self._ask_file_read_choice = Mock(return_value="y" if accepted else "n")
@@ -126,7 +131,7 @@ class MockMoveRequirement(MockRequirementMixin, MoveRequirement):
         # Mock OS interactions
         self._validate_move_access = Mock()
         self._move_file_or_directory = Mock()
-        
+
         # Mock user interactions - default behavior based on accepted parameter
         self._ask_move_consent = Mock(return_value=accepted)
 
@@ -139,7 +144,7 @@ class MockCopyRequirement(MockRequirementMixin, CopyRequirement):
         # Mock OS interactions
         self._validate_copy_access = Mock()
         self._copy_file_or_directory = Mock()
-        
+
         # Mock user interactions - default behavior based on accepted parameter
         self._ask_copy_consent = Mock(return_value=accepted)
 
@@ -152,7 +157,7 @@ class MockDeleteRequirement(MockRequirementMixin, DeleteRequirement):
         # Mock OS interactions
         self._validate_delete_access = Mock()
         self._delete_file_or_directory = Mock()
-        
+
         # Mock user interactions - default behavior based on accepted parameter
         self._ask_delete_consent = Mock(return_value=accepted)
 
@@ -197,7 +202,7 @@ class MockRequirementFactory:
         "copy": {
             "class": MockCopyRequirement,
             "defaults": {
-                "source_path": "/test/original.txt", 
+                "source_path": "/test/original.txt",
                 "dest_path": "/test/copy.txt",
                 "comment": "I need to copy the original file",
             },
@@ -259,7 +264,7 @@ class MockRequirementFactory:
             MockRequirementFactory.create_command_requirement(**kwargs),
         ]
 
-    @staticmethod 
+    @staticmethod
     def create_all_requirements(**kwargs):
         """Create a list of all requirement types."""
         return [
@@ -279,7 +284,7 @@ class MessageFactory:
     def create_llm_message(
         comment="I need to read a file, write another file, and run a command.",
         requirements=None,
-        **kwargs
+        **kwargs,
     ):
         """Create an LLM message with mock requirements.
 
@@ -308,5 +313,5 @@ DeleteResult.model_rebuild()
 DEFAULT_MESSAGE = MessageFactory.create_llm_message()
 ALL_REQUIREMENTS_MESSAGE = MessageFactory.create_llm_message(
     comment="I need to read, write, run commands, move, copy, and delete files",
-    requirements=MockRequirementFactory.create_all_requirements()
+    requirements=MockRequirementFactory.create_all_requirements(),
 )

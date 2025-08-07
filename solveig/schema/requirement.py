@@ -12,14 +12,23 @@ from ..plugins.exceptions import PluginException, ProcessingError, ValidationErr
 
 if TYPE_CHECKING:
     from .result import (
-        CommandResult, CopyResult, DeleteResult, MoveResult,
-        ReadResult, RequirementResult, WriteResult
+        CommandResult,
+        CopyResult,
+        DeleteResult,
+        MoveResult,
+        ReadResult,
+        RequirementResult,
+        WriteResult,
     )
 else:
     # Runtime imports - needed for instantiation
     from .result import (
-        CommandResult, CopyResult, DeleteResult, MoveResult,
-        ReadResult, WriteResult
+        CommandResult,
+        CopyResult,
+        DeleteResult,
+        MoveResult,
+        ReadResult,
+        WriteResult,
     )
 
 
@@ -29,6 +38,7 @@ class Requirement(BaseModel):
     Important: all statements that have side-effects (prints, network, filesystem operations)
     must be inside separate methods that can be mocked in a MockRequirement class for tests
     """
+
     comment: str
 
     @field_validator("comment", mode="before")
@@ -93,26 +103,8 @@ class Requirement(BaseModel):
         raise NotImplementedError()
 
 
-class FileRequirement(Requirement):
+class ReadRequirement(Requirement):
     path: str
-
-    # Idk if I'm keeping this or how it fits into the current explicit permissions
-    # def is_possible(self, config: SolveigConfig) -> bool:
-    #     possible = False
-    #     for path in config.allowed_paths:
-    #         if Path(self.path).is_relative_to(path):
-    #             if path.mode == "n":
-    #                 return False
-    #             elif self.mode_allowed(path.mode):
-    #                 possible = True
-    #     return possible
-    #
-    # @staticmethod
-    # def mode_allowed(mode: str) -> bool:
-    #     raise NotImplementedError()
-
-
-class ReadRequirement(FileRequirement):
     only_read_metadata: bool
 
     def _print(self, config):
@@ -129,17 +121,17 @@ class ReadRequirement(FileRequirement):
     def _validate_read_access(self, path: str) -> None:
         """Validate read access to path (OS interaction - can be mocked)."""
         utils.file.validate_read_access(path)
-    
+
     def _read_file_with_metadata(self, path: str, include_content: bool = True) -> dict:
         """Read file with metadata (OS interaction - can be mocked)."""
         return utils.file.read_file_with_metadata(path, include_content=include_content)
-    
+
     def _ask_directory_consent(self) -> bool:
         """Ask user consent for directory reading (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             "    ? Allow reading directory listing and metadata? [y/N]: "
         )
-    
+
     def _ask_file_read_choice(self) -> str:
         """Ask user what type of file read to perform (user interaction - can be mocked)."""
         return (
@@ -149,7 +141,7 @@ class ReadRequirement(FileRequirement):
             .strip()
             .lower()
         )
-    
+
     def _ask_final_consent(self, has_content: bool) -> bool:
         """Ask final consent to send data (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
@@ -247,7 +239,8 @@ class ReadRequirement(FileRequirement):
                 return ReadResult(requirement=self, accepted=False)
 
 
-class WriteRequirement(FileRequirement):
+class WriteRequirement(Requirement):
+    path: str
     is_directory: bool
     content: str | None = None
 
@@ -277,17 +270,17 @@ class WriteRequirement(FileRequirement):
     def _resolve_path(self, path: str) -> Path:
         """Resolve path (OS interaction - can be mocked)."""
         return Path(path).expanduser().resolve()
-    
+
     def _path_exists(self, abs_path: Path) -> bool:
         """Check if path exists (OS interaction - can be mocked)."""
         return abs_path.exists()
-    
+
     def _ask_write_consent(self, operation_type: str, content_desc: str) -> bool:
         """Ask user consent for write operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "
         )
-    
+
     def _validate_write_access(self, config: SolveigConfig) -> None:
         """Validate write access (OS interaction - can be mocked)."""
         utils.file.validate_write_access(
@@ -296,8 +289,10 @@ class WriteRequirement(FileRequirement):
             content=self.content,
             min_disk_size_left=config.min_disk_space_left,
         )
-    
-    def _write_file_or_directory(self, path: str, is_directory: bool, content: str) -> None:
+
+    def _write_file_or_directory(
+        self, path: str, is_directory: bool, content: str
+    ) -> None:
         """Write file or directory (OS interaction - can be mocked)."""
         utils.file.write_file_or_directory(path, is_directory, content)
 
@@ -354,7 +349,7 @@ class CommandRequirement(Requirement):
     def _ask_run_consent(self) -> bool:
         """Ask user consent for running command (user interaction - can be mocked)."""
         return utils.misc.ask_yes("    ? Allow running command? [y/N]: ")
-    
+
     def _execute_command(self, command: str) -> tuple[str | None, str | None]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         result = subprocess.run(
@@ -363,7 +358,7 @@ class CommandRequirement(Requirement):
         output = result.stdout.strip() if result.stdout else None
         error = result.stderr.strip() if result.stderr else None
         return output, error
-    
+
     def _ask_output_consent(self) -> bool:
         """Ask user consent for sending output (user interaction - can be mocked)."""
         return utils.misc.ask_yes("    ? Allow sending output? [y/N]: ")
@@ -417,19 +412,14 @@ class CommandRequirement(Requirement):
         return CommandResult(requirement=self, accepted=False)
 
 
-class MoveRequirement(FileRequirement):
+class MoveRequirement(Requirement):
     source_path: str
     dest_path: str
-    
-    # Override path to use source_path for the base FileRequirement path validation
-    @property
-    def path(self) -> str:
-        return self.source_path
 
     def _print(self, config):
         source_abs = Path(self.source_path).expanduser().resolve()
         dest_abs = Path(self.dest_path).expanduser().resolve()
-        
+
         print("  [ Move ]")
         print(f'    comment: "{self.comment}"')
         print(f"    source: {self.source_path}")
@@ -440,23 +430,23 @@ class MoveRequirement(FileRequirement):
     def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
         """Create MoveResult with error."""
         return MoveResult(
-            requirement=self, 
-            accepted=accepted, 
+            requirement=self,
+            accepted=accepted,
             error=error_message,
             source_path=self.source_path,
-            dest_path=self.dest_path
+            dest_path=self.dest_path,
         )
 
     def _validate_move_access(self) -> None:
         """Validate move access (OS interaction - can be mocked)."""
         utils.file.validate_move_access(self.source_path, self.dest_path)
-    
+
     def _ask_move_consent(self) -> bool:
         """Ask user consent for move operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             f"    ? Allow moving '{self.source_path}' to '{self.dest_path}'? [y/N]: "
         )
-    
+
     def _move_file_or_directory(self) -> None:
         """Move file or directory (OS interaction - can be mocked)."""
         utils.file.move_file_or_directory(self.source_path, self.dest_path)
@@ -468,11 +458,11 @@ class MoveRequirement(FileRequirement):
         except (FileNotFoundError, PermissionError, OSError) as e:
             print(f"    Skipping - {e}")
             return MoveResult(
-                requirement=self, 
-                accepted=False, 
+                requirement=self,
+                accepted=False,
                 error=str(e),
                 source_path=self.source_path,
-                dest_path=self.dest_path
+                dest_path=self.dest_path,
             )
 
         # Get user consent
@@ -481,41 +471,36 @@ class MoveRequirement(FileRequirement):
                 # Perform the move operation
                 self._move_file_or_directory()
                 return MoveResult(
-                    requirement=self, 
+                    requirement=self,
                     accepted=True,
                     source_path=self.source_path,
-                    dest_path=self.dest_path
+                    dest_path=self.dest_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return MoveResult(
-                    requirement=self, 
-                    accepted=False, 
+                    requirement=self,
+                    accepted=False,
                     error=str(e),
                     source_path=self.source_path,
-                    dest_path=self.dest_path
+                    dest_path=self.dest_path,
                 )
         else:
             return MoveResult(
-                requirement=self, 
+                requirement=self,
                 accepted=False,
                 source_path=self.source_path,
-                dest_path=self.dest_path
+                dest_path=self.dest_path,
             )
 
 
-class CopyRequirement(FileRequirement):
+class CopyRequirement(Requirement):
     source_path: str
     dest_path: str
-    
-    # Override path to use source_path for the base FileRequirement path validation  
-    @property
-    def path(self) -> str:
-        return self.source_path
 
     def _print(self, config):
         source_abs = Path(self.source_path).expanduser().resolve()
         dest_abs = Path(self.dest_path).expanduser().resolve()
-        
+
         print("  [ Copy ]")
         print(f'    comment: "{self.comment}"')
         print(f"    source: {self.source_path}")
@@ -526,23 +511,23 @@ class CopyRequirement(FileRequirement):
     def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
         """Create CopyResult with error."""
         return CopyResult(
-            requirement=self, 
-            accepted=accepted, 
+            requirement=self,
+            accepted=accepted,
             error=error_message,
             source_path=self.source_path,
-            dest_path=self.dest_path
+            dest_path=self.dest_path,
         )
 
     def _validate_copy_access(self) -> None:
         """Validate copy access (OS interaction - can be mocked)."""
         utils.file.validate_copy_access(self.source_path, self.dest_path)
-    
+
     def _ask_copy_consent(self) -> bool:
         """Ask user consent for copy operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             f"    ? Allow copying '{self.source_path}' to '{self.dest_path}'? [y/N]: "
         )
-    
+
     def _copy_file_or_directory(self) -> None:
         """Copy file or directory (OS interaction - can be mocked)."""
         utils.file.copy_file_or_directory(self.source_path, self.dest_path)
@@ -554,11 +539,11 @@ class CopyRequirement(FileRequirement):
         except (FileNotFoundError, PermissionError, OSError) as e:
             print(f"    Skipping - {e}")
             return CopyResult(
-                requirement=self, 
-                accepted=False, 
+                requirement=self,
+                accepted=False,
                 error=str(e),
                 source_path=self.source_path,
-                dest_path=self.dest_path
+                dest_path=self.dest_path,
             )
 
         # Get user consent
@@ -567,33 +552,35 @@ class CopyRequirement(FileRequirement):
                 # Perform the copy operation
                 self._copy_file_or_directory()
                 return CopyResult(
-                    requirement=self, 
+                    requirement=self,
                     accepted=True,
                     source_path=self.source_path,
-                    dest_path=self.dest_path
+                    dest_path=self.dest_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return CopyResult(
-                    requirement=self, 
-                    accepted=False, 
+                    requirement=self,
+                    accepted=False,
                     error=str(e),
                     source_path=self.source_path,
-                    dest_path=self.dest_path
+                    dest_path=self.dest_path,
                 )
         else:
             return CopyResult(
-                requirement=self, 
+                requirement=self,
                 accepted=False,
                 source_path=self.source_path,
-                dest_path=self.dest_path
+                dest_path=self.dest_path,
             )
 
 
-class DeleteRequirement(FileRequirement):
+class DeleteRequirement(Requirement):
+    path: str
+
     def _print(self, config):
         abs_path = Path(self.path).expanduser().resolve()
         is_dir = abs_path.is_dir() if abs_path.exists() else False
-        
+
         print("  [ Delete ]")
         print(f'    comment: "{self.comment}"')
         print(f"    path: {self.path} ({'directory' if is_dir else 'file'})")
@@ -607,13 +594,13 @@ class DeleteRequirement(FileRequirement):
     def _validate_delete_access(self) -> None:
         """Validate delete access (OS interaction - can be mocked)."""
         utils.file.validate_delete_access(self.path)
-    
+
     def _ask_delete_consent(self) -> bool:
         """Ask user consent for delete operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
             f"    ? ⚠️  PERMANENTLY DELETE '{self.path}'? This cannot be undone! [y/N]: "
         )
-    
+
     def _delete_file_or_directory(self) -> None:
         """Delete file or directory (OS interaction - can be mocked)."""
         utils.file.delete_file_or_directory(self.path)

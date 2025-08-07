@@ -12,11 +12,11 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from .requirement import (
         CommandRequirement,
-        CopyRequirement, 
+        CopyRequirement,
         DeleteRequirement,
         MoveRequirement,
-        ReadRequirement, 
-        WriteRequirement
+        ReadRequirement,
+        WriteRequirement,
     )
 
 
@@ -25,8 +25,13 @@ class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
     requirement: (
-        ReadRequirement | WriteRequirement | CommandRequirement | 
-        MoveRequirement | CopyRequirement | DeleteRequirement | None
+        ReadRequirement
+        | WriteRequirement
+        | CommandRequirement
+        | MoveRequirement
+        | CopyRequirement
+        | DeleteRequirement
+        | None
     )
     accepted: bool
     error: str | None = None
@@ -60,7 +65,7 @@ class WriteResult(FileResult):
 class MoveResult(FileResult):
     source_path: str | None = None
     dest_path: str | None = None
-    
+
     def to_openai(self):
         data = super().to_openai()
         requirement = data.pop("requirement")
@@ -72,11 +77,11 @@ class MoveResult(FileResult):
 class CopyResult(FileResult):
     source_path: str | None = None
     dest_path: str | None = None
-    
+
     def to_openai(self):
         data = super().to_openai()
         requirement = data.pop("requirement")
-        data["source_path"] = requirement["source_path"] 
+        data["source_path"] = requirement["source_path"]
         data["dest_path"] = requirement["dest_path"]
         return data
 

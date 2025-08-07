@@ -36,7 +36,7 @@ __all__ = [
     "WriteRequirement",
     "CommandRequirement",
     "MoveRequirement",
-    "CopyRequirement", 
+    "CopyRequirement",
     "DeleteRequirement",
     "RequirementResult",
     "ReadResult",

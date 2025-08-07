@@ -5,11 +5,13 @@ This tests the shellcheck plugin in isolation from other plugins.
 
 from unittest.mock import Mock, patch
 
-import pytest
-
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from tests.test_utils import MockRequirementFactory, DEFAULT_CONFIG, MockCommandRequirement
+from tests.test_utils import (
+    DEFAULT_CONFIG,
+    MockCommandRequirement,
+    MockRequirementFactory,
+)
 
 
 class TestShellcheckPlugin:
@@ -53,7 +55,9 @@ class TestShellcheckPlugin:
 
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
-        assert "mkfs.ext4" in result.error  # Should mention the specific dangerous command
+        assert (
+            "mkfs.ext4" in result.error
+        )  # Should mention the specific dangerous command
         assert not result.success
 
     def test_normal_command_passes_validation(self):
@@ -77,8 +81,7 @@ class TestShellcheckPlugin:
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
 
         cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test successful validation", 
-            command="echo 'properly quoted'"
+            comment="Test successful validation", command="echo 'properly quoted'"
         )
         cmd_req._ask_run_consent.return_value = False
 
@@ -103,8 +106,7 @@ class TestShellcheckPlugin:
             stderr="",
         )
         req: MockCommandRequirement = MockRequirementFactory.create_command_requirement(
-            comment="Test",
-            command="echo $UNQUOTED_VAR"
+            comment="Test", command="echo $UNQUOTED_VAR"
         )
 
         result = req.solve(DEFAULT_CONFIG)
@@ -122,9 +124,7 @@ class TestShellcheckPlugin:
 
         config = DEFAULT_CONFIG
         req = MockRequirementFactory.create_command_requirement(
-            comment="Test",
-            command="echo test",
-            accepted=False
+            comment="Test", command="echo test", accepted=False
         )
 
         result = req.solve(config)
@@ -140,17 +140,22 @@ class TestShellcheckPlugin:
         mock_issues = [
             {"level": "error", "message": "Missing quotes around variable"},
             {"level": "warning", "message": "Consider using [[ ]] instead of [ ]"},
-            {"level": "info", "message": "Consider using $(...) instead of legacy backticks"}
+            {
+                "level": "info",
+                "message": "Consider using $(...) instead of legacy backticks",
+            },
         ]
         mock_subprocess.return_value = Mock(
             returncode=1,
-            stdout=f"[{mock_issues[0]}, {mock_issues[1]}, {mock_issues[2]}]".replace("'", '"'),
+            stdout=f"[{mock_issues[0]}, {mock_issues[1]}, {mock_issues[2]}]".replace(
+                "'", '"'
+            ),
             stderr="",
         )
 
         req = MockRequirementFactory.create_command_requirement(
             comment="Test multiple issues",
-            command="if [ $var = `date` ]; then echo hello; fi"
+            command="if [ $var = `date` ]; then echo hello; fi",
         )
 
         result = req.solve(DEFAULT_CONFIG)
@@ -179,7 +184,9 @@ class TestShellcheckPluginIntegration:
         """Test that shellcheck only runs for CommandRequirement."""
 
         # CommandRequirement with dangerous pattern should trigger shellcheck
-        cmd_req = MockRequirementFactory.create_command_requirement(comment="Test", command="rm -rf /")
+        cmd_req = MockRequirementFactory.create_command_requirement(
+            comment="Test", command="rm -rf /"
+        )
         result = cmd_req.solve(DEFAULT_CONFIG)
 
         # Should be stopped by shellcheck plugin
