@@ -114,7 +114,7 @@ class ReadRequirement(Requirement):
     @classmethod
     def path_not_empty(cls, path):
         if not path.strip():
-            raise ValueError(f"Empty path")
+            raise ValueError("Empty path")
         return path
 
     def _print(self, config):

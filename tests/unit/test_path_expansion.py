@@ -17,12 +17,18 @@ class TestPathExpansion:
     def test_tilde_expansion_single_path_requirements(self):
         """Test that single-path requirements expand tilde paths consistently."""
         home = str(Path.home())
-        
+
         # Test all single-path requirement types
         requirements = [
-            MockRequirementFactory.create_read_requirement(path="~/test.txt", comment="Test"),
-            MockRequirementFactory.create_write_requirement(path="~/test.txt", comment="Test"),
-            MockRequirementFactory.create_delete_requirement(path="~/test.txt", comment="Test"),
+            MockRequirementFactory.create_read_requirement(
+                path="~/test.txt", comment="Test"
+            ),
+            MockRequirementFactory.create_write_requirement(
+                path="~/test.txt", comment="Test"
+            ),
+            MockRequirementFactory.create_delete_requirement(
+                path="~/test.txt", comment="Test"
+            ),
         ]
 
         for req in requirements:
@@ -34,14 +40,18 @@ class TestPathExpansion:
     def test_tilde_expansion_dual_path_requirements(self):
         """Test that dual-path requirements expand both source and destination paths."""
         home = str(Path.home())
-        
+
         # Test dual-path requirement types
         requirements = [
             MockRequirementFactory.create_move_requirement(
-                source_path="~/source.txt", destination_path="~/dest.txt", comment="Test"
+                source_path="~/source.txt",
+                destination_path="~/dest.txt",
+                comment="Test",
             ),
             MockRequirementFactory.create_copy_requirement(
-                source_path="~/source.txt", destination_path="~/dest.txt", comment="Test"
+                source_path="~/source.txt",
+                destination_path="~/dest.txt",
+                comment="Test",
             ),
         ]
 

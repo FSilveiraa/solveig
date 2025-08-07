@@ -419,5 +419,5 @@ def delete_file_or_directory(file_path: str) -> None:
         shutil.rmtree(str(path))
 
 
-def absolute_path(path: str|Path) -> Path:
+def absolute_path(path: str | Path) -> Path:
     return Path(path).expanduser().resolve()
