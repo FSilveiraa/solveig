@@ -82,7 +82,7 @@ class MockReadRequirement(MockRequirementMixin, ReadRequirement):
         self._read_file_with_metadata = Mock(
             return_value={
                 "metadata": {
-                    "path": str(self.path),
+                    "path": str(Path(self.path).expanduser().resolve()),
                     "size": 1024,
                     "mtime": "2024-01-01T00:00:00",
                 },

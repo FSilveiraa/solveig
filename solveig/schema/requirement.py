@@ -110,8 +110,15 @@ class ReadRequirement(Requirement):
     path: str
     only_read_metadata: bool
 
+    @field_validator("path")
+    @classmethod
+    def path_not_empty(cls, path):
+        if not path.strip():
+            raise ValueError(f"Empty path")
+        return path
+
     def _print(self, config):
-        abs_path = Path(self.path).expanduser().resolve()
+        abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir()
         print("  [ Read ]")
         print(f'    comment: "{self.comment}"')
@@ -121,7 +128,7 @@ class ReadRequirement(Requirement):
         """Create ReadResult with error."""
         return ReadResult(
             requirement=self,
-            path=Path(self.path).expanduser().resolve(),
+            path=utils.file.absolute_path(self.path),
             accepted=accepted,
             error=error_message,
         )
@@ -159,7 +166,7 @@ class ReadRequirement(Requirement):
         )
 
     def _actually_solve(self, config) -> ReadResult:
-        abs_path = Path(self.path).expanduser().resolve()
+        abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir()
 
         # Pre-flight validation
@@ -202,7 +209,7 @@ class ReadRequirement(Requirement):
             # Read metadata first
             try:
                 file_data = self._read_file_with_metadata(
-                    self.path, include_content=False
+                    abs_path, include_content=False
                 )
             except (PermissionError, OSError) as e:
                 return ReadResult(
@@ -249,7 +256,7 @@ class ReadRequirement(Requirement):
             if self._ask_final_consent(content is not None):
                 return ReadResult(
                     requirement=self,
-                    path=self.path,
+                    path=abs_path,
                     accepted=True,
                     metadata=file_data["metadata"],
                     content=content,
@@ -265,7 +272,7 @@ class WriteRequirement(Requirement):
     content: str | None = None
 
     def _print(self, config):
-        abs_path = Path(self.path).expanduser().resolve()
+        abs_path = utils.file.absolute_path(self.path)
 
         print("  [ Write ]")
         print(f'    comment: "{self.comment}"')
@@ -287,14 +294,10 @@ class WriteRequirement(Requirement):
         """Create WriteResult with error."""
         return WriteResult(
             requirement=self,
-            path=Path(self.path).expanduser().resolve(),
+            path=utils.file.absolute_path(self.path),
             accepted=accepted,
             error=error_message,
         )
-
-    def _resolve_path(self, path: str | Path) -> Path:
-        """Resolve path (OS interaction - can be mocked)."""
-        return Path(path).expanduser().resolve()
 
     def _path_exists(self, abs_path: Path) -> bool:
         """Check if path exists (OS interaction - can be mocked)."""
@@ -309,7 +312,7 @@ class WriteRequirement(Requirement):
     def _validate_write_access(self, config: SolveigConfig) -> None:
         """Validate write access (OS interaction - can be mocked)."""
         utils.file.validate_write_access(
-            file_path=self.path,
+            file_path=utils.file.absolute_path(self.path),
             is_directory=self.is_directory,
             content=self.content,
             min_disk_size_left=config.min_disk_space_left,
@@ -322,7 +325,7 @@ class WriteRequirement(Requirement):
         utils.file.write_file_or_directory(path, is_directory, content)
 
     def _actually_solve(self, config: SolveigConfig) -> WriteResult:
-        abs_path = self._resolve_path(self.path)
+        abs_path = utils.file.absolute_path(self.path)
 
         # Show warning if path exists
         if self._path_exists(abs_path):
@@ -460,8 +463,8 @@ class MoveRequirement(Requirement):
     destination_path: str
 
     def _print(self, config):
-        source_abs = Path(self.source_path).expanduser().resolve()
-        dest_abs = Path(self.destination_path).expanduser().resolve()
+        source_abs = utils.file.absolute_path(self.source_path)
+        dest_abs = utils.file.absolute_path(self.destination_path)
 
         print("  [ Move ]")
         print(f'    comment: "{self.comment}"')
@@ -476,8 +479,8 @@ class MoveRequirement(Requirement):
             requirement=self,
             accepted=accepted,
             error=error_message,
-            source_path=Path(self.source_path).expanduser().resolve(),
-            destination_path=Path(self.destination_path).expanduser().resolve(),
+            source_path=utils.file.absolute_path(self.source_path),
+            destination_path=utils.file.absolute_path(self.destination_path),
         )
 
     def _validate_move_access(self) -> None:
@@ -496,8 +499,8 @@ class MoveRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> MoveResult:
         # Pre-flight validation
-        abs_source_path = Path(self.source_path).expanduser().resolve()
-        abs_destination_path = Path(self.destination_path).expanduser().resolve()
+        abs_source_path = utils.file.absolute_path(self.source_path)
+        abs_destination_path = utils.file.absolute_path(self.destination_path)
 
         try:
             self._validate_move_access()
@@ -544,8 +547,8 @@ class CopyRequirement(Requirement):
     destination_path: str
 
     def _print(self, config):
-        source_abs = Path(self.source_path).expanduser().resolve()
-        dest_abs = Path(self.destination_path).expanduser().resolve()
+        source_abs = utils.file.absolute_path(self.source_path)
+        dest_abs = utils.file.absolute_path(self.destination_path)
 
         print("  [ Copy ]")
         print(f'    comment: "{self.comment}"')
@@ -560,8 +563,8 @@ class CopyRequirement(Requirement):
             requirement=self,
             accepted=accepted,
             error=error_message,
-            source_path=Path(self.source_path).resolve().expanduser(),
-            destination_path=Path(self.destination_path).resolve().expanduser(),
+            source_path=utils.file.absolute_path(self.source_path),
+            destination_path=utils.file.absolute_path(self.destination_path),
         )
 
     def _validate_copy_access(self) -> None:
@@ -580,8 +583,8 @@ class CopyRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> CopyResult:
         # Pre-flight validation
-        abs_source_path = Path(self.source_path).expanduser().resolve()
-        abs_destination_path = Path(self.destination_path).expanduser().resolve()
+        abs_source_path = utils.file.absolute_path(self.source_path)
+        abs_destination_path = utils.file.absolute_path(self.destination_path)
         try:
             self._validate_copy_access()
         except (FileNotFoundError, PermissionError, OSError) as e:
@@ -625,8 +628,8 @@ class CopyRequirement(Requirement):
 class DeleteRequirement(Requirement):
     path: str
 
-    def _print(self, config, abs_path=None):
-        abs_path = abs_path if abs_path else Path(self.path).expanduser().resolve()
+    def _print(self, config):
+        abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir() if abs_path.exists() else False
 
         print("  [ Delete ]")
@@ -639,7 +642,7 @@ class DeleteRequirement(Requirement):
         """Create DeleteResult with error."""
         return DeleteResult(
             requirement=self,
-            path=Path(self.path).expanduser().resolve(),
+            path=utils.file.absolute_path(self.path),
             accepted=accepted,
             error=error_message,
         )
@@ -660,7 +663,7 @@ class DeleteRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig) -> DeleteResult:
         # Pre-flight validation
-        abs_path = Path(self.path).expanduser().resolve()
+        abs_path = utils.file.absolute_path(self.path)
         try:
             self._validate_delete_access()
         except (FileNotFoundError, PermissionError) as e:
