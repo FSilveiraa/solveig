@@ -44,22 +44,6 @@ solveig -u "http://localhost:5001/v1" "Tell me a joke"
 solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
 ```
 
-## 🧪 Running Tests
-
-```bash
-# Install with testing dependencies:
-pip install -e .[dev]
-
-# Unit tests only
-python -m pytest tests/unit/ -v
-
-# All tests with coverage
-python -m pytest tests/ --cov=solveig --cov=scripts --cov-report=term-missing -v
-
-# Specific test class
-python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
-```
-
 ---
 
 ## ❓ FAQ
@@ -335,26 +319,26 @@ We use modern Python tooling to maintain code quality and consistency:
 
 ### Development Tools
 
-- **Black** - Automatic code formatting for consistent style across all contributors
-- **Ruff** - Fast linting that catches bugs, unused imports, and style issues (replaces ~10 older tools)
-- **MyPy** - Static type checking to prevent type-related runtime errors
-
-### Code Quality Workflow
-
 All code is automatically checked on `main` and `develop` branches:
 1. **Formatting**: `black .` - Ensures consistent code style
 2. **Linting**: `ruff check .` - Catches potential bugs and code quality issues  
 3. **Type checking**: `mypy solveig/ scripts/ --ignore-missing-imports` - Validates type hints
 4. **Testing**: `pytest` - Runs full test suite with coverage reporting
 
-### Setup for Contributors
+### Running tests and checks
 
 ```bash
-# Install development dependencies
+# Install with testing dependencies:
 pip install -e .[dev]
 
+# Unit tests only
+python -m pytest tests/unit/ -v
+
+# Specific test class
+python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
+
 # Run all checks locally (same as CI)
-black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -v
+black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
 ```
 
 ---
@@ -364,7 +348,5 @@ black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && py
 **Next Steps:**
 - Enhanced command validation with Semgrep static analysis  
 - Second-opinion LLM validation for generated commands
-
-**Future Ideas:**
-- Direct API integration for Claude/Gemini
-- Advanced plugin ecosystem with custom requirement types
+- Improve test coverage
+- API integration for Claude/Gemini
