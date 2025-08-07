@@ -8,6 +8,8 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+[![asciicast](https://asciinema.org/a/XaPr7wtGuZIMTDAoZZAJBm8K1.svg)](https://asciinema.org/a/XaPr7wtGuZIMTDAoZZAJBm8K1)
+
 **A safe bridge between AI assistants and your computer.**
 
 Solveig lets LLMs read files and run commands with explicit user approval for every operation.
@@ -16,12 +18,6 @@ Solveig lets LLMs read files and run commands with explicit user approval for ev
 * **Safety validation** - Shellcheck integration prevents dangerous commands
 * **Works anywhere** - Any OpenAI-compatible LLM endpoint (OpenRouter, local models)
 * **Simple setup** - Modern Python CLI with comprehensive testing
-
----
-
-<a href="https://vshymanskyy.github.io/StandWithUkraine">
-	<img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
-</a>
 
 ---
 
@@ -43,6 +39,12 @@ solveig -u "http://localhost:5001/v1" "Tell me a joke"
 # Run from a remote API like OpenRouter:
 solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
 ```
+
+---
+
+<a href="https://vshymanskyy.github.io/StandWithUkraine">
+	<img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
+</a>
 
 ---
 

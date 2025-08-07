@@ -100,7 +100,7 @@ def read_file_as_text(path: str | Path) -> str:
 def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
     mime, _ = mimetypes.guess_type(path)
     try:
-        if mime and mime.startswith("text"):
+        if mime and mime.startswith("text") or mime == "application/x-sh":
             return (read_file_as_text(path), "text")
         else:
             raise UnicodeDecodeError("utf-8", b"", 0, 1, "Fallback to base64")
