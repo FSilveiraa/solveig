@@ -414,17 +414,17 @@ class CommandRequirement(Requirement):
 
 class MoveRequirement(Requirement):
     source_path: str
-    dest_path: str
+    destination_path: str
 
     def _print(self, config):
         source_abs = Path(self.source_path).expanduser().resolve()
-        dest_abs = Path(self.dest_path).expanduser().resolve()
+        dest_abs = Path(self.destination_path).expanduser().resolve()
 
         print("  [ Move ]")
         print(f'    comment: "{self.comment}"')
         print(f"    source: {self.source_path}")
         print(f"    real source: {source_abs}")
-        print(f"    dest: {self.dest_path}")
+        print(f"    dest: {self.destination_path}")
         print(f"    real dest: {dest_abs}")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
@@ -434,22 +434,22 @@ class MoveRequirement(Requirement):
             accepted=accepted,
             error=error_message,
             source_path=self.source_path,
-            dest_path=self.dest_path,
+            dest_path=self.destination_path,
         )
 
     def _validate_move_access(self) -> None:
         """Validate move access (OS interaction - can be mocked)."""
-        utils.file.validate_move_access(self.source_path, self.dest_path)
+        utils.file.validate_move_access(self.source_path, self.destination_path)
 
     def _ask_move_consent(self) -> bool:
         """Ask user consent for move operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
-            f"    ? Allow moving '{self.source_path}' to '{self.dest_path}'? [y/N]: "
+            f"    ? Allow moving '{self.source_path}' to '{self.destination_path}'? [y/N]: "
         )
 
     def _move_file_or_directory(self) -> None:
         """Move file or directory (OS interaction - can be mocked)."""
-        utils.file.move_file_or_directory(self.source_path, self.dest_path)
+        utils.file.move_file_or_directory(self.source_path, self.destination_path)
 
     def _actually_solve(self, config: SolveigConfig) -> MoveResult:
         # Pre-flight validation
@@ -462,7 +462,7 @@ class MoveRequirement(Requirement):
                 accepted=False,
                 error=str(e),
                 source_path=self.source_path,
-                dest_path=self.dest_path,
+                dest_path=self.destination_path,
             )
 
         # Get user consent
@@ -474,7 +474,7 @@ class MoveRequirement(Requirement):
                     requirement=self,
                     accepted=True,
                     source_path=self.source_path,
-                    dest_path=self.dest_path,
+                    dest_path=self.destination_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return MoveResult(
@@ -482,30 +482,30 @@ class MoveRequirement(Requirement):
                     accepted=False,
                     error=str(e),
                     source_path=self.source_path,
-                    dest_path=self.dest_path,
+                    dest_path=self.destination_path,
                 )
         else:
             return MoveResult(
                 requirement=self,
                 accepted=False,
                 source_path=self.source_path,
-                dest_path=self.dest_path,
+                dest_path=self.destination_path,
             )
 
 
 class CopyRequirement(Requirement):
     source_path: str
-    dest_path: str
+    destination_path: str
 
     def _print(self, config):
         source_abs = Path(self.source_path).expanduser().resolve()
-        dest_abs = Path(self.dest_path).expanduser().resolve()
+        dest_abs = Path(self.destination_path).expanduser().resolve()
 
         print("  [ Copy ]")
         print(f'    comment: "{self.comment}"')
         print(f"    source: {self.source_path}")
         print(f"    real source: {source_abs}")
-        print(f"    dest: {self.dest_path}")
+        print(f"    dest: {self.destination_path}")
         print(f"    real dest: {dest_abs}")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
@@ -515,22 +515,22 @@ class CopyRequirement(Requirement):
             accepted=accepted,
             error=error_message,
             source_path=self.source_path,
-            dest_path=self.dest_path,
+            dest_path=self.destination_path,
         )
 
     def _validate_copy_access(self) -> None:
         """Validate copy access (OS interaction - can be mocked)."""
-        utils.file.validate_copy_access(self.source_path, self.dest_path)
+        utils.file.validate_copy_access(self.source_path, self.destination_path)
 
     def _ask_copy_consent(self) -> bool:
         """Ask user consent for copy operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
-            f"    ? Allow copying '{self.source_path}' to '{self.dest_path}'? [y/N]: "
+            f"    ? Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "
         )
 
     def _copy_file_or_directory(self) -> None:
         """Copy file or directory (OS interaction - can be mocked)."""
-        utils.file.copy_file_or_directory(self.source_path, self.dest_path)
+        utils.file.copy_file_or_directory(self.source_path, self.destination_path)
 
     def _actually_solve(self, config: SolveigConfig) -> CopyResult:
         # Pre-flight validation
@@ -543,7 +543,7 @@ class CopyRequirement(Requirement):
                 accepted=False,
                 error=str(e),
                 source_path=self.source_path,
-                dest_path=self.dest_path,
+                dest_path=self.destination_path,
             )
 
         # Get user consent
@@ -555,7 +555,7 @@ class CopyRequirement(Requirement):
                     requirement=self,
                     accepted=True,
                     source_path=self.source_path,
-                    dest_path=self.dest_path,
+                    dest_path=self.destination_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 return CopyResult(
@@ -563,14 +563,14 @@ class CopyRequirement(Requirement):
                     accepted=False,
                     error=str(e),
                     source_path=self.source_path,
-                    dest_path=self.dest_path,
+                    dest_path=self.destination_path,
                 )
         else:
             return CopyResult(
                 requirement=self,
                 accepted=False,
                 source_path=self.source_path,
-                dest_path=self.dest_path,
+                dest_path=self.destination_path,
             )
 
 

@@ -54,12 +54,12 @@ def summarize_requirements(message: LLMMessage):
     if moves:
         print("  Move:")
         for requirement in moves:
-            print(f"    {requirement.source_path} → {requirement.dest_path}")
+            print(f"    {requirement.source_path} → {requirement.destination_path}")
 
     if copies:
         print("  Copy:")
         for requirement in copies:
-            print(f"    {requirement.source_path} → {requirement.dest_path}")
+            print(f"    {requirement.source_path} → {requirement.destination_path}")
 
     if deletes:
         print("  Delete:")
