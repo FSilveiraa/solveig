@@ -239,3 +239,173 @@ def _check_can_create_parent(parent_dir: Path) -> bool:
             return os.access(current, os.W_OK)
         current = current.parent
     return False  # Reached root without finding writable directory
+
+
+def validate_move_access(source_path: str, dest_path: str) -> None:
+    """
+    Validate that a move operation can be performed.
+    
+    Args:
+        source_path: Source file/directory path
+        dest_path: Destination path
+        
+    Raises:
+        FileNotFoundError: If source doesn't exist
+        PermissionError: If insufficient permissions
+        OSError: If destination exists or other OS error
+    """
+    source = Path(source_path).expanduser().resolve()
+    dest = Path(dest_path).expanduser().resolve()
+    
+    # Check source exists and is readable
+    if not source.exists():
+        raise FileNotFoundError(f"Source path does not exist: {source_path}")
+    
+    if not os.access(source, os.R_OK):
+        raise PermissionError(f"No read permission for source: {source_path}")
+    
+    # Check we can delete from source directory
+    if not os.access(source.parent, os.W_OK):
+        raise PermissionError(f"No write permission in source directory: {source.parent}")
+    
+    # Check destination doesn't exist
+    if dest.exists():
+        raise OSError(f"Destination already exists: {dest_path}")
+    
+    # Check we can write to destination directory
+    dest_parent = dest.parent
+    if dest_parent.exists():
+        if not os.access(dest_parent, os.W_OK):
+            raise PermissionError(f"No write permission in destination directory: {dest_parent}")
+    else:
+        # Check if we can create the parent directory
+        if not _check_can_create_parent(dest_parent):
+            raise PermissionError(f"Cannot create destination directory: {dest_parent}")
+
+
+def validate_copy_access(source_path: str, dest_path: str) -> None:
+    """
+    Validate that a copy operation can be performed.
+    
+    Args:
+        source_path: Source file/directory path
+        dest_path: Destination path
+        
+    Raises:
+        FileNotFoundError: If source doesn't exist
+        PermissionError: If insufficient permissions
+        OSError: If destination exists or other OS error
+    """
+    source = Path(source_path).expanduser().resolve()
+    dest = Path(dest_path).expanduser().resolve()
+    
+    # Check source exists and is readable
+    if not source.exists():
+        raise FileNotFoundError(f"Source path does not exist: {source_path}")
+    
+    if not os.access(source, os.R_OK):
+        raise PermissionError(f"No read permission for source: {source_path}")
+    
+    # Check destination doesn't exist
+    if dest.exists():
+        raise OSError(f"Destination already exists: {dest_path}")
+    
+    # Check we can write to destination directory
+    dest_parent = dest.parent
+    if dest_parent.exists():
+        if not os.access(dest_parent, os.W_OK):
+            raise PermissionError(f"No write permission in destination directory: {dest_parent}")
+    else:
+        # Check if we can create the parent directory
+        if not _check_can_create_parent(dest_parent):
+            raise PermissionError(f"Cannot create destination directory: {dest_parent}")
+
+
+def validate_delete_access(file_path: str) -> None:
+    """
+    Validate that a delete operation can be performed.
+    
+    Args:
+        file_path: File or directory path to delete
+        
+    Raises:
+        FileNotFoundError: If path doesn't exist
+        PermissionError: If insufficient permissions
+    """
+    path = Path(file_path).expanduser().resolve()
+    
+    # Check path exists
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {file_path}")
+    
+    # Check we have write permission in the parent directory
+    if not os.access(path.parent, os.W_OK):
+        raise PermissionError(f"No write permission in directory: {path.parent}")
+    
+    # For directories, check they're not read-only and we can delete contents
+    if path.is_dir():
+        if not os.access(path, os.W_OK | os.X_OK):
+            raise PermissionError(f"No write/execute permission for directory: {file_path}")
+
+
+def move_file_or_directory(source_path: str, dest_path: str) -> None:
+    """
+    Move a file or directory from source to destination.
+    
+    Args:
+        source_path: Source file/directory path
+        dest_path: Destination path
+        
+    Raises:
+        Same as validate_move_access, plus shutil.Error for copy failures
+    """
+    source = Path(source_path).expanduser().resolve()
+    dest = Path(dest_path).expanduser().resolve()
+    
+    # Create destination parent directory if needed
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Use shutil.move which handles cross-filesystem moves
+    shutil.move(str(source), str(dest))
+
+
+def copy_file_or_directory(source_path: str, dest_path: str) -> None:
+    """
+    Copy a file or directory from source to destination.
+    
+    Args:
+        source_path: Source file/directory path  
+        dest_path: Destination path
+        
+    Raises:
+        Same as validate_copy_access, plus shutil.Error for copy failures
+    """
+    source = Path(source_path).expanduser().resolve()
+    dest = Path(dest_path).expanduser().resolve()
+    
+    # Create destination parent directory if needed
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Copy file or directory tree
+    if source.is_file():
+        shutil.copy2(str(source), str(dest))  # copy2 preserves metadata
+    else:
+        shutil.copytree(str(source), str(dest))
+
+
+def delete_file_or_directory(file_path: str) -> None:
+    """
+    Delete a file or directory.
+    
+    Args:
+        file_path: File or directory path to delete
+        
+    Raises:
+        Same as validate_delete_access, plus OSError for deletion failures
+    """
+    path = Path(file_path).expanduser().resolve()
+    
+    if path.is_file():
+        path.unlink()
+    else:
+        shutil.rmtree(str(path))

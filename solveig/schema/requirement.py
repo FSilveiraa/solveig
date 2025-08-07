@@ -11,10 +11,16 @@ from .. import SolveigConfig, plugins, utils
 from ..plugins.exceptions import PluginException, ProcessingError, ValidationError
 
 if TYPE_CHECKING:
-    from .result import CommandResult, ReadResult, RequirementResult, WriteResult
+    from .result import (
+        CommandResult, CopyResult, DeleteResult, MoveResult,
+        ReadResult, RequirementResult, WriteResult
+    )
 else:
     # Runtime imports - needed for instantiation
-    from .result import CommandResult, ReadResult, WriteResult
+    from .result import (
+        CommandResult, CopyResult, DeleteResult, MoveResult,
+        ReadResult, WriteResult
+    )
 
 
 # Base class for things the LLM can request
@@ -409,3 +415,224 @@ class CommandRequirement(Requirement):
                 error=error,
             )
         return CommandResult(requirement=self, accepted=False)
+
+
+class MoveRequirement(FileRequirement):
+    source_path: str
+    dest_path: str
+    
+    # Override path to use source_path for the base FileRequirement path validation
+    @property
+    def path(self) -> str:
+        return self.source_path
+
+    def _print(self, config):
+        source_abs = Path(self.source_path).expanduser().resolve()
+        dest_abs = Path(self.dest_path).expanduser().resolve()
+        
+        print("  [ Move ]")
+        print(f'    comment: "{self.comment}"')
+        print(f"    source: {self.source_path}")
+        print(f"    real source: {source_abs}")
+        print(f"    dest: {self.dest_path}")
+        print(f"    real dest: {dest_abs}")
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
+        """Create MoveResult with error."""
+        return MoveResult(
+            requirement=self, 
+            accepted=accepted, 
+            error=error_message,
+            source_path=self.source_path,
+            dest_path=self.dest_path
+        )
+
+    def _validate_move_access(self) -> None:
+        """Validate move access (OS interaction - can be mocked)."""
+        utils.file.validate_move_access(self.source_path, self.dest_path)
+    
+    def _ask_move_consent(self) -> bool:
+        """Ask user consent for move operation (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            f"    ? Allow moving '{self.source_path}' to '{self.dest_path}'? [y/N]: "
+        )
+    
+    def _move_file_or_directory(self) -> None:
+        """Move file or directory (OS interaction - can be mocked)."""
+        utils.file.move_file_or_directory(self.source_path, self.dest_path)
+
+    def _actually_solve(self, config: SolveigConfig) -> MoveResult:
+        # Pre-flight validation
+        try:
+            self._validate_move_access()
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            print(f"    Skipping - {e}")
+            return MoveResult(
+                requirement=self, 
+                accepted=False, 
+                error=str(e),
+                source_path=self.source_path,
+                dest_path=self.dest_path
+            )
+
+        # Get user consent
+        if self._ask_move_consent():
+            try:
+                # Perform the move operation
+                self._move_file_or_directory()
+                return MoveResult(
+                    requirement=self, 
+                    accepted=True,
+                    source_path=self.source_path,
+                    dest_path=self.dest_path
+                )
+            except (PermissionError, OSError, FileExistsError) as e:
+                return MoveResult(
+                    requirement=self, 
+                    accepted=False, 
+                    error=str(e),
+                    source_path=self.source_path,
+                    dest_path=self.dest_path
+                )
+        else:
+            return MoveResult(
+                requirement=self, 
+                accepted=False,
+                source_path=self.source_path,
+                dest_path=self.dest_path
+            )
+
+
+class CopyRequirement(FileRequirement):
+    source_path: str
+    dest_path: str
+    
+    # Override path to use source_path for the base FileRequirement path validation  
+    @property
+    def path(self) -> str:
+        return self.source_path
+
+    def _print(self, config):
+        source_abs = Path(self.source_path).expanduser().resolve()
+        dest_abs = Path(self.dest_path).expanduser().resolve()
+        
+        print("  [ Copy ]")
+        print(f'    comment: "{self.comment}"')
+        print(f"    source: {self.source_path}")
+        print(f"    real source: {source_abs}")
+        print(f"    dest: {self.dest_path}")
+        print(f"    real dest: {dest_abs}")
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
+        """Create CopyResult with error."""
+        return CopyResult(
+            requirement=self, 
+            accepted=accepted, 
+            error=error_message,
+            source_path=self.source_path,
+            dest_path=self.dest_path
+        )
+
+    def _validate_copy_access(self) -> None:
+        """Validate copy access (OS interaction - can be mocked)."""
+        utils.file.validate_copy_access(self.source_path, self.dest_path)
+    
+    def _ask_copy_consent(self) -> bool:
+        """Ask user consent for copy operation (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            f"    ? Allow copying '{self.source_path}' to '{self.dest_path}'? [y/N]: "
+        )
+    
+    def _copy_file_or_directory(self) -> None:
+        """Copy file or directory (OS interaction - can be mocked)."""
+        utils.file.copy_file_or_directory(self.source_path, self.dest_path)
+
+    def _actually_solve(self, config: SolveigConfig) -> CopyResult:
+        # Pre-flight validation
+        try:
+            self._validate_copy_access()
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            print(f"    Skipping - {e}")
+            return CopyResult(
+                requirement=self, 
+                accepted=False, 
+                error=str(e),
+                source_path=self.source_path,
+                dest_path=self.dest_path
+            )
+
+        # Get user consent
+        if self._ask_copy_consent():
+            try:
+                # Perform the copy operation
+                self._copy_file_or_directory()
+                return CopyResult(
+                    requirement=self, 
+                    accepted=True,
+                    source_path=self.source_path,
+                    dest_path=self.dest_path
+                )
+            except (PermissionError, OSError, FileExistsError) as e:
+                return CopyResult(
+                    requirement=self, 
+                    accepted=False, 
+                    error=str(e),
+                    source_path=self.source_path,
+                    dest_path=self.dest_path
+                )
+        else:
+            return CopyResult(
+                requirement=self, 
+                accepted=False,
+                source_path=self.source_path,
+                dest_path=self.dest_path
+            )
+
+
+class DeleteRequirement(FileRequirement):
+    def _print(self, config):
+        abs_path = Path(self.path).expanduser().resolve()
+        is_dir = abs_path.is_dir() if abs_path.exists() else False
+        
+        print("  [ Delete ]")
+        print(f'    comment: "{self.comment}"')
+        print(f"    path: {self.path} ({'directory' if is_dir else 'file'})")
+        print(f"    real path: {abs_path}")
+        print("    ⚠️  WARNING: This operation is permanent and cannot be undone!")
+
+    def _create_error_result(self, error_message: str, accepted: bool) -> DeleteResult:
+        """Create DeleteResult with error."""
+        return DeleteResult(requirement=self, accepted=accepted, error=error_message)
+
+    def _validate_delete_access(self) -> None:
+        """Validate delete access (OS interaction - can be mocked)."""
+        utils.file.validate_delete_access(self.path)
+    
+    def _ask_delete_consent(self) -> bool:
+        """Ask user consent for delete operation (user interaction - can be mocked)."""
+        return utils.misc.ask_yes(
+            f"    ? ⚠️  PERMANENTLY DELETE '{self.path}'? This cannot be undone! [y/N]: "
+        )
+    
+    def _delete_file_or_directory(self) -> None:
+        """Delete file or directory (OS interaction - can be mocked)."""
+        utils.file.delete_file_or_directory(self.path)
+
+    def _actually_solve(self, config: SolveigConfig) -> DeleteResult:
+        # Pre-flight validation
+        try:
+            self._validate_delete_access()
+        except (FileNotFoundError, PermissionError) as e:
+            print(f"    Skipping - {e}")
+            return DeleteResult(requirement=self, accepted=False, error=str(e))
+
+        # Get user consent (with extra warning)
+        if self._ask_delete_consent():
+            try:
+                # Perform the delete operation
+                self._delete_file_or_directory()
+                return DeleteResult(requirement=self, accepted=True)
+            except (PermissionError, OSError) as e:
+                return DeleteResult(requirement=self, accepted=False, error=str(e))
+        else:
+            return DeleteResult(requirement=self, accepted=False)

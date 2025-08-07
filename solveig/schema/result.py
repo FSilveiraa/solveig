@@ -10,14 +10,24 @@ from pydantic import BaseModel
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from .requirement import CommandRequirement, ReadRequirement, WriteRequirement
+    from .requirement import (
+        CommandRequirement,
+        CopyRequirement, 
+        DeleteRequirement,
+        MoveRequirement,
+        ReadRequirement, 
+        WriteRequirement
+    )
 
 
 # Base class for data returned for requirements
 class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
-    requirement: ReadRequirement | WriteRequirement | CommandRequirement | None
+    requirement: (
+        ReadRequirement | WriteRequirement | CommandRequirement | 
+        MoveRequirement | CopyRequirement | DeleteRequirement | None
+    )
     accepted: bool
     error: str | None = None
 
@@ -45,6 +55,38 @@ class ReadResult(FileResult):
 
 class WriteResult(FileResult):
     pass
+
+
+class MoveResult(FileResult):
+    source_path: str | None = None
+    dest_path: str | None = None
+    
+    def to_openai(self):
+        data = super().to_openai()
+        requirement = data.pop("requirement")
+        data["source_path"] = requirement["source_path"]
+        data["dest_path"] = requirement["dest_path"]
+        return data
+
+
+class CopyResult(FileResult):
+    source_path: str | None = None
+    dest_path: str | None = None
+    
+    def to_openai(self):
+        data = super().to_openai()
+        requirement = data.pop("requirement")
+        data["source_path"] = requirement["source_path"] 
+        data["dest_path"] = requirement["dest_path"]
+        return data
+
+
+class DeleteResult(FileResult):
+    def to_openai(self):
+        data = super().to_openai()
+        requirement = data.pop("requirement")
+        data["path"] = requirement["path"]
+        return data
 
 
 class CommandResult(RequirementResult):

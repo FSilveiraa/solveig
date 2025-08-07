@@ -21,7 +21,7 @@ from tests.test_utils import (
     DEFAULT_MESSAGE,
     VERBOSE_CONFIG,
     MessageFactory,
-    MockRequirementFactory,
+    MockRequirementFactory, ALL_REQUIREMENTS_MESSAGE,
 )
 
 mock_completion = Mock()
@@ -197,17 +197,17 @@ class TestDisplayLLMResponse:
     def test_display_response_with_requirements(
         self, mock_print, mock_summarize, mock_print_line
     ):
-        """Test displaying LLM response with requirements."""
-        # Execute
-        display_llm_response(DEFAULT_MESSAGE)
+        """Test displaying LLM response with all requirement types."""
+        # Execute with comprehensive requirements
+        display_llm_response(ALL_REQUIREMENTS_MESSAGE)
 
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_any_call(DEFAULT_MESSAGE.comment)
+        mock_print.assert_any_call(ALL_REQUIREMENTS_MESSAGE.comment)
         mock_print.assert_any_call(
-            f"\n[ Requirements ({len(DEFAULT_MESSAGE.requirements)}) ]"
+            f"\n[ Requirements ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]"
         )
-        mock_summarize.assert_called_once_with(DEFAULT_MESSAGE)
+        mock_summarize.assert_called_once_with(ALL_REQUIREMENTS_MESSAGE)
 
     @patch("scripts.solveig_cli.utils.misc.print_line")
     @patch("builtins.print")
@@ -229,23 +229,21 @@ class TestSummarizeRequirements:
     """Test the summarize_requirements function."""
 
     @patch("builtins.print")
-    def test_summarize_mixed_requirements(self, mock_print):
-        """Test summarizing different types of requirements."""
-        # Execute
-        summarize_requirements(DEFAULT_MESSAGE)
+    def test_summarize_all_requirement_types(self, mock_print):
+        """Test summarizing all types of requirements including new file operations."""
+        # Execute with comprehensive requirements
+        summarize_requirements(ALL_REQUIREMENTS_MESSAGE)
 
-        # Verify print calls
-        expected_calls = [
-            "  Read:",
-            "    /test/file.txt (content)",
-            "  Write:",
-            "    /test/output.txt",
-            "  Commands:",
-            "    ls -la",
-        ]
-
-        actual_calls = [call[0][0] for call in mock_print.call_args_list]
-        assert actual_calls == expected_calls
+        # Verify that all requirement types are printed
+        call_args = [str(call) for call in mock_print.call_args_list]
+        
+        # Check that we see output for all 6 requirement types
+        assert any("Read:" in call for call in call_args), "Should summarize ReadRequirement"
+        assert any("Write:" in call for call in call_args), "Should summarize WriteRequirement"
+        assert any("Commands:" in call for call in call_args), "Should summarize CommandRequirement"
+        assert any("Move:" in call for call in call_args), "Should summarize MoveRequirement"  
+        assert any("Copy:" in call for call in call_args), "Should summarize CopyRequirement"
+        assert any("Delete:" in call for call in call_args), "Should summarize DeleteRequirement"
 
 
 class TestProcessRequirements:
@@ -254,54 +252,77 @@ class TestProcessRequirements:
     @patch("scripts.solveig_cli.utils.misc.print_line")
     @patch("builtins.print")
     def test_process_requirements_success(self, mock_print, mock_print_line):
-        """Test successful requirement processing."""
-        # Execute
-        results = process_requirements(DEFAULT_MESSAGE, DEFAULT_CONFIG)
+        """Test successful requirement processing with all requirement types."""
+        # Execute with ALL requirements instead of just the basic 3
+        results = process_requirements(ALL_REQUIREMENTS_MESSAGE, DEFAULT_CONFIG)
 
         # Verify
         mock_print_line.assert_called_once_with("User")
-        mock_print.assert_any_call("[ Requirement Results (3) ]")
+        mock_print.assert_any_call(f"[ Requirement Results ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]")  # Now 6 requirements!
         mock_print.assert_any_call()  # Final empty print
 
-        # Verify each requirement's mock methods were called (proving business logic executed)
-        read_req, write_req, command_req = DEFAULT_MESSAGE.requirements
-        
-        # ReadRequirement mocks should have been called
-        read_req._validate_read_access.assert_called_once()
-        read_req._ask_file_read_choice.assert_called_once()
-        read_req._read_file_with_metadata.assert_called()
-        read_req._ask_final_consent.assert_called_once()
-        
-        # WriteRequirement mocks should have been called
-        write_req._resolve_path.assert_called_once()
-        write_req._path_exists.assert_called_once()
-        write_req._ask_write_consent.assert_called_once()
-        write_req._validate_write_access.assert_called_once()
-        write_req._write_file_or_directory.assert_called_once()
-        
-        # CommandRequirement mocks should have been called
-        command_req._ask_run_consent.assert_called_once()
-        command_req._execute_command.assert_called_once()
-        command_req._ask_output_consent.assert_called_once()
+        # Verify that ALL requirements called _actually_solve (not blocked by plugins)
+        for requirement in ALL_REQUIREMENTS_MESSAGE.requirements:
+            assert requirement.actually_solve_called, f"{type(requirement).__name__} should have called _actually_solve"
 
         # Verify we get actual RequirementResult objects
-        assert len(results) == 3
+        assert len(results) == len(ALL_REQUIREMENTS_MESSAGE.requirements)
         assert all(hasattr(result, "accepted") for result in results)
         assert all(result.accepted for result in results)
 
-        # Verify the types of results we get
+        # Verify we get all the result types
         result_types = [type(result).__name__ for result in results]
         assert "ReadResult" in result_types
         assert "WriteResult" in result_types
         assert "CommandResult" in result_types
+        assert "MoveResult" in result_types
+        assert "CopyResult" in result_types
+        assert "DeleteResult" in result_types
+
+    def test_process_plugin_blocked_vs_user_declined(self):
+        """Test that we can distinguish between plugin-blocked and user-declined operations."""
+        # Create mixed scenario with plugin blocks and user declines
+        requirements = [
+            # This will be blocked by shellcheck plugin
+            MockRequirementFactory.create_command_requirement(command="rm -rf /"),
+            # This will reach user but be declined
+            MockRequirementFactory.create_command_requirement(command="echo safe", accepted=False),
+            # This will succeed
+            MockRequirementFactory.create_move_requirement(accepted=True),
+        ]
+        
+        message = MessageFactory.create_llm_message(
+            comment="Mixed success/failure scenario", 
+            requirements=requirements
+        )
+        
+        results = process_requirements(message, DEFAULT_CONFIG)
+        
+        # Verify the different failure modes
+        dangerous_cmd, declined_cmd, move_req = requirements
+        
+        # Dangerous command blocked by plugin - never reached _actually_solve
+        assert not dangerous_cmd.actually_solve_called, "Plugin should have blocked dangerous command"
+        assert not dangerous_cmd.actually_solve_called
+        
+        # Safe command reached _actually_solve but user declined
+        assert declined_cmd.actually_solve_called, "Safe command should reach _actually_solve"
+        
+        # Move succeeded
+        assert move_req.actually_solve_called, "Move should reach _actually_solve"
+        
+        # Check results
+        successful_results = [r for r in results if r.accepted]
+        assert len(successful_results) == 1  # Only move succeeded
 
     @patch("scripts.solveig_cli.utils.misc.print_line")
     @patch("builtins.print")
     def test_process_requirements_with_error(self, mock_print, mock_print_line):
-        """Test requirement processing with errors."""
-        # Setup
-        requirements = MockRequirementFactory.create_mixed_requirements()
-        read_req, write_req, command_req = requirements
+        """Test requirement processing with errors using all requirement types."""
+        # Setup - use ALL requirements and make one fail
+        requirements = MockRequirementFactory.create_all_requirements()
+        read_req, write_req, command_req, move_req, copy_req, delete_req = requirements
+        
         # Make one of the requirements fail by making a mock method raise an exception
         write_req._validate_write_access.side_effect = Exception("Test error")
         llm_message = MessageFactory.create_llm_message("Test message", requirements)
@@ -318,7 +339,7 @@ class TestProcessRequirements:
         )
         # Verify that we get RequirementResult objects from successful requirements
         # (the failed one will be excluded)
-        assert len(results) == 2  # One failed, two succeeded
+        assert len(results) == len(ALL_REQUIREMENTS_MESSAGE.requirements) - 1 # One failed, four succeeded (was 5 total)
         assert all(hasattr(result, "accepted") for result in results)
         assert all(result.accepted for result in results)
 

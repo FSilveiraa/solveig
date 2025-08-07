@@ -362,7 +362,6 @@ black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && py
 ## 📈 Roadmap
 
 **Next Steps:**
-- Additional file operations (copy, move, delete)
 - Enhanced command validation with Semgrep static analysis  
 - Second-opinion LLM validation for generated commands
 

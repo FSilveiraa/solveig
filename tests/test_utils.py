@@ -7,10 +7,15 @@ from solveig.config import APIType, SolveigConfig
 from solveig.schema.message import LLMMessage
 from solveig.schema.requirement import (
     CommandRequirement,
+    CopyRequirement,
+    DeleteRequirement,
+    MoveRequirement,
     ReadRequirement,
     WriteRequirement,
 )
-from solveig.schema.result import CommandResult, ReadResult, WriteResult
+from solveig.schema.result import (
+    CommandResult, CopyResult, DeleteResult, MoveResult, ReadResult, WriteResult
+)
 
 DEFAULT_CONFIG = SolveigConfig(
     api_type=APIType.OPENAI,
@@ -38,11 +43,30 @@ class MockRequirementMixin:
         self, *args, accepted: bool = True, **kwargs
     ):
         super().__init__(**kwargs)
+        # Add tracking for _actually_solve calls
+        self._actually_solve_call_count = 0
+        self._original_actually_solve = self._actually_solve
+        self._actually_solve = self._tracked_actually_solve
         self._setup_mocks(accepted)
+
+    def _tracked_actually_solve(self, config):
+        """Wrapper around _actually_solve to track calls."""
+        self._actually_solve_call_count += 1
+        return self._original_actually_solve(config)
 
     def _setup_mocks(self, accepted: bool = True):
         """Set up mocks for OS interaction methods. Override in subclasses."""
         pass
+
+    @property
+    def actually_solve_called(self) -> bool:
+        """Check if _actually_solve() was called (i.e., not blocked by plugins)."""
+        return self._actually_solve_call_count > 0
+
+    @property
+    def actually_solve_call_count(self) -> int:
+        """Get the number of times _actually_solve() was called."""
+        return self._actually_solve_call_count
 
 
 class MockReadRequirement(MockRequirementMixin, ReadRequirement):
@@ -94,6 +118,45 @@ class MockCommandRequirement(MockRequirementMixin, CommandRequirement):
         self._ask_output_consent = Mock(return_value=accepted)
 
 
+class MockMoveRequirement(MockRequirementMixin, MoveRequirement):
+    """MoveRequirement subclass that mocks only OS interactions."""
+
+    def _setup_mocks(self, accepted: bool = True):
+        """Set up mocks for MoveRequirement OS interactions."""
+        # Mock OS interactions
+        self._validate_move_access = Mock()
+        self._move_file_or_directory = Mock()
+        
+        # Mock user interactions - default behavior based on accepted parameter
+        self._ask_move_consent = Mock(return_value=accepted)
+
+
+class MockCopyRequirement(MockRequirementMixin, CopyRequirement):
+    """CopyRequirement subclass that mocks only OS interactions."""
+
+    def _setup_mocks(self, accepted: bool = True):
+        """Set up mocks for CopyRequirement OS interactions."""
+        # Mock OS interactions
+        self._validate_copy_access = Mock()
+        self._copy_file_or_directory = Mock()
+        
+        # Mock user interactions - default behavior based on accepted parameter
+        self._ask_copy_consent = Mock(return_value=accepted)
+
+
+class MockDeleteRequirement(MockRequirementMixin, DeleteRequirement):
+    """DeleteRequirement subclass that mocks only OS interactions."""
+
+    def _setup_mocks(self, accepted: bool = True):
+        """Set up mocks for DeleteRequirement OS interactions."""
+        # Mock OS interactions
+        self._validate_delete_access = Mock()
+        self._delete_file_or_directory = Mock()
+        
+        # Mock user interactions - default behavior based on accepted parameter
+        self._ask_delete_consent = Mock(return_value=accepted)
+
+
 class MockRequirementFactory:
     """Factory for creating requirements with mocked OS interactions."""
 
@@ -123,6 +186,29 @@ class MockRequirementFactory:
                 "comment": "After that let's see if all expected files are there",
             },
         },
+        "move": {
+            "class": MockMoveRequirement,
+            "defaults": {
+                "source_path": "/test/source.txt",
+                "dest_path": "/test/destination.txt",
+                "comment": "I need to move the source file to destination",
+            },
+        },
+        "copy": {
+            "class": MockCopyRequirement,
+            "defaults": {
+                "source_path": "/test/original.txt", 
+                "dest_path": "/test/copy.txt",
+                "comment": "I need to copy the original file",
+            },
+        },
+        "delete": {
+            "class": MockDeleteRequirement,
+            "defaults": {
+                "path": "/test/unwanted.txt",
+                "comment": "I need to delete this unwanted file",
+            },
+        },
     }
 
     @staticmethod
@@ -150,12 +236,39 @@ class MockRequirementFactory:
         return MockRequirementFactory._create_requirement("command", **kwargs)
 
     @staticmethod
+    def create_move_requirement(**kwargs):
+        """Create a MoveRequirement with mocked OS interactions."""
+        return MockRequirementFactory._create_requirement("move", **kwargs)
+
+    @staticmethod
+    def create_copy_requirement(**kwargs):
+        """Create a CopyRequirement with mocked OS interactions."""
+        return MockRequirementFactory._create_requirement("copy", **kwargs)
+
+    @staticmethod
+    def create_delete_requirement(**kwargs):
+        """Create a DeleteRequirement with mocked OS interactions."""
+        return MockRequirementFactory._create_requirement("delete", **kwargs)
+
+    @staticmethod
     def create_mixed_requirements(**kwargs):
         """Create a list of read, write, and command requirements."""
         return [
             MockRequirementFactory.create_read_requirement(**kwargs),
             MockRequirementFactory.create_write_requirement(**kwargs),
             MockRequirementFactory.create_command_requirement(**kwargs),
+        ]
+
+    @staticmethod 
+    def create_all_requirements(**kwargs):
+        """Create a list of all requirement types."""
+        return [
+            MockRequirementFactory.create_read_requirement(**kwargs),
+            MockRequirementFactory.create_write_requirement(**kwargs),
+            MockRequirementFactory.create_command_requirement(**kwargs),
+            MockRequirementFactory.create_move_requirement(**kwargs),
+            MockRequirementFactory.create_copy_requirement(**kwargs),
+            MockRequirementFactory.create_delete_requirement(**kwargs),
         ]
 
 
@@ -187,6 +300,13 @@ class MessageFactory:
 ReadResult.model_rebuild()
 WriteResult.model_rebuild()
 CommandResult.model_rebuild()
+MoveResult.model_rebuild()
+CopyResult.model_rebuild()
+DeleteResult.model_rebuild()
 
 # Single default message that works everywhere
 DEFAULT_MESSAGE = MessageFactory.create_llm_message()
+ALL_REQUIREMENTS_MESSAGE = MessageFactory.create_llm_message(
+    comment="I need to read, write, run commands, move, copy, and delete files",
+    requirements=MockRequirementFactory.create_all_requirements()
+)

@@ -15,13 +15,16 @@ from solveig.config import SolveigConfig
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import (
     CommandRequirement,
+    CopyRequirement,
+    DeleteRequirement,
+    MoveRequirement,
     ReadRequirement,
     WriteRequirement,
 )
 
 
 def summarize_requirements(message: LLMMessage):
-    reads, writes, commands = [], [], []
+    reads, writes, commands, moves, copies, deletes = [], [], [], [], [], []
     for requirement in message.requirements or []:
         if isinstance(requirement, ReadRequirement):
             reads.append(requirement)
@@ -29,6 +32,12 @@ def summarize_requirements(message: LLMMessage):
             writes.append(requirement)
         elif isinstance(requirement, CommandRequirement):
             commands.append(requirement)
+        elif isinstance(requirement, MoveRequirement):
+            moves.append(requirement)
+        elif isinstance(requirement, CopyRequirement):
+            copies.append(requirement)
+        elif isinstance(requirement, DeleteRequirement):
+            deletes.append(requirement)
 
     if reads:
         print("  Read:")
@@ -40,6 +49,21 @@ def summarize_requirements(message: LLMMessage):
     if writes:
         print("  Write:")
         for requirement in writes:
+            print(f"    {requirement.path}")
+
+    if moves:
+        print("  Move:")
+        for requirement in moves:
+            print(f"    {requirement.source_path} → {requirement.dest_path}")
+
+    if copies:
+        print("  Copy:")
+        for requirement in copies:
+            print(f"    {requirement.source_path} → {requirement.dest_path}")
+
+    if deletes:
+        print("  Delete:")
+        for requirement in deletes:
             print(f"    {requirement.path}")
 
     if commands:
