@@ -3,12 +3,18 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, field_validator
 
 from .. import SolveigConfig, plugins, utils
 from ..plugins.exceptions import PluginException, ProcessingError, ValidationError
+
+if TYPE_CHECKING:
+    from ..interface.base import RequirementPresentation
+else:
+    # Runtime import
+    from ..interface.base import RequirementPresentation
 
 if TYPE_CHECKING:
     from .result import (
@@ -42,6 +48,7 @@ class Requirement(BaseModel):
     to fill them in.
     """
 
+    title: str
     comment: str
 
     @field_validator("comment", mode="before")
@@ -70,6 +77,20 @@ class Requirement(BaseModel):
 
         return path_print_str
 
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for this requirement."""
+        return RequirementPresentation(
+            title=getattr(
+                self,
+                "title",
+                self.__class__.__name__.replace("Requirement", "").strip(),
+            ),
+            comment=self.comment,
+            details=[],
+            warnings=None,
+            content_preview=None,
+        )
+
     def _print(self, config):
         """
         Example:
@@ -79,8 +100,13 @@ class Requirement(BaseModel):
         print(f"  [ {self.__class__.__name__.replace('Requirement', '').strip()} ]")
         print(f"    ❝ {self.comment}")
 
-    def solve(self, config):
-        self._print(config)
+    def solve(self, config, interface=None):
+        # Display requirement using interface if provided, otherwise fallback to _print
+        if interface:
+            presentation_data = self.get_presentation_data(config)
+            interface.display_requirement(presentation_data)
+        else:
+            self._print(config)
 
         # Run before hooks - they validate and can throw exceptions
         for before_hook, requirements in plugins.hooks.HOOKS.before:
@@ -134,6 +160,7 @@ class Requirement(BaseModel):
 
 
 class ReadRequirement(Requirement):
+    title: Literal["read"] = "read"
     path: str
     only_read_metadata: bool
 
@@ -143,6 +170,22 @@ class ReadRequirement(Requirement):
         if not path.strip():
             raise ValueError("Empty path")
         return path
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for read requirement."""
+        abs_path = utils.file.absolute_path(self.path)
+        is_dir = abs_path.is_dir()
+        path_info = self.get_path_info_str(
+            path=self.path, abs_path=abs_path, is_dir=is_dir
+        )
+
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[path_info],
+            warnings=None,
+            content_preview=None,
+        )
 
     def _print(self, config):
         super()._print(config)
@@ -293,9 +336,25 @@ class ReadRequirement(Requirement):
 
 
 class WriteRequirement(Requirement):
+    title: Literal["write"] = "write"
     path: str
     is_directory: bool
     content: str | None = None
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for write requirement."""
+        abs_path = utils.file.absolute_path(self.path)
+        path_info = self.get_path_info_str(
+            path=self.path, abs_path=abs_path, is_dir=self.is_directory
+        )
+
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[path_info],
+            warnings=None,
+            content_preview=self.content if self.content else None,
+        )
 
     def _print(self, config):
         super()._print(config)
@@ -396,7 +455,18 @@ class WriteRequirement(Requirement):
 
 
 class CommandRequirement(Requirement):
+    title: Literal["command"] = "command"
     command: str
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for command requirement."""
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[f"    🗲 {self.command}"],
+            warnings=None,
+            content_preview=None,
+        )
 
     def _print(self, config):
         super()._print(config)
@@ -484,8 +554,29 @@ class CommandRequirement(Requirement):
 
 
 class MoveRequirement(Requirement):
+    title: Literal["move"] = "move"
     source_path: str
     destination_path: str
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for move requirement."""
+        source_abs = utils.file.absolute_path(self.source_path)
+        dest_abs = utils.file.absolute_path(self.destination_path)
+        path_info = self.get_path_info_str(
+            path=self.source_path,
+            abs_path=str(source_abs),
+            is_dir=source_abs.is_dir(),
+            destination_path=dest_abs,
+            absolute_destination_path=dest_abs,
+        )
+
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[path_info],
+            warnings=None,
+            content_preview=None,
+        )
 
     def _print(self, config):
         super()._print(config)
@@ -572,8 +663,29 @@ class MoveRequirement(Requirement):
 
 
 class CopyRequirement(Requirement):
+    title: Literal["copy"] = "copy"
     source_path: str
     destination_path: str
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for copy requirement."""
+        source_abs = utils.file.absolute_path(self.source_path)
+        dest_abs = utils.file.absolute_path(self.destination_path)
+        path_info = self.get_path_info_str(
+            path=self.source_path,
+            abs_path=str(source_abs),
+            is_dir=source_abs.is_dir(),
+            destination_path=dest_abs,
+            absolute_destination_path=dest_abs,
+        )
+
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[path_info],
+            warnings=None,
+            content_preview=None,
+        )
 
     def _print(self, config):
         super()._print(config)
@@ -659,7 +771,24 @@ class CopyRequirement(Requirement):
 
 
 class DeleteRequirement(Requirement):
+    title: Literal["delete"] = "delete"
     path: str
+
+    def get_presentation_data(self, config) -> RequirementPresentation:
+        """Return structured presentation data for delete requirement."""
+        abs_path = utils.file.absolute_path(self.path)
+        is_dir = abs_path.is_dir() if abs_path.exists() else False
+        path_info = self.get_path_info_str(
+            path=self.path, abs_path=str(abs_path), is_dir=is_dir
+        )
+
+        return RequirementPresentation(
+            title=self.title,
+            comment=self.comment,
+            details=[path_info],
+            warnings=["    ⚠︎ This operation is permanent and cannot be undone!"],
+            content_preview=None,
+        )
 
     def _print(self, config):
         super()._print(config)

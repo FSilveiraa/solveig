@@ -3,6 +3,7 @@ Main CLI entry point for Solveig.
 """
 
 import json
+import logging
 import sys
 
 import httpx
@@ -12,6 +13,7 @@ from openai import AuthenticationError, RateLimitError
 
 from solveig import llm, system_prompt, utils
 from solveig.config import SolveigConfig
+from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import (
@@ -87,13 +89,15 @@ def initialize_conversation(config: SolveigConfig) -> tuple[Instructor, MessageH
     return client, message_history
 
 
-def get_initial_user_message(user_prompt: str | None = None) -> UserMessage:
+def get_initial_user_message(
+    user_prompt: str | None, interface: CLIInterface
+) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
-    utils.misc.print_line("User")
+    interface.display_section_header("User")
     if user_prompt:
         print(f"{utils.misc.INPUT_PROMPT}{user_prompt}")
     else:
-        user_prompt = utils.misc.prompt_user()
+        user_prompt = interface.prompt_user()
     return UserMessage(comment=user_prompt)
 
 
@@ -158,6 +162,7 @@ def send_message_to_llm_with_retry(
     message_history: MessageHistory,
     user_response: UserMessage,
     config: SolveigConfig,
+    interface: CLIInterface,
 ) -> tuple[LLMMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
@@ -169,10 +174,12 @@ def send_message_to_llm_with_retry(
 
         # Error occurred, ask if user wants to retry or provide new input
         print("[ Error ]")
-        if not utils.misc.ask_yes(
-            f"  ? Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
-        ):
-            user_response = UserMessage(comment=utils.misc.prompt_user())
+        prompt = f"  ? Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
+        retry = interface.ask_yes_no(prompt)
+
+        if not retry:
+            new_comment = interface.prompt_user()
+            user_response = UserMessage(comment=new_comment)
             message_history.add_message(user_response)
         # If they said yes to retry, the loop continues with the same user_response
 
@@ -207,46 +214,49 @@ def handle_network_error(
     print()
 
 
-def display_llm_response(llm_response: LLMMessage) -> None:
+def display_llm_response(llm_response: LLMMessage, interface: CLIInterface) -> None:
     """Display the LLM response and requirements summary."""
-    utils.misc.print_line("Assistant")
-    if llm_response.comment:
-        print(f"❝ {llm_response.comment.strip()}")
-
-    if llm_response.requirements:
-        print(f"\n[ Requirements ({ len(llm_response.requirements) }) ]")
-        summarize_requirements(llm_response)
+    interface.display_llm_response(llm_response)
 
 
-def process_requirements(llm_response: LLMMessage, config: SolveigConfig) -> list:
+def process_requirements(
+    llm_response: LLMMessage, config: SolveigConfig, interface: CLIInterface
+) -> list:
     """Process all requirements from LLM response and return results."""
     results = []
-    utils.misc.print_line("User")
     if llm_response.requirements:
-        print(f"[ Requirement Results ({ len(llm_response.requirements) }) ]")
+        interface.display_results_header(len(llm_response.requirements))
         for requirement in llm_response.requirements:
             try:
-                result = requirement.solve(config)
+                result = requirement.solve(config, interface)
                 if result:
                     results.append(result)
             except Exception as e:
-                print(e)
+                interface.display_error(str(e))
         print()
     return results
 
 
 def main_loop(config: SolveigConfig, user_prompt: str | None = None):
+    # Configure logging for instructor debug output when verbose
+    if config.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+        # Enable debug logging for instructor and openai
+        logging.getLogger("instructor").setLevel(logging.DEBUG)
+        logging.getLogger("openai").setLevel(logging.DEBUG)
+    
     # Configure plugins based on config
     filter_plugins(config)
     client, message_history = initialize_conversation(config)
+    interface = CLIInterface(config)
 
-    user_response = get_initial_user_message(user_prompt)
+    user_response = get_initial_user_message(user_prompt, interface)
     message_history.add_message(user_response)
 
     while True:
         # Send message to LLM and handle any errors
         llm_response, user_response = send_message_to_llm_with_retry(
-            client, message_history, user_response, config
+            client, message_history, user_response, config, interface
         )
 
         if llm_response is None:
@@ -255,11 +265,11 @@ def main_loop(config: SolveigConfig, user_prompt: str | None = None):
 
         # Successfully got LLM response
         message_history.add_message(llm_response)
-        display_llm_response(llm_response)
+        display_llm_response(llm_response, interface)
 
         # Process requirements and get next user input
-        results = process_requirements(llm_response, config)
-        user_response = UserMessage(comment=utils.misc.prompt_user(), results=results)
+        results = process_requirements(llm_response, config, interface)
+        user_response = UserMessage(comment=interface.prompt_user(), results=results)
         message_history.add_message(user_response)
 
 

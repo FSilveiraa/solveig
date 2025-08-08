@@ -14,6 +14,7 @@ from scripts.solveig_cli import (
     send_message_to_llm,
     summarize_requirements,
 )
+from solveig.interface.cli import CLIInterface
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from tests.test_utils import (
     ALL_REQUIREMENTS_MESSAGE,
@@ -100,10 +101,11 @@ class TestGetInitialUserMessage:
         mock_prompt_user.side_effect = Exception("Should not be called")
 
         # Execute
-        message = get_initial_user_message(test_prompt)
+        mock_interface = Mock(spec=CLIInterface)
+        message = get_initial_user_message(test_prompt, mock_interface)
 
         # Verify
-        mock_print_line.assert_called_once_with("User")
+        mock_interface.display_section_header.assert_called_once_with("User")
         mock_print.assert_called_once_with(
             f"{solveig.utils.misc.INPUT_PROMPT}{test_prompt}"
         )
@@ -121,11 +123,13 @@ class TestGetInitialUserMessage:
         mock_prompt_user.return_value = test_prompt
 
         # Execute
-        message = get_initial_user_message(None)
+        mock_interface = Mock(spec=CLIInterface)
+        mock_interface.prompt_user.return_value = test_prompt
+        message = get_initial_user_message(None, mock_interface)
 
         # Verify
-        mock_print_line.assert_called_once_with("User")
-        mock_prompt_user.assert_called_once()
+        mock_interface.display_section_header.assert_called_once_with("User")
+        mock_interface.prompt_user.assert_called_once()
         assert isinstance(message, UserMessage)
         assert message.comment == test_prompt
 
@@ -198,15 +202,13 @@ class TestDisplayLLMResponse:
     ):
         """Test displaying LLM response with all requirement types."""
         # Execute with comprehensive requirements
-        display_llm_response(ALL_REQUIREMENTS_MESSAGE)
+        mock_interface = Mock(spec=CLIInterface)
+        display_llm_response(ALL_REQUIREMENTS_MESSAGE, mock_interface)
 
         # Verify
-        mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_any_call("❝ " + ALL_REQUIREMENTS_MESSAGE.comment)
-        mock_print.assert_any_call(
-            f"\n[ Requirements ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]"
+        mock_interface.display_llm_response.assert_called_once_with(
+            ALL_REQUIREMENTS_MESSAGE
         )
-        mock_summarize.assert_called_once_with(ALL_REQUIREMENTS_MESSAGE)
 
     @patch("scripts.solveig_cli.utils.misc.print_line")
     @patch("builtins.print")
@@ -217,11 +219,11 @@ class TestDisplayLLMResponse:
         llm_message = LLMMessage(comment=comment)
 
         # Execute
-        display_llm_response(llm_message)
+        mock_interface = Mock(spec=CLIInterface)
+        display_llm_response(llm_message, mock_interface)
 
         # Verify
-        mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_called_once_with("❝ " + comment)
+        mock_interface.display_llm_response.assert_called_once_with(llm_message)
 
 
 class TestSummarizeRequirements:
@@ -265,14 +267,15 @@ class TestProcessRequirements:
     def test_process_requirements_success(self, mock_print, mock_print_line):
         """Test successful requirement processing with all requirement types."""
         # Execute with ALL requirements instead of just the basic 3
-        results = process_requirements(ALL_REQUIREMENTS_MESSAGE, DEFAULT_CONFIG)
+        mock_interface = Mock(spec=CLIInterface)
+        results = process_requirements(
+            ALL_REQUIREMENTS_MESSAGE, DEFAULT_CONFIG, mock_interface
+        )
 
         # Verify
-        mock_print_line.assert_called_once_with("User")
-        mock_print.assert_any_call(
-            f"[ Requirement Results ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]"
-        )  # Now 6 requirements!
-        mock_print.assert_any_call()  # Final empty print
+        mock_interface.display_results_header.assert_called_once_with(
+            len(ALL_REQUIREMENTS_MESSAGE.requirements)
+        )
 
         # Verify that ALL requirements called _actually_solve (not blocked by plugins)
         for requirement in ALL_REQUIREMENTS_MESSAGE.requirements:
@@ -312,7 +315,8 @@ class TestProcessRequirements:
             comment="Mixed success/failure scenario", requirements=requirements
         )
 
-        results = process_requirements(message, DEFAULT_CONFIG)
+        mock_interface = Mock(spec=CLIInterface)
+        results = process_requirements(message, DEFAULT_CONFIG, mock_interface)
 
         # Verify the different failure modes
         dangerous_cmd, declined_cmd, move_req = requirements
@@ -348,15 +352,12 @@ class TestProcessRequirements:
         llm_message = MessageFactory.create_llm_message("Test message", requirements)
 
         # Execute
-        results = process_requirements(llm_message, DEFAULT_CONFIG)
+        mock_interface = Mock(spec=CLIInterface)
+        results = process_requirements(llm_message, DEFAULT_CONFIG, mock_interface)
 
         # Verify error was printed and processing continued
-        # The actual exception object is printed, so we need to check it was called with any exception
-        print_calls = [call[0][0] for call in mock_print.call_args_list if call[0]]
-        assert any(
-            isinstance(call, Exception) and str(call) == "Test error"
-            for call in print_calls
-        )
+        # The actual exception object is printed via interface, so check display_error was called
+        mock_interface.display_error.assert_called()
         # Verify that we get RequirementResult objects from successful requirements
         # (the failed one will be excluded)
         assert (
@@ -372,10 +373,12 @@ class TestProcessRequirements:
         llm_response = LLMMessage(comment="To get across the road!")
 
         # Execute
-        results = process_requirements(llm_response, DEFAULT_CONFIG)
+        mock_interface = Mock(spec=CLIInterface)
+        results = process_requirements(llm_response, DEFAULT_CONFIG, mock_interface)
 
         # Verify
-        mock_print_line.assert_called_once_with("User")
+        # When no requirements exist, display_results_header should not be called
+        mock_interface.display_results_header.assert_not_called()
         assert results == []
 
 

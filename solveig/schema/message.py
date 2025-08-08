@@ -1,9 +1,9 @@
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, Annotated, Union
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 
 from .. import utils
 from .requirement import (
@@ -68,13 +68,22 @@ class UserMessage(BaseMessage):
 # - or a response with the final answer
 class LLMMessage(BaseMessage):
     requirements: (
+        # Magic semantics explained
+        # Means that, if 2 requirements have the same JSON structure like
+        # copy and move (comment, title, source, destination), the `title`
+        # field is used to disambiguate them
         list[
-            ReadRequirement
-            | WriteRequirement
-            | CommandRequirement
-            | MoveRequirement
-            | CopyRequirement
-            | DeleteRequirement
+            Annotated[
+                Union[
+                    ReadRequirement
+                    | WriteRequirement
+                    | CommandRequirement
+                    | MoveRequirement
+                    | CopyRequirement
+                    | DeleteRequirement
+                ],
+                Field(discriminator="title")
+            ]
         ]
         | None
     ) = None
@@ -136,11 +145,6 @@ class MessageHistory:
 
     def to_openai(self):
         return [ self.system_prompt] + self.message_cache
-        history = []
-        if self.system_prompt:
-            history.append({"role": "system", "content": self.system_prompt})
-        history.extend(message.to_openai() for message in self.messages)
-        return history + self.message_cache
 
     def to_example(self):
         return "\n".join(message.to_example() for message in self.messages)
