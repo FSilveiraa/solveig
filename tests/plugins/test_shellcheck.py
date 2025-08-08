@@ -7,9 +7,8 @@ from unittest.mock import Mock, patch
 
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from tests.test_utils import (
+from tests.utils.mocks import (
     DEFAULT_CONFIG,
-    MockCommandRequirement,
     MockRequirementFactory,
 )
 
@@ -105,7 +104,7 @@ class TestShellcheckPlugin:
             stdout=f"[{mock_issues[0]}, {mock_issues[1]}]".replace("'", '"'),
             stderr="",
         )
-        req: MockCommandRequirement = MockRequirementFactory.create_command_requirement(
+        req = MockRequirementFactory.create_command_requirement(
             comment="Test", command="echo $UNQUOTED_VAR"
         )
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_utils import DEFAULT_CONFIG, MockRequirementFactory
+from tests.utils.mocks import DEFAULT_CONFIG, MockRequirementFactory
 
 
 class TestPathExpansion:

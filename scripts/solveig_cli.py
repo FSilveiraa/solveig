@@ -13,6 +13,7 @@ from openai import AuthenticationError, RateLimitError
 
 from solveig import llm, system_prompt, utils
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
@@ -95,9 +96,9 @@ def get_initial_user_message(
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section_header("User")
     if user_prompt:
-        print(f"{utils.misc.INPUT_PROMPT}{user_prompt}")
+        interface.show(f"{utils.misc.INPUT_PROMPT}{user_prompt}")
     else:
-        user_prompt = interface.prompt_user()
+        user_prompt = interface.ask_user()
     return UserMessage(comment=user_prompt)
 
 
@@ -162,7 +163,7 @@ def send_message_to_llm_with_retry(
     message_history: MessageHistory,
     user_response: UserMessage,
     config: SolveigConfig,
-    interface: CLIInterface,
+    interface: SolveigInterface,
 ) -> tuple[LLMMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
@@ -178,7 +179,7 @@ def send_message_to_llm_with_retry(
         retry = interface.ask_yes_no(prompt)
 
         if not retry:
-            new_comment = interface.prompt_user()
+            new_comment = interface.ask_user()
             user_response = UserMessage(comment=new_comment)
             message_history.add_message(user_response)
         # If they said yes to retry, the loop continues with the same user_response
@@ -269,7 +270,7 @@ def main_loop(config: SolveigConfig, user_prompt: str | None = None):
 
         # Process requirements and get next user input
         results = process_requirements(llm_response, config, interface)
-        user_response = UserMessage(comment=interface.prompt_user(), results=results)
+        user_response = UserMessage(comment=interface.ask_user(), results=results)
         message_history.add_message(user_response)
 
 

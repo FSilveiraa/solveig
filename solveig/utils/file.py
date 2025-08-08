@@ -108,6 +108,16 @@ def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
         return (read_file_as_base64(path), "base64")
 
 
+# def _resolve_and_validate_path(path: str) -> Path:
+#     """
+#     Basic path validation, raises FileNotFoundError if path does not exist.
+#     """
+#     abs_path = Path(path).expanduser().resolve()
+#     if not abs_path.exists():
+#         raise FileNotFoundError("This path doesn't exist")
+#     return abs_path
+
+
 def validate_read_access(file_path: str | Path) -> None:
     """
     Validate that a file/directory can be read.
@@ -120,6 +130,16 @@ def validate_read_access(file_path: str | Path) -> None:
 
     if not os.access(abs_path, os.R_OK):
         raise PermissionError(f"Permission denied: Cannot read '{abs_path}'")
+
+
+# def validate_write_access(file_path: str | Path) -> None:
+#     """
+#     Validate that a file/directory can be written.
+#     Raises appropriate exceptions if validation fails.
+#     """
+#     abs_path = _resolve_and_validate_path(file_path)
+#     if not os.access(abs_path, os.W_OK):
+#         raise PermissionError(f"Permission denied: Cannot write '{abs_path}'")
 
 
 def read_file_with_metadata(

@@ -7,10 +7,9 @@ from solveig.plugins import hooks
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.test_utils import (
+from tests.utils.mocks import (
     DEFAULT_CONFIG,
     MockRequirementFactory,
-    MockRequirementMixin,
 )
 
 
@@ -206,7 +205,7 @@ class TestPluginHookSystem:
         # Setup
         called = []
 
-        def get_requirement_name(requirement: MockRequirementMixin) -> str:
+        def get_requirement_name(requirement) -> str:
             return f"universal_{type(requirement).__name__}"
 
         @hooks.before()  # No schema filter

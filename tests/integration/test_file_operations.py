@@ -15,19 +15,21 @@ from solveig.schema.requirement import (
     ReadRequirement,
     WriteRequirement,
 )
-from tests.test_utils import DEFAULT_CONFIG
+from tests.utils.mocks import DEFAULT_CONFIG, MockInterface
 
 
 class TestReadRequirementIntegration:
     """Integration tests for ReadRequirement with real files."""
 
     def test_read_file_with_tilde_path(self):
-        """Test reading a file using tilde path expansion."""
+        """Test reading a file using tilde path expansion. ! This test performs actual file operations !"""
         # Create a test file in user's home directory
         home_test_dir = Path.home() / ".solveig_test_temp"
         home_test_dir.mkdir(exist_ok=True)
         test_file = home_test_dir / "integration_test.txt"
         test_content = "Hello from integration test!"
+        mock_interface = MockInterface()
+        mock_interface.user_inputs.extend(["yes", "Yes"])
 
         try:
             test_file.write_text(test_content)
@@ -39,13 +41,8 @@ class TestReadRequirementIntegration:
                 comment="Integration test read",
             )
 
-            # Mock user consent (but let real file operations happen)
-            with (
-                patch.object(req, "_ask_file_read_choice", return_value="y"),
-                patch.object(req, "_ask_final_consent", return_value=True),
-            ):
-
-                result = req._actually_solve(DEFAULT_CONFIG)
+            # Mock user consent by consenting to all file operations, but let real file operations happen
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify result
             assert result.accepted
@@ -70,6 +67,10 @@ class TestReadRequirementIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
+            # Create a mock interface that accepts reading the directory
+            mock_interface = MockInterface()
+            mock_interface.user_inputs.append("y")
+
             # Create test files
             (temp_path / "file1.txt").write_text("Content 1")
             (temp_path / "file2.py").write_text("print('hello')")
@@ -81,8 +82,7 @@ class TestReadRequirementIntegration:
                 path=str(temp_path), only_read_metadata=True, comment="Read directory"
             )
 
-            with patch.object(req, "_ask_directory_consent", return_value=True):
-                result = req._actually_solve(DEFAULT_CONFIG)
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory listing
             assert result.accepted
@@ -94,6 +94,8 @@ class TestReadRequirementIntegration:
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
+            # The nested file should not be in the listing
+            assert "nested.txt" not in filenames
 
     def test_read_nonexistent_file(self):
         """Test reading a file that doesn't exist."""
@@ -102,8 +104,9 @@ class TestReadRequirementIntegration:
             only_read_metadata=False,
             comment="Read missing file",
         )
+        mock_interface = MockInterface()
 
-        result = req._actually_solve(DEFAULT_CONFIG)
+        result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
         # Should fail gracefully
         assert not result.accepted
@@ -130,8 +133,9 @@ class TestReadRequirementIntegration:
                     only_read_metadata=False,
                     comment="Read restricted file",
                 )
+                mock_interface = MockInterface()
 
-                result = req._actually_solve(DEFAULT_CONFIG)
+                result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
                 # Should fail gracefully
                 assert not result.accepted
@@ -159,9 +163,11 @@ class TestWriteRequirementIntegration:
                 content=test_content,
                 comment="Create new file",
             )
+            mock_interface = MockInterface()
+            mock_interface.user_inputs.append("y")
 
-            with patch.object(req, "_ask_write_consent", return_value=True):
-                result = req._actually_solve(DEFAULT_CONFIG)
+            # with patch.object(req, "_ask_write_consent", return_value=True):
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify write succeeded
             assert result.accepted
@@ -180,9 +186,11 @@ class TestWriteRequirementIntegration:
             req = WriteRequirement(
                 path=str(new_dir), is_directory=True, comment="Create nested directory"
             )
+            mock_interface = MockInterface()
+            mock_interface.user_inputs.append("y")
 
-            with patch.object(req, "_ask_write_consent", return_value=True):
-                result = req._actually_solve(DEFAULT_CONFIG)
+            # with patch.object(req, "_ask_write_consent", return_value=True):
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory creation
             assert result.accepted
@@ -202,21 +210,23 @@ class TestWriteRequirementIntegration:
                 content="New content",
                 comment="Overwrite file",
             )
+            mock_interface = MockInterface()
+            mock_interface.user_inputs.append("y")
 
-            with (
-                patch.object(req, "_ask_write_consent", return_value=True),
-                patch("builtins.print") as mock_print,
-            ):
+            # with (
+            #     patch.object(req, "_ask_write_consent", return_value=True),
+            #     patch("builtins.print") as mock_print,
+            # ):
 
-                result = req._actually_solve(DEFAULT_CONFIG)
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=MockInterface())
 
             # Should warn about existing path
             warning_calls = [
+
                 call
-                for call in mock_print.call_args_list
-                if call[0]
-                and any(
-                    sig in str(call[0][0]).lower()
+                for call in mock_interface.outputs
+                if any(
+                    sig in call.lower()
                     for sig in {"warning", "⚠︎", "already exists"}
                 )
             ]
@@ -246,9 +256,11 @@ class TestMoveRequirementIntegration:
                 destination_path=str(dest_file),
                 comment="Move file",
             )
+            mock_interface = MockInterface()
+            mock_interface.user_inputs.append("y")
 
-            with patch.object(req, "_ask_move_consent", return_value=True):
-                result = req._actually_solve(DEFAULT_CONFIG)
+            # with patch.object(req, "_ask_move_consent", return_value=True):
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify move succeeded
             assert result.accepted

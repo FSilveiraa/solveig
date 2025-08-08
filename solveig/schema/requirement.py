@@ -12,7 +12,7 @@ from .. import SolveigConfig, plugins, utils
 from ..plugins.exceptions import PluginException, ProcessingError, ValidationError
 
 if TYPE_CHECKING:
-    from ..interface.base import RequirementPresentation
+    from ..interface.base import RequirementPresentation, SolveigInterface
 else:
     # Runtime import
     from ..interface.base import RequirementPresentation
@@ -89,25 +89,25 @@ class Requirement(BaseModel, ABC):
             comment=self.comment,
             details=[],
             warnings=None,
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        """
-        Example:
-          [ Move ]
-            ⸙ Move ~/run.sh to ~/run2.sh to rename the file
-        """
-        print(f"  [ {self.__class__.__name__.replace('Requirement', '').strip()} ]")
-        print(f"    ❝ {self.comment}")
+    # def _print(self, config):
+    #     """
+    #     Example:
+    #       [ Move ]
+    #         ⸙ Move ~/run.sh to ~/run2.sh to rename the file
+    #     """
+    #     print(f"  [ {self.__class__.__name__.replace('Requirement', '').strip()} ]")
+    #     print(f"    ❝ {self.comment}")
 
-    def solve(self, config, interface=None):
-        # Display requirement using interface if provided, otherwise fallback to _print
+    def solve(self, config: SolveigConfig, interface: SolveigInterface | None = None):
+        # Display requirement using interface if provided
         if interface:
             presentation_data = self.get_presentation_data(config)
             interface.display_requirement(presentation_data)
-        else:
-            self._print(config)
+        # else:
+        #     self._print(config)
 
         # Run before hooks - they validate and can throw exceptions
         for before_hook, requirements in plugins.hooks.HOOKS.before:
@@ -128,7 +128,7 @@ class Requirement(BaseModel, ABC):
                     )
 
         # Run the actual requirement solving
-        result = self._actually_solve(config)
+        result = self._actually_solve(config, interface)
 
         # Run after hooks - they can process/modify result or throw exceptions
         for after_hook, requirements in plugins.hooks.HOOKS.after:
@@ -151,7 +151,7 @@ class Requirement(BaseModel, ABC):
         return result
 
     @abstractmethod
-    def _actually_solve(self, config) -> RequirementResult:
+    def _actually_solve(self, config, interface: SolveigInterface) -> RequirementResult:
         """Solve yourself as a requirement following the config"""
         pass
 
@@ -188,14 +188,14 @@ class ReadRequirement(Requirement):
             comment=self.comment,
             details=[path_info],
             warnings=None,
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        abs_path = utils.file.absolute_path(self.path)
-        is_dir = abs_path.is_dir()
-        print(self.get_path_info_str(path=self.path, abs_path=abs_path, is_dir=is_dir))
+    # def _print(self, config):
+    #     super()._print(config)
+    #     abs_path = utils.file.absolute_path(self.path)
+    #     is_dir = abs_path.is_dir()
+    #     print(self.get_path_info_str(path=self.path, abs_path=abs_path, is_dir=is_dir))
 
     def _create_error_result(self, error_message: str, accepted: bool) -> ReadResult:
         """Create ReadResult with error."""
@@ -206,7 +206,7 @@ class ReadRequirement(Requirement):
             error=error_message,
         )
 
-    def _validate_read_access(self, path: str | Path) -> None:
+    def _validate_file_access(self, path: str | Path) -> None:
         """Validate read access to path (OS interaction - can be mocked)."""
         utils.file.validate_read_access(path)
 
@@ -216,44 +216,44 @@ class ReadRequirement(Requirement):
         """Read file with metadata (OS interaction - can be mocked)."""
         return utils.file.read_file_with_metadata(path, include_content=include_content)
 
-    def _ask_directory_consent(self) -> bool:
-        """Ask user consent for directory reading (user interaction - can be mocked)."""
-        return utils.misc.ask_yes(
-            "    ? Allow reading directory listing and metadata? [y/N]: "
-        )
+    # def _ask_directory_consent(self, interface: SolveigInterface) -> bool:
+    #     """Ask user consent for directory reading (user interaction - can be mocked)."""
+    #     return interface.ask_directory_consent(
+    #         "     "
+    #     )
 
-    def _ask_file_read_choice(self) -> str:
-        """Ask user what type of file read to perform (user interaction - can be mocked)."""
-        return (
-            input(
-                "    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: "
-            )
-            .strip()
-            .lower()
-        )
+    # def _ask_file_read_choice(self) -> str:
+    #     """Ask user what type of file read to perform (user interaction - can be mocked)."""
+    #     return (
+    #         input(
+    #             "    ? Allow reading file? [y=content+metadata / m=metadata / N=skip]: "
+    #         )
+    #         .strip()
+    #         .lower()
+    #     )
+    #
+    # def _ask_final_consent(self, has_content: bool) -> bool:
+    #     """Ask final consent to send data (user interaction - can be mocked)."""
+    #     return utils.misc.ask_yes(
+    #         f"    ? Allow sending {'file content and ' if has_content else ''}metadata? [y/N]: "
+    #     )
 
-    def _ask_final_consent(self, has_content: bool) -> bool:
-        """Ask final consent to send data (user interaction - can be mocked)."""
-        return utils.misc.ask_yes(
-            f"    ? Allow sending {'file content and ' if has_content else ''}metadata? [y/N]: "
-        )
-
-    def _actually_solve(self, config) -> ReadResult:
+    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> ReadResult:
         abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir()
 
         # Pre-flight validation
         try:
-            self._validate_read_access(abs_path)
+            self._validate_file_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
-            print(f"    ✖ Skipping - {e}")
+            print(f"Skipping - {e}")
             return ReadResult(
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
 
         # Handle user interaction for different read types
         if is_dir:
-            if self._ask_directory_consent():
+            if interface.ask_yes_no("? Allow reading directory listing and metadata? [y/N]:"):
                 try:
                     file_data = self._read_file_with_metadata(
                         self.path, include_content=False
@@ -274,33 +274,25 @@ class ReadRequirement(Requirement):
         else:
             # File reading with user choices
             # TODO: print the file size here so the user can have some idea of how much data they're sending
-            choice_read_file = self._ask_file_read_choice()
-
-            if choice_read_file not in {"m", "y"}:
+            # choice_read_file = interface.ask_yes_no("? Allow reading file? [y=content+metadata / m=metadata / N=skip]: ") # self._ask_file_read_choice()
+            if not interface.ask_yes_no(
+                f"? Allow reading file {'metadata' if self.only_read_metadata else 'contents'}? [y/N]: "
+            ):
                 return ReadResult(requirement=self, path=abs_path, accepted=False)
 
             # Read metadata first
             try:
-                file_data = self._read_file_with_metadata(
-                    abs_path, include_content=False
-                )
+                file_data = self._read_file_with_metadata(abs_path, include_content=False)
             except (PermissionError, OSError) as e:
                 return ReadResult(
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
+            with interface.group("Metadata"):
+                interface.show(json.dumps(file_data["metadata"]))
 
-            print("    [ Metadata ]")
-            print(
-                utils.misc.format_output(
-                    json.dumps(file_data["metadata"]),
-                    indent=6,
-                    max_lines=config.max_output_lines,
-                    max_chars=config.max_output_size,
-                )
-            )
-
-            content = encoding = None
-            if choice_read_file == "y":
+            content = None
+            encoding = None
+            if not self.only_read_metadata:
                 # Read content
                 try:
                     file_data = self._read_file_with_metadata(
@@ -309,24 +301,23 @@ class ReadRequirement(Requirement):
                     content = file_data["content"]
                     encoding = file_data["encoding"]
                 except (PermissionError, OSError, UnicodeDecodeError) as e:
+                    interface.display_error("Failed to file contents")
                     return ReadResult(
                         requirement=self, path=abs_path, accepted=False, error=str(e)
                     )
 
-                print("    [ Content ]")
-                print(
-                    "      (Base64)"
-                    if encoding == "base64"
-                    else utils.misc.format_output(
-                        content,
-                        indent=6,
-                        max_lines=config.max_output_lines,
-                        max_chars=config.max_output_size,
-                    )
-                )
+                with interface.group("Content"):
+                    content = ("(Base64)"
+                        if encoding == "base64"
+                        else utils.misc.format_output(
+                            content,
+                            indent=6,
+                            max_lines=config.max_output_lines,
+                            max_chars=config.max_output_size,
+                        ))
+                    interface.show(content)
 
-            # Final consent check
-            if self._ask_final_consent(content is not None):
+            if interface.ask_yes_no("Allow sending {'file content and ' if has_content else ''}metadata? [y/N]: "):
                 return ReadResult(
                     requirement=self,
                     path=abs_path,
@@ -337,6 +328,55 @@ class ReadRequirement(Requirement):
                 )
             else:
                 return ReadResult(requirement=self, path=abs_path, accepted=False)
+
+            # print("    [ Metadata ]")
+            # print(
+            #     utils.misc.format_output(
+            #         json.dumps(file_data["metadata"]),
+            #         indent=6,
+            #         max_lines=config.max_output_lines,
+            #         max_chars=config.max_output_size,
+            #     )
+            # )
+            #
+            # content = encoding = None
+            # if choice_read_file == "y":
+            #     # Read content
+            #     try:
+            #         file_data = self._read_file_with_metadata(
+            #             self.path, include_content=True
+            #         )
+            #         content = file_data["content"]
+            #         encoding = file_data["encoding"]
+            #     except (PermissionError, OSError, UnicodeDecodeError) as e:
+            #         return ReadResult(
+            #             requirement=self, path=abs_path, accepted=False, error=str(e)
+            #         )
+            #
+            #     print("    [ Content ]")
+            #     print(
+            #         "      (Base64)"
+            #         if encoding == "base64"
+            #         else utils.misc.format_output(
+            #             content,
+            #             indent=6,
+            #             max_lines=config.max_output_lines,
+            #             max_chars=config.max_output_size,
+            #         )
+            #     )
+            #
+            # # Final consent check
+            # if self._ask_final_consent(content is not None):
+            #     return ReadResult(
+            #         requirement=self,
+            #         path=abs_path,
+            #         accepted=True,
+            #         metadata=file_data["metadata"],
+            #         content=content,
+            #         content_encoding=encoding,
+            #     )
+            # else:
+            #     return ReadResult(requirement=self, path=abs_path, accepted=False)
 
 
 class WriteRequirement(Requirement):
@@ -357,27 +397,27 @@ class WriteRequirement(Requirement):
             comment=self.comment,
             details=[path_info],
             warnings=None,
-            content_preview=self.content if self.content else None,
+            content=self.content if self.content else None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        abs_path = utils.file.absolute_path(self.path)
-        print(
-            self.get_path_info_str(
-                path=self.path, abs_path=abs_path, is_dir=self.is_directory
-            )
-        )
-        if self.content:
-            print("      [ Content ]")
-            formatted_content = utils.misc.format_output(
-                self.content,
-                indent=8,
-                max_lines=config.max_output_lines,
-                max_chars=config.max_output_size,
-            )
-            # TODO: make this print optional, or in a `less`-like window, or it will get messy
-            print(formatted_content)
+    # def _print(self, config):
+    #     super()._print(config)
+    #     abs_path = utils.file.absolute_path(self.path)
+    #     print(
+    #         self.get_path_info_str(
+    #             path=self.path, abs_path=abs_path, is_dir=self.is_directory
+    #         )
+    #     )
+    #     if self.content:
+    #         print("      [ Content ]")
+    #         formatted_content = utils.misc.format_output(
+    #             self.content,
+    #             indent=8,
+    #             max_lines=config.max_output_lines,
+    #             max_chars=config.max_output_size,
+    #         )
+    #         # TODO: make this print optional, or in a `less`-like window, or it will get messy
+    #         print(formatted_content)
 
     def _create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
@@ -392,11 +432,16 @@ class WriteRequirement(Requirement):
         """Check if path exists (OS interaction - can be mocked)."""
         return abs_path.exists()
 
-    def _ask_write_consent(self, operation_type: str, content_desc: str) -> bool:
-        """Ask user consent for write operation (user interaction - can be mocked)."""
-        return utils.misc.ask_yes(
-            f"    ? Allow writing {operation_type}{content_desc}? [y/N]: "
-        )
+    def _ask_write_consent(self, interface: SolveigInterface, is_dir: bool, has_content: bool) -> bool:
+        """Ask write consent."""
+        question = f"Allow writing {'directory' if is_dir else 'file'}{' and contents' if not is_dir else ''}? [y/N]: "
+        return interface.ask_yes_no(question)
+
+    # def _ask_write_consent(self, operation_type: str, content_desc: str) -> bool:
+    #     """Ask user consent for write operation (user interaction - can be mocked)."""
+    #     return utils.misc.ask_yes(
+    #         f"Allow writing {operation_type}{content_desc}? [y/N]: "
+    #     )
 
     def _validate_write_access(self, config: SolveigConfig) -> None:
         """Validate write access (OS interaction - can be mocked)."""
@@ -413,18 +458,20 @@ class WriteRequirement(Requirement):
         """Write file or directory (OS interaction - can be mocked)."""
         utils.file.write_file_or_directory(path, is_directory, content)
 
-    def _actually_solve(self, config: SolveigConfig) -> WriteResult:
+    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> WriteResult:
         abs_path = utils.file.absolute_path(self.path)
+        is_directory = abs_path.is_dir()
 
         # Show warning if path exists
         if self._path_exists(abs_path):
-            print("    ⚠︎ This path already exists")
+            interface.display_error("This path already exist")
 
         # Get user consent before attempting operation
-        operation_type = "directory" if self.is_directory else "file"
-        content_desc = " and contents" if not self.is_directory and self.content else ""
+        # operation_type = "directory" if self.is_directory else "file"
+        # content_desc = " and contents" if not self.is_directory and self.content else ""
 
-        if self._ask_write_consent(operation_type, content_desc):
+        # if self._ask_write_consent(operation_type, content_desc):
+        if self._ask_write_consent(interface, is_dir=is_directory, has_content=True if self.content else False):
             try:
                 # Validate write access first
                 self._validate_write_access(config)
@@ -435,15 +482,7 @@ class WriteRequirement(Requirement):
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
 
-            except FileExistsError as e:
-                return WriteResult(
-                    requirement=self, path=abs_path, accepted=False, error=str(e)
-                )
-            except PermissionError as e:
-                return WriteResult(
-                    requirement=self, path=abs_path, accepted=False, error=str(e)
-                )
-            except OSError as e:
+            except (FileExistsError | PermissionError | OSError) as e:
                 return WriteResult(
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
@@ -469,12 +508,12 @@ class CommandRequirement(Requirement):
             comment=self.comment,
             details=[f"    🗲 {self.command}"],
             warnings=None,
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        print(f"    🗲 {self.command}")
+    # def _print(self, config):
+    #     super()._print(config)
+    #     print(f"    🗲 {self.command}")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CommandResult:
         """Create CommandResult with error."""
@@ -503,7 +542,7 @@ class CommandRequirement(Requirement):
         """Ask user consent for sending output (user interaction - can be mocked)."""
         return utils.misc.ask_yes("    ? Allow sending output? [y/N]: ")
 
-    def _actually_solve(self, config) -> CommandResult:
+    def _actually_solve(self, config, interface: SolveigInterface) -> CommandResult:
         if self._ask_run_consent():
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
@@ -579,22 +618,22 @@ class MoveRequirement(Requirement):
             comment=self.comment,
             details=[path_info],
             warnings=None,
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        source_abs = utils.file.absolute_path(self.source_path)
-        dest_abs = utils.file.absolute_path(self.destination_path)
-        print(
-            self.get_path_info_str(
-                path=self.source_path,
-                abs_path=str(source_abs),
-                is_dir=source_abs.is_dir(),
-                destination_path=dest_abs,
-                absolute_destination_path=dest_abs,
-            )
-        )
+    # def _print(self, config):
+    #     super()._print(config)
+    #     source_abs = utils.file.absolute_path(self.source_path)
+    #     dest_abs = utils.file.absolute_path(self.destination_path)
+    #     print(
+    #         self.get_path_info_str(
+    #             path=self.source_path,
+    #             abs_path=str(source_abs),
+    #             is_dir=source_abs.is_dir(),
+    #             destination_path=dest_abs,
+    #             absolute_destination_path=dest_abs,
+    #         )
+    #     )
 
     def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
         """Create MoveResult with error."""
@@ -620,7 +659,7 @@ class MoveRequirement(Requirement):
         """Move file or directory (OS interaction - can be mocked)."""
         utils.file.move_file_or_directory(self.source_path, self.destination_path)
 
-    def _actually_solve(self, config: SolveigConfig) -> MoveResult:
+    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> MoveResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
         abs_destination_path = utils.file.absolute_path(self.destination_path)
@@ -688,22 +727,22 @@ class CopyRequirement(Requirement):
             comment=self.comment,
             details=[path_info],
             warnings=None,
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        source_abs = utils.file.absolute_path(self.source_path)
-        dest_abs = utils.file.absolute_path(self.destination_path)
-        print(
-            self.get_path_info_str(
-                path=self.source_path,
-                abs_path=str(source_abs),
-                is_dir=source_abs.is_dir(),
-                destination_path=dest_abs,
-                absolute_destination_path=dest_abs,
-            )
-        )
+    # def _print(self, config):
+    #     super()._print(config)
+    #     source_abs = utils.file.absolute_path(self.source_path)
+    #     dest_abs = utils.file.absolute_path(self.destination_path)
+    #     print(
+    #         self.get_path_info_str(
+    #             path=self.source_path,
+    #             abs_path=str(source_abs),
+    #             is_dir=source_abs.is_dir(),
+    #             destination_path=dest_abs,
+    #             absolute_destination_path=dest_abs,
+    #         )
+    #     )
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
         """Create CopyResult with error."""
@@ -729,7 +768,7 @@ class CopyRequirement(Requirement):
         """Copy file or directory (OS interaction - can be mocked)."""
         utils.file.copy_file_or_directory(self.source_path, self.destination_path)
 
-    def _actually_solve(self, config: SolveigConfig) -> CopyResult:
+    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> CopyResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
         abs_destination_path = utils.file.absolute_path(self.destination_path)
@@ -791,19 +830,19 @@ class DeleteRequirement(Requirement):
             comment=self.comment,
             details=[path_info],
             warnings=["    ⚠︎ This operation is permanent and cannot be undone!"],
-            content_preview=None,
+            content=None,
         )
 
-    def _print(self, config):
-        super()._print(config)
-        abs_path = utils.file.absolute_path(self.path)
-        is_dir = abs_path.is_dir() if abs_path.exists() else False
-        print(
-            self.get_path_info_str(
-                path=self.path, abs_path=str(abs_path), is_dir=is_dir
-            )
-        )
-        print("    ⚠︎ This operation is permanent and cannot be undone!")
+    # def _print(self, config):
+    #     super()._print(config)
+    #     abs_path = utils.file.absolute_path(self.path)
+    #     is_dir = abs_path.is_dir() if abs_path.exists() else False
+    #     print(
+    #         self.get_path_info_str(
+    #             path=self.path, abs_path=str(abs_path), is_dir=is_dir
+    #         )
+    #     )
+    #     print("    ⚠︎ This operation is permanent and cannot be undone!")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> DeleteResult:
         """Create DeleteResult with error."""
@@ -826,7 +865,7 @@ class DeleteRequirement(Requirement):
         """Delete file or directory (OS interaction - can be mocked)."""
         utils.file.delete_file_or_directory(self.path)
 
-    def _actually_solve(self, config: SolveigConfig) -> DeleteResult:
+    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> DeleteResult:
         # Pre-flight validation
         abs_path = utils.file.absolute_path(self.path)
         try:
