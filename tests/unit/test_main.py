@@ -61,7 +61,7 @@ class TestInitializeConversation:
         mock_get_prompt.assert_called_once_with(DEFAULT_CONFIG)
         assert client is mock_get_client.return_value
         assert isinstance(message_history, MessageHistory)
-        assert message_history.system_prompt == "Test system prompt"
+        assert message_history.system_prompt == {"content": "Test system prompt", "role": "system"}
 
     @patch("scripts.solveig_cli.llm.get_instructor_client")
     @patch("scripts.solveig_cli.system_prompt.get_system_prompt")
