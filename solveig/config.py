@@ -2,7 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Optional
 
 from solveig.llm import APIType
 from solveig.utils.file import parse_size_notation_into_bytes
@@ -50,7 +50,7 @@ class SolveigConfig:
     max_output_size: int = 100
     min_disk_space_left: int = parse_size_notation_into_bytes("1GiB")
     verbose: bool = False
-    plugins: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self):
         # convert API type to enum

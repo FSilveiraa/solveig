@@ -10,9 +10,9 @@ from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 from openai import AuthenticationError, RateLimitError
 
-from solveig.plugins.hooks import filter_plugins
 from solveig import llm, system_prompt, utils
 from solveig.config import SolveigConfig
+from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import (
     CommandRequirement,

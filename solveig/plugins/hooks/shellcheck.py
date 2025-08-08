@@ -27,7 +27,7 @@ def detect_shell(plugin_config) -> str:
     # Check for plugin-specific shell configuration
     if "shell" in plugin_config:
         return plugin_config["shell"]
-    
+
     # Fall back to OS detection
     if platform.system().lower() == "windows":
         return "powershell"
@@ -62,12 +62,12 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
     try:
         # Build shellcheck command with plugin configuration
         cmd = ["shellcheck", script_path, "--format=json", f"--shell={shell_name}"]
-        
+
         # Add ignore codes if configured
         ignore_codes = plugin_config.get("ignore_codes", [])
         if ignore_codes:
             cmd.extend(["--exclude", ",".join(ignore_codes)])
-        
+
         try:
             result = subprocess.run(
                 cmd,

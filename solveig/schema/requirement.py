@@ -50,7 +50,9 @@ class Requirement(BaseModel):
         return comment.strip()
 
     @staticmethod
-    def get_path_info_str(path, abs_path, is_dir, destination_path=None, absolute_destination_path=None):
+    def get_path_info_str(
+        path, abs_path, is_dir, destination_path=None, absolute_destination_path=None
+    ):
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
         # add it to the printed info
         path_print_str = f"    {'🗁' if is_dir else '🗎'} {path}"
@@ -60,7 +62,10 @@ class Requirement(BaseModel):
         # if this is a two-path operation (copy, move), print the other path too
         if destination_path:
             path_print_str += f"  →  {destination_path}"
-            if absolute_destination_path and str(absolute_destination_path) != destination_path:
+            if (
+                absolute_destination_path
+                and str(absolute_destination_path) != destination_path
+            ):
                 path_print_str += f" ({absolute_destination_path})"
 
         return path_print_str
@@ -72,7 +77,7 @@ class Requirement(BaseModel):
             ⸙ Move ~/run.sh to ~/run2.sh to rename the file
         """
         print(f"  [ {self.__class__.__name__.replace('Requirement', '').strip()} ]")
-        print(f'    ❝ {self.comment}')
+        print(f"    ❝ {self.comment}")
 
     def solve(self, config):
         self._print(config)
@@ -295,7 +300,11 @@ class WriteRequirement(Requirement):
     def _print(self, config):
         super()._print(config)
         abs_path = utils.file.absolute_path(self.path)
-        print(self.get_path_info_str(path=self.path, abs_path=abs_path, is_dir=self.is_directory))
+        print(
+            self.get_path_info_str(
+                path=self.path, abs_path=abs_path, is_dir=self.is_directory
+            )
+        )
         if self.content:
             print("      [ Content ]")
             formatted_content = utils.misc.format_output(
@@ -482,7 +491,15 @@ class MoveRequirement(Requirement):
         super()._print(config)
         source_abs = utils.file.absolute_path(self.source_path)
         dest_abs = utils.file.absolute_path(self.destination_path)
-        print(self.get_path_info_str(path=self.source_path, abs_path=str(source_abs), is_dir=source_abs.is_dir(), destination_path=dest_abs, absolute_destination_path=dest_abs))
+        print(
+            self.get_path_info_str(
+                path=self.source_path,
+                abs_path=str(source_abs),
+                is_dir=source_abs.is_dir(),
+                destination_path=dest_abs,
+                absolute_destination_path=dest_abs,
+            )
+        )
 
     def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
         """Create MoveResult with error."""
@@ -562,8 +579,15 @@ class CopyRequirement(Requirement):
         super()._print(config)
         source_abs = utils.file.absolute_path(self.source_path)
         dest_abs = utils.file.absolute_path(self.destination_path)
-        print(self.get_path_info_str(path=self.source_path, abs_path=str(source_abs), is_dir=source_abs.is_dir(),
-                        destination_path=dest_abs, absolute_destination_path=dest_abs))
+        print(
+            self.get_path_info_str(
+                path=self.source_path,
+                abs_path=str(source_abs),
+                is_dir=source_abs.is_dir(),
+                destination_path=dest_abs,
+                absolute_destination_path=dest_abs,
+            )
+        )
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
         """Create CopyResult with error."""
@@ -641,7 +665,11 @@ class DeleteRequirement(Requirement):
         super()._print(config)
         abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir() if abs_path.exists() else False
-        print(self.get_path_info_str(path=self.path, abs_path=str(abs_path), is_dir=is_dir))
+        print(
+            self.get_path_info_str(
+                path=self.path, abs_path=str(abs_path), is_dir=is_dir
+            )
+        )
         print("    ⚠︎ This operation is permanent and cannot be undone!")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> DeleteResult:
@@ -659,9 +687,7 @@ class DeleteRequirement(Requirement):
 
     def _ask_delete_consent(self) -> bool:
         """Ask user consent for delete operation (user interaction - can be mocked)."""
-        return utils.misc.ask_yes(
-            f"    ? Permanently delete '{self.path}'? [y/N]: "
-        )
+        return utils.misc.ask_yes(f"    ? Permanently delete '{self.path}'? [y/N]: ")
 
     def _delete_file_or_directory(self) -> None:
         """Delete file or directory (OS interaction - can be mocked)."""

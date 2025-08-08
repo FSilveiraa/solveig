@@ -1,7 +1,6 @@
 import importlib
 import pkgutil
 from collections.abc import Callable
-from typing import Optional, Set
 
 from solveig import SolveigConfig
 
@@ -9,7 +8,13 @@ from solveig import SolveigConfig
 class HOOKS:
     before: list[tuple[Callable, tuple[type] | None]] = []
     after: list[tuple[Callable, tuple[type] | None]] = []
-    _all_hooks: dict[str, tuple[list[tuple[Callable, tuple[type] | None]], list[tuple[Callable, tuple[type] | None]]]] = {}
+    _all_hooks: dict[
+        str,
+        tuple[
+            list[tuple[Callable, tuple[type] | None]],
+            list[tuple[Callable, tuple[type] | None]],
+        ],
+    ] = {}
 
     # __init__ is called after instantiation, __new__ is called before
     def __new__(cls, *args, **kwargs):
@@ -22,7 +27,9 @@ def _announce_register(verb, fun: Callable, requirements, plugin_name: str):
         if requirements
         else "any requirements"
     )
-    print(f"   ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}")
+    print(
+        f"   ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
+    )
 
 
 def _get_plugin_name_from_function(fun: Callable) -> str:
@@ -38,16 +45,16 @@ def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
         _announce_register("before", fun, requirements, plugin_name)
-        
+
         # Store in both active hooks and all hooks registry
         hook_entry = (fun, requirements)
         HOOKS.before.append(hook_entry)
-        
+
         # Store by plugin name for filtering
         if plugin_name not in HOOKS._all_hooks:
             HOOKS._all_hooks[plugin_name] = ([], [])
         HOOKS._all_hooks[plugin_name][0].append(hook_entry)
-        
+
         return fun
 
     return register
@@ -57,16 +64,16 @@ def after(requirements: tuple[type] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
         _announce_register("after", fun, requirements, plugin_name)
-        
+
         # Store in both active hooks and all hooks registry
         hook_entry = (fun, requirements)
         HOOKS.after.append(hook_entry)
-        
+
         # Store by plugin name for filtering
         if plugin_name not in HOOKS._all_hooks:
             HOOKS._all_hooks[plugin_name] = ([], [])
         HOOKS._all_hooks[plugin_name][1].append(hook_entry)
-        
+
         return fun
 
     return register
@@ -91,7 +98,7 @@ def load_hooks():
             try:
                 importlib.import_module(module_name)
                 # check if we actually loaded something
-                if (len(HOOKS._all_hooks) > current_count):
+                if len(HOOKS._all_hooks) > current_count:
                     print(f"   ✓ Loaded plugin file: {plugin_name}")
                 # Not an error: we could have a schema-only plugin
                 # else:
@@ -104,7 +111,7 @@ def load_hooks():
     )
 
 
-def filter_plugins(enabled_plugins: Set[str] | SolveigConfig = None):
+def filter_plugins(enabled_plugins: set[str] | SolveigConfig | None = None):
     """
     Filters currently loaded plugins according to config
 
@@ -131,9 +138,10 @@ def filter_plugins(enabled_plugins: Set[str] | SolveigConfig = None):
                 print(f"   ≫ Skipping plugin, not present in config: {plugin_name}")
 
         total_hooks = len(HOOKS.before) + len(HOOKS.after)
-        print(f"🕮  Plugin filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active")
+        print(
+            f"🕮  Plugin filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
+        )
         return
-
 
 
 # Expose only what plugin developers and the main system need
