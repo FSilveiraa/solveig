@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -39,7 +40,7 @@ else:
 
 
 # Base class for things the LLM can request
-class Requirement(BaseModel):
+class Requirement(BaseModel, ABC):
     """
     Important: all statements that have side-effects (prints, network, filesystem operations)
     must be inside separate methods that can be mocked in a MockRequirement class for tests.
@@ -149,14 +150,17 @@ class Requirement(BaseModel):
 
         return result
 
+    @abstractmethod
     def _actually_solve(self, config) -> RequirementResult:
-        raise NotImplementedError()
+        """Solve yourself as a requirement following the config"""
+        pass
 
+    @abstractmethod
     def _create_error_result(
         self, error_message: str, accepted: bool
     ) -> RequirementResult:
         """Create appropriate error result for this requirement type."""
-        raise NotImplementedError()
+        pass
 
 
 class ReadRequirement(Requirement):
