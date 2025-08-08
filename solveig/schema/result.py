@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
-
 from pydantic import BaseModel
 
 # Circular import fix:
@@ -42,6 +41,11 @@ class RequirementResult(BaseModel):
     def to_openai(self):
         data = self.model_dump()
         data.pop("requirement")
+        # convert all Paths to str when serializing
+        data = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in data.items()
+        }
         return data
 
     # def to_openai(self):

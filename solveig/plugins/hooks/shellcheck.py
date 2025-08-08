@@ -23,10 +23,12 @@ def is_obviously_dangerous(cmd: str) -> bool:
     return False
 
 
-def detect_shell(config: SolveigConfig) -> str:
-    # TODO: somewhere down the line the config needs to be able to handle plugin settings
-    # if config.shell:
-    #     return config.shell
+def detect_shell(plugin_config) -> str:
+    # Check for plugin-specific shell configuration
+    if "shell" in plugin_config:
+        return plugin_config["shell"]
+    
+    # Fall back to OS detection
     if platform.system().lower() == "windows":
         return "powershell"
     return "bash"
@@ -37,6 +39,7 @@ def detect_shell(config: SolveigConfig) -> str:
 # (tbh I have no idea if solveig itself works on anything besides Linux)
 @before(requirements=(CommandRequirement,))
 def check_command(config: SolveigConfig, requirement: CommandRequirement):
+    plugin_config = config.plugins.get("shellcheck", {})
     print("    [ Plugin: Shellcheck ]")
 
     # Check for obviously dangerous patterns first
@@ -46,7 +49,7 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
             f"Command contains dangerous pattern: {requirement.command}"
         )
 
-    shell_name = detect_shell(config)
+    shell_name = detect_shell(plugin_config)
 
     # we have to use delete=False and later os.remove(), instead of just delete=True,
     # otherwise the file won't be available on disk for an external process to access
@@ -57,9 +60,17 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
         script_path = temporary_script.name
 
     try:
+        # Build shellcheck command with plugin configuration
+        cmd = ["shellcheck", script_path, "--format=json", f"--shell={shell_name}"]
+        
+        # Add ignore codes if configured
+        ignore_codes = plugin_config.get("ignore_codes", [])
+        if ignore_codes:
+            cmd.extend(["--exclude", ",".join(ignore_codes)])
+        
         try:
             result = subprocess.run(
-                ["shellcheck", script_path, "--format=json", f"--shel={shell_name}"],
+                cmd,
                 capture_output=True,
                 text=True,
             )

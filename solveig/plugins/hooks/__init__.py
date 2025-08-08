@@ -1,30 +1,53 @@
 import importlib
 import pkgutil
 from collections.abc import Callable
+from typing import Optional, Set
+
+from solveig import SolveigConfig
 
 
 class HOOKS:
     before: list[tuple[Callable, tuple[type] | None]] = []
     after: list[tuple[Callable, tuple[type] | None]] = []
+    _all_hooks: dict[str, tuple[list[tuple[Callable, tuple[type] | None]], list[tuple[Callable, tuple[type] | None]]]] = {}
 
     # __init__ is called after instantiation, __new__ is called before
     def __new__(cls, *args, **kwargs):
         raise TypeError("HOOKS is a static registry and cannot be instantiated")
 
 
-def _announce_register(verb, fun: Callable, requirements):
+def _announce_register(verb, fun: Callable, requirements, plugin_name: str):
     req_types = (
         ", ".join([req.__name__ for req in requirements])
         if requirements
         else "any requirements"
     )
-    print(f"🔌 Registering plugin `{fun.__name__}` to run {verb} {req_types}")
+    print(f"   ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}")
+
+
+def _get_plugin_name_from_function(fun: Callable) -> str:
+    """Extract plugin name from function module path."""
+    module = fun.__module__
+    if ".hooks." in module:
+        # Extract plugin name from module path like 'solveig.plugins.hooks.shellcheck'
+        return module.split(".hooks.")[-1]
+    return "unknown"
 
 
 def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
-        _announce_register("before", fun, requirements)
-        HOOKS.before.append((fun, requirements))
+        plugin_name = _get_plugin_name_from_function(fun)
+        _announce_register("before", fun, requirements, plugin_name)
+        
+        # Store in both active hooks and all hooks registry
+        hook_entry = (fun, requirements)
+        HOOKS.before.append(hook_entry)
+        
+        # Store by plugin name for filtering
+        if plugin_name not in HOOKS._all_hooks:
+            HOOKS._all_hooks[plugin_name] = ([], [])
+        HOOKS._all_hooks[plugin_name][0].append(hook_entry)
+        
         return fun
 
     return register
@@ -32,8 +55,18 @@ def before(requirements: tuple[type] | None = None):
 
 def after(requirements: tuple[type] | None = None):
     def register(fun):
-        _announce_register("after", fun, requirements)
-        HOOKS.after.append((fun, requirements))
+        plugin_name = _get_plugin_name_from_function(fun)
+        _announce_register("after", fun, requirements, plugin_name)
+        
+        # Store in both active hooks and all hooks registry
+        hook_entry = (fun, requirements)
+        HOOKS.after.append(hook_entry)
+        
+        # Store by plugin name for filtering
+        if plugin_name not in HOOKS._all_hooks:
+            HOOKS._all_hooks[plugin_name] = ([], [])
+        HOOKS._all_hooks[plugin_name][1].append(hook_entry)
+        
         return fun
 
     return register
@@ -43,29 +76,65 @@ def after(requirements: tuple[type] | None = None):
 # that uses @before/@after decorators will be automatically registered
 def load_hooks():
     """
-    Discover and load all plugin files in the hooks directory.
-    Any Python file that uses @before/@after decorators will auto-register.
+    Discover and load plugin files in the hooks directory.
     """
-    print("🔍 Loading plugin hooks...")
-    loaded_count = 0
+    print("⌖ Loading plugin hooks...")
 
     # Iterate through modules in this package
+    total_files = 0
+    total_schema = 0
     for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
         if not is_pkg and not module_name.endswith(".__init__"):
+            total_files += 1
+            plugin_name = module_name.split(".")[-1]
+            current_count = len(HOOKS._all_hooks)
             try:
                 importlib.import_module(module_name)
-                loaded_count += 1
-                plugin_name = module_name.split(".")[-1]
-                print(f"   ✓ Loaded plugin file: {plugin_name}")
+                # check if we actually loaded something
+                if (len(HOOKS._all_hooks) > current_count):
+                    print(f"   ✓ Loaded plugin file: {plugin_name}")
+                # Not an error: we could have a schema-only plugin
+                # else:
+                #     print(f"   ✗ Plugin loaded, but failed to register: {plugin_name}: {e}")
             except Exception as e:
-                plugin_name = module_name.split(".")[-1]
                 print(f"   ✗ Failed to load plugin {plugin_name}: {e}")
 
-    total_hooks = len(HOOKS.before) + len(HOOKS.after)
     print(
-        f"🎯 Plugin loading complete: {loaded_count} files, {total_hooks} hooks registered"
+        f"🕮  Plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks, {total_schema} schema"
     )
 
 
+def filter_plugins(enabled_plugins: Set[str] | SolveigConfig = None):
+    """
+    Filters currently loaded plugins according to config
+
+    Args:
+    enabled_plugins: If provided, only activate plugins whose names are in this set.
+                    If None, loads all discovered plugins (used during schema init).
+    :return:
+    """
+
+    if enabled_plugins is not None:
+        if isinstance(enabled_plugins, SolveigConfig):
+            enabled_plugins = set(enabled_plugins.plugins.keys())
+        print(f"⌖ Filtering plugin hooks: {', '.join(sorted(enabled_plugins))}")
+        # Clear current hooks and rebuild from registry
+        HOOKS.before.clear()
+        HOOKS.after.clear()
+
+        for plugin_name in HOOKS._all_hooks:
+            if plugin_name in enabled_plugins:
+                before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
+                HOOKS.before.extend(before_hooks)
+                HOOKS.after.extend(after_hooks)
+            else:
+                print(f"   ≫ Skipping plugin, not present in config: {plugin_name}")
+
+        total_hooks = len(HOOKS.before) + len(HOOKS.after)
+        print(f"🕮  Plugin filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active")
+        return
+
+
+
 # Expose only what plugin developers and the main system need
-__all__ = ["HOOKS", "before", "after", "load_hooks"]
+__all__ = ["HOOKS", "before", "after", "filter_plugins"]

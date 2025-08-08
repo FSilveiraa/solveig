@@ -49,8 +49,30 @@ class Requirement(BaseModel):
     def strip_name(cls, comment):
         return comment.strip()
 
+    @staticmethod
+    def get_path_info_str(path, abs_path, is_dir, destination_path=None, absolute_destination_path=None):
+        # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
+        # add it to the printed info
+        path_print_str = f"    {'🗁' if is_dir else '🗎'} {path}"
+        if str(abs_path) != path:
+            path_print_str += f" ({abs_path})"
+
+        # if this is a two-path operation (copy, move), print the other path too
+        if destination_path:
+            path_print_str += f"  →  {destination_path}"
+            if absolute_destination_path and str(absolute_destination_path) != destination_path:
+                path_print_str += f" ({absolute_destination_path})"
+
+        return path_print_str
+
     def _print(self, config):
-        raise NotImplementedError()
+        """
+        Example:
+          [ Move ]
+            ⸙ Move ~/run.sh to ~/run2.sh to rename the file
+        """
+        print(f"  [ {self.__class__.__name__.replace('Requirement', '').strip()} ]")
+        print(f'    ❝ {self.comment}')
 
     def solve(self, config):
         self._print(config)
@@ -118,11 +140,10 @@ class ReadRequirement(Requirement):
         return path
 
     def _print(self, config):
+        super()._print(config)
         abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir()
-        print("  [ Read ]")
-        print(f'    comment: "{self.comment}"')
-        print(f"    path: {self.path} ({'directory' if is_dir else 'file'})")
+        print(self.get_path_info_str(path=self.path, abs_path=abs_path, is_dir=is_dir))
 
     def _create_error_result(self, error_message: str, accepted: bool) -> ReadResult:
         """Create ReadResult with error."""
@@ -173,7 +194,7 @@ class ReadRequirement(Requirement):
         try:
             self._validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
-            print(f"    Skipping - {e}")
+            print(f"    ✖ Skipping - {e}")
             return ReadResult(
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
@@ -272,13 +293,9 @@ class WriteRequirement(Requirement):
     content: str | None = None
 
     def _print(self, config):
+        super()._print(config)
         abs_path = utils.file.absolute_path(self.path)
-
-        print("  [ Write ]")
-        print(f'    comment: "{self.comment}"')
-        # TODO also list real path if it's different from the LLM's path (and also for ReadRequirement)
-        print(f"    path: {self.path} ({'directory' if self.is_directory else 'file'})")
-        print(f"    real path: {abs_path}")
+        print(self.get_path_info_str(path=self.path, abs_path=abs_path, is_dir=self.is_directory))
         if self.content:
             print("      [ Content ]")
             formatted_content = utils.misc.format_output(
@@ -329,7 +346,7 @@ class WriteRequirement(Requirement):
 
         # Show warning if path exists
         if self._path_exists(abs_path):
-            print("    ! Warning: this path already exists !")
+            print("    ⚠︎ This path already exists")
 
         # Get user consent before attempting operation
         operation_type = "directory" if self.is_directory else "file"
@@ -373,9 +390,8 @@ class CommandRequirement(Requirement):
     command: str
 
     def _print(self, config):
-        print("  [ Command ]")
-        print(f'    comment: "{self.comment}"')
-        print(f"    command: {self.command}")
+        super()._print(config)
+        print(f"    🗲 {self.command}")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CommandResult:
         """Create CommandResult with error."""
@@ -413,7 +429,7 @@ class CommandRequirement(Requirement):
                 output, error = self._execute_command(self.command)
             except Exception as e:
                 error_str = str(e)
-                print(error_str)
+                print(f"      {error_str}")
                 return CommandResult(
                     requirement=self,
                     command=self.command,
@@ -463,15 +479,10 @@ class MoveRequirement(Requirement):
     destination_path: str
 
     def _print(self, config):
+        super()._print(config)
         source_abs = utils.file.absolute_path(self.source_path)
         dest_abs = utils.file.absolute_path(self.destination_path)
-
-        print("  [ Move ]")
-        print(f'    comment: "{self.comment}"')
-        print(f"    source: {self.source_path}")
-        print(f"    real source: {source_abs}")
-        print(f"    dest: {self.destination_path}")
-        print(f"    real dest: {dest_abs}")
+        print(self.get_path_info_str(path=self.source_path, abs_path=str(source_abs), is_dir=source_abs.is_dir(), destination_path=dest_abs, absolute_destination_path=dest_abs))
 
     def _create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
         """Create MoveResult with error."""
@@ -505,7 +516,7 @@ class MoveRequirement(Requirement):
         try:
             self._validate_move_access()
         except (FileNotFoundError, PermissionError, OSError) as e:
-            print(f"    Skipping - {e}")
+            print(f"    ✖ Skipping - {e}")
             return MoveResult(
                 requirement=self,
                 accepted=False,
@@ -519,6 +530,7 @@ class MoveRequirement(Requirement):
             try:
                 # Perform the move operation
                 self._move_file_or_directory()
+                print("      ✓ Moved")
                 return MoveResult(
                     requirement=self,
                     accepted=True,
@@ -547,15 +559,11 @@ class CopyRequirement(Requirement):
     destination_path: str
 
     def _print(self, config):
+        super()._print(config)
         source_abs = utils.file.absolute_path(self.source_path)
         dest_abs = utils.file.absolute_path(self.destination_path)
-
-        print("  [ Copy ]")
-        print(f'    comment: "{self.comment}"')
-        print(f"    source: {self.source_path}")
-        print(f"    real source: {source_abs}")
-        print(f"    dest: {self.destination_path}")
-        print(f"    real dest: {dest_abs}")
+        print(self.get_path_info_str(path=self.source_path, abs_path=str(source_abs), is_dir=source_abs.is_dir(),
+                        destination_path=dest_abs, absolute_destination_path=dest_abs))
 
     def _create_error_result(self, error_message: str, accepted: bool) -> CopyResult:
         """Create CopyResult with error."""
@@ -588,7 +596,7 @@ class CopyRequirement(Requirement):
         try:
             self._validate_copy_access()
         except (FileNotFoundError, PermissionError, OSError) as e:
-            print(f"    Skipping - {e}")
+            print(f"    ✖ Skipping - {e}")
             return CopyResult(
                 requirement=self,
                 accepted=False,
@@ -602,6 +610,7 @@ class CopyRequirement(Requirement):
             try:
                 # Perform the copy operation
                 self._copy_file_or_directory()
+                print("      ✓ Copied")
                 return CopyResult(
                     requirement=self,
                     accepted=True,
@@ -629,14 +638,11 @@ class DeleteRequirement(Requirement):
     path: str
 
     def _print(self, config):
+        super()._print(config)
         abs_path = utils.file.absolute_path(self.path)
         is_dir = abs_path.is_dir() if abs_path.exists() else False
-
-        print("  [ Delete ]")
-        print(f'    comment: "{self.comment}"')
-        print(f"    path: {self.path} ({'directory' if is_dir else 'file'})")
-        print(f"    real path: {abs_path}")
-        print("    ⚠️  WARNING: This operation is permanent and cannot be undone!")
+        print(self.get_path_info_str(path=self.path, abs_path=str(abs_path), is_dir=is_dir))
+        print("    ⚠︎ This operation is permanent and cannot be undone!")
 
     def _create_error_result(self, error_message: str, accepted: bool) -> DeleteResult:
         """Create DeleteResult with error."""
@@ -654,7 +660,7 @@ class DeleteRequirement(Requirement):
     def _ask_delete_consent(self) -> bool:
         """Ask user consent for delete operation (user interaction - can be mocked)."""
         return utils.misc.ask_yes(
-            f"    ? ⚠️  PERMANENTLY DELETE '{self.path}'? This cannot be undone! [y/N]: "
+            f"    ? Permanently delete '{self.path}'? [y/N]: "
         )
 
     def _delete_file_or_directory(self) -> None:
@@ -667,7 +673,7 @@ class DeleteRequirement(Requirement):
         try:
             self._validate_delete_access()
         except (FileNotFoundError, PermissionError) as e:
-            print(f"    Skipping - {e}")
+            print(f"    ✖ Skipping - {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )

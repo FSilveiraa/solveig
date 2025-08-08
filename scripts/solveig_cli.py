@@ -10,6 +10,7 @@ from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 from openai import AuthenticationError, RateLimitError
 
+from solveig.plugins.hooks import filter_plugins
 from solveig import llm, system_prompt, utils
 from solveig.config import SolveigConfig
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
@@ -209,7 +210,8 @@ def handle_network_error(
 def display_llm_response(llm_response: LLMMessage) -> None:
     """Display the LLM response and requirements summary."""
     utils.misc.print_line("Assistant")
-    print((llm_response.comment or "").strip())
+    if llm_response.comment:
+        print(f"❝ {llm_response.comment.strip()}")
 
     if llm_response.requirements:
         print(f"\n[ Requirements ({ len(llm_response.requirements) }) ]")
@@ -234,6 +236,8 @@ def process_requirements(llm_response: LLMMessage, config: SolveigConfig) -> lis
 
 
 def main_loop(config: SolveigConfig, user_prompt: str | None = None):
+    # Configure plugins based on config
+    filter_plugins(config)
     client, message_history = initialize_conversation(config)
 
     user_response = get_initial_user_message(user_prompt)

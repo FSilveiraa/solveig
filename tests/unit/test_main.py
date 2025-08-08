@@ -202,7 +202,7 @@ class TestDisplayLLMResponse:
 
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_any_call(ALL_REQUIREMENTS_MESSAGE.comment)
+        mock_print.assert_any_call("❝ " + ALL_REQUIREMENTS_MESSAGE.comment)
         mock_print.assert_any_call(
             f"\n[ Requirements ({len(ALL_REQUIREMENTS_MESSAGE.requirements)}) ]"
         )
@@ -221,7 +221,7 @@ class TestDisplayLLMResponse:
 
         # Verify
         mock_print_line.assert_called_once_with("Assistant")
-        mock_print.assert_called_once_with(comment)
+        mock_print.assert_called_once_with("❝ " + comment)
 
 
 class TestSummarizeRequirements:

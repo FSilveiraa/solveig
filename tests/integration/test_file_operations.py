@@ -214,7 +214,7 @@ class TestWriteRequirementIntegration:
             warning_calls = [
                 call
                 for call in mock_print.call_args_list
-                if call[0] and "Warning" in str(call[0][0])
+                if call[0] and any(sig in str(call[0][0]).lower() for sig in {"warning", "⚠︎", "already exists"})
             ]
             assert len(warning_calls) > 0
 
