@@ -107,10 +107,17 @@ class MessageContainer:
 
 @dataclass
 class MessageHistory:
-    system_prompt: str | None = None
+    system_prompt: dict = None
     max_context: int = -1
     messages: list[MessageContainer] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
+
+    def __post_init__(self):
+        if isinstance(self.system_prompt, str):
+            self.system_prompt = {
+                "role": "system",
+                "content": self.system_prompt.strip()
+            }
 
     def get_token_count(self):
         count = utils.misc.count_tokens(self.system_prompt) if self.system_prompt else 0
@@ -128,6 +135,7 @@ class MessageHistory:
         self.prune_message_cache()
 
     def to_openai(self):
+        return [ self.system_prompt] + self.message_cache
         history = []
         if self.system_prompt:
             history.append({"role": "system", "content": self.system_prompt})
