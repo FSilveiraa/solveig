@@ -33,7 +33,7 @@ class TestSolveigConfig:
         config = SolveigConfig(api_type="OPENAI")
         assert config.api_type == APIType.OPENAI
 
-        config = SolveigConfig(api_type="KOBOLDCPP")
+        config = SolveigConfig(api_type="LOCAL")
         assert config.api_type == APIType.LOCAL
 
     def test_post_init_disk_space_parsing(self):
@@ -59,19 +59,21 @@ class TestSolveigConfig:
         result = SolveigConfig.parse_from_file(None)
         assert result is None
 
-    def test_parse_from_file_success(self):
+    def test_parse_from_file_success(self, mock_all_file_operations):
         """Test successful parsing from file."""
-        test_config = {"api_type": "KOBOLDCPP", "temperature": 0.7, "verbose": True}
+        test_config = {"api_type": "LOCAL", "temperature": 0.7, "verbose": True}
+        config_path = "/path/to/config.json"
+        mock_all_file_operations.add_file(config_path, json.dumps(test_config, indent=2))
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(test_config, f)
-            temp_path = f.name
+        # with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        #     json.dump(test_config, f)
+        #     temp_path = f.name
 
-        try:
-            result = SolveigConfig.parse_from_file(temp_path)
-            assert result == test_config
-        finally:
-            Path(temp_path).unlink()
+        # try:
+        result = SolveigConfig.parse_from_file(config_path)
+        assert result == test_config
+        # finally:
+        #     Path().unlink()
 
     @patch("argparse.ArgumentParser.parse_args")
     def test_parse_config_and_prompt_defaults(self, mock_parse_args):
@@ -108,7 +110,7 @@ class TestSolveigConfig:
         mock_args = Namespace(
             config="/nonexistent/config.json",
             url="http://custom-url:8080/v1",
-            api_type="KOBOLDCPP",
+            api_type="LOCAL",
             api_key="custom-key",
             model="custom-model",
             temperature=0.8,

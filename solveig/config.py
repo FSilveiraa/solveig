@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from solveig import utils
 from solveig.llm import APIType
 from solveig.utils.file import parse_size_notation_into_bytes
 
@@ -86,12 +87,17 @@ class SolveigConfig:
     def parse_from_file(cls, config_path: Path | str) -> Optional["SolveigConfig"]:
         if not config_path:
             return None
-        if not isinstance(config_path, Path):
-            config_path = Path(config_path)
-        config_path = config_path.expanduser()
-        if config_path.exists():
-            return json.loads(config_path.read_text())
-        return None
+        abs_path = utils.file.absolute_path(config_path)
+        try:
+            return json.loads(utils.file.read_file_as_text(abs_path))
+        except FileNotFoundError:
+            return None
+        # if not isinstance(config_path, Path):
+        #     config_path = Path(config_path)
+        # config_path = config_path.expanduser()
+        # if config_path.exists():
+        #     return json.loads()
+        # return None
 
     @classmethod
     def parse_config_and_prompt(cls, cli_args=None):

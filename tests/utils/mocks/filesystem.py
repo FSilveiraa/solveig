@@ -118,6 +118,20 @@ def mock_read_file(path) -> Tuple[str, str]:
     return file_data["content"], "text"
 
 
+def mock_read_file_as_text(path) -> str:
+    """Mock implementation of utils.file.read_file_as_text"""
+    abs_path = str(Path(path).resolve())
+    
+    if not mock_fs.exists(abs_path):
+        raise FileNotFoundError(f"{path} does not exist")
+    
+    file_data = mock_fs.files[abs_path]
+    if file_data["is_directory"]:
+        raise IsADirectoryError(f"{path} is a directory")
+    
+    return file_data["content"]
+
+
 def mock_validate_read_access(file_path) -> None:
     """Mock implementation of utils.file.validate_read_access"""
     abs_path = str(Path(file_path).resolve())
