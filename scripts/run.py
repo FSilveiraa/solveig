@@ -105,7 +105,7 @@ def send_message_to_llm(
     if config.verbose:
         with interface.with_group("Sending"):
         # print("[ Sending ]")
-            interface.display_text_block(json.dumps(user_response.to_openai(), text="Message", indent=2))
+            interface.display_text_block(user_response.to_openai(), title="Message")
     else:
         interface.show("(Sending)")
 

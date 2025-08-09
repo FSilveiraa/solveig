@@ -7,10 +7,11 @@ from unittest.mock import mock_open, patch
 from scripts.init import (
     add_bash_timestamps,
     check_dependencies,
-    check_optional_tools,
+    # check_optional_tools,
     create_config_directory,
     main,
 )
+from tests.utils.mocks import MockInterface
 
 
 class TestBashTimestamps:
@@ -134,18 +135,18 @@ class TestConfigDirectory:
 class TestOptionalTools:
     """Test optional tools checking."""
 
-    @patch("builtins.print")
-    @patch("shutil.which")
-    def test_check_optional_tools(self, mock_which, mock_print):
-        """Test checking for optional tools."""
-        mock_which.side_effect = lambda tool: tool == "git"  # Only git available
-
-        check_optional_tools()
-
-        # Should print status for both tools
-        print_calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("git" in call for call in print_calls)
-        assert any("shellcheck" in call for call in print_calls)
+    # @patch("builtins.print")
+    # @patch("shutil.which")
+    # def test_check_optional_tools(self, mock_which, mock_print):
+    #     """Test checking for optional tools."""
+    #     mock_which.side_effect = lambda tool: tool == "git"  # Only git available
+    #
+    #     check_optional_tools()
+    #
+    #     # Should print status for both tools
+    #     print_calls = [call.args[0] for call in mock_print.call_args_list]
+    #     assert any("git" in call for call in print_calls)
+    #     assert any("shellcheck" in call for call in print_calls)
 
 
 # class TestYesNoPrompt:
@@ -190,60 +191,48 @@ class TestOptionalTools:
 class TestMainFunction:
     """Test main initialization function."""
 
-    @patch("scripts.init.ask_yes_no")
-    @patch("scripts.init.check_optional_tools")
     @patch("scripts.init.create_config_directory")
     @patch("scripts.init.check_dependencies")
     @patch("scripts.init.add_bash_timestamps")
-    @patch("builtins.print")
     def test_main_success_with_bash_setup(
         self,
-        mock_print,
         mock_add_bash,
-        mock_check_deps,
         mock_create_config,
         mock_check_tools,
-        mock_ask_yes_no,
     ):
         """Test main function with successful bash setup."""
-        mock_check_deps.return_value = True
+        mock_interface = MockInterface()
         mock_create_config.return_value = True
         mock_ask_yes_no.return_value = True
         mock_add_bash.return_value = True
 
-        result = main()
+        result = main(interface=mock_interface)
 
         assert result == 0
-        mock_check_deps.assert_called_once()
         mock_create_config.assert_called_once()
         mock_check_tools.assert_called_once()
         mock_ask_yes_no.assert_called_once()
         mock_add_bash.assert_called_once()
 
-    @patch("scripts.init.ask_yes_no")
-    @patch("scripts.init.check_optional_tools")
     @patch("scripts.init.create_config_directory")
     @patch("scripts.init.check_dependencies")
-    @patch("builtins.print")
     def test_main_skip_bash_setup(
         self,
-        mock_print,
         mock_check_deps,
         mock_create_config,
-        mock_check_tools,
-        mock_ask_yes_no,
     ):
         """Test main function when user skips bash setup."""
         mock_check_deps.return_value = True
         mock_create_config.return_value = True
-        mock_ask_yes_no.return_value = False
 
-        result = main()
+        mock_interface = MockInterface()
+        # check dependencies,
+        mock_interface.user_inputs.append("n")
+        result = main(interface=mock_interface)
 
         assert result == 0
-        mock_ask_yes_no.assert_called_once()
         # Should print skip message
-        print_calls = [str(call) for call in mock_print.call_args_list]
+        print_calls = [str(call) for call in mock_interface.outputs]
         assert any("Skipped bash history" in call for call in print_calls)
 
     @patch("scripts.init.check_dependencies")

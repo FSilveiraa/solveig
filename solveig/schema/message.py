@@ -27,13 +27,18 @@ from .result import (
 class BaseMessage(BaseModel):
     comment: str | None
 
-    def to_openai(self) -> dict:
-        return self.model_dump()
+    def to_openai(self) -> str:
+        return json.dumps(self.model_dump())
 
     @field_validator("comment", mode="before")
     @classmethod
     def strip_name(cls, comment):
         return comment.strip()
+
+
+class SystemMessage(BaseMessage):
+    def to_openai(self):
+        return self.comment
 
 
 # The user's message will contain
@@ -53,14 +58,14 @@ class UserMessage(BaseMessage):
         | None
     ) = None
 
-    def to_openai(self) -> dict:
-        data = super().to_openai()
+    def to_openai(self) -> str:
+        data = self.model_dump()
         data["results"] = (
             [result.to_openai() for result in self.results]
             if self.results is not None
             else None
         )
-        return data
+        return json.dumps(data)
 
 
 # The LLM's response can be:
@@ -97,7 +102,7 @@ class MessageContainer:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     role: Literal["user", "assistant", "system"] = field(init=False)
 
-    def __init__(self, message: BaseMessage, role: str | None = None):
+    def __init__(self, message: BaseMessage, role: Literal["user", "assistant", "system"] | None = None):
         self.message = message
         if role:
             self.role = role
@@ -105,15 +110,15 @@ class MessageContainer:
             self.role = "user"
         elif isinstance(message, LLMMessage):
             self.role = "assistant"
-        else:
+        elif isinstance(message, SystemMessage):
             self.role = "system"
-        self.content = json.dumps(message.to_openai())
+        self.content = message.to_openai()
         self.token_count = utils.misc.count_tokens(self.content)
 
     def to_openai(self) -> dict:
         return {
             "role": self.role,
-            "content": json.dumps(self.message.to_openai()),
+            "content": self.message.to_openai(),
         }
 
     def to_example(self) -> str:
@@ -131,7 +136,7 @@ class MessageHistory:
     def __init__(self, system_prompt, max_context: int = -1, messages: list[MessageContainer] = None, message_cache: list[dict] = None):
         self.messages = messages or []
         self.message_cache = message_cache or []
-        self.add_message(BaseMessage(comment=system_prompt), role="system")
+        self.add_message(SystemMessage(comment=system_prompt), role="system")
 
     # def __post_init__(self):
     #     if isinstance(self.system_prompt, str):

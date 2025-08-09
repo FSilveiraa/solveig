@@ -2,6 +2,7 @@
 Mock file system for testing file operations without touching real files.
 """
 
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -16,6 +17,8 @@ class MockFileSystem:
     def reset(self):
         """Reset the mock file system to default test state."""
         self.files.clear()
+        # Add parent directories first
+        self.add_directory("/test")
         # Add some default test files that tests expect
         self.add_file("/test/file.txt", "test content")
         self.add_file("/test/source.txt", "source content")
@@ -44,7 +47,7 @@ class MockFileSystem:
             "listing": None
         }
     
-    def add_directory(self, path: str, listing: List[Dict[str, Any]] = None):
+    def add_directory(self, path: str, listing: List[Dict[str, Any]] = None, metadata: Dict[str, Any] = None):
         """Add a mock directory to the file system."""
         abs_path = str(Path(path).resolve())
         self.files[abs_path] = {
@@ -56,7 +59,8 @@ class MockFileSystem:
                 "mtime": "2024-01-01T00:00:00", 
                 "is_directory": True,
                 "owner": "testuser",
-                "group": "testgroup"
+                "group": "testgroup",
+                **(metadata or {})
             },
             "listing": listing or []
         }
@@ -70,6 +74,13 @@ class MockFileSystem:
         """Check if a path is a directory in the mock file system."""
         abs_path = str(Path(path).resolve())
         return self.files.get(abs_path, {}).get("is_directory", False)
+    
+    def get_content(self, path: str) -> str:
+        """Get content of a file in the mock file system."""
+        abs_path = str(Path(path).resolve())
+        if not self.exists(abs_path):
+            raise FileNotFoundError(f"File does not exist: {path}")
+        return self.files[abs_path]["content"]
 
 
 # Global mock file system instance
@@ -113,7 +124,12 @@ def mock_validate_read_access(file_path) -> None:
     
     if not mock_fs.exists(abs_path):
         raise FileNotFoundError("This path doesn't exist")
-    # Always allow read access in tests
+    
+    # Check if file has readable=False metadata (for permission testing)
+    file_data = mock_fs.files[abs_path]
+    if file_data["metadata"].get("readable") is False:
+        raise PermissionError("Cannot read this file")
+    # Otherwise allow read access
 
 
 def mock_validate_write_access(file_path, is_directory=False, content=None, min_disk_size_left=None) -> None:
@@ -207,3 +223,46 @@ def mock_delete_file_or_directory(file_path) -> None:
     
     # Delete from mock system
     del mock_fs.files[abs_path]
+
+
+# Low-level system call mocks for validation functions to use
+def mock_path_exists(self) -> bool:
+    """Mock Path.exists() to check MockFileSystem"""
+    abs_path = str(self.resolve())
+    return mock_fs.exists(abs_path)
+
+
+def mock_os_access(path, mode) -> bool:
+    """Mock os.access() to check MockFileSystem permissions"""
+    abs_path = str(Path(path).resolve())
+    if not mock_fs.exists(abs_path):
+        return False
+    
+    file_data = mock_fs.files[abs_path]
+    metadata = file_data["metadata"]
+    
+    # Check readable permission
+    if mode & os.R_OK and metadata.get("readable") is False:
+        return False
+    
+    # Check writable permission  
+    if mode & os.W_OK and metadata.get("writable") is False:
+        return False
+    
+    return True
+
+
+def mock_shutil_disk_usage(path):
+    """Mock shutil.disk_usage() for disk space testing"""
+    from collections import namedtuple
+    DiskUsage = namedtuple('DiskUsage', 'total used free')
+    
+    # Return large disk space by default, tests can override via metadata
+    abs_path = str(Path(path).resolve()) 
+    if mock_fs.exists(abs_path):
+        file_data = mock_fs.files[abs_path]
+        free_space = file_data["metadata"].get("disk_free", 1000000000)  # 1GB default
+    else:
+        free_space = 1000000000  # 1GB default
+    
+    return DiskUsage(total=2000000000, used=1000000000, free=free_space)

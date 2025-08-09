@@ -13,7 +13,7 @@ from pathlib import Path
 from solveig.interface import SolveigInterface, CLIInterface
 
 
-def add_bash_timestamps() -> bool:
+def add_bash_timestamps(interface: SolveigInterface) -> bool:
     """
     Add timestamp formatting to bash history.
 
@@ -26,29 +26,39 @@ def add_bash_timestamps() -> bool:
     bashrc_path = Path.home() / ".bashrc"
     timestamp_line = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "'
 
-    try:
-        # Check if timestamps are already configured
-        if bashrc_path.exists():
-            content = bashrc_path.read_text()
-            if "HISTTIMEFORMAT" in content:
-                print("✓ Bash history timestamps are already configured.")
+    with interface.with_group("Bash History Timestamps"):
+        interface.display_text_block(
+            "Adding timestamps to your bash history helps Solveig understand " +
+            "when you executed commands, providing better context for assistance."
+        )
+        if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
+            try:
+                # Check if timestamps are already configured
+                if bashrc_path.exists():
+                    content = bashrc_path.read_text()
+                    if "HISTTIMEFORMAT" in content:
+                        interface.show("✓ Bash history timestamps are already configured.")
+                        return True
+
+                # Add timestamp configuration
+                # file_utils.write_file_or_directory()
+                with open(bashrc_path, "a") as f:
+                    f.write("\n# Added by Solveig for better context awareness\n")
+                    f.write(f"{timestamp_line}\n")
+
+                interface.show("✓ Added bash history timestamps to ~/.bashrc")
+                interface.show("Run 'source ~/.bashrc' or restart your terminal to apply changes.")
                 return True
 
-        # Add timestamp configuration
-        with open(bashrc_path, "a") as f:
-            f.write("\n# Added by Solveig for better context awareness\n")
-            f.write(f"{timestamp_line}\n")
-
-        print("✓ Added bash history timestamps to ~/.bashrc")
-        print("  Run 'source ~/.bashrc' or restart your terminal to apply changes.")
-        return True
-
-    except Exception as e:
-        print(f"✗ Failed to add bash timestamps: {e}")
-        return False
+            except Exception as e:
+                interface.display_error(f"Failed to add bash timestamps: {e}")
+                return False
+        else:
+            interface.show("○ Skipped bash history timestamp setup.")
+            return False
 
 
-def check_dependencies() -> bool:
+def check_dependencies(interface: SolveigInterface) -> bool:
     """Check if all required dependencies are installed."""
     required_packages = [
         "distro",
@@ -60,99 +70,102 @@ def check_dependencies() -> bool:
 
     missing_packages = []
 
-    for package in required_packages:
-        try:
-            __import__(package)
-        except ImportError:
-            missing_packages.append(package)
+    with interface.with_group("Dependencies"):
+        for package in required_packages:
+            try:
+                __import__(package)
+            except ImportError:
+                missing_packages.append(package)
 
-    if missing_packages:
-        print("✗ Missing required packages:")
-        for package in missing_packages:
-            print(f"  - {package}")
-        print("\nRun: pip install -e .")
-        return False
-    else:
-        print("✓ All required dependencies are installed.")
-        return True
-
-
-def check_optional_tools() -> None:
-    """Check for optional tools that enhance Solveig's functionality."""
-    import shutil
-
-    optional_tools = {
-        "shellcheck": "Command validation (recommended for security)",
-        "git": "Version control integration",
-    }
-
-    print("\nOptional tools:")
-    for tool, description in optional_tools.items():
-        if shutil.which(tool):
-            print(f"✓ {tool} - {description}")
+        if missing_packages:
+            interface.display_error("Found missing packages")
+            with interface.with_group("Missing", count=len(missing_packages)):
+                for package in missing_packages:
+                    interface.display_error(f"{package}")
+            interface.display_error("Run: pip install -e .")
+            return False
         else:
-            print(f"○ {tool} - {description} (not found)")
+            interface.show("✓ All required dependencies are installed.")
+            return True
 
 
-def create_config_directory() -> bool:
+# def check_optional_tools(interface: SolveigInterface) -> None:
+#     """Check for optional tools that enhance Solveig's functionality."""
+#     import shutil
+#
+#     optional_tools = {
+#         "shellcheck": "Command validation (recommended for security)",
+#         "git": "Version control integration",
+#     }
+#
+#     print("\nOptional tools:")
+#     for tool, description in optional_tools.items():
+#         if shutil.which(tool):
+#             print(f"✓ {tool} - {description}")
+#         else:
+#             print(f"○ {tool} - {description} (not found)")
+
+
+def create_config_directory(interface: SolveigInterface) -> bool:
     """Create the default configuration directory."""
     config_dir = Path.home() / ".config"
 
     try:
         config_dir.mkdir(exist_ok=True)
-        print(f"✓ Configuration directory ready: {config_dir}")
+        interface.show(f"✓ Configuration directory ready: {config_dir}")
         return True
     except Exception as e:
-        print(f"✗ Failed to create config directory: {e}")
+        interface.display_error(f"Failed to create config directory: {e}")
         return False
 
 
-def main() -> int:
-    # All defaults for now
-    interface = CLIInterface()
-
+def main(interface: SolveigInterface | None = None) -> int:
     """Main initialization function."""
-    print("🛡️  Solveig Setup")
-    print("================")
-    print("Setting up your environment for secure AI-system integration.")
-    print()
+    # All defaults for now
+    interface = interface or CLIInterface()
+
+    interface.display_section("Setup")
+    interface.show("Setting up Solveig")
 
     # Check dependencies first
-    if not check_dependencies():
+    if not check_dependencies(interface):
         return 1
 
     # Create config directory
-    if not create_config_directory():
+    if not create_config_directory(interface):
         return 1
 
     # Check optional tools
-    check_optional_tools()
-    print()
+    # check_optional_tools()
+    # print()
 
     # Ask about bash history timestamps (replaces old setup.sh functionality)
-    print("Bash History Timestamps")
-    print("-" * 23)
-    print("Adding timestamps to your bash history helps Solveig understand")
-    print("when you executed commands, providing better context for assistance.")
-    print("This is the same functionality as the old setup.sh script.")
-    print()
+    add_bash_timestamps(interface)
 
-    if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
-        add_bash_timestamps()
-    else:
-        print("○ Skipped bash history timestamp setup.")
+    # if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
+    #     add_bash_timestamps(interface)
+    # else:
+    #     print("○ Skipped bash history timestamp setup.")
 
-    print()
-    print("🎉 Solveig setup complete!")
-    print()
-    print("Quick start:")
-    print("  solveig --help                    # Show available options")
-    print("  solveig 'Tell me about this dir' # Start a conversation")
-    print()
-    print("For more information, see: README.md")
+    # print()
+    interface.show("Solveig setup complete!")
+
+    quick_start_str = """
+# Run a local model:
+solveig -u "http://localhost:5001/v1" "Tell me a joke"
+
+# Run from a remote API like OpenRouter:
+solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
+    """.strip()
+    interface.display_text_block(quick_start_str, title="Quick start:")
+
+    # print("  solveig --help                    # Show available options")
+    # print("  solveig 'Tell me about this dir' # Start a conversation")
+    # print()
+    # print("For more information, see: README.md")
 
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit()

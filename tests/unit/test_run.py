@@ -1,5 +1,5 @@
 """Unit tests for scripts.run module functions."""
-
+import json
 from unittest.mock import Mock, patch
 
 from instructor.exceptions import InstructorRetryException
@@ -13,7 +13,7 @@ from scripts.run import (
     send_message_to_llm,
     # summarize_requirements,
 )
-from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
+from solveig.schema.message import LLMMessage, MessageHistory, UserMessage, BaseMessage
 from solveig.schema.requirement import CommandRequirement, MoveRequirement
 from tests.utils.mocks import (
     DEFAULT_CONFIG,
@@ -41,8 +41,8 @@ class TestInitializeConversation:
 
     @patch("scripts.run.llm.get_instructor_client")
     @patch("scripts.run.system_prompt.get_system_prompt")
-    def test_initialize_conversation(self, mock_get_prompt, mock_get_client):
-        """Test successful conversation initialization."""
+    def test_initialize_conversation_with_string(self, mock_get_prompt, mock_get_client):
+        """Test successful conversation initialization - a string system prompt should be converted to a message."""
         # Setup
         init_mock_get_client(mock_get_client)
         mock_get_prompt.return_value = "Test system prompt"
@@ -165,14 +165,13 @@ class TestSendMessageToLLM:
         mock_client.chat.completions.create.side_effect = INSTRUCTOR_RETRY_ERROR
 
         # Execute
-        with patch("builtins.print"):
-            result = send_message_to_llm(
-                config=DEFAULT_CONFIG,
-                interface=interface,
-                client=mock_client,
-                message_history=message_history,
-                user_response=user_message,
-            )
+        result = send_message_to_llm(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            client=mock_client,
+            message_history=message_history,
+            user_response=user_message,
+        )
 
         # Verify
         mock_handle_error.assert_called_once_with(

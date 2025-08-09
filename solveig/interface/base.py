@@ -110,7 +110,7 @@ class SolveigInterface(ABC):
     def display_comment(self, message: str) -> None:
         self.show(f"❝  {message}")
 
-    def display_error(self, message: str | Exception) -> None:
+    def display_error(self, message: str | Exception = None) -> None:
         self.show(f"✖  {message}")
 
     def display_warning(self, message: str) -> None:
