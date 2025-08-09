@@ -28,7 +28,7 @@ class MockInterface(CLIInterface):
         raise ValueError()
 
     def _get_max_output_width(self) -> int:
-        return -1
+        return 80
 
     def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
         """Mock implementation of display_tree - just captures the call."""

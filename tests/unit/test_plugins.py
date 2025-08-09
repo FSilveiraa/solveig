@@ -226,3 +226,153 @@ class TestPluginHookSystem:
         # Verify
         assert get_requirement_name(cmd_req) in called
         assert get_requirement_name(read_req) in called
+
+
+class TestPluginFiltering:
+    """Test plugin filtering based on configuration."""
+    
+    def setup_method(self):
+        """Store original hooks and clear for isolated testing."""
+        self.original_before = hooks.HOOKS.before[:]
+        self.original_after = hooks.HOOKS.after[:]
+        self.original_all_hooks = hooks.HOOKS._all_hooks.copy()
+        hooks.HOOKS.before.clear()
+        hooks.HOOKS.after.clear()
+        hooks.HOOKS._all_hooks.clear()
+
+    def teardown_method(self):
+        """Restore original hooks."""
+        hooks.HOOKS.before[:] = self.original_before
+        hooks.HOOKS.after[:] = self.original_after
+        hooks.HOOKS._all_hooks.clear()
+        hooks.HOOKS._all_hooks.update(self.original_all_hooks)
+    
+    def test_plugin_enabled_when_in_config(self):
+        """Test that plugins are enabled when present in config.plugins."""
+        # Setup: Create a test plugin
+        called = []
+        
+        @hooks.before(requirements=(CommandRequirement,))
+        def test_plugin_hook(config, requirement):
+            called.append("test_plugin_executed")
+            
+        # Simulate plugin registration (normally done by load_plugins)
+        hooks.HOOKS._all_hooks["test_plugin"] = ([hooks.HOOKS.before[-1]], [])
+        
+        # Create config with plugin enabled
+        config_with_plugin = SolveigConfig(
+            url="test-url",
+            api_key="test-key", 
+            plugins={"test_plugin": {}}  # Empty config but plugin is listed
+        )
+        
+        interface = MockInterface()
+        
+        # Apply filtering
+        hooks.filter_plugins(enabled_plugins=config_with_plugin, interface=interface)
+        
+        # Execute requirement
+        req = CommandRequirement(command="echo test", comment="Test")
+        interface.set_user_inputs(["n"])
+        req.solve(config_with_plugin, interface)
+        
+        # Verify plugin executed
+        assert "test_plugin_executed" in called
+    
+    def test_plugin_disabled_when_not_in_config(self):
+        """Test that plugins are disabled when not present in config.plugins."""
+        # Setup: Create a test plugin
+        called = []
+        
+        @hooks.before(requirements=(CommandRequirement,))
+        def test_plugin_hook(config, requirement):
+            called.append("test_plugin_executed")
+            
+        # Simulate plugin registration
+        hooks.HOOKS._all_hooks["test_plugin"] = ([hooks.HOOKS.before[-1]], [])
+        
+        # Create config WITHOUT plugin (empty plugins dict)
+        config_without_plugin = SolveigConfig(
+            url="test-url",
+            api_key="test-key",
+            plugins={}  # Plugin not listed, should be disabled
+        )
+        
+        interface = MockInterface()
+        
+        # Apply filtering
+        hooks.filter_plugins(enabled_plugins=config_without_plugin, interface=interface)
+        
+        # Execute requirement
+        req = CommandRequirement(command="echo test", comment="Test")
+        interface.set_user_inputs(["n"])
+        req.solve(config_without_plugin, interface)
+        
+        # Verify plugin did NOT execute
+        assert "test_plugin_executed" not in called
+        assert len(called) == 0
+    
+    def test_shellcheck_plugin_filtering(self):
+        """Test specific shellcheck plugin filtering behavior."""
+        # This tests the exact scenario from the error output
+        interface = MockInterface()
+        
+        # Config without shellcheck (default state)
+        config_no_shellcheck = SolveigConfig(
+            url="test-url", 
+            api_key="test-key",
+            plugins={}  # Shellcheck not configured
+        )
+        
+        # Load all plugins (this would register shellcheck)
+        hooks.load_plugins(interface=interface)
+        
+        # Apply filtering - should filter out shellcheck
+        hooks.filter_plugins(enabled_plugins=config_no_shellcheck, interface=interface)
+        
+        # Verify filtering message appears in output
+        output_text = " ".join(interface.outputs)
+        assert "≫ Skipping plugin, not present in config: shellcheck" in output_text
+        
+        # Verify no hooks are active
+        assert len(hooks.HOOKS.before) == 0
+        assert len(hooks.HOOKS.after) == 0
+    
+    def test_plugin_with_config_options(self):
+        """Test that plugin configuration is passed correctly."""
+        # Setup: Create a plugin that uses its config
+        received_config = []
+        
+        @hooks.before(requirements=(CommandRequirement,))
+        def configurable_plugin_hook(config, requirement):
+            plugin_config = config.plugins.get("configurable_plugin", {})
+            received_config.append(plugin_config)
+            
+        hooks.HOOKS._all_hooks["configurable_plugin"] = ([hooks.HOOKS.before[-1]], [])
+        
+        # Create config with plugin options
+        config_with_options = SolveigConfig(
+            url="test-url",
+            api_key="test-key",
+            plugins={
+                "configurable_plugin": {
+                    "option1": "value1",
+                    "option2": 42,
+                    "enabled": True
+                }
+            }
+        )
+        
+        interface = MockInterface()
+        hooks.filter_plugins(enabled_plugins=config_with_options, interface=interface)
+        
+        # Execute requirement
+        req = CommandRequirement(command="echo test", comment="Test")
+        interface.set_user_inputs(["n"])
+        req.solve(config_with_options, interface)
+        
+        # Verify plugin received its configuration
+        assert len(received_config) == 1
+        assert received_config[0]["option1"] == "value1"
+        assert received_config[0]["option2"] == 42
+        assert received_config[0]["enabled"] == True
