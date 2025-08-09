@@ -4,6 +4,7 @@ CLI implementation of Solveig interface.
 
 from collections import defaultdict
 import shutil
+from pathlib import Path
 from typing import Any
 import traceback
 
@@ -103,7 +104,11 @@ class CLIInterface(SolveigInterface):
             self.display_text_block(traceback_block, title="Error")
 
     def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None) -> None:
-        text = " | ".join([
+        text = f"{'🗁' if metadata['is_directory'] else '🗎'} {metadata["path"]}"
+        # size for directories is visual noise
+        if (metadata["is_directory"]):
+            metadata.pop("size")
+        text += " | ".join([
             f"{key}={value}"
             for key, value in metadata.items()
         ])
@@ -112,7 +117,7 @@ class CLIInterface(SolveigInterface):
             # text = f"{text}\nEntries:"
             total_entries = len(listing)
             for n, entry in enumerate(listing):
-                entry_str = f"{'🗁' if entry['is_directory'] else '🗎'} {entry['name']}"
+                entry_str = f"{'🗁' if entry['is_directory'] else '🗎'} {Path(entry["path"]).name}"
                 # └ if it's the last item, otherwise ├
                 text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
         self.display_text_block(text, title="Metadata", level=level, max_lines=max_lines)
@@ -136,6 +141,7 @@ class CLIInterface(SolveigInterface):
 
         lines = text.splitlines()
         for line_no, line in enumerate(lines):
+            # truncate number of lines
             if line_no == self.max_lines:
                 lines_missing = len(lines) - line_no
                 truncated_line = f" ({lines_missing} more...)"
@@ -144,11 +150,14 @@ class CLIInterface(SolveigInterface):
                 # self._output(f"{vertical_bar_left}...{' ' * (max_line_length-3)}{vertical_bar_right}")
                 break
 
-            truncated_line = line[0:max_line_length]
-            if len(truncated_line) > max_line_length:
-                truncated_line = f"{truncated_line[0:max_line_length - 3]}..."
+            # truncate individual line length
+            # truncated_line = line[0:max_line_length]
+            if len(line) > max_line_length:
+                # _before = truncated_line
+                truncated_line = f"{line[0:max_line_length - 3]}..."
             else:
-                truncated_line = f"{truncated_line}{' ' * (max_line_length - len(truncated_line))}"
+                truncated_line = f"{line}{' ' * (max_line_length - len(line))}"
+            # print(f"DEBUG: truncated line: {line} -> {truncated_line}")
             self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
 
         # └─────────────────────────────────────────┘
