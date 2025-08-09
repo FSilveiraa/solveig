@@ -8,7 +8,7 @@ from scripts.solveig_cli import (
     display_llm_response,
     get_initial_user_message,
     handle_llm_error,
-    initialize_conversation,
+    get_llm_client,
     process_requirements,
     send_message_to_llm,
     summarize_requirements,
@@ -48,7 +48,7 @@ class TestInitializeConversation:
         mock_get_prompt.return_value = "Test system prompt"
 
         # Execute
-        client, message_history = initialize_conversation(DEFAULT_CONFIG)
+        client, message_history = get_llm_client(DEFAULT_CONFIG)
 
         # Verify
         mock_get_client.assert_called_once_with(
@@ -73,7 +73,7 @@ class TestInitializeConversation:
         mock_get_prompt.return_value = "The quick brown fox jumps over the lazy dog"
 
         # Execute
-        initialize_conversation(VERBOSE_CONFIG)
+        get_llm_client(VERBOSE_CONFIG)
 
         # Verify verbose output
         mock_print.assert_called_with(
@@ -129,6 +129,7 @@ class TestSendMessageToLLM:
         user_message = UserMessage(comment="Test message")
         llm_response = LLMMessage(comment="Test response")
         mock_handle_error.side_effect = Exception("Should not be called")
+        mock_interface = MockInterface()
 
         # Setup mock return values BEFORE execution
         mock_client.chat.completions.create.return_value = llm_response
@@ -136,7 +137,7 @@ class TestSendMessageToLLM:
         # Execute
         with patch("builtins.print") as mock_print:
             result = send_message_to_llm(
-                mock_client, message_history, user_message, DEFAULT_CONFIG
+                DEFAULT_CONFIG, mock_interface, mock_client, message_history, user_message,
             )
 
         # Verify

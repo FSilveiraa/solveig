@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from ..schema.message import LLMMessage
 
 
-DEFAULT_YES = { "y", "yes", "true" }
 
 
 @dataclass
@@ -27,10 +26,15 @@ class RequirementPresentation:
 
 class SolveigInterface(ABC):
     """Abstract base class for all Solveig user interfaces."""
+
+    DEFAULT_INPUT_PROMPT = "> "
+    DEFAULT_YES = {"y", "yes"}
+
     
-    def __init__(self, indent_base: int = 2, be_verbose: bool = False):
+    def __init__(self, indent_base: int = 2, max_lines = 6, be_verbose: bool = False):
         self.indent_base = indent_base
         self.current_level = 0
+        self.max_lines = max_lines
         self.be_verbose = be_verbose
 
     # Implement these:
@@ -104,21 +108,43 @@ class SolveigInterface(ABC):
         finally:
             self.current_level = old_level
 
+
+
+    @abstractmethod
+    def display_text_block(self, text: str, level: int | None = None) -> None:
+        """Display a block of text."""
+        pass
+
+    def display_comment(self, message: str) -> None:
+        self.show(f"❝ {message}")
+
     def display_error(self, message: str) -> None:
         self.show(f"✖ {message}")
 
     def display_warning(self, message: str) -> None:
         self.show(f"⚠ {message}")
 
-    def ask_user(self, prompt: str) -> str:
-        """Ask user a question and get a response."""
-        return self._input(f"?︎ {prompt}")
+    # def _format_question(self, question: str) -> str:
+    #     """Utility method to format a question prompt."""
+    #     question = question.strip()
+    #     if not question.startswith("?"):
+    #         question = f"? {question}"
+    #
+    #     return f"{question} "
 
-    def ask_yes_no(self, prompt: str, yes_values=None) -> bool:
+    def ask_user(self, question: str = DEFAULT_INPUT_PROMPT, level: int | None = None) -> str:
+        """Ask user a question and get a response."""
+        indent = self._indent(level)
+        return self._input(f"{indent}? {question}")
+
+    def ask_yes_no(self, question: str, yes_values=None, auto_format: bool = True, level: int | None = None) -> bool:
         """Ask user a yes/no question."""
+        if auto_format:
+            if not "y/n" in question.lower():
+                question = f"{question.strip()} [y/N]: "
+        response = self.ask_user(question, level=level)
         if yes_values is None:
-            yes_values = DEFAULT_YES
-        response = self.ask_user(prompt)
+            yes_values = self.DEFAULT_YES
         return response.lower() in yes_values
     #
     # @abstractmethod

@@ -5,100 +5,116 @@ CLI implementation of Solveig interface.
 from collections import defaultdict
 import shutil
 
-from ..utils import misc
+# from ..utils import misc
 from .base import RequirementPresentation, SolveigInterface
 
 
-DEFAULT_INPUT_PROMPT = "Reply:\n > "
-DEFAULT_YES = { "y", "yes" }
+# DEFAULT_INPUT_PROMPT = "Reply:\n > "
+# DEFAULT_YES = { "y", "yes" }
 
 
 class CLIInterface(SolveigInterface):
     """Command-line interface implementation."""
 
+    DEFAULT_INPUT_PROMPT = "Reply:\n > "
+
+    class TEXT_BOX_CHARACTERS:
+        H = "─"
+        V = "│"
+        TL = "┌"  # top-left
+        TR = "┐"  # top-right
+        BL = "└"  # bottom-left
+        BR = "┘"  # bottom-right
+
     def _output(self, text: str) -> None:
         print(text)
+
+    def _input(self, prompt: str) -> str:
+        return input(prompt)
 
     def _get_max_output_width(self) -> int:
         return shutil.get_terminal_size((80, 20)).columns
 
-    def display_section_header(self, title: str) -> None:
-        """Display a section header using the existing print_line utility."""
-        misc.print_line(title)
+    # def display_section_header(self, title: str) -> None:
+    #     """Display a section header using the existing print_line utility."""
+    #     misc.print_line(title)
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
         """Display the LLM response and requirements summary."""
-        self.display_section_header("Assistant")
         if llm_response.comment:
-            self.show(f"❝ {llm_response.comment.strip()}")
+            self.display_comment(llm_response.comment.strip())
 
         if llm_response.requirements:
-            with self.group("[ Requirements ({len(message.requirements)}) ]"):
+            with self.group("Requirements", len(llm_response.requirements)):
                 indexed_requirements = defaultdict(list)
                 for requirement in llm_response.requirements:
                     indexed_requirements[requirement.title].append(requirement)
 
                 for requirement_type, requirements in indexed_requirements.items():
-                    with self.group(f"[{requirement_type.title()}]"):
+                    with self.group(requirement_type.title()):
                         for requirement in requirements:
                             requirement_presentation = requirement.get_presentation_data()
                             if requirement_presentation.details:
-                                self.show(requirement_presentation.details)
+                                for requirement_info in requirement_presentation.details:
+                                    self.show(requirement_info)
+                            if requirement_presentation.warnings:
+                                for warning in requirement_presentation.warnings:
+                                    self.display_warning(warning)
 
     def display_requirement(self, presentation: RequirementPresentation) -> None:
         """Display a single requirement with proper formatting."""
-        with self.group(f"{presentation.title}"):
-            self.show(f"❝ {presentation.comment}")
+        self.display_comment(presentation.comment)
 
-            # Display details (path info, etc.)
-            for detail in presentation.details:
-                self.show(detail)
+        # Display details (path info, etc.)
+        for detail in presentation.details:
+            self.show(detail)
 
-            # Display warnings if any
-            if presentation.warnings:
-                for warning in presentation.warnings:
-                    self.show(f"⚠ {warning}")
+        # Display warnings if any
+        if presentation.warnings:
+            for warning in presentation.warnings:
+                self.display_warning(warning)
 
-            # Display content preview if any
-            if presentation.content:
-                with self.group("Content"):
-                    # formatted_content = misc.format_output(
-                    #     presentation.content_preview,
-                    #     indent=8,
-                    #     max_lines=-1, #self.config.max_output_lines,
-                    #     max_chars=-1, #self.config.max_output_size,
-                    # )
-                    self.show(presentation.content)
+        # Display content preview if any
+        if presentation.content:
+            with self.group("Content"):
+                # formatted_content = misc.format_output(
+                #     presentation.content_preview,
+                #     indent=8,
+                #     max_lines=-1, #self.config.max_output_lines,
+                #     max_chars=-1, #self.config.max_output_size,
+                # )
+                self.show(presentation.content)
 
-    def display_requirements_header(self, count: int) -> None:
-        """Display header for requirements section."""
-        self.show(f"[ Requirements ({count}) ]")
+    # def display_requirements_header(self, count: int) -> None:
+    #     """Display header for requirements section."""
+    #     self.show(f"[ Requirements ({count}) ]")
 
-    def display_results_header(self, count: int) -> None:
-        """Display header for requirement results section."""
-        self.display_section_header("User")
-        self.show(f"[ Requirement Results ({count}) ]")
+    # def display_results_header(self, count: int) -> None:
+    #     """Display header for requirement results section."""
+    #     self.section("")
+    #     self.display_section_header("User")
+    #     self.show(f"[ Requirement Results ({count}) ]")
 
-    def display_error(self, message: str) -> None:
-        """Display an error message with proper formatting."""
-        self.show(f"{message}")
+    # def display_error(self, message: str) -> None:
+    #     """Display an error message with proper formatting."""
+    #     self.show(f"{message}")
 
     # def display_status(self, message: str) -> None:
     #     """Display a status message."""
     #     self.show(message)
 
-    def ask_user(self, prompt: str = DEFAULT_INPUT_PROMPT) -> str:
-        """Get text input from user."""
-        return input(prompt).strip()
+    # def ask_user(self, prompt: str = DEFAULT_INPUT_PROMPT, auto_format = True) -> str:
+    #     """Get text input from user."""
+    #     return super().ask_user(prompt, auto_format=auto_format)
 
     # def ask_yes_no(self, prompt: str) -> bool:
     #     """Ask user a yes/no question."""
     #     return misc.ask_yes(prompt)
 
-    def display_verbose_info(self, message: str) -> None:
-        """Display verbose information only if verbose mode is enabled."""
-        if self.be_verbose:
-            self.show(message)
+    # def display_verbose_info(self, message: str) -> None:
+    #     """Display verbose information only if verbose mode is enabled."""
+    #     if self.be_verbose:
+    #         self.show(message)
 
     # def _summarize_requirements(self, message: "LLMMessage") -> None:
     #     """Display requirements summary (preserves existing logic from solveig_cli.py)."""
@@ -155,3 +171,17 @@ class CLIInterface(SolveigInterface):
         #     print("  Commands:")
         #     for requirement in commands:
         #         print(f"    {requirement.command}")
+
+
+
+    def display_block(self, text: str, level: int | None = None) -> None:
+        indent = self._indent(level)
+        horizontal_bar = self.TEXT_BOX_CHARACTERS.V * (self._get_max_output_width() - len(indent))
+        self._indent(f"{indent}{horizontal_bar}")
+
+        vertical_bar = "|"
+        message_lines = text.splitlines()
+        for line in message_lines:
+            pass
+
+        self._indent(f"{indent}{horizontal_bar}")

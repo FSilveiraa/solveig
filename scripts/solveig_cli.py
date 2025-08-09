@@ -6,77 +6,67 @@ import json
 import logging
 import sys
 
-import httpx
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
-from openai import AuthenticationError, RateLimitError
 
-from solveig import llm, system_prompt, utils
+from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
-from solveig.schema.requirement import (
-    CommandRequirement,
-    CopyRequirement,
-    DeleteRequirement,
-    MoveRequirement,
-    ReadRequirement,
-    WriteRequirement,
-)
 
 
-def summarize_requirements(message: LLMMessage):
-    reads, writes, commands, moves, copies, deletes = [], [], [], [], [], []
-    for requirement in message.requirements or []:
-        if isinstance(requirement, ReadRequirement):
-            reads.append(requirement)
-        elif isinstance(requirement, WriteRequirement):
-            writes.append(requirement)
-        elif isinstance(requirement, CommandRequirement):
-            commands.append(requirement)
-        elif isinstance(requirement, MoveRequirement):
-            moves.append(requirement)
-        elif isinstance(requirement, CopyRequirement):
-            copies.append(requirement)
-        elif isinstance(requirement, DeleteRequirement):
-            deletes.append(requirement)
+# def summarize_requirements(message: LLMMessage):
+#     reads, writes, commands, moves, copies, deletes = [], [], [], [], [], []
+#     for requirement in message.requirements or []:
+#         if isinstance(requirement, ReadRequirement):
+#             reads.append(requirement)
+#         elif isinstance(requirement, WriteRequirement):
+#             writes.append(requirement)
+#         elif isinstance(requirement, CommandRequirement):
+#             commands.append(requirement)
+#         elif isinstance(requirement, MoveRequirement):
+#             moves.append(requirement)
+#         elif isinstance(requirement, CopyRequirement):
+#             copies.append(requirement)
+#         elif isinstance(requirement, DeleteRequirement):
+#             deletes.append(requirement)
+#
+#     if reads:
+#         print("  Read:")
+#         for requirement in reads:
+#             print(
+#                 f"    {requirement.path} ({'metadata' if requirement.only_read_metadata else 'content'})"
+#             )
+#
+#     if writes:
+#         print("  Write:")
+#         for requirement in writes:
+#             print(f"    {requirement.path}")
+#
+#     if moves:
+#         print("  Move:")
+#         for requirement in moves:
+#             print(f"    {requirement.source_path} → {requirement.destination_path}")
+#
+#     if copies:
+#         print("  Copy:")
+#         for requirement in copies:
+#             print(f"    {requirement.source_path} → {requirement.destination_path}")
+#
+#     if deletes:
+#         print("  Delete:")
+#         for requirement in deletes:
+#             print(f"    {requirement.path}")
+#
+#     if commands:
+#         print("  Commands:")
+#         for requirement in commands:
+#             print(f"    {requirement.command}")
 
-    if reads:
-        print("  Read:")
-        for requirement in reads:
-            print(
-                f"    {requirement.path} ({'metadata' if requirement.only_read_metadata else 'content'})"
-            )
 
-    if writes:
-        print("  Write:")
-        for requirement in writes:
-            print(f"    {requirement.path}")
-
-    if moves:
-        print("  Move:")
-        for requirement in moves:
-            print(f"    {requirement.source_path} → {requirement.destination_path}")
-
-    if copies:
-        print("  Copy:")
-        for requirement in copies:
-            print(f"    {requirement.source_path} → {requirement.destination_path}")
-
-    if deletes:
-        print("  Delete:")
-        for requirement in deletes:
-            print(f"    {requirement.path}")
-
-    if commands:
-        print("  Commands:")
-        for requirement in commands:
-            print(f"    {requirement.command}")
-
-
-def initialize_conversation(config: SolveigConfig) -> tuple[Instructor, MessageHistory]:
+def get_llm_client(config: SolveigConfig, interface: SolveigInterface) -> tuple[Instructor, MessageHistory]:
     """Initialize the LLM client and conversation state."""
     client: Instructor = llm.get_instructor_client(
         api_type=config.api_type, api_key=config.api_key, url=config.url
@@ -84,36 +74,41 @@ def initialize_conversation(config: SolveigConfig) -> tuple[Instructor, MessageH
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
-        print(f"[ System Prompt ]\n{sys_prompt}\n")
+        with interface.group("System Prompt"):
+            interface.show(sys_prompt, level=interface.current_level+1)
+    # if config.verbose:
+    #     print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
-
     return client, message_history
 
 
-def get_initial_user_message(
-    user_prompt: str | None, interface: CLIInterface
-) -> UserMessage:
-    """Get the initial user prompt and create a UserMessage."""
-    interface.display_section_header("User")
-    if user_prompt:
-        interface.show(f"{utils.misc.INPUT_PROMPT}{user_prompt}")
-    else:
-        user_prompt = interface.ask_user()
-    return UserMessage(comment=user_prompt)
+# def get_initial_user_message(
+#     user_prompt: str | None, interface: CLIInterface
+# ) -> UserMessage:
+#     """Get the initial user prompt and create a UserMessage."""
+#     interface.section("User")
+#     # interface.display_section_header("User")
+#     if user_prompt:
+#         interface.show(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}")
+#     else:
+#         user_prompt = interface.ask_user()
+#     return UserMessage(comment=user_prompt)
 
 
 def send_message_to_llm(
+    config: SolveigConfig,
+    interface: SolveigInterface,
     client: Instructor,
     message_history: MessageHistory,
     user_response: UserMessage,
-    config: SolveigConfig,
 ) -> LLMMessage | None:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
-        print("[ Sending ]")
-        print(json.dumps(user_response.to_openai(), indent=2))
+        with interface.group("Sending"):
+        # print("[ Sending ]")
+            interface.show(json.dumps(user_response.to_openai(), indent=2))
     else:
-        print("(Sending)")
+        interface.show("(Sending)")
 
     try:
         llm_response: LLMMessage = client.chat.completions.create(
@@ -125,50 +120,50 @@ def send_message_to_llm(
             # max_tokens=512,
         )
         return llm_response
-    except InstructorRetryException as e:
-        handle_llm_error(e, config)
-        return None
-    except AuthenticationError as e:
-        handle_network_error(
-            "Authentication failed: Invalid API key or unauthorized access", e, config
-        )
-        return None
-    except RateLimitError as e:
-        handle_network_error(
-            "Rate limit exceeded: Please wait before making more requests", e, config
-        )
-        return None
-    except httpx.ConnectError as e:
-        handle_network_error(
-            "Connection failed: Unable to reach the LLM service", e, config
-        )
-        return None
-    except httpx.TimeoutException as e:
-        handle_network_error(
-            "Request timed out: The LLM service is not responding", e, config
-        )
-        return None
-    except httpx.HTTPStatusError as e:
-        handle_network_error(
-            f"HTTP error {e.response.status_code}: {e.response.text}", e, config
-        )
-        return None
     except Exception as e:
-        handle_network_error(f"Unexpected error: {str(e)}", e, config)
+        handle_llm_error(e, config, interface)
         return None
+    # except AuthenticationError as e:
+    #     handle_network_error(
+    #         "Authentication failed: Invalid API key or unauthorized access", e, config
+    #     )
+    #     return None
+    # except RateLimitError as e:
+    #     handle_network_error(
+    #         "Rate limit exceeded: Please wait before making more requests", e, config
+    #     )
+    #     return None
+    # except httpx.ConnectError as e:
+    #     handle_network_error(
+    #         "Connection failed: Unable to reach the LLM service", e, config
+    #     )
+    #     return None
+    # except httpx.TimeoutException as e:
+    #     handle_network_error(
+    #         "Request timed out: The LLM service is not responding", e, config
+    #     )
+    #     return None
+    # except httpx.HTTPStatusError as e:
+    #     handle_network_error(
+    #         f"HTTP error {e.response.status_code}: {e.response.text}", e, config
+    #     )
+    #     return None
+    # except Exception as e:
+    #     handle_network_error(f"Unexpected error: {str(e)}", e, config)
+    #     return None
 
 
 def send_message_to_llm_with_retry(
+    config: SolveigConfig,
+    interface: SolveigInterface,
     client: Instructor,
     message_history: MessageHistory,
     user_response: UserMessage,
-    config: SolveigConfig,
-    interface: SolveigInterface,
 ) -> tuple[LLMMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
         llm_response = send_message_to_llm(
-            client, message_history, user_response, config
+            config, interface, client, message_history, user_response
         )
         if llm_response is not None:
             return llm_response, user_response
@@ -185,60 +180,66 @@ def send_message_to_llm_with_retry(
         # If they said yes to retry, the loop continues with the same user_response
 
 
-def handle_llm_error(error: InstructorRetryException, config: SolveigConfig) -> None:
+def handle_llm_error(error: Exception, config: SolveigConfig, interface: SolveigInterface) -> None:
     """Display LLM parsing error details."""
-    print("  " + str(error))
-    print("  Failed to parse message")
-    if config.verbose and error.last_completion:
-        print("  Output:")
+    interface.display_error(str(error))
+    # print("  " + str(error))
+    # print("  Failed to parse message")
+    if config.verbose and isinstance(error, InstructorRetryException) and error.last_completion:
+        interface.current_level += 1
         for output in error.last_completion.choices:
-            print(output.message.content.strip())
-        print()
+            interface.display_error(output.message.content.strip())
+        interface.current_level -= 1
+        # print("  Output:")
+        # for output in error.last_completion.choices:
+        #     print(output.message.content.strip())
+        # print()
 
 
-def handle_network_error(
-    user_message: str, error: Exception, config: SolveigConfig
-) -> None:
-    """Display network error with user-friendly message and technical details."""
-    print(f"  {user_message}")
-    print("  Network connection failed")
+# def handle_network_error(
+#     user_message: str, error: Exception, config: SolveigConfig
+# ) -> None:
+#     """Display network error with user-friendly message and technical details."""
+#     print(f"  {user_message}")
+#     print("  Network connection failed")
+#
+#     if config.verbose:
+#         print(f"  Technical details: {error}")
+#         print(f"  Error type: {type(error).__name__}")
+#
+#     print("  Suggestions:")
+#     print("    • Check your internet connection")
+#     print("    • Verify the API endpoint URL is correct")
+#     print("    • Confirm your API key is valid")
+#     print("    • Try again in a few moments")
+#     print()
 
-    if config.verbose:
-        print(f"  Technical details: {error}")
-        print(f"  Error type: {type(error).__name__}")
 
-    print("  Suggestions:")
-    print("    • Check your internet connection")
-    print("    • Verify the API endpoint URL is correct")
-    print("    • Confirm your API key is valid")
-    print("    • Try again in a few moments")
-    print()
-
-
-def display_llm_response(llm_response: LLMMessage, interface: CLIInterface) -> None:
-    """Display the LLM response and requirements summary."""
-    interface.display_llm_response(llm_response)
+# def display_llm_response(llm_response: LLMMessage, interface: CLIInterface) -> None:
+#     """Display the LLM response and requirements summary."""
+#     interface.display_llm_response(llm_response)
 
 
 def process_requirements(
-    llm_response: LLMMessage, config: SolveigConfig, interface: CLIInterface
+    config: SolveigConfig, interface: SolveigInterface, llm_response: LLMMessage
 ) -> list:
     """Process all requirements from LLM response and return results."""
     results = []
     if llm_response.requirements:
-        interface.display_results_header(len(llm_response.requirements))
-        for requirement in llm_response.requirements:
-            try:
-                result = requirement.solve(config, interface)
-                if result:
-                    results.append(result)
-            except Exception as e:
-                interface.display_error(str(e))
-        print()
+        # interface.display_results_header(len(llm_response.requirements))
+        with interface.group("Results", count=len(llm_response.requirements)):
+            for requirement in llm_response.requirements:
+                try:
+                    result = requirement.solve(config, interface)
+                    if result:
+                        results.append(result)
+                except Exception as e:
+                    interface.display_error(str(e))
+        # print()
     return results
 
 
-def main_loop(config: SolveigConfig, user_prompt: str | None = None):
+def main_loop(config: SolveigConfig, user_prompt: str = ""):
     # Configure logging for instructor debug output when verbose
     if config.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -248,16 +249,21 @@ def main_loop(config: SolveigConfig, user_prompt: str | None = None):
     
     # Configure plugins based on config
     filter_plugins(config)
-    client, message_history = initialize_conversation(config)
-    interface = CLIInterface(config)
 
-    user_response = get_initial_user_message(user_prompt, interface)
+    # Get user interface, LLM client and message history
+    interface = CLIInterface(be_verbose=config.verbose)
+    client, message_history = get_llm_client(config, interface)
+
+    with interface.section("User"):
+        pass
+    user_prompt = user_prompt.strip() if user_prompt else ""
+    user_response = UserMessage(comment=user_prompt or interface.ask_user()) # get_initial_user_message(user_prompt, interface)
     message_history.add_message(user_response)
 
     while True:
         # Send message to LLM and handle any errors
         llm_response, user_response = send_message_to_llm_with_retry(
-            client, message_history, user_response, config, interface
+            config, interface, client, message_history, user_response
         )
 
         if llm_response is None:
@@ -266,11 +272,15 @@ def main_loop(config: SolveigConfig, user_prompt: str | None = None):
 
         # Successfully got LLM response
         message_history.add_message(llm_response)
-        display_llm_response(llm_response, interface)
-
+        with interface.section("Assistant"):
+            interface.display_llm_response(llm_response)
         # Process requirements and get next user input
-        results = process_requirements(llm_response, config, interface)
-        user_response = UserMessage(comment=interface.ask_user(), results=results)
+
+        # Prepare user response
+        with interface.section("User"):
+            results = process_requirements(llm_response=llm_response, config=config, interface=interface)
+            user_response = UserMessage(comment=interface.ask_user(), results=results)
+
         message_history.add_message(user_response)
 
 
