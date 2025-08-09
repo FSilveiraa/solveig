@@ -69,7 +69,6 @@ class ReadResult(RequirementResult):
     metadata: dict | None = None
     # For files
     content: str | None = None
-    content_encoding: Literal["text", "base64"] | None = None
     # For directories
     directory_listing: list[dict] | None = None
 

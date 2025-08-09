@@ -22,6 +22,10 @@ _SIZE_NOTATIONS = {
 _SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
 
 
+def absolute_path(path: str | Path) -> Path:
+    return Path(path).expanduser().resolve()
+
+
 def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
     if size_notation is not None:
         if not isinstance(size_notation, int):
@@ -34,15 +38,16 @@ def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
                         raise ValueError(f"'{size_notation}' is not a valid disk size")
                     size, unit = match_result.groups()
                     unit = unit.strip().lower()
-                    return int(float(size) * _SIZE_NOTATIONS[unit])
-                except KeyError:
-                    supported = [
-                        f"{supported_unit[0].upper()}{supported_unit[1:-1]}{supported_unit[-1].upper()}"
-                        for supported_unit in _SIZE_NOTATIONS
-                    ]
-                    raise ValueError(
-                        f"'{unit}' is not a valid disk size unit. Supported: {supported}"
-                    ) from None
+                    try:
+                        return int(float(size) * _SIZE_NOTATIONS[unit])
+                    except KeyError:
+                        supported = [
+                            f"{supported_unit[0].upper()}{supported_unit[1:-1]}{supported_unit[-1].upper()}"
+                            for supported_unit in _SIZE_NOTATIONS
+                        ]
+                        raise ValueError(
+                            f"'{unit}' is not a valid disk size unit. Supported: {supported}"
+                        ) from None
                 except (AttributeError, ValueError):
                     raise ValueError(
                         f"'{size_notation}' is not a valid disk size"
@@ -50,40 +55,42 @@ def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
 
-def read_metadata_and_entries(path):
-    if not os.path.exists(path):
+def read_metadata_and_listing(path: str | Path, _descend=True):
+    abs_path = absolute_path(path)
+    if not abs_path.exists():
         raise FileNotFoundError(f"{path} does not exist")
 
-    stats = os.stat(path)
-    is_dir = os.path.isdir(path)
+    stats = abs_path.stat()
     # resolve uid/gid to names
     owner_name = pwd.getpwuid(stats.st_uid).pw_name
     group_name = grp.getgrgid(stats.st_gid).gr_name
 
     metadata = {
-        "path": os.path.abspath(path),
+        "path": str(abs_path),
         "size": stats.st_size,
         "mtime": time.ctime(stats.st_mtime),
-        "is_directory": is_dir,
+        "is_directory": abs_path.is_dir(),
         "owner": owner_name,
         "group": group_name,
     }
     entries = None
 
-    if is_dir:
+    if abs_path.is_dir() and _descend:
         # For a directory, list entries (including hidden)
         entries = []
-        for name in sorted(os.listdir(path)):
-            entry_path = os.path.join(path, name)
-            entry_stats = os.stat(entry_path)
-            entries.append(
-                {
-                    "name": name,
-                    "is_dir": os.path.isdir(entry_path),
-                    "size": entry_stats.st_size,
-                    "mtime": time.ctime(entry_stats.st_mtime),
-                }
-            )
+        for name in sorted(abs_path.iterdir()):
+            # entry_path = os.path.join(path, name)
+            entry_path = abs_path.joinpath(name).resolve()
+            # entry_stats = os.stat(entry_path)
+            # read the metadata for each entry using this same method with going further down
+            entries.append(read_metadata_and_listing(entry_path, _descend=False)[0])
+                # {
+                #     "name": name,
+                #     "is_directory": os.path.isdir(entry_path),
+                #     "size": entry_stats.st_size,
+                #     "mtime": time.ctime(entry_stats.st_mtime),
+                # }
+            # )
     return metadata, entries
 
 
@@ -98,6 +105,10 @@ def read_file_as_text(path: str | Path) -> str:
 
 
 def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
+    abs_path = absolute_path(path)
+    if abs_path.is_dir():
+        raise FileNotFoundError(f"{abs_path} is a directory")
+
     mime, _ = mimetypes.guess_type(path)
     try:
         if mime and mime.startswith("text") or mime == "application/x-sh":
@@ -142,38 +153,33 @@ def validate_read_access(file_path: str | Path) -> None:
 #         raise PermissionError(f"Permission denied: Cannot write '{abs_path}'")
 
 
-def read_file_with_metadata(
-    file_path: str | Path, include_content: bool = False
-) -> dict[str, Any]:
-    """
-    Read file/directory metadata and optionally content.
-    Returns dict with 'metadata', 'content', 'encoding', 'directory_listing' keys.
-    Raises exceptions on errors - caller handles error wrapping.
-    """
-    abs_path = Path(file_path).expanduser().resolve()
-    is_dir = abs_path.is_dir()
-
-    result: dict[str, Any] = {
-        "metadata": None,
-        "content": None,
-        "encoding": None,
-        "directory_listing": None,
-    }
-
-    if is_dir:
-        metadata, entries = read_metadata_and_entries(abs_path)
-        result["metadata"] = metadata
-        result["directory_listing"] = entries
-    else:
-        metadata, _ = read_metadata_and_entries(abs_path)
-        result["metadata"] = metadata
-
-        if include_content:
-            content, encoding = read_file(abs_path)
-            result["content"] = content
-            result["encoding"] = encoding
-
-    return result
+# def read_file_content(
+#     file_path: str | Path, read_content: bool = False
+# ) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+#     """
+#     Read file/directory metadata and optionally content.
+#     Returns dict with 'metadata', 'content', 'encoding', 'directory_listing' keys.
+#     Raises exceptions on errors - caller handles error wrapping.
+#     """
+#     abs_path = Path(file_path).expanduser().resolve()
+#     if not abs_path.is_dir():
+#
+#     # result: dict[str, Any] = {
+#     #     "metadata": None,
+#     #     "content": None,
+#     #     "encoding": None,
+#     #     "directory_listing": None,
+#     # }
+#
+#     metadata, entries = read_metadata_and_entries(abs_path)
+#     content = None
+#     is_dir = metadata["is_directory"]
+#     # if is_dir and entries:
+#         # metadata["directory_listing"] = entries
+#     if not is_dir and read_content:
+#         content, metadata["encoding"] = read_file(abs_path)
+#
+#     return content, metadata, entries
 
 
 def validate_write_access(
@@ -437,7 +443,3 @@ def delete_file_or_directory(file_path: str) -> None:
         path.unlink()
     else:
         shutil.rmtree(str(path))
-
-
-def absolute_path(path: str | Path) -> Path:
-    return Path(path).expanduser().resolve()

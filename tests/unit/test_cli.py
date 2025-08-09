@@ -5,13 +5,13 @@ from unittest.mock import Mock, patch
 from instructor.exceptions import InstructorRetryException
 
 from scripts.solveig_cli import (
-    display_llm_response,
+    # display_llm_response,
     get_initial_user_message,
     handle_llm_error,
     get_llm_client,
     process_requirements,
     send_message_to_llm,
-    summarize_requirements,
+    # summarize_requirements,
 )
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from tests.utils.mocks import (
@@ -175,71 +175,71 @@ class TestSendMessageToLLM:
         assert result is None
 
 
-class TestDisplayLLMResponse:
-    """Test the display_llm_response function."""
-
-    def test_display_response_with_requirements(self):
-        """Test displaying LLM response with all requirement types."""
-        # Execute with comprehensive requirements
-        mock_interface = MockInterface()
-        display_llm_response(ALL_REQUIREMENTS_MESSAGE, mock_interface)
-
-        # Verify interface display was called and captured output
-        mock_interface.assert_output_contains("--- Assistant")
-        mock_interface.assert_output_contains(ALL_REQUIREMENTS_MESSAGE.comment)
-        # Should show requirements summary
-        mock_interface.assert_output_contains("Requirements")
-
-    def test_display_response_no_requirements(self):
-        """Test displaying LLM response without requirements."""
-        # Setup
-        comment = "To get across the road!"
-        llm_message = LLMMessage(comment=comment)
-
-        # Execute
-        mock_interface = MockInterface()
-        display_llm_response(llm_message, mock_interface)
-
-        # Verify
-        mock_interface.assert_output_contains("--- Assistant")
-        mock_interface.assert_output_contains(comment)
-        # Should not show requirements section when none exist
-        all_output = mock_interface.get_all_output()
-        assert "Requirements" not in all_output
-
-
-class TestSummarizeRequirements:
-    """Test the summarize_requirements function."""
-
-    @patch("builtins.print")
-    def test_summarize_all_requirement_types(self, mock_print):
-        """Test summarizing all types of requirements including new file operations."""
-        # This function still uses direct print() calls, so we keep the patch
-        # Execute with comprehensive requirements
-        summarize_requirements(ALL_REQUIREMENTS_MESSAGE)
-
-        # Verify that all requirement types are printed
-        call_args = [str(call) for call in mock_print.call_args_list]
-
-        # Check that we see output for all 6 requirement types
-        assert any(
-            "Read:" in call for call in call_args
-        ), "Should summarize ReadRequirement"
-        assert any(
-            "Write:" in call for call in call_args
-        ), "Should summarize WriteRequirement"
-        assert any(
-            "Commands:" in call for call in call_args
-        ), "Should summarize CommandRequirement"
-        assert any(
-            "Move:" in call for call in call_args
-        ), "Should summarize MoveRequirement"
-        assert any(
-            "Copy:" in call for call in call_args
-        ), "Should summarize CopyRequirement"
-        assert any(
-            "Delete:" in call for call in call_args
-        ), "Should summarize DeleteRequirement"
+# class TestDisplayLLMResponse:
+#     """Test the display_llm_response function."""
+#
+#     def test_display_response_with_requirements(self):
+#         """Test displaying LLM response with all requirement types."""
+#         # Execute with comprehensive requirements
+#         mock_interface = MockInterface()
+#         display_llm_response(ALL_REQUIREMENTS_MESSAGE, mock_interface)
+#
+#         # Verify interface display was called and captured output
+#         mock_interface.assert_output_contains("--- Assistant")
+#         mock_interface.assert_output_contains(ALL_REQUIREMENTS_MESSAGE.comment)
+#         # Should show requirements summary
+#         mock_interface.assert_output_contains("Requirements")
+#
+#     def test_display_response_no_requirements(self):
+#         """Test displaying LLM response without requirements."""
+#         # Setup
+#         comment = "To get across the road!"
+#         llm_message = LLMMessage(comment=comment)
+#
+#         # Execute
+#         mock_interface = MockInterface()
+#         display_llm_response(llm_message, mock_interface)
+#
+#         # Verify
+#         mock_interface.assert_output_contains("--- Assistant")
+#         mock_interface.assert_output_contains(comment)
+#         # Should not show requirements section when none exist
+#         all_output = mock_interface.get_all_output()
+#         assert "Requirements" not in all_output
+#
+#
+# class TestSummarizeRequirements:
+#     """Test the summarize_requirements function."""
+#
+#     @patch("builtins.print")
+#     def test_summarize_all_requirement_types(self, mock_print):
+#         """Test summarizing all types of requirements including new file operations."""
+#         # This function still uses direct print() calls, so we keep the patch
+#         # Execute with comprehensive requirements
+#         summarize_requirements(ALL_REQUIREMENTS_MESSAGE)
+#
+#         # Verify that all requirement types are printed
+#         call_args = [str(call) for call in mock_print.call_args_list]
+#
+#         # Check that we see output for all 6 requirement types
+#         assert any(
+#             "Read:" in call for call in call_args
+#         ), "Should summarize ReadRequirement"
+#         assert any(
+#             "Write:" in call for call in call_args
+#         ), "Should summarize WriteRequirement"
+#         assert any(
+#             "Commands:" in call for call in call_args
+#         ), "Should summarize CommandRequirement"
+#         assert any(
+#             "Move:" in call for call in call_args
+#         ), "Should summarize MoveRequirement"
+#         assert any(
+#             "Copy:" in call for call in call_args
+#         ), "Should summarize CopyRequirement"
+#         assert any(
+#             "Delete:" in call for call in call_args
+#         ), "Should summarize DeleteRequirement"
 
 
 class TestProcessRequirements:
@@ -250,7 +250,7 @@ class TestProcessRequirements:
         # Execute with ALL requirements instead of just the basic 3
         mock_interface = MockInterface()
         results = process_requirements(
-            ALL_REQUIREMENTS_MESSAGE, DEFAULT_CONFIG, mock_interface
+            DEFAULT_CONFIG, mock_interface, ALL_REQUIREMENTS_MESSAGE
         )
 
         # Verify interface showed requirement processing
@@ -330,7 +330,7 @@ class TestProcessRequirements:
 
         # Execute
         mock_interface = MockInterface()
-        results = process_requirements(llm_message, DEFAULT_CONFIG, mock_interface)
+        results = process_requirements(DEFAULT_CONFIG, mock_interface, llm_message)
 
         # Verify error was displayed and processing continued
         mock_interface.assert_output_contains("ERROR:")
@@ -349,7 +349,7 @@ class TestProcessRequirements:
 
         # Execute
         mock_interface = MockInterface()
-        results = process_requirements(llm_response, DEFAULT_CONFIG, mock_interface)
+        results = process_requirements(DEFAULT_CONFIG, mock_interface, llm_response)
 
         # Verify
         # When no requirements exist, no results header should appear
@@ -364,21 +364,25 @@ class TestHandleLLMError:
     @patch("builtins.print")
     def test_handle_error_basic(self, mock_print):
         """Test basic error handling."""
-        # This function still uses direct print() calls, so we keep the patch
+        # Setup
+        mock_interface = MockInterface()
+
         # Execute
-        handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG)
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, mock_interface)
 
         # Verify
         expected_calls = ["  Test error", "  Failed to parse message"]
-        actual_calls = [call[0][0] for call in mock_print.call_args_list]
-        assert actual_calls == expected_calls
+        # actual_calls = [call[0][0] for call in mock_print.call_args_list]
+        assert mock_interface.outputs == expected_calls
 
     @patch("builtins.print")
     def test_handle_error_verbose(self, mock_print):
         """Test error handling with verbose output."""
-        # This function still uses direct print() calls, so we keep the patch
+        # Setup
+        mock_interface = MockInterface()
+
         # Execute
-        handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG)
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG, MockInterface)
 
         # Verify verbose output was included
         actual_calls = []

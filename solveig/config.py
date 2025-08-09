@@ -152,7 +152,7 @@ class SolveigConfig:
             "--max-output-lines",
             "-l",
             type=int,
-            help="The maximum number of lines of file content or command output to print",
+            help="The maximum number of lines of file content or command output to print (-1 to disable)",
         )
         parser.add_argument(
             "--max-output-size",

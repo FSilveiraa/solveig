@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -63,9 +62,9 @@ class Requirement(BaseModel, ABC):
     ):
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
         # add it to the printed info
-        path_print_str = f"{'🗁' if is_dir else '🗎'} {path}"
+        path_print_str = f"{'🗁' if is_dir else '🗎'}  {path}"
         if str(abs_path) != path:
-            path_print_str += f" ({abs_path})"
+            path_print_str += f"  ({abs_path})"
 
         # if this is a two-path operation (copy, move), print the other path too
         if destination_path:
@@ -88,7 +87,7 @@ class Requirement(BaseModel, ABC):
     #     print(f"    ❝ {self.comment}")
 
     def solve(self, config: SolveigConfig, interface: SolveigInterface):
-        with interface.group(self.title.title()):
+        with interface.with_group(self.title.title()):
 
             presentation_data = self.get_presentation_data()
             interface.display_requirement(presentation_data)
@@ -112,7 +111,15 @@ class Requirement(BaseModel, ABC):
                         )
 
             # Run the actual requirement solving
-            result = self._actually_solve(config, interface)
+            try:
+                result = self._actually_solve(config, interface)
+            except Exception as error:
+                # with interface.with_indent():
+                interface.display_error(error)
+                error_info = "Execution error"
+                if interface.ask_yes_no("Send error message back to assistant? [y/N]: "):
+                    error_info = f": {str(error)}"
+                result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions
             for after_hook, requirements in plugins.hooks.HOOKS.after:
@@ -215,9 +222,9 @@ class ReadRequirement(Requirement):
         ead access to path (OS interaction - can be mocked)."""
         utils.file.validate_read_access(path)
 
-    def _read_file_with_metadata(self, path: str | Path, include_content: bool = True) -> dict:
-        """Read file with metadata (OS interaction - can be mocked)."""
-        return utils.file.read_file_with_metadata(path, include_content=include_content)
+    # def _read_file_with_metadata(self, path: str | Path, include_content: bool = True) -> dict:
+    #     """Read file with metadata (OS interaction - can be mocked)."""
+    #     return utils.file.read_file_and_metadata(path, read_content=include_content)
 
     # def _ask_directory_consent(self, interface: SolveigInterface) -> bool:
     #     """Ask user consent for directory reading (user interaction - can be mocked)."""
@@ -243,7 +250,6 @@ class ReadRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> ReadResult:
         abs_path = utils.file.absolute_path(self.path)
-        is_dir = abs_path.is_dir()
 
         # Pre-flight validation
         try:
@@ -254,78 +260,82 @@ class ReadRequirement(Requirement):
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
 
-        # Handle user interaction for different read types
-        if is_dir:
-            if interface.ask_yes_no("Allow reading directory listing and metadata? [y/N]:"):
-                try:
-                    file_data = self._read_file_with_metadata(
-                        self.path, include_content=False
-                    )
-                    return ReadResult(
-                        requirement=self,
-                        path=abs_path,
-                        accepted=True,
-                        metadata=file_data["metadata"],
-                        directory_listing=file_data["directory_listing"],
-                    )
-                except (PermissionError, OSError) as e:
-                    interface.display_error(f"Found error when reading {abs_path}: {e}")
-                    return ReadResult(
-                        requirement=self, path=abs_path, accepted=False, error=str(e)
-                    )
-            else:
-                return ReadResult(requirement=self, path=abs_path, accepted=False)
-        else:
+        metadata, listing = utils.file.read_metadata_and_listing(abs_path)
+        interface.display_metadata(metadata, listing)
+        is_dir = metadata["is_directory"]
+        content = None
+
+        # if is_dir:
+        #     if interface.ask_yes_no("Allow reading directory listing and metadata? [y/N]:"):
+        #         try:
+        #             file_data = self._read_file_with_metadata(
+        #                 self.path, include_content=False
+        #             )
+        #             return ReadResult(
+        #                 requirement=self,
+        #                 path=abs_path,
+        #                 accepted=True,
+        #                 metadata=file_data["metadata"],
+        #                 directory_listing=file_data["directory_listing"],
+        #             )
+        #         except (PermissionError, OSError) as e:
+        #             interface.display_error(f"Found error when reading {abs_path}: {e}")
+        #             return ReadResult(
+        #                 requirement=self, path=abs_path, accepted=False, error=str(e)
+        #             )
+        #     else:
+        #         return ReadResult(requirement=self, path=abs_path, accepted=False)
+        # else:
+        # If this is a directory or only the metadata of a file, we already have all the information
+        # Otherwise, if the request is for file data, we have to confirm with the user
+        if not is_dir and not self.only_read_metadata and interface.ask_yes_no("Allow reading file contents? [y/N]: "):
             # File reading with user choices
             # TODO: print the file size here so the user can have some idea of how much data they're sending
             # choice_read_file = interface.ask_yes_no("? Allow reading file? [y=content+metadata / m=metadata / N=skip]: ") # self._ask_file_read_choice()
-            if not interface.ask_yes_no(
-                f"? Allow reading file {'metadata' if self.only_read_metadata else 'contents'}? [y/N]: "
-            ):
-                return ReadResult(requirement=self, path=abs_path, accepted=False)
+            # if not interface.ask_yes_no("Allow reading file contents? [y/N]: "):
+            #     return ReadResult(requirement=self, path=abs_path, accepted=False)
 
             # Read metadata first
+            # try:
+            #     content, metadata = utils.file.read_file_and_metadata(abs_path, read_content=True)
+            # except (PermissionError, OSError) as e:
+            #     interface.display_error(f"Error reading file metadata: {e}")
+            #     return ReadResult(
+            #         requirement=self, path=abs_path, accepted=False, error=str(e)
+            #     )
+            # interface.display_metadata(metadata)
+            #     " | ".join([f"{key}={value}" for key, value in metadata.items()]),
+            # )
+            # with interface.with_group("Metadata"):
+            #     interface.show(json.dumps(file_data["metadata"]))
+
+            # if not self.only_read_metadata:
+            # Read content
             try:
-                file_data = self._read_file_with_metadata(abs_path, include_content=False)
-            except (PermissionError, OSError) as e:
-                interface.display_error(f"Error reading file metadata: {e}")
+                # metadata, listing = utils.file.read_metadata_and_entries(abs_path, read_content=True)
+                content, encoding = utils.file.read_file(abs_path)
+                metadata["encoding"] = encoding
+            except (PermissionError, OSError, UnicodeDecodeError) as e:
+                interface.display_error(f"Failed to read file contents: {e}")
                 return ReadResult(
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
-            with interface.group("Metadata"):
-                interface.show(json.dumps(file_data["metadata"]))
 
-            content = None
-            encoding = None
-            if not self.only_read_metadata:
-                # Read content
-                try:
-                    file_data = self._read_file_with_metadata(
-                        self.path, include_content=True
-                    )
-                    content = file_data["content"]
-                    encoding = file_data["encoding"]
-                except (PermissionError, OSError, UnicodeDecodeError) as e:
-                    interface.display_error(f"Failed to read file contents: {e}")
-                    return ReadResult(
-                        requirement=self, path=abs_path, accepted=False, error=str(e)
-                    )
+            # with interface.group("Content"):
+            content_output = "(Base64)" if metadata["encoding"].lower() == "base64" else content
+            interface.display_text_block(content_output, title="Content")
 
-                # with interface.group("Content"):
-                content_output = "(Base64)" if encoding.lower() == "base64" else content
-                interface.display_text_block(content_output, title="Content")
-
-            if interface.ask_yes_no(f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "):
-                return ReadResult(
-                    requirement=self,
-                    path=abs_path,
-                    accepted=True,
-                    metadata=file_data["metadata"],
-                    content=content,
-                    content_encoding=encoding,
-                )
-            else:
-                return ReadResult(requirement=self, path=abs_path, accepted=False)
+        if interface.ask_yes_no(f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "):
+            return ReadResult(
+                requirement=self,
+                path=abs_path,
+                accepted=True,
+                metadata=metadata,
+                content=content,
+                directory_listing=listing,
+            )
+        else:
+            return ReadResult(requirement=self, path=abs_path, accepted=False)
 
             # print("    [ Metadata ]")
             # print(
@@ -428,6 +438,10 @@ class WriteRequirement(Requirement):
     #         # TODO: make this print optional, or in a `less`-like window, or it will get messy
     #         print(formatted_content)
 
+    # def _read_file_metadata(self, path: str | Path) -> dict:
+    #     """Read file with metadata (OS interaction - can be mocked)."""
+    #     return utils.file.read_file_and_metadata(path, read_content=False)["metadata"]
+
     def create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
         return WriteResult(
@@ -437,9 +451,9 @@ class WriteRequirement(Requirement):
             error=error_message,
         )
 
-    def _path_exists(self, abs_path: Path) -> bool:
-        """Check if path exists (OS interaction - can be mocked)."""
-        return abs_path.exists()
+    # def _path_exists(self, abs_path: Path) -> bool:
+    #     """Check if path exists (OS interaction - can be mocked)."""
+    #     return abs_path.exists()
 
     # def _ask_write_consent(self, interface: SolveigInterface, is_dir: bool, has_content: bool) -> bool:
     #     """Ask write consent."""
@@ -468,15 +482,31 @@ class WriteRequirement(Requirement):
 
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> WriteResult:
         abs_path = utils.file.absolute_path(self.path)
-        is_directory = abs_path.is_dir()
 
-        # Show warning if path exists
-        already_exists = self._path_exists(abs_path)
-        if already_exists:
-            if is_directory:
-                raise ValueError("Cannot overwrite directory")
+        # Confirm if path exists
+        try:
+            metadata, listing = utils.file.read_metadata_and_listing(abs_path)
+            already_exists = True
+            # Do not overwrite directories (confirm if the existing path is a dir, not the request)
+            if metadata["is_directory"]:
+                raise ValueError("Cannot write directory")
+            # Otherwise show a warning with the file metadata
             else:
-                interface.display_warning("This path already exist")
+                interface.display_warning("This file already exists")
+                interface.display_metadata(metadata)
+                #     " | ".join([f"{key}={value}" for key, value in metadata.items()]),
+                #     title="Metadata",
+                # )
+        except FileNotFoundError:
+            # File does not exist
+            already_exists = False
+
+        # already_exists = self._path_exists(abs_path)
+        # if already_exists:
+        #     if is_directory:
+        #         raise ValueError("Cannot overwrite directory")
+        #     else:
+        #         interface.display_warning("This path already exist")
 
         # Get user consent before attempting operation
         # operation_type = "directory" if self.is_directory else "file"
@@ -484,9 +514,9 @@ class WriteRequirement(Requirement):
 
         # if self._ask_write_consent(operation_type, content_desc):
         question = (
-            f"Allow {'creating' if is_directory and not already_exists else 'updating'} "
-            f"{'directory' if is_directory else 'file'}"
-            f"{' and contents' if not is_directory else ''}? [y/N]: "
+            f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
+            f"{'directory' if self.is_directory else 'file'}"
+            f"{' and contents' if not self.is_directory else ''}? [y/N]: "
         )
         if interface.ask_yes_no(question):
             try:
@@ -495,7 +525,7 @@ class WriteRequirement(Requirement):
 
                 # Perform the write operation
                 self._write_file_or_directory(abs_path)
-                interface.show(f"✓ {'Updated' if already_exists else 'Created'}", level=interface.current_level + 1)
+                interface.show(f"✓  {'Updated' if already_exists else 'Created'}", level=interface.current_level + 1)
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
 
@@ -532,7 +562,7 @@ class CommandRequirement(Requirement):
         return RequirementPresentation(
             title=self.title,
             comment=self.comment,
-            details=[f"🗲 {self.command}"],
+            details=[f"🗲  {self.command}"],
             warnings=None,
             content=None,
         )
@@ -607,10 +637,10 @@ class CommandRequirement(Requirement):
                 #     )
                 # )
             else:
-                interface.group("No output")
+                interface.with_group("No output")
                 # print("    [ No Output ]")
             if error:
-                with interface.group("Error"):
+                with interface.with_group("Error"):
                     interface.display_text_block(error, title="Error")
                 # print(
                 #     utils.misc.format_output(
@@ -726,6 +756,9 @@ class MoveRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
+        metadata = self._read_file_metadata(abs_source_path)
+        interface.display_metadata(metadata)
+
         # Get user consent
         if interface.ask_yes_no(f"Allow moving {self.source_path} to {self.destination_path}? [y/N]: "):
             try:
@@ -733,7 +766,7 @@ class MoveRequirement(Requirement):
                 self._move_file_or_directory()
                 interface.indent_base += 1
 
-                interface.show("✓ Moved", level=interface.current_level+1)
+                interface.show("✓  Moved", level=interface.current_level+1)
                 # print("      ✓ Moved")
                 return MoveResult(
                     requirement=self,
@@ -849,13 +882,16 @@ class CopyRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
+        metadata = self._read_file_metadata(abs_source_path)
+        interface.display_metadata(metadata)
+
         # Get user consent
         if interface.ask_yes_no(f"Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "):
         # if self._ask_copy_consent():
             try:
                 # Perform the copy operation
                 self._copy_file_or_directory()
-                interface.show("✓ Copied", level=interface.current_level+1)
+                interface.show("✓  Copied", level=interface.current_level+1)
                 return CopyResult(
                     requirement=self,
                     accepted=True,
@@ -956,11 +992,11 @@ class DeleteRequirement(Requirement):
             )
 
         # Get user consent (with extra warning)
-        if interface.ask_user(f"Permanently delete {abs_path}? [y/N]: "):
+        if interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
             try:
                 # Perform the delete operation
                 self._delete_file_or_directory()
-                interface.show("✓ Deleted", level=interface.current_level + 1)
+                interface.show("✓  Deleted", level=interface.current_level + 1)
                 return DeleteResult(requirement=self, path=abs_path, accepted=True)
             except (PermissionError, OSError) as e:
                 interface.display_error(f"Found error when deleting: {e}")

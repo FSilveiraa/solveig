@@ -1,5 +1,5 @@
 from solveig.interface import SolveigInterface, RequirementPresentation, CLIInterface
-from solveig.interface.cli import DEFAULT_YES
+# from solveig.interface.cli import DEFAULT_YES
 
 
 class MockInterface(CLIInterface):
@@ -13,30 +13,37 @@ class MockInterface(CLIInterface):
         super().__init__()
         self.outputs = []
         self.user_inputs = []
-        self.prompt_calls = []
-        self.yes_no_calls = []
+        self.questions = []
+        # self.yes_no_calls = []
 
     def _output(self, text: str) -> None:
         """Capture output instead of printing"""
         self.outputs.append(text)
 
+    def _input(self, text: str) -> None:
+        """Capture input instead of printing"""
+        self.questions.append(text)
+        if self.user_inputs:
+            return self.user_inputs.pop()
+        raise ValueError()
+
     def _get_max_output_width(self) -> int:
         return -1
 
-    def ask_user(self, prompt) -> str:
-        """Mock user input - returns pre-configured responses or default"""
-        self.prompt_calls.append(prompt)
-        if self.user_inputs:
-            return self.user_inputs.pop(0)
-        raise ValueError()
+    # def ask_user(self, prompt) -> str:
+    #     """Mock user input - returns pre-configured responses or default"""
+    #     self.prompt_calls.append(prompt)
+    #     if self.user_inputs:
+    #         return self.user_inputs.pop(0)
+    #     raise ValueError()
 
-    def ask_yes_no(self, prompt: str = "") -> bool:
-        """Mock yes/no input - returns pre-configured responses or default"""
-        self.yes_no_calls.append(prompt)
-        if self.user_inputs:
-            response = self.user_inputs.pop(0)
-            return response.lower() in DEFAULT_YES
-        raise ValueError()
+    # def ask_yes_no(self, prompt: str = "") -> bool:
+    #     """Mock yes/no input - returns pre-configured responses or default"""
+    #     self.yes_no_calls.append(prompt)
+    #     if self.user_inputs:
+    #         response = self.user_inputs.pop(0)
+    #         return response.lower() in DEFAULT_YES
+    #     raise ValueError()
 
     # def display_llm_response(self, llm_response) -> None:
     #     """Mock LLM response display using context managers"""
@@ -118,6 +125,7 @@ class MockInterface(CLIInterface):
         """Clear all captured data"""
         self.outputs.clear()
         self.user_inputs.clear()
-        self.prompt_calls.clear()
-        self.yes_no_calls.clear()
+        self.questions.clear()
+        # self.prompt_calls.clear()
+        # self.yes_no_calls.clear()
         self.current_level = 0

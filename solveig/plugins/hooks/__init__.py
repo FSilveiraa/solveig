@@ -3,6 +3,7 @@ import pkgutil
 from collections.abc import Callable
 
 from solveig import SolveigConfig
+from solveig.interface import SolveigInterface
 
 
 class HOOKS:
@@ -111,7 +112,7 @@ def load_hooks():
     )
 
 
-def filter_plugins(enabled_plugins: set[str] | SolveigConfig | None = None):
+def filter_plugins(interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None):
     """
     Filters currently loaded plugins according to config
 
@@ -120,25 +121,26 @@ def filter_plugins(enabled_plugins: set[str] | SolveigConfig | None = None):
                     If None, loads all discovered plugins (used during schema init).
     :return:
     """
-
-    if enabled_plugins is not None:
+    if HOOKS._all_hooks and enabled_plugins:
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
-        print(f"⌖ Filtering plugin hooks: {', '.join(sorted(enabled_plugins))}")
+        interface.show(f"⌖ Filtering plugin hooks: {', '.join(sorted(enabled_plugins))}")
         # Clear current hooks and rebuild from registry
         HOOKS.before.clear()
         HOOKS.after.clear()
 
+        interface.current_level += 1
         for plugin_name in HOOKS._all_hooks:
             if plugin_name in enabled_plugins:
                 before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
                 HOOKS.before.extend(before_hooks)
                 HOOKS.after.extend(after_hooks)
             else:
-                print(f"   ≫ Skipping plugin, not present in config: {plugin_name}")
+                interface.show(f"≫ Skipping plugin, not present in config: {plugin_name}")
+        interface.current_level -= 1
 
         total_hooks = len(HOOKS.before) + len(HOOKS.after)
-        print(
+        interface.show(
             f"🕮  Plugin filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
         )
         return
