@@ -9,17 +9,28 @@ from unittest.mock import patch
 
 from tests.utils.mocks.filesystem import (
     mock_fs,
-    mock_absolute_path,
-    mock_read_metadata_and_listing,
-    mock_read_file,
-    mock_read_file_as_text,
-    mock_write_file_or_directory,
-    mock_copy_file_or_directory,
-    mock_move_file_or_directory,
-    mock_delete_file_or_directory,
+    # Low-level primitive mocks - Path operations
     mock_path_exists,
+    mock_path_is_file,
+    mock_path_is_dir,
+    mock_path_stat,
+    mock_path_iterdir,
+    mock_path_read_text,
+    mock_path_read_bytes,
+    mock_path_write_text,
+    mock_path_mkdir,
+    mock_path_unlink,
+    # System operations
+    mock_shutil_rmtree,
+    mock_shutil_move,
+    mock_shutil_copy2,
+    mock_shutil_copytree,
     mock_os_access,
     mock_shutil_disk_usage,
+    # System info operations
+    mock_pwd_getpwuid,
+    mock_grp_getgrgid,
+    mock_mimetypes_guess_type,
 )
 
 
@@ -38,21 +49,27 @@ def mock_all_file_operations(request):
         yield None
         return
     
-    # Patch file I/O operations and low-level system calls
-    # NOTE: Don't patch validation functions - let them run real logic against mocked I/O
-    with patch.multiple(
-        'solveig.utils.file',
-        absolute_path=mock_absolute_path,
-        read_metadata_and_listing=mock_read_metadata_and_listing,
-        read_file=mock_read_file,
-        read_file_as_text=mock_read_file_as_text,
-        write_file_or_directory=mock_write_file_or_directory,
-        copy_file_or_directory=mock_copy_file_or_directory,
-        move_file_or_directory=mock_move_file_or_directory,
-        delete_file_or_directory=mock_delete_file_or_directory,
-    ), patch.object(Path, 'exists', mock_path_exists), \
-       patch('os.access', mock_os_access), \
-       patch('shutil.disk_usage', mock_shutil_disk_usage):
+    # Patch ONLY low-level primitives - let business logic run against mocked primitives
+    # This allows proper testing of validation logic, error handling, and business flows
+    with patch.object(Path, 'exists', mock_path_exists), \
+         patch.object(Path, 'is_file', mock_path_is_file), \
+         patch.object(Path, 'is_dir', mock_path_is_dir), \
+         patch.object(Path, 'stat', mock_path_stat), \
+         patch.object(Path, 'iterdir', mock_path_iterdir), \
+         patch.object(Path, 'read_text', mock_path_read_text), \
+         patch.object(Path, 'read_bytes', mock_path_read_bytes), \
+         patch.object(Path, 'write_text', mock_path_write_text), \
+         patch.object(Path, 'mkdir', mock_path_mkdir), \
+         patch.object(Path, 'unlink', mock_path_unlink), \
+         patch('shutil.rmtree', mock_shutil_rmtree), \
+         patch('shutil.move', mock_shutil_move), \
+         patch('shutil.copy2', mock_shutil_copy2), \
+         patch('shutil.copytree', mock_shutil_copytree), \
+         patch('os.access', mock_os_access), \
+         patch('shutil.disk_usage', mock_shutil_disk_usage), \
+         patch('pwd.getpwuid', mock_pwd_getpwuid), \
+         patch('grp.getgrgid', mock_grp_getgrgid), \
+         patch('mimetypes.guess_type', mock_mimetypes_guess_type):
         # Reset to clean state for each test
         mock_fs.reset()
         yield mock_fs

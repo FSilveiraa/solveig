@@ -97,14 +97,13 @@ def read_metadata_and_listing(path: str | Path, _descend=True):
 
 
 def read_file_as_base64(path: str | Path) -> str:
-    with open(path, "rb") as fd:
-        return base64.b64encode(fd.read()).decode("utf-8")
+    abs_path = absolute_path(path)
+    return base64.b64encode(abs_path.read_bytes()).decode("utf-8")
 
 
-def read_file_as_text(path: Path) -> str:
-    return path.read_text()
-    # with open(path) as fd:
-    #     return fd.read()
+def read_file_as_text(path: str | Path) -> str:
+    abs_path = absolute_path(path)
+    return abs_path.read_text()
 
 
 def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:

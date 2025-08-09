@@ -205,15 +205,15 @@ class TestFileReading:
     
     def test_read_file_binary(self, mock_all_file_operations):
         """Test reading a binary file."""
-        # Add a binary file to mock filesystem
-        mock_all_file_operations.add_file("/test/binary.bin", "YmluYXJ5IGNvbnRlbnQ=", 
+        # Add a binary file to mock filesystem with actual binary content
+        mock_all_file_operations.add_file("/test/binary.bin", "binary content", 
                                           metadata={"mime_type": "application/octet-stream"})
         
         content, encoding = file_utils.read_file("/test/binary.bin")
         
-        # The mock implementation returns text encoding - this may need enhancement
+        # Should be base64 encoded binary content
         assert content == "YmluYXJ5IGNvbnRlbnQ="
-        assert encoding == "text"  # Mock currently returns 'text' - could be enhanced
+        assert encoding == "base64"
     
     def test_read_file_directory_error(self, mock_all_file_operations):
         """Test reading a directory (should fail)."""
