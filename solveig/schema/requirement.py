@@ -311,16 +311,9 @@ class ReadRequirement(Requirement):
                         requirement=self, path=abs_path, accepted=False, error=str(e)
                     )
 
-                with interface.group("Content"):
-                    content_output = ("(Base64)"
-                        if encoding == "base64"
-                        else utils.misc.format_output(
-                            content,
-                            indent=6,
-                            max_lines=config.max_output_lines,
-                            max_chars=config.max_output_size,
-                        ))
-                    interface.show(content_output)
+                # with interface.group("Content"):
+                content_output = "(Base64)" if encoding.lower() == "base64" else content
+                interface.display_text_block(content_output, title="Content")
 
             if interface.ask_yes_no(f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "):
                 return ReadResult(
@@ -597,13 +590,14 @@ class CommandRequirement(Requirement):
                 )
 
             if output:
-                with interface.group("Output"):
-                    interface.show(utils.misc.format_output(
-                        output,
-                        indent=6,
-                        max_lines=config.max_output_lines,
-                        max_chars=config.max_output_size,
-                    ))
+                # with interface.group("Output"):
+                interface.display_text_block(output, title="Output")
+                    # interface.show(utils.misc.format_output(
+                    #     output,
+                    #     indent=6,
+                    #     max_lines=config.max_output_lines,
+                    #     max_chars=config.max_output_size,
+                    # ))
                 # print(
                 #     utils.misc.format_output(
                 #         output,
@@ -617,9 +611,7 @@ class CommandRequirement(Requirement):
                 # print("    [ No Output ]")
             if error:
                 with interface.group("Error"):
-                    interface.show(utils.misc.format_output(
-                        error, indent=6, max_lines=config.max_output_size, max_chars=config.max_output_size
-                    ))
+                    interface.display_text_block(error, title="Error")
                 # print(
                 #     utils.misc.format_output(
                 #         error,

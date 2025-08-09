@@ -254,8 +254,7 @@ def main_loop(config: SolveigConfig, user_prompt: str = ""):
     interface = CLIInterface(be_verbose=config.verbose)
     client, message_history = get_llm_client(config, interface)
 
-    with interface.section("User"):
-        pass
+    interface.display_section("User")
     user_prompt = user_prompt.strip() if user_prompt else ""
     user_response = UserMessage(comment=user_prompt or interface.ask_user()) # get_initial_user_message(user_prompt, interface)
     message_history.add_message(user_response)
@@ -272,14 +271,14 @@ def main_loop(config: SolveigConfig, user_prompt: str = ""):
 
         # Successfully got LLM response
         message_history.add_message(llm_response)
-        with interface.section("Assistant"):
-            interface.display_llm_response(llm_response)
+        interface.display_section("Assistant")
+        interface.display_llm_response(llm_response)
         # Process requirements and get next user input
 
         # Prepare user response
-        with interface.section("User"):
-            results = process_requirements(llm_response=llm_response, config=config, interface=interface)
-            user_response = UserMessage(comment=interface.ask_user(), results=results)
+        interface.display_section("User")
+        results = process_requirements(llm_response=llm_response, config=config, interface=interface)
+        user_response = UserMessage(comment=interface.ask_user(), results=results)
 
         message_history.add_message(user_response)
 

@@ -18,7 +18,7 @@ class CLIInterface(SolveigInterface):
 
     DEFAULT_INPUT_PROMPT = "Reply:\n > "
 
-    class TEXT_BOX_CHARACTERS:
+    class TEXT_BOX:
         H = "─"
         V = "│"
         TL = "┌"  # top-left
@@ -38,6 +38,16 @@ class CLIInterface(SolveigInterface):
     # def display_section_header(self, title: str) -> None:
     #     """Display a section header using the existing print_line utility."""
     #     misc.print_line(title)
+
+    def display_section(self, title: str) -> None:
+        """
+        Section header with line
+        --- User ---------------
+        """
+        terminal_width = self._get_max_output_width()
+        title_formatted = f"{self.TEXT_BOX.H * 3} {title} " if title else ""
+        padding = self.TEXT_BOX.H * (terminal_width - len(title_formatted)) if terminal_width > 0 else ""
+        self._output(f"\n{title_formatted}{padding}")
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
         """Display the LLM response and requirements summary."""
@@ -174,14 +184,35 @@ class CLIInterface(SolveigInterface):
 
 
 
-    def display_block(self, text: str, level: int | None = None) -> None:
+    def display_text_block(self, text: str, title: str | None = None, level: int | None = None, max_lines: int | None = None) -> None:
+        if not self.max_lines or not text:
+            return
+
         indent = self._indent(level)
-        horizontal_bar = self.TEXT_BOX_CHARACTERS.V * (self._get_max_output_width() - len(indent))
-        self._indent(f"{indent}{horizontal_bar}")
+        max_width = self._get_max_output_width()
 
-        vertical_bar = "|"
-        message_lines = text.splitlines()
-        for line in message_lines:
-            pass
+        # ┌─── Content ─────────────────────────────┐
+        top_bar = f"{indent}{self.TEXT_BOX.TL}"
+        if title:
+            top_bar = f"{top_bar}{self.TEXT_BOX.H * 3} {title.title()} "
+        self._output(f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 1)}{self.TEXT_BOX.TR}")
 
-        self._indent(f"{indent}{horizontal_bar}")
+        vertical_bar_left = f"{indent}{self.TEXT_BOX.V} "
+        vertical_bar_right = f" {self.TEXT_BOX.V}"
+        max_line_length = self._get_max_output_width() - len(vertical_bar_left) - len(vertical_bar_right)
+
+        current_line_no = 0
+        for line in text.splitlines():
+            current_line_no += 1
+            if current_line_no > self.max_lines:
+                # self._output(f"{vertical_bar_left}...{' ' * (max_line_length-3)}{vertical_bar_right}")
+                break
+            truncated_line = line[0:max_line_length]
+            if len(truncated_line) > max_line_length:
+                truncated_line = f"{truncated_line[0:max_line_length - 3]}..."
+            else:
+                truncated_line = f"{truncated_line}{' ' * (max_line_length - len(truncated_line))}"
+            self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
+
+        # └─────────────────────────────────────────┘
+        self._output(f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 2)}{self.TEXT_BOX.BR}")

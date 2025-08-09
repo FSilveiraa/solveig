@@ -64,6 +64,11 @@ class SolveigInterface(ABC):
         """Display a single requirement with its presentation data."""
         pass
 
+    @abstractmethod
+    def display_text_block(self, text: str, title: str | None = None, level: int | None = None, max_lines: int | None = None) -> None:
+        """Display a block of text."""
+        pass
+
     #####
     
     def _indent(self, level: Optional[int] = None) -> str:
@@ -75,21 +80,21 @@ class SolveigInterface(ABC):
         """Display content at specified or current indent level"""
         indent = self._indent(level)
         self._output(f"{indent}{content}")
-    
-    @contextmanager
-    def section(self, title: str) -> Generator[None, None, None]:
+
+    def display_section(self, title: str) -> None:
         """
         Section header with line
         --- User ---------------
         """
-        terminal_width = self._get_max_output_width()
-        title_formatted = f"--- {title} " if title else ""
-        padding = "-" * (terminal_width - len(title_formatted)) if terminal_width > 0 else ""
-        self._output(f"\n{title_formatted}{padding}")
-        try:
-            yield
-        finally:
-            pass
+        pass
+        # terminal_width = self._get_max_output_width()
+        # title_formatted = f"--- {title} " if title else ""
+        # padding = "-" * (terminal_width - len(title_formatted)) if terminal_width > 0 else ""
+        # self._output(f"\n{title_formatted}{padding}")
+        # try:
+        #     yield
+        # finally:
+        #     pass
     
     @contextmanager  
     def group(self, title: str, count: Optional[int] = None) -> Generator[None, None, None]:
@@ -107,13 +112,6 @@ class SolveigInterface(ABC):
             yield
         finally:
             self.current_level = old_level
-
-
-
-    @abstractmethod
-    def display_text_block(self, text: str, level: int | None = None) -> None:
-        """Display a block of text."""
-        pass
 
     def display_comment(self, message: str) -> None:
         self.show(f"❝ {message}")
