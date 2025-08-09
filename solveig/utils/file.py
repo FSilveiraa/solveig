@@ -313,7 +313,7 @@ def validate_move_access(source_path: str, dest_path: str) -> None:
             raise PermissionError(f"Cannot create destination directory: {dest_parent}")
 
 
-def validate_copy_access(source_path: str, dest_path: str) -> None:
+def validate_copy_access(source_path: str | Path, dest_path: str | Path) -> None:
     """
     Validate that a copy operation can be performed.
 
@@ -326,8 +326,8 @@ def validate_copy_access(source_path: str, dest_path: str) -> None:
         PermissionError: If insufficient permissions
         OSError: If destination exists or other OS error
     """
-    source = Path(source_path).expanduser().resolve()
-    dest = Path(dest_path).expanduser().resolve()
+    source = absolute_path(source_path)
+    dest = absolute_path(dest_path)
 
     # Check source exists and is readable
     if not source.exists():

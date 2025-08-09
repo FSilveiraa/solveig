@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 import traceback
 
-from .base import RequirementPresentation, SolveigInterface
+from .base import SolveigInterface
 
 
 class CLIInterface(SolveigInterface):
@@ -64,35 +64,11 @@ class CLIInterface(SolveigInterface):
                     indexed_requirements[requirement.title].append(requirement)
 
                 for requirement_type, requirements in indexed_requirements.items():
-                    with self.with_group(requirement_type.title()):
+                    with self.with_group(requirement_type.title(), count=len(requirements)):
                         for requirement in requirements:
-                            requirement_presentation = requirement.get_presentation_data()
+                            requirement.display_header(None, self)  # config not needed for LLM response display
 
-                            if requirement_presentation.details:
-                                for requirement_info in requirement_presentation.details:
-                                    self.show(requirement_info)
-
-                            if requirement_presentation.warnings:
-                                for warning in requirement_presentation.warnings:
-                                    self.display_warning(warning)
-
-    def display_requirement(self, presentation: RequirementPresentation) -> None:
-        """Display a single requirement with proper formatting."""
-        self.display_comment(presentation.comment)
-
-        # Display details (path info, etc.)
-        for detail in presentation.details:
-            self.show(detail)
-
-        # Display warnings if any
-        if presentation.warnings:
-            for warning in presentation.warnings:
-                self.display_warning(warning)
-
-        # Display content preview if any
-        if presentation.content:
-            with self.with_group("Content"):
-                self.show(presentation.content)
+# display_requirement removed - requirements now display themselves directly
 
     def display_error(self, message: str | Exception) -> None:
         _exception = message
@@ -103,10 +79,10 @@ class CLIInterface(SolveigInterface):
             traceback_block = "".join(traceback.format_exception(type(_exception), _exception, _exception.__traceback__))
             self.display_text_block(traceback_block, title="Error")
 
-    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None) -> None:
-        text = f"{'🗁' if metadata['is_directory'] else '🗎'} {metadata["path"]}"
+    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+        text = f"{'🗁' if metadata['is_directory'] else '🗎'} {metadata["path"]} | "
         # size for directories is visual noise
-        if (metadata["is_directory"]):
+        if metadata["is_directory"]:
             metadata.pop("size")
         text += " | ".join([
             f"{key}={value}"
@@ -120,7 +96,7 @@ class CLIInterface(SolveigInterface):
                 entry_str = f"{'🗁' if entry['is_directory'] else '🗎'} {Path(entry["path"]).name}"
                 # └ if it's the last item, otherwise ├
                 text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
-        self.display_text_block(text, title="Metadata", level=level, max_lines=max_lines)
+        self.display_text_block(text, title=title, level=level, max_lines=max_lines)
 
     def display_text_block(self, text: str, title: str | None = None, level: int | None = None, max_lines: int | None = None) -> None:
         if not self.max_lines or not text:

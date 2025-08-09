@@ -10,6 +10,8 @@ This replaces the old setup.sh script with proper Python integration.
 import sys
 from pathlib import Path
 
+from solveig.interface import SolveigInterface, CLIInterface
+
 
 def add_bash_timestamps() -> bool:
     """
@@ -105,23 +107,10 @@ def create_config_directory() -> bool:
         return False
 
 
-def ask_yes_no(question: str, default: bool = True) -> bool:
-    """Ask a yes/no question with a default answer."""
-    default_str = "Y/n" if default else "y/N"
-    while True:
-        response = input(f"{question} [{default_str}]: ").strip().lower()
-
-        if not response:
-            return default
-        elif response in ("y", "yes"):
-            return True
-        elif response in ("n", "no"):
-            return False
-        else:
-            print("Please answer 'y' or 'n'")
-
-
 def main() -> int:
+    # All defaults for now
+    interface = CLIInterface()
+
     """Main initialization function."""
     print("🛡️  Solveig Setup")
     print("================")
@@ -148,7 +137,7 @@ def main() -> int:
     print("This is the same functionality as the old setup.sh script.")
     print()
 
-    if ask_yes_no("Would you like to enable bash history timestamps?"):
+    if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
         add_bash_timestamps()
     else:
         print("○ Skipped bash history timestamp setup.")

@@ -3,7 +3,7 @@ Base interface classes for Solveig user interaction.
 """
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from dataclasses import dataclass
+# dataclass import removed with RequirementPresentation
 from typing import TYPE_CHECKING, Generator, Optional, Any
 
 from .. import SolveigConfig
@@ -14,14 +14,7 @@ if TYPE_CHECKING:
 
 
 
-@dataclass
-class RequirementPresentation:
-    """Data structure containing everything needed to display a requirement."""
-    title: str
-    comment: str
-    details: list[str]
-    warnings: list[str] | None = None
-    content: str | None = None
+# RequirementPresentation removed - requirements now have direct interface access
 
 
 class SolveigInterface(ABC):
@@ -59,10 +52,7 @@ class SolveigInterface(ABC):
         """Display the LLM's comment and requirements summary."""
         pass
 
-    @abstractmethod
-    def display_requirement(self, presentation: RequirementPresentation) -> None:
-        """Display a single requirement with its presentation data."""
-        pass
+# display_requirement removed - requirements now display themselves directly
 
     @abstractmethod
     def display_text_block(self, text: str, title: str | None = None, level: int | None = None, max_lines: int | None = None) -> None:
@@ -70,7 +60,7 @@ class SolveigInterface(ABC):
         pass
 
     @abstractmethod
-    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None) -> None:
+    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
         """Utility method to display a block of text with metadata"""
         pass
 
