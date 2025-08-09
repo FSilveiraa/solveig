@@ -28,7 +28,9 @@ def absolute_path(path: str | Path) -> Path:
 
 def parse_size_notation_into_bytes(size_notation: int | str | None) -> int:
     if size_notation is not None:
-        if not isinstance(size_notation, int):
+        if isinstance(size_notation, int):
+            return size_notation
+        else:
             try:
                 return int(size_notation)
             except ValueError:
@@ -134,7 +136,7 @@ def validate_read_access(file_path: str | Path) -> None:
     Validate that a file/directory can be read.
     Raises appropriate exceptions if validation fails.
     """
-    abs_path = Path(file_path).expanduser().resolve()
+    abs_path = absolute_path(file_path)
 
     if not abs_path.exists():
         raise FileNotFoundError("This path doesn't exist")
@@ -192,7 +194,7 @@ def validate_write_access(
     Validate write operation before attempting it.
     Raises appropriate exceptions if validation fails.
     """
-    abs_path = Path(file_path).expanduser().resolve()
+    abs_path = absolute_path(file_path)
     min_disk_bytes_left = parse_size_notation_into_bytes(min_disk_size_left)
 
     # Check if path already exists
@@ -240,7 +242,7 @@ def write_file_or_directory(
     Write a file or create a directory.
     Raises exceptions on errors - caller handles error wrapping.
     """
-    abs_path = Path(file_path).expanduser().resolve()
+    abs_path = absolute_path(file_path)
 
     if is_directory:
         # Create directory
@@ -267,7 +269,7 @@ def _check_can_create_parent(parent_dir: Path) -> bool:
     return False  # Reached root without finding writable directory
 
 
-def validate_move_access(source_path: str, dest_path: str) -> None:
+def validate_move_access(source_path: str | Path, dest_path: str | Path) -> None:
     """
     Validate that a move operation can be performed.
 
@@ -280,8 +282,8 @@ def validate_move_access(source_path: str, dest_path: str) -> None:
         PermissionError: If insufficient permissions
         OSError: If destination exists or other OS error
     """
-    source = Path(source_path).expanduser().resolve()
-    dest = Path(dest_path).expanduser().resolve()
+    source = absolute_path(source_path)
+    dest = absolute_path(dest_path)
 
     # Check source exists and is readable
     if not source.exists():
@@ -353,7 +355,7 @@ def validate_copy_access(source_path: str | Path, dest_path: str | Path) -> None
             raise PermissionError(f"Cannot create destination directory: {dest_parent}")
 
 
-def validate_delete_access(file_path: str) -> None:
+def validate_delete_access(file_path: str | Path) -> None:
     """
     Validate that a delete operation can be performed.
 
@@ -364,7 +366,7 @@ def validate_delete_access(file_path: str) -> None:
         FileNotFoundError: If path doesn't exist
         PermissionError: If insufficient permissions
     """
-    path = Path(file_path).expanduser().resolve()
+    path = absolute_path(file_path)
 
     # Check path exists
     if not path.exists():
@@ -382,7 +384,7 @@ def validate_delete_access(file_path: str) -> None:
             )
 
 
-def move_file_or_directory(source_path: str, dest_path: str) -> None:
+def move_file_or_directory(source_path: str | Path, dest_path: str | Path) -> None:
     """
     Move a file or directory from source to destination.
 
@@ -393,8 +395,8 @@ def move_file_or_directory(source_path: str, dest_path: str) -> None:
     Raises:
         Same as validate_move_access, plus shutil.Error for copy failures
     """
-    source = Path(source_path).expanduser().resolve()
-    dest = Path(dest_path).expanduser().resolve()
+    source = absolute_path(source_path)
+    dest = absolute_path(dest_path)
 
     # Create destination parent directory if needed
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -403,7 +405,7 @@ def move_file_or_directory(source_path: str, dest_path: str) -> None:
     shutil.move(str(source), str(dest))
 
 
-def copy_file_or_directory(source_path: str, dest_path: str) -> None:
+def copy_file_or_directory(source_path: str | Path, dest_path: str | Path) -> None:
     """
     Copy a file or directory from source to destination.
 
@@ -414,8 +416,8 @@ def copy_file_or_directory(source_path: str, dest_path: str) -> None:
     Raises:
         Same as validate_copy_access, plus shutil.Error for copy failures
     """
-    source = Path(source_path).expanduser().resolve()
-    dest = Path(dest_path).expanduser().resolve()
+    source = absolute_path(source_path)
+    dest = absolute_path(dest_path)
 
     # Create destination parent directory if needed
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -427,7 +429,7 @@ def copy_file_or_directory(source_path: str, dest_path: str) -> None:
         shutil.copytree(str(source), str(dest))
 
 
-def delete_file_or_directory(file_path: str) -> None:
+def delete_file_or_directory(file_path: str | Path) -> None:
     """
     Delete a file or directory.
 
@@ -437,7 +439,7 @@ def delete_file_or_directory(file_path: str) -> None:
     Raises:
         Same as validate_delete_access, plus OSError for deletion failures
     """
-    path = Path(file_path).expanduser().resolve()
+    path = absolute_path(file_path)
 
     if path.is_file():
         path.unlink()

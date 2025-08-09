@@ -1,9 +1,11 @@
 from solveig import SolveigConfig, APIType
 from solveig.schema import LLMMessage
-from tests.utils.mocks.requirement import MockRequirementFactory
+from solveig.schema.requirement import (
+    ReadRequirement, WriteRequirement, CommandRequirement,
+    MoveRequirement, CopyRequirement, DeleteRequirement
+)
 
 from .interface import MockInterface
-from .requirement import MockRequirementFactory
 
 
 DEFAULT_CONFIG = SolveigConfig(
@@ -11,9 +13,9 @@ DEFAULT_CONFIG = SolveigConfig(
     api_key="test-key",
     url="test-url",
     model="test-model",
-    temperature=0.5,
-
+    temperature=0.0,
     verbose=False,
+    min_disk_space_left="1gb",
 )
 
 VERBOSE_CONFIG = SolveigConfig(
@@ -21,13 +23,25 @@ VERBOSE_CONFIG = SolveigConfig(
     api_key="test-key",
     url="test-url",
     model="test-model",
-    temperature=0.5,
+    temperature=0.0,
     verbose=True,
+    min_disk_space_left="1gb",
 )
 
+# Create test requirements using real requirement classes (will be mocked at utils.file level)
 ALL_REQUIREMENTS_MESSAGE = LLMMessage(
     comment="I need to read, write, run commands, move, copy, and delete files",
-    requirements=MockRequirementFactory.create_all_requirements(),
+    requirements=[
+        ReadRequirement(path="/test/file.txt", only_read_metadata=False, comment="Read test file"),
+        WriteRequirement(path="/test/output.txt", content="test content", is_directory=False, comment="Write test file"),
+        CommandRequirement(command="ls -la", comment="List files"),
+        MoveRequirement(source_path="/test/source.txt", destination_path="/test/dest.txt", comment="Move file"),
+        CopyRequirement(source_path="/test/original.txt", destination_path="/test/copy.txt", comment="Copy file"),
+        DeleteRequirement(path="/test/unwanted.txt", comment="Delete file"),
+    ],
 )
 
-__all__ = ["ALL_REQUIREMENTS_MESSAGE", "DEFAULT_CONFIG", "VERBOSE_CONFIG", MockInterface, MockRequirementFactory]
+__all__ = [
+    "ALL_REQUIREMENTS_MESSAGE", "DEFAULT_CONFIG", "VERBOSE_CONFIG", 
+    "MockInterface"
+]

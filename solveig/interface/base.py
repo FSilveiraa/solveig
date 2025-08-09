@@ -60,7 +60,7 @@ class SolveigInterface(ABC):
         pass
 
     @abstractmethod
-    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+    def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
         """Utility method to display a block of text with metadata"""
         pass
 

@@ -339,7 +339,7 @@ python -m pytest tests/unit/ -v
 # Specific test class
 python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
 
-# Run all checks locally (same as CI)
+# Run all checks locally (same as CI) 
 black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
 ```
 

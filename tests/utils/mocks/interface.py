@@ -1,5 +1,5 @@
-from solveig.interface import SolveigInterface, RequirementPresentation, CLIInterface
-# from solveig.interface.cli import DEFAULT_YES
+from typing import Any
+from solveig.interface import CLIInterface
 
 
 class MockInterface(CLIInterface):
@@ -29,6 +29,13 @@ class MockInterface(CLIInterface):
 
     def _get_max_output_width(self) -> int:
         return -1
+
+    def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+        """Mock implementation of display_tree - just captures the call."""
+        tree_output = f"TREE: {title} - {metadata.get('path', 'unknown')}"
+        if listing:
+            tree_output += f" (with {len(listing)} entries)"
+        self.outputs.append(tree_output)
 
     # def ask_user(self, prompt) -> str:
     #     """Mock user input - returns pre-configured responses or default"""

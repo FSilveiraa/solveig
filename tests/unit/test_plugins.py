@@ -9,7 +9,7 @@ from solveig.schema import CommandResult
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
 from tests.utils.mocks import (
     DEFAULT_CONFIG,
-    MockRequirementFactory,
+    MockInterface
 )
 
 
@@ -66,12 +66,12 @@ class TestPluginHookSystem:
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="fail this command"
-        )
+        req = CommandRequirement(command="fail this command", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline if it gets to user
 
         # Execute
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert not result.accepted
@@ -87,12 +87,12 @@ class TestPluginHookSystem:
             if "rm -rf" in requirement.command:
                 raise SecurityError("Dangerous command detected")
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="rm -rf /important/data"
-        )
+        req = CommandRequirement(command="rm -rf /important/data", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])
 
-        # Execute
-        result = req.solve(DEFAULT_CONFIG)
+        # Execute  
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert not result.accepted
@@ -108,14 +108,12 @@ class TestPluginHookSystem:
             # Just validate, don't throw
             assert requirement.command is not None
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test",
-            command="echo hello",
-            accepted=False,
-        )
+        req = CommandRequirement(command="echo hello", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline the command
 
         # Execute
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         # Should get to user interaction (not stopped by plugin)
@@ -135,12 +133,12 @@ class TestPluginHookSystem:
             if result.accepted:
                 raise ProcessingError("Post-processing failed")
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo hello"
-        )
+        req = CommandRequirement(command="echo hello", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["y", "y"])  # Accept the command
 
         # Execute
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert result.accepted  # Command was accepted originally
@@ -159,12 +157,12 @@ class TestPluginHookSystem:
         def second_validator(config, requirement):
             execution_order.append("second")
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo test"
-        )
+        req = CommandRequirement(command="echo test", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])
 
         # Execute
-        req.solve(DEFAULT_CONFIG)
+        req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert execution_order == ["first", "second"]
@@ -184,16 +182,16 @@ class TestPluginHookSystem:
 
         # Execute
         # Test with CommandRequirement
-        cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo test"
-        )
-        cmd_req.solve(DEFAULT_CONFIG)
+        cmd_req = CommandRequirement(command="echo test", comment="Test")
+        interface1 = MockInterface()
+        interface1.set_user_inputs(["n"])
+        cmd_req.solve(DEFAULT_CONFIG, interface1)
 
-        # Test with ReadRequirement
-        read_req = MockRequirementFactory.create_read_requirement(
-            comment="Test", path="/test/file", only_read_metadata=True
-        )
-        read_req.solve(DEFAULT_CONFIG)
+        # Test with ReadRequirement  
+        read_req = ReadRequirement(path="/test/file.txt", only_read_metadata=True, comment="Test")
+        interface2 = MockInterface()
+        interface2.set_user_inputs(["n"])
+        read_req.solve(DEFAULT_CONFIG, interface2)
 
         # Verify
         assert "command_hook" in called
@@ -213,16 +211,17 @@ class TestPluginHookSystem:
             called.append(get_requirement_name(requirement))
 
         # Test with different requirement types
-        cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo test"
-        )
-        read_req = MockRequirementFactory.create_read_requirement(
-            comment="Test", path="/test/file", only_read_metadata=True
-        )
+        cmd_req = CommandRequirement(command="echo test", comment="Test")
+        read_req = ReadRequirement(path="/test/file.txt", only_read_metadata=True, comment="Test")
 
         # Execute
-        cmd_req.solve(DEFAULT_CONFIG)
-        read_req.solve(DEFAULT_CONFIG)
+        interface1 = MockInterface()
+        interface1.set_user_inputs(["n"])
+        cmd_req.solve(DEFAULT_CONFIG, interface1)
+        
+        interface2 = MockInterface() 
+        interface2.set_user_inputs(["n"])
+        read_req.solve(DEFAULT_CONFIG, interface2)
 
         # Verify
         assert get_requirement_name(cmd_req) in called

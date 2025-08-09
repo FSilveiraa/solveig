@@ -7,9 +7,10 @@ from unittest.mock import Mock, patch
 
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
+from solveig.schema.requirement import CommandRequirement, ReadRequirement
 from tests.utils.mocks import (
     DEFAULT_CONFIG,
-    MockRequirementFactory,
+    MockInterface
 )
 
 
@@ -44,13 +45,10 @@ class TestShellcheckPlugin:
 
     def test_security_error_message_format(self):
         """Test that dangerous commands produce properly formatted error messages."""
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test dangerous command error formatting",
-            command="mkfs.ext4 /dev/sda1",
-            accepted=False,
-        )
+        req = CommandRequirement(command="mkfs.ext4 /dev/sda1", comment="Test dangerous command error formatting")
+        interface = MockInterface()
 
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
@@ -61,13 +59,12 @@ class TestShellcheckPlugin:
 
     def test_normal_command_passes_validation(self):
         """Test that normal commands pass shellcheck validation."""
-        cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test normal command", command="echo 'hello world'"
-        )
-        cmd_req._ask_run_consent.return_value = False
+        cmd_req = CommandRequirement(command="echo 'hello world'", comment="Test normal command")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline to run
 
         # Mock user declining to run the command (we just want to test plugin validation)
-        result = cmd_req.solve(DEFAULT_CONFIG)
+        result = cmd_req.solve(DEFAULT_CONFIG, interface)
 
         # Should reach user prompt (not stopped by plugin) and be declined by user
         assert not result.accepted
@@ -79,12 +76,11 @@ class TestShellcheckPlugin:
         # Mock shellcheck returning success (no issues)
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
 
-        cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test successful validation", command="echo 'properly quoted'"
-        )
-        cmd_req._ask_run_consent.return_value = False
+        cmd_req = CommandRequirement(command="echo 'properly quoted'", comment="Test successful validation")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline to run
 
-        result = cmd_req.solve(DEFAULT_CONFIG)
+        result = cmd_req.solve(DEFAULT_CONFIG, interface)
 
         # Should pass validation and reach user prompt
         assert not result.accepted  # Declined by user
@@ -104,11 +100,10 @@ class TestShellcheckPlugin:
             stdout=f"[{mock_issues[0]}, {mock_issues[1]}]".replace("'", '"'),
             stderr="",
         )
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo $UNQUOTED_VAR"
-        )
+        req = CommandRequirement(command="echo $UNQUOTED_VAR", comment="Test")
+        interface = MockInterface()
 
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
@@ -122,11 +117,11 @@ class TestShellcheckPlugin:
         mock_subprocess.side_effect = FileNotFoundError("shellcheck command not found")
 
         config = DEFAULT_CONFIG
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="echo test", accepted=False
-        )
+        req = CommandRequirement(command="echo test", comment="Test")
+        interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline to run
 
-        result = req.solve(config)
+        result = req.solve(config, interface)
 
         # Should continue processing gracefully without shellcheck
         assert not result.accepted  # Declined by user
@@ -152,12 +147,13 @@ class TestShellcheckPlugin:
             stderr="",
         )
 
-        req = MockRequirementFactory.create_command_requirement(
-            comment="Test multiple issues",
-            command="if [ $var = `date` ]; then echo hello; fi",
+        req = CommandRequirement(
+            command="if [ $var = `date` ]; then echo hello; fi", 
+            comment="Test multiple issues"
         )
+        interface = MockInterface()
 
-        result = req.solve(DEFAULT_CONFIG)
+        result = req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
@@ -183,24 +179,19 @@ class TestShellcheckPluginIntegration:
         """Test that shellcheck only runs for CommandRequirement."""
 
         # CommandRequirement with dangerous pattern should trigger shellcheck
-        cmd_req = MockRequirementFactory.create_command_requirement(
-            comment="Test", command="rm -rf /"
-        )
-        result = cmd_req.solve(DEFAULT_CONFIG)
+        cmd_req = CommandRequirement(command="rm -rf /", comment="Test")
+        interface = MockInterface()
+        result = cmd_req.solve(DEFAULT_CONFIG, interface)
 
         # Should be stopped by shellcheck plugin
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
-        # didn't get to this point since it was interrupted
-        cmd_req._ask_run_consent.assert_not_called()
 
         # Test that ReadRequirement doesn't trigger shellcheck
-        read_req = MockRequirementFactory.create_read_requirement(
-            comment="Test", path="/test/file", only_read_metadata=True
-        )
-        read_req._validate_read_access.side_effect = FileNotFoundError("File not found")
-        result = read_req.solve(DEFAULT_CONFIG)
+        read_req = ReadRequirement(path="/test/nonexistent.txt", only_read_metadata=True, comment="Test")
+        interface2 = MockInterface()
+        result = read_req.solve(DEFAULT_CONFIG, interface2)
 
         # Should not be stopped by shellcheck (file validation error is different)
         assert not result.accepted
-        assert "file not found" in result.error.lower()  # File error, not plugin error
+        assert "doesn't exist" in result.error.lower()  # File error, not plugin error

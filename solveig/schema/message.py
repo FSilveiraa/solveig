@@ -91,22 +91,29 @@ class LLMMessage(BaseMessage):
 
 @dataclass
 class MessageContainer:
-    message: UserMessage | LLMMessage
+    message: BaseMessage
     content: str = field(init=False)
     token_count: int = field(init=False)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    role: Literal["user", "assistant"] = field(init=False)
+    role: Literal["user", "assistant", "system"] = field(init=False)
 
-    def __init__(self, message: LLMMessage | UserMessage):
+    def __init__(self, message: BaseMessage, role: str | None = None):
         self.message = message
-        self.role = "user" if isinstance(message, UserMessage) else "assistant"
+        if role:
+            self.role = role
+        elif isinstance(message, UserMessage):
+            self.role = "user"
+        elif isinstance(message, LLMMessage):
+            self.role = "assistant"
+        else:
+            self.role = "system"
         self.content = json.dumps(message.to_openai())
         self.token_count = utils.misc.count_tokens(self.content)
 
     def to_openai(self) -> dict:
         return {
             "role": self.role,
-            "content": self.content,
+            "content": json.dumps(self.message.to_openai()),
         }
 
     def to_example(self) -> str:
@@ -114,37 +121,47 @@ class MessageContainer:
         return f"{data['role']}: {data['content']}"
 
 
-@dataclass
+# @dataclass
 class MessageHistory:
-    system_prompt: dict = None
+    # system_prompt: dict = None
     max_context: int = -1
-    messages: list[MessageContainer] = field(default_factory=list)
-    message_cache: list[dict] = field(default_factory=list)
+    messages: list[MessageContainer] # = field(default_factory=list)
+    message_cache: list[dict] # = field(default_factory=list)
 
-    def __post_init__(self):
-        if isinstance(self.system_prompt, str):
-            self.system_prompt = {
-                "role": "system",
-                "content": self.system_prompt.strip()
-            }
+    def __init__(self, system_prompt, max_context: int = -1, messages: list[MessageContainer] = None, message_cache: list[dict] = None):
+        self.messages = messages or []
+        self.message_cache = message_cache or []
+        self.add_message(BaseMessage(comment=system_prompt), role="system")
+
+    # def __post_init__(self):
+    #     if isinstance(self.system_prompt, str):
+    #         self.system_prompt = {
+    #             "role": "system",
+    #             "content": self.system_prompt.strip()
+    #         }
 
     def get_token_count(self):
-        count = utils.misc.count_tokens(self.system_prompt) if self.system_prompt else 0
-        return count + sum(message["content"] for message in self.message_cache)
+        # count = 0
+        # if self.system_prompt:
+        #     if isinstance(self.system_prompt, dict):
+        #         count = len(self.system_prompt["content"])
+        #     else:
+        #         count = len(self.system_prompt)
+        return sum(utils.misc.count_tokens(message["content"]) for message in self.message_cache)
 
     def prune_message_cache(self):
         if self.max_context >= 0:
             while self.get_token_count() > self.max_context:
                 self.message_cache.pop(0)
 
-    def add_message(self, message: UserMessage | LLMMessage):
-        message_container = MessageContainer(message)
+    def add_message(self, message: BaseMessage, role: str | None = None):
+        message_container = MessageContainer(message, role=role)
         self.messages.append(message_container)
         self.message_cache.append(message_container.to_openai())
         self.prune_message_cache()
 
     def to_openai(self):
-        return [ self.system_prompt] + self.message_cache
+        return self.message_cache
 
     def to_example(self):
         return "\n".join(message.to_example() for message in self.messages)

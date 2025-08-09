@@ -79,7 +79,7 @@ class CLIInterface(SolveigInterface):
             traceback_block = "".join(traceback.format_exception(type(_exception), _exception, _exception.__traceback__))
             self.display_text_block(traceback_block, title="Error")
 
-    def display_metadata(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+    def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]], level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
         text = f"{'🗁' if metadata['is_directory'] else '🗎'} {metadata["path"]} | "
         # size for directories is visual noise
         if metadata["is_directory"]:

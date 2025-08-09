@@ -176,17 +176,12 @@ class ReadRequirement(Requirement):
             error=error_message,
         )
 
-    def _validate_file_access(self, path: str | Path) -> None:
-        """Validate r
-        ead access to path (OS interaction - can be mocked)."""
-        utils.file.validate_read_access(path)
-
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> ReadResult:
         abs_path = utils.file.absolute_path(self.path)
 
         # Pre-flight validation
         try:
-            self._validate_file_access(abs_path)
+            utils.file.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
             interface.display_error(f"Cannot access {abs_path}: {e}")
             return ReadResult(
@@ -194,7 +189,7 @@ class ReadRequirement(Requirement):
             )
 
         metadata, listing = utils.file.read_metadata_and_listing(abs_path)
-        interface.display_metadata(metadata, listing)
+        interface.display_tree(metadata, listing)
         is_dir = metadata["is_directory"]
         content = None
 
@@ -262,15 +257,6 @@ class WriteRequirement(Requirement):
             error=error_message,
         )
 
-    def _validate_write_access(self, config: SolveigConfig) -> None:
-        """Validate write access (OS interaction - can be mocked)."""
-        utils.file.validate_write_access(
-            file_path=utils.file.absolute_path(self.path),
-            is_directory=self.is_directory,
-            content=self.content,
-            min_disk_size_left=config.min_disk_space_left,
-        )
-
     def _write_file_or_directory(self, path: str | Path, content: str | None = None) -> None:
         """Write file or directory (OS interaction - can be mocked)."""
         content = content or self.content or "" # cannot be None
@@ -281,6 +267,13 @@ class WriteRequirement(Requirement):
 
         # Confirm if path exists
         try:
+            utils.file.validate_write_access(
+                file_path=utils.file.absolute_path(self.path),
+                is_directory=self.is_directory,
+                content=self.content,
+                min_disk_size_left=config.min_disk_space_left,
+            )
+
             metadata, listing = utils.file.read_metadata_and_listing(abs_path)
             already_exists = True
             # Do not overwrite directories (confirm if the existing path is a dir, not the request)
@@ -289,7 +282,7 @@ class WriteRequirement(Requirement):
             # Otherwise show a warning with the file metadata
             else:
                 interface.display_warning("This file already exists")
-                interface.display_metadata(metadata, None)
+                interface.display_tree(metadata, None)
         except FileNotFoundError:
             # File does not exist
             already_exists = False
@@ -301,11 +294,8 @@ class WriteRequirement(Requirement):
         )
         if interface.ask_yes_no(question):
             try:
-                # Validate write access first
-                self._validate_write_access(config)
-
                 # Perform the write operation
-                self._write_file_or_directory(abs_path)
+                utils.file.write_file_or_directory(abs_path, is_directory=self.is_directory, content=self.content)
                 interface.show(f"✓  {'Updated' if already_exists else 'Created'}", level=interface.current_level + 1)
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
@@ -444,14 +434,6 @@ class MoveRequirement(Requirement):
             destination_path=utils.file.absolute_path(self.destination_path),
         )
 
-    def _validate_move_access(self) -> None:
-        """Validate move access (OS interaction - can be mocked)."""
-        utils.file.validate_move_access(self.source_path, self.destination_path)
-
-    def _move_file_or_directory(self) -> None:
-        """Move file or directory (OS interaction - can be mocked)."""
-        utils.file.move_file_or_directory(self.source_path, self.destination_path)
-
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> MoveResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
@@ -469,7 +451,7 @@ class MoveRequirement(Requirement):
             error = e
             interface.display_warning("Destination path already exists")
             destination_metadata, destination_listing = utils.file.read_metadata_and_listing(abs_destination_path)
-            interface.display_metadata(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
+            interface.display_tree(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
 
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
@@ -482,13 +464,13 @@ class MoveRequirement(Requirement):
             )
 
         metadata, listing = utils.file.read_metadata_and_listing(abs_source_path)
-        interface.display_metadata(metadata=metadata, listing=listing, title="Source Metadata")
+        interface.display_tree(metadata=metadata, listing=listing, title="Source Metadata")
 
         # Get user consent
         if interface.ask_yes_no(f"Allow moving {self.source_path} to {self.destination_path}? [y/N]: "):
             try:
                 # Perform the move operation
-                self._move_file_or_directory()
+                utils.file.move_file_or_directory(source_path=abs_source_path, dest_path=abs_destination_path)
 
                 with interface.with_indent():
                     interface.show("✓  Moved")
@@ -557,10 +539,6 @@ class CopyRequirement(Requirement):
             destination_path=utils.file.absolute_path(self.destination_path),
         )
 
-    def _copy_file_or_directory(self) -> None:
-        """Copy file or directory (OS interaction - can be mocked)."""
-        utils.file.copy_file_or_directory(self.source_path, self.destination_path)
-
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> CopyResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
@@ -579,7 +557,7 @@ class CopyRequirement(Requirement):
             error = e
             interface.display_warning("Destination path already exists")
             destination_metadata, destination_listing = utils.file.read_metadata_and_listing(abs_destination_path)
-            interface.display_metadata(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
+            interface.display_tree(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
 
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
@@ -592,14 +570,14 @@ class CopyRequirement(Requirement):
             )
 
         source_metadata, source_listing = utils.file.read_metadata_and_listing(abs_source_path)
-        interface.display_metadata(metadata=source_metadata, listing=source_listing, title="Source Metadata")
+        interface.display_tree(metadata=source_metadata, listing=source_listing, title="Source Metadata")
 
         # Get user consent
         if interface.ask_yes_no(f"Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "):
         # if self._ask_copy_consent():
             try:
                 # Perform the copy operation
-                self._copy_file_or_directory()
+                utils.file.copy_file_or_directory(source_path=abs_source_path, dest_path=abs_destination_path)
                 with interface.with_indent():
                     interface.show("✓  Copied")
                 return CopyResult(
@@ -663,31 +641,26 @@ class DeleteRequirement(Requirement):
             error=error_message,
         )
 
-    def _validate_delete_access(self) -> None:
-        """Validate delete access (OS interaction - can be mocked)."""
-        utils.file.validate_delete_access(self.path)
-
-    def _delete_file_or_directory(self) -> None:
-        """Delete file or directory (OS interaction - can be mocked)."""
-        utils.file.delete_file_or_directory(self.path)
-
     def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> DeleteResult:
         # Pre-flight validation
         abs_path = utils.file.absolute_path(self.path)
 
         try:
-            self._validate_delete_access()
+            utils.file.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
             interface.display_error(f"Skipping: {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )
 
+        metadata, listing = utils.file.read_metadata_and_listing(abs_path)
+        interface.display_tree(metadata=metadata, listing=listing)
+
         # Get user consent (with extra warning)
         if interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
             try:
                 # Perform the delete operation
-                self._delete_file_or_directory()
+                utils.file.delete_file_or_directory(abs_path)
                 interface.show("✓  Deleted", level=interface.current_level + 1)
                 return DeleteResult(requirement=self, path=abs_path, accepted=True)
             except (PermissionError, OSError) as e:

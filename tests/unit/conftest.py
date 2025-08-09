@@ -19,22 +19,19 @@ def safe_external_operations():
         with patch("solveig.utils.misc.ask_yes", return_value=False):
             # Only patch file operations in our solveig modules, not globally
             with patch(
-                "solveig.utils.file.read_file_with_metadata",
-                return_value={
+                "solveig.utils.file.read_metadata_and_listing",
+                return_value=({
                     "metadata": {"path": "/test/path", "size": 100},
                     "content": None,
                     "encoding": None,
                     "directory_listing": None,
-                },
+                }, []),
             ):
-                with patch(
-                    "solveig.utils.file.validate_read_access", return_value=None
-                ):
-                    with patch(
-                        "solveig.utils.file.validate_write_access", return_value=None
-                    ):
-                        with patch(
-                            "solveig.utils.file.write_file_or_directory",
-                            return_value=None,
-                        ):
-                            yield
+                with patch("solveig.utils.file.read_file", return_value=None):
+                    with patch("solveig.utils.file.validate_read_access", return_value=None):
+                        with patch("solveig.utils.file.validate_write_access", return_value=None):
+                            with patch(
+                                "solveig.utils.file.write_file_or_directory",
+                                return_value=None,
+                            ):
+                                yield

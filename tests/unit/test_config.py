@@ -34,7 +34,7 @@ class TestSolveigConfig:
         assert config.api_type == APIType.OPENAI
 
         config = SolveigConfig(api_type="KOBOLDCPP")
-        assert config.api_type == APIType.KOBOLDCPP
+        assert config.api_type == APIType.LOCAL
 
     def test_post_init_disk_space_parsing(self):
         """Test disk space parsing during post init."""
@@ -126,7 +126,7 @@ class TestSolveigConfig:
         config, prompt = SolveigConfig.parse_config_and_prompt()
 
         assert config.url == "http://custom-url:8080/v1"
-        assert config.api_type == APIType.KOBOLDCPP
+        assert config.api_type == APIType.LOCAL
         assert config.api_key == "custom-key"
         assert config.model == "custom-model"
         assert config.temperature == 0.8

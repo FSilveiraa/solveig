@@ -49,8 +49,8 @@ Issues = "https://github.com/FranciscoSilveira/solveig/issues"
 Documentation = "https://github.com/FranciscoSilveira/solveig#README.md"
 
 [project.scripts]
-solveig = "scripts.solveig_cli:cli_main"
-solveig-init = "scripts.solveig_init:main"
+solveig = "scripts.run:cli_main"
+solveig-init = "scripts.init:main"
 
 [tool.setuptools.packages.find]
 include = ["solveig*", "scripts*"]
