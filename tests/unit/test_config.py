@@ -65,16 +65,8 @@ class TestSolveigConfig:
         mock_all_file_operations.add_file(
             config_path, json.dumps(test_config, indent=2)
         )
-
-        # with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        #     json.dump(test_config, f)
-        #     temp_path = f.name
-
-        # try:
         result = SolveigConfig.parse_from_file(config_path)
-        assert result == test_config
-        # finally:
-        #     Path().unlink()
+        assert result == SolveigConfig(**test_config)
 
     @patch("argparse.ArgumentParser.parse_args")
     def test_parse_config_and_prompt_defaults(self, mock_parse_args):
