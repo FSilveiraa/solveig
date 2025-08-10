@@ -1,10 +1,11 @@
 """
-Mock file system for testing file operations without touching real files.
+Streamlined mock file system for testing file operations without touching real files.
+Only contains the essential MockFileSystem class and low-level primitive mocks.
 """
 
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 
 
 class MockFileSystem:
@@ -85,158 +86,6 @@ class MockFileSystem:
 
 # Global mock file system instance
 mock_fs = MockFileSystem()
-
-
-# Mock implementations for all utils.file methods that do I/O
-def mock_absolute_path(path) -> Path:
-    """Mock implementation of utils.file.absolute_path"""
-    return Path(path).expanduser().absolute()
-
-
-def mock_read_metadata_and_listing(path, _descend=True) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Mock implementation of utils.file.read_metadata_and_listing"""
-    abs_path = str(Path(path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError(f"{path} does not exist")
-    
-    file_data = mock_fs.files[abs_path]
-    return file_data["metadata"], file_data["listing"]
-
-
-def mock_read_file(path) -> Tuple[str, str]:
-    """Mock implementation of utils.file.read_file"""
-    abs_path = str(Path(path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError(f"{path} does not exist")
-    
-    if mock_fs.is_directory(abs_path):
-        raise FileNotFoundError(f"{path} is a directory")
-    
-    file_data = mock_fs.files[abs_path]
-    return file_data["content"], "text"
-
-
-def mock_read_file_as_text(path) -> str:
-    """Mock implementation of utils.file.read_file_as_text"""
-    abs_path = str(Path(path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError(f"{path} does not exist")
-    
-    file_data = mock_fs.files[abs_path]
-    if file_data["is_directory"]:
-        raise IsADirectoryError(f"{path} is a directory")
-    
-    return file_data["content"]
-
-
-def mock_validate_read_access(file_path) -> None:
-    """Mock implementation of utils.file.validate_read_access"""
-    abs_path = str(Path(file_path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError("This path doesn't exist")
-    
-    # Check if file has readable=False metadata (for permission testing)
-    file_data = mock_fs.files[abs_path]
-    if file_data["metadata"].get("readable") is False:
-        raise PermissionError("Cannot read this file")
-    # Otherwise allow read access
-
-
-def mock_validate_write_access(file_path, is_directory=False, content=None, min_disk_size_left=None) -> None:
-    """Mock implementation of utils.file.validate_write_access"""
-    abs_path = str(Path(file_path).expanduser().absolute())
-    
-    # Check for existing directories
-    if mock_fs.exists(abs_path) and is_directory and mock_fs.is_directory(abs_path):
-        raise FileExistsError("This directory already exists")
-    # Always allow write access otherwise
-
-
-def mock_write_file_or_directory(file_path, is_directory=False, content="") -> None:
-    """Mock implementation of utils.file.write_file_or_directory"""
-    abs_path = str(Path(file_path).expanduser().absolute())
-    
-    if is_directory:
-        mock_fs.add_directory(abs_path)
-    else:
-        mock_fs.add_file(abs_path, content)
-
-
-def mock_validate_copy_access(source_path, dest_path) -> None:
-    """Mock implementation of utils.file.validate_copy_access"""
-    source_abs = str(Path(source_path).expanduser().absolute())
-    dest_abs = str(Path(dest_path).expanduser().absolute())
-    
-    if not mock_fs.exists(source_abs):
-        raise FileNotFoundError(f"Source path does not exist: {source_path}")
-    
-    if mock_fs.exists(dest_abs):
-        raise OSError(f"Destination already exists: {dest_path}")
-
-
-def mock_copy_file_or_directory(source_path, dest_path) -> None:
-    """Mock implementation of utils.file.copy_file_or_directory"""
-    source_abs = str(Path(source_path).expanduser().absolute())
-    dest_abs = str(Path(dest_path).expanduser().absolute())
-    
-    if not mock_fs.exists(source_abs):
-        raise FileNotFoundError(f"Source does not exist: {source_path}")
-    
-    # Copy the file/directory in mock system
-    source_data = mock_fs.files[source_abs]
-    if source_data["is_directory"]:
-        mock_fs.add_directory(dest_abs, source_data["listing"])
-    else:
-        mock_fs.add_file(dest_abs, source_data["content"])
-
-
-def mock_validate_move_access(source_path, dest_path) -> None:
-    """Mock implementation of utils.file.validate_move_access"""
-    # Use same validation as copy
-    mock_validate_copy_access(source_path, dest_path)
-
-
-def mock_move_file_or_directory(source_path, dest_path) -> None:
-    """Mock implementation of utils.file.move_file_or_directory"""
-    source_abs = str(Path(source_path).expanduser().absolute())
-    dest_abs = str(Path(dest_path).expanduser().absolute())
-    
-    if not mock_fs.exists(source_abs):
-        raise FileNotFoundError(f"Source does not exist: {source_path}")
-    
-    # Move = copy + delete in mock system
-    source_data = mock_fs.files[source_abs]
-    if source_data["is_directory"]:
-        mock_fs.add_directory(dest_abs, source_data["listing"])
-    else:
-        mock_fs.add_file(dest_abs, source_data["content"])
-    
-    # Remove source
-    del mock_fs.files[source_abs]
-
-
-def mock_validate_delete_access(file_path) -> None:
-    """Mock implementation of utils.file.validate_delete_access"""
-    abs_path = str(Path(file_path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError(f"Path does not exist: {file_path}")
-    # Always allow delete in tests
-
-
-def mock_delete_file_or_directory(file_path) -> None:
-    """Mock implementation of utils.file.delete_file_or_directory"""
-    abs_path = str(Path(file_path).expanduser().absolute())
-    
-    if not mock_fs.exists(abs_path):
-        raise FileNotFoundError(f"Path does not exist: {file_path}")
-    
-    # Delete from mock system
-    del mock_fs.files[abs_path]
 
 
 # ===================================================================
@@ -462,7 +311,7 @@ def mock_shutil_disk_usage(path):
     DiskUsage = namedtuple('DiskUsage', 'total used free')
     
     # Return large disk space by default, tests can override via metadata
-    abs_path = str(Path(path).expanduser().absolute()) 
+    abs_path = str(Path(path).expanduser().absolute())
     if mock_fs.exists(abs_path):
         file_data = mock_fs.files[abs_path]
         free_space = file_data["metadata"].get("disk_free", 1000000000)  # 1GB default

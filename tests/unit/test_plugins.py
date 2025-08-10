@@ -325,7 +325,7 @@ class TestPluginFiltering:
         )
         
         # Load all plugins (this would register shellcheck)
-        hooks.load_plugins(interface=interface)
+        hooks.load_hooks(interface=interface)
         
         # Apply filtering - should filter out shellcheck
         hooks.filter_plugins(enabled_plugins=config_no_shellcheck, interface=interface)

@@ -86,13 +86,6 @@ def read_metadata_and_listing(path: str | Path, _descend=True):
             # entry_stats = os.stat(entry_path)
             # read the metadata for each entry using this same method with going further down
             entries.append(read_metadata_and_listing(entry_path, _descend=False)[0])
-                # {
-                #     "name": name,
-                #     "is_directory": os.path.isdir(entry_path),
-                #     "size": entry_stats.st_size,
-                #     "mtime": time.ctime(entry_stats.st_mtime),
-                # }
-            # )
     return metadata, entries
 
 
@@ -121,16 +114,6 @@ def read_file(path: str | Path) -> tuple[str, Literal["text", "base64"]]:
         return (read_file_as_base64(abs_path), "base64")
 
 
-# def _resolve_and_validate_path(path: str) -> Path:
-#     """
-#     Basic path validation, raises FileNotFoundError if path does not exist.
-#     """
-#     abs_path = Path(path).expanduser().resolve()
-#     if not abs_path.exists():
-#         raise FileNotFoundError("This path doesn't exist")
-#     return abs_path
-
-
 def validate_read_access(file_path: str | Path) -> None:
     """
     Validate that a file/directory can be read.
@@ -143,46 +126,6 @@ def validate_read_access(file_path: str | Path) -> None:
 
     if not os.access(abs_path, os.R_OK):
         raise PermissionError(f"Permission denied: Cannot read '{abs_path}'")
-
-
-# def validate_write_access(file_path: str | Path) -> None:
-#     """
-#     Validate that a file/directory can be written.
-#     Raises appropriate exceptions if validation fails.
-#     """
-#     abs_path = _resolve_and_validate_path(file_path)
-#     if not os.access(abs_path, os.W_OK):
-#         raise PermissionError(f"Permission denied: Cannot write '{abs_path}'")
-
-
-# def read_file_content(
-#     file_path: str | Path, read_content: bool = False
-# ) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
-#     """
-#     Read file/directory metadata and optionally content.
-#     Returns dict with 'metadata', 'content', 'encoding', 'directory_listing' keys.
-#     Raises exceptions on errors - caller handles error wrapping.
-#     """
-#     abs_path = Path(file_path).expanduser().resolve()
-#     if not abs_path.is_dir():
-#
-#     # result: dict[str, Any] = {
-#     #     "metadata": None,
-#     #     "content": None,
-#     #     "encoding": None,
-#     #     "directory_listing": None,
-#     # }
-#
-#     metadata, entries = read_metadata_and_entries(abs_path)
-#     content = None
-#     is_dir = metadata["is_directory"]
-#     # if is_dir and entries:
-#         # metadata["directory_listing"] = entries
-#     if not is_dir and read_content:
-#         content, metadata["encoding"] = read_file(abs_path)
-#
-#     return content, metadata, entries
-
 
 def validate_write_access(
     file_path: str | Path,

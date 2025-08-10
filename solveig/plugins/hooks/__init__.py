@@ -3,7 +3,7 @@ import pkgutil
 from collections.abc import Callable
 
 from solveig import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface, CLIInterface
 
 
 class HOOKS:
@@ -82,32 +82,40 @@ def after(requirements: tuple[type] | None = None):
 
 # Auto-discovery of hook plugins - any .py file in this directory
 # that uses @before/@after decorators will be automatically registered
-def load_hooks():
+def load_hooks(interface: SolveigInterface | None = None):
     """
     Discover and load plugin files in the hooks directory.
     """
-    print("⌖ Loading plugin hooks...")
+    interface = interface or CLIInterface()
+    # print("⌖ Loading plugin hooks...")
+
+    import sys
 
     # Iterate through modules in this package
     total_files = 0
     total_schema = 0
-    for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
-        if not is_pkg and not module_name.endswith(".__init__"):
-            total_files += 1
-            plugin_name = module_name.split(".")[-1]
-            current_count = len(HOOKS._all_hooks)
-            try:
-                importlib.import_module(module_name)
-                # check if we actually loaded something
-                if len(HOOKS._all_hooks) > current_count:
-                    print(f"   ✓ Loaded plugin file: {plugin_name}")
-                # Not an error: we could have a schema-only plugin
-                # else:
-                #     print(f"   ✗ Plugin loaded, but failed to register: {plugin_name}: {e}")
-            except Exception as e:
-                print(f"   ✗ Failed to load plugin {plugin_name}: {e}")
+    with interface.with_group("Plugins"):
+        for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
+            if not is_pkg and not module_name.endswith(".__init__"):
+                total_files += 1
+                plugin_name = module_name.split(".")[-1]
+                current_count = len(HOOKS._all_hooks)
+                try:
+                    # If module is already loaded and hooks were cleared, reload it
+                    if module_name in sys.modules:
+                        importlib.reload(sys.modules[module_name])
+                    else:
+                        importlib.import_module(module_name)
+                    # check if we actually loaded something
+                    if len(HOOKS._all_hooks) > current_count:
+                        interface.show(f"✓ Loaded plugin file: {plugin_name}")
+                    # Not an error: we could have a schema-only plugin
+                    # else:
+                    #     print(f"   ✗ Plugin loaded, but failed to register: {plugin_name}: {e}")
+                except Exception as e:
+                    interface.display_error(f"Failed to load plugin {plugin_name}: {e}")
 
-    print(
+    interface.show(
         f"🕮  Plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks, {total_schema} schema"
     )
 
@@ -121,7 +129,8 @@ def filter_plugins(interface: SolveigInterface, enabled_plugins: set[str] | Solv
                     If None, loads all discovered plugins (used during schema init).
     :return:
     """
-    if HOOKS._all_hooks and enabled_plugins:
+    if HOOKS._all_hooks:
+        enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
         interface.show(f"⌖ Filtering plugin hooks: {', '.join(sorted(enabled_plugins))}")
