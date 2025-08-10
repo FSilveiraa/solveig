@@ -90,7 +90,7 @@ class SolveigConfig:
             return None
         abs_path = utils.file.absolute_path(config_path)
         try:
-            return json.loads(utils.file.read_file_as_text(abs_path))
+            return cls(**json.loads(utils.file.read_file_as_text(abs_path)))
         except FileNotFoundError:
             return None
         # if not isinstance(config_path, Path):
