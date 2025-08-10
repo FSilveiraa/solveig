@@ -139,8 +139,8 @@ class MessageHistory:
         self,
         system_prompt,
         max_context: int = -1,
-        messages: list[MessageContainer] = None,
-        message_cache: list[dict] = None,
+        messages: list[MessageContainer] | None = None,
+        message_cache: list[dict] | None = None,
     ):
         self.messages = messages or []
         self.message_cache = message_cache or []
@@ -170,7 +170,11 @@ class MessageHistory:
             while self.get_token_count() > self.max_context:
                 self.message_cache.pop(0)
 
-    def add_message(self, message: BaseMessage, role: str | None = None):
+    def add_message(
+        self,
+        message: BaseMessage,
+        role: Literal["user", "assistant", "system"] | None = None,
+    ):
         message_container = MessageContainer(message, role=role)
         self.messages.append(message_container)
         self.message_cache.append(message_container.to_openai())

@@ -37,32 +37,34 @@ def get_instructor_client(
         try:
             from openai import OpenAI
 
-            client = OpenAI(api_key=api_key, base_url=url)
-            return instructor.from_openai(client, mode=instructor.Mode.JSON)
-        except ImportError:
+            openai_client = OpenAI(api_key=api_key, base_url=url)
+            return instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
+        except ImportError as error:
             raise ValueError(
                 "OpenAI client not available. Install with: pip install openai"
-            )
+            ) from error
     elif api_type == APIType.CLAUDE or api_type == APIType.ANTHROPIC:
         try:
             from anthropic import Anthropic
 
-            client = Anthropic(api_key=api_key, base_url=url)
-            return instructor.from_anthropic(client, mode=instructor.Mode.JSON)
-        except ImportError:
+            anthropic_client = Anthropic(api_key=api_key, base_url=url)
+            return instructor.from_anthropic(
+                anthropic_client, mode=instructor.Mode.JSON
+            )
+        except ImportError as error:
             raise ValueError(
                 "Anthropic client not available. Install with: pip install anthropic"
-            )
+            ) from error
     elif api_type == APIType.GEMINI:
         try:
             import google.generativeai as genai
 
             genai.configure(api_key=api_key)
-            client = genai.GenerativeModel("gemini-pro")
-            return instructor.from_gemini(client, mode=instructor.Mode.JSON)
-        except ImportError:
+            gemini_client = genai.GenerativeModel("gemini-pro")
+            return instructor.from_gemini(gemini_client, mode=instructor.Mode.JSON)
+        except ImportError as error:
             raise ValueError(
                 "Google Generative AI client not available. Install with: pip install google-generativeai"
-            )
+            ) from error
     else:
         raise ValueError(f"Unsupported API type: {api_type}")

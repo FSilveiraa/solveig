@@ -159,8 +159,8 @@ class ReadRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError:
-            raise ValueError("Empty path")
+        except ValueError as error:
+            raise ValueError("Empty path") from error
         return path
 
     def display_header(
@@ -251,8 +251,8 @@ class WriteRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError:
-            raise ValueError("Empty path")
+        except ValueError as error:
+            raise ValueError("Empty path") from error
         return path
 
     def display_header(
@@ -320,7 +320,7 @@ class WriteRequirement(Requirement):
             try:
                 # Perform the write operation
                 utils.file.write_file_or_directory(
-                    abs_path, is_directory=self.is_directory, content=self.content
+                    abs_path, is_directory=self.is_directory, content=self.content or ""
                 )
                 interface.show(
                     f"✓  {'Updated' if already_exists else 'Created'}",
@@ -353,8 +353,8 @@ class CommandRequirement(Requirement):
             command = command.strip()
             if not command:  # raises in case it's None or ""
                 raise ValueError("Empty command")
-        except ValueError:
-            raise ValueError("Empty command")
+        except ValueError as error:
+            raise ValueError("Empty command") from error
         return command
 
     def display_header(
@@ -393,6 +393,8 @@ class CommandRequirement(Requirement):
             #  that's confusing and should be differentiated from not running the command at all.
             #  or if anything at all is refused, maybe just say that in the error
             try:
+                output: str | None
+                error: str | None
                 output, error = self._execute_command(config)
             except Exception as e:
                 error_str = str(e)
@@ -441,8 +443,8 @@ class MoveRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError:
-            raise ValueError("Empty path")
+        except ValueError as error:
+            raise ValueError("Empty path") from error
         return path
 
     def display_header(
@@ -544,7 +546,7 @@ class MoveRequirement(Requirement):
                 accepted=False,
                 source_path=abs_source_path,
                 destination_path=abs_destination_path,
-                error=error,
+                error=str(error),
             )
 
 
@@ -560,8 +562,8 @@ class CopyRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError:
-            raise ValueError("Empty path")
+        except ValueError as error:
+            raise ValueError("Empty path") from error
         return path
 
     def display_header(
@@ -683,8 +685,8 @@ class DeleteRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError:
-            raise ValueError("Empty path")
+        except ValueError as error:
+            raise ValueError("Empty path") from error
         return path
 
     def display_header(

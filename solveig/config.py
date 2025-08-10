@@ -184,16 +184,19 @@ class SolveigConfig:
         user_prompt = args_dict.pop("prompt")
 
         file_config = cls.parse_from_file(args_dict.pop("config"))
+        file_config_dict = {}
         if not file_config:
             warning = "Failed to parse config file, falling back to defaults"
             if interface:
                 interface.display_error(warning)
             else:
                 print(f"Warning: {warning}")
-            file_config = {}
+        else:
+            # Convert SolveigConfig object to dict
+            file_config_dict = vars(file_config)
 
         # Merge config from file and CLI
-        merged_config = {**file_config}
+        merged_config = {**file_config_dict}
         for k, v in args_dict.items():
             if v is not None:
                 merged_config[k] = v

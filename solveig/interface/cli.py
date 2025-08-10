@@ -6,9 +6,12 @@ import shutil
 import traceback
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .base import SolveigInterface
+
+if TYPE_CHECKING:
+    from solveig.schema import LLMMessage
 
 
 class CLIInterface(SolveigInterface):
@@ -72,13 +75,15 @@ class CLIInterface(SolveigInterface):
                         requirement_type.title(), count=len(requirements)
                     ):
                         for requirement in requirements:
-                            requirement.display_header(
-                                None, self
-                            )  # config not needed for LLM response display
+                            # Create minimal config for display purposes
+                            from solveig.config import SolveigConfig
+
+                            minimal_config = SolveigConfig()
+                            requirement.display_header(minimal_config, self)
 
     # display_requirement removed - requirements now display themselves directly
 
-    def display_error(self, message: str | Exception) -> None:
+    def display_error(self, message: str | Exception | None = None) -> None:
         _exception = message
         if isinstance(_exception, Exception):
             message = str(f"{_exception.__class__.__name__}: {_exception}")
@@ -94,7 +99,7 @@ class CLIInterface(SolveigInterface):
     def display_tree(
         self,
         metadata: dict[str, Any],
-        listing: list[dict[str, Any]],
+        listing: list[dict[str, Any]] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = "Metadata",

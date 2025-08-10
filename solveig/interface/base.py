@@ -5,7 +5,7 @@ Base interface classes for Solveig user interaction.
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -118,7 +118,7 @@ class SolveigInterface(ABC):
     def display_comment(self, message: str) -> None:
         self.show(f"❝  {message}")
 
-    def display_error(self, message: str | Exception = None) -> None:
+    def display_error(self, message: str | Exception | None = None) -> None:
         self.show(f"✖  {message}")
 
     def display_warning(self, message: str) -> None:

@@ -374,4 +374,4 @@ class TestPluginFiltering:
         assert len(received_config) == 1
         assert received_config[0]["option1"] == "value1"
         assert received_config[0]["option2"] == 42
-        assert received_config[0]["enabled"] == True
+        assert received_config[0]["enabled"]

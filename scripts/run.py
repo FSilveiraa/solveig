@@ -83,7 +83,7 @@ def get_llm_client(
 
 
 def get_initial_user_message(
-    user_prompt: str | None, interface: CLIInterface
+    user_prompt: str | None, interface: SolveigInterface
 ) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")

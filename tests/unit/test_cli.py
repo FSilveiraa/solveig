@@ -27,7 +27,7 @@ class TestCLIInterface:
         interface = CLIInterface(indent_base=4, max_lines=10, be_verbose=True)
         assert interface.indent_base == 4
         assert interface.max_lines == 10
-        assert interface.be_verbose == True
+        assert interface.be_verbose
         assert interface.current_level == 0
 
     def test_display_section(self):
