@@ -136,19 +136,19 @@ class TestSendMessageToLLM:
         mock_client.chat.completions.create.return_value = llm_response
 
         # Execute
-        with patch("builtins.print") as mock_print:
-            result = send_message_to_llm(
-                DEFAULT_CONFIG, mock_interface, mock_client, message_history, user_message,
-            )
+        result = send_message_to_llm(
+            DEFAULT_CONFIG, mock_interface, mock_client, message_history, user_message,
+        )
 
         # Verify
-        mock_print.assert_called_once_with("(Sending)")
+        output_text = " ".join(mock_interface.outputs)
+        assert "(Sending)" in output_text
         mock_client.chat.completions.create.assert_called_once_with(
             messages=message_history.to_openai(),
             response_model=LLMMessage,
             strict=False,
             model="test-model",
-            temperature=0.5,
+            temperature=0.0,
         )
         assert result is llm_response
 
@@ -175,7 +175,7 @@ class TestSendMessageToLLM:
 
         # Verify
         mock_handle_error.assert_called_once_with(
-            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG
+            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
         )
         assert result is None
 

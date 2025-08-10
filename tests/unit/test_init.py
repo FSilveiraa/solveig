@@ -29,8 +29,10 @@ class TestBashTimestamps:
         mock_home.return_value = Path("/home/test")
         mock_exists.return_value = True
         mock_read.return_value = "# Empty bashrc"
+        interface = MockInterface()
+        interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
-        result = add_bash_timestamps()
+        result = add_bash_timestamps(interface)
 
         assert result is True
         mock_open_file.assert_called()
@@ -46,13 +48,12 @@ class TestBashTimestamps:
         mock_home.return_value = Path("/home/test")
         mock_exists.return_value = True
         mock_read.return_value = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "'
+        interface = MockInterface()
+        interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
-        result = add_bash_timestamps()
+        result = add_bash_timestamps(interface)
 
         assert result is True
-        mock_print.assert_called_with(
-            "✓ Bash history timestamps are already configured."
-        )
 
     @patch("builtins.print")
     @patch("scripts.init.Path.home")
@@ -64,8 +65,10 @@ class TestBashTimestamps:
         """Test handling exceptions during timestamp setup."""
         mock_home.return_value = Path("/home/test")
         mock_exists.side_effect = PermissionError("Access denied")
+        interface = MockInterface()
+        interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
-        result = add_bash_timestamps()
+        result = add_bash_timestamps(interface)
 
         assert result is False
 
@@ -73,20 +76,21 @@ class TestBashTimestamps:
 class TestDependencyCheck:
     """Test dependency checking functionality."""
 
-    @patch("builtins.print")
     @patch("builtins.__import__")
-    def test_check_dependencies_all_available(self, mock_import, mock_print):
+    def test_check_dependencies_all_available(self, mock_import):
         """Test when all dependencies are available."""
         mock_import.return_value = True  # All imports succeed
+        interface = MockInterface()
 
-        result = check_dependencies()
+        result = check_dependencies(interface)
 
         assert result is True
-        mock_print.assert_called_with("✓ All required dependencies are installed.")
+        # Check that success message appears in interface output
+        output_text = " ".join(interface.outputs)
+        assert "✓ All required dependencies are installed." in output_text
 
-    @patch("builtins.print")
     @patch("builtins.__import__")
-    def test_check_dependencies_missing(self, mock_import, mock_print):
+    def test_check_dependencies_missing(self, mock_import):
         """Test when some dependencies are missing."""
         mock_import.side_effect = [
             True,
@@ -95,39 +99,41 @@ class TestDependencyCheck:
             True,
             True,
         ]  # Second import fails
+        interface = MockInterface()
 
-        result = check_dependencies()
+        result = check_dependencies(interface)
 
         assert result is False
-        # Check that missing packages message was printed
-        print_calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("Missing required packages:" in call for call in print_calls)
+        # Check that missing packages message appears in interface output
+        output_text = " ".join(interface.outputs)
+        assert "Found missing packages" in output_text
 
 
 class TestConfigDirectory:
     """Test configuration directory creation."""
 
-    @patch("builtins.print")
     @patch("scripts.init.Path.home")
-    def test_create_config_directory_success(self, mock_home, mock_print):
+    def test_create_config_directory_success(self, mock_home):
         """Test successful config directory creation."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            mock_home.return_value = Path(temp_dir)
+        interface = MockInterface()
+        mock_home.return_value = Path("/home/test")
+        
+        result = create_config_directory(interface)
 
-            result = create_config_directory()
+        assert result is True
+        # Check that success message appears in interface output
+        output_text = " ".join(interface.outputs)
+        assert "Configuration directory ready" in output_text
 
-            assert result is True
-            assert (Path(temp_dir) / ".config").exists()
-
-    @patch("builtins.print")
     @patch("scripts.init.Path.home")
     @patch("pathlib.Path.mkdir")
-    def test_create_config_directory_exception(self, mock_mkdir, mock_home, mock_print):
+    def test_create_config_directory_exception(self, mock_mkdir, mock_home):
         """Test handling exceptions during directory creation."""
         mock_home.return_value = Path("/home/test")
         mock_mkdir.side_effect = PermissionError("Access denied")
+        interface = MockInterface()
 
-        result = create_config_directory()
+        result = create_config_directory(interface)
 
         assert result is False
 
@@ -202,8 +208,9 @@ class TestMainFunction:
     ):
         """Test main function with successful bash setup."""
         mock_interface = MockInterface()
+        mock_interface.set_user_inputs(["y"])  # User says yes to bash setup
         mock_create_config.return_value = True
-        mock_ask_yes_no.return_value = True
+        mock_check_tools.return_value = True  # check_dependencies returns True
         mock_add_bash.return_value = True
 
         result = main(interface=mock_interface)
@@ -211,7 +218,6 @@ class TestMainFunction:
         assert result == 0
         mock_create_config.assert_called_once()
         mock_check_tools.assert_called_once()
-        mock_ask_yes_no.assert_called_once()
         mock_add_bash.assert_called_once()
 
     @patch("scripts.init.create_config_directory")

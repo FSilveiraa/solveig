@@ -14,7 +14,7 @@ class TestInstructorClientFactory:
     """Test get_instructor_client factory function."""
     
     @patch('solveig.llm.instructor')
-    @patch('solveig.llm.OpenAI')
+    @patch('openai.OpenAI')
     def test_get_instructor_client_openai(self, mock_openai, mock_instructor):
         """Test creating instructor client for OpenAI API."""
         mock_openai_client = Mock()
@@ -32,7 +32,7 @@ class TestInstructorClientFactory:
             api_key="test-api-key", 
             base_url="https://api.openai.com/v1"
         )
-        mock_instructor.from_openai.assert_called_once_with(mock_openai_client)
+        mock_instructor.from_openai.assert_called_once_with(mock_openai_client, mode=mock_instructor.Mode.JSON)
         assert result == mock_instructor_client
     
     @patch('solveig.llm.instructor')
@@ -54,11 +54,11 @@ class TestInstructorClientFactory:
             api_key="test-anthropic-key",
             base_url="https://api.anthropic.com/v1"
         )
-        mock_instructor.from_anthropic.assert_called_once_with(mock_anthropic_client)
+        mock_instructor.from_anthropic.assert_called_once_with(mock_anthropic_client, mode=mock_instructor.Mode.JSON)
         assert result == mock_instructor_client
     
     @patch('solveig.llm.instructor')
-    @patch('solveig.llm.OpenAI')
+    @patch('openai.OpenAI')
     def test_get_instructor_client_custom_provider(self, mock_openai, mock_instructor):
         """Test creating instructor client with custom provider URL."""
         mock_openai.return_value = Mock()
@@ -93,7 +93,7 @@ class TestInstructorClientFactory:
         
         mock_configure.assert_called_once_with(api_key="test-gemini-key")
         mock_model.assert_called_once_with('gemini-pro')
-        mock_instructor.from_gemini.assert_called_once_with(mock_gemini_client)
+        mock_instructor.from_gemini.assert_called_once_with(mock_gemini_client, mode=mock_instructor.Mode.JSON)
         assert result == mock_instructor_client
     
     def test_get_instructor_client_anthropic_import_error(self):
@@ -116,7 +116,7 @@ class TestInstructorClientFactory:
                     url="https://generativelanguage.googleapis.com/v1beta"
                 )
     
-    @patch('solveig.llm.OpenAI')
+    @patch('openai.OpenAI')
     def test_client_creation_error_handling(self, mock_openai):
         """Test that client creation errors are propagated."""
         mock_openai.side_effect = Exception("OpenAI client creation failed")
