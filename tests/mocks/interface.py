@@ -27,8 +27,11 @@ class MockInterface(CLIInterface):
         """Capture input instead of printing"""
         self.questions.append(text)
         if self.user_inputs:
-            return self.user_inputs.pop()
+            return self.user_inputs.pop(0)
         raise ValueError()
+
+    def _output_inline(self, text: str) -> None:
+        self._output(text)
 
     def _get_max_output_width(self) -> int:
         return 80
@@ -47,9 +50,9 @@ class MockInterface(CLIInterface):
             tree_output += f" (with {len(listing)} entries)"
         self.outputs.append(tree_output)
 
-    def display_animation_while(self, run_this: Callable, message: str | None = None) -> None:
-        self.show(message)
-        return run_this()
+    # def display_animation_while(self, run_this: Callable, message: str | None = None) -> None:
+    #     self.show(message)
+    #     return run_this()
 
 
     # Test helper methods

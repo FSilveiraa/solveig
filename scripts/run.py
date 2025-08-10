@@ -41,9 +41,10 @@ def get_initial_user_message(
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
     if user_prompt:
-        interface.show(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}")
+        interface.show(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}\n")
     else:
         user_prompt = interface.ask_user()
+        interface.show("")
     return UserMessage(comment=user_prompt)
 
 
@@ -69,32 +70,34 @@ def send_message_to_llm(
             # max_tokens=512,
         )
 
-    try:
-        llm_response: LLMMessage = interface.display_animation_while(
-            run_this=blocking_llm_call,
-            message="Waiting... ",
-        )
-        interface.show(f"Found response: {llm_response}")
-        interface.show(llm_response.to_openai())
-        return llm_response
-    except Exception as e:
-        handle_llm_error(e, config, interface)
-        return None
+    return interface.display_animation_while(
+        run_this=blocking_llm_call,
+        message="Waiting... (Ctrl+C to stop)",
+    )
+    # interface.show(f"Found response: {llm_response}")
+    # interface.show(llm_response.to_openai())
+    return llm_response
+    # except KeyboardInterrupt:
+    #     interface.show("Interrupted by user")
+    #     return None
+    # except Exception as e:
+    #     handle_llm_error(e, config, interface)
+    #     return None
 
-    # Fallback for verbose mode - no animation to avoid interfering with debug output
-    try:
-        llm_response: LLMMessage = client.chat.completions.create(
-            messages=message_history.to_openai(),
-            response_model=LLMMessage,
-            strict=False,
-            model=config.model,
-            temperature=config.temperature,
-            # max_tokens=512,
-        )
-        return llm_response
-    except Exception as e:
-        handle_llm_error(e, config, interface)
-        return None
+    # # Fallback for verbose mode - no animation to avoid interfering with debug output
+    # try:
+    #     llm_response: LLMMessage = client.chat.completions.create(
+    #         messages=message_history.to_openai(),
+    #         response_model=LLMMessage,
+    #         strict=False,
+    #         model=config.model,
+    #         temperature=config.temperature,
+    #         # max_tokens=512,
+    #     )
+    #     return llm_response
+    # except Exception as e:
+    #     handle_llm_error(e, config, interface)
+    #     return None
 
 
 def send_message_to_llm_with_retry(
@@ -106,18 +109,21 @@ def send_message_to_llm_with_retry(
 ) -> tuple[LLMMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
-        llm_response = send_message_to_llm(
-            config, interface, client, message_history, user_response
-        )
-        interface.show(f"Got response: {llm_response}")
-        if llm_response is not None:
-            interface.show(llm_response.to_openai())
-            return llm_response, user_response
+        try:
+            llm_response = send_message_to_llm(
+                config, interface, client, message_history, user_response
+            )
+            if llm_response is not None:
+                return llm_response, user_response
+
+        except KeyboardInterrupt:
+            interface.display_warning("Interrupted by user")
+
+        except Exception as e:
+            handle_llm_error(e, config, interface)
 
         # Error occurred, ask if user wants to retry or provide new input
-        with interface.with_group("Error"):
-            prompt = f"Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
-            retry = interface.ask_yes_no(prompt)
+        retry = interface.ask_yes_no(f"Re-send previous message{' and results' if user_response.results else ''}? [y/N]: ")
 
         if not retry:
             new_comment = interface.ask_user()
@@ -157,6 +163,7 @@ def process_requirements(
                     result = requirement.solve(config, interface)
                     if result:
                         results.append(result)
+                    interface.show("")
                 except Exception as e:
                     # this should not happen - all errors during plugin solve() should be caught inside
                     with interface.with_indent():
@@ -189,15 +196,16 @@ def main_loop(
 
     # interface.display_section("User")
     user_prompt = user_prompt.strip() if user_prompt else ""
-    user_response = get_initial_user_message(user_prompt, interface)
+    user_message = get_initial_user_message(user_prompt, interface)
     # message_history.add_message(user_response)
 
     while True:
         """Each cycle starts with the previous/initial user response finalized, but not added to the message history or sent"""
         # Send message to LLM and handle any errors
-        message_history.add_message(user_response)
-        llm_response, user_response = send_message_to_llm_with_retry(
-            config, interface, client, message_history, user_response
+        message_history.add_message(user_message)
+
+        llm_response, user_message = send_message_to_llm_with_retry(
+            config, interface, client, message_history, user_message
         )
 
         if llm_response is None:
@@ -207,6 +215,8 @@ def main_loop(
         # Successfully got LLM response
         message_history.add_message(llm_response)
         interface.display_section("Assistant")
+        if config.verbose:
+            interface.display_text_block(llm_response.to_openai(), title="Response")
         interface.display_llm_response(llm_response)
         # Process requirements and get next user input
 
@@ -215,7 +225,9 @@ def main_loop(
         results = process_requirements(
             llm_response=llm_response, config=config, interface=interface
         )
-        user_response = UserMessage(comment=interface.ask_user(), results=results)
+        user_prompt = interface.ask_user()
+        interface.show("")
+        user_message = UserMessage(comment=user_prompt, results=results)
 
 
 def cli_main():

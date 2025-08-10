@@ -10,7 +10,7 @@ from scripts.run import (
     get_llm_client,
     handle_llm_error,
     process_requirements,
-    send_message_to_llm,
+    send_message_to_llm_with_retry,
     # summarize_requirements,
 )
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
@@ -138,7 +138,7 @@ class TestSendMessageToLLM:
         mock_client.chat.completions.create.return_value = llm_response
 
         # Execute
-        result = send_message_to_llm(
+        llm_message, new_user_message = send_message_to_llm_with_retry(
             DEFAULT_CONFIG,
             mock_interface,
             mock_client,
@@ -148,7 +148,7 @@ class TestSendMessageToLLM:
 
         # Verify
         output_text = " ".join(mock_interface.outputs)
-        assert "(Sending)" in output_text
+        assert "Waiting..." in output_text
         mock_client.chat.completions.create.assert_called_once_with(
             messages=message_history.to_openai(),
             response_model=LLMMessage,
@@ -156,22 +156,29 @@ class TestSendMessageToLLM:
             model="test-model",
             temperature=0.0,
         )
-        assert result is llm_response
+        assert new_user_message is user_message
+        assert llm_message is llm_response
 
     @patch("scripts.run.handle_llm_error")
-    def test_send_message_error(self, mock_handle_error):
-        """Test LLM message sending with error."""
+    def test_send_message_retry_then_success(self, mock_handle_error):
+        """Test LLM error, user retries, then succeeds."""
         # Setup
         mock_client = Mock()
         interface = MockInterface()
         message_history = MessageHistory(system_prompt="Test system")
         user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success!")
 
-        # Setup mock to raise error BEFORE execution
-        mock_client.chat.completions.create.side_effect = INSTRUCTOR_RETRY_ERROR
+        # First call fails, second succeeds
+        mock_client.chat.completions.create.side_effect = [
+            INSTRUCTOR_RETRY_ERROR,
+            success_response
+        ]
+        # User retries once
+        interface.user_inputs.extend(["y"])
 
         # Execute
-        result = send_message_to_llm(
+        llm_message, new_user_message = send_message_to_llm_with_retry(
             config=DEFAULT_CONFIG,
             interface=interface,
             client=mock_client,
@@ -183,7 +190,77 @@ class TestSendMessageToLLM:
         mock_handle_error.assert_called_once_with(
             INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
         )
-        assert result is None
+        assert llm_message is success_response
+        assert new_user_message is user_message
+
+    @patch("scripts.run.handle_llm_error")
+    def test_send_message_error_new_input(self, mock_handle_error):
+        """Test LLM error, user provides new input instead of retry."""
+        # Setup
+        mock_client = Mock()
+        interface = MockInterface()
+        message_history = MessageHistory(system_prompt="Test system")
+        user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success with new input!")
+
+        # First call fails, second succeeds with new input
+        mock_client.chat.completions.create.side_effect = [
+            INSTRUCTOR_RETRY_ERROR,
+            success_response
+        ]
+        # User declines retry, provides new input
+        interface.user_inputs.extend(["n", "New message"])
+
+        # Execute
+        llm_message, new_user_message = send_message_to_llm_with_retry(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            client=mock_client,
+            message_history=message_history,
+            user_response=user_message,
+        )
+
+        # Verify
+        mock_handle_error.assert_called_once_with(
+            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
+        )
+        assert llm_message is success_response
+        assert new_user_message.comment == "New message"
+        # Should have added new message to history
+        assert len(message_history.message_cache) >= 2
+
+    def test_send_message_keyboard_interrupt_during_llm_call(self):
+        """Test KeyboardInterrupt during LLM processing."""
+        # Setup
+        mock_client = Mock()
+        interface = MockInterface()
+        message_history = MessageHistory(system_prompt="Test system")
+        user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success after interrupt!")
+
+        # First call interrupted, second succeeds  
+        mock_client.chat.completions.create.side_effect = [
+            KeyboardInterrupt(),
+            success_response
+        ]
+        # After interrupt, user retries
+        interface.user_inputs.extend(["y"])
+
+        # Execute
+        llm_message, new_user_message = send_message_to_llm_with_retry(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            client=mock_client,
+            message_history=message_history,
+            user_response=user_message,
+        )
+
+        # Verify
+        assert llm_message is success_response
+        assert new_user_message is user_message
+        # Should show interrupt warning
+        output_text = " ".join(interface.outputs)
+        assert "Interrupted by user" in output_text
 
 
 # class TestDisplayLLMResponse:
@@ -356,7 +433,7 @@ class TestHandleLLMError:
 
         # Verify error display
         output_text = " ".join(mock_interface.outputs)
-        assert "✖  Test error" in output_text
+        assert "Test error" in output_text
 
     def test_handle_error_verbose(self):
         """Test error handling with verbose output."""
@@ -368,6 +445,6 @@ class TestHandleLLMError:
 
         # Verify verbose output shows the error and completion details
         output_text = " ".join(mock_interface.outputs)
-        assert "✖  Test error" in output_text
+        assert "Test error" in output_text
         # Should also show the raw completion content when verbose
         assert "Raw output" in output_text

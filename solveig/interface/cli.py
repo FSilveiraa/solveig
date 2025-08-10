@@ -52,7 +52,6 @@ class CLIInterface(SolveigInterface):
 
     def _input(self, prompt: str) -> str:
         user_input = input(prompt)
-        self.show("")
         return user_input
 
     def _get_max_output_width(self) -> int:
@@ -255,7 +254,7 @@ class Animation:
 
         Args:
             interface: The CLIInterface instance to use for displaying information
-            run_this: Function to run while anymation plays
+            run_this: Function to run while animation plays
             message: Message to show with spinner
 
         Returns:
@@ -270,13 +269,11 @@ class Animation:
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor() as executor:
                 result = await loop.run_in_executor(executor, run_this)
-                interface.show("")
 
             # Stop spinner with success message
             await self.stop()
             return result
 
-        except Exception as e:
-            # Stop spinner with error message
+        finally:
+            interface.show("")
             await self.stop()
-            raise
