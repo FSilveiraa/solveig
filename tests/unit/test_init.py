@@ -1,13 +1,11 @@
 """Tests for scripts.init module."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from scripts.init import (
     add_bash_timestamps,
     check_dependencies,
-    # check_optional_tools,
     create_config_directory,
     main,
 )
@@ -17,13 +15,12 @@ from tests.utils.mocks import MockInterface
 class TestBashTimestamps:
     """Test bash timestamp functionality."""
 
-    @patch("builtins.print")
     @patch("scripts.init.Path.home")
     @patch("pathlib.Path.read_text")
     @patch("pathlib.Path.exists")
     @patch("builtins.open", new_callable=mock_open)
     def test_add_bash_timestamps_new_bashrc(
-        self, mock_open_file, mock_exists, mock_read, mock_home, mock_print
+        self, mock_open_file, mock_exists, mock_read, mock_home
     ):
         """Test adding timestamps to empty .bashrc."""
         mock_home.return_value = Path("/home/test")
@@ -37,12 +34,11 @@ class TestBashTimestamps:
         assert result is True
         mock_open_file.assert_called()
 
-    @patch("builtins.print")
     @patch("scripts.init.Path.home")
     @patch("pathlib.Path.read_text")
     @patch("pathlib.Path.exists")
     def test_add_bash_timestamps_already_configured(
-        self, mock_exists, mock_read, mock_home, mock_print
+        self, mock_exists, mock_read, mock_home
     ):
         """Test when timestamps are already configured."""
         mock_home.return_value = Path("/home/test")
@@ -55,12 +51,11 @@ class TestBashTimestamps:
 
         assert result is True
 
-    @patch("builtins.print")
     @patch("scripts.init.Path.home")
     @patch("pathlib.Path.read_text")
     @patch("pathlib.Path.exists")
     def test_add_bash_timestamps_exception(
-        self, mock_exists, mock_read, mock_home, mock_print
+        self, mock_exists, mock_read, mock_home
     ):
         """Test handling exceptions during timestamp setup."""
         mock_home.return_value = Path("/home/test")
@@ -242,25 +237,25 @@ class TestMainFunction:
         assert any("Skipped bash history" in call for call in print_calls)
 
     @patch("scripts.init.check_dependencies")
-    @patch("builtins.print")
-    def test_main_dependency_failure(self, mock_print, mock_check_deps):
+    def test_main_dependency_failure(self, mock_check_deps):
         """Test main function when dependencies are missing."""
         mock_check_deps.return_value = False
+        interface = MockInterface()
 
-        result = main()
+        result = main(interface)
 
         assert result == 1
 
     @patch("scripts.init.create_config_directory")
     @patch("scripts.init.check_dependencies")
-    @patch("builtins.print")
     def test_main_config_directory_failure(
-        self, mock_print, mock_check_deps, mock_create_config
+        self, mock_check_deps, mock_create_config
     ):
         """Test main function when config directory creation fails."""
         mock_check_deps.return_value = True
         mock_create_config.return_value = False
+        interface = MockInterface()
 
-        result = main()
+        result = main(interface)
 
         assert result == 1

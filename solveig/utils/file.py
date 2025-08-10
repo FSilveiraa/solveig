@@ -283,7 +283,7 @@ def validate_copy_access(source_path: str | Path, dest_path: str | Path) -> None
 
     # Check destination doesn't exist
     if dest.exists():
-        raise OSError(f"Destination already exists: {dest_path}")
+        raise FileExistsError(f"Destination already exists: {dest_path}")
 
     # Check we can write to destination directory
     dest_parent = dest.parent

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from solveig import utils
+from solveig.interface import SolveigInterface
 from solveig.llm import APIType
 from solveig.utils.file import parse_size_notation_into_bytes
 
@@ -100,7 +101,7 @@ class SolveigConfig:
         # return None
 
     @classmethod
-    def parse_config_and_prompt(cls, cli_args=None):
+    def parse_config_and_prompt(cls, interface: SolveigInterface | None = None, cli_args=None):
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--config",
@@ -182,7 +183,11 @@ class SolveigConfig:
 
         file_config = cls.parse_from_file(args_dict.pop("config"))
         if not file_config:
-            print("Warning: Failed to parse config file, falling back to defaults")
+            warning = "Failed to parse config file, falling back to defaults"
+            if interface:
+                interface.display_error(warning)
+            else:
+                print(f"Warning: {warning}")
             file_config = {}
 
         # Merge config from file and CLI

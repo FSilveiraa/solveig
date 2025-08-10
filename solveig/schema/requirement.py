@@ -442,11 +442,7 @@ class MoveRequirement(Requirement):
 
         try:
             utils.file.validate_copy_access(source_path=abs_source_path, dest_path=abs_destination_path)
-        except OSError as e:
-            # Different type of OS error, use normal handling
-            if "already exists" not in str(e).lower():
-                raise e
-
+        except FileExistsError as e:
             # Destination path already exists
             error = e
             interface.display_warning("Destination path already exists")
@@ -548,11 +544,7 @@ class CopyRequirement(Requirement):
         try:
 
             utils.file.validate_copy_access(source_path=abs_source_path, dest_path=abs_destination_path)
-        except OSError as e:
-            # Different type of OS error, use normal handling
-            if "already exists" not in str(e).lower():
-                raise e
-
+        except FileExistsError as e:
             # Destination file already exists - print information, allow user to overwrite
             error = e
             interface.display_warning("Destination path already exists")

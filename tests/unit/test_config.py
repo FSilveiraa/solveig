@@ -1,13 +1,12 @@
 """Tests for solveig.config module."""
 
 import json
-import tempfile
 from argparse import Namespace
-from pathlib import Path
 from unittest.mock import patch
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
+from tests.utils.mocks import MockInterface
 
 
 class TestSolveigConfig:
@@ -140,9 +139,8 @@ class TestSolveigConfig:
         assert config.verbose is True
         assert prompt is None
 
-    @patch("builtins.print")
     @patch("argparse.ArgumentParser.parse_args")
-    def test_parse_config_file_warning(self, mock_parse_args, mock_print):
+    def test_parse_config_file_warning(self, mock_parse_args):
         """Test warning when config file parsing fails."""
         mock_args = Namespace(
             config="/nonexistent/config.json",
@@ -161,9 +159,11 @@ class TestSolveigConfig:
             prompt="test",
         )
         mock_parse_args.return_value = mock_args
+        mock_interface = MockInterface()
 
-        SolveigConfig.parse_config_and_prompt()
+        SolveigConfig.parse_config_and_prompt(interface=mock_interface)
 
-        mock_print.assert_called_with(
-            "Warning: Failed to parse config file, falling back to defaults"
+        assert any(
+            "Failed to parse config file, falling back to defaults" in call
+            for call in mock_interface.outputs
         )

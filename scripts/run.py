@@ -239,7 +239,7 @@ def process_requirements(
     return results
 
 
-def main_loop(config: SolveigConfig, user_prompt: str = ""):
+def main_loop(config: SolveigConfig, interface: SolveigInterface | None = None, user_prompt: str = ""):
     # Configure logging for instructor debug output when verbose
     if config.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -247,7 +247,7 @@ def main_loop(config: SolveigConfig, user_prompt: str = ""):
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    interface = CLIInterface(be_verbose=config.verbose, max_lines=config.max_output_lines)
+    interface = interface or CLIInterface(be_verbose=config.verbose, max_lines=config.max_output_lines)
 
     # Configure plugins based on config
     filter_plugins(enabled_plugins=config, interface=interface)
@@ -290,7 +290,7 @@ def cli_main():
     """Entry point for the solveig CLI command."""
     try:
         config, prompt = SolveigConfig.parse_config_and_prompt()
-        main_loop(config, prompt)
+        main_loop(config=config, user_prompt=prompt)
     except KeyboardInterrupt:
         print("\n\nGoodbye!")
         sys.exit(0)

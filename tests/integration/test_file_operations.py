@@ -70,20 +70,21 @@ class TestReadRequirementIntegration:
         """Test reading directory with real files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
+            base_path = temp_path
 
             # Create a mock interface that accepts reading the directory
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
             # Create test files
-            (temp_path / "file1.txt").write_text("Content 1")
-            (temp_path / "file2.py").write_text("print('hello')")
-            (temp_path / "subdir").mkdir()
-            (temp_path / "subdir" / "nested.txt").write_text("Nested content")
+            (base_path / "file1.txt").write_text("Content 1")
+            (base_path / "file2.py").write_text("print('hello')")
+            (base_path / "subdir").mkdir()
+            (base_path / "subdir" / "nested.txt").write_text("Nested content")
 
             # Test directory read
             req = ReadRequirement(
-                path=str(temp_path), only_read_metadata=True, comment="Read directory"
+                path=str(base_path), only_read_metadata=True, comment="Read directory"
             )
 
             result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
@@ -94,7 +95,7 @@ class TestReadRequirementIntegration:
             assert len(result.directory_listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = [item["name"] for item in result.directory_listing]
+            filenames = { Path(item["path"]).name for item in result.directory_listing }
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
@@ -224,7 +225,7 @@ class TestWriteRequirementIntegration:
             #     patch("builtins.print") as mock_print,
             # ):
 
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=MockInterface())
+            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Should warn about existing path
             warning_calls = [
@@ -283,6 +284,7 @@ class TestMoveRequirementIntegration:
     def test_move_directory(self):
         """Test moving an entire directory."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             source_dir = temp_path / "source_dir"
@@ -311,6 +313,7 @@ class TestMoveRequirementIntegration:
     def test_move_nonexistent_source(self):
         """Test moving a file that doesn't exist."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
         req = MoveRequirement(
             source_path="/nonexistent/source.txt",
             destination_path="/tmp/dest.txt",
@@ -330,6 +333,7 @@ class TestCopyRequirementIntegration:
     def test_copy_file(self):
         """Test copying a file to new location."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -358,6 +362,7 @@ class TestCopyRequirementIntegration:
     def test_copy_directory_tree(self):
         """Test copying an entire directory tree."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -392,6 +397,7 @@ class TestDeleteRequirementIntegration:
     def test_delete_file(self):
         """Test deleting a file."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -411,6 +417,7 @@ class TestDeleteRequirementIntegration:
     def test_delete_directory_tree(self):
         """Test deleting an entire directory tree."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             test_dir = temp_path / "dir_to_delete"
@@ -432,6 +439,7 @@ class TestDeleteRequirementIntegration:
     def test_delete_nonexistent_file(self):
         """Test deleting a file that doesn't exist."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
         req = DeleteRequirement(
             path="/nonexistent/file.txt", comment="Delete missing file"
         )
@@ -449,6 +457,7 @@ class TestPathSecurityIntegration:
     def test_path_traversal_protection(self):
         """Test that path traversal attempts are handled safely."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Try to read outside the temp directory
@@ -471,6 +480,7 @@ class TestPathSecurityIntegration:
     def test_tilde_expansion_security(self):
         """Test that tilde expansion works consistently and securely."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.append("y")
         home_path = str(Path.home())
 
         req = ReadRequirement(
@@ -503,6 +513,9 @@ class TestCompleteWorkflowIntegration:
             read_req = ReadRequirement(
                 path=str(config_file), only_read_metadata=False, comment="Read config"
             )
+            mock_interface.user_inputs.extend([
+                "y", "y"  # yes to read, yes to send back
+            ])
 
             read_result = read_req._actually_solve(DEFAULT_CONFIG, mock_interface)
 
@@ -519,7 +532,9 @@ class TestCompleteWorkflowIntegration:
                 content=modified_content,
                 comment="Update config",
             )
-
+            mock_interface.user_inputs.extend([
+                "y", # yes to write
+            ])
             write_result = write_req._actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert write_result.accepted
@@ -532,6 +547,7 @@ class TestCompleteWorkflowIntegration:
     def test_backup_and_modify_workflow(self):
         """Test workflow: copy file to backup, then modify original."""
         mock_interface = MockInterface()
+        mock_interface.user_inputs.extend(["y", "y"])  # For copy and write operations
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

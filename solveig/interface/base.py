@@ -3,18 +3,7 @@ Base interface classes for Solveig user interaction.
 """
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-# dataclass import removed with RequirementPresentation
-from typing import TYPE_CHECKING, Generator, Optional, Any
-
-from .. import SolveigConfig
-
-if TYPE_CHECKING:
-    from ..schema.message import LLMMessage
-
-
-
-
-# RequirementPresentation removed - requirements now have direct interface access
+from typing import Generator, Optional, Any
 
 
 class SolveigInterface(ABC):
