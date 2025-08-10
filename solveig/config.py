@@ -101,7 +101,9 @@ class SolveigConfig:
         # return None
 
     @classmethod
-    def parse_config_and_prompt(cls, interface: SolveigInterface | None = None, cli_args=None):
+    def parse_config_and_prompt(
+        cls, interface: SolveigInterface | None = None, cli_args=None
+    ):
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--config",

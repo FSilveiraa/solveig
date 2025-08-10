@@ -2,7 +2,6 @@
 Main CLI entry point for Solveig.
 """
 
-import json
 import logging
 import sys
 
@@ -15,7 +14,6 @@ from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
-
 
 # def summarize_requirements(message: LLMMessage):
 #     reads, writes, commands, moves, copies, deletes = [], [], [], [], [], []
@@ -66,7 +64,9 @@ from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 #             print(f"    {requirement.command}")
 
 
-def get_llm_client(config: SolveigConfig, interface: SolveigInterface) -> tuple[Instructor, MessageHistory]:
+def get_llm_client(
+    config: SolveigConfig, interface: SolveigInterface
+) -> tuple[Instructor, MessageHistory]:
     """Initialize the LLM client and conversation state."""
     client: Instructor = llm.get_instructor_client(
         api_type=config.api_type, api_key=config.api_key, url=config.url
@@ -75,7 +75,7 @@ def get_llm_client(config: SolveigConfig, interface: SolveigInterface) -> tuple[
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
         with interface.with_group("System Prompt"):
-            interface.show(sys_prompt, level=interface.current_level+1)
+            interface.show(sys_prompt, level=interface.current_level + 1)
     # if config.verbose:
     #     print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
@@ -104,7 +104,7 @@ def send_message_to_llm(
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
         with interface.with_group("Sending"):
-        # print("[ Sending ]")
+            # print("[ Sending ]")
             interface.display_text_block(user_response.to_openai(), title="Message")
     else:
         interface.show("(Sending)")
@@ -179,12 +179,18 @@ def send_message_to_llm_with_retry(
         # If they said yes to retry, the loop continues with the same user_response
 
 
-def handle_llm_error(error: Exception, config: SolveigConfig, interface: SolveigInterface) -> None:
+def handle_llm_error(
+    error: Exception, config: SolveigConfig, interface: SolveigInterface
+) -> None:
     """Display LLM parsing error details."""
     interface.display_error(str(error))
     # print("  " + str(error))
     # print("  Failed to parse message")
-    if config.verbose and isinstance(error, InstructorRetryException) and error.last_completion:
+    if (
+        config.verbose
+        and isinstance(error, InstructorRetryException)
+        and error.last_completion
+    ):
         with interface.with_indent():
             for output in error.last_completion.choices:
                 interface.display_error(output.message.content.strip())
@@ -239,7 +245,11 @@ def process_requirements(
     return results
 
 
-def main_loop(config: SolveigConfig, interface: SolveigInterface | None = None, user_prompt: str = ""):
+def main_loop(
+    config: SolveigConfig,
+    interface: SolveigInterface | None = None,
+    user_prompt: str = "",
+):
     # Configure logging for instructor debug output when verbose
     if config.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -247,7 +257,9 @@ def main_loop(config: SolveigConfig, interface: SolveigInterface | None = None, 
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    interface = interface or CLIInterface(be_verbose=config.verbose, max_lines=config.max_output_lines)
+    interface = interface or CLIInterface(
+        be_verbose=config.verbose, max_lines=config.max_output_lines
+    )
 
     # Configure plugins based on config
     filter_plugins(enabled_plugins=config, interface=interface)
@@ -280,7 +292,9 @@ def main_loop(config: SolveigConfig, interface: SolveigInterface | None = None, 
 
         # Prepare user response
         interface.display_section("User")
-        results = process_requirements(llm_response=llm_response, config=config, interface=interface)
+        results = process_requirements(
+            llm_response=llm_response, config=config, interface=interface
+        )
         user_response = UserMessage(comment=interface.ask_user(), results=results)
 
         # message_history.add_message(user_response)

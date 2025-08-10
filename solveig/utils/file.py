@@ -7,7 +7,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 _SIZE_NOTATIONS = {
     "kib": 1024,
@@ -126,6 +126,7 @@ def validate_read_access(file_path: str | Path) -> None:
 
     if not os.access(abs_path, os.R_OK):
         raise PermissionError(f"Permission denied: Cannot read '{abs_path}'")
+
 
 def validate_write_access(
     file_path: str | Path,

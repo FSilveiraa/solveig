@@ -1,9 +1,14 @@
 """
 Base interface classes for Solveig user interaction.
 """
+
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator, Optional, Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from solveig.schema import LLMMessage
 
 
 class SolveigInterface(ABC):
@@ -12,8 +17,7 @@ class SolveigInterface(ABC):
     DEFAULT_INPUT_PROMPT = ">  "
     DEFAULT_YES = {"y", "yes"}
 
-    
-    def __init__(self, indent_base: int = 2, max_lines = 6, be_verbose: bool = False):
+    def __init__(self, indent_base: int = 2, max_lines=6, be_verbose: bool = False):
         self.indent_base = indent_base
         self.current_level = 0
         self.max_lines = max_lines
@@ -30,7 +34,7 @@ class SolveigInterface(ABC):
     def _input(self, prompt: str) -> str:
         """Get text input from user."""
         pass
-    
+
     @abstractmethod
     def _get_max_output_width(self) -> int:
         """Get terminal width - implemented by concrete interfaces (-1 to disable)"""
@@ -41,15 +45,28 @@ class SolveigInterface(ABC):
         """Display the LLM's comment and requirements summary."""
         pass
 
-# display_requirement removed - requirements now display themselves directly
+    # display_requirement removed - requirements now display themselves directly
 
     @abstractmethod
-    def display_text_block(self, text: str, title: str | None = None, level: int | None = None, max_lines: int | None = None) -> None:
+    def display_text_block(
+        self,
+        text: str,
+        title: str | None = None,
+        level: int | None = None,
+        max_lines: int | None = None,
+    ) -> None:
         """Display a block of text."""
         pass
 
     @abstractmethod
-    def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+    def display_tree(
+        self,
+        metadata: dict[str, Any],
+        listing: list[dict[str, Any]] | None,
+        level: int | None = None,
+        max_lines: int | None = None,
+        title: str | None = "Metadata",
+    ) -> None:
         """Utility method to display a block of text with metadata"""
         pass
 
@@ -62,13 +79,13 @@ class SolveigInterface(ABC):
         pass
 
     #####
-    
-    def _indent(self, level: Optional[int] = None) -> str:
+
+    def _indent(self, level: int | None = None) -> str:
         """Calculate indentation for given level (or current level)"""
         actual_level = level if level is not None else self.current_level
         return " " * (actual_level * self.indent_base)
-    
-    def show(self, content: str, level: Optional[int] = None) -> None:
+
+    def show(self, content: str, level: int | None = None) -> None:
         """Display content at specified or current indent level"""
         indent = self._indent(level)
         self._output(f"{indent}{content}")
@@ -83,15 +100,17 @@ class SolveigInterface(ABC):
         finally:
             self.current_level = old_level
 
-    @contextmanager  
-    def with_group(self, title: str, count: Optional[int] = None) -> Generator[None, None, None]:
+    @contextmanager
+    def with_group(
+        self, title: str, count: int | None = None
+    ) -> Generator[None, None, None]:
         """
         Group/item header with optional count
         [ Requirements (3) ]
         """
         count_str = f" ({count})" if count is not None else ""
         self.show(f"[ {title}{count_str} ]")
-        
+
         # Use the with_indent context manager internally
         with self.with_indent():
             yield
@@ -105,16 +124,24 @@ class SolveigInterface(ABC):
     def display_warning(self, message: str) -> None:
         self.show(f"⚠  {message}")
 
-    def ask_user(self, question: str = DEFAULT_INPUT_PROMPT, level: int | None = None) -> str:
+    def ask_user(
+        self, question: str = DEFAULT_INPUT_PROMPT, level: int | None = None
+    ) -> str:
         """Ask user a question and get a response."""
         indent = self._indent(level)
         return self._input(f"{indent}?  {question}")
 
-    def ask_yes_no(self, question: str, yes_values=None, auto_format: bool = True, level: int | None = None) -> bool:
+    def ask_yes_no(
+        self,
+        question: str,
+        yes_values=None,
+        auto_format: bool = True,
+        level: int | None = None,
+    ) -> bool:
         """Ask user a yes/no question."""
         if auto_format:
             question = f"{question.strip()} "
-            if not "y/n" in question.lower():
+            if "y/n" not in question.lower():
                 question = f"{question}[y/N]: "
         response = self.ask_user(question, level=level)
         if yes_values is None:

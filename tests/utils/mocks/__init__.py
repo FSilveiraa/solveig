@@ -1,12 +1,15 @@
-from solveig import SolveigConfig, APIType
+from solveig import APIType, SolveigConfig
 from solveig.schema import LLMMessage
 from solveig.schema.requirement import (
-    ReadRequirement, WriteRequirement, CommandRequirement,
-    MoveRequirement, CopyRequirement, DeleteRequirement
+    CommandRequirement,
+    CopyRequirement,
+    DeleteRequirement,
+    MoveRequirement,
+    ReadRequirement,
+    WriteRequirement,
 )
 
 from .interface import MockInterface
-
 
 DEFAULT_CONFIG = SolveigConfig(
     api_type=APIType.OPENAI,
@@ -32,16 +35,33 @@ VERBOSE_CONFIG = SolveigConfig(
 ALL_REQUIREMENTS_MESSAGE = LLMMessage(
     comment="I need to read, write, run commands, move, copy, and delete files",
     requirements=[
-        ReadRequirement(path="/test/file.txt", only_read_metadata=False, comment="Read test file"),
-        WriteRequirement(path="/test/output.txt", content="test content", is_directory=False, comment="Write test file"),
+        ReadRequirement(
+            path="/test/file.txt", only_read_metadata=False, comment="Read test file"
+        ),
+        WriteRequirement(
+            path="/test/output.txt",
+            content="test content",
+            is_directory=False,
+            comment="Write test file",
+        ),
         CommandRequirement(command="ls -la", comment="List files"),
-        MoveRequirement(source_path="/test/source.txt", destination_path="/test/dest.txt", comment="Move file"),
-        CopyRequirement(source_path="/test/original.txt", destination_path="/test/copy.txt", comment="Copy file"),
+        MoveRequirement(
+            source_path="/test/source.txt",
+            destination_path="/test/dest.txt",
+            comment="Move file",
+        ),
+        CopyRequirement(
+            source_path="/test/original.txt",
+            destination_path="/test/copy.txt",
+            comment="Copy file",
+        ),
         DeleteRequirement(path="/test/unwanted.txt", comment="Delete file"),
     ],
 )
 
 __all__ = [
-    "ALL_REQUIREMENTS_MESSAGE", "DEFAULT_CONFIG", "VERBOSE_CONFIG", 
-    "MockInterface"
+    "ALL_REQUIREMENTS_MESSAGE",
+    "DEFAULT_CONFIG",
+    "VERBOSE_CONFIG",
+    "MockInterface",
 ]

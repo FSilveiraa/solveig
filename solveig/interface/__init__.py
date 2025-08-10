@@ -49,8 +49,8 @@ class TEXT_BOX:
     # Cross
     X = "┼"
 
+
 from .base import SolveigInterface
 from .cli import CLIInterface
 
 __all__ = ["SolveigInterface", "CLIInterface"]
-

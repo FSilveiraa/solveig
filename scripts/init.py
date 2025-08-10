@@ -10,7 +10,7 @@ This replaces the old setup.sh script with proper Python integration.
 import sys
 from pathlib import Path
 
-from solveig.interface import SolveigInterface, CLIInterface
+from solveig.interface import CLIInterface, SolveigInterface
 
 
 def add_bash_timestamps(interface: SolveigInterface) -> bool:
@@ -28,8 +28,8 @@ def add_bash_timestamps(interface: SolveigInterface) -> bool:
 
     with interface.with_group("Bash History Timestamps"):
         interface.display_text_block(
-            "Adding timestamps to your bash history helps Solveig understand " +
-            "when you executed commands, providing better context for assistance."
+            "Adding timestamps to your bash history helps Solveig understand "
+            + "when you executed commands, providing better context for assistance."
         )
         if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
             try:
@@ -37,7 +37,9 @@ def add_bash_timestamps(interface: SolveigInterface) -> bool:
                 if bashrc_path.exists():
                     content = bashrc_path.read_text()
                     if "HISTTIMEFORMAT" in content:
-                        interface.show("✓ Bash history timestamps are already configured.")
+                        interface.show(
+                            "✓ Bash history timestamps are already configured."
+                        )
                         return True
 
                 # Add timestamp configuration
@@ -47,7 +49,9 @@ def add_bash_timestamps(interface: SolveigInterface) -> bool:
                     f.write(f"{timestamp_line}\n")
 
                 interface.show("✓ Added bash history timestamps to ~/.bashrc")
-                interface.show("Run 'source ~/.bashrc' or restart your terminal to apply changes.")
+                interface.show(
+                    "Run 'source ~/.bashrc' or restart your terminal to apply changes."
+                )
                 return True
 
             except Exception as e:

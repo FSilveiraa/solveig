@@ -36,24 +36,33 @@ def get_instructor_client(
     if api_type == APIType.OPENAI or api_type == APIType.LOCAL:
         try:
             from openai import OpenAI
+
             client = OpenAI(api_key=api_key, base_url=url)
             return instructor.from_openai(client, mode=instructor.Mode.JSON)
         except ImportError:
-            raise ValueError("OpenAI client not available. Install with: pip install openai")
+            raise ValueError(
+                "OpenAI client not available. Install with: pip install openai"
+            )
     elif api_type == APIType.CLAUDE or api_type == APIType.ANTHROPIC:
         try:
             from anthropic import Anthropic
+
             client = Anthropic(api_key=api_key, base_url=url)
             return instructor.from_anthropic(client, mode=instructor.Mode.JSON)
         except ImportError:
-            raise ValueError("Anthropic client not available. Install with: pip install anthropic")
+            raise ValueError(
+                "Anthropic client not available. Install with: pip install anthropic"
+            )
     elif api_type == APIType.GEMINI:
         try:
             import google.generativeai as genai
+
             genai.configure(api_key=api_key)
-            client = genai.GenerativeModel('gemini-pro')
+            client = genai.GenerativeModel("gemini-pro")
             return instructor.from_gemini(client, mode=instructor.Mode.JSON)
         except ImportError:
-            raise ValueError("Google Generative AI client not available. Install with: pip install google-generativeai")
+            raise ValueError(
+                "Google Generative AI client not available. Install with: pip install google-generativeai"
+            )
     else:
         raise ValueError(f"Unsupported API type: {api_type}")

@@ -4,13 +4,13 @@ These tests exercise the full stack from requirement parsing to actual file oper
 using real files in temporary directories. Only user interactions are mocked.
 """
 
-import pytest
 import tempfile
+
+import pytest
 
 # Mark all tests in this module to skip file mocking
 pytestmark = pytest.mark.no_file_mocking
 from pathlib import Path
-from unittest.mock import patch
 
 from solveig.schema.requirement import (
     CopyRequirement,
@@ -46,7 +46,9 @@ class TestReadRequirementIntegration:
             )
 
             # Mock user consent by consenting to all file operations, but let real file operations happen
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify result
             assert result.accepted
@@ -87,7 +89,9 @@ class TestReadRequirementIntegration:
                 path=str(base_path), only_read_metadata=True, comment="Read directory"
             )
 
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify directory listing
             assert result.accepted
@@ -95,7 +99,7 @@ class TestReadRequirementIntegration:
             assert len(result.directory_listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = { Path(item["path"]).name for item in result.directory_listing }
+            filenames = {Path(item["path"]).name for item in result.directory_listing}
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
@@ -141,7 +145,9 @@ class TestReadRequirementIntegration:
                     comment="Read restricted file",
                 )
 
-                result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+                result = req._actually_solve(
+                    config=DEFAULT_CONFIG, interface=mock_interface
+                )
 
                 # Should fail gracefully
                 assert not result.accepted
@@ -173,7 +179,9 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify write succeeded
             assert result.accepted
@@ -197,7 +205,9 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify directory creation
             assert result.accepted
@@ -225,16 +235,16 @@ class TestWriteRequirementIntegration:
             #     patch("builtins.print") as mock_print,
             # ):
 
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Should warn about existing path
             warning_calls = [
-
                 call
                 for call in mock_interface.outputs
                 if any(
-                    sig in call.lower()
-                    for sig in {"warning", "⚠︎", "already exists"}
+                    sig in call.lower() for sig in {"warning", "⚠︎", "already exists"}
                 )
             ]
             assert len(warning_calls) > 0
@@ -269,7 +279,9 @@ class TestMoveRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_move_consent", return_value=True):
-            result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = req._actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify move succeeded
             assert result.accepted
@@ -513,9 +525,9 @@ class TestCompleteWorkflowIntegration:
             read_req = ReadRequirement(
                 path=str(config_file), only_read_metadata=False, comment="Read config"
             )
-            mock_interface.user_inputs.extend([
-                "y", "y"  # yes to read, yes to send back
-            ])
+            mock_interface.user_inputs.extend(
+                ["y", "y"]  # yes to read, yes to send back
+            )
 
             read_result = read_req._actually_solve(DEFAULT_CONFIG, mock_interface)
 
@@ -532,9 +544,11 @@ class TestCompleteWorkflowIntegration:
                 content=modified_content,
                 comment="Update config",
             )
-            mock_interface.user_inputs.extend([
-                "y", # yes to write
-            ])
+            mock_interface.user_inputs.extend(
+                [
+                    "y",  # yes to write
+                ]
+            )
             write_result = write_req._actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert write_result.accepted

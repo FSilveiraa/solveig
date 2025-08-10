@@ -76,7 +76,8 @@ class Requirement(BaseModel, ABC):
             # Run before hooks - they validate and can throw exceptions
             for before_hook, requirements in plugins.hooks.HOOKS.before:
                 if not requirements or any(
-                    isinstance(self, requirement_type) for requirement_type in requirements
+                    isinstance(self, requirement_type)
+                    for requirement_type in requirements
                 ):
                     try:
                         before_hook(config, self)
@@ -98,14 +99,17 @@ class Requirement(BaseModel, ABC):
                 # with interface.with_indent():
                 interface.display_error(error)
                 error_info = "Execution error"
-                if interface.ask_yes_no("Send error message back to assistant? [y/N]: "):
+                if interface.ask_yes_no(
+                    "Send error message back to assistant? [y/N]: "
+                ):
                     error_info = f": {str(error)}"
                 result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions
             for after_hook, requirements in plugins.hooks.HOOKS.after:
                 if not requirements or any(
-                    isinstance(self, requirement_type) for requirement_type in requirements
+                    isinstance(self, requirement_type)
+                    for requirement_type in requirements
                 ):
                     try:
                         after_hook(config, self, result)
@@ -124,7 +128,9 @@ class Requirement(BaseModel, ABC):
 
     ### Implement these:
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display the requirement header/summary using the interface directly."""
         interface.display_comment(self.comment)
 
@@ -157,7 +163,9 @@ class ReadRequirement(Requirement):
             raise ValueError("Empty path")
         return path
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display read requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)
@@ -176,7 +184,9 @@ class ReadRequirement(Requirement):
             error=error_message,
         )
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> ReadResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> ReadResult:
         abs_path = utils.file.absolute_path(self.path)
 
         # Pre-flight validation
@@ -193,7 +203,11 @@ class ReadRequirement(Requirement):
         is_dir = metadata["is_directory"]
         content = None
 
-        if not is_dir and not self.only_read_metadata and interface.ask_yes_no("Allow reading file contents? [y/N]: "):
+        if (
+            not is_dir
+            and not self.only_read_metadata
+            and interface.ask_yes_no("Allow reading file contents? [y/N]: ")
+        ):
             try:
                 content, encoding = utils.file.read_file(abs_path)
                 metadata["encoding"] = encoding
@@ -204,10 +218,14 @@ class ReadRequirement(Requirement):
                 )
 
             # with interface.group("Content"):
-            content_output = "(Base64)" if metadata["encoding"].lower() == "base64" else content
+            content_output = (
+                "(Base64)" if metadata["encoding"].lower() == "base64" else content
+            )
             interface.display_text_block(content_output, title="Content")
 
-        if interface.ask_yes_no(f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "):
+        if interface.ask_yes_no(
+            f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
+        ):
             return ReadResult(
                 requirement=self,
                 path=abs_path,
@@ -237,7 +255,9 @@ class WriteRequirement(Requirement):
             raise ValueError("Empty path")
         return path
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display write requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)
@@ -257,12 +277,16 @@ class WriteRequirement(Requirement):
             error=error_message,
         )
 
-    def _write_file_or_directory(self, path: str | Path, content: str | None = None) -> None:
+    def _write_file_or_directory(
+        self, path: str | Path, content: str | None = None
+    ) -> None:
         """Write file or directory (OS interaction - can be mocked)."""
-        content = content or self.content or "" # cannot be None
+        content = content or self.content or ""  # cannot be None
         utils.file.write_file_or_directory(path, self.is_directory, content)
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> WriteResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> WriteResult:
         abs_path = utils.file.absolute_path(self.path)
 
         # Confirm if path exists
@@ -295,8 +319,13 @@ class WriteRequirement(Requirement):
         if interface.ask_yes_no(question):
             try:
                 # Perform the write operation
-                utils.file.write_file_or_directory(abs_path, is_directory=self.is_directory, content=self.content)
-                interface.show(f"✓  {'Updated' if already_exists else 'Created'}", level=interface.current_level + 1)
+                utils.file.write_file_or_directory(
+                    abs_path, is_directory=self.is_directory, content=self.content
+                )
+                interface.show(
+                    f"✓  {'Updated' if already_exists else 'Created'}",
+                    level=interface.current_level + 1,
+                )
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
 
@@ -322,13 +351,15 @@ class CommandRequirement(Requirement):
     def path_not_empty(cls, command: str) -> str:
         try:
             command = command.strip()
-            if not command: # raises in case it's None or ""
+            if not command:  # raises in case it's None or ""
                 raise ValueError("Empty command")
         except ValueError:
             raise ValueError("Empty command")
         return command
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display command requirement header."""
         interface.display_comment(self.comment)
         interface.show(f"🗲  {self.command}")
@@ -354,7 +385,9 @@ class CommandRequirement(Requirement):
             return output, error
         raise ValueError("Empty command")
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> CommandResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> CommandResult:
         if interface.ask_yes_no("Allow running command? [y/N]: "):
             # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
             #  that's confusing and should be differentiated from not running the command at all.
@@ -363,7 +396,9 @@ class CommandRequirement(Requirement):
                 output, error = self._execute_command(config)
             except Exception as e:
                 error_str = str(e)
-                interface.display_error(f"Found error when running command: {error_str}")
+                interface.display_error(
+                    f"Found error when running command: {error_str}"
+                )
                 # print(f"      {error_str}")
                 return CommandResult(
                     requirement=self,
@@ -410,7 +445,9 @@ class MoveRequirement(Requirement):
             raise ValueError("Empty path")
         return path
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display move requirement header."""
         interface.display_comment(self.comment)
         source_abs = utils.file.absolute_path(self.source_path)
@@ -434,20 +471,30 @@ class MoveRequirement(Requirement):
             destination_path=utils.file.absolute_path(self.destination_path),
         )
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> MoveResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> MoveResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
         abs_destination_path = utils.file.absolute_path(self.destination_path)
         error: Exception | None = None
 
         try:
-            utils.file.validate_copy_access(source_path=abs_source_path, dest_path=abs_destination_path)
+            utils.file.validate_copy_access(
+                source_path=abs_source_path, dest_path=abs_destination_path
+            )
         except FileExistsError as e:
             # Destination path already exists
             error = e
             interface.display_warning("Destination path already exists")
-            destination_metadata, destination_listing = utils.file.read_metadata_and_listing(abs_destination_path)
-            interface.display_tree(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
+            destination_metadata, destination_listing = (
+                utils.file.read_metadata_and_listing(abs_destination_path)
+            )
+            interface.display_tree(
+                metadata=destination_metadata,
+                listing=destination_listing,
+                title="Destination Metadata",
+            )
 
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
@@ -460,13 +507,19 @@ class MoveRequirement(Requirement):
             )
 
         metadata, listing = utils.file.read_metadata_and_listing(abs_source_path)
-        interface.display_tree(metadata=metadata, listing=listing, title="Source Metadata")
+        interface.display_tree(
+            metadata=metadata, listing=listing, title="Source Metadata"
+        )
 
         # Get user consent
-        if interface.ask_yes_no(f"Allow moving {self.source_path} to {self.destination_path}? [y/N]: "):
+        if interface.ask_yes_no(
+            f"Allow moving {self.source_path} to {self.destination_path}? [y/N]: "
+        ):
             try:
                 # Perform the move operation
-                utils.file.move_file_or_directory(source_path=abs_source_path, dest_path=abs_destination_path)
+                utils.file.move_file_or_directory(
+                    source_path=abs_source_path, dest_path=abs_destination_path
+                )
 
                 with interface.with_indent():
                     interface.show("✓  Moved")
@@ -511,7 +564,9 @@ class CopyRequirement(Requirement):
             raise ValueError("Empty path")
         return path
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display copy requirement header."""
         interface.display_comment(self.comment)
         source_abs = utils.file.absolute_path(self.source_path)
@@ -535,7 +590,9 @@ class CopyRequirement(Requirement):
             destination_path=utils.file.absolute_path(self.destination_path),
         )
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> CopyResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> CopyResult:
         # Pre-flight validation
         abs_source_path = utils.file.absolute_path(self.source_path)
         abs_destination_path = utils.file.absolute_path(self.destination_path)
@@ -543,13 +600,21 @@ class CopyRequirement(Requirement):
 
         try:
 
-            utils.file.validate_copy_access(source_path=abs_source_path, dest_path=abs_destination_path)
+            utils.file.validate_copy_access(
+                source_path=abs_source_path, dest_path=abs_destination_path
+            )
         except FileExistsError as e:
             # Destination file already exists - print information, allow user to overwrite
             error = e
             interface.display_warning("Destination path already exists")
-            destination_metadata, destination_listing = utils.file.read_metadata_and_listing(abs_destination_path)
-            interface.display_tree(metadata=destination_metadata, listing=destination_listing, title="Destination Metadata")
+            destination_metadata, destination_listing = (
+                utils.file.read_metadata_and_listing(abs_destination_path)
+            )
+            interface.display_tree(
+                metadata=destination_metadata,
+                listing=destination_listing,
+                title="Destination Metadata",
+            )
 
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
@@ -561,15 +626,23 @@ class CopyRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
-        source_metadata, source_listing = utils.file.read_metadata_and_listing(abs_source_path)
-        interface.display_tree(metadata=source_metadata, listing=source_listing, title="Source Metadata")
+        source_metadata, source_listing = utils.file.read_metadata_and_listing(
+            abs_source_path
+        )
+        interface.display_tree(
+            metadata=source_metadata, listing=source_listing, title="Source Metadata"
+        )
 
         # Get user consent
-        if interface.ask_yes_no(f"Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "):
-        # if self._ask_copy_consent():
+        if interface.ask_yes_no(
+            f"Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "
+        ):
+            # if self._ask_copy_consent():
             try:
                 # Perform the copy operation
-                utils.file.copy_file_or_directory(source_path=abs_source_path, dest_path=abs_destination_path)
+                utils.file.copy_file_or_directory(
+                    source_path=abs_source_path, dest_path=abs_destination_path
+                )
                 with interface.with_indent():
                     interface.show("✓  Copied")
                 return CopyResult(
@@ -593,7 +666,9 @@ class CopyRequirement(Requirement):
                 accepted=False,
                 source_path=abs_source_path,
                 destination_path=abs_destination_path,
-                error = str(error), # allows us to return a "No" with the reason being that the file existed
+                error=str(
+                    error
+                ),  # allows us to return a "No" with the reason being that the file existed
             )
 
 
@@ -603,8 +678,7 @@ class DeleteRequirement(Requirement):
 
     @field_validator("path", mode="before")
     @classmethod
-    def strip_and_check(
-            cls, path: str) -> str:
+    def strip_and_check(cls, path: str) -> str:
         try:
             path = path.strip()
             if not path:
@@ -613,7 +687,9 @@ class DeleteRequirement(Requirement):
             raise ValueError("Empty path")
         return path
 
-    def display_header(self, config: SolveigConfig, interface: "SolveigInterface") -> None:
+    def display_header(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> None:
         """Display delete requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)
@@ -633,7 +709,9 @@ class DeleteRequirement(Requirement):
             error=error_message,
         )
 
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> DeleteResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> DeleteResult:
         # Pre-flight validation
         abs_path = utils.file.absolute_path(self.path)
 

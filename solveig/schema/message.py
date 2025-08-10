@@ -1,9 +1,9 @@
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal, Annotated, Union
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
 from .requirement import (
@@ -79,15 +79,13 @@ class LLMMessage(BaseMessage):
         # field is used to disambiguate them
         list[
             Annotated[
-                Union[
-                    ReadRequirement
-                    | WriteRequirement
-                    | CommandRequirement
-                    | MoveRequirement
-                    | CopyRequirement
-                    | DeleteRequirement
-                ],
-                Field(discriminator="title")
+                ReadRequirement
+                | WriteRequirement
+                | CommandRequirement
+                | MoveRequirement
+                | CopyRequirement
+                | DeleteRequirement,
+                Field(discriminator="title"),
             ]
         ]
         | None
@@ -102,7 +100,11 @@ class MessageContainer:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     role: Literal["user", "assistant", "system"] = field(init=False)
 
-    def __init__(self, message: BaseMessage, role: Literal["user", "assistant", "system"] | None = None):
+    def __init__(
+        self,
+        message: BaseMessage,
+        role: Literal["user", "assistant", "system"] | None = None,
+    ):
         self.message = message
         if role:
             self.role = role
@@ -130,10 +132,16 @@ class MessageContainer:
 class MessageHistory:
     # system_prompt: dict = None
     max_context: int = -1
-    messages: list[MessageContainer] # = field(default_factory=list)
-    message_cache: list[dict] # = field(default_factory=list)
+    messages: list[MessageContainer]  # = field(default_factory=list)
+    message_cache: list[dict]  # = field(default_factory=list)
 
-    def __init__(self, system_prompt, max_context: int = -1, messages: list[MessageContainer] = None, message_cache: list[dict] = None):
+    def __init__(
+        self,
+        system_prompt,
+        max_context: int = -1,
+        messages: list[MessageContainer] = None,
+        message_cache: list[dict] = None,
+    ):
         self.messages = messages or []
         self.message_cache = message_cache or []
         self.add_message(SystemMessage(comment=system_prompt), role="system")
@@ -152,7 +160,10 @@ class MessageHistory:
         #         count = len(self.system_prompt["content"])
         #     else:
         #         count = len(self.system_prompt)
-        return sum(utils.misc.count_tokens(message["content"]) for message in self.message_cache)
+        return sum(
+            utils.misc.count_tokens(message["content"])
+            for message in self.message_cache
+        )
 
     def prune_message_cache(self):
         if self.max_context >= 0:

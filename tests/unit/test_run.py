@@ -1,5 +1,5 @@
 """Unit tests for scripts.run module functions."""
-import json
+
 from unittest.mock import Mock, patch
 
 from instructor.exceptions import InstructorRetryException
@@ -7,19 +7,19 @@ from instructor.exceptions import InstructorRetryException
 from scripts.run import (
     # display_llm_response,
     get_initial_user_message,
-    handle_llm_error,
     get_llm_client,
+    handle_llm_error,
     process_requirements,
     send_message_to_llm,
     # summarize_requirements,
 )
-from solveig.schema.message import LLMMessage, MessageHistory, UserMessage, BaseMessage
+from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import CommandRequirement, MoveRequirement
 from tests.utils.mocks import (
+    ALL_REQUIREMENTS_MESSAGE,
     DEFAULT_CONFIG,
     VERBOSE_CONFIG,
-    ALL_REQUIREMENTS_MESSAGE,
-    MockInterface
+    MockInterface,
 )
 
 mock_completion = Mock()
@@ -41,7 +41,9 @@ class TestInitializeConversation:
 
     @patch("scripts.run.llm.get_instructor_client")
     @patch("scripts.run.system_prompt.get_system_prompt")
-    def test_initialize_conversation_with_string(self, mock_get_prompt, mock_get_client):
+    def test_initialize_conversation_with_string(
+        self, mock_get_prompt, mock_get_client
+    ):
         """Test successful conversation initialization - a string system prompt should be converted to a message."""
         # Setup
         init_mock_get_client(mock_get_client)
@@ -137,7 +139,11 @@ class TestSendMessageToLLM:
 
         # Execute
         result = send_message_to_llm(
-            DEFAULT_CONFIG, mock_interface, mock_client, message_history, user_message,
+            DEFAULT_CONFIG,
+            mock_interface,
+            mock_client,
+            message_history,
+            user_message,
         )
 
         # Verify
@@ -280,14 +286,18 @@ class TestProcessRequirements:
             # This will reach user but be declined
             CommandRequirement(command="echo safe", comment="Safe command"),
             # This will succeed
-            MoveRequirement(source_path="/test/source.txt", destination_path="/test/dest.txt", comment="Move operation"),
+            MoveRequirement(
+                source_path="/test/source.txt",
+                destination_path="/test/dest.txt",
+                comment="Move operation",
+            ),
         ]
 
         message = LLMMessage(
             comment="Mixed success/failure scenario", requirements=requirements
         )
 
-        # Set interface to decline all user prompts 
+        # Set interface to decline all user prompts
         mock_interface = MockInterface()
         mock_interface.set_user_inputs(["n"] * 10)  # Decline all prompts
         results = process_requirements(DEFAULT_CONFIG, mock_interface, message)
@@ -299,7 +309,7 @@ class TestProcessRequirements:
 
     def test_process_requirements_with_error(self):
         """Test requirement processing with errors using all requirement types."""
-        # Setup - use ALL requirements from our test message 
+        # Setup - use ALL requirements from our test message
         # but don't provide user inputs to cause errors
         requirements = ALL_REQUIREMENTS_MESSAGE.requirements
         llm_message = LLMMessage(comment="Test message", requirements=requirements)

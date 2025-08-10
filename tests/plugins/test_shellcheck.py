@@ -8,10 +8,7 @@ from unittest.mock import Mock, patch
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.utils.mocks import (
-    DEFAULT_CONFIG,
-    MockInterface
-)
+from tests.utils.mocks import DEFAULT_CONFIG, MockInterface
 
 
 class TestShellcheckPlugin:
@@ -45,7 +42,10 @@ class TestShellcheckPlugin:
 
     def test_security_error_message_format(self):
         """Test that dangerous commands produce properly formatted error messages."""
-        req = CommandRequirement(command="mkfs.ext4 /dev/sda1", comment="Test dangerous command error formatting")
+        req = CommandRequirement(
+            command="mkfs.ext4 /dev/sda1",
+            comment="Test dangerous command error formatting",
+        )
         interface = MockInterface()
 
         result = req.solve(DEFAULT_CONFIG, interface)
@@ -59,7 +59,9 @@ class TestShellcheckPlugin:
 
     def test_normal_command_passes_validation(self):
         """Test that normal commands pass shellcheck validation."""
-        cmd_req = CommandRequirement(command="echo 'hello world'", comment="Test normal command")
+        cmd_req = CommandRequirement(
+            command="echo 'hello world'", comment="Test normal command"
+        )
         interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline to run
 
@@ -76,7 +78,9 @@ class TestShellcheckPlugin:
         # Mock shellcheck returning success (no issues)
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
 
-        cmd_req = CommandRequirement(command="echo 'properly quoted'", comment="Test successful validation")
+        cmd_req = CommandRequirement(
+            command="echo 'properly quoted'", comment="Test successful validation"
+        )
         interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline to run
 
@@ -148,8 +152,8 @@ class TestShellcheckPlugin:
         )
 
         req = CommandRequirement(
-            command="if [ $var = `date` ]; then echo hello; fi", 
-            comment="Test multiple issues"
+            command="if [ $var = `date` ]; then echo hello; fi",
+            comment="Test multiple issues",
         )
         interface = MockInterface()
 
@@ -188,7 +192,9 @@ class TestShellcheckPluginIntegration:
         assert "dangerous pattern" in result.error.lower()
 
         # Test that ReadRequirement doesn't trigger shellcheck
-        read_req = ReadRequirement(path="/test/nonexistent.txt", only_read_metadata=True, comment="Test")
+        read_req = ReadRequirement(
+            path="/test/nonexistent.txt", only_read_metadata=True, comment="Test"
+        )
         interface2 = MockInterface()
         result = read_req.solve(DEFAULT_CONFIG, interface2)
 

@@ -1,4 +1,5 @@
 from typing import Any
+
 from solveig.interface import CLIInterface
 
 
@@ -9,7 +10,9 @@ class MockInterface(CLIInterface):
     Retrieve outputs (prints) in outputs field
     """
 
-    def __init__(self, ):
+    def __init__(
+        self,
+    ):
         super().__init__()
         self.outputs = []
         self.user_inputs = []
@@ -30,7 +33,14 @@ class MockInterface(CLIInterface):
     def _get_max_output_width(self) -> int:
         return 80
 
-    def display_tree(self, metadata: dict[str, Any], listing: list[dict[str, Any]] | None, level: int | None = None, max_lines: int | None = None, title: str | None = "Metadata") -> None:
+    def display_tree(
+        self,
+        metadata: dict[str, Any],
+        listing: list[dict[str, Any]] | None,
+        level: int | None = None,
+        max_lines: int | None = None,
+        title: str | None = "Metadata",
+    ) -> None:
         """Mock implementation of display_tree - just captures the call."""
         tree_output = f"TREE: {title} - {metadata.get('path', 'unknown')}"
         if listing:
@@ -122,11 +132,15 @@ class MockInterface(CLIInterface):
     def assert_output_contains(self, text: str) -> None:
         """Assert that output contains specific text"""
         all_output = self.get_all_output()
-        assert text in all_output, f"Output does not contain '{text}'. Actual output:\n{all_output}"
+        assert (
+            text in all_output
+        ), f"Output does not contain '{text}'. Actual output:\n{all_output}"
 
     def assert_output_lines_equal(self, expected_lines: list[str]) -> None:
         """Assert exact output line matching"""
-        assert self.outputs == expected_lines, f"Output mismatch.\nExpected: {expected_lines}\nActual: {self.outputs}"
+        assert (
+            self.outputs == expected_lines
+        ), f"Output mismatch.\nExpected: {expected_lines}\nActual: {self.outputs}"
 
     def clear(self) -> None:
         """Clear all captured data"""

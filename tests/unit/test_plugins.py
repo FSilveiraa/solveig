@@ -7,10 +7,7 @@ from solveig.plugins import hooks
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.utils.mocks import (
-    DEFAULT_CONFIG,
-    MockInterface
-)
+from tests.utils.mocks import DEFAULT_CONFIG, MockInterface
 
 
 class TestPluginExceptions:
@@ -91,7 +88,7 @@ class TestPluginHookSystem:
         interface = MockInterface()
         interface.set_user_inputs(["n"])
 
-        # Execute  
+        # Execute
         result = req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
@@ -187,8 +184,10 @@ class TestPluginHookSystem:
         interface1.set_user_inputs(["n"])
         cmd_req.solve(DEFAULT_CONFIG, interface1)
 
-        # Test with ReadRequirement  
-        read_req = ReadRequirement(path="/test/file.txt", only_read_metadata=True, comment="Test")
+        # Test with ReadRequirement
+        read_req = ReadRequirement(
+            path="/test/file.txt", only_read_metadata=True, comment="Test"
+        )
         interface2 = MockInterface()
         interface2.set_user_inputs(["n"])
         read_req.solve(DEFAULT_CONFIG, interface2)
@@ -212,14 +211,16 @@ class TestPluginHookSystem:
 
         # Test with different requirement types
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        read_req = ReadRequirement(path="/test/file.txt", only_read_metadata=True, comment="Test")
+        read_req = ReadRequirement(
+            path="/test/file.txt", only_read_metadata=True, comment="Test"
+        )
 
         # Execute
         interface1 = MockInterface()
         interface1.set_user_inputs(["n"])
         cmd_req.solve(DEFAULT_CONFIG, interface1)
-        
-        interface2 = MockInterface() 
+
+        interface2 = MockInterface()
         interface2.set_user_inputs(["n"])
         read_req.solve(DEFAULT_CONFIG, interface2)
 
@@ -230,7 +231,7 @@ class TestPluginHookSystem:
 
 class TestPluginFiltering:
     """Test plugin filtering based on configuration."""
-    
+
     def setup_method(self):
         """Store original hooks and clear for isolated testing."""
         self.original_before = hooks.HOOKS.before[:]
@@ -246,110 +247,108 @@ class TestPluginFiltering:
         hooks.HOOKS.after[:] = self.original_after
         hooks.HOOKS._all_hooks.clear()
         hooks.HOOKS._all_hooks.update(self.original_all_hooks)
-    
+
     def test_plugin_enabled_when_in_config(self):
         """Test that plugins are enabled when present in config.plugins."""
         # Setup: Create a test plugin
         called = []
-        
+
         @hooks.before(requirements=(CommandRequirement,))
         def test_plugin_hook(config, requirement):
             called.append("test_plugin_executed")
-            
+
         # Simulate plugin registration (normally done by load_plugins)
         hooks.HOOKS._all_hooks["test_plugin"] = ([hooks.HOOKS.before[-1]], [])
-        
+
         # Create config with plugin enabled
         config_with_plugin = SolveigConfig(
             url="test-url",
-            api_key="test-key", 
-            plugins={"test_plugin": {}}  # Empty config but plugin is listed
+            api_key="test-key",
+            plugins={"test_plugin": {}},  # Empty config but plugin is listed
         )
-        
+
         interface = MockInterface()
-        
+
         # Apply filtering
         hooks.filter_plugins(enabled_plugins=config_with_plugin, interface=interface)
-        
+
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
         interface.set_user_inputs(["n"])
         req.solve(config_with_plugin, interface)
-        
+
         # Verify plugin executed
         assert "test_plugin_executed" in called
-    
+
     def test_plugin_disabled_when_not_in_config(self):
         """Test that plugins are disabled when not present in config.plugins."""
         # Setup: Create a test plugin
         called = []
-        
+
         @hooks.before(requirements=(CommandRequirement,))
         def test_plugin_hook(config, requirement):
             called.append("test_plugin_executed")
-            
+
         # Simulate plugin registration
         hooks.HOOKS._all_hooks["test_plugin"] = ([hooks.HOOKS.before[-1]], [])
-        
+
         # Create config WITHOUT plugin (empty plugins dict)
         config_without_plugin = SolveigConfig(
             url="test-url",
             api_key="test-key",
-            plugins={}  # Plugin not listed, should be disabled
+            plugins={},  # Plugin not listed, should be disabled
         )
-        
+
         interface = MockInterface()
-        
+
         # Apply filtering
         hooks.filter_plugins(enabled_plugins=config_without_plugin, interface=interface)
-        
+
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
         interface.set_user_inputs(["n"])
         req.solve(config_without_plugin, interface)
-        
+
         # Verify plugin did NOT execute
         assert "test_plugin_executed" not in called
         assert len(called) == 0
-    
+
     def test_shellcheck_plugin_filtering(self):
         """Test specific shellcheck plugin filtering behavior."""
         # This tests the exact scenario from the error output
         interface = MockInterface()
-        
+
         # Config without shellcheck (default state)
         config_no_shellcheck = SolveigConfig(
-            url="test-url", 
-            api_key="test-key",
-            plugins={}  # Shellcheck not configured
+            url="test-url", api_key="test-key", plugins={}  # Shellcheck not configured
         )
-        
+
         # Load all plugins (this would register shellcheck)
         hooks.load_hooks(interface=interface)
-        
+
         # Apply filtering - should filter out shellcheck
         hooks.filter_plugins(enabled_plugins=config_no_shellcheck, interface=interface)
-        
+
         # Verify filtering message appears in output
         output_text = " ".join(interface.outputs)
         assert "≫ Skipping plugin, not present in config: shellcheck" in output_text
-        
+
         # Verify no hooks are active
         assert len(hooks.HOOKS.before) == 0
         assert len(hooks.HOOKS.after) == 0
-    
+
     def test_plugin_with_config_options(self):
         """Test that plugin configuration is passed correctly."""
         # Setup: Create a plugin that uses its config
         received_config = []
-        
+
         @hooks.before(requirements=(CommandRequirement,))
         def configurable_plugin_hook(config, requirement):
             plugin_config = config.plugins.get("configurable_plugin", {})
             received_config.append(plugin_config)
-            
+
         hooks.HOOKS._all_hooks["configurable_plugin"] = ([hooks.HOOKS.before[-1]], [])
-        
+
         # Create config with plugin options
         config_with_options = SolveigConfig(
             url="test-url",
@@ -358,19 +357,19 @@ class TestPluginFiltering:
                 "configurable_plugin": {
                     "option1": "value1",
                     "option2": 42,
-                    "enabled": True
+                    "enabled": True,
                 }
-            }
+            },
         )
-        
+
         interface = MockInterface()
         hooks.filter_plugins(enabled_plugins=config_with_options, interface=interface)
-        
+
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
         interface.set_user_inputs(["n"])
         req.solve(config_with_options, interface)
-        
+
         # Verify plugin received its configuration
         assert len(received_config) == 1
         assert received_config[0]["option1"] == "value1"

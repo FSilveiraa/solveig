@@ -54,9 +54,7 @@ class TestBashTimestamps:
     @patch("scripts.init.Path.home")
     @patch("pathlib.Path.read_text")
     @patch("pathlib.Path.exists")
-    def test_add_bash_timestamps_exception(
-        self, mock_exists, mock_read, mock_home
-    ):
+    def test_add_bash_timestamps_exception(self, mock_exists, mock_read, mock_home):
         """Test handling exceptions during timestamp setup."""
         mock_home.return_value = Path("/home/test")
         mock_exists.side_effect = PermissionError("Access denied")
@@ -112,7 +110,7 @@ class TestConfigDirectory:
         """Test successful config directory creation."""
         interface = MockInterface()
         mock_home.return_value = Path("/home/test")
-        
+
         result = create_config_directory(interface)
 
         assert result is True
@@ -248,9 +246,7 @@ class TestMainFunction:
 
     @patch("scripts.init.create_config_directory")
     @patch("scripts.init.check_dependencies")
-    def test_main_config_directory_failure(
-        self, mock_check_deps, mock_create_config
-    ):
+    def test_main_config_directory_failure(self, mock_check_deps, mock_create_config):
         """Test main function when config directory creation fails."""
         mock_check_deps.return_value = True
         mock_create_config.return_value = False
