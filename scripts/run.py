@@ -36,7 +36,7 @@ def get_llm_client(
 
 
 def get_initial_user_message(
-    user_prompt: str | None, interface: CLIInterface
+    user_prompt: str | None, interface: SolveigInterface
 ) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
@@ -74,30 +74,6 @@ def send_message_to_llm(
         run_this=blocking_llm_call,
         message="Waiting... (Ctrl+C to stop)",
     )
-    # interface.show(f"Found response: {llm_response}")
-    # interface.show(llm_response.to_openai())
-    return llm_response
-    # except KeyboardInterrupt:
-    #     interface.show("Interrupted by user")
-    #     return None
-    # except Exception as e:
-    #     handle_llm_error(e, config, interface)
-    #     return None
-
-    # # Fallback for verbose mode - no animation to avoid interfering with debug output
-    # try:
-    #     llm_response: LLMMessage = client.chat.completions.create(
-    #         messages=message_history.to_openai(),
-    #         response_model=LLMMessage,
-    #         strict=False,
-    #         model=config.model,
-    #         temperature=config.temperature,
-    #         # max_tokens=512,
-    #     )
-    #     return llm_response
-    # except Exception as e:
-    #     handle_llm_error(e, config, interface)
-    #     return None
 
 
 def send_message_to_llm_with_retry(
@@ -123,7 +99,9 @@ def send_message_to_llm_with_retry(
             handle_llm_error(e, config, interface)
 
         # Error occurred, ask if user wants to retry or provide new input
-        retry = interface.ask_yes_no(f"Re-send previous message{' and results' if user_response.results else ''}? [y/N]: ")
+        retry = interface.ask_yes_no(
+            f"Re-send previous message{' and results' if user_response.results else ''}? [y/N]: "
+        )
 
         if not retry:
             new_comment = interface.ask_user()

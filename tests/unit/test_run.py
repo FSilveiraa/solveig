@@ -172,7 +172,7 @@ class TestSendMessageToLLM:
         # First call fails, second succeeds
         mock_client.chat.completions.create.side_effect = [
             INSTRUCTOR_RETRY_ERROR,
-            success_response
+            success_response,
         ]
         # User retries once
         interface.user_inputs.extend(["y"])
@@ -206,7 +206,7 @@ class TestSendMessageToLLM:
         # First call fails, second succeeds with new input
         mock_client.chat.completions.create.side_effect = [
             INSTRUCTOR_RETRY_ERROR,
-            success_response
+            success_response,
         ]
         # User declines retry, provides new input
         interface.user_inputs.extend(["n", "New message"])
@@ -238,10 +238,10 @@ class TestSendMessageToLLM:
         user_message = UserMessage(comment="Test message")
         success_response = LLMMessage(comment="Success after interrupt!")
 
-        # First call interrupted, second succeeds  
+        # First call interrupted, second succeeds
         mock_client.chat.completions.create.side_effect = [
             KeyboardInterrupt(),
-            success_response
+            success_response,
         ]
         # After interrupt, user retries
         interface.user_inputs.extend(["y"])
@@ -261,73 +261,6 @@ class TestSendMessageToLLM:
         # Should show interrupt warning
         output_text = " ".join(interface.outputs)
         assert "Interrupted by user" in output_text
-
-
-# class TestDisplayLLMResponse:
-#     """Test the display_llm_response function."""
-#
-#     def test_display_response_with_requirements(self):
-#         """Test displaying LLM response with all requirement types."""
-#         # Execute with comprehensive requirements
-#         mock_interface = MockInterface()
-#         display_llm_response(ALL_REQUIREMENTS_MESSAGE, mock_interface)
-#
-#         # Verify interface display was called and captured output
-#         mock_interface.assert_output_contains("--- Assistant")
-#         mock_interface.assert_output_contains(ALL_REQUIREMENTS_MESSAGE.comment)
-#         # Should show requirements summary
-#         mock_interface.assert_output_contains("Requirements")
-#
-#     def test_display_response_no_requirements(self):
-#         """Test displaying LLM response without requirements."""
-#         # Setup
-#         comment = "To get across the road!"
-#         llm_message = LLMMessage(comment=comment)
-#
-#         # Execute
-#         mock_interface = MockInterface()
-#         display_llm_response(llm_message, mock_interface)
-#
-#         # Verify
-#         mock_interface.assert_output_contains("--- Assistant")
-#         mock_interface.assert_output_contains(comment)
-#         # Should not show requirements section when none exist
-#         all_output = mock_interface.get_all_output()
-#         assert "Requirements" not in all_output
-#
-#
-# class TestSummarizeRequirements:
-#     """Test the summarize_requirements function."""
-#
-#     @patch("builtins.print")
-#     def test_summarize_all_requirement_types(self, mock_print):
-#         """Test summarizing all types of requirements including new file operations."""
-#         # This function still uses direct print() calls, so we keep the patch
-#         # Execute with comprehensive requirements
-#         summarize_requirements(ALL_REQUIREMENTS_MESSAGE)
-#
-#         # Verify that all requirement types are printed
-#         call_args = [str(call) for call in mock_print.call_args_list]
-#
-#         # Check that we see output for all 6 requirement types
-#         assert any(
-#             "Read:" in call for call in call_args
-#         ), "Should summarize ReadRequirement"
-#         assert any(
-#             "Write:" in call for call in call_args
-#         ), "Should summarize WriteRequirement"
-#         assert any(
-#             "Commands:" in call for call in call_args
-#         ), "Should summarize CommandRequirement"
-#         assert any(
-#             "Move:" in call for call in call_args
-#         ), "Should summarize MoveRequirement"
-#         assert any(
-#             "Copy:" in call for call in call_args
-#         ), "Should summarize CopyRequirement"
-#         assert any(
-#             "Delete:" in call for call in call_args
-#         ), "Should summarize DeleteRequirement"
 
 
 class TestProcessRequirements:

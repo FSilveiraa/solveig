@@ -2,16 +2,17 @@
 CLI implementation of Solveig interface.
 """
 
+import asyncio
 import shutil
 import sys
 import traceback
 from collections import defaultdict
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base import SolveigInterface
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 if TYPE_CHECKING:
     from ..schema import LLMMessage
@@ -87,13 +88,11 @@ class CLIInterface(SolveigInterface):
                         requirement_type.title(), count=len(requirements)
                     ):
                         for requirement in requirements:
-                            requirement.display_header(
-                                None, self
-                            )  # config not needed for LLM response display
+                            requirement.display_header(interface=self)
 
     # display_requirement removed - requirements now display themselves directly
 
-    def display_error(self, message: str | Exception = None) -> None:
+    def display_error(self, message: str | Exception | None = None) -> None:
         _exception = message
         if isinstance(_exception, Exception):
             message = str(f"{_exception.__class__.__name__}: {_exception}")
@@ -109,7 +108,7 @@ class CLIInterface(SolveigInterface):
     def display_tree(
         self,
         metadata: dict[str, Any],
-        listing: list[dict[str, Any]],
+        listing: list[dict[str, Any]] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = "Metadata",
@@ -186,22 +185,29 @@ class CLIInterface(SolveigInterface):
             f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 2)}{self.TEXT_BOX.BR}"
         )
 
-    def display_animation_while(self, run_this: Callable, message: str | None = None) -> None:
+    def display_animation_while(
+        self, run_this: Callable, message: str | None = None
+    ) -> None:
         animation = Animation()
         return asyncio.run(animation.animate_while(self, run_this, message))
 
 
 class Animation:
     SPINNERS = {
-        "dots": ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-        "line": ['|', '/', '-', '\\'],
-        "bounce": ['⠁', '⠂', '⠄', '⠂'],
-        "pulse": ['●', '○', '●', '○'],
-        "thinking": ['🤔', '💭', '🧠', '✨'],
-        "processing": ['⚡', '⚡', '⚡', '✨'],
+        "dots": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+        "line": ["|", "/", "-", "\\"],
+        "bounce": ["⠁", "⠂", "⠄", "⠂"],
+        "pulse": ["●", "○", "●", "○"],
+        "thinking": ["🤔", "💭", "🧠", "✨"],
+        "processing": ["⚡", "⚡", "⚡", "✨"],
     }
 
-    def __init__(self, animation_type: str | None = "dots", frames: list[str] = None, interval: float = 0.1):
+    def __init__(
+        self,
+        animation_type: str | None = "dots",
+        frames: list[str] | None = None,
+        interval: float = 0.1,
+    ):
         """
         Initialize async spinner.
 
@@ -209,10 +215,10 @@ class Animation:
             frames: List of icon frames to cycle through
             interval: Time between frame changes in seconds
         """
-        self.frames = frames or self.SPINNERS[animation_type]
+        self.frames = frames or self.SPINNERS[animation_type or "dots"]
         self.interval = interval
         self._current_frame = 0
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._stopped = False
 
     async def start(self, interface: CLIInterface, message: str) -> None:
@@ -221,7 +227,8 @@ class Animation:
             self._task = asyncio.create_task(self._animate(interface, message))
         else:
             interface.display_error(
-                "Interface error: Tried to start animation while previous one was not cancelled")
+                "Interface error: Tried to start animation while previous one was not cancelled"
+            )
 
     async def stop(self, completion_message: str = "✅ Done"):
         """Stop the animation and show completion message."""
@@ -234,7 +241,9 @@ class Animation:
                 pass
             self._task = None
 
-    async def _animate(self, interface: CLIInterface, message: str | None = None) -> None:
+    async def _animate(
+        self, interface: CLIInterface, message: str | None = None
+    ) -> None:
         """Run the animation loop."""
         while not self._stopped:
             # Show current frame with message
@@ -248,7 +257,12 @@ class Animation:
             # Wait for next frame
             await asyncio.sleep(self.interval)
 
-    async def animate_while(self, interface: CLIInterface, run_this: Callable, message: str | None = None, ) -> Any:
+    async def animate_while(
+        self,
+        interface: CLIInterface,
+        run_this: Callable,
+        message: str | None = None,
+    ) -> Any:
         """
         Run a blocking function in a thread while showing an animated spinner.
 
@@ -262,7 +276,7 @@ class Animation:
         """
 
         # Start spinner
-        await self.start(interface, message)
+        await self.start(interface, message or "")
 
         try:
             # Run blocking function in thread pool

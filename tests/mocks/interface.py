@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any
 
 from solveig.interface import CLIInterface
 
@@ -50,11 +50,6 @@ class MockInterface(CLIInterface):
             tree_output += f" (with {len(listing)} entries)"
         self.outputs.append(tree_output)
 
-    # def display_animation_while(self, run_this: Callable, message: str | None = None) -> None:
-    #     self.show(message)
-    #     return run_this()
-
-
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:
         """Pre-configure user inputs for testing"""
@@ -82,6 +77,4 @@ class MockInterface(CLIInterface):
         self.outputs.clear()
         self.user_inputs.clear()
         self.questions.clear()
-        # self.prompt_calls.clear()
-        # self.yes_no_calls.clear()
         self.current_level = 0

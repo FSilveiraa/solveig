@@ -2,7 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from solveig import utils
 from solveig.interface import SolveigInterface
@@ -85,7 +85,7 @@ class SolveigConfig:
         """
 
     @classmethod
-    def parse_from_file(cls, config_path: Path | str) -> Optional["SolveigConfig"]:
+    def parse_from_file(cls, config_path: Path | str) -> dict | None:
         if not config_path:
             return None
         abs_path = utils.file.absolute_path(config_path)
@@ -193,7 +193,7 @@ class SolveigConfig:
             file_config = {}
 
         # Merge config from file and CLI
-        merged_config = {**file_config}
+        merged_config: dict = {**file_config}
         for k, v in args_dict.items():
             if v is not None:
                 merged_config[k] = v
