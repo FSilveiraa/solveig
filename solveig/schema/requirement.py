@@ -71,7 +71,7 @@ class Requirement(BaseModel, ABC):
 
     def solve(self, config: SolveigConfig, interface: SolveigInterface):
         with interface.with_group(self.title.title()):
-            self.display_header(config, interface)
+            self.display_header(interface)
 
             # Run before hooks - they validate and can throw exceptions
             for before_hook, requirements in plugins.hooks.HOOKS.before:
@@ -128,9 +128,7 @@ class Requirement(BaseModel, ABC):
 
     ### Implement these:
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display the requirement header/summary using the interface directly."""
         interface.display_comment(self.comment)
 
@@ -159,13 +157,11 @@ class ReadRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError as error:
-            raise ValueError("Empty path") from error
+        except ValueError as e:
+            raise ValueError("Empty path") from e
         return path
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display read requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)
@@ -251,13 +247,11 @@ class WriteRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError as error:
-            raise ValueError("Empty path") from error
+        except ValueError as e:
+            raise ValueError("Empty path") from e
         return path
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display write requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)
@@ -353,13 +347,11 @@ class CommandRequirement(Requirement):
             command = command.strip()
             if not command:  # raises in case it's None or ""
                 raise ValueError("Empty command")
-        except ValueError as error:
-            raise ValueError("Empty command") from error
+        except ValueError as e:
+            raise ValueError("Empty command") from e
         return command
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display command requirement header."""
         interface.display_comment(self.comment)
         interface.show(f"🗲  {self.command}")
@@ -418,8 +410,8 @@ class CommandRequirement(Requirement):
                 with interface.with_group("Error"):
                     interface.display_text_block(error, title="Error")
             if not interface.ask_yes_no("Allow sending output? [y/N]: "):
-                output = None
-                error = None
+                output = ""
+                error = ""
             return CommandResult(
                 requirement=self,
                 command=self.command,
@@ -443,13 +435,11 @@ class MoveRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError as error:
-            raise ValueError("Empty path") from error
+        except ValueError as e:
+            raise ValueError("Empty path") from e
         return path
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display move requirement header."""
         interface.display_comment(self.comment)
         source_abs = utils.file.absolute_path(self.source_path)
@@ -515,7 +505,7 @@ class MoveRequirement(Requirement):
 
         # Get user consent
         if interface.ask_yes_no(
-            f"Allow moving {self.source_path} to {self.destination_path}? [y/N]: "
+            f"Allow moving {abs_source_path} to {abs_destination_path}? [y/N]: "
         ):
             try:
                 # Perform the move operation
@@ -546,7 +536,7 @@ class MoveRequirement(Requirement):
                 accepted=False,
                 source_path=abs_source_path,
                 destination_path=abs_destination_path,
-                error=str(error),
+                error=str(error) if error else None,
             )
 
 
@@ -562,13 +552,11 @@ class CopyRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError as error:
-            raise ValueError("Empty path") from error
+        except ValueError as e:
+            raise ValueError("Empty path") from e
         return path
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display copy requirement header."""
         interface.display_comment(self.comment)
         source_abs = utils.file.absolute_path(self.source_path)
@@ -637,7 +625,7 @@ class CopyRequirement(Requirement):
 
         # Get user consent
         if interface.ask_yes_no(
-            f"Allow copying '{self.source_path}' to '{self.destination_path}'? [y/N]: "
+            f"Allow copying '{abs_source_path}' to '{abs_destination_path}'? [y/N]: "
         ):
             # if self._ask_copy_consent():
             try:
@@ -685,13 +673,11 @@ class DeleteRequirement(Requirement):
             path = path.strip()
             if not path:
                 raise ValueError("Empty path")
-        except ValueError as error:
-            raise ValueError("Empty path") from error
+        except ValueError as e:
+            raise ValueError("Empty path") from e
         return path
 
-    def display_header(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> None:
+    def display_header(self, interface: SolveigInterface) -> None:
         """Display delete requirement header."""
         interface.display_comment(self.comment)
         abs_path = utils.file.absolute_path(self.path)

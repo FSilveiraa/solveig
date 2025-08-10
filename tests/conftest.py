@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.utils.mocks.filesystem import (
+from tests.mocks.filesystem import (
     mock_fs,
     mock_grp_getgrgid,
     mock_mimetypes_guess_type,

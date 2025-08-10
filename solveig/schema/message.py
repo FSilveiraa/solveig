@@ -130,15 +130,13 @@ class MessageContainer:
 
 # @dataclass
 class MessageHistory:
-    # system_prompt: dict = None
     max_context: int = -1
-    messages: list[MessageContainer]  # = field(default_factory=list)
-    message_cache: list[dict]  # = field(default_factory=list)
+    messages: list[MessageContainer]
+    message_cache: list[dict]
 
     def __init__(
         self,
         system_prompt,
-        max_context: int = -1,
         messages: list[MessageContainer] | None = None,
         message_cache: list[dict] | None = None,
     ):
@@ -146,20 +144,7 @@ class MessageHistory:
         self.message_cache = message_cache or []
         self.add_message(SystemMessage(comment=system_prompt), role="system")
 
-    # def __post_init__(self):
-    #     if isinstance(self.system_prompt, str):
-    #         self.system_prompt = {
-    #             "role": "system",
-    #             "content": self.system_prompt.strip()
-    #         }
-
     def get_token_count(self):
-        # count = 0
-        # if self.system_prompt:
-        #     if isinstance(self.system_prompt, dict):
-        #         count = len(self.system_prompt["content"])
-        #     else:
-        #         count = len(self.system_prompt)
         return sum(
             utils.misc.count_tokens(message["content"])
             for message in self.message_cache
@@ -173,7 +158,7 @@ class MessageHistory:
     def add_message(
         self,
         message: BaseMessage,
-        role: Literal["user", "assistant", "system"] | None = None,
+        role: Literal["system", "user", "assistant"] | None = None,
     ):
         message_container = MessageContainer(message, role=role)
         self.messages.append(message_container)

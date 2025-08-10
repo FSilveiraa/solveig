@@ -10,12 +10,12 @@ from scripts.run import (
     get_llm_client,
     handle_llm_error,
     process_requirements,
-    send_message_to_llm,
+    send_message_to_llm_with_retry,
     # summarize_requirements,
 )
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import CommandRequirement, MoveRequirement
-from tests.utils.mocks import (
+from tests.mocks import (
     ALL_REQUIREMENTS_MESSAGE,
     DEFAULT_CONFIG,
     VERBOSE_CONFIG,
@@ -138,7 +138,7 @@ class TestSendMessageToLLM:
         mock_client.chat.completions.create.return_value = llm_response
 
         # Execute
-        result = send_message_to_llm(
+        llm_message, new_user_message = send_message_to_llm_with_retry(
             DEFAULT_CONFIG,
             mock_interface,
             mock_client,
@@ -148,7 +148,7 @@ class TestSendMessageToLLM:
 
         # Verify
         output_text = " ".join(mock_interface.outputs)
-        assert "(Sending)" in output_text
+        assert "Waiting..." in output_text
         mock_client.chat.completions.create.assert_called_once_with(
             messages=message_history.to_openai(),
             response_model=LLMMessage,
@@ -156,22 +156,29 @@ class TestSendMessageToLLM:
             model="test-model",
             temperature=0.0,
         )
-        assert result is llm_response
+        assert new_user_message is user_message
+        assert llm_message is llm_response
 
     @patch("scripts.run.handle_llm_error")
-    def test_send_message_error(self, mock_handle_error):
-        """Test LLM message sending with error."""
+    def test_send_message_retry_then_success(self, mock_handle_error):
+        """Test LLM error, user retries, then succeeds."""
         # Setup
         mock_client = Mock()
         interface = MockInterface()
         message_history = MessageHistory(system_prompt="Test system")
         user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success!")
 
-        # Setup mock to raise error BEFORE execution
-        mock_client.chat.completions.create.side_effect = INSTRUCTOR_RETRY_ERROR
+        # First call fails, second succeeds
+        mock_client.chat.completions.create.side_effect = [
+            INSTRUCTOR_RETRY_ERROR,
+            success_response,
+        ]
+        # User retries once
+        interface.user_inputs.extend(["y"])
 
         # Execute
-        result = send_message_to_llm(
+        llm_message, new_user_message = send_message_to_llm_with_retry(
             config=DEFAULT_CONFIG,
             interface=interface,
             client=mock_client,
@@ -183,74 +190,77 @@ class TestSendMessageToLLM:
         mock_handle_error.assert_called_once_with(
             INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
         )
-        assert result is None
+        assert llm_message is success_response
+        assert new_user_message is user_message
 
+    @patch("scripts.run.handle_llm_error")
+    def test_send_message_error_new_input(self, mock_handle_error):
+        """Test LLM error, user provides new input instead of retry."""
+        # Setup
+        mock_client = Mock()
+        interface = MockInterface()
+        message_history = MessageHistory(system_prompt="Test system")
+        user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success with new input!")
 
-# class TestDisplayLLMResponse:
-#     """Test the display_llm_response function."""
-#
-#     def test_display_response_with_requirements(self):
-#         """Test displaying LLM response with all requirement types."""
-#         # Execute with comprehensive requirements
-#         mock_interface = MockInterface()
-#         display_llm_response(ALL_REQUIREMENTS_MESSAGE, mock_interface)
-#
-#         # Verify interface display was called and captured output
-#         mock_interface.assert_output_contains("--- Assistant")
-#         mock_interface.assert_output_contains(ALL_REQUIREMENTS_MESSAGE.comment)
-#         # Should show requirements summary
-#         mock_interface.assert_output_contains("Requirements")
-#
-#     def test_display_response_no_requirements(self):
-#         """Test displaying LLM response without requirements."""
-#         # Setup
-#         comment = "To get across the road!"
-#         llm_message = LLMMessage(comment=comment)
-#
-#         # Execute
-#         mock_interface = MockInterface()
-#         display_llm_response(llm_message, mock_interface)
-#
-#         # Verify
-#         mock_interface.assert_output_contains("--- Assistant")
-#         mock_interface.assert_output_contains(comment)
-#         # Should not show requirements section when none exist
-#         all_output = mock_interface.get_all_output()
-#         assert "Requirements" not in all_output
-#
-#
-# class TestSummarizeRequirements:
-#     """Test the summarize_requirements function."""
-#
-#     @patch("builtins.print")
-#     def test_summarize_all_requirement_types(self, mock_print):
-#         """Test summarizing all types of requirements including new file operations."""
-#         # This function still uses direct print() calls, so we keep the patch
-#         # Execute with comprehensive requirements
-#         summarize_requirements(ALL_REQUIREMENTS_MESSAGE)
-#
-#         # Verify that all requirement types are printed
-#         call_args = [str(call) for call in mock_print.call_args_list]
-#
-#         # Check that we see output for all 6 requirement types
-#         assert any(
-#             "Read:" in call for call in call_args
-#         ), "Should summarize ReadRequirement"
-#         assert any(
-#             "Write:" in call for call in call_args
-#         ), "Should summarize WriteRequirement"
-#         assert any(
-#             "Commands:" in call for call in call_args
-#         ), "Should summarize CommandRequirement"
-#         assert any(
-#             "Move:" in call for call in call_args
-#         ), "Should summarize MoveRequirement"
-#         assert any(
-#             "Copy:" in call for call in call_args
-#         ), "Should summarize CopyRequirement"
-#         assert any(
-#             "Delete:" in call for call in call_args
-#         ), "Should summarize DeleteRequirement"
+        # First call fails, second succeeds with new input
+        mock_client.chat.completions.create.side_effect = [
+            INSTRUCTOR_RETRY_ERROR,
+            success_response,
+        ]
+        # User declines retry, provides new input
+        interface.user_inputs.extend(["n", "New message"])
+
+        # Execute
+        llm_message, new_user_message = send_message_to_llm_with_retry(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            client=mock_client,
+            message_history=message_history,
+            user_response=user_message,
+        )
+
+        # Verify
+        mock_handle_error.assert_called_once_with(
+            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
+        )
+        assert llm_message is success_response
+        assert new_user_message.comment == "New message"
+        # Should have added new message to history
+        assert len(message_history.message_cache) >= 2
+
+    def test_send_message_keyboard_interrupt_during_llm_call(self):
+        """Test KeyboardInterrupt during LLM processing."""
+        # Setup
+        mock_client = Mock()
+        interface = MockInterface()
+        message_history = MessageHistory(system_prompt="Test system")
+        user_message = UserMessage(comment="Test message")
+        success_response = LLMMessage(comment="Success after interrupt!")
+
+        # First call interrupted, second succeeds
+        mock_client.chat.completions.create.side_effect = [
+            KeyboardInterrupt(),
+            success_response,
+        ]
+        # After interrupt, user retries
+        interface.user_inputs.extend(["y"])
+
+        # Execute
+        llm_message, new_user_message = send_message_to_llm_with_retry(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            client=mock_client,
+            message_history=message_history,
+            user_response=user_message,
+        )
+
+        # Verify
+        assert llm_message is success_response
+        assert new_user_message is user_message
+        # Should show interrupt warning
+        output_text = " ".join(interface.outputs)
+        assert "Interrupted by user" in output_text
 
 
 class TestProcessRequirements:
@@ -356,7 +366,7 @@ class TestHandleLLMError:
 
         # Verify error display
         output_text = " ".join(mock_interface.outputs)
-        assert "✖  Test error" in output_text
+        assert "Test error" in output_text
 
     def test_handle_error_verbose(self):
         """Test error handling with verbose output."""
@@ -368,6 +378,6 @@ class TestHandleLLMError:
 
         # Verify verbose output shows the error and completion details
         output_text = " ".join(mock_interface.outputs)
-        assert "✖  Test error" in output_text
+        assert "Test error" in output_text
         # Should also show the raw completion content when verbose
         assert "Raw output" in output_text

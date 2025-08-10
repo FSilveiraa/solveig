@@ -28,7 +28,6 @@ def get_instructor_client(
     api_type: APIType,
     api_key: str | None = None,
     url: str | None = None,
-    skip_instructor_system_prompt=True,
 ) -> instructor.Instructor:
     # NoneType throws error, but we don't want to enforce having an API key for local runs
     api_key = api_key or ""
@@ -37,12 +36,12 @@ def get_instructor_client(
         try:
             from openai import OpenAI
 
-            openai_client = OpenAI(api_key=api_key, base_url=url)
-            return instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
-        except ImportError as error:
+            client = OpenAI(api_key=api_key, base_url=url)
+            return instructor.from_openai(client, mode=instructor.Mode.JSON)
+        except ImportError as e:
             raise ValueError(
                 "OpenAI client not available. Install with: pip install openai"
-            ) from error
+            ) from e
     elif api_type == APIType.CLAUDE or api_type == APIType.ANTHROPIC:
         try:
             from anthropic import Anthropic
@@ -51,10 +50,10 @@ def get_instructor_client(
             return instructor.from_anthropic(
                 anthropic_client, mode=instructor.Mode.JSON
             )
-        except ImportError as error:
+        except ImportError as e:
             raise ValueError(
                 "Anthropic client not available. Install with: pip install anthropic"
-            ) from error
+            ) from e
     elif api_type == APIType.GEMINI:
         try:
             import google.generativeai as genai
@@ -62,9 +61,9 @@ def get_instructor_client(
             genai.configure(api_key=api_key)
             gemini_client = genai.GenerativeModel("gemini-pro")
             return instructor.from_gemini(gemini_client, mode=instructor.Mode.JSON)
-        except ImportError as error:
+        except ImportError as e:
             raise ValueError(
                 "Google Generative AI client not available. Install with: pip install google-generativeai"
-            ) from error
+            ) from e
     else:
         raise ValueError(f"Unsupported API type: {api_type}")

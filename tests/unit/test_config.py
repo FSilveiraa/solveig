@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from tests.utils.mocks import MockInterface
+from tests.mocks import MockInterface
 
 
 class TestSolveigConfig:

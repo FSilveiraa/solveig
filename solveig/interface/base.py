@@ -3,7 +3,7 @@ Base interface classes for Solveig user interaction.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -76,6 +76,12 @@ class SolveigInterface(ABC):
         Section header with line
         --- User ---------------
         """
+        pass
+
+    @abstractmethod
+    def display_animation_while(
+        self, run_this: Callable, message: str | None = None
+    ) -> Any:
         pass
 
     #####
