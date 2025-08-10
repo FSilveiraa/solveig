@@ -22,13 +22,16 @@ class HOOKS:
         raise TypeError("HOOKS is a static registry and cannot be instantiated")
 
 
-def _announce_register(verb, fun: Callable, requirements, plugin_name: str):
+# def announce_register(plugin_name: str, before: list[tuple[Callable, list[type]]], after: list[tuple[Callable, list[type]]]):
+def announce_register(
+    verb, fun: Callable, requirements, plugin_name: str, interface: SolveigInterface
+):
     req_types = (
         ", ".join([req.__name__ for req in requirements])
         if requirements
         else "any requirements"
     )
-    print(
+    interface.show(
         f"ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
     )
 
@@ -45,7 +48,7 @@ def _get_plugin_name_from_function(fun: Callable) -> str:
 def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
-        _announce_register("before", fun, requirements, plugin_name)
+        # _announce_register("before", fun, requirements, plugin_name)
 
         # Store in both active hooks and all hooks registry
         hook_entry = (fun, requirements)
@@ -64,7 +67,7 @@ def before(requirements: tuple[type] | None = None):
 def after(requirements: tuple[type] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
-        _announce_register("after", fun, requirements, plugin_name)
+        # _announce_register("after", fun, requirements, plugin_name)
 
         # Store in both active hooks and all hooks registry
         hook_entry = (fun, requirements)
@@ -107,17 +110,33 @@ def load_hooks(interface: SolveigInterface | None = None):
                     else:
                         importlib.import_module(module_name)
                     # check if we actually loaded something
-                    if len(HOOKS._all_hooks) > current_count:
-                        interface.show(f"✓ Loaded plugin file: {plugin_name}")
+                    if len(HOOKS._all_hooks) <= current_count:
+                        interface.display_warning(
+                            "Plugin `{}` was loaded, but did not register"
+                        )
+
+                    registered = HOOKS._all_hooks[plugin_name]
+                    if registered:
+                        # announce_register(plugin_name, before_hooks, after_hooks)
+                        for fun, requirements in registered[0]:
+                            announce_register(
+                                "before", fun, requirements, plugin_name, interface
+                            )
+                        for fun, requirements in registered[1]:
+                            announce_register(
+                                "after", fun, requirements, plugin_name, interface
+                            )
+
+                        # interface.show(f"✓ Loaded plugin file: {plugin_name}")
                     # Not an error: we could have a schema-only plugin
                     # else:
                     #     print(f"   ✗ Plugin loaded, but failed to register: {plugin_name}: {e}")
                 except Exception as e:
                     interface.display_error(f"Failed to load plugin {plugin_name}: {e}")
 
-    interface.show(
-        f"🕮  Plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks, {total_schema} schema"
-    )
+        interface.show(
+            f"🕮  Plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks, {total_schema} schema"
+        )
 
 
 def filter_plugins(
