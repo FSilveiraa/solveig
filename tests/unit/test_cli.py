@@ -12,7 +12,7 @@ from solveig.schema.requirement import (
     ReadRequirement,
     WriteRequirement,
 )
-from tests.utils.mocks.interface import MockInterface
+from tests.mocks.interface import MockInterface
 
 
 class TestCLIInterface:

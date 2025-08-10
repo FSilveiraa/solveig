@@ -15,7 +15,7 @@ from scripts.run import (
 )
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 from solveig.schema.requirement import CommandRequirement, MoveRequirement
-from tests.utils.mocks import (
+from tests.mocks import (
     ALL_REQUIREMENTS_MESSAGE,
     DEFAULT_CONFIG,
     VERBOSE_CONFIG,

@@ -19,7 +19,7 @@ from solveig.schema.requirement import (
     ReadRequirement,
     WriteRequirement,
 )
-from tests.utils.mocks import DEFAULT_CONFIG, MockInterface
+from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
 class TestReadRequirementIntegration:

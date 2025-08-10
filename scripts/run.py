@@ -15,54 +15,6 @@ from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_plugins
 from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
 
-# def summarize_requirements(message: LLMMessage):
-#     reads, writes, commands, moves, copies, deletes = [], [], [], [], [], []
-#     for requirement in message.requirements or []:
-#         if isinstance(requirement, ReadRequirement):
-#             reads.append(requirement)
-#         elif isinstance(requirement, WriteRequirement):
-#             writes.append(requirement)
-#         elif isinstance(requirement, CommandRequirement):
-#             commands.append(requirement)
-#         elif isinstance(requirement, MoveRequirement):
-#             moves.append(requirement)
-#         elif isinstance(requirement, CopyRequirement):
-#             copies.append(requirement)
-#         elif isinstance(requirement, DeleteRequirement):
-#             deletes.append(requirement)
-#
-#     if reads:
-#         print("  Read:")
-#         for requirement in reads:
-#             print(
-#                 f"    {requirement.path} ({'metadata' if requirement.only_read_metadata else 'content'})"
-#             )
-#
-#     if writes:
-#         print("  Write:")
-#         for requirement in writes:
-#             print(f"    {requirement.path}")
-#
-#     if moves:
-#         print("  Move:")
-#         for requirement in moves:
-#             print(f"    {requirement.source_path} → {requirement.destination_path}")
-#
-#     if copies:
-#         print("  Copy:")
-#         for requirement in copies:
-#             print(f"    {requirement.source_path} → {requirement.destination_path}")
-#
-#     if deletes:
-#         print("  Delete:")
-#         for requirement in deletes:
-#             print(f"    {requirement.path}")
-#
-#     if commands:
-#         print("  Commands:")
-#         for requirement in commands:
-#             print(f"    {requirement.command}")
-
 
 def get_llm_client(
     config: SolveigConfig, interface: SolveigInterface
@@ -74,8 +26,9 @@ def get_llm_client(
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
-        with interface.with_group("System Prompt"):
-            interface.show(sys_prompt, level=interface.current_level + 1)
+        interface.display_text_block(sys_prompt, title="System Prompt")
+        # with interface.with_group("System Prompt"):
+        #     interface.show(sys_prompt, level=interface.current_level + 1)
     # if config.verbose:
     #     print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
@@ -103,12 +56,32 @@ def send_message_to_llm(
 ) -> LLMMessage | None:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
-        with interface.with_group("Sending"):
-            # print("[ Sending ]")
-            interface.display_text_block(user_response.to_openai(), title="Message")
-    else:
-        interface.show("(Sending)")
+        interface.display_text_block(user_response.to_openai(), title="Sending")
 
+    # Show animated spinner during LLM processing
+    def blocking_llm_call():
+        return client.chat.completions.create(
+            messages=message_history.to_openai(),
+            response_model=LLMMessage,
+            strict=False,
+            model=config.model,
+            temperature=config.temperature,
+            # max_tokens=512,
+        )
+
+    try:
+        llm_response: LLMMessage = interface.display_animation_while(
+            run_this=blocking_llm_call,
+            message="Waiting... ",
+        )
+        interface.show(f"Found response: {llm_response}")
+        interface.show(llm_response.to_openai())
+        return llm_response
+    except Exception as e:
+        handle_llm_error(e, config, interface)
+        return None
+
+    # Fallback for verbose mode - no animation to avoid interfering with debug output
     try:
         llm_response: LLMMessage = client.chat.completions.create(
             messages=message_history.to_openai(),
@@ -122,34 +95,6 @@ def send_message_to_llm(
     except Exception as e:
         handle_llm_error(e, config, interface)
         return None
-    # except AuthenticationError as e:
-    #     handle_network_error(
-    #         "Authentication failed: Invalid API key or unauthorized access", e, config
-    #     )
-    #     return None
-    # except RateLimitError as e:
-    #     handle_network_error(
-    #         "Rate limit exceeded: Please wait before making more requests", e, config
-    #     )
-    #     return None
-    # except httpx.ConnectError as e:
-    #     handle_network_error(
-    #         "Connection failed: Unable to reach the LLM service", e, config
-    #     )
-    #     return None
-    # except httpx.TimeoutException as e:
-    #     handle_network_error(
-    #         "Request timed out: The LLM service is not responding", e, config
-    #     )
-    #     return None
-    # except httpx.HTTPStatusError as e:
-    #     handle_network_error(
-    #         f"HTTP error {e.response.status_code}: {e.response.text}", e, config
-    #     )
-    #     return None
-    # except Exception as e:
-    #     handle_network_error(f"Unexpected error: {str(e)}", e, config)
-    #     return None
 
 
 def send_message_to_llm_with_retry(
@@ -164,13 +109,15 @@ def send_message_to_llm_with_retry(
         llm_response = send_message_to_llm(
             config, interface, client, message_history, user_response
         )
+        interface.show(f"Got response: {llm_response}")
         if llm_response is not None:
+            interface.show(llm_response.to_openai())
             return llm_response, user_response
 
         # Error occurred, ask if user wants to retry or provide new input
-        print("[ Error ]")
-        prompt = f"  ? Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
-        retry = interface.ask_yes_no(prompt)
+        with interface.with_group("Error"):
+            prompt = f"Re-send previous message{' and results' if user_response.results else ''}? [y/N] "
+            retry = interface.ask_yes_no(prompt)
 
         if not retry:
             new_comment = interface.ask_user()
@@ -183,7 +130,8 @@ def handle_llm_error(
     error: Exception, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
     """Display LLM parsing error details."""
-    interface.display_error(str(error))
+
+    interface.display_error(error)
     # print("  " + str(error))
     # print("  Failed to parse message")
     if (
@@ -194,34 +142,6 @@ def handle_llm_error(
         with interface.with_indent():
             for output in error.last_completion.choices:
                 interface.display_error(output.message.content.strip())
-        # print("  Output:")
-        # for output in error.last_completion.choices:
-        #     print(output.message.content.strip())
-        # print()
-
-
-# def handle_network_error(
-#     user_message: str, error: Exception, config: SolveigConfig
-# ) -> None:
-#     """Display network error with user-friendly message and technical details."""
-#     print(f"  {user_message}")
-#     print("  Network connection failed")
-#
-#     if config.verbose:
-#         print(f"  Technical details: {error}")
-#         print(f"  Error type: {type(error).__name__}")
-#
-#     print("  Suggestions:")
-#     print("    • Check your internet connection")
-#     print("    • Verify the API endpoint URL is correct")
-#     print("    • Confirm your API key is valid")
-#     print("    • Try again in a few moments")
-#     print()
-
-
-# def display_llm_response(llm_response: LLMMessage, interface: CLIInterface) -> None:
-#     """Display the LLM response and requirements summary."""
-#     interface.display_llm_response(llm_response)
 
 
 def process_requirements(
@@ -296,8 +216,6 @@ def main_loop(
             llm_response=llm_response, config=config, interface=interface
         )
         user_response = UserMessage(comment=interface.ask_user(), results=results)
-
-        # message_history.add_message(user_response)
 
 
 def cli_main():

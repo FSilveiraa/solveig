@@ -9,7 +9,7 @@ from scripts.init import (
     create_config_directory,
     main,
 )
-from tests.utils.mocks import MockInterface
+from tests.mocks import MockInterface
 
 
 class TestBashTimestamps:
