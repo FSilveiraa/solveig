@@ -29,7 +29,7 @@ def _announce_register(verb, fun: Callable, requirements, plugin_name: str):
         else "any requirements"
     )
     print(
-        f"   ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
+        f"ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
     )
 
 
