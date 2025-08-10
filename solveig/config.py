@@ -85,20 +85,14 @@ class SolveigConfig:
         """
 
     @classmethod
-    def parse_from_file(cls, config_path: Path | str) -> dict | None:
+    def parse_from_file(cls, config_path: Path | str) -> dict:
         if not config_path:
-            return None
+            return {}
         abs_path = utils.file.absolute_path(config_path)
         try:
-            return cls(**json.loads(utils.file.read_file_as_text(abs_path)))
+            return json.loads(utils.file.read_file_as_text(abs_path))
         except FileNotFoundError:
-            return None
-        # if not isinstance(config_path, Path):
-        #     config_path = Path(config_path)
-        # config_path = config_path.expanduser()
-        # if config_path.exists():
-        #     return json.loads()
-        # return None
+            return {}
 
     @classmethod
     def parse_config_and_prompt(
@@ -184,16 +178,13 @@ class SolveigConfig:
         user_prompt = args_dict.pop("prompt")
 
         file_config = cls.parse_from_file(args_dict.pop("config"))
-        file_config_dict = {}
         if not file_config:
+            file_config = {}
             warning = "Failed to parse config file, falling back to defaults"
             if interface:
                 interface.display_error(warning)
             else:
                 print(f"Warning: {warning}")
-        else:
-            # Convert SolveigConfig object to dict
-            file_config_dict = vars(file_config)
 
         # Merge config from file and CLI
         merged_config: dict = {**file_config}

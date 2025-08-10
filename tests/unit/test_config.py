@@ -46,17 +46,17 @@ class TestSolveigConfig:
     def test_parse_from_file_nonexistent(self):
         """Test parsing from non-existent file returns None."""
         result = SolveigConfig.parse_from_file("/nonexistent/path")
-        assert result is None
+        assert not result
 
     def test_parse_from_file_empty_path(self):
         """Test parsing with empty path returns None."""
         result = SolveigConfig.parse_from_file("")
-        assert result is None
+        assert not result
 
     def test_parse_from_file_none_path(self):
         """Test parsing with None path returns None."""
         result = SolveigConfig.parse_from_file(None)
-        assert result is None
+        assert not result
 
     def test_parse_from_file_success(self, mock_all_file_operations):
         """Test successful parsing from file."""
@@ -66,7 +66,7 @@ class TestSolveigConfig:
             config_path, json.dumps(test_config, indent=2)
         )
         result = SolveigConfig.parse_from_file(config_path)
-        assert result == SolveigConfig(**test_config)
+        assert result == test_config
 
     @patch("argparse.ArgumentParser.parse_args")
     def test_parse_config_and_prompt_defaults(self, mock_parse_args):
