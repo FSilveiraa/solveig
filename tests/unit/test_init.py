@@ -6,9 +6,10 @@ from unittest.mock import mock_open, patch
 from scripts.init import (
     add_bash_timestamps,
     check_dependencies,
-    create_config_directory,
+    create_example_config,
     main,
 )
+from solveig import SolveigConfig
 from tests.mocks import MockInterface
 
 
@@ -20,7 +21,7 @@ class TestBashTimestamps:
     @patch("pathlib.Path.exists")
     @patch("builtins.open", new_callable=mock_open)
     def test_add_bash_timestamps_new_bashrc(
-        self, mock_open_file, mock_exists, mock_read, mock_home
+        self, mock_open_file, mock_exists, mock_read, mock_home, mock_all_file_operations
     ):
         """Test adding timestamps to empty .bashrc."""
         mock_home.return_value = Path("/home/test")
@@ -52,12 +53,11 @@ class TestBashTimestamps:
         assert result is True
 
     @patch("scripts.init.Path.home")
-    @patch("pathlib.Path.read_text")
-    @patch("pathlib.Path.exists")
-    def test_add_bash_timestamps_exception(self, mock_exists, mock_read, mock_home):
+    def test_add_bash_timestamps_exception(self, mock_home, mock_all_file_operations):
         """Test handling exceptions during timestamp setup."""
         mock_home.return_value = Path("/home/test")
-        mock_exists.side_effect = PermissionError("Access denied")
+        mock_all_file_operations.mocks.exists.side_effect = [ PermissionError("Access denied") ]
+        # mock_exists.side_effect = PermissionError("Access denied")
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
@@ -105,30 +105,79 @@ class TestDependencyCheck:
 class TestConfigDirectory:
     """Test configuration directory creation."""
 
-    @patch("scripts.init.Path.home")
-    def test_create_config_directory_success(self, mock_home):
+    @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
+    def test_create_config_success(self, mock_all_file_operations):
         """Test successful config directory creation."""
+        # User agrees to create an example config
         interface = MockInterface()
-        mock_home.return_value = Path("/home/test")
+        interface.set_user_inputs(["y"])
 
-        result = create_config_directory(interface)
+        default_config_path = Path("/home/_test_user_/solveig_config.json")
+        # Show the files doesn't exist before
+        assert not mock_all_file_operations.exists(default_config_path)
+        assert not mock_all_file_operations.exists(default_config_path.parent)
+        # Confirm using the mocks is the same as calling Path.exists() directly
+        assert not default_config_path.exists()
+        assert not default_config_path.parent.exists()
 
-        assert result is True
+        # Execute
+        create_example_config(interface)
+
         # Check that success message appears in interface output
-        output_text = " ".join(interface.outputs)
-        assert "Configuration directory ready" in output_text
+        assert f"✓ Created example config at {default_config_path}" in interface.get_all_output()
 
-    @patch("scripts.init.Path.home")
-    @patch("pathlib.Path.mkdir")
-    def test_create_config_directory_exception(self, mock_mkdir, mock_home):
-        """Test handling exceptions during directory creation."""
-        mock_home.return_value = Path("/home/test")
-        mock_mkdir.side_effect = PermissionError("Access denied")
+        # Confirm the config path was created
+        assert default_config_path in mock_all_file_operations.files
+        assert default_config_path.parent in mock_all_file_operations.files
+        # Use Path methods to confirm mocks are working, despite obviously this path not existing
+        # in the real filesystem
+        assert default_config_path.parent.exists()
+        assert default_config_path.read_text() == SolveigConfig().to_json()
+        assert default_config_path.read_text() == mock_all_file_operations.get_content(default_config_path)
+
+    @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
+    def test_create_config_denial(self, mock_all_file_operations):
+        """Test successful config directory creation."""
+        default_config_path = Path("/home/_test_user_/solveig_config.json")
+
+        # User denies to create an example config
         interface = MockInterface()
+        interface.set_user_inputs(["n"])
 
-        result = create_config_directory(interface)
+        # Show the files doesn't exist before
+        assert not default_config_path.parent.exists()
+        assert not default_config_path.exists()
 
-        assert result is False
+        create_example_config(interface)
+
+        # Check that success message appears in interface output
+        assert f"○ Skipped config file creation." in interface.get_all_output()
+
+        # Confirm the config path was not created
+        assert not default_config_path.parent.exists()
+        assert not default_config_path.exists()
+
+    @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
+    @patch.object(Path, "mkdir")
+    def test_create_config_exception(self, mock_makedir, mock_all_file_operations):
+        """Test handling exceptions during directory creation."""
+        mock_makedir.side_effect = PermissionError("Access denied")
+        default_config_path = Path("/home/_test_user_/solveig_config.json")
+
+        # User agrees to creating the file config
+        interface = MockInterface()
+        interface.set_user_inputs(["y"])
+
+        # The file doesn't exist before
+        assert not default_config_path.exists()
+
+        create_example_config(interface)
+
+        assert not default_config_path.exists()
+        assert "✖  Failed to create config file: Access denied" in interface.get_all_output()
+
+        # assert "/home/test/.config" not in mock_all_file_operations.files
+        # assert "/home/test/.config/solveig.json" not in mock_all_file_operations.files
 
 
 class TestOptionalTools:
@@ -190,30 +239,30 @@ class TestOptionalTools:
 class TestMainFunction:
     """Test main initialization function."""
 
-    @patch("scripts.init.create_config_directory")
+    @patch("scripts.init.create_example_config")
     @patch("scripts.init.check_dependencies")
     @patch("scripts.init.add_bash_timestamps")
     def test_main_success_with_bash_setup(
         self,
         mock_add_bash,
+        mock_check_dependencies,
         mock_create_config,
-        mock_check_tools,
     ):
         """Test main function with successful bash setup."""
         mock_interface = MockInterface()
         mock_interface.set_user_inputs(["y"])  # User says yes to bash setup
         mock_create_config.return_value = True
-        mock_check_tools.return_value = True  # check_dependencies returns True
+        mock_check_dependencies.return_value = True  # check_dependencies returns True
         mock_add_bash.return_value = True
 
         result = main(interface=mock_interface)
 
         assert result == 0
         mock_create_config.assert_called_once()
-        mock_check_tools.assert_called_once()
+        mock_check_dependencies.assert_called_once()
         mock_add_bash.assert_called_once()
 
-    @patch("scripts.init.create_config_directory")
+    @patch("scripts.init.create_example_config")
     @patch("scripts.init.check_dependencies")
     def test_main_skip_bash_setup(
         self,
@@ -238,18 +287,6 @@ class TestMainFunction:
     def test_main_dependency_failure(self, mock_check_deps):
         """Test main function when dependencies are missing."""
         mock_check_deps.return_value = False
-        interface = MockInterface()
-
-        result = main(interface)
-
-        assert result == 1
-
-    @patch("scripts.init.create_config_directory")
-    @patch("scripts.init.check_dependencies")
-    def test_main_config_directory_failure(self, mock_check_deps, mock_create_config):
-        """Test main function when config directory creation fails."""
-        mock_check_deps.return_value = True
-        mock_create_config.return_value = False
         interface = MockInterface()
 
         result = main(interface)

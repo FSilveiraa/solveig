@@ -72,15 +72,14 @@ class TestFileValidation:
     def test_validate_read_access_file_not_found(self, mock_all_file_operations):
         """Test read access validation when file doesn't exist."""
         # Don't add file to filesystem - it won't exist
-
         with pytest.raises(FileNotFoundError, match="doesn't exist"):
             file_utils.validate_read_access("/nonexistent/file.txt")
 
     def test_validate_read_access_permission_denied(self, mock_all_file_operations):
         """Test read access validation with insufficient permissions."""
         # Add file with no read permissions
-        mock_all_file_operations.add_file(
-            "/restricted/file.txt", content="test", metadata={"readable": False}
+        mock_all_file_operations.write_file(
+            path="/restricted/file.txt", content="test", metadata={"readable": False}
         )
 
         with pytest.raises(PermissionError, match="Cannot read"):
@@ -111,12 +110,12 @@ class TestFileValidation:
         """Test write access validation with insufficient disk space."""
         # Set low disk space in the test directory metadata
         mock_all_file_operations.add_directory(
-            "/test", metadata={"disk_free": 100}
+            "/tiny-dir", metadata={"disk_free": 100}
         )  # Only 100 bytes free
 
         with pytest.raises(OSError, match="Insufficient disk space"):
             file_utils.validate_write_access(
-                "/test/file.txt",
+                "/tiny-dir/file.txt",
                 is_directory=False,
                 content="x" * 1000,  # 1000 bytes content
                 min_disk_size_left="1KB",  # Need 1KB minimum
@@ -146,9 +145,8 @@ class TestFileOperations:
 
     def test_move_file_or_directory(self, mock_all_file_operations):
         """Test moving a file or directory."""
-        # Add source file to mock filesystem first
-        mock_all_file_operations.add_file("/source/path", "content")
-
+        # Add source file to mock filesystem and move it
+        file_utils.write_file_or_directory("/source/path", False, "content")
         file_utils.move_file_or_directory("/source/path", "/dest/path")
 
         # Verify move in mock filesystem
@@ -159,8 +157,7 @@ class TestFileOperations:
     def test_copy_file_or_directory_file(self, mock_all_file_operations):
         """Test copying a file."""
         # Add source file to mock filesystem first
-        mock_all_file_operations.add_file("/source/file.txt", "source content")
-
+        file_utils.write_file_or_directory("/source/file.txt",  False, "source content")
         file_utils.copy_file_or_directory("/source/file.txt", "/dest/file.txt")
 
         # Verify copy in mock filesystem
@@ -219,7 +216,7 @@ class TestFileReading:
     def test_read_file_binary(self, mock_all_file_operations):
         """Test reading a binary file."""
         # Add a binary file to mock filesystem with actual binary content
-        mock_all_file_operations.add_file(
+        mock_all_file_operations.write_file(
             "/test/binary.bin",
             "binary content",
             metadata={"mime_type": "application/octet-stream"},

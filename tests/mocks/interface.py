@@ -23,7 +23,7 @@ class MockInterface(CLIInterface):
         """Capture output instead of printing"""
         self.outputs.append(text)
 
-    def _input(self, text: str) -> None:
+    def _input(self, text: str) -> str:
         """Capture input instead of printing"""
         self.questions.append(text)
         if self.user_inputs:

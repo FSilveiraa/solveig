@@ -193,3 +193,21 @@ class SolveigConfig:
                 merged_config[k] = v
 
         return (cls(**merged_config), user_prompt)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Export config to a dictionary suitable for JSON serialization."""
+        config_dict = {}
+
+        for field_name, field_value in vars(self).items():
+            if isinstance(field_value, APIType):
+                config_dict[field_name] = field_value.name
+            elif isinstance(field_value, Path):
+                config_dict[field_name] = str(field_value)
+            else:
+                config_dict[field_name] = field_value
+
+        return config_dict
+
+    def to_json(self, indent: int = 2) -> str:
+        """Export config to JSON string."""
+        return json.dumps(self.to_dict(), indent=indent)

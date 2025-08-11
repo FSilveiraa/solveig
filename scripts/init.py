@@ -10,6 +10,7 @@ This replaces the old setup.sh script with proper Python integration.
 import sys
 from pathlib import Path
 
+from solveig.config import DEFAULT_CONFIG_PATH, SolveigConfig
 from solveig.interface import CLIInterface, SolveigInterface
 
 
@@ -93,34 +94,27 @@ def check_dependencies(interface: SolveigInterface) -> bool:
             return True
 
 
-# def check_optional_tools(interface: SolveigInterface) -> None:
-#     """Check for optional tools that enhance Solveig's functionality."""
-#     import shutil
-#
-#     optional_tools = {
-#         "shellcheck": "Command validation (recommended for security)",
-#         "git": "Version control integration",
-#     }
-#
-#     print("\nOptional tools:")
-#     for tool, description in optional_tools.items():
-#         if shutil.which(tool):
-#             print(f"✓ {tool} - {description}")
-#         else:
-#             print(f"○ {tool} - {description} (not found)")
+def create_example_config(interface: SolveigInterface):
+    """Create an example configuration file with defaults."""
+    if DEFAULT_CONFIG_PATH.exists():
+        interface.show(f"✓ Config file already exists: {DEFAULT_CONFIG_PATH}")
 
+    if interface.ask_yes_no(f"Create example config at {DEFAULT_CONFIG_PATH}? [y/N]"):
+        try:
+            # Create the config dir if it doesn't exist
+            DEFAULT_CONFIG_PATH.parent.mkdir(exist_ok=True)
 
-def create_config_directory(interface: SolveigInterface) -> bool:
-    """Create the default configuration directory."""
-    config_dir = Path.home() / ".config"
+            # Create a default config instance and export it
+            default_config = SolveigConfig().to_json(indent=2)
+            DEFAULT_CONFIG_PATH.write_text(default_config)
 
-    try:
-        config_dir.mkdir(exist_ok=True)
-        interface.show(f"✓ Configuration directory ready: {config_dir}")
-        return True
-    except Exception as e:
-        interface.display_error(f"Failed to create config directory: {e}")
-        return False
+            interface.show(f"✓ Created example config at {DEFAULT_CONFIG_PATH}")
+            interface.show("Edit this file to customize your settings.")
+
+        except Exception as e:
+            interface.display_error(f"Failed to create config file: {e}")
+    else:
+        interface.show("○ Skipped config file creation.")
 
 
 def main(interface: SolveigInterface | None = None) -> int:
@@ -135,25 +129,14 @@ def main(interface: SolveigInterface | None = None) -> int:
     if not check_dependencies(interface):
         return 1
 
-    # Create config directory
-    if not create_config_directory(interface):
-        return 1
-
-    # Check optional tools
-    # check_optional_tools()
-    # print()
+    with interface.with_group("Configuration"):
+        # Offer to create example config file
+        create_example_config(interface)
 
     # Ask about bash history timestamps (replaces old setup.sh functionality)
     add_bash_timestamps(interface)
 
-    # if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
-    #     add_bash_timestamps(interface)
-    # else:
-    #     print("○ Skipped bash history timestamp setup.")
-
-    # print()
     interface.show("Solveig setup complete!")
-
     quick_start_str = """
 # Run a local model:
 solveig -u "http://localhost:5001/v1" "Tell me a joke"
@@ -162,11 +145,6 @@ solveig -u "http://localhost:5001/v1" "Tell me a joke"
 solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
     """.strip()
     interface.display_text_block(quick_start_str, title="Quick start:")
-
-    # print("  solveig --help                    # Show available options")
-    # print("  solveig 'Tell me about this dir' # Start a conversation")
-    # print()
-    # print("For more information, see: README.md")
 
     return 0
 

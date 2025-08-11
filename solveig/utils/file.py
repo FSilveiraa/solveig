@@ -169,7 +169,6 @@ def validate_write_access(
         try:
             content_size = len(content.encode("utf-8"))
             available_space = shutil.disk_usage(parent_dir).free
-            # Require at least 2x the content size for safety
             available_after_write = available_space - content_size
             if available_after_write < min_disk_bytes_left:
                 raise OSError(

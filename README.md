@@ -12,12 +12,11 @@
 
 **A safe bridge between AI assistants and your computer.**
 
-Solveig lets LLMs read files and run commands with explicit user approval for every operation.
+Solveig transforms any LLM into a practical assistant that can read files and run commands—with your explicit approval for every operation. No more copying and pasting between your terminal and ChatGPT.
 
-* **Explicit consent** - Review every file or command request before execution
-* **Safety validation** - Shellcheck integration prevents dangerous commands
-* **Works anywhere** - Any OpenAI-compatible LLM endpoint (OpenRouter, local models)
-* **Simple setup** - Modern Python CLI with comprehensive testing
+🔒 **Safe** • 150+ tests with 55%+ coverage • Secure file API • Command validation  
+🚀 **Useful** • Works with any OpenAI-compatible API • Handles real tasks efficiently  
+🧩 **Extensible** • Drop-in plugin system • Easy to customize and extend
 
 ---
 

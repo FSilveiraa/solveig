@@ -62,7 +62,7 @@ class TestSolveigConfig:
         """Test successful parsing from file."""
         test_config = {"api_type": "LOCAL", "temperature": 0.7, "verbose": True}
         config_path = "/path/to/config.json"
-        mock_all_file_operations.add_file(
+        mock_all_file_operations.write_file(
             config_path, json.dumps(test_config, indent=2)
         )
         result = SolveigConfig.parse_from_file(config_path)
