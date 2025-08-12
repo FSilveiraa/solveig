@@ -7,6 +7,6 @@ This module provides helper functions for:
 - Output processing and display
 """
 
-from solveig.utils import file, misc
+from solveig.utils import misc
 
-__all__ = ["file", "misc"]
+__all__ = ["_old_file.py", "misc"]

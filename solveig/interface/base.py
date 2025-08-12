@@ -5,7 +5,10 @@ import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from solveig.utils.filesystem import Metadata
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -61,8 +64,8 @@ class SolveigInterface(ABC):
     @abstractmethod
     def display_tree(
         self,
-        metadata: dict[str, Any],
-        listing: list[dict[str, Any]] | None,
+        metadata: Metadata,
+        listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = "Metadata",

@@ -7,8 +7,8 @@ from typing import Any
 from solveig import utils
 from solveig.interface import SolveigInterface
 from solveig.llm import APIType
-from solveig.utils.file import parse_size_notation_into_bytes
-
+# from solveig.utils.file import parse_size_notation_into_bytes
+from solveig.utils.filesystem import parse_size_notation_into_bytes, Filesystem
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
@@ -89,9 +89,10 @@ class SolveigConfig:
     def parse_from_file(cls, config_path: Path | str) -> dict:
         if not config_path:
             return {}
-        abs_path = utils.file.absolute_path(config_path)
+        abs_path = Filesystem.get_absolute_path(config_path)
         try:
-            return json.loads(utils.file.read_file_as_text(abs_path))
+            content, _ = Filesystem.read_file(abs_path)
+            return json.loads(content)
         except FileNotFoundError:
             return {}
 

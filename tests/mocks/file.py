@@ -143,7 +143,7 @@ class MockFilesystem(Filesystem):
         with (
             patch.object(Filesystem, "_exists", MagicMock(side_effect=self._mock_exists)) as patch_exists,
             patch.object(Filesystem, "_is_dir", MagicMock(side_effect=self._mock_is_dir)) as patch_is_dir,
-            patch.object(Filesystem, "_read_metadata", MagicMock(side_effect=self._mock_read_metadata)) as patch_read_metadata,
+            patch.object(Filesystem, "read_metadata", MagicMock(side_effect=self._mock_read_metadata)) as patch_read_metadata,
             patch.object(Filesystem, "_get_listing", MagicMock(side_effect=self._mock_get_listing)) as patch_get_listing,
             patch.object(Filesystem, "_read_text", MagicMock(side_effect=self._mock_read_text)) as patch_read_text,
             patch.object(Filesystem, "_read_bytes", MagicMock(side_effect=self._mock_read_bytes)) as patch_read_bytes,

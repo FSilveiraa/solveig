@@ -452,6 +452,7 @@ class Metadata:
     is_directory: bool
     is_readable: bool
     is_writable: bool
+    encoding: Literal["text", "base64"] | None = None # set after reading a file
 
 
 class Filesystem:
@@ -477,7 +478,7 @@ class Filesystem:
         return abs_path.is_dir()
 
     @staticmethod
-    def _read_metadata(abs_path: Path) -> Metadata:
+    def read_metadata(abs_path: Path) -> Metadata:
         stats = abs_path.stat()
         return Metadata(
             path = abs_path,
@@ -562,14 +563,14 @@ class Filesystem:
     @classmethod
     def is_readable(cls, abs_path: Path) -> bool:
         try:
-            return cls._read_metadata(abs_path).is_readable
+            return cls.read_metadata(abs_path).is_readable
         except PermissionError | OSError:
             # If we can't read metadata, it's not readable
             return False
 
     @classmethod
     def is_writable(cls, abs_path: Path) -> bool:
-        return cls._read_metadata(abs_path).is_writable
+        return cls.read_metadata(abs_path).is_writable
 
 
     """Validation"""
@@ -618,6 +619,7 @@ class Filesystem:
     def validate_write_access(
             cls,
             path: str | Path,
+            content: str | None = None,
             content_size: int | None = None,
             min_disk_size_left: str | int = 0,
     ) -> None:
@@ -647,13 +649,12 @@ class Filesystem:
                 raise IsADirectoryError(f"Cannot overwrite existing directory {abs_path}")
             elif not cls.is_writable(abs_path):
                 raise PermissionError(f"Cannot write into file {abs_path}")
-        # If the path does not exist, then we need to question the permissions of the parent
-        parent_to_write_into = abs_path.parent
-
-        # Find the closest writable parent
-        closest_writable_parent = cls.closest_writable_parent(parent_to_write_into)
+        # If the path does not exist, or it exists and is a file, then we need to find the closest
+        # writable parent - so if we have /test/ and we're trying to write /test/dir1/dir2/file1.txt,
+        # that would we /test/
+        closest_writable_parent = cls.closest_writable_parent(abs_path.parent)
         if not closest_writable_parent:
-            raise PermissionError(f"Cannot create parent directory {parent_to_write_into}")
+            raise PermissionError(f"Cannot create parent directory {abs_path.parent}")
 
         # If the parent directory does not exist, check if it's possible to create it
         # abs_parent = abs_path.parent
@@ -668,6 +669,8 @@ class Filesystem:
         #     raise PermissionError(f"Cannot write to parent directory {abs_parent}")
 
         # Check if there is enough space after writing
+        if not content_size and content is not None:
+            content_size = len(content.encode("utf-8"))
         if content_size is not None:
             free_space = cls._get_free_space(closest_writable_parent)
             free_after_write = free_space - content_size
@@ -691,11 +694,6 @@ class Filesystem:
 
         Args:
             path: Source file/directory path
-
-        Raises:
-            FileNotFoundError: If trying to read a non-existing file
-            IsADirectoryError: If trying to read a directory
-            PermissionError: If file is not readable
         """
         abs_path = cls.get_absolute_path(path)
         cls.validate_read_access(abs_path)
@@ -714,9 +712,9 @@ class Filesystem:
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
 
-        src_size = cls._read_metadata(src_path).size
+        src_size = cls.read_metadata(src_path).size
         cls.validate_read_access(src_path)
-        cls.validate_write_access(dest_path, src_size, min_space_left)
+        cls.validate_write_access(dest_path, content_size=src_size, min_disk_size_left=min_space_left)
         cls.create_directory(dest_path.parent)
 
         if cls._is_dir(src_path):
@@ -761,7 +759,7 @@ class Filesystem:
     def write_file(cls, file_path: str | Path, content: str = "", encoding: str = "utf-8", min_space_left: int = 0, append=False) -> None:
         abs_path = cls.get_absolute_path(file_path)
         size = len(content.encode(encoding))
-        cls.validate_write_access(abs_path, size, min_space_left)
+        cls.validate_write_access(abs_path, content_size=size, min_disk_size_left=min_space_left)
         cls.create_directory(abs_path.parent, exist_ok=True)
         if append and cls._exists(abs_path):
             cls._append_text(abs_path, content, encoding=encoding)
@@ -769,10 +767,13 @@ class Filesystem:
             cls._write_text(abs_path, content, encoding=encoding)
 
     @classmethod
-    def get_dir_listing(cls, dir_path: str | Path) -> list[Path]:
+    def get_dir_listing(cls, dir_path: str | Path) -> dict[Path, Metadata]:
         abs_path = cls.get_absolute_path(dir_path)
         cls.validate_read_access(abs_path)
         if not cls._is_dir(abs_path):
             raise NotADirectoryError(f"File {abs_path} is not a directory")
-        return cls._get_listing(abs_path)
-
+        dir_listing = cls._get_listing(abs_path)
+        return {
+            path: cls.read_metadata(path)
+            for path in dir_listing
+        }

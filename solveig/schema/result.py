@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from ..utils.filesystem import Metadata
+
 # Circular import fix:
 # - This module (result.py) needs Requirement classes for type hints
 # - requirement.py imports Result classes for actual usage
@@ -66,11 +68,11 @@ class RequirementResult(BaseModel):
 
 class ReadResult(RequirementResult):
     path: str | Path
-    metadata: dict | None = None
+    metadata: Metadata | None = None
     # For files
     content: str | None = None
     # For directories
-    directory_listing: list[dict] | None = None
+    directory_listing: dict[Path, Metadata] | None = None
 
 
 class WriteResult(RequirementResult):

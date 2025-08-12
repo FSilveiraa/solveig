@@ -5,7 +5,7 @@ Provides automatic mocking of all file I/O operations.
 
 import pytest
 
-from tests.mocks.filesystem import mock_fs
+from tests.mocks.file import mock_fs
 
 
 @pytest.fixture(autouse=True, scope="function")

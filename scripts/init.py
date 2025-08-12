@@ -15,7 +15,7 @@ from solveig.interface import CLIInterface, SolveigInterface
 from solveig.utils.filesystem import Filesystem
 
 
-DEFAULT_BASHRC_PATH = Path("~/.bashrc").expanduser()
+DEFAULT_BASHRC_PATH = Filesystem.get_absolute_path("~/.bashrc")
 
 
 def add_bash_timestamps(interface: SolveigInterface) -> bool:
@@ -42,8 +42,9 @@ export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
         if interface.ask_yes_no("Would you like to enable bash history timestamps?"):
             try:
                 # Check if timestamps are already configured
-                if Filesystem._exists(Filesystem.get_absolute_path(bashrc_path)):
-                    content = bashrc_path.read_text()
+                abs_bashrc_path = Filesystem.get_absolute_path(bashrc_path)
+                if Filesystem._exists(abs_bashrc_path):
+                    content, _ = Filesystem.read_file(bashrc_path)
                     if "HISTTIMEFORMAT" in content:
                         interface.display_success(
                             "Bash history timestamps were already configured"

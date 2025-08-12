@@ -5,14 +5,14 @@ CLI implementation of Solveig interface.
 import asyncio
 import shutil
 import sys
-import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .base import SolveigInterface
+from solveig.interface.base import SolveigInterface
+from solveig.utils.filesystem import Metadata
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -94,23 +94,23 @@ class CLIInterface(SolveigInterface):
 
     def display_tree(
         self,
-        metadata: dict[str, Any],
-        listing: list[dict[str, Any]] | None,
+        metadata: Metadata,
+        listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = "Metadata",
     ) -> None:
-        text = f"{'🗁' if metadata['is_directory'] else '🗎'} {metadata["path"]} | "
+        text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path} | "
         # size for directories is visual noise
-        if metadata["is_directory"]:
-            metadata.pop("size")
-        text += " | ".join([f"{key}={value}" for key, value in metadata.items()])
+        # if metadata.is_directory:
+        #     metadata.size = None
+        text += " | ".join([f"{key}={value}" for key, value in vars(metadata).items()])
         # print("DEBUG: " + str(len(entries)) + " entries: " + str(entries))
         if listing:
             # text = f"{text}\nEntries:"
             total_entries = len(listing)
-            for n, entry in enumerate(listing):
-                entry_str = f"{'🗁' if entry['is_directory'] else '🗎'} {Path(entry["path"]).name}"
+            for n, (entry_path, entry_metadata) in enumerate(listing.items()):
+                entry_str = f"{'🗁' if entry_metadata.is_directory else '🗎'} {Path(entry_path).name}"
                 # └ if it's the last item, otherwise ├
                 text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
         self.display_text_block(text, title=title, level=level, max_lines=max_lines)
@@ -261,7 +261,6 @@ class Animation:
         Returns:
             Result from the blocking function
         """
-
         # Start spinner
         await self.start(interface, message or "")
 

@@ -11,6 +11,7 @@ from scripts.init import (
     main,
 )
 from solveig import SolveigConfig
+from solveig.utils.filesystem import Filesystem
 from tests.mocks import MockInterface
 
 
@@ -41,12 +42,14 @@ class TestBashTimestamps:
     # @patch("pathlib.Path.read_text")
     # @patch("pathlib.Path.exists")
     def test_add_bash_timestamps_already_configured(
-        self, mock_exists, mock_read, mock_home
+        self, mock_all_file_operations
     ):
         """Test when timestamps are already configured."""
-        mock_home.return_value = Path("/home/test")
-        mock_exists.return_value = True
-        mock_read.return_value = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "'
+        # Create a bashrc file with timestamps already configured
+        bashrc_path = "/home/_test_user_/.bashrc"
+        bashrc_content = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "\nexport PS1="$ "'
+        mock_all_file_operations.write_file(bashrc_path, bashrc_content)
+        
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
@@ -116,26 +119,28 @@ class TestConfigDirectory:
 
         default_config_path = Path("/home/_test_user_/solveig_config.json")
         # Show the files doesn't exist before
-        assert not mock_all_file_operations.exists(default_config_path)
-        assert not mock_all_file_operations.exists(default_config_path.parent)
+        assert not mock_all_file_operations._mock_exists(default_config_path)
+        assert not mock_all_file_operations._mock_exists(default_config_path.parent)
         # Confirm using the mocks is the same as calling Path.exists() directly
-        assert not default_config_path.exists()
-        assert not default_config_path.parent.exists()
+        assert not Filesystem._exists(default_config_path)
+        assert not Filesystem._exists(default_config_path.parent)
 
         # Execute
         create_example_config(interface)
 
         # Check that success message appears in interface output
-        assert f"✓ Created example config at {default_config_path}" in interface.get_all_output()
+        assert f"Created example config file at {default_config_path}" in interface.get_all_output()
 
         # Confirm the config path was created
-        assert default_config_path in mock_all_file_operations.files
-        assert default_config_path.parent in mock_all_file_operations.files
-        # Use Path methods to confirm mocks are working, despite obviously this path not existing
+        assert default_config_path in mock_all_file_operations._paths
+        assert default_config_path.parent in mock_all_file_operations._paths
+        # Use Filesystem methods to confirm mocks are working, despite obviously this path not existing
         # in the real filesystem
-        assert default_config_path.parent.exists()
-        assert default_config_path.read_text() == SolveigConfig().to_json()
-        assert default_config_path.read_text() == mock_all_file_operations.get_content(default_config_path)
+        assert Filesystem._exists(default_config_path.parent)
+        content, _ = Filesystem.read_file(default_config_path)
+        assert content == SolveigConfig().to_json()
+        mock_content = mock_all_file_operations._mock_read_text(default_config_path)
+        assert content == mock_content
 
     @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
     def test_create_config_denial(self, mock_all_file_operations):
@@ -147,8 +152,8 @@ class TestConfigDirectory:
         interface.set_user_inputs(["n"])
 
         # Show the files doesn't exist before
-        assert not default_config_path.parent.exists()
-        assert not default_config_path.exists()
+        assert not Filesystem._exists(default_config_path.parent)
+        assert not Filesystem._exists(default_config_path)
 
         create_example_config(interface)
 
@@ -156,14 +161,14 @@ class TestConfigDirectory:
         assert f"○ Skipped config file creation." in interface.get_all_output()
 
         # Confirm the config path was not created
-        assert not default_config_path.parent.exists()
-        assert not default_config_path.exists()
+        assert not Filesystem._exists(default_config_path.parent)
+        assert not Filesystem._exists(default_config_path)
 
     @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
-    @patch.object(Path, "mkdir")
-    def test_create_config_exception(self, mock_makedir, mock_all_file_operations):
+    def test_create_config_exception(self, mock_all_file_operations):
         """Test handling exceptions during directory creation."""
-        mock_makedir.side_effect = PermissionError("Access denied")
+        # Set up the mock to fail when trying to create directories
+        mock_all_file_operations.mocks.create_directory.side_effect = PermissionError("Access denied")
         default_config_path = Path("/home/_test_user_/solveig_config.json")
 
         # User agrees to creating the file config
@@ -171,12 +176,12 @@ class TestConfigDirectory:
         interface.set_user_inputs(["y"])
 
         # The file doesn't exist before
-        assert not default_config_path.exists()
+        assert not Filesystem._exists(default_config_path)
 
         create_example_config(interface)
 
-        assert not default_config_path.exists()
-        assert "✖  Failed to create config file: Access denied" in interface.get_all_output()
+        assert not Filesystem._exists(default_config_path)
+        assert "Failed to create config file: Access denied" in interface.get_all_output()
 
         # assert "/home/test/.config" not in mock_all_file_operations.files
         # assert "/home/test/.config/solveig.json" not in mock_all_file_operations.files
