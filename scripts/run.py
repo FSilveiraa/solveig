@@ -163,7 +163,7 @@ def main_loop(
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
     interface = interface or CLIInterface(
-        be_verbose=config.verbose, max_lines=config.max_output_lines
+        verbose=config.verbose, max_lines=config.max_output_lines
     )
 
     # Configure plugins based on config

@@ -4,11 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from solveig import utils
 from solveig.interface import SolveigInterface
 from solveig.llm import APIType
-# from solveig.utils.file import parse_size_notation_into_bytes
 from solveig.utils.filesystem import parse_size_notation_into_bytes, Filesystem
+
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 

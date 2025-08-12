@@ -49,21 +49,9 @@ class RequirementResult(BaseModel):
             key: str(value) if isinstance(value, Path) else value
             for key, value in data.items()
         }
+        if data.get("metadata"):
+            data["metadata"]["path"] = str(data["metadata"]["path"])
         return data
-
-    # def to_openai(self):
-    #     return self.model_dump()
-
-
-# class FileResult(RequirementResult):
-# hack to preserve the paths
-# def to_openai(self):
-#     data = super().to_openai()
-#     requirement = data.pop("requirement")
-#     # for attr in { "path", "source_path", "destination_path" }:
-#     #     if attr in requirement:
-#     #         data[attr] = requirement[attr]
-#     return data
 
 
 class ReadResult(RequirementResult):
@@ -82,42 +70,19 @@ class WriteResult(RequirementResult):
 class MoveResult(RequirementResult):
     source_path: str | Path
     destination_path: str | Path
-    # def to_openai(self):
-    #     data = super().to_openai()
-    #     requirement = data.pop("requirement")
-    #     data["source_path"] = requirement["source_path"]
-    #     data["dest_path"] = requirement["dest_path"]
-    #     return data
 
 
 class CopyResult(RequirementResult):
     source_path: str | Path
     destination_path: str | Path
-    # def to_openai(self):
-    #     data = super().to_openai()
-    #     requirement = data.pop("requirement")
-    #     data["source_path"] = requirement["source_path"]
-    #     data["dest_path"] = requirement["dest_path"]
-    #     return data
 
 
 class DeleteResult(RequirementResult):
     path: str | Path
-    # def to_openai(self):
-    #     data = super().to_openai()
-    #     requirement = data.pop("requirement")
-    #     data["path"] = requirement["path"]
-    #     return data
 
 
 class CommandResult(RequirementResult):
     command: str
     success: bool | None = None
     stdout: str | None = None
-    # use the `error` field for stderr
 
-    # def to_openai(self):
-    #     data = super().to_openai()
-    #     requirement = data.pop("requirement")
-    #     data["command"] = requirement["command"]
-    #     return data

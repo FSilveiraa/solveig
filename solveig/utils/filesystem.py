@@ -541,8 +541,26 @@ class Filesystem:
         shutil.rmtree(abs_path)
 
     @staticmethod
-    def _is_text_file(abs_path: Path) -> bool:
-        return magic.from_file(abs_path, mime=True).startswith("text/")
+    def _is_text_file(abs_path: Path, _blocksize: int = 512) -> bool:
+        """
+        Believe it or not, the most reliable way to tell if a real file
+        is to read a piece of it and find b'\x00'
+        """
+        with abs_path.open("rb") as fd:
+            chunk = fd.read(_blocksize)
+            if b"\x00" in chunk:
+                return False
+            try:
+                chunk.decode("utf-8")
+                return True
+            except UnicodeDecodeError:
+                try:
+                    chunk.decode("utf-16")
+                    return True
+                except UnicodeDecodeError:
+                    return False
+        # mime_type = magic.from_file(abs_path, mime=True)
+        # return .startswith("text/")
 
     """Helpers"""
 

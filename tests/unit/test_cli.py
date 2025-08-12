@@ -26,10 +26,10 @@ class TestCLIInterface:
 
     def test_initialization(self):
         """Test CLIInterface initialization."""
-        interface = CLIInterface(indent_base=4, max_lines=10, verbosity=1)
+        interface = CLIInterface(indent_base=4, max_lines=10, verbose=True)
         assert interface.indent_base == 4
         assert interface.max_lines == 10
-        assert interface.verbosity == 1
+        assert interface.verbose == True
         assert interface.current_level == 0
 
     def test_display_section(self):

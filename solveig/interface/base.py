@@ -20,11 +20,11 @@ class SolveigInterface(ABC):
     DEFAULT_INPUT_PROMPT = ">  "
     DEFAULT_YES = {"y", "yes"}
 
-    def __init__(self, indent_base: int = 2, max_lines=6, verbosity: int = 1):
+    def __init__(self, indent_base: int = 2, max_lines=6, verbose: bool = False):
         self.indent_base = indent_base
         self.current_level = 0
         self.max_lines = max_lines
-        self.verbosity = verbosity
+        self.verbose = verbose
 
     # Implement these:
 
@@ -140,7 +140,7 @@ class SolveigInterface(ABC):
             message = ""
         message = message or str(f"{exception.__class__.__name__}: {exception}")
         self.show(f"✖  {message}")
-        if exception and self.verbosity > 0:
+        if exception and self.verbose:
             traceback_block = "".join(
                 traceback.format_exception(
                     type(exception), exception, exception.__traceback__
