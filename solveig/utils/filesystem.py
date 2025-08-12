@@ -699,6 +699,8 @@ class Filesystem:
         """
         abs_path = cls.get_absolute_path(path)
         cls.validate_read_access(abs_path)
+        if cls._is_dir(abs_path):
+            raise IsADirectoryError(f"Cannot read directory {abs_path}")
         try:
             if cls._is_text_file(abs_path):
                 return (cls._read_text(abs_path), "text")

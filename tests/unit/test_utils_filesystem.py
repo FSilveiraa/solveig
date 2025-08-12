@@ -44,6 +44,10 @@ class TestSizeNotationParsing:
             parse_size_notation_into_bytes("invalid")
         with pytest.raises(ValueError, match="not a valid disk size"):
             parse_size_notation_into_bytes("1.2.3 GB")
+    
+    def test_parse_none_returns_zero(self):
+        """Test parsing None returns 0."""
+        assert parse_size_notation_into_bytes(None) == 0
 
 
 class TestMetadata:
@@ -394,6 +398,26 @@ class TestFilesystemHighLevelOperations:
         content, format_type = Filesystem.read_file(text_path)
         assert content == "text content"
         assert format_type == "text"
+    
+    def test_read_file_binary_format(self, mock_all_file_operations):
+        """Test reading binary files returns base64 format."""
+        # Create a binary file
+        binary_path = "/test/binary_file.bin"
+        Filesystem.write_file(binary_path, "binary content")
+        
+        # Mock _is_text_file to return False for this test
+        fs = mock_all_file_operations
+        fs.mocks.is_text_file.side_effect = [False]  # Return False once
+        
+        # Read should return base64 format
+        content, format_type = Filesystem.read_file(binary_path)
+        assert content == "YmluYXJ5IGNvbnRlbnQ="  # base64 of "binary content"
+        assert format_type == "base64"
+    
+    def test_read_file_directory_error(self, mock_all_file_operations):
+        """Test reading a directory raises appropriate error."""
+        with pytest.raises(IsADirectoryError, match="Cannot read directory"):
+            Filesystem.read_file("/test/dir")
 
 
 class TestFilesystemErrorHandling:
@@ -404,10 +428,25 @@ class TestFilesystemErrorHandling:
         with pytest.raises(FileNotFoundError):
             Filesystem.copy("/nonexistent_source.txt", "/test/dest.txt", min_space_left=0)
     
+    def test_copy_destination_already_exists(self, mock_all_file_operations):
+        """Test copying when destination already exists."""
+        # Both source and destination exist in mock filesystem
+        with pytest.raises(IsADirectoryError, match="Cannot overwrite existing directory"):
+            Filesystem.copy("/test/file.txt", "/test/dir", min_space_left=0)
+    
     def test_move_nonexistent_source(self, mock_all_file_operations):
         """Test moving non-existent source raises appropriate error."""
         with pytest.raises(FileNotFoundError):
             Filesystem.move("/nonexistent_source.txt", "/test/dest.txt")
+    
+    def test_move_destination_already_exists(self, mock_all_file_operations):
+        """Test moving when destination already exists."""
+        # Create source file first
+        Filesystem.write_file("/test/moveme2.txt", "move content")
+        
+        # Try to move to existing directory
+        with pytest.raises(IsADirectoryError, match="Cannot overwrite existing directory"):
+            Filesystem.move("/test/moveme2.txt", "/test/dir")
     
     def test_write_file_insufficient_space(self, mock_all_file_operations):
         """Test writing file when insufficient disk space."""
@@ -426,6 +465,15 @@ class TestFilesystemErrorHandling:
         
         with pytest.raises(PermissionError, match="Cannot create parent directory"):
             Filesystem.write_file("/test/new_file.txt", "content")
+    
+    def test_write_validation_with_minimum_space_requirements(self, mock_all_file_operations):
+        """Test write validation with both insufficient space AND minimum space requirements."""
+        # Try to write more than available space with high minimum requirement
+        huge_content = "x" * (mock_all_file_operations.total_size - 1000)
+        min_space_required = "100MB"
+        
+        with pytest.raises(OSError, match="Insufficient disk space"):
+            Filesystem.write_file("/test/huge2.txt", huge_content, min_space_left=min_space_required)
 
 
 class TestMockFilesystemSideEffects:
@@ -462,6 +510,23 @@ class TestMockFilesystemSideEffects:
         # Write should fail with mock side effect
         with pytest.raises(PermissionError, match="Read-only filesystem"):
             Filesystem.write_file("/test/readonly_fs.txt", "content")
+    
+    def test_validate_read_access_permission_denied_scenarios(self, mock_all_file_operations):
+        """Test various permission denied scenarios for reading."""
+        fs = mock_all_file_operations
+        
+        # Create file and make parent directory unreadable
+        Filesystem.write_file("/test/subdir/restricted.txt", "content")
+        parent_dir = Filesystem.get_absolute_path("/test/subdir")
+        fs._paths[parent_dir].metadata.is_readable = False
+        
+        # This should still work because the file itself is readable,
+        # but let's test when the file itself is not readable
+        file_path = Filesystem.get_absolute_path("/test/subdir/restricted.txt")
+        fs._paths[file_path].metadata.is_readable = False
+        
+        with pytest.raises(PermissionError, match="not readable"):
+            Filesystem.validate_read_access("/test/subdir/restricted.txt")
 
 
 class TestFilesystemIntegration:
