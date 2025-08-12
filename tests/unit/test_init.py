@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from scripts.init import (
+    DEFAULT_CONFIG_PATH,
     add_bash_timestamps,
     check_dependencies,
     create_example_config,
@@ -13,31 +14,32 @@ from solveig import SolveigConfig
 from tests.mocks import MockInterface
 
 
+# @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
 class TestBashTimestamps:
     """Test bash timestamp functionality."""
 
-    @patch("scripts.init.Path.home")
-    @patch("pathlib.Path.read_text")
-    @patch("pathlib.Path.exists")
-    @patch("builtins.open", new_callable=mock_open)
+    # @patch("scripts.init.Path.home")
+    # @patch("pathlib.Path.read_text")
+    # @patch("pathlib.Path.exists")
+    # @patch("builtins.open", new_callable=mock_open)
+    # @patch("solveig.config.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
+    # @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
     def test_add_bash_timestamps_new_bashrc(
-        self, mock_open_file, mock_exists, mock_read, mock_home, mock_all_file_operations
+        self, mock_all_file_operations
     ):
         """Test adding timestamps to empty .bashrc."""
-        mock_home.return_value = Path("/home/test")
-        mock_exists.return_value = True
-        mock_read.return_value = "# Empty bashrc"
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
         result = add_bash_timestamps(interface)
 
         assert result is True
-        mock_open_file.assert_called()
+        assert Path("/home/_test_user_/.bashrc") in mock_all_file_operations._paths
+        assert "export HISTTIMEFORMAT=" in mock_all_file_operations._paths[Path("/home/_test_user_/.bashrc")].content
 
-    @patch("scripts.init.Path.home")
-    @patch("pathlib.Path.read_text")
-    @patch("pathlib.Path.exists")
+    # @patch("scripts.init.Path.home")
+    # @patch("pathlib.Path.read_text")
+    # @patch("pathlib.Path.exists")
     def test_add_bash_timestamps_already_configured(
         self, mock_exists, mock_read, mock_home
     ):
@@ -80,7 +82,7 @@ class TestDependencyCheck:
         assert result is True
         # Check that success message appears in interface output
         output_text = " ".join(interface.outputs)
-        assert "✓ All required dependencies are installed." in output_text
+        assert "All required dependencies are installed." in output_text
 
     @patch("builtins.__import__")
     def test_check_dependencies_missing(self, mock_import):

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from .base import SolveigInterface
 
 if TYPE_CHECKING:
-    from ..schema import LLMMessage
+    from solveig.schema import LLMMessage
 
 
 class CLIInterface(SolveigInterface):
@@ -91,19 +91,6 @@ class CLIInterface(SolveigInterface):
                             requirement.display_header(interface=self)
 
     # display_requirement removed - requirements now display themselves directly
-
-    def display_error(self, message: str | Exception | None = None) -> None:
-        _exception = message
-        if isinstance(_exception, Exception):
-            message = str(f"{_exception.__class__.__name__}: {_exception}")
-        super().display_error(message)
-        if isinstance(_exception, Exception):
-            traceback_block = "".join(
-                traceback.format_exception(
-                    type(_exception), _exception, _exception.__traceback__
-                )
-            )
-            self.display_text_block(traceback_block, title="Error")
 
     def display_tree(
         self,

@@ -1,7 +1,7 @@
 """
 Base interface classes for Solveig user interaction.
 """
-
+import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -17,11 +17,11 @@ class SolveigInterface(ABC):
     DEFAULT_INPUT_PROMPT = ">  "
     DEFAULT_YES = {"y", "yes"}
 
-    def __init__(self, indent_base: int = 2, max_lines=6, be_verbose: bool = False):
+    def __init__(self, indent_base: int = 2, max_lines=6, verbosity: int = 1):
         self.indent_base = indent_base
         self.current_level = 0
         self.max_lines = max_lines
-        self.be_verbose = be_verbose
+        self.verbosity = verbosity
 
     # Implement these:
 
@@ -124,8 +124,24 @@ class SolveigInterface(ABC):
     def display_comment(self, message: str) -> None:
         self.show(f"❝  {message}")
 
-    def display_error(self, message: str | Exception | None = None) -> None:
+    def display_success(self, message: str) -> None:
+        self.show(f"✓  {message}")
+
+    def display_error(self, message: str | Exception | None, exception: Exception | None = None) -> None:
+        if not exception and not message:
+            raise RuntimeError("Need to specify message or exception")
+        # If we got an exception in the place of a message, or if we get an explicit exception and no message,
+        # the message becomes the exception's description
+        if (isinstance(message, Exception) and not exception) or (exception and not message):
+            message = str(f"{exception.__class__.__name__}: {exception}")
         self.show(f"✖  {message}")
+        if exception and self.verbosity > 0:
+            traceback_block = "".join(
+                traceback.format_exception(
+                    type(exception), exception, exception.__traceback__
+                )
+            )
+            self.display_text_block(traceback_block, title=exception.__class__.__name__)
 
     def display_warning(self, message: str) -> None:
         self.show(f"⚠  {message}")

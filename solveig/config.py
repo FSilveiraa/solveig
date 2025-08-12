@@ -9,6 +9,7 @@ from solveig.interface import SolveigInterface
 from solveig.llm import APIType
 from solveig.utils.file import parse_size_notation_into_bytes
 
+
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
 

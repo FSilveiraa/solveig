@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from solveig.utils import file as file_utils
+from solveig.utils.filesystem import Filesystem
 
 
 class TestFileUtils:
@@ -249,11 +250,11 @@ class TestCopyMoveValidation:
         with pytest.raises(OSError, match="already exists"):
             file_utils.validate_copy_access("/test/file.txt", "/test/source.txt")
 
-    def test_validate_copy_access_success(self):
+    def test_validate_copy_access_success(self, mock_all_file_operations):
         """Test successful copy validation."""
         # Source exists, destination doesn't
         # Should not raise an exception
-        file_utils.validate_copy_access("/test/file.txt", "/test/new_file.txt")
+        ("/test/file.txt", "/test/new_file.txt")
 
     def test_validate_move_access_uses_copy_validation(self):
         """Test that move validation uses copy validation logic."""

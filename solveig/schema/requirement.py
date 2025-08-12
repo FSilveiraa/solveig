@@ -11,7 +11,7 @@ from .. import SolveigConfig, plugins, utils
 from ..plugins.exceptions import PluginException, ProcessingError, ValidationError
 
 if TYPE_CHECKING:
-    from ..interface.base import SolveigInterface
+    from solveig.interface import SolveigInterface
 
 if TYPE_CHECKING:
     from .result import (
