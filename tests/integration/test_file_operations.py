@@ -54,11 +54,11 @@ class TestReadRequirementIntegration:
             assert result.accepted
             assert result.content == test_content
             assert result.metadata is not None
-            assert "integration_test.txt" in result.metadata["path"]
-            assert result.metadata["size"] == len(test_content)
+            assert "integration_test.txt" == result.metadata.path.name
+            assert result.metadata.size == len(test_content.encode("utf-8"))
 
             # Verify path expansion worked
-            assert str(result.path) == str(test_file.resolve())
+            assert result.path == result.metadata.path == test_file.resolve()
             assert "~" not in str(result.path)
 
         finally:
@@ -99,7 +99,7 @@ class TestReadRequirementIntegration:
             assert len(result.directory_listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = {Path(item["path"]).name for item in result.directory_listing}
+            filenames = {item.name for item in result.directory_listing}
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
@@ -120,11 +120,7 @@ class TestReadRequirementIntegration:
         # Should fail gracefully
         assert not result.accepted
         assert result.error is not None
-        assert (
-            "No such file" in result.error
-            or "not found" in result.error.lower()
-            or "doesn't exist" in result.error.lower()
-        )
+        assert "path /nonexistent/file.txt does not exist" in result.error.lower()
 
     def test_read_permission_denied(self):
         """Test reading a file with insufficient permissions."""
@@ -152,7 +148,8 @@ class TestReadRequirementIntegration:
                 # Should fail gracefully
                 assert not result.accepted
                 assert result.error is not None
-                assert "Permission denied" in result.error
+                assert "Permission denied" in result.error \
+                    or " not readable" in result.error
 
             finally:
                 # Restore permissions for cleanup

@@ -196,9 +196,11 @@ class ReadRequirement(Requirement):
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
 
-        # metadata, listing = utils.file.read_metadata_and_listing(abs_path)
         metadata = Filesystem.read_metadata(abs_path)
-        listing = Filesystem.get_dir_listing(abs_path)
+        try:
+            listing = Filesystem.get_dir_listing(abs_path)
+        except NotADirectoryError:
+            listing = None
         interface.display_tree(metadata, listing)
         content = None
 
@@ -287,12 +289,7 @@ class WriteRequirement(Requirement):
             )
 
             metadata = Filesystem.read_metadata(abs_path)
-            # metadata, listing = utils.file.read_metadata_and_listing(abs_path)
             already_exists = True
-            # Do not overwrite directories (confirm if the existing path is a dir, not the request)
-            # if metadata.is_directory:
-            #     raise ValueError("Cannot write directory")
-            # Otherwise show a warning with the file metadata
 
             if already_exists:
                 # If it got this far, it's a file
@@ -314,9 +311,6 @@ class WriteRequirement(Requirement):
                     Filesystem.create_directory(abs_path)
                 else:
                     Filesystem.write_file(abs_path, content=self.content)
-                # utils.file.write_file_or_directory(
-                #     abs_path, is_directory=self.is_directory, content=self.content or ""
-                # )
                 with interface.with_indent():
                     interface.display_success(f"{'Updated' if already_exists else 'Created'}")
 
@@ -392,7 +386,6 @@ class CommandRequirement(Requirement):
                 interface.display_error(
                     f"Found error when running command: {error_str}"
                 )
-                # print(f"      {error_str}")
                 return CommandResult(
                     requirement=self,
                     command=self.command,
@@ -478,11 +471,11 @@ class MoveRequirement(Requirement):
             error = e
             interface.display_warning("Destination path already exists")
             destination_metadata = Filesystem.read_metadata(abs_destination_path)
-            destination_listing = Filesystem.get_dir_listing(abs_destination_path)
+            try:
+                destination_listing = Filesystem.get_dir_listing(abs_destination_path)
+            except NotADirectoryError:
+                destination_listing = None
 
-            # destination_metadata, destination_listing = (
-            #     utils.file.read_metadata_and_listing(abs_destination_path)
-            # )
             interface.display_tree(
                 metadata=destination_metadata,
                 listing=destination_listing,
@@ -499,9 +492,11 @@ class MoveRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
-        # metadata, listing = utils.file.read_metadata_and_listing(abs_source_path)
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        source_listing = Filesystem.get_dir_listing(abs_source_path)
+        try:
+            source_listing = Filesystem.get_dir_listing(abs_source_path)
+        except NotADirectoryError:
+            source_listing = None
         interface.display_tree(
             metadata=source_metadata, listing=source_listing, title="Source Metadata"
         )
@@ -597,11 +592,11 @@ class CopyRequirement(Requirement):
             error = e
             interface.display_warning("Destination path already exists")
 
-            # destination_metadata, destination_listing = (
-            #     utils.file.read_metadata_and_listing(abs_destination_path)
-            # )
             destination_metadata = Filesystem.read_metadata(abs_destination_path)
-            destination_listing = Filesystem.get_dir_listing(abs_destination_path)
+            try:
+                destination_listing = Filesystem.get_dir_listing(abs_destination_path)
+            except NotADirectoryError:
+                destination_listing = None
             interface.display_tree(
                 metadata=destination_metadata,
                 listing=destination_listing,
@@ -619,10 +614,11 @@ class CopyRequirement(Requirement):
             )
 
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        source_listing = Filesystem.get_dir_listing(abs_source_path)
-        # source_metadata, source_listing = utils.file.read_metadata_and_listing(
-        #     abs_source_path
-        # )
+        try:
+            source_listing = Filesystem.get_dir_listing(abs_source_path)
+        except NotADirectoryError:
+            source_listing = None
+
         interface.display_tree(
             metadata=source_metadata, listing=source_listing, title="Source Metadata"
         )
@@ -631,13 +627,9 @@ class CopyRequirement(Requirement):
         if interface.ask_yes_no(
             f"Allow copying '{abs_source_path}' to '{abs_destination_path}'? [y/N]: "
         ):
-            # if self._ask_copy_consent():
             try:
                 # Perform the copy operation
                 Filesystem.copy(abs_source_path, abs_destination_path, min_space_left=config.min_disk_space_left)
-                # utils.file.copy_file_or_directory(
-                #     source_path=abs_source_path, dest_path=abs_destination_path
-                # )
                 with interface.with_indent():
                     interface.display_success("Copied")
                 return CopyResult(
@@ -715,9 +707,11 @@ class DeleteRequirement(Requirement):
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )
 
-        # metadata, listing = utils.file.read_metadata_and_listing(abs_path)
         metadata = Filesystem.read_metadata(abs_path)
-        listing = Filesystem.get_dir_listing(abs_path)
+        try:
+            listing = Filesystem.get_dir_listing(abs_path)
+        except NotADirectoryError:
+            listing = None
         interface.display_tree(metadata=metadata, listing=listing)
 
         # Get user consent (with extra warning)

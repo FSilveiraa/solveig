@@ -467,7 +467,7 @@ class Filesystem:
     @staticmethod
     def get_absolute_path(path: str | Path) -> Path:
         """Convert path to absolute path. Using PurePath ensures no real filesystem ops can be done using Path"""
-        return Path(path).expanduser().absolute()
+        return Path(path).expanduser().resolve()
 
     @staticmethod
     def _exists(abs_path: str | Path) -> bool:

@@ -200,4 +200,4 @@ class TestShellcheckPluginIntegration:
 
         # Should not be stopped by shellcheck (file validation error is different)
         assert not result.accepted
-        assert "doesn't exist" in result.error.lower()  # File error, not plugin error
+        assert "does not exist" in result.error.lower()  # File error, not plugin error

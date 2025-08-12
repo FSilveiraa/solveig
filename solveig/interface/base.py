@@ -135,8 +135,10 @@ class SolveigInterface(ABC):
             raise RuntimeError("Need to specify message or exception")
         # If we got an exception in the place of a message, or if we get an explicit exception and no message,
         # the message becomes the exception's description
-        if (isinstance(message, Exception) and not exception) or (exception and not message):
-            message = str(f"{exception.__class__.__name__}: {exception}")
+        if isinstance(message, Exception) and not exception:
+            exception = message
+            message = ""
+        message = message or str(f"{exception.__class__.__name__}: {exception}")
         self.show(f"✖  {message}")
         if exception and self.verbosity > 0:
             traceback_block = "".join(
