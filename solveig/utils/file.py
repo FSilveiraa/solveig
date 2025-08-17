@@ -1,15 +1,13 @@
 import base64
-from dataclasses import dataclass
 import grp
 import os
 import pwd
 import re
 import shutil
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-import magic
-
 
 # class Filesystem:
 #     _SIZE_NOTATIONS = {
@@ -399,15 +397,15 @@ import magic
 # # ===== What I really need
 #
 _SIZE_NOTATIONS = {
-        "kib": 1024,
-        "mib": 1024 ** 2,
-        "gib": 1024 ** 3,
-        "tib": 1024 ** 4,
-        "kb": 1000,
-        "mb": 1000 ** 2,
-        "gb": 1000 ** 3,
-        "tb": 1000 ** 4,
-    }
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "tib": 1024**4,
+    "kb": 1000,
+    "mb": 1000**2,
+    "gb": 1000**3,
+    "tb": 1000**4,
+}
 
 _SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
 
@@ -442,6 +440,7 @@ def parse_size_notation_into_bytes(size_notation: int | str) -> int:
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
+
 @dataclass
 class Metadata:
     owner_name: str
@@ -452,7 +451,7 @@ class Metadata:
     is_directory: bool
     is_readable: bool
     is_writable: bool
-    encoding: Literal["text", "base64"] | None = None # set after reading a file
+    encoding: Literal["text", "base64"] | None = None  # set after reading a file
 
 
 class Filesystem:
@@ -464,13 +463,14 @@ class Filesystem:
     Keep in mind these do not perform any path normalization or checks, so if you call fs._read_text(Path("~"))
     it won't give you a proper error
     """
+
     @staticmethod
     def get_absolute_path(path: str | Path) -> Path:
         """Convert path to absolute path. Using PurePath ensures no real filesystem ops can be done using Path"""
         return Path(path).expanduser().resolve()
 
     @staticmethod
-    def _exists(abs_path: str | Path) -> bool:
+    def _exists(abs_path: Path) -> bool:
         return abs_path.exists()
 
     @staticmethod
@@ -481,14 +481,14 @@ class Filesystem:
     def read_metadata(abs_path: Path) -> Metadata:
         stats = abs_path.stat()
         return Metadata(
-            path = abs_path,
-            size = stats.st_size,
-            modified_time= time.ctime(stats.st_mtime),
-            is_directory = abs_path.is_dir(),
-            owner_name = pwd.getpwuid(stats.st_uid).pw_name,
-            group_name = grp.getgrgid(stats.st_gid).gr_name,
-            is_readable = os.access(abs_path, os.R_OK),
-            is_writable = os.access(abs_path, os.W_OK)
+            path=abs_path,
+            size=stats.st_size,
+            modified_time=time.ctime(stats.st_mtime),
+            is_directory=abs_path.is_dir(),
+            owner_name=pwd.getpwuid(stats.st_uid).pw_name,
+            group_name=grp.getgrgid(stats.st_gid).gr_name,
+            is_readable=os.access(abs_path, os.R_OK),
+            is_writable=os.access(abs_path, os.W_OK),
         )
 
     @staticmethod
@@ -508,11 +508,11 @@ class Filesystem:
         abs_path.mkdir()
 
     @staticmethod
-    def _write_text(abs_path: Path, content: str = "", encoding = "utf-8") -> None:
+    def _write_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
         abs_path.write_text(content, encoding=encoding)
 
     @staticmethod
-    def _append_text(abs_path: Path, content: str = "", encoding = "utf-8") -> None:
+    def _append_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
         with open(abs_path, "a", encoding=encoding) as fd:
             fd.write(content)
 
@@ -582,14 +582,13 @@ class Filesystem:
     def is_readable(cls, abs_path: Path) -> bool:
         try:
             return cls.read_metadata(abs_path).is_readable
-        except PermissionError | OSError:
+        except (PermissionError, OSError):
             # If we can't read metadata, it's not readable
             return False
 
     @classmethod
     def is_writable(cls, abs_path: Path) -> bool:
         return cls.read_metadata(abs_path).is_writable
-
 
     """Validation"""
 
@@ -635,11 +634,11 @@ class Filesystem:
 
     @classmethod
     def validate_write_access(
-            cls,
-            path: str | Path,
-            content: str | None = None,
-            content_size: int | None = None,
-            min_disk_size_left: str | int = 0,
+        cls,
+        path: str | Path,
+        content: str | None = None,
+        content_size: int | None = None,
+        min_disk_size_left: str | int = 0,
     ) -> None:
         """
         Validate that a file or directory can be written.
@@ -664,7 +663,9 @@ class Filesystem:
         # parent_to_write_into = abs_path.parent
         if cls._exists(abs_path):
             if cls._is_dir(abs_path):
-                raise IsADirectoryError(f"Cannot overwrite existing directory {abs_path}")
+                raise IsADirectoryError(
+                    f"Cannot overwrite existing directory {abs_path}"
+                )
             elif not cls.is_writable(abs_path):
                 raise PermissionError(f"Cannot write into file {abs_path}")
         # If the path does not exist, or it exists and is a file, then we need to find the closest
@@ -700,7 +701,7 @@ class Filesystem:
 
     """
     File operations
-    
+
     These are the ones you're supposed to use in the project
     These do checks, validation and accept string and relative/unexpanded paths
     """
@@ -721,18 +722,25 @@ class Filesystem:
             if cls._is_text_file(abs_path):
                 return (cls._read_text(abs_path), "text")
             else:
-                raise UnicodeDecodeError("Fallback to base64")
-        except (UnicodeDecodeError, Exception):
-            return (base64.b64encode(cls._read_bytes(abs_path)).decode("utf-8"), "base64")
+                raise Exception("utf-8", None, 0, -1, "Fallback to Base64")
+        except Exception:
+            return (
+                base64.b64encode(cls._read_bytes(abs_path)).decode("utf-8"),
+                "base64",
+            )
 
     @classmethod
-    def copy(cls, src_path: str | Path, dest_path: str | Path, min_space_left: int) -> None:
+    def copy(
+        cls, src_path: str | Path, dest_path: str | Path, min_space_left: int
+    ) -> None:
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
 
         src_size = cls.read_metadata(src_path).size
         cls.validate_read_access(src_path)
-        cls.validate_write_access(dest_path, content_size=src_size, min_disk_size_left=min_space_left)
+        cls.validate_write_access(
+            dest_path, content_size=src_size, min_disk_size_left=min_space_left
+        )
         cls.create_directory(dest_path.parent)
 
         if cls._is_dir(src_path):
@@ -774,10 +782,19 @@ class Filesystem:
             cls._create_directory(abs_path)
 
     @classmethod
-    def write_file(cls, file_path: str | Path, content: str = "", encoding: str = "utf-8", min_space_left: int = 0, append=False) -> None:
+    def write_file(
+        cls,
+        file_path: str | Path,
+        content: str = "",
+        encoding: str = "utf-8",
+        min_space_left: int = 0,
+        append=False,
+    ) -> None:
         abs_path = cls.get_absolute_path(file_path)
         size = len(content.encode(encoding))
-        cls.validate_write_access(abs_path, content_size=size, min_disk_size_left=min_space_left)
+        cls.validate_write_access(
+            abs_path, content_size=size, min_disk_size_left=min_space_left
+        )
         cls.create_directory(abs_path.parent, exist_ok=True)
         if append and cls._exists(abs_path):
             cls._append_text(abs_path, content, encoding=encoding)
@@ -791,7 +808,4 @@ class Filesystem:
         if not cls._is_dir(abs_path):
             raise NotADirectoryError(f"File {abs_path} is not a directory")
         dir_listing = cls._get_listing(abs_path)
-        return {
-            path: cls.read_metadata(path)
-            for path in dir_listing
-        }
+        return {path: cls.read_metadata(path) for path in dir_listing}

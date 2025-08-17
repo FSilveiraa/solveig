@@ -148,8 +148,10 @@ class TestReadRequirementIntegration:
                 # Should fail gracefully
                 assert not result.accepted
                 assert result.error is not None
-                assert "Permission denied" in result.error \
+                assert (
+                    "Permission denied" in result.error
                     or " not readable" in result.error
+                )
 
             finally:
                 # Restore permissions for cleanup

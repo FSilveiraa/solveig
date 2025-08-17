@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from ..utils.filesystem import Metadata
+from ..utils.file import Metadata
 
 # Circular import fix:
 # - This module (result.py) needs Requirement classes for type hints
@@ -85,4 +85,3 @@ class CommandResult(RequirementResult):
     command: str
     success: bool | None = None
     stdout: str | None = None
-

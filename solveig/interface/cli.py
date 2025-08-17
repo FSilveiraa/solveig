@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from solveig.interface.base import SolveigInterface
-from solveig.utils.filesystem import Metadata
+from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage

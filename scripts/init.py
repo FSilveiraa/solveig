@@ -8,12 +8,10 @@ This replaces the old setup.sh script with proper Python integration.
 """
 
 import sys
-from pathlib import Path
 
 from solveig.config import DEFAULT_CONFIG_PATH, SolveigConfig
 from solveig.interface import CLIInterface, SolveigInterface
-from solveig.utils.filesystem import Filesystem
-
+from solveig.utils.file import Filesystem
 
 DEFAULT_BASHRC_PATH = Filesystem.get_absolute_path("~/.bashrc")
 
@@ -110,13 +108,17 @@ def create_example_config(interface: SolveigInterface):
     if _config_file_exists:
         interface.display_warning(f"Config file already exists: {DEFAULT_CONFIG_PATH}")
 
-    if interface.ask_yes_no(f"Create example config file at {DEFAULT_CONFIG_PATH}? [y/N]"):
+    if interface.ask_yes_no(
+        f"Create example config file at {DEFAULT_CONFIG_PATH}? [y/N]"
+    ):
         try:
             # Create a default config instance and export it
             default_config = SolveigConfig().to_json(indent=2)
             Filesystem.write_file(DEFAULT_CONFIG_PATH, default_config)
 
-            interface.display_success(f"Created example config file at {DEFAULT_CONFIG_PATH}")
+            interface.display_success(
+                f"Created example config file at {DEFAULT_CONFIG_PATH}"
+            )
             interface.show("Edit this file to customize your settings")
 
         except Exception as e:

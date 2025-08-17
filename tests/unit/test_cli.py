@@ -2,6 +2,7 @@
 Unit tests for solveig.interface.cli module.
 Tests the CLIInterface implementation using MockInterface.
 """
+
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from solveig.schema.requirement import (
     ReadRequirement,
     WriteRequirement,
 )
-from solveig.utils.filesystem import Metadata
+from solveig.utils.file import Metadata
 from tests.mocks.interface import MockInterface
 
 
@@ -29,7 +30,7 @@ class TestCLIInterface:
         interface = CLIInterface(indent_base=4, max_lines=10, verbose=True)
         assert interface.indent_base == 4
         assert interface.max_lines == 10
-        assert interface.verbose == True
+        assert interface.verbose
         assert interface.current_level == 0
 
     def test_display_section(self):
@@ -125,12 +126,12 @@ class TestCLIInterface:
         file_metadata = {
             "is_directory": False,
             "path": Path("/test/dir/file1.txt"),
-            **base_metadata
+            **base_metadata,
         }
         subdir_metadata = {
             "is_directory": True,
             "path": Path("/test/dir/subdir"),
-            **base_metadata
+            **base_metadata,
         }
 
         listing = {
@@ -145,7 +146,6 @@ class TestCLIInterface:
         # assert "TREE:" in output_text
         assert "dir" in output_text
         assert "file1.txt" in output_text
-
 
     def test_display_error_with_string(self):
         """Test error display with string message."""

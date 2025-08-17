@@ -1,7 +1,8 @@
 import os
 import platform
+from pathlib import Path
 
-from .utils.filesystem import Metadata
+from .utils.file import Metadata
 
 try:
     import distro  # optional, only needed for Linux distros
@@ -77,16 +78,16 @@ script_chat.add_message(
             ReadResult(
                 requirement=file_req1,
                 path=file_req1.path,
-                metadata=Metadata(**{
-                    "owner_name": "user",
-                    "group_name": "user",
-                    "path": "/home/user/run.sh",
-                    "size": 101,
-                    "modified_time": "Thu Jul 17 02:54:43 2025",
-                    "is_directory": False,
-                    "is_readable": True,
-                    "is_writable": True,
-                }),
+                metadata=Metadata(
+                    owner_name="user",
+                    group_name="user",
+                    path=Path("/home/user/run.sh"),
+                    size=101,
+                    modified_time="Thu Jul 17 02:54:43 2025",
+                    is_directory=False,
+                    is_readable=True,
+                    is_writable=True,
+                ),
                 accepted=True,
                 content="""
 #!/usr/bin/env bash
@@ -190,16 +191,16 @@ tmpfs           784M   48K  784M   1% /run/user/1000
                 requirement=file_req_log,
                 path=file_req_log.path,
                 accepted=True,
-                metadata=Metadata(**{
-                    "owner_name": "user",
-                    "group_name": "user", 
-                    "path": "/home/user/Documents/my_app.log",
-                    "size": 11180,
-                    "modified_time": "Wed Jul 16 12:59:44 2025",
-                    "is_directory": False,
-                    "is_readable": True,
-                    "is_writable": True,
-                }),
+                metadata=Metadata(
+                    owner_name="user",
+                    group_name="user",
+                    path=Path("/home/user/Documents/my_app.log"),
+                    size=11180,
+                    modified_time="Wed Jul 16 12:59:44 2025",
+                    is_directory=False,
+                    is_readable=True,
+                    is_writable=True,
+                ),
                 content="""
 2025-07-16 09:12:03 INFO  [app] Starting web server on port 8080
 2025-07-16 09:12:04 INFO  [db] Connection established to postgres://localhost:5432/mydb

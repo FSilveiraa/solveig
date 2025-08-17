@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, field_validator
 
 from solveig.config import SolveigConfig
-from solveig.plugins.hooks import HOOKS
 from solveig.plugins.exceptions import PluginException, ProcessingError, ValidationError
+from solveig.plugins.hooks import HOOKS
+
 # from .. import utils
-from solveig.utils.filesystem import Filesystem
+from solveig.utils.file import Filesystem
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
@@ -218,9 +219,7 @@ class ReadRequirement(Requirement):
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
 
-            content_output = (
-                "(Base64)" if encoding.lower() == "base64" else content
-            )
+            content_output = "(Base64)" if encoding.lower() == "base64" else content
             interface.display_text_block(content_output, title="Content")
 
         if interface.ask_yes_no(
@@ -310,9 +309,11 @@ class WriteRequirement(Requirement):
                 if self.is_directory:
                     Filesystem.create_directory(abs_path)
                 else:
-                    Filesystem.write_file(abs_path, content=self.content)
+                    Filesystem.write_file(abs_path, content=self.content or "")
                 with interface.with_indent():
-                    interface.display_success(f"{'Updated' if already_exists else 'Created'}")
+                    interface.display_success(
+                        f"{'Updated' if already_exists else 'Created'}"
+                    )
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
 
@@ -629,7 +630,11 @@ class CopyRequirement(Requirement):
         ):
             try:
                 # Perform the copy operation
-                Filesystem.copy(abs_source_path, abs_destination_path, min_space_left=config.min_disk_space_left)
+                Filesystem.copy(
+                    abs_source_path,
+                    abs_destination_path,
+                    min_space_left=config.min_disk_space_left,
+                )
                 with interface.with_indent():
                     interface.display_success("Copied")
                 return CopyResult(

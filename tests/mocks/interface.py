@@ -1,8 +1,4 @@
-from pathlib import Path
-from typing import Any
-
 from solveig.interface import CLIInterface
-from solveig.utils.filesystem import Metadata
 
 
 class MockInterface(CLIInterface):

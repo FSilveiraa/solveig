@@ -1,6 +1,7 @@
 """
 Base interface classes for Solveig user interaction.
 """
+
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
@@ -8,7 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from solveig.utils.filesystem import Metadata
+from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -130,7 +131,9 @@ class SolveigInterface(ABC):
     def display_success(self, message: str) -> None:
         self.show(f"✓  {message}")
 
-    def display_error(self, message: str | Exception | None, exception: Exception | None = None) -> None:
+    def display_error(
+        self, message: str | Exception | None, exception: Exception | None = None
+    ) -> None:
         if not exception and not message:
             raise RuntimeError("Need to specify message or exception")
         # If we got an exception in the place of a message, or if we get an explicit exception and no message,
