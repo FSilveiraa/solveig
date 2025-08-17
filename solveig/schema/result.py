@@ -49,8 +49,8 @@ class RequirementResult(BaseModel):
             key: str(value) if isinstance(value, Path) else value
             for key, value in data.items()
         }
-        if data.get("metadata"):
-            data["metadata"]["path"] = str(data["metadata"]["path"])
+        # if data.get("metadata"):
+        #     data["metadata"]["path"] = str(data["metadata"]["path"])
         return data
 
 
@@ -61,6 +61,15 @@ class ReadResult(RequirementResult):
     content: str | None = None
     # For directories
     directory_listing: dict[Path, Metadata] | None = None
+
+    def to_openai(self):
+        data = super().to_openai()
+        if data.get("directory_listing"):
+            data["directory_listing"] = {
+                str(path): metadata
+                for path, metadata in data["directory_listing"].items()
+            }
+        return data
 
 
 class WriteResult(RequirementResult):

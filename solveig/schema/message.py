@@ -65,7 +65,7 @@ class UserMessage(BaseMessage):
             if self.results is not None
             else None
         )
-        return json.dumps(data)
+        return json.dumps(data, default=utils.misc.default_json_serialize)
 
 
 # The LLM's response can be:
