@@ -10,7 +10,11 @@ except ImportError:
     distro = None  # type: ignore
 
 from .config import SolveigConfig
-from .schema.message import *
+from .schema.message import LLMMessage, MessageHistory, UserMessage
+
+# TODO: Make conversation examples dynamic rather than hardcoded
+from .schema.requirements import CommandRequirement, ReadRequirement
+from .schema.results import CommandResult, ReadResult
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.
@@ -242,32 +246,14 @@ def get_basic_os_info(exclude_username=False):
 
 def get_available_capabilities() -> str:
     """Generate capabilities list from currently filtered requirements."""
-    from solveig.schema.requirements import (
-        CommandRequirement,
-        CopyRequirement,
-        DeleteRequirement,
-        MoveRequirement,
-        ReadRequirement,
-        WriteRequirement,
-    )
-
-    # Core requirements (always available)
-    active_requirements = [
-        ReadRequirement,
-        WriteRequirement,
-        CommandRequirement,
-        MoveRequirement,
-        CopyRequirement,
-        DeleteRequirement,
-    ]
-
-    # Add filtered plugin requirements (reuse existing filtering infrastructure)
+    # Get ALL active requirements from the unified registry (core + plugins)
     try:
         from solveig.plugins.requirements import REQUIREMENTS
 
-        active_requirements.extend(REQUIREMENTS.registered.values())
+        active_requirements = list(REQUIREMENTS.registered.values())
     except ImportError:
-        pass
+        # Fallback if registry not available
+        active_requirements = []
 
     return "\n".join(
         f"- {req_class.get_description()}" for req_class in active_requirements

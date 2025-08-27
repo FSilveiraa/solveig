@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
@@ -29,10 +30,10 @@ def validate_non_empty_path(path: str) -> str:
 
 def format_path_info(
     path: str,
-    abs_path,
+    abs_path: Path,
     is_dir: bool,
-    destination_path: str = None,
-    absolute_destination_path=None,
+    destination_path: str | None = None,
+    absolute_destination_path: Path | None = None,
 ) -> str:
     """Format path information for display - shared by all requirements."""
     # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),

@@ -6,22 +6,9 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
-from .requirements import (
-    CommandRequirement,
-    CopyRequirement,
-    DeleteRequirement,
-    MoveRequirement,
-    ReadRequirement,
-    WriteRequirement,
-)
-from .results import (
-    CommandResult,
-    CopyResult,
-    DeleteResult,
-    MoveResult,
-    ReadResult,
-    WriteResult,
-)
+from .results import RequirementResult
+
+# Requirements imported dynamically from registry to support plugins
 
 
 class BaseMessage(BaseModel):
@@ -45,18 +32,7 @@ class SystemMessage(BaseMessage):
 # - either the initial prompt or optionally more prompting
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
-    comment: str | None = None
-    results: (
-        list[
-            ReadResult
-            | WriteResult
-            | CommandResult
-            | MoveResult
-            | CopyResult
-            | DeleteResult
-        ]
-        | None
-    ) = None
+    results: list[RequirementResult] | None = None
 
     def to_openai(self) -> str:
         data = self.model_dump()
@@ -71,62 +47,36 @@ class UserMessage(BaseMessage):
 # The LLM's response can be:
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
+# Note: This static class is kept for backwards compatibility but is replaced
+# at runtime by get_filtered_llm_message_class() which includes all active requirements
 class LLMMessage(BaseMessage):
-    requirements: (
-        # Magic semantics explained
-        # Means that, if 2 requirements have the same JSON structure like
-        # copy and move (comment, title, source, destination), the `title`
-        # field is used to disambiguate them
-        list[
-            Annotated[
-                ReadRequirement
-                | WriteRequirement
-                | CommandRequirement
-                | MoveRequirement
-                | CopyRequirement
-                | DeleteRequirement,
-                Field(discriminator="title"),
-            ]
-        ]
-        | None
-    ) = None
+    requirements: list | None = None  # Simplified - actual schema generated dynamically
 
 
 def get_filtered_llm_message_class():
     """Get a dynamically created LLMMessage class with only filtered requirements.
 
     This is used by Instructor to get the correct schema without caching issues.
+    Gets all active requirements from the unified registry (core + plugins).
     """
-    from solveig.schema.requirements import (
-        CommandRequirement,
-        CopyRequirement,
-        DeleteRequirement,
-        MoveRequirement,
-        ReadRequirement,
-        WriteRequirement,
-    )
-
-    # Core requirements (always available)
-    core_requirements = [
-        ReadRequirement,
-        WriteRequirement,
-        CommandRequirement,
-        MoveRequirement,
-        CopyRequirement,
-        DeleteRequirement,
-    ]
-
-    # Add only filtered plugin requirements
+    # Get ALL active requirements from the unified registry
     try:
         from ..plugins.requirements import REQUIREMENTS
 
-        filtered_plugin_requirements = list(REQUIREMENTS.registered.values())
+        all_active_requirements = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):
-        filtered_plugin_requirements = []
+        # Fallback - should not happen in normal operation
+        all_active_requirements = []
 
-    all_active_requirements = core_requirements + filtered_plugin_requirements
+    # Handle empty registry case
+    if not all_active_requirements:
+        # Return a minimal class if no requirements are registered
+        class EmptyLLMMessage(BaseMessage):
+            requirements: list | None = None
 
-    # Create union dynamically
+        return EmptyLLMMessage
+
+    # Create union dynamically from all registered requirements
     if len(all_active_requirements) == 1:
         requirements_union = all_active_requirements[0]
     else:
@@ -136,7 +86,6 @@ def get_filtered_llm_message_class():
 
     # Create completely fresh LLMMessage class
     class FilteredLLMMessage(BaseMessage):
-        comment: str | None = None
         requirements: (
             list[
                 Annotated[

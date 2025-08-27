@@ -8,19 +8,20 @@ from solveig.interface import CLIInterface, SolveigInterface
 
 if TYPE_CHECKING:
     from solveig import SolveigConfig
+    from solveig.schema.requirements.base import Requirement
 
 
 class REQUIREMENTS:
     """Registry for dynamically discovered requirement plugins."""
 
-    registered: dict[str, type] = {}
-    _all_requirements: dict[str, type] = {}
+    registered: dict[str, type["Requirement"]] = {}
+    _all_requirements: dict[str, type["Requirement"]] = {}
 
     def __new__(cls, *args, **kwargs):
         raise TypeError("REQUIREMENTS is a static registry and cannot be instantiated")
 
 
-def register_requirement(requirement_class: type):
+def register_requirement(requirement_class: type["Requirement"]):
     """
     Decorator to register a requirement plugin.
 
@@ -146,7 +147,7 @@ def filter_requirements(
             return
 
 
-def get_all_requirements() -> dict[str, type]:
+def get_all_requirements() -> dict[str, type["Requirement"]]:
     """Get all registered requirement types for use by the system."""
     return REQUIREMENTS.registered.copy()
 

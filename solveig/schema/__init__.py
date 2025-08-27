@@ -60,6 +60,30 @@ RequirementResult.model_rebuild()
 # Auto-load plugins after schema is fully initialized
 from .. import plugins
 
-# Load requirements before hooks, since hooks latch onto before/after requirements
+
+# Register core requirements in the unified registry
+def _register_core_requirements():
+    """Register all core requirement types in the plugin registry for unified access."""
+    from ..plugins.requirements import REQUIREMENTS, register_requirement
+
+    # Core requirement classes - explicitly listed for clarity
+    core_requirements = [
+        ReadRequirement,
+        WriteRequirement,
+        CommandRequirement,
+        MoveRequirement,
+        CopyRequirement,
+        DeleteRequirement,
+    ]
+
+    for requirement_class in core_requirements:
+        # Only register if not already registered
+        if requirement_class.__name__ not in REQUIREMENTS.registered:
+            register_requirement(requirement_class)
+
+
+_register_core_requirements()
+
+# Load plugin requirements and hooks
 plugins.requirements.load_requirements()
 plugins.hooks.load_hooks()
