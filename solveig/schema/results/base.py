@@ -5,15 +5,13 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from ..utils.file import Metadata
-
 # Circular import fix:
-# - This module (result.py) needs Requirement classes for type hints
+# - This module (base.py) needs Requirement classes for type hints
 # - requirement.py imports Result classes for actual usage
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from .requirements import (
+    from ..requirements import (
         CommandRequirement,
         CopyRequirement,
         DeleteRequirement,
@@ -23,7 +21,6 @@ if TYPE_CHECKING:
     )
 
 
-# Base class for data returned for requirements
 class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
@@ -52,45 +49,3 @@ class RequirementResult(BaseModel):
         # if data.get("metadata"):
         #     data["metadata"]["path"] = str(data["metadata"]["path"])
         return data
-
-
-class ReadResult(RequirementResult):
-    path: str | Path
-    metadata: Metadata | None = None
-    # For files
-    content: str | None = None
-    # For directories
-    directory_listing: dict[Path, Metadata] | None = None
-
-    def to_openai(self):
-        data = super().to_openai()
-        if data.get("directory_listing"):
-            data["directory_listing"] = {
-                str(path): metadata
-                for path, metadata in data["directory_listing"].items()
-            }
-        return data
-
-
-class WriteResult(RequirementResult):
-    path: str | Path
-
-
-class MoveResult(RequirementResult):
-    source_path: str | Path
-    destination_path: str | Path
-
-
-class CopyResult(RequirementResult):
-    source_path: str | Path
-    destination_path: str | Path
-
-
-class DeleteResult(RequirementResult):
-    path: str | Path
-
-
-class CommandResult(RequirementResult):
-    command: str
-    success: bool | None = None
-    stdout: str | None = None

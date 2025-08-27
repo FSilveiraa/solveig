@@ -15,9 +15,10 @@ from .requirements import (
     MoveRequirement,
     ReadRequirement,
     Requirement,
+    TreeRequirement,
     WriteRequirement,
 )
-from .result import (
+from .results import (
     CommandResult,
     CopyResult,
     DeleteResult,

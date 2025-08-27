@@ -14,7 +14,7 @@ from solveig.utils.file import Filesystem
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
-    from solveig.schema.result import RequirementResult
+    from solveig.schema.results import RequirementResult
 
 
 def validate_non_empty_path(path: str) -> str:

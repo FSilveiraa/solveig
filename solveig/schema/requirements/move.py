@@ -10,9 +10,9 @@ from solveig.utils.file import Filesystem
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
-    from solveig.schema.result import MoveResult
+    from solveig.schema.results import MoveResult
 else:
-    from solveig.schema.result import MoveResult
+    from solveig.schema.results import MoveResult
 
 
 class MoveRequirement(Requirement):

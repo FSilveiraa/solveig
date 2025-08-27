@@ -14,7 +14,7 @@ from .requirements import (
     ReadRequirement,
     WriteRequirement,
 )
-from .result import (
+from .results import (
     CommandResult,
     CopyResult,
     DeleteResult,

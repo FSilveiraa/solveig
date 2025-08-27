@@ -14,7 +14,7 @@
 
 Solveig transforms any LLM into a practical assistant that can read files and run commands—with your explicit approval for every operation. No more copying and pasting between your terminal and ChatGPT.
 
-🔒 **Safe** • 160+ tests with 83% coverage • Secure file API • Command validation  
+🔒 **Safe** • Comprehensive test suite • Secure file API • Command validation  
 🚀 **Useful** • Works with any OpenAI-compatible API • Handles real tasks efficiently  
 🧩 **Extensible** • Drop-in plugin system • Easy to customize and extend
 
@@ -139,8 +139,8 @@ Reply:
 Solveig has an extensible plugin system that automatically discovers and loads plugins on startup.
 
 **Plugin Types:**
-1. **Hook into requirements**: Use `@before()` or `@after()` decorators to validate or process existing requirements (file/command operations)
-2. **Schema extensions**: Create new requirement types that the LLM can request by extending `Requirement` and implementing `_actually_solve()`
+1. **Hook plugins**: Use `@before()` or `@after()` decorators to validate or process existing requirements (file/command operations)
+2. **Requirement plugins**: Create new operation types that the LLM can request - things like database queries, API calls, directory trees, or specialized file operations
 3. **Plugin tests**: Add comprehensive test suites in `tests/plugins/test_my_plugin.py`
 
 **Adding a hook plugin:**
@@ -149,7 +149,16 @@ Solveig has an extensible plugin system that automatically discovers and loads p
 3. Add tests in `tests/plugins/test_my_plugin.py` following the existing patterns
 4. Plugins auto-load when Solveig starts - no configuration needed!
 
-Check out `solveig/plugins/hooks/shellcheck.py` and `tests/plugins/test_shellcheck.py` for complete examples.
+**Adding a requirement plugin:**
+1. Create a new requirement class in `solveig/schema/requirements/my_requirement.py`
+2. Extend the base `Requirement` class and implement `_actually_solve()` method
+3. Add the new requirement type to `solveig/schema/requirements/__init__.py`
+4. Create corresponding result class in `solveig/schema/results/my_result.py`  
+5. Update the LLM system prompt examples to show the new capability
+6. Add comprehensive tests for both success and failure cases
+
+Check out `solveig/plugins/hooks/shellcheck.py` and `tests/plugins/test_shellcheck.py` for complete hook examples.
+The existing requirement types in `solveig/schema/requirements/` show patterns for implementing new operations.
 
 
 ### Examples:
@@ -163,7 +172,7 @@ Check out `solveig/plugins/hooks/shellcheck.py` and `tests/plugins/test_shellche
 from solveig.config import SolveigConfig
 from solveig.plugins.hooks import before
 from solveig.plugins.exceptions import SecurityError
-from solveig.schema.requirement import CommandRequirement
+from solveig.schema.requirements import CommandRequirement
 
 @before(requirements=(CommandRequirement,))
 def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirement):
@@ -190,8 +199,8 @@ import re
 from solveig.config import SolveigConfig
 from solveig.plugins.hooks import after
 from solveig.plugins.exceptions import ProcessingError
-from solveig.schema.requirement import ReadRequirement, WriteRequirement
-from solveig.schema.result import ReadResult, WriteResult
+from solveig.schema.requirements import ReadRequirement, WriteRequirement
+from solveig.schema.results import ReadResult, WriteResult
 
 @after(requirements=(ReadRequirement, WriteRequirement))
 def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
@@ -204,6 +213,91 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
     result.metadata['path'] = anonymous_path
 ```
+</details>
+
+<details>
+<summary><b>Create a new requirement type: Directory tree listing</b></summary>
+
+```python
+# solveig/schema/requirements/tree.py
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from .base import Requirement, validate_non_empty_path
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+    from solveig.schema.results import TreeResult
+
+class TreeRequirement(Requirement):
+    """Generate a directory tree listing showing file structure."""
+    
+    path: str = Field(..., validator=validate_non_empty_path)
+    max_depth: int = Field(default=3, ge=1, le=10)
+    show_hidden: bool = Field(default=False)
+    
+    def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
+        from solveig.schema.results import TreeResult
+        
+        abs_path = Path(self.path).expanduser().resolve()
+        
+        # Generate tree structure
+        tree_lines = self._generate_tree(abs_path, self.max_depth, self.show_hidden)
+        
+        return TreeResult(
+            requirement=self,
+            accepted=True,
+            path=abs_path,
+            tree_output="\n".join(tree_lines),
+            total_files=len([line for line in tree_lines if "📄" in line]),
+            total_dirs=len([line for line in tree_lines if "📁" in line])
+        )
+    
+    def _generate_tree(self, path: Path, max_depth: int, show_hidden: bool) -> list[str]:
+        """Generate tree structure lines."""
+        lines = [f"📁 {path.name}/"]
+        
+        def _walk_dir(current_path: Path, prefix: str, depth: int):
+            if depth >= max_depth:
+                return
+                
+            try:
+                entries = list(current_path.iterdir())
+                if not show_hidden:
+                    entries = [e for e in entries if not e.name.startswith('.')]
+                    
+                entries.sort(key=lambda x: (x.is_file(), x.name.lower()))
+                
+                for i, entry in enumerate(entries):
+                    is_last = i == len(entries) - 1
+                    current_prefix = "└── " if is_last else "├── "
+                    next_prefix = prefix + ("    " if is_last else "│   ")
+                    
+                    if entry.is_dir():
+                        lines.append(f"{prefix}{current_prefix}📁 {entry.name}/")
+                        _walk_dir(entry, next_prefix, depth + 1)
+                    else:
+                        lines.append(f"{prefix}{current_prefix}📄 {entry.name}")
+                        
+            except PermissionError:
+                lines.append(f"{prefix}└── ❌ Permission denied")
+        
+        _walk_dir(path, "", 0)
+        return lines
+
+# solveig/schema/results/tree.py  
+from pathlib import Path
+from .base import RequirementResult
+
+class TreeResult(RequirementResult):
+    path: str | Path
+    tree_output: str
+    total_files: int = 0
+    total_dirs: int = 0
+```
+
+Then update `solveig/schema/requirements/__init__.py` and `solveig/schema/results/__init__.py` to export the new classes, and add examples to the system prompt showing the LLM how to use `TreeRequirement`.
+
 </details>
 
 ---

@@ -10,9 +10,9 @@ from solveig.utils.file import Filesystem
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
-    from solveig.schema.result import ReadResult
+    from solveig.schema.results import ReadResult
 else:
-    from solveig.schema.result import ReadResult
+    from solveig.schema.results import ReadResult
 
 
 class ReadRequirement(Requirement):

@@ -10,9 +10,9 @@ from .base import Requirement, validate_non_empty_path
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
-    from solveig.schema.result import CommandResult
+    from solveig.schema.results import CommandResult
 else:
-    from solveig.schema.result import CommandResult
+    from solveig.schema.results import CommandResult
 
 
 class CommandRequirement(Requirement):

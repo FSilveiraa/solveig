@@ -10,9 +10,9 @@ from solveig.utils.file import Filesystem
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
-    from solveig.schema.result import DeleteResult
+    from solveig.schema.results import DeleteResult
 else:
-    from solveig.schema.result import DeleteResult
+    from solveig.schema.results import DeleteResult
 
 
 class DeleteRequirement(Requirement):

@@ -1,0 +1,1 @@
+"""Requirement plugins - new operation types that extend Solveig's capabilities."""
