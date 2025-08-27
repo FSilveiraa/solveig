@@ -79,16 +79,14 @@ class SolveigConfig:
 
     @classmethod
     def parse_config_and_prompt(
-            cls,
-            interface: SolveigInterface | None = None,
-            cli_args=None
+        cls, interface: SolveigInterface | None = None, cli_args=None
     ):
         """Parse configuration from CLI arguments and config file.
-        
+
         Args:
             interface: Optional interface for displaying warnings/errors
             cli_args: CLI arguments list for testing (uses sys.argv if None)
-            
+
         Returns:
             tuple: (SolveigConfig instance, user_prompt string)
         """

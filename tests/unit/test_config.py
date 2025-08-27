@@ -7,7 +7,7 @@ import pytest
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from tests.mocks import MockInterface, DEFAULT_CONFIG
+from tests.mocks import MockInterface
 
 
 class TestSolveigConfigCore:
@@ -45,10 +45,9 @@ class TestSolveigConfigCore:
 class TestConfigFileParsing:
     """Test configuration file parsing functionality."""
 
-    @pytest.mark.parametrize("config_path", [
-        "",                      # invalid path
-        "/nonexistent/path.json" # inexistent path
-    ])
+    @pytest.mark.parametrize(
+        "config_path", ["", "/nonexistent/path.json"]  # invalid path  # inexistent path
+    )
     def test_parse_from_file_invalid_path(self, config_path):
         """Test parsing from invalid path returns empty dict."""
         result = SolveigConfig.parse_from_file(config_path)
@@ -58,10 +57,8 @@ class TestConfigFileParsing:
         """Test successful config file parsing."""
         test_config = {"api_type": "LOCAL", "temperature": 0.7}
         config_path = "/test/config.json"
-        mock_all_file_operations.write_file(
-            config_path, json.dumps(test_config)
-        )
-        
+        mock_all_file_operations.write_file(config_path, json.dumps(test_config))
+
         result = SolveigConfig.parse_from_file(config_path)
         assert result == test_config
 
@@ -69,7 +66,7 @@ class TestConfigFileParsing:
         """Test malformed JSON raises JSONDecodeError."""
         config_path = "/test/bad_config.json"
         mock_all_file_operations.write_file(config_path, "{invalid json")
-        
+
         with pytest.raises(JSONDecodeError):
             SolveigConfig.parse_from_file(config_path)
 
@@ -123,7 +120,7 @@ class TestCLIIntegration:
         file_config = {"verbose": True, "temperature": 0.2}
         config_path = "/test/config.json"
         mock_all_file_operations.write_file(config_path, json.dumps(file_config))
-        
+
         args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
         config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
         assert config.verbose is True  # From file
@@ -133,8 +130,9 @@ class TestCLIIntegration:
         """Test warning shown when config file parsing fails."""
         args = ["--config", "/nonexistent/config.json", "test prompt"]
         interface = MockInterface()
-        
+
         SolveigConfig.parse_config_and_prompt(cli_args=args, interface=interface)
-        
-        assert any("Failed to parse config file" in output 
-                  for output in interface.outputs)
+
+        assert any(
+            "Failed to parse config file" in output for output in interface.outputs
+        )
