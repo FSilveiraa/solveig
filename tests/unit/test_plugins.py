@@ -270,7 +270,7 @@ class TestPluginFiltering:
         interface = MockInterface()
 
         # Apply filtering
-        hooks.filter_plugins(enabled_plugins=config_with_plugin, interface=interface)
+        hooks.filter_hooks(enabled_plugins=config_with_plugin, interface=interface)
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
@@ -302,7 +302,7 @@ class TestPluginFiltering:
         interface = MockInterface()
 
         # Apply filtering
-        hooks.filter_plugins(enabled_plugins=config_without_plugin, interface=interface)
+        hooks.filter_hooks(enabled_plugins=config_without_plugin, interface=interface)
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
@@ -327,11 +327,11 @@ class TestPluginFiltering:
         hooks.load_hooks(interface=interface)
 
         # Apply filtering - should filter out shellcheck
-        hooks.filter_plugins(enabled_plugins=config_no_shellcheck, interface=interface)
+        hooks.filter_hooks(enabled_plugins=config_no_shellcheck, interface=interface)
 
         # Verify filtering message appears in output
         output_text = " ".join(interface.outputs)
-        assert "≫ Skipping plugin, not present in config: shellcheck" in output_text
+        assert "≫ Skipping hook plugin, not present in config: shellcheck" in output_text
 
         # Verify no hooks are active
         assert len(hooks.HOOKS.before) == 0
@@ -363,7 +363,7 @@ class TestPluginFiltering:
         )
 
         interface = MockInterface()
-        hooks.filter_plugins(enabled_plugins=config_with_options, interface=interface)
+        hooks.filter_hooks(enabled_plugins=config_with_options, interface=interface)
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")

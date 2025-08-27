@@ -2,9 +2,12 @@
 
 import importlib
 import pkgutil
-from typing import Dict, Type
+from typing import Dict, Type, TYPE_CHECKING
 
 from solveig.interface import CLIInterface, SolveigInterface
+
+if TYPE_CHECKING:
+    from solveig import SolveigConfig
 
 
 class REQUIREMENTS:
@@ -82,7 +85,7 @@ def load_requirements(interface: SolveigInterface | None = None):
                     if new_requirement_names:
                         total_requirements += len(new_requirement_names)
                         for req_name in new_requirement_names:
-                            interface.show(f"✓ Loaded requirement from {plugin_name}.{req_name}")
+                            interface.show(f"✓ Loaded {plugin_name}.{req_name}")
                     else:
                         interface.show(f"≫ Plugin {plugin_name} loaded but registered no requirements")
                         
@@ -94,10 +97,54 @@ def load_requirements(interface: SolveigInterface | None = None):
         )
 
 
+def filter_requirements(
+    interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
+):
+    """
+    Filters currently loaded requirements according to config
+    
+    Args:
+    enabled_plugins: If provided, only activate requirements whose plugin names are in this set.
+                    If None, loads all discovered requirements (used during schema init).
+    :return:
+    """
+    from solveig import SolveigConfig
+    
+    if REQUIREMENTS._all_requirements:
+        enabled_plugins = enabled_plugins or set()
+        if isinstance(enabled_plugins, SolveigConfig):
+            enabled_plugins = set(enabled_plugins.plugins.keys())
+        with interface.with_group(
+            f"Filtering requirement plugins", count=len(enabled_plugins)
+        ):
+            # Clear current requirements and rebuild from registry
+            REQUIREMENTS.registered.clear()
+
+            interface.current_level += 1
+            for req_name, req_class in REQUIREMENTS._all_requirements.items():
+                plugin_name = _get_plugin_name_from_class(req_class)
+                if plugin_name in enabled_plugins:
+                    REQUIREMENTS.registered[req_name] = req_class
+                else:
+                    interface.show(
+                        f"≫ Skipping requirement plugin, not present in config: {plugin_name}.{req_name}"
+                    )
+            interface.current_level -= 1
+
+            total_requirements = len(REQUIREMENTS.registered)
+            interface.show(
+                f"🕮  Requirement filtering complete: {len(enabled_plugins)} plugins, {total_requirements} requirements active"
+            )
+            
+            # No need to rebuild LLMMessage - run.py uses get_filtered_llm_message_class()
+            # which dynamically creates the correct schema based on current filtering
+            return
+
+
 def get_all_requirements() -> Dict[str, Type]:
     """Get all registered requirement types for use by the system."""
     return REQUIREMENTS.registered.copy()
 
 
 # Expose the essential interface
-__all__ = ["REQUIREMENTS", "register_requirement", "load_requirements", "get_all_requirements"]
+__all__ = ["REQUIREMENTS", "register_requirement", "load_requirements", "filter_requirements", "get_all_requirements"]

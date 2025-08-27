@@ -24,16 +24,18 @@ from .results import (
 )
 
 
+
+
 class BaseMessage(BaseModel):
-    comment: str | None
+    comment: str = ""
 
     def to_openai(self) -> str:
         return json.dumps(self.model_dump())
 
     @field_validator("comment", mode="before")
     @classmethod
-    def strip_name(cls, comment):
-        return comment.strip()
+    def strip_comment(cls, comment):
+        return (comment or "").strip()
 
 
 class SystemMessage(BaseMessage):
@@ -42,7 +44,7 @@ class SystemMessage(BaseMessage):
 
 
 # The user's message will contain
-# - either the inital prompt or optionally more prompting
+# - either the initial prompt or optionally more prompting
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
     comment: str | None = None
@@ -92,6 +94,57 @@ class LLMMessage(BaseMessage):
     ) = None
 
 
+
+
+def get_filtered_llm_message_class():
+    """Get a dynamically created LLMMessage class with only filtered requirements.
+    
+    This is used by Instructor to get the correct schema without caching issues.
+    """
+    from solveig.schema.requirements import (
+        ReadRequirement, WriteRequirement, CommandRequirement,
+        MoveRequirement, CopyRequirement, DeleteRequirement
+    )
+    
+    # Core requirements (always available)
+    core_requirements = [
+        ReadRequirement, WriteRequirement, CommandRequirement,
+        MoveRequirement, CopyRequirement, DeleteRequirement,
+    ]
+    
+    # Add only filtered plugin requirements
+    try:
+        from ..plugins.requirements import REQUIREMENTS
+        filtered_plugin_requirements = list(REQUIREMENTS.registered.values())
+    except (ImportError, AttributeError):
+        filtered_plugin_requirements = []
+    
+    all_active_requirements = core_requirements + filtered_plugin_requirements
+    
+    # Create union dynamically
+    if len(all_active_requirements) == 1:
+        requirements_union = all_active_requirements[0]
+    else:
+        requirements_union = all_active_requirements[0]
+        for req_type in all_active_requirements[1:]:
+            requirements_union = requirements_union | req_type
+    
+    # Create completely fresh LLMMessage class
+    class FilteredLLMMessage(BaseMessage):
+        comment: str | None = None
+        requirements: (
+            list[
+                Annotated[
+                    requirements_union,
+                    Field(discriminator="title"),
+                ]
+            ]
+            | None
+        ) = None
+    
+    return FilteredLLMMessage
+
+
 @dataclass
 class MessageContainer:
     message: BaseMessage
@@ -110,10 +163,14 @@ class MessageContainer:
             self.role = role
         elif isinstance(message, UserMessage):
             self.role = "user"
-        elif isinstance(message, LLMMessage):
-            self.role = "assistant"
         elif isinstance(message, SystemMessage):
             self.role = "system"
+        elif hasattr(message, 'requirements'):
+            # Handle dynamically created LLMMessage classes
+            self.role = "assistant"
+        else:
+            # Fallback - shouldn't happen but ensures role is always set
+            self.role = "assistant"
         self.content = message.to_openai()
         self.token_count = utils.misc.count_tokens(self.content)
 

@@ -135,11 +135,11 @@ def load_hooks(interface: SolveigInterface | None = None):
                     interface.display_error(f"Failed to load plugin {plugin_name}: {e}")
 
         interface.show(
-            f"🕮  Plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks, {total_schema} schema"
+            f"🕮  Hook plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks"
         )
 
 
-def filter_plugins(
+def filter_hooks(
     interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None
 ):
     """
@@ -154,31 +154,31 @@ def filter_plugins(
         enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
-        interface.show(
-            f"⌖ Filtering plugin hooks: {', '.join(sorted(enabled_plugins))}"
-        )
-        # Clear current hooks and rebuild from registry
-        HOOKS.before.clear()
-        HOOKS.after.clear()
+        with interface.with_group(
+            f"Filtering hook plugins", count=len(enabled_plugins)
+        ):
+            # Clear current hooks and rebuild from registry
+            HOOKS.before.clear()
+            HOOKS.after.clear()
 
-        interface.current_level += 1
-        for plugin_name in HOOKS._all_hooks:
-            if plugin_name in enabled_plugins:
-                before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
-                HOOKS.before.extend(before_hooks)
-                HOOKS.after.extend(after_hooks)
-            else:
-                interface.show(
-                    f"≫ Skipping plugin, not present in config: {plugin_name}"
-                )
-        interface.current_level -= 1
+            interface.current_level += 1
+            for plugin_name in HOOKS._all_hooks:
+                if plugin_name in enabled_plugins:
+                    before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
+                    HOOKS.before.extend(before_hooks)
+                    HOOKS.after.extend(after_hooks)
+                else:
+                    interface.show(
+                        f"≫ Skipping hook plugin, not present in config: {plugin_name}"
+                    )
+            interface.current_level -= 1
 
-        total_hooks = len(HOOKS.before) + len(HOOKS.after)
-        interface.show(
-            f"🕮  Plugin filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
-        )
-        return
+            total_hooks = len(HOOKS.before) + len(HOOKS.after)
+            interface.show(
+                f"🕮  Hook filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
+            )
+            return
 
 
 # Expose only what plugin developers and the main system need
-__all__ = ["HOOKS", "before", "after", "filter_plugins"]
+__all__ = ["HOOKS", "before", "after", "filter_hooks"]

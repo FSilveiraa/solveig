@@ -12,8 +12,9 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
-from solveig.plugins.hooks import filter_plugins
-from solveig.schema.message import LLMMessage, MessageHistory, UserMessage
+from solveig.plugins.hooks import filter_hooks
+from solveig.plugins.requirements import filter_requirements
+from solveig.schema.message import LLMMessage, MessageHistory, UserMessage, get_filtered_llm_message_class
 
 
 def get_llm_client(
@@ -61,9 +62,12 @@ def send_message_to_llm(
 
     # Show animated spinner during LLM processing
     def blocking_llm_call():
+        # Use filtered LLMMessage class that respects plugin filtering
+        filtered_llm_message_class = get_filtered_llm_message_class()
+        
         return client.chat.completions.create(
             messages=message_history.to_openai(),
-            response_model=LLMMessage,
+            response_model=filtered_llm_message_class,
             strict=False,
             model=config.model,
             temperature=config.temperature,
@@ -167,7 +171,8 @@ def main_loop(
     )
 
     # Configure plugins based on config
-    filter_plugins(enabled_plugins=config, interface=interface)
+    filter_requirements(enabled_plugins=config, interface=interface)
+    filter_hooks(enabled_plugins=config, interface=interface)
 
     # Get user interface, LLM client and message history
     client, message_history = get_llm_client(config, interface)

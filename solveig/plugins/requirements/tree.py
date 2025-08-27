@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from solveig.schema.requirements.base import Requirement, validate_non_empty_path
 from solveig.utils.file import Filesystem
@@ -22,7 +22,13 @@ if TYPE_CHECKING:
 class TreeRequirement(Requirement):
     """Generate a directory tree listing showing file structure."""
     
-    path: str = Field(..., validator=validate_non_empty_path, description="Directory path to generate tree for")
+    title: Literal["tree"] = "tree"
+    path: str = Field(..., description="Directory path to generate tree for")
+    
+    @field_validator("path")
+    @classmethod
+    def path_not_empty(cls, path: str) -> str:
+        return validate_non_empty_path(path)
     
     def create_error_result(self, error_message: str, accepted: bool) -> "TreeResult":
         """Create TreeResult with error."""
