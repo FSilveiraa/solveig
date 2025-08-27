@@ -79,8 +79,19 @@ class SolveigConfig:
 
     @classmethod
     def parse_config_and_prompt(
-        cls, interface: SolveigInterface | None = None, cli_args=None
+            cls,
+            interface: SolveigInterface | None = None,
+            cli_args=None
     ):
+        """Parse configuration from CLI arguments and config file.
+        
+        Args:
+            interface: Optional interface for displaying warnings/errors
+            cli_args: CLI arguments list for testing (uses sys.argv if None)
+            
+        Returns:
+            tuple: (SolveigConfig instance, user_prompt string)
+        """
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--config",
@@ -94,7 +105,7 @@ class SolveigConfig:
             "--api-type",
             "-a",
             type=str,
-            choices={api_type.name.lower() for api_type in APIType},
+            choices={api_type.name for api_type in APIType},
             help="Type of API to use (default: OpenAI)",
         )
         parser.add_argument("--api-key", "-k", type=str)
@@ -153,7 +164,7 @@ class SolveigConfig:
             default="1GiB",
             help='The minimum disk space allowed for the system to use, either in bytes or size notation (1024, "1.3 GB", etc)',
         )
-        parser.add_argument("--verbose", "-v", action="store_true")
+        parser.add_argument("--verbose", "-v", action="store_true", default=None)
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
         args = parser.parse_args(cli_args)

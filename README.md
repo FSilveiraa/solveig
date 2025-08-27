@@ -235,6 +235,7 @@ Solveig follows **strict testing guidelines** to ensure reliability and safety:
 - Use **minimal mocking**: Mock only the lowest-level behaviors while keeping high-level logic unmocked
 - Mock framework provides utility methods for easy test setup (mock filesystem with directory structure)
 - Test real object serialization and business logic with actual Pydantic models
+- Config tests use `cli_args` to bypass reading sys.argv and pass mock values without complex patching
 
 **Integration Tests (`tests/integration/`)**:
 - Allow real file I/O operations using temporary directories
