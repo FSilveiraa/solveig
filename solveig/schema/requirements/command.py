@@ -45,6 +45,11 @@ class CommandRequirement(Requirement):
             success=False,
             error=error_message,
         )
+    
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of command capability."""
+        return "command(command): execute shell commands and inspect their output"
 
     def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""

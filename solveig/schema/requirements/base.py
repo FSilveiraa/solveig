@@ -138,6 +138,17 @@ class Requirement(BaseModel, ABC):
     ) -> RequirementResult:
         """Create appropriate error result for this requirement type."""
         pass
+    
+    @classmethod
+    @abstractmethod
+    def get_description(cls) -> str:
+        """Return a human-readable description of this requirement's capability.
+        
+        Used in system prompts to tell the LLM what this requirement can do.
+        Should be a concise, actionable description like:
+        'read(path, only_read_metadata): reads a file or directory...'
+        """
+        pass
 
 
 # Intermediate classes for common patterns (if needed in future)

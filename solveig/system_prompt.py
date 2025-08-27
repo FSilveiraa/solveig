@@ -17,14 +17,9 @@ You are an AI assisting a user with whatever issues they may have with their com
 Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
 Always try to answer the user's question, no matter how redundant it may seem.
 
-You may request any of the following file operations that you think is necessary:
-- read(path, only_read_metadata): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata.
-- write(path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write.
-- copy(source_path, destination_path): copies a file or directory.
-- move(source_path, destination_path): moves a file or directory.
+You may request any of the following operations that you think are necessary:
+{CAPABILITIES_LIST}
 Any time you request any filesystem operations from the user, always explain why they're necessary.
-
-You may also request to run certain commands and inspect their output if you think it will help you solve user's issue.
 Any time you ask the user to execute anything, always explain why you need it, what each flag does, what you expect it to do and what the expected output is.
 Put the safety and integrity of user's system above everything else, do not suggest dangerous/destructive commands unless it's absolutely necessary.
 
@@ -245,8 +240,34 @@ def get_basic_os_info(exclude_username=False):
     return info
 
 
+def get_available_capabilities() -> str:
+    """Generate capabilities list from currently filtered requirements."""
+    from solveig.schema.requirements import (
+        ReadRequirement, WriteRequirement, CommandRequirement, 
+        MoveRequirement, CopyRequirement, DeleteRequirement
+    )
+    
+    # Core requirements (always available)
+    active_requirements = [
+        ReadRequirement, WriteRequirement, CommandRequirement,
+        MoveRequirement, CopyRequirement, DeleteRequirement,
+    ]
+    
+    # Add filtered plugin requirements (reuse existing filtering infrastructure)
+    try:
+        from solveig.plugins.requirements import REQUIREMENTS
+        active_requirements.extend(REQUIREMENTS.registered.values())
+    except ImportError:
+        pass
+    
+    return "\n".join(f"- {req_class.get_description()}" for req_class in active_requirements)
+
+
 def get_system_prompt(config: SolveigConfig):
-    system_prompt = SYSTEM_PROMPT.strip()
+    # Generate dynamic capabilities list
+    capabilities_list = get_available_capabilities()
+    system_prompt = SYSTEM_PROMPT.strip().replace("{CAPABILITIES_LIST}", capabilities_list)
+    
     if config.add_os_info:
         os_info = get_basic_os_info(config.exclude_username)
         system_prompt = (

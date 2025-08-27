@@ -43,6 +43,11 @@ class TreeRequirement(Requirement):
             total_dirs=0
         )
     
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of tree capability."""
+        return "tree(path): generates a directory tree structure showing files and folders"
+    
     def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
         from solveig.schema.results import TreeResult
         

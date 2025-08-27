@@ -42,6 +42,11 @@ class ReadRequirement(Requirement):
             accepted=accepted,
             error=error_message,
         )
+    
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of read capability."""
+        return "read(path, only_read_metadata): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
 
     def _actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

@@ -48,6 +48,11 @@ class MoveRequirement(Requirement):
             source_path=Filesystem.get_absolute_path(self.source_path),
             destination_path=Filesystem.get_absolute_path(self.destination_path),
         )
+    
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of move capability."""
+        return "move(source_path, destination_path): moves a file or directory"
 
     def _actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
