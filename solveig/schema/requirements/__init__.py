@@ -7,7 +7,6 @@ from .command import CommandRequirement
 from .move import MoveRequirement
 from .copy import CopyRequirement
 from .delete import DeleteRequirement
-
 __all__ = [
     "Requirement",
     "ReadRequirement", 

@@ -10,17 +10,19 @@ from pydantic import Field
 from solveig.schema.requirements.base import Requirement, validate_non_empty_path
 from solveig.utils.file import Filesystem
 
+# Import the registration decorator
+from . import register_requirement
+
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
     from solveig.schema.results import TreeResult
 
 
+@register_requirement
 class TreeRequirement(Requirement):
     """Generate a directory tree listing showing file structure."""
     
     path: str = Field(..., validator=validate_non_empty_path, description="Directory path to generate tree for")
-    max_depth: int = Field(default=3, ge=1, le=10, description="Maximum depth to traverse")
-    show_hidden: bool = Field(default=False, description="Include hidden files and directories")
     
     def create_error_result(self, error_message: str, accepted: bool) -> "TreeResult":
         """Create TreeResult with error."""
@@ -40,67 +42,51 @@ class TreeRequirement(Requirement):
         
         abs_path = Filesystem.get_absolute_path(self.path)
         
-        # Generate tree structure using existing file.py primitives
-        tree_lines, stats = self._generate_tree_lines(abs_path, self.max_depth, self.show_hidden)
+        # Walk directory tree and collect all files/dirs
+        stats = {"files": 0, "dirs": 0}
+        self._walk_and_display(interface, abs_path, stats)
         
         return TreeResult(
             requirement=self,
             accepted=True,
             path=abs_path,
-            tree_output="\n".join(tree_lines),
+            tree_output="",
             total_files=stats["files"],
-            total_dirs=stats["dirs"],
-            max_depth_reached=stats["max_depth_reached"]
+            total_dirs=stats["dirs"]
         )
     
-    def _generate_tree_lines(self, root_path: Path, max_depth: int, show_hidden: bool) -> tuple[list[str], dict]:
-        """Generate tree structure lines using file.py primitives only."""
-        lines = [f"📁 {root_path.name}/"]
-        stats = {"files": 0, "dirs": 0, "max_depth_reached": False}
-        
-        def _walk_directory(current_path: Path, prefix: str, depth: int):
-            if depth >= max_depth:
-                if depth == max_depth:
-                    # Check if there are more directories to indicate truncation
-                    try:
-                        listing = Filesystem.get_dir_listing(current_path)
-                        has_subdirs = any(Filesystem._is_dir(path) for path in listing.keys())
-                        if has_subdirs:
-                            stats["max_depth_reached"] = True
-                    except (PermissionError, OSError, NotADirectoryError):
-                        pass
-                return
+    def _walk_and_display(self, interface: "SolveigInterface", path: Path, stats: dict) -> None:
+        """Walk directory tree using existing utilities and display via interface."""
+        try:
+            metadata = Filesystem.read_metadata(path)
+            
+            if Filesystem._is_dir(path):
+                # Get directory listing - includes all files and dirs, including hidden
+                listing = Filesystem.get_dir_listing(path)
+                stats["dirs"] += 1
                 
-            try:
-                # Use existing file.py primitive
-                dir_listing = Filesystem.get_dir_listing(current_path)
-                entries = list(dir_listing.keys())
+                # Display this directory and its immediate children
+                interface.display_tree(
+                    metadata=metadata,
+                    listing=listing,
+                    title=f"Tree: {path}"
+                )
                 
-                if not show_hidden:
-                    entries = [e for e in entries if not e.name.startswith('.')]
-                    
-                # Sort: directories first, then files, both alphabetically
-                entries.sort(key=lambda x: (not Filesystem._is_dir(x), x.name.lower()))
+                # Count files in this level
+                for entry_path, entry_metadata in listing.items():
+                    if entry_metadata.is_directory:
+                        # Recursively walk subdirectories
+                        self._walk_and_display(interface, entry_path, stats)
+                    else:
+                        stats["files"] += 1
+            else:
+                # Single file
+                stats["files"] += 1
+                interface.display_tree(
+                    metadata=metadata,
+                    listing=None,
+                    title=f"File: {path}"
+                )
                 
-                for i, entry in enumerate(entries):
-                    is_last = i == len(entries) - 1
-                    current_prefix = "└── " if is_last else "├── "
-                    next_prefix = prefix + ("    " if is_last else "│   ")
-                    
-                    try:
-                        if Filesystem._is_dir(entry):
-                            lines.append(f"{prefix}{current_prefix}📁 {entry.name}/")
-                            stats["dirs"] += 1
-                            _walk_directory(entry, next_prefix, depth + 1)
-                        else:
-                            lines.append(f"{prefix}{current_prefix}📄 {entry.name}")
-                            stats["files"] += 1
-                            
-                    except (PermissionError, OSError):
-                        lines.append(f"{prefix}{current_prefix}❌ {entry.name} (Permission denied)")
-                        
-            except (PermissionError, OSError, NotADirectoryError):
-                lines.append(f"{prefix}└── ❌ Permission denied")
-        
-        _walk_directory(root_path, "", 0)
-        return lines, stats
+        except (PermissionError, OSError) as e:
+            interface.display_error(f"Cannot access {path}: {e}")

@@ -97,7 +97,7 @@ def load_hooks(interface: SolveigInterface | None = None):
     # Iterate through modules in this package
     total_files = 0
     total_schema = 0
-    with interface.with_group("Plugins"):
+    with interface.with_group("Hook Plugins"):
         for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
             if not is_pkg and not module_name.endswith(".__init__"):
                 total_files += 1

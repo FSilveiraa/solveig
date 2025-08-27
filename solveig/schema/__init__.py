@@ -60,4 +60,6 @@ RequirementResult.model_rebuild()
 # Auto-load plugins after schema is fully initialized
 from .. import plugins
 
+# Load requirements before hooks, since hooks latch onto before/after requirements
+plugins.requirements.load_requirements()
 plugins.hooks.load_hooks()
