@@ -14,7 +14,7 @@
 
 Solveig transforms any LLM into a practical assistant that can read files and run commands—with your explicit approval for every operation. No more copying and pasting between your terminal and ChatGPT.
 
-🔒 **Safe** • 150+ tests with 55%+ coverage • Secure file API • Command validation  
+🔒 **Safe** • 160+ tests with 83% coverage • Secure file API • Command validation  
 🚀 **Useful** • Works with any OpenAI-compatible API • Handles real tasks efficiently  
 🧩 **Extensible** • Drop-in plugin system • Easy to customize and extend
 
@@ -220,7 +220,35 @@ All code is automatically checked on `main` and `develop` branches:
 3. **Type checking**: `mypy solveig/ scripts/ --ignore-missing-imports` - Validates type hints
 4. **Testing**: `pytest` - Runs full test suite with coverage reporting
 
-### Running tests and checks
+### Testing Philosophy
+
+Solveig follows **strict testing guidelines** to ensure reliability and safety:
+
+#### Test Coverage Requirements
+- **Success and failure paths**: Every feature must test both successful execution and error conditions
+- **Mock only when necessary**: Mock only low-level I/O behavior with potential side effects
+- **No untested code paths**: All business logic, error handling, and user interactions must be tested
+
+#### Testing Architecture
+**Unit Tests (`tests/unit/`)**:
+- Mock all I/O and side-effect operations (file system, user interface, external commands)
+- Use **minimal mocking**: Mock only the lowest-level behaviors while keeping high-level logic unmocked
+- Mock framework provides utility methods for easy test setup (mock filesystem with directory structure)
+- Test real object serialization and business logic with actual Pydantic models
+
+**Integration Tests (`tests/integration/`)**:
+- Allow real file I/O operations using temporary directories
+- Mock only user interactions to avoid interactive prompts
+- Test full stack from requirement parsing to actual file operations
+- Marked with `@pytest.mark.no_file_mocking` to bypass file system mocks
+
+**Mocking Strategy**:
+- **File operations**: Mock `solveig.utils.file` methods for filesystem interactions
+- **User interface**: Mock input/output methods while preserving all display logic and formatting
+- **External commands**: Mock subprocess calls and command execution
+- **Real objects**: Never mock requirement/result objects - test actual Pydantic serialization
+
+#### Running Tests
 
 ```bash
 # Install with testing dependencies:
@@ -229,11 +257,23 @@ pip install -e .[dev]
 # Unit tests only
 python -m pytest tests/unit/ -v
 
+# Integration tests only  
+python -m pytest tests/integration/ -v
+
 # Specific test class
 python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
 
 # Run all checks locally (same as CI) 
 black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
+```
+
+#### Test Organization
+```
+tests/
+├── unit/           # Unit tests
+├── integration/    # Integration tests
+├── mocks/          # Mock implementations
+└── plugins/        # Plugin-specific tests
 ```
 
 ---

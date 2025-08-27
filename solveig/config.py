@@ -11,23 +11,6 @@ from solveig.utils.file import Filesystem, parse_size_notation_into_bytes
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
 
-class SolveigPath(Path):
-    def __init__(self, *args, **kwargs):
-        try:
-            self.mode = kwargs.pop("mode")
-        except (
-            KeyError
-        ):  # happens on .expanduser(), it's set by the method later anyway
-            self.mode = None
-        super().__init__(*args, **kwargs)
-
-    # preserve `mode` when creating a new path using a builder-like syntax (ex: new_path = old_path.expanduser())
-    def with_segments(self, *pathsegments):
-        new_path = super().with_segments(*pathsegments)
-        new_path.mode = self.mode
-        return new_path
-
-
 @dataclass()
 class SolveigConfig:
     # write paths in the format of /path/to/file:permissions
@@ -38,7 +21,7 @@ class SolveigConfig:
     # w: read and write
     # n: negate (useful for denying access to sub-paths contained in another allowed path)
     url: str = "http://localhost:5001/v1/"
-    api_type: APIType = APIType.OPENAI
+    api_type: APIType = APIType.LOCAL
     api_key: str | None = None
     model: str | None = None
     temperature: float = 0
@@ -201,8 +184,6 @@ class SolveigConfig:
         for field_name, field_value in vars(self).items():
             if isinstance(field_value, APIType):
                 config_dict[field_name] = field_value.name
-            elif isinstance(field_value, Path):
-                config_dict[field_name] = str(field_value)
             else:
                 config_dict[field_name] = field_value
 
