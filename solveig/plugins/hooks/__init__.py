@@ -96,7 +96,6 @@ def load_hooks(interface: SolveigInterface | None = None):
 
     # Iterate through modules in this package
     total_files = 0
-    total_schema = 0
     with interface.with_group("Hook Plugins"):
         for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
             if not is_pkg and not module_name.endswith(".__init__"):
@@ -154,9 +153,7 @@ def filter_hooks(
         enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
-        with interface.with_group(
-            f"Filtering hook plugins", count=len(enabled_plugins)
-        ):
+        with interface.with_group("Filtering hook plugins", count=len(enabled_plugins)):
             # Clear current hooks and rebuild from registry
             HOOKS.before.clear()
             HOOKS.after.clear()

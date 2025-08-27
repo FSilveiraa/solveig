@@ -809,4 +809,3 @@ class Filesystem:
             raise NotADirectoryError(f"File {abs_path} is not a directory")
         dir_listing = cls._get_listing(abs_path)
         return {path: cls.read_metadata(path) for path in dir_listing}
-

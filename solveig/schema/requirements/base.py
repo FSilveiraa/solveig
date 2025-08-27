@@ -5,12 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from solveig.config import SolveigConfig
 from solveig.plugins.exceptions import PluginException, ProcessingError, ValidationError
 from solveig.plugins.hooks import HOOKS
-from solveig.utils.file import Filesystem
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
@@ -29,7 +28,11 @@ def validate_non_empty_path(path: str) -> str:
 
 
 def format_path_info(
-    path: str, abs_path, is_dir: bool, destination_path: str = None, absolute_destination_path = None
+    path: str,
+    abs_path,
+    is_dir: bool,
+    destination_path: str = None,
+    absolute_destination_path=None,
 ) -> str:
     """Format path information for display - shared by all requirements."""
     # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
@@ -53,7 +56,7 @@ def format_path_info(
 class Requirement(BaseModel, ABC):
     """
     Base class for all requirements that LLMs can make.
-    
+
     Important: all statements that have side-effects (prints, network, filesystem operations)
     must be inside separate methods that can be mocked in tests.
     Avoid all fields that are not strictly necessary, even if they are useful - like an `abs_path`
@@ -128,7 +131,9 @@ class Requirement(BaseModel, ABC):
         interface.display_comment(self.comment)
 
     @abstractmethod
-    def _actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> RequirementResult:
+    def _actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> RequirementResult:
         """Solve yourself as a requirement following the config"""
         pass
 
@@ -138,12 +143,12 @@ class Requirement(BaseModel, ABC):
     ) -> RequirementResult:
         """Create appropriate error result for this requirement type."""
         pass
-    
+
     @classmethod
     @abstractmethod
     def get_description(cls) -> str:
         """Return a human-readable description of this requirement's capability.
-        
+
         Used in system prompts to tell the LLM what this requirement can do.
         Should be a concise, actionable description like:
         'read(path, only_read_metadata): reads a file or directory...'
@@ -154,10 +159,12 @@ class Requirement(BaseModel, ABC):
 # Intermediate classes for common patterns (if needed in future)
 # Keep these here in base.py to avoid artificial file proliferation
 
+
 class FileRequirement(Requirement):
     """Base class for requirements that operate on files/directories.
-    
+
     Currently not used, but available if common file operation patterns emerge
     that would benefit from shared implementation.
     """
+
     pass

@@ -13,7 +13,11 @@ from scripts.run import (
     send_message_to_llm_with_retry,
     # summarize_requirements,
 )
-from solveig.schema.message import LLMMessage, MessageHistory, UserMessage, get_filtered_llm_message_class
+from solveig.schema.message import (
+    LLMMessage,
+    MessageHistory,
+    UserMessage,
+)
 from solveig.schema.requirements import CommandRequirement, MoveRequirement
 from tests.mocks import (
     ALL_REQUIREMENTS_MESSAGE,
@@ -149,11 +153,11 @@ class TestSendMessageToLLM:
         # Verify
         output_text = " ".join(mock_interface.outputs)
         assert "Waiting..." in output_text
-        
+
         # The key test: did we get back exactly what the mock client returned?
         assert llm_message is llm_response
         assert new_user_message is user_message
-        
+
         # Verify LLM client was called (implementation details don't matter for this test)
         mock_client.chat.completions.create.assert_called_once()
 

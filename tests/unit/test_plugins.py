@@ -331,7 +331,9 @@ class TestPluginFiltering:
 
         # Verify filtering message appears in output
         output_text = " ".join(interface.outputs)
-        assert "≫ Skipping hook plugin, not present in config: shellcheck" in output_text
+        assert (
+            "≫ Skipping hook plugin, not present in config: shellcheck" in output_text
+        )
 
         # Verify no hooks are active
         assert len(hooks.HOOKS.before) == 0

@@ -24,8 +24,6 @@ from .results import (
 )
 
 
-
-
 class BaseMessage(BaseModel):
     comment: str = ""
 
@@ -94,33 +92,40 @@ class LLMMessage(BaseMessage):
     ) = None
 
 
-
-
 def get_filtered_llm_message_class():
     """Get a dynamically created LLMMessage class with only filtered requirements.
-    
+
     This is used by Instructor to get the correct schema without caching issues.
     """
     from solveig.schema.requirements import (
-        ReadRequirement, WriteRequirement, CommandRequirement,
-        MoveRequirement, CopyRequirement, DeleteRequirement
+        CommandRequirement,
+        CopyRequirement,
+        DeleteRequirement,
+        MoveRequirement,
+        ReadRequirement,
+        WriteRequirement,
     )
-    
+
     # Core requirements (always available)
     core_requirements = [
-        ReadRequirement, WriteRequirement, CommandRequirement,
-        MoveRequirement, CopyRequirement, DeleteRequirement,
+        ReadRequirement,
+        WriteRequirement,
+        CommandRequirement,
+        MoveRequirement,
+        CopyRequirement,
+        DeleteRequirement,
     ]
-    
+
     # Add only filtered plugin requirements
     try:
         from ..plugins.requirements import REQUIREMENTS
+
         filtered_plugin_requirements = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):
         filtered_plugin_requirements = []
-    
+
     all_active_requirements = core_requirements + filtered_plugin_requirements
-    
+
     # Create union dynamically
     if len(all_active_requirements) == 1:
         requirements_union = all_active_requirements[0]
@@ -128,7 +133,7 @@ def get_filtered_llm_message_class():
         requirements_union = all_active_requirements[0]
         for req_type in all_active_requirements[1:]:
             requirements_union = requirements_union | req_type
-    
+
     # Create completely fresh LLMMessage class
     class FilteredLLMMessage(BaseMessage):
         comment: str | None = None
@@ -141,7 +146,7 @@ def get_filtered_llm_message_class():
             ]
             | None
         ) = None
-    
+
     return FilteredLLMMessage
 
 
@@ -165,7 +170,7 @@ class MessageContainer:
             self.role = "user"
         elif isinstance(message, SystemMessage):
             self.role = "system"
-        elif hasattr(message, 'requirements'):
+        elif hasattr(message, "requirements"):
             # Handle dynamically created LLMMessage classes
             self.role = "assistant"
         else:

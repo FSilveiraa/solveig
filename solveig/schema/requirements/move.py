@@ -4,12 +4,13 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import field_validator
 
-from .base import Requirement, validate_non_empty_path, format_path_info
 from solveig.utils.file import Filesystem
 
+from .base import Requirement, format_path_info, validate_non_empty_path
+
 if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
+    from solveig.interface import SolveigInterface
     from solveig.schema.results import MoveResult
 else:
     from solveig.schema.results import MoveResult
@@ -48,7 +49,7 @@ class MoveRequirement(Requirement):
             source_path=Filesystem.get_absolute_path(self.source_path),
             destination_path=Filesystem.get_absolute_path(self.destination_path),
         )
-    
+
     @classmethod
     def get_description(cls) -> str:
         """Return description of move capability."""

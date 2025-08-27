@@ -243,31 +243,44 @@ def get_basic_os_info(exclude_username=False):
 def get_available_capabilities() -> str:
     """Generate capabilities list from currently filtered requirements."""
     from solveig.schema.requirements import (
-        ReadRequirement, WriteRequirement, CommandRequirement, 
-        MoveRequirement, CopyRequirement, DeleteRequirement
+        CommandRequirement,
+        CopyRequirement,
+        DeleteRequirement,
+        MoveRequirement,
+        ReadRequirement,
+        WriteRequirement,
     )
-    
+
     # Core requirements (always available)
     active_requirements = [
-        ReadRequirement, WriteRequirement, CommandRequirement,
-        MoveRequirement, CopyRequirement, DeleteRequirement,
+        ReadRequirement,
+        WriteRequirement,
+        CommandRequirement,
+        MoveRequirement,
+        CopyRequirement,
+        DeleteRequirement,
     ]
-    
+
     # Add filtered plugin requirements (reuse existing filtering infrastructure)
     try:
         from solveig.plugins.requirements import REQUIREMENTS
+
         active_requirements.extend(REQUIREMENTS.registered.values())
     except ImportError:
         pass
-    
-    return "\n".join(f"- {req_class.get_description()}" for req_class in active_requirements)
+
+    return "\n".join(
+        f"- {req_class.get_description()}" for req_class in active_requirements
+    )
 
 
 def get_system_prompt(config: SolveigConfig):
     # Generate dynamic capabilities list
     capabilities_list = get_available_capabilities()
-    system_prompt = SYSTEM_PROMPT.strip().replace("{CAPABILITIES_LIST}", capabilities_list)
-    
+    system_prompt = SYSTEM_PROMPT.strip().replace(
+        "{CAPABILITIES_LIST}", capabilities_list
+    )
+
     if config.add_os_info:
         os_info = get_basic_os_info(config.exclude_username)
         system_prompt = (

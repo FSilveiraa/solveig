@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import field_validator
 
-from .base import Requirement, validate_non_empty_path
+from .base import Requirement
 
 if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
     from solveig.config import SolveigConfig
+    from solveig.interface import SolveigInterface
     from solveig.schema.results import CommandResult
 else:
     from solveig.schema.results import CommandResult
@@ -36,7 +36,9 @@ class CommandRequirement(Requirement):
         interface.display_comment(self.comment)
         interface.show(f"🗲  {self.command}")
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "CommandResult":
+    def create_error_result(
+        self, error_message: str, accepted: bool
+    ) -> "CommandResult":
         """Create CommandResult with error."""
         return CommandResult(
             requirement=self,
@@ -45,7 +47,7 @@ class CommandRequirement(Requirement):
             success=False,
             error=error_message,
         )
-    
+
     @classmethod
     def get_description(cls) -> str:
         """Return description of command capability."""
