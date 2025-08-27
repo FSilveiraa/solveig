@@ -15,7 +15,6 @@ from .requirements import (
     MoveRequirement,
     ReadRequirement,
     Requirement,
-    TreeRequirement,
     WriteRequirement,
 )
 from .results import (

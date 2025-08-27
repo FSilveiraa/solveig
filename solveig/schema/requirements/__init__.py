@@ -7,7 +7,6 @@ from .command import CommandRequirement
 from .move import MoveRequirement
 from .copy import CopyRequirement
 from .delete import DeleteRequirement
-from .tree import TreeRequirement
 
 __all__ = [
     "Requirement",
@@ -17,5 +16,4 @@ __all__ = [
     "MoveRequirement",
     "CopyRequirement",
     "DeleteRequirement",
-    "TreeRequirement",
 ]

@@ -22,6 +22,19 @@ class TreeRequirement(Requirement):
     max_depth: int = Field(default=3, ge=1, le=10, description="Maximum depth to traverse")
     show_hidden: bool = Field(default=False, description="Include hidden files and directories")
     
+    def create_error_result(self, error_message: str, accepted: bool) -> "TreeResult":
+        """Create TreeResult with error."""
+        from solveig.schema.results import TreeResult
+        return TreeResult(
+            requirement=self,
+            path=Filesystem.get_absolute_path(self.path),
+            accepted=accepted,
+            error=error_message,
+            tree_output="",
+            total_files=0,
+            total_dirs=0
+        )
+    
     def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
         from solveig.schema.results import TreeResult
         
