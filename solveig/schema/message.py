@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
-from .requirement import (
+from .requirements import (
     CommandRequirement,
     CopyRequirement,
     DeleteRequirement,

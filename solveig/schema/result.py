@@ -13,7 +13,7 @@ from ..utils.file import Metadata
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from .requirement import (
+    from .requirements import (
         CommandRequirement,
         CopyRequirement,
         DeleteRequirement,

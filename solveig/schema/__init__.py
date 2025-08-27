@@ -8,7 +8,7 @@ This module defines the data structures used for:
 """
 
 from .message import LLMMessage, MessageHistory, UserMessage
-from .requirement import (
+from .requirements import (
     CommandRequirement,
     CopyRequirement,
     DeleteRequirement,

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from solveig.schema.requirement import CommandRequirement, ReadRequirement
+from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 

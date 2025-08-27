@@ -12,7 +12,7 @@ import pytest
 pytestmark = pytest.mark.no_file_mocking
 from pathlib import Path
 
-from solveig.schema.requirement import (
+from solveig.schema.requirements import (
     CopyRequirement,
     DeleteRequirement,
     MoveRequirement,

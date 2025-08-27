@@ -7,7 +7,7 @@ import tempfile
 from solveig.config import SolveigConfig
 from solveig.plugins.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import before
-from solveig.schema.requirement import CommandRequirement
+from solveig.schema.requirements import CommandRequirement
 
 DANGEROUS_PATTERNS = [
     "rm -rf",

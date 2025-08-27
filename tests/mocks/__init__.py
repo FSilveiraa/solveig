@@ -1,6 +1,6 @@
 from solveig import APIType, SolveigConfig
 from solveig.schema import LLMMessage
-from solveig.schema.requirement import (
+from solveig.schema.requirements import (
     CommandRequirement,
     CopyRequirement,
     DeleteRequirement,

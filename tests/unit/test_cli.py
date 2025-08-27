@@ -9,7 +9,7 @@ import pytest
 
 from solveig.interface.cli import CLIInterface
 from solveig.schema.message import LLMMessage
-from solveig.schema.requirement import (
+from solveig.schema.requirements import (
     CommandRequirement,
     ReadRequirement,
     WriteRequirement,

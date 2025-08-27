@@ -6,7 +6,7 @@ from solveig.config import SolveigConfig
 from solveig.plugins import hooks
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult
-from solveig.schema.requirement import CommandRequirement, ReadRequirement
+from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
