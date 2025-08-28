@@ -463,9 +463,9 @@ class TestFilesystemErrorHandling:
         """Test writing file when insufficient disk space."""
         # Save original total size and restore after test
         original_total_size = mock_all_file_operations.total_size
-        
+
         try:
-            # Set a small total size to avoid massive string allocation  
+            # Set a small total size to avoid massive string allocation
             mock_all_file_operations.total_size = 1000  # 1KB
             huge_content = "x" * 2000  # 2KB, exceeds the 1KB limit
 
@@ -492,13 +492,15 @@ class TestFilesystemErrorHandling:
         """Test write validation with both insufficient space AND minimum space requirements."""
         # Save original total size and restore after test
         original_total_size = mock_all_file_operations.total_size
-        
+
         try:
             # Set manageable total size to avoid massive string allocation
             mock_all_file_operations.total_size = 5000  # 5KB
             # Try to write content that would leave insufficient minimum space
             huge_content = "x" * 4000  # 4KB content
-            min_space_required = "2KB"  # Require 2KB minimum, but only 1KB would be left
+            min_space_required = (
+                "2KB"  # Require 2KB minimum, but only 1KB would be left
+            )
 
             with pytest.raises(OSError, match="Insufficient disk space"):
                 Filesystem.write_file(
