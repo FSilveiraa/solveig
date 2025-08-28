@@ -62,7 +62,7 @@ ALL_REQUIREMENTS_MESSAGE = LLMMessage(
 
 __all__ = [
     "ALL_REQUIREMENTS_MESSAGE",
-    "DEFAULT_CONFIG", 
+    "DEFAULT_CONFIG",
     "VERBOSE_CONFIG",
     "MockInterface",
     "MockLLMClient",

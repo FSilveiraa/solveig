@@ -3,6 +3,8 @@ Tests for the shellcheck plugin.
 This tests the shellcheck plugin in isolation from other plugins.
 """
 
+# Config with shellcheck plugin enabled - manually create to avoid copy issues
+from dataclasses import replace
 from unittest.mock import Mock, patch
 
 from solveig.plugins import hooks
@@ -11,8 +13,6 @@ from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
-# Config with shellcheck plugin enabled - manually create to avoid copy issues
-from dataclasses import replace
 SHELLCHECK_CONFIG = replace(DEFAULT_CONFIG, plugins={"shellcheck": {}})
 
 
@@ -189,8 +189,7 @@ class TestShellcheckPluginIntegration:
     def test_plugin_registration(self):
         """Test that shellcheck plugin is properly registered."""
         # Import shellcheck plugin to ensure registration
-        from solveig.plugins.hooks import shellcheck  # This registers the hook
-        
+
         # Should have the shellcheck before hook loaded
         assert len(hooks.HOOKS.before) >= 1
         hook_names = [hook[0].__name__ for hook in hooks.HOOKS.before]
