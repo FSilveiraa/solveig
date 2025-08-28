@@ -18,8 +18,13 @@ else:
 
 class CopyRequirement(Requirement):
     title: Literal["copy"] = "copy"
-    source_path: str = Field(..., description="Path of file/directory to copy from (supports ~ for home directory)")
-    destination_path: str = Field(..., description="Path where file/directory should be copied to")
+    source_path: str = Field(
+        ...,
+        description="Path of file/directory to copy from (supports ~ for home directory)",
+    )
+    destination_path: str = Field(
+        ..., description="Path where file/directory should be copied to"
+    )
 
     @field_validator("source_path", "destination_path", mode="before")
     @classmethod

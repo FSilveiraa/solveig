@@ -17,7 +17,9 @@ else:
 
 class CommandRequirement(Requirement):
     title: Literal["command"] = "command"
-    command: str = Field(..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')")
+    command: str = Field(
+        ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
+    )
 
     @field_validator("command")
     @classmethod

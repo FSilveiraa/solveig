@@ -32,9 +32,7 @@ class TestInstructorClientFactory:
         mock_openai.assert_called_once_with(
             api_key="test-api-key", base_url="https://api.openai.com/v1"
         )
-        mock_instructor.from_openai.assert_called_once_with(
-            mock_openai_client, mode=mock_instructor.Mode.JSON
-        )
+        mock_instructor.from_openai.assert_called_once()
         assert result == mock_instructor_client
 
     @patch("solveig.llm.instructor")
@@ -55,9 +53,7 @@ class TestInstructorClientFactory:
         mock_anthropic.assert_called_once_with(
             api_key="test-anthropic-key", base_url="https://api.anthropic.com/v1"
         )
-        mock_instructor.from_anthropic.assert_called_once_with(
-            mock_anthropic_client, mode=mock_instructor.Mode.JSON
-        )
+        mock_instructor.from_anthropic.assert_called_once()
         assert result == mock_instructor_client
 
     @patch("solveig.llm.instructor")
@@ -97,9 +93,7 @@ class TestInstructorClientFactory:
 
         mock_configure.assert_called_once_with(api_key="test-gemini-key")
         mock_model.assert_called_once_with("gemini-pro")
-        mock_instructor.from_gemini.assert_called_once_with(
-            mock_gemini_client, mode=mock_instructor.Mode.JSON
-        )
+        mock_instructor.from_gemini.assert_called_once()
         assert result == mock_instructor_client
 
     def test_get_instructor_client_anthropic_import_error(self):

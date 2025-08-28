@@ -18,8 +18,13 @@ else:
 
 class MoveRequirement(Requirement):
     title: Literal["move"] = "move"
-    source_path: str = Field(..., description="Current path of file/directory to move (supports ~ for home directory)")
-    destination_path: str = Field(..., description="New path where file/directory should be moved to")
+    source_path: str = Field(
+        ...,
+        description="Current path of file/directory to move (supports ~ for home directory)",
+    )
+    destination_path: str = Field(
+        ..., description="New path where file/directory should be moved to"
+    )
 
     @field_validator("source_path", "destination_path", mode="before")
     @classmethod

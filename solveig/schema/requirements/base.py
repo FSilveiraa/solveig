@@ -66,7 +66,9 @@ class Requirement(BaseModel, ABC):
     """
 
     title: str
-    comment: str = Field(..., description="Brief explanation of why this operation is needed")
+    comment: str = Field(
+        ..., description="Brief explanation of why this operation is needed"
+    )
 
     def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""

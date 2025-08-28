@@ -18,9 +18,16 @@ else:
 
 class WriteRequirement(Requirement):
     title: Literal["write"] = "write"
-    path: str = Field(..., description="File or directory path to create/update (supports ~ for home directory)")
-    is_directory: bool = Field(..., description="If true, create a directory; if false, create a file")
-    content: str | None = Field(None, description="File content to write (only used when is_directory=false)")
+    path: str = Field(
+        ...,
+        description="File or directory path to create/update (supports ~ for home directory)",
+    )
+    is_directory: bool = Field(
+        ..., description="If true, create a directory; if false, create a file"
+    )
+    content: str | None = Field(
+        None, description="File content to write (only used when is_directory=false)"
+    )
 
     @field_validator("path")
     @classmethod

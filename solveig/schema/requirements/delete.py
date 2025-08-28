@@ -18,7 +18,10 @@ else:
 
 class DeleteRequirement(Requirement):
     title: Literal["delete"] = "delete"
-    path: str = Field(..., description="Path of file/directory to permanently delete (supports ~ for home directory)")
+    path: str = Field(
+        ...,
+        description="Path of file/directory to permanently delete (supports ~ for home directory)",
+    )
 
     @field_validator("path", mode="before")
     @classmethod

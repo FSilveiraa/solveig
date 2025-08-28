@@ -18,8 +18,14 @@ else:
 
 class ReadRequirement(Requirement):
     title: Literal["read"] = "read"
-    path: str = Field(..., description="File or directory path to read (supports ~ for home directory)")
-    metadata_only: bool = Field(..., description="If true, read only file/directory metadata; if false, read full contents")
+    path: str = Field(
+        ...,
+        description="File or directory path to read (supports ~ for home directory)",
+    )
+    metadata_only: bool = Field(
+        ...,
+        description="If true, read only file/directory metadata; if false, read full contents",
+    )
 
     @field_validator("path")
     @classmethod
