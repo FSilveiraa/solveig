@@ -4,6 +4,7 @@ Tests core plugin functionality without over-engineering.
 """
 
 from unittest.mock import patch
+
 from solveig.plugins.requirements.tree import TreeRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -53,7 +54,7 @@ class TestPluginRequirements:
         # Empty path should fail validation
         try:
             TreeRequirement(path="", comment="empty path")
-            assert False, "Should have raised validation error"
+            raise AssertionError("Should have raised validation error")
         except Exception:
             pass  # Expected validation error
 
@@ -64,8 +65,9 @@ class TestPluginRequirements:
         self, mock_listing, mock_is_dir, mock_metadata
     ):
         """Test tree requirement with successful directory processing."""
-        from solveig.utils.file import Metadata
         from pathlib import Path
+
+        from solveig.utils.file import Metadata
 
         # Mock successful directory access
         mock_metadata.return_value = Metadata(
