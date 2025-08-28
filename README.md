@@ -343,6 +343,8 @@ Solveig follows **strict testing guidelines** to ensure reliability and safety:
 - **External commands**: Mock subprocess calls and command execution
 - **Real objects**: Never mock requirement/result objects - test actual Pydantic serialization
 
+**Mock Filesystem Safety Proof**: Tests like `TestReadRequirement.test_successful_reads_with_mock_fs()` prove our mock filesystem works by creating files at paths like `/test/readable.txt` that don't exist on the real filesystem, then successfully reading them through the requirement system. The fact that these tests pass demonstrates that our mock filesystem is intercepting all file operations, ensuring no real files are touched during unit testing.
+
 #### Running Tests
 
 ```bash

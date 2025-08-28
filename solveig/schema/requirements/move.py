@@ -71,22 +71,6 @@ class MoveRequirement(Requirement):
         try:
             Filesystem.validate_read_access(abs_source_path)
             Filesystem.validate_write_access(abs_destination_path)
-        except FileExistsError as e:
-            # Destination path already exists
-            error = e
-            interface.display_warning("Destination path already exists")
-            destination_metadata = Filesystem.read_metadata(abs_destination_path)
-            try:
-                destination_listing = Filesystem.get_dir_listing(abs_destination_path)
-            except NotADirectoryError:
-                destination_listing = None
-
-            interface.display_tree(
-                metadata=destination_metadata,
-                listing=destination_listing,
-                title="Destination Metadata",
-            )
-
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
             return MoveResult(
