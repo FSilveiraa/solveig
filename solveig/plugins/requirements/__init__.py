@@ -30,8 +30,6 @@ def register_requirement(requirement_class: type["Requirement"]):
     class MyRequirement(Requirement):
         ...
     """
-    # plugin_name = _get_plugin_name_from_class(requirement_class)
-
     # Store in both active and all requirements registry
     REQUIREMENTS.registered[requirement_class.__name__] = requirement_class
     REQUIREMENTS._all_requirements[requirement_class.__name__] = requirement_class
@@ -128,13 +126,20 @@ def filter_requirements(
 
             interface.current_level += 1
             for req_name, req_class in REQUIREMENTS._all_requirements.items():
-                plugin_name = _get_plugin_name_from_class(req_class)
-                if plugin_name in enabled_plugins:
+                module = req_class.__module__
+
+                # Core requirements (from schema.requirements) are always enabled
+                if "schema.requirements" in module:
                     REQUIREMENTS.registered[req_name] = req_class
                 else:
-                    interface.show(
-                        f"≫ Skipping requirement plugin, not present in config: {plugin_name}.{req_name}"
-                    )
+                    # Plugin requirements are filtered by config
+                    plugin_name = _get_plugin_name_from_class(req_class)
+                    if plugin_name in enabled_plugins:
+                        REQUIREMENTS.registered[req_name] = req_class
+                    else:
+                        interface.show(
+                            f"≫ Skipping requirement plugin, not present in config: {plugin_name}.{req_name}"
+                        )
             interface.current_level -= 1
 
             total_requirements = len(REQUIREMENTS.registered)
