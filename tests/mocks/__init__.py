@@ -10,6 +10,7 @@ from solveig.schema.requirements import (
 )
 
 from .interface import MockInterface
+from .llm_client import MockLLMClient, create_mock_client
 
 DEFAULT_CONFIG = SolveigConfig(
     api_type=APIType.OPENAI,
@@ -61,7 +62,9 @@ ALL_REQUIREMENTS_MESSAGE = LLMMessage(
 
 __all__ = [
     "ALL_REQUIREMENTS_MESSAGE",
-    "DEFAULT_CONFIG",
+    "DEFAULT_CONFIG", 
     "VERBOSE_CONFIG",
     "MockInterface",
+    "MockLLMClient",
+    "create_mock_client",
 ]

@@ -6,15 +6,23 @@ This tests the shellcheck plugin in isolation from other plugins.
 from unittest.mock import Mock, patch
 
 from solveig.plugins import hooks
+from solveig.plugins.hooks import filter_hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
+
+# Config with shellcheck plugin enabled - manually create to avoid copy issues
+from dataclasses import replace
+SHELLCHECK_CONFIG = replace(DEFAULT_CONFIG, plugins={"shellcheck": {}})
 
 
 class TestShellcheckPlugin:
     """Test the shellcheck plugin functionality in isolation."""
 
-    # No setup needed - plugins are auto-loaded when importing schema
+    def setup_method(self):
+        """Ensure shellcheck plugin is properly loaded before each test."""
+        interface = MockInterface()
+        filter_hooks(interface, SHELLCHECK_CONFIG)
 
     def test_dangerous_patterns_detection(self):
         """Test that dangerous patterns are correctly identified."""
@@ -47,8 +55,9 @@ class TestShellcheckPlugin:
             comment="Test dangerous command error formatting",
         )
         interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline sending error back to assistant
 
-        result = req.solve(DEFAULT_CONFIG, interface)
+        result = req.solve(SHELLCHECK_CONFIG, interface)
 
         assert not result.accepted
         assert "dangerous pattern" in result.error.lower()
@@ -66,7 +75,7 @@ class TestShellcheckPlugin:
         interface.set_user_inputs(["n"])  # Decline to run
 
         # Mock user declining to run the command (we just want to test plugin validation)
-        result = cmd_req.solve(DEFAULT_CONFIG, interface)
+        result = cmd_req.solve(SHELLCHECK_CONFIG, interface)
 
         # Should reach user prompt (not stopped by plugin) and be declined by user
         assert not result.accepted
@@ -84,7 +93,7 @@ class TestShellcheckPlugin:
         interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline to run
 
-        result = cmd_req.solve(DEFAULT_CONFIG, interface)
+        result = cmd_req.solve(SHELLCHECK_CONFIG, interface)
 
         # Should pass validation and reach user prompt
         assert not result.accepted  # Declined by user
@@ -106,8 +115,9 @@ class TestShellcheckPlugin:
         )
         req = CommandRequirement(command="echo $UNQUOTED_VAR", comment="Test")
         interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline sending error back to assistant
 
-        result = req.solve(DEFAULT_CONFIG, interface)
+        result = req.solve(SHELLCHECK_CONFIG, interface)
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
@@ -120,7 +130,7 @@ class TestShellcheckPlugin:
         # Mock shellcheck command not found
         mock_subprocess.side_effect = FileNotFoundError("shellcheck command not found")
 
-        config = DEFAULT_CONFIG
+        config = SHELLCHECK_CONFIG
         req = CommandRequirement(command="echo test", comment="Test")
         interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline to run
@@ -156,8 +166,9 @@ class TestShellcheckPlugin:
             comment="Test multiple issues",
         )
         interface = MockInterface()
+        interface.set_user_inputs(["n"])  # Decline sending error back to assistant
 
-        result = req.solve(DEFAULT_CONFIG, interface)
+        result = req.solve(SHELLCHECK_CONFIG, interface)
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
@@ -170,10 +181,16 @@ class TestShellcheckPlugin:
 class TestShellcheckPluginIntegration:
     """Test shellcheck plugin integration with Solveig core."""
 
-    # No setup needed - plugins are auto-loaded when importing schema
+    def setup_method(self):
+        """Ensure shellcheck plugin is properly loaded before each test."""
+        interface = MockInterface()
+        filter_hooks(interface, SHELLCHECK_CONFIG)
 
     def test_plugin_registration(self):
         """Test that shellcheck plugin is properly registered."""
+        # Import shellcheck plugin to ensure registration
+        from solveig.plugins.hooks import shellcheck  # This registers the hook
+        
         # Should have the shellcheck before hook loaded
         assert len(hooks.HOOKS.before) >= 1
         hook_names = [hook[0].__name__ for hook in hooks.HOOKS.before]
@@ -185,7 +202,8 @@ class TestShellcheckPluginIntegration:
         # CommandRequirement with dangerous pattern should trigger shellcheck
         cmd_req = CommandRequirement(command="rm -rf /", comment="Test")
         interface = MockInterface()
-        result = cmd_req.solve(DEFAULT_CONFIG, interface)
+        interface.set_user_inputs(["n"])  # Decline sending error back to assistant
+        result = cmd_req.solve(SHELLCHECK_CONFIG, interface)
 
         # Should be stopped by shellcheck plugin
         assert not result.accepted
@@ -196,7 +214,7 @@ class TestShellcheckPluginIntegration:
             path="/test/nonexistent.txt", metadata_only=True, comment="Test"
         )
         interface2 = MockInterface()
-        result = read_req.solve(DEFAULT_CONFIG, interface2)
+        result = read_req.solve(SHELLCHECK_CONFIG, interface2)
 
         # Should not be stopped by shellcheck (file validation error is different)
         assert not result.accepted

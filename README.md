@@ -324,24 +324,26 @@ Solveig follows **strict testing guidelines** to ensure reliability and safety:
 - **No untested code paths**: All business logic, error handling, and user interactions must be tested
 
 #### Testing Architecture
+
+**Test Safety Philosophy**: Unit tests must achieve high coverage while being completely safe to run. Our mocking approach ensures tests never touch real files, run real commands, or require user interaction.
+
+**Core Mocking Infrastructure**:
+- **MockFilesystem**: Elaborate wrapper around `@patch()` calls that simulates complete file operations
+- **MockInterface**: Wrapper around `@patch()` calls for user input/output without actual terminal interaction  
+- **Plugin isolation**: Tests call `filter_hooks()` with specific configs to ensure plugin state isolation
+- **Automatic mocking**: `conftest.py` automatically applies mocks via `@pytest.fixture(autouse=True)`
+
 **Unit Tests (`tests/unit/`)**:
 - Mock all I/O and side-effect operations (file system, user interface, external commands)
-- Use **minimal mocking**: Mock only the lowest-level behaviors while keeping high-level logic unmocked
-- Mock framework provides utility methods for easy test setup (mock filesystem with directory structure)
-- Test real object serialization and business logic with actual Pydantic models
+- Tests like `TestReadRequirement.test_successful_reads_with_mock_fs()` prove mock isolation by creating files at paths like `/test/readable.txt` that don't exist on the real filesystem
 - Config tests use `cli_args` to bypass reading sys.argv and pass mock values without complex patching
 
 **Integration Tests (`tests/integration/`)**:
-- Allow real file I/O operations using temporary directories
-- Mock only user interactions to avoid interactive prompts
-- Test full stack from requirement parsing to actual file operations
-- Marked with `@pytest.mark.no_file_mocking` to bypass file system mocks
+- Allow real file I/O operations using temporary directories  
+- Mock only user interactions and LLM responses to avoid interactive prompts
+- Test complete conversation flows with `MockLLMClient` (thin wrapper around `@patch()`)
 
-**Mocking Strategy**:
-- **File operations**: Mock `solveig.utils.file` methods for filesystem interactions
-- **User interface**: Mock input/output methods while preserving all display logic and formatting
-- **External commands**: Mock subprocess calls and command execution
-- **Real objects**: Never mock requirement/result objects - test actual Pydantic serialization
+**The apparent complexity serves a critical purpose**: achieving 87%+ coverage while guaranteeing tests cannot damage your system or require manual intervention.
 
 #### Running Tests
 
