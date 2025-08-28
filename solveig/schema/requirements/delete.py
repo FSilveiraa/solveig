@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from solveig.utils.file import Filesystem
 
@@ -18,7 +18,7 @@ else:
 
 class DeleteRequirement(Requirement):
     title: Literal["delete"] = "delete"
-    path: str
+    path: str = Field(..., description="Path of file/directory to permanently delete (supports ~ for home directory)")
 
     @field_validator("path", mode="before")
     @classmethod

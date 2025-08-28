@@ -36,7 +36,7 @@ ALL_REQUIREMENTS_MESSAGE = LLMMessage(
     comment="I need to read, write, run commands, move, copy, and delete files",
     requirements=[
         ReadRequirement(
-            path="/test/file.txt", only_read_metadata=False, comment="Read test file"
+            path="/test/file.txt", metadata_only=False, comment="Read test file"
         ),
         WriteRequirement(
             path="/test/output.txt",

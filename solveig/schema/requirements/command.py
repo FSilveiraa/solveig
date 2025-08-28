@@ -3,7 +3,7 @@
 import subprocess
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from .base import Requirement
 
@@ -17,7 +17,7 @@ else:
 
 class CommandRequirement(Requirement):
     title: Literal["command"] = "command"
-    command: str
+    command: str = Field(..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')")
 
     @field_validator("command")
     @classmethod

@@ -63,7 +63,7 @@ script_chat = MessageHistory(system_prompt="")
 CONVERSATION_EXAMPLES.append(script_chat)
 script_chat.add_message(UserMessage(comment="What does the script on ~/run.sh do?"))
 file_req1 = ReadRequirement(
-    only_read_metadata=True,
+    metadata_only=True,
     path="~/run.sh",
     comment="To check what this script does, I need to read the contents of run.sh.",
 )
@@ -130,12 +130,12 @@ cmd_req_disk_usage = CommandRequirement(
 file_req_large_dirs = ReadRequirement(
     comment="If you also want to see which directories are largest in your home folder",
     path="~",
-    only_read_metadata=True,
+    metadata_only=True,
 )
 file_req_log = ReadRequirement(
     comment="I need to access the log to analyze it",
     path="~/Documents/my_app.log",
-    only_read_metadata=False,
+    metadata_only=False,
 )
 multiple_issues_chat.add_message(
     LLMMessage(

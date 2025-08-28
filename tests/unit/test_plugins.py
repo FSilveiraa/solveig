@@ -186,7 +186,7 @@ class TestPluginHookSystem:
 
         # Test with ReadRequirement
         read_req = ReadRequirement(
-            path="/test/file.txt", only_read_metadata=True, comment="Test"
+            path="/test/file.txt", metadata_only=True, comment="Test"
         )
         interface2 = MockInterface()
         interface2.set_user_inputs(["n"])
@@ -212,7 +212,7 @@ class TestPluginHookSystem:
         # Test with different requirement types
         cmd_req = CommandRequirement(command="echo test", comment="Test")
         read_req = ReadRequirement(
-            path="/test/file.txt", only_read_metadata=True, comment="Test"
+            path="/test/file.txt", metadata_only=True, comment="Test"
         )
 
         # Execute

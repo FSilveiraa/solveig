@@ -37,7 +37,7 @@ def get_instructor_client(
             from openai import OpenAI
 
             client = OpenAI(api_key=api_key, base_url=url)
-            return instructor.from_openai(client, mode=instructor.Mode.JSON)
+            return instructor.from_openai(client, mode=instructor.Mode.TOOLS)
         except ImportError as e:
             raise ValueError(
                 "OpenAI client not available. Install with: pip install openai"
@@ -48,7 +48,7 @@ def get_instructor_client(
 
             anthropic_client = Anthropic(api_key=api_key, base_url=url)
             return instructor.from_anthropic(
-                anthropic_client, mode=instructor.Mode.JSON
+                anthropic_client, mode=instructor.Mode.TOOLS
             )
         except ImportError as e:
             raise ValueError(
@@ -60,7 +60,7 @@ def get_instructor_client(
 
             genai.configure(api_key=api_key)
             gemini_client = genai.GenerativeModel("gemini-pro")
-            return instructor.from_gemini(gemini_client, mode=instructor.Mode.JSON)
+            return instructor.from_gemini(gemini_client, mode=instructor.Mode.TOOLS)
         except ImportError as e:
             raise ValueError(
                 "Google Generative AI client not available. Install with: pip install google-generativeai"

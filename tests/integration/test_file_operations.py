@@ -41,7 +41,7 @@ class TestReadRequirementIntegration:
             # Create requirement with tilde path
             req = ReadRequirement(
                 path="~/.solveig_test_temp/integration_test.txt",
-                only_read_metadata=False,
+                metadata_only=False,
                 comment="Integration test read",
             )
 
@@ -86,7 +86,7 @@ class TestReadRequirementIntegration:
 
             # Test directory read
             req = ReadRequirement(
-                path=str(base_path), only_read_metadata=True, comment="Read directory"
+                path=str(base_path), metadata_only=True, comment="Read directory"
             )
 
             result = req._actually_solve(
@@ -110,7 +110,7 @@ class TestReadRequirementIntegration:
         """Test reading a file that doesn't exist."""
         req = ReadRequirement(
             path="/nonexistent/file.txt",
-            only_read_metadata=False,
+            metadata_only=False,
             comment="Read missing file",
         )
         mock_interface = MockInterface()
@@ -137,7 +137,7 @@ class TestReadRequirementIntegration:
             try:
                 req = ReadRequirement(
                     path=str(restricted_file),
-                    only_read_metadata=False,
+                    metadata_only=False,
                     comment="Read restricted file",
                 )
 
@@ -474,7 +474,7 @@ class TestPathSecurityIntegration:
             # Try to read outside the temp directory
             req = ReadRequirement(
                 path=f"{temp_dir}/../../../etc/passwd",
-                only_read_metadata=True,
+                metadata_only=True,
                 comment="Path traversal attempt",
             )
 
@@ -496,7 +496,7 @@ class TestPathSecurityIntegration:
 
         req = ReadRequirement(
             path="~/.bashrc",  # Common file that might exist
-            only_read_metadata=True,
+            metadata_only=True,
             comment="Tilde expansion test",
         )
 
@@ -522,7 +522,7 @@ class TestCompleteWorkflowIntegration:
 
             # 1. Read the config file
             read_req = ReadRequirement(
-                path=str(config_file), only_read_metadata=False, comment="Read config"
+                path=str(config_file), metadata_only=False, comment="Read config"
             )
             mock_interface.user_inputs.extend(
                 ["y", "y"]  # yes to read, yes to send back

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from solveig.utils.file import Filesystem
 
@@ -18,8 +18,8 @@ else:
 
 class ReadRequirement(Requirement):
     title: Literal["read"] = "read"
-    path: str
-    only_read_metadata: bool
+    path: str = Field(..., description="File or directory path to read (supports ~ for home directory)")
+    metadata_only: bool = Field(..., description="If true, read only file/directory metadata; if false, read full contents")
 
     @field_validator("path")
     @classmethod
@@ -47,7 +47,7 @@ class ReadRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of read capability."""
-        return "read(path, only_read_metadata): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
+        return "read(path, metadata_only): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
 
     def _actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
@@ -73,7 +73,7 @@ class ReadRequirement(Requirement):
 
         if (
             not metadata.is_directory
-            and not self.only_read_metadata
+            and not self.metadata_only
             and interface.ask_yes_no("Allow reading file contents? [y/N]: ")
         ):
             try:

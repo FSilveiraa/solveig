@@ -189,7 +189,7 @@ class TestCLIInterfaceLLMResponse:
         """Test displaying LLM response with requirements."""
         requirements = [
             ReadRequirement(
-                path="/test/file.txt", only_read_metadata=False, comment="Read file"
+                path="/test/file.txt", metadata_only=False, comment="Read file"
             ),
             WriteRequirement(
                 path="/test/output.txt",
@@ -217,10 +217,10 @@ class TestCLIInterfaceLLMResponse:
         """Test that requirements are properly grouped by type."""
         requirements = [
             ReadRequirement(
-                path="/test/file1.txt", only_read_metadata=False, comment="Read file 1"
+                path="/test/file1.txt", metadata_only=False, comment="Read file 1"
             ),
             ReadRequirement(
-                path="/test/file2.txt", only_read_metadata=True, comment="Read file 2"
+                path="/test/file2.txt", metadata_only=True, comment="Read file 2"
             ),
             WriteRequirement(
                 path="/test/output.txt",

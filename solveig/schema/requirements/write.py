@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from solveig.utils.file import Filesystem
 
@@ -18,9 +18,9 @@ else:
 
 class WriteRequirement(Requirement):
     title: Literal["write"] = "write"
-    path: str
-    is_directory: bool
-    content: str | None = None
+    path: str = Field(..., description="File or directory path to create/update (supports ~ for home directory)")
+    is_directory: bool = Field(..., description="If true, create a directory; if false, create a file")
+    content: str | None = Field(None, description="File content to write (only used when is_directory=false)")
 
     @field_validator("path")
     @classmethod

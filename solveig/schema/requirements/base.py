@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
 from solveig.plugins.exceptions import PluginException, ProcessingError, ValidationError
@@ -66,7 +66,7 @@ class Requirement(BaseModel, ABC):
     """
 
     title: str
-    comment: str
+    comment: str = Field(..., description="Brief explanation of why this operation is needed")
 
     def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""

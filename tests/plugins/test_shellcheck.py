@@ -193,7 +193,7 @@ class TestShellcheckPluginIntegration:
 
         # Test that ReadRequirement doesn't trigger shellcheck
         read_req = ReadRequirement(
-            path="/test/nonexistent.txt", only_read_metadata=True, comment="Test"
+            path="/test/nonexistent.txt", metadata_only=True, comment="Test"
         )
         interface2 = MockInterface()
         result = read_req.solve(DEFAULT_CONFIG, interface2)
