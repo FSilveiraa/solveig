@@ -11,11 +11,10 @@ from solveig.schema.requirements.base import Requirement, validate_non_empty_pat
 from solveig.utils.file import Filesystem
 
 # Import the registration decorator
-from . import register_requirement
+from . import register_plugin_result, register_requirement
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
-    from solveig.schema.results import TreeResult
 
 
 @register_requirement
@@ -32,7 +31,7 @@ class TreeRequirement(Requirement):
 
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
         """Create TreeResult with error."""
-        from solveig.schema.results import TreeResult
+        from solveig.schema.results.tree import TreeResult
 
         return TreeResult(
             requirement=self,
@@ -52,7 +51,7 @@ class TreeRequirement(Requirement):
         )
 
     def _actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
-        from solveig.schema.results import TreeResult
+        from solveig.schema.results.tree import TreeResult
 
         abs_path = Filesystem.get_absolute_path(self.path)
 
@@ -102,3 +101,9 @@ class TreeRequirement(Requirement):
 
         except (PermissionError, OSError) as e:
             interface.display_error(f"Cannot access {path}: {e}")
+
+
+# Register the TreeResult for model rebuilding
+from solveig.schema.results.tree import TreeResult
+
+register_plugin_result(TreeResult)

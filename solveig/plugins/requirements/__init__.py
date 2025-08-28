@@ -9,6 +9,7 @@ from solveig.interface import CLIInterface, SolveigInterface
 if TYPE_CHECKING:
     from solveig import SolveigConfig
     from solveig.schema.requirements.base import Requirement
+    from solveig.schema.results.base import RequirementResult
 
 
 class REQUIREMENTS:
@@ -16,6 +17,9 @@ class REQUIREMENTS:
 
     registered: dict[str, type["Requirement"]] = {}
     _all_requirements: dict[str, type["Requirement"]] = {}
+    _plugin_results: list[type["RequirementResult"]] = (
+        []
+    )  # Result types that need model_rebuild()
 
     def __new__(cls, *args, **kwargs):
         raise TypeError("REQUIREMENTS is a static registry and cannot be instantiated")
@@ -35,6 +39,11 @@ def register_requirement(requirement_class: type["Requirement"]):
     REQUIREMENTS._all_requirements[requirement_class.__name__] = requirement_class
 
     return requirement_class
+
+
+def register_plugin_result(result_class: type["RequirementResult"]):
+    """Register a plugin result type that needs model_rebuild()."""
+    REQUIREMENTS._plugin_results.append(result_class)
 
 
 def _get_plugin_name_from_class(cls: type) -> str:
@@ -100,6 +109,13 @@ def load_requirements(interface: SolveigInterface | None = None):
             f"🕮  Requirement plugin loading complete: {total_files} files, {total_requirements} requirements"
         )
 
+    # Rebuild all registered plugin result models
+    for result_class in REQUIREMENTS._plugin_results:
+        try:
+            result_class.model_rebuild()
+        except Exception:
+            pass  # If rebuild fails, continue silently
+
 
 def filter_requirements(
     interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
@@ -161,6 +177,7 @@ def get_all_requirements() -> dict[str, type["Requirement"]]:
 __all__ = [
     "REQUIREMENTS",
     "register_requirement",
+    "register_plugin_result",
     "load_requirements",
     "filter_requirements",
     "get_all_requirements",

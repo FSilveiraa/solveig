@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
+from .requirements import Requirement
 from .results import RequirementResult
 
 # Requirements imported dynamically from registry to support plugins
@@ -72,7 +73,7 @@ def get_filtered_llm_message_class():
     if not all_active_requirements:
         # Return a minimal class if no requirements are registered
         class EmptyLLMMessage(BaseMessage):
-            requirements: list | None = None
+            requirements: list[Requirement] | None = None
 
         return EmptyLLMMessage
 
