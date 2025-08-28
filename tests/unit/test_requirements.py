@@ -138,7 +138,7 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True  # Shell execution succeeded
-        assert "command not found" in result.error
+        assert "not found" in result.error  # Works across different shell environments
 
     def test_command_exception_handling(self):
         """Test command requirement exception handling during execution."""
