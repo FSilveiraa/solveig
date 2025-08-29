@@ -100,20 +100,30 @@ class CLIInterface(SolveigInterface):
         max_lines: int | None = None,
         title: str | None = "Metadata",
     ) -> None:
-        text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path} | "
-        # size for directories is visual noise
-        # if metadata.is_directory:
-        #     metadata.size = None
-        text += " | ".join([f"{key}={value}" for key, value in vars(metadata).items()])
-        # print("DEBUG: " + str(len(entries)) + " entries: " + str(entries))
-        if listing:
-            # text = f"{text}\nEntries:"
-            total_entries = len(listing)
-            for n, (entry_path, entry_metadata) in enumerate(listing.items()):
-                entry_str = f"{'🗁' if entry_metadata.is_directory else '🗎'} {Path(entry_path).name}"
-                # └ if it's the last item, otherwise ├
-                text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
-        self.display_text_block(text, title=title, level=level, max_lines=max_lines)
+        # text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path} | "
+        # # size for directories is visual noise
+        # # if metadata.is_directory:
+        # #     metadata.size = None
+        # text += " | ".join([f"{key}={value}" for key, value in vars(metadata).items()])
+        # # print("DEBUG: " + str(len(entries)) + " entries: " + str(entries))
+        # if listing:
+        #     # text = f"{text}\nEntries:"
+        #     total_entries = len(listing)
+        #     for n, (entry_path, entry_metadata) in enumerate(listing.items()):
+        #         entry_str = f"{'🗁' if entry_metadata.is_directory else '🗎'} {Path(entry_path).name}"
+        #         # └ if it's the last item, otherwise ├
+        #         text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
+        self.display_text_block(self._get_element_text_box(metadata), title=title, level=level, max_lines=max_lines)
+
+    def _get_element_text_box(self, metadata: Metadata, indent=0) -> str:
+        text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path.name}"
+        if metadata.is_directory and metadata.listing:
+            for index, (sub_path, sub_metadata) in enumerate(sorted(metadata.listing.items())):
+                entry_str = self._get_element_text_box(sub_metadata, indent+1)
+                #  │ ├─🗎 run.sh.bak
+                #  │ └─🗎 stuff.txt
+                text = f"{text}\n{'  '*indent}{self.TEXT_BOX.BL if index == (len(metadata.listing) - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
+        return text
 
     def display_text_block(
         self,
@@ -131,7 +141,7 @@ class CLIInterface(SolveigInterface):
         # ┌─── Content ─────────────────────────────┐
         top_bar = f"{indent}{self.TEXT_BOX.TL}"
         if title:
-            top_bar = f"{top_bar}{self.TEXT_BOX.H * 3} {title.title()} "
+            top_bar = f"{top_bar}{self.TEXT_BOX.H * 3} {title} "
         self._output(
             f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 1)}{self.TEXT_BOX.TR}"
         )
