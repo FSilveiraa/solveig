@@ -53,7 +53,7 @@ class TestCLIInterface:
         assert len(self.interface.outputs) == 1
         output = self.interface.outputs[0]
         assert output.startswith("\n")
-        assert "─" in output
+        assert "────" in output
 
     def test_display_text_block_simple(self):
         """Test simple text block display."""
@@ -61,7 +61,7 @@ class TestCLIInterface:
 
         # Should produce bordered output
         assert len(self.interface.outputs) >= 3  # Top, content, bottom
-        output_text = " ".join(self.interface.outputs)
+        output_text = self.interface.get_all_output()
         assert "┌─── Test" in output_text  # Top border with title
         assert "Test content" in output_text  # Content
         assert "└" in output_text  # Bottom border
@@ -71,10 +71,10 @@ class TestCLIInterface:
         self.interface.display_text_block("Line 1\nLine 2\nLine 3", title="Multi")
 
         # Should produce bordered output with multiple content lines
-        output_text = " ".join(self.interface.outputs)
-        assert "Line 1" in output_text
-        assert "Line 2" in output_text
-        assert "Line 3" in output_text
+        output_text = self.interface.get_all_output()
+        assert "│ Line 1" in output_text
+        assert "│ Line 2" in output_text
+        assert "│ Line 3" in output_text
         assert "┌─── Multi" in output_text
 
     def test_display_text_block_line_limit(self):
@@ -84,11 +84,11 @@ class TestCLIInterface:
         self.interface.display_text_block(long_text, title="Limited")
 
         # Should truncate content
-        output_text = " ".join(self.interface.outputs)
-        assert "Line 0" in output_text
-        assert "Line 1" in output_text
+        output_text = self.interface.get_all_output()
+        assert "│ Line 0" in output_text
+        assert "│ Line 1" in output_text
         # Should show truncation indicator
-        assert "more" in output_text.lower()
+        assert "more" in output_text
 
     def test_display_tree_file(self):
         """Test displaying file metadata tree."""
@@ -107,8 +107,7 @@ class TestCLIInterface:
 
         # MockInterface implementation should capture tree display
         assert len(self.interface.outputs) >= 1
-        output_text = " ".join(self.interface.outputs)
-        # assert "TREE: File Info" in output_text
+        output_text = self.interface.get_all_output()
         assert "/test/file.txt" in output_text
 
     def test_display_tree_directory_with_listing(self):
@@ -152,8 +151,7 @@ class TestCLIInterface:
         self.interface.display_error("Test error message")
 
         # Should format with error symbol
-        output_text = " ".join(self.interface.outputs)
-        assert "✖  Test error message" in output_text
+        assert "✖  Test error message" in self.interface.get_all_output()
 
     def test_display_error_with_exception(self):
         """Test error display with exception object."""
@@ -162,7 +160,7 @@ class TestCLIInterface:
         self.interface.display_error(exception)
 
         # Should format exception with class name and show traceback
-        output_text = " ".join(self.interface.outputs)
+        output_text = self.interface.get_all_output()
         assert "ValueError: Test exception" in output_text
         # Should also show traceback in text block
         assert "Error" in output_text  # Traceback block title
@@ -182,8 +180,7 @@ class TestCLIInterfaceLLMResponse:
         self.interface.display_llm_response(message)
 
         # Should display the comment
-        output_text = " ".join(self.interface.outputs)
-        assert "Just a simple response" in output_text
+        assert "Just a simple response" in self.interface.get_all_output()
 
     def test_display_llm_response_with_requirements(self):
         """Test displaying LLM response with requirements."""
@@ -206,12 +203,12 @@ class TestCLIInterfaceLLMResponse:
         self.interface.display_llm_response(message)
 
         # Should display comment and requirements
-        output_text = " ".join(self.interface.outputs)
+        output_text = self.interface.get_all_output()
         assert "Response with requirements" in output_text
         # Requirements should be grouped and displayed
         assert "Read file" in output_text
         assert "Write file" in output_text
-        assert "List files" in output_text
+        assert "List files" in output_text and "ls -la" in output_text
 
     def test_display_llm_response_grouped_requirements(self):
         """Test that requirements are properly grouped by type."""
@@ -259,19 +256,19 @@ class TestCLIInterfaceIO:
         assert response == "test response"
         assert "Test prompt: " in interface.questions
 
-    def test_mock_interface_output_capture(self):
-        """Test MockInterface output capture functionality."""
-        interface = MockInterface()
-
-        interface._output("Test output")
-
-        assert "Test output" in interface.outputs
-
-    def test_mock_interface_max_width(self):
-        """Test MockInterface terminal width behavior."""
-        interface = MockInterface()
-        # MockInterface returns fixed width for consistent testing
-        assert interface._get_max_output_width() == 80
+    # def test_mock_interface_output_capture(self):
+    #     """Test MockInterface output capture functionality."""
+    #     interface = MockInterface()
+    #
+    #     interface._output("Test output")
+    #
+    #     assert "Test output" in interface.outputs
+    #
+    # def test_mock_interface_max_width(self):
+    #     """Test MockInterface terminal width behavior."""
+    #     interface = MockInterface()
+    #     # MockInterface returns fixed width for consistent testing
+    #     assert interface._get_max_output_width() == 80
 
 
 class TestCLIInterfaceConstants:

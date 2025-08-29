@@ -211,7 +211,7 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
         return
     anonymous_path = re.sub(r"/home/\w+", "/home/jdoe", original_path)
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
-    result.metadata['path'] = anonymous_path
+    result.metadata.path = anonymous_path
 ```
 </details>
 
@@ -219,81 +219,43 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
 <summary><b>Create a new requirement type: Directory tree listing</b></summary>
 
 ```python
-# solveig/schema/requirements/tree.py
+# solveig/plugins/requirements/tree.py
 from pathlib import Path
-from typing import TYPE_CHECKING
+from pydantic import Field
 
-from .base import Requirement, validate_non_empty_path
+from solveig.schema.requirements.base import Requirement, validate_non_empty_path
+from solveig.schema.results.base import RequirementResult
+from solveig.interface import SolveigInterface
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import TreeResult
 
-class TreeRequirement(Requirement):
+class MyResult(RequirementResult):
+    path: str | Path
+    accepted: bool
+    
+class MyRequirement(Requirement):
     """Generate a directory tree listing showing file structure."""
     
-    path: str = Field(..., validator=validate_non_empty_path)
-    max_depth: int = Field(default=3, ge=1, le=10)
-    show_hidden: bool = Field(default=False)
+    # Use descriptive fields, with a description string that the LLM will have access to,
+    # as well as validation methods
+    path: str = Field(..., description="The path to look from", validator=validate_non_empty_path)
+    show_hidden: bool = Field(description="Look at hidden files and directories", default=False)
     
     def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
-        from solveig.schema.results import TreeResult
-        
-        abs_path = Path(self.path).expanduser().resolve()
-        
-        # Generate tree structure
-        tree_lines = self._generate_tree(abs_path, self.max_depth, self.show_hidden)
-        
-        return TreeResult(
-            requirement=self,
-            accepted=True,
-            path=abs_path,
-            tree_output="\n".join(tree_lines),
-            total_files=len([line for line in tree_lines if "📄" in line]),
-            total_dirs=len([line for line in tree_lines if "📁" in line])
-        )
-    
-    def _generate_tree(self, path: Path, max_depth: int, show_hidden: bool) -> list[str]:
-        """Generate tree structure lines."""
-        lines = [f"📁 {path.name}/"]
-        
-        def _walk_dir(current_path: Path, prefix: str, depth: int):
-            if depth >= max_depth:
-                return
-                
-            try:
-                entries = list(current_path.iterdir())
-                if not show_hidden:
-                    entries = [e for e in entries if not e.name.startswith('.')]
-                    
-                entries.sort(key=lambda x: (x.is_file(), x.name.lower()))
-                
-                for i, entry in enumerate(entries):
-                    is_last = i == len(entries) - 1
-                    current_prefix = "└── " if is_last else "├── "
-                    next_prefix = prefix + ("    " if is_last else "│   ")
-                    
-                    if entry.is_dir():
-                        lines.append(f"{prefix}{current_prefix}📁 {entry.name}/")
-                        _walk_dir(entry, next_prefix, depth + 1)
-                    else:
-                        lines.append(f"{prefix}{current_prefix}📄 {entry.name}")
-                        
-            except PermissionError:
-                lines.append(f"{prefix}└── ❌ Permission denied")
-        
-        _walk_dir(path, "", 0)
-        return lines
-
-# solveig/schema/results/tree.py  
-from pathlib import Path
-from .base import RequirementResult
-
-class TreeResult(RequirementResult):
-    path: str | Path
-    tree_output: str
-    total_files: int = 0
-    total_dirs: int = 0
+        # Access the config, use the interface, solve the requirement and return a result
+        try:
+            if config.plugins.myplugin.is_active:
+                return MyResult(
+                    requirement=self,
+                    accepted=interface.ask_yes_no("Proceed?"),
+                    path=self.path
+                )
+        except Exception as e:
+            return MyResult(
+                requirement=self,
+                accepted=False,
+                path=self.path,
+                error=str(e)
+            )
 ```
 
 Then update `solveig/schema/requirements/__init__.py` and `solveig/schema/results/__init__.py` to export the new classes, and add examples to the system prompt showing the LLM how to use `TreeRequirement`.
