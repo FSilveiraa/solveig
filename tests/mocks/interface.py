@@ -10,12 +10,12 @@ class MockInterface(CLIInterface):
 
     def __init__(
         self,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.outputs = []
         self.user_inputs = []
         self.questions = []
-        # self.yes_no_calls = []
 
     def _output(self, text: str) -> None:
         """Capture output instead of printing"""
@@ -42,19 +42,6 @@ class MockInterface(CLIInterface):
     def get_all_output(self) -> str:
         """Get all captured output as single string"""
         return "\n".join(self.outputs)
-
-    def assert_output_contains(self, text: str) -> None:
-        """Assert that output contains specific text"""
-        all_output = self.get_all_output()
-        assert (
-            text in all_output
-        ), f"Output does not contain '{text}'. Actual output:\n{all_output}"
-
-    def assert_output_lines_equal(self, expected_lines: list[str]) -> None:
-        """Assert exact output line matching"""
-        assert (
-            self.outputs == expected_lines
-        ), f"Output mismatch.\nExpected: {expected_lines}\nActual: {self.outputs}"
 
     def clear(self) -> None:
         """Clear all captured data"""

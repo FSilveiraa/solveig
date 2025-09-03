@@ -33,7 +33,7 @@ class MoveRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display move requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         source_abs = Filesystem.get_absolute_path(self.source_path)
         dest_abs = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(

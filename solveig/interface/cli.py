@@ -98,24 +98,11 @@ class CLIInterface(SolveigInterface):
         listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
-        title: str | None = "Metadata",
+        title: str | None = None,
     ) -> None:
-        # text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path} | "
-        # # size for directories is visual noise
-        # # if metadata.is_directory:
-        # #     metadata.size = None
-        # text += " | ".join([f"{key}={value}" for key, value in vars(metadata).items()])
-        # # print("DEBUG: " + str(len(entries)) + " entries: " + str(entries))
-        # if listing:
-        #     # text = f"{text}\nEntries:"
-        #     total_entries = len(listing)
-        #     for n, (entry_path, entry_metadata) in enumerate(listing.items()):
-        #         entry_str = f"{'🗁' if entry_metadata.is_directory else '🗎'} {Path(entry_path).name}"
-        #         # └ if it's the last item, otherwise ├
-        #         text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
         self.display_text_block(
             "\n".join(self._get_tree_element_str(metadata)),
-            title=title,
+            title=title or str(metadata.path),
             level=level,
             max_lines=max_lines,
         )
@@ -163,11 +150,11 @@ class CLIInterface(SolveigInterface):
         if title:
             top_bar = f"{top_bar}{self.TEXT_BOX.H * 3} {title} "
         self._output(
-            f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 1)}{self.TEXT_BOX.TR}"
+            f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR} "
         )
 
         vertical_bar_left = f"{indent}{self.TEXT_BOX.V} "
-        vertical_bar_right = f" {self.TEXT_BOX.V}"
+        vertical_bar_right = f" {self.TEXT_BOX.V} "
         max_line_length = (
             self._get_max_output_width()
             - len(vertical_bar_left)
@@ -184,22 +171,17 @@ class CLIInterface(SolveigInterface):
                     f"{truncated_line}{' ' * (max_line_length - len(truncated_line))}"
                 )
                 self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
-                # self._output(f"{vertical_bar_left}...{' ' * (max_line_length-3)}{vertical_bar_right}")
                 break
 
-            # truncate individual line length
-            # truncated_line = line[0:max_line_length]
             if len(line) > max_line_length:
-                # _before = truncated_line
                 truncated_line = f"{line[0:max_line_length - 3]}..."
             else:
                 truncated_line = f"{line}{' ' * (max_line_length - len(line))}"
-            # print(f"DEBUG: truncated line: {line} -> {truncated_line}")
             self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
 
         # └─────────────────────────────────────────┘
         self._output(
-            f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 2)}{self.TEXT_BOX.BR}"
+            f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 3)}{self.TEXT_BOX.BR} "
         )
 
     def display_animation_while(

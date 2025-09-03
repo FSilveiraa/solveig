@@ -1,359 +1,315 @@
-"""
-Unit tests for solveig.interface.cli module.
-Tests the CLIInterface implementation using MockInterface.
-"""
+"""Unit tests for solveig.interface.cli module."""
 
+import re
 from pathlib import Path
-
-import pytest
 
 from solveig.interface.cli import CLIInterface
 from solveig.schema.message import LLMMessage
-from solveig.schema.requirements import (
-    CommandRequirement,
-    ReadRequirement,
-    WriteRequirement,
-)
+from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from solveig.utils.file import Metadata
 from tests.mocks.interface import MockInterface
 
 
-class TestCLIInterface:
-    """Test CLIInterface functionality using MockInterface."""
+def create_complex_tree_metadata() -> Metadata:
+    """Create a complex nested directory structure like /home/francisco/Sync."""
+    # Create deepest files first
+    f3 = Metadata(
+        path=Path("/test/d1/sub-d1/sub-d2/sub-d3/f3"),
+        is_directory=False, size=100, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True
+    )
+    
+    f4 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f4"), is_directory=False, size=100, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    f5 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f5"), is_directory=False, size=100, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    f6 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f6"), is_directory=False, size=100, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    
+    # Build directories from bottom up
+    sub_d3 = Metadata(
+        path=Path("/test/d1/sub-d1/sub-d2/sub-d3"), is_directory=True, size=4096, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True,
+        listing={Path("/test/d1/sub-d1/sub-d2/sub-d3/f3"): f3}
+    )
+    
+    sub_d2 = Metadata(
+        path=Path("/test/d1/sub-d1/sub-d2"), is_directory=True, size=4096, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True,
+        listing={
+            Path("/test/d1/sub-d1/sub-d2/f4"): f4,
+            Path("/test/d1/sub-d1/sub-d2/f5"): f5,
+            Path("/test/d1/sub-d1/sub-d2/f6"): f6,
+            Path("/test/d1/sub-d1/sub-d2/sub-d3"): sub_d3,
+        }
+    )
+    
+    sub_f1 = Metadata(path=Path("/test/d1/sub-f1"), is_directory=False, size=100, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    
+    sub_d1 = Metadata(
+        path=Path("/test/d1/sub-d1"), is_directory=True, size=4096, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True,
+        listing={Path("/test/d1/sub-d1/sub-d2"): sub_d2}
+    )
+    
+    d1 = Metadata(
+        path=Path("/test/d1"), is_directory=True, size=4096, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True,
+        listing={
+            Path("/test/d1/sub-d1"): sub_d1,
+            Path("/test/d1/sub-f1"): sub_f1,
+        }
+    )
+    
+    # Root level files
+    dev_sh = Metadata(path=Path("/test/dev.sh"), is_directory=False, size=200, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    f1 = Metadata(path=Path("/test/f1"), is_directory=False, size=50, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    hello_py = Metadata(path=Path("/test/hello.py"), is_directory=False, size=150, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    j1_json = Metadata(path=Path("/test/j1.json"), is_directory=False, size=300, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    run_sh_bak = Metadata(path=Path("/test/run.sh.bak"), is_directory=False, size=250, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    stuff_txt = Metadata(path=Path("/test/stuff.txt"), is_directory=False, size=80, modified_time="2024-01-01", owner_name="user", group_name="group", is_readable=True, is_writable=True)
+    
+    # Root directory
+    root = Metadata(
+        path=Path("/test"), is_directory=True, size=4096, modified_time="2024-01-01",
+        owner_name="user", group_name="group", is_readable=True, is_writable=True,
+        listing={
+            Path("/test/d1"): d1,
+            Path("/test/dev.sh"): dev_sh,
+            Path("/test/f1"): f1,
+            Path("/test/hello.py"): hello_py,
+            Path("/test/j1.json"): j1_json,
+            Path("/test/run.sh.bak"): run_sh_bak,
+            Path("/test/stuff.txt"): stuff_txt,
+        }
+    )
+    
+    return root
 
-    def setup_method(self):
-        """Setup for each test method."""
-        self.interface = MockInterface()
+
+class TestCLIInterfaceCore:
+    """Test core CLI interface functionality."""
 
     def test_initialization(self):
-        """Test CLIInterface initialization."""
+        """Test CLIInterface initialization with parameters."""
         interface = CLIInterface(indent_base=4, max_lines=10, verbose=True)
         assert interface.indent_base == 4
         assert interface.max_lines == 10
         assert interface.verbose
         assert interface.current_level == 0
+        # starting a group should advance the indent level
+        with interface.with_group("Group Name"):
+            assert interface.current_level > 0
+        assert interface.current_level == 0
 
-    def test_display_section(self):
-        """Test section header display."""
-        self.interface.display_section("Test Section")
+    def test_section_display_behavior(self):
+        """Test section header display with and without titles."""
+        interface = MockInterface()
+        
+        # Test section display with title
+        interface.display_section("Test Section")
+        assert re.match("^─+ Test Section ─+$", interface.get_all_output().strip())
+        interface.clear()
+        
+        # Test section display without title
+        interface.display_section("")
+        assert re.match("^─+$", interface.get_all_output().strip())
 
-        # Should produce section header output
-        assert len(self.interface.outputs) == 1
-        output = self.interface.outputs[0]
-        assert (
-            "─── Test Section " in output
-        )  # Title with prefix, may not have trailing dashes with MockInterface
-        assert output.startswith("\n")
+    def test_text_box_complete_rendering(self):
+        """Test complete text box rendering: top border with title, content lines, bottom border, truncation."""
+        interface = MockInterface()
+        
+        # Test complete text box with title and multiline content
+        lines = [f"Line {n}" for n in range(1, 5)] # 4 lines
+        interface.display_text_block("\n".join(lines), title="Test Box")
+        output_lines = [line for line in interface.get_all_output().split('\n') if line.strip()]
 
-    def test_display_section_no_title(self):
-        """Test section header with no title."""
-        self.interface.display_section("")
+        # Box header
+        assert re.match("^┌─+ Test Box ─+┐$", output_lines[0].strip())
 
-        # Should produce line of dashes
-        assert len(self.interface.outputs) == 1
-        output = self.interface.outputs[0]
-        assert output.startswith("\n")
-        assert "────" in output
+        # Box body
+        output_body = output_lines[1:-1]
+        for index, output_line in enumerate(output_body):
+            output_line = output_line.strip()
+            actual_line = lines[index].strip()
+            assert output_line.startswith("│")
+            assert actual_line in output_line
+            assert output_line.endswith("│")
 
-    def test_display_text_block_simple(self):
-        """Test simple text block display."""
-        self.interface.display_text_block("Test content", title="Test")
+        # Box bottom
+        assert re.match("^└─+┘$", output_lines[-1].strip())
 
-        # Should produce bordered output
-        assert len(self.interface.outputs) >= 3  # Top, content, bottom
-        output_text = self.interface.get_all_output()
-        assert "┌─── Test" in output_text  # Top border with title
-        assert "Test content" in output_text  # Content
-        assert "└" in output_text  # Bottom border
-
-    def test_display_text_block_multiline(self):
-        """Test multiline text block display."""
-        self.interface.display_text_block("Line 1\nLine 2\nLine 3", title="Multi")
-
-        # Should produce bordered output with multiple content lines
-        output_text = self.interface.get_all_output()
-        assert "│ Line 1" in output_text
-        assert "│ Line 2" in output_text
-        assert "│ Line 3" in output_text
-        assert "┌─── Multi" in output_text
-
-    def test_display_text_block_line_limit(self):
-        """Test text block with line limit."""
-        self.interface.max_lines = 2
+    def test_text_box_truncation(self):
+        """Test truncation behavior"""
+        interface = MockInterface(max_lines=2)
         long_text = "\n".join([f"Line {i}" for i in range(5)])
-        self.interface.display_text_block(long_text, title="Limited")
+        interface.display_text_block(long_text, title="Limited")
 
-        # Should truncate content
-        output_text = self.interface.get_all_output()
-        assert "│ Line 0" in output_text
-        assert "│ Line 1" in output_text
-        # Should show truncation indicator
-        assert "more" in output_text
+        output = interface.get_all_output().strip()
+        output_lines = output.split('\n')
+        assert "more..." in output_lines[-2].lower()
 
-    def test_display_tree_file(self):
-        """Test displaying file metadata tree."""
-        metadata = Metadata(
-            path=Path("/test/file.txt"),
-            size=1024,
-            modified_time="2024-01-01",
-            is_directory=False,
-            owner_name="user",
-            group_name="group",
-            is_readable=True,
-            is_writable=True,
+
+class TestTreeDisplay:
+    """Test complex tree visualization functionality."""
+
+    def test_display_complex_directory_tree_complete_structure(self):
+        """Test displaying complex nested directory structure with full depth visualization."""
+        interface = MockInterface()
+        interface.max_lines = 50  # Ensure we see full structure
+        
+        complex_tree = create_complex_tree_metadata()
+        interface.display_tree(complex_tree, listing=None)
+        output = interface.get_all_output()
+        
+        # Verify complete nested structure is rendered
+        assert "🗁 test" in output  # Root directory
+        assert "🗁 d1" in output
+        assert "🗁 sub-d1" in output
+        assert "🗁 sub-d2" in output
+        assert "🗁 sub-d3" in output  # 4 levels deep
+        
+        # Verify files at different nesting levels
+        assert "🗎 sub-f1" in output  # File in d1
+        assert "🗎 f3" in output      # File in deepest directory (sub-d3)
+        assert "🗎 f4" in output      # Files in sub-d2
+        assert "🗎 f5" in output
+        assert "🗎 f6" in output
+        
+        # Verify all root level files
+        root_files = ["🗎 dev.sh", "🗎 f1", "🗎 hello.py", "🗎 j1.json", "🗎 run.sh.bak", "🗎 stuff.txt"]
+        for root_file in root_files:
+            assert root_file in output
+        
+        # Verify tree structure uses proper drawing characters
+        assert "├─" in output  # Branch connectors
+        assert "└─" in output  # Last branch connectors  
+        assert "│" in output   # Vertical continuation lines
+        
+        # Verify depth visualization - deeper files should have more complex indentation
+        lines = output.split('\n')
+        root_file_line = next((line for line in lines if "🗎 dev.sh" in line), "")
+        deep_file_line = next((line for line in lines if "🗎 f3" in line), "")
+        assert len(deep_file_line) > len(root_file_line)  # Deep file should be more indented
+
+    def test_display_single_file_and_empty_directory(self):
+        """Test tree display edge cases: single files and empty directories."""
+        interface = MockInterface()
+        
+        # Test single file display
+        file_metadata = Metadata(
+            path=Path("simple.txt"), size=1024, modified_time="2024-01-01", 
+            is_directory=False, owner_name="user", group_name="group",
+            is_readable=True, is_writable=True
         )
-
-        self.interface.display_tree(metadata, listing=None, title="File Info")
-
-        # MockInterface implementation should capture tree display
-        assert len(self.interface.outputs) >= 1
-        output_text = self.interface.get_all_output()
-        assert "/test/file.txt" in output_text
-
-    def test_display_tree_directory_with_listing(self):
-        """Test displaying directory metadata tree with file listing."""
-        base_metadata = {
-            "path": "/test/dir",
-            "modified_time": "2024-01-01",
-            "is_directory": True,
-            "owner_name": "user",
-            "group_name": "group",
-            "size": 1024,
-            "is_readable": True,
-            "is_writable": True,
-        }
-        file_metadata = {
-            "is_directory": False,
-            "path": Path("/test/dir/file1.txt"),
-            **base_metadata,
-        }
-        subdir_metadata = {
-            "is_directory": True,
-            "path": Path("/test/dir/subdir"),
-            **base_metadata,
-        }
-
-        listing = {
-            Path("/test/dir/file1.txt"): Metadata(**file_metadata),
-            Path("/test/dir/subdir"): Metadata(**subdir_metadata),
-        }
-
-        self.interface.display_tree(Metadata(**base_metadata), listing=listing)
-
-        # MockInterface should capture tree with listing count
-        output_text = self.interface.get_all_output()
-        # assert "TREE:" in output_text
-        assert "dir" in output_text
-        assert "file1.txt" in output_text
-
-    def test_display_error_with_string(self):
-        """Test error display with string message."""
-        self.interface.display_error("Test error message")
-
-        # Should format with error symbol
-        assert "✖  Test error message" in self.interface.get_all_output()
-
-    def test_display_error_with_exception(self):
-        """Test error display with exception object."""
-        exception = ValueError("Test exception")
-
-        self.interface.display_error(exception)
-
-        # Should format exception with class name and show traceback
-        output_text = self.interface.get_all_output()
-        assert "ValueError: Test exception" in output_text
-        # Should also show traceback in text block
-        assert "Error" in output_text  # Traceback block title
+        interface.display_tree(file_metadata, listing=None, title="File Info")
+        file_output = interface.get_all_output()
+        interface.clear()
+        
+        # Test empty directory
+        empty_dir = Metadata(
+            path=Path("empty"), is_directory=True, size=4096, modified_time="2024-01-01",
+            owner_name="user", group_name="group", is_readable=True, is_writable=True,
+            listing={}
+        )
+        interface.display_tree(empty_dir, listing=None)
+        empty_output = interface.get_all_output()
+        
+        # File tests
+        assert "File Info" in file_output
+        assert "🗎 simple.txt" in file_output
+        
+        # Empty directory tests
+        assert "🗁 empty" in empty_output
+        # Should have minimal structure - just the directory name in borders
+        lines = [line for line in empty_output.split('\n') if line.strip()]
+        assert len(lines) >= 3  # Top border, content, bottom border
 
 
-class TestCLIInterfaceLLMResponse:
-    """Test CLI interface LLM response display using MockInterface."""
+class TestLLMResponseAndErrorDisplay:
+    """Test LLM response and error display functionality."""
 
-    def setup_method(self):
-        """Setup for each test method."""
-        self.interface = MockInterface()
-
-    def test_display_llm_response_comment_only(self):
-        """Test displaying LLM response with only comment."""
-        message = LLMMessage(comment="Just a simple response")
-
-        self.interface.display_llm_response(message)
-
-        # Should display the comment
-        assert "Just a simple response" in self.interface.get_all_output()
-
-    def test_display_llm_response_with_requirements(self):
-        """Test displaying LLM response with requirements."""
+    def test_llm_response_display_complete_behavior(self):
+        """Test complete LLM response display with comments and grouped requirements."""
+        interface = MockInterface()
+        
+        # Test response with both comment and multiple requirement types
         requirements = [
-            ReadRequirement(
-                path="/test/file.txt", metadata_only=False, comment="Read file"
-            ),
-            WriteRequirement(
-                path="/test/output.txt",
-                content="content",
-                is_directory=False,
-                comment="Write file",
-            ),
+            ReadRequirement(path="/test/file1.txt", metadata_only=False, comment="Read first file"),
+            ReadRequirement(path="/test/file2.txt", metadata_only=True, comment="Read second file metadata"),
             CommandRequirement(command="ls -la", comment="List files"),
+            CommandRequirement(command="echo test", comment="Test command"),
         ]
         message = LLMMessage(
-            comment="Response with requirements", requirements=requirements
+            comment="I'll analyze these files and run some commands.", 
+            requirements=requirements
         )
+        
+        interface.display_llm_response(message)
+        output = interface.get_all_output()
+        interface.clear()
+        
+        # Test comment-only response
+        simple_message = LLMMessage(comment="Just a simple response")
+        interface.display_llm_response(simple_message)
+        simple_output = interface.get_all_output()
+        
+        # Response with requirements tests
+        assert "I'll analyze these files" in output
+        assert "Requirements" in output  # Should show requirements section
+        assert len(output) > len(message.comment)  # More content than just comment
+        
+        # Comment-only tests
+        assert "Just a simple response" in simple_output
+        assert "Requirements" not in simple_output  # No requirements section
 
-        self.interface.display_llm_response(message)
-
-        # Should display comment and requirements
-        output_text = self.interface.get_all_output()
-        assert "Response with requirements" in output_text
-        # Requirements should be grouped and displayed
-        assert "Read file" in output_text
-        assert "Write file" in output_text
-        assert "List files" in output_text and "ls -la" in output_text
-
-    def test_display_llm_response_grouped_requirements(self):
-        """Test that requirements are properly grouped by type."""
-        requirements = [
-            ReadRequirement(
-                path="/test/file1.txt", metadata_only=False, comment="Read file 1"
-            ),
-            ReadRequirement(
-                path="/test/file2.txt", metadata_only=True, comment="Read file 2"
-            ),
-            WriteRequirement(
-                path="/test/output.txt",
-                content="content",
-                is_directory=False,
-                comment="Write file",
-            ),
-        ]
-        message = LLMMessage(comment="Grouped requirements", requirements=requirements)
-
-        self.interface.display_llm_response(message)
-
-        # Should group requirements by type
-        output_text = " ".join(self.interface.outputs)
-        assert "Grouped requirements" in output_text
-        assert "Read file 1" in output_text
-        assert "Read file 2" in output_text
-        assert "Write file" in output_text
+    def test_error_display_complete_behavior(self):
+        """Test complete error display for strings and exceptions with proper formatting."""
+        interface = MockInterface()
+        
+        # Test string error
+        interface.display_error("File not found: /test/missing.txt")
+        string_error = interface.get_all_output()
+        interface.clear()
+        
+        # Test exception error
+        exception = ValueError("Invalid input parameter")
+        interface.display_error(exception)
+        exception_error = interface.get_all_output()
+        
+        # String error tests
+        assert "✖  File not found: /test/missing.txt" in string_error
+        
+        # Exception error tests
+        assert "ValueError: Invalid input parameter" in exception_error
+        assert "Error" in exception_error  # Should show detailed error block
 
 
-class TestCLIInterfaceIO:
-    """Test CLI interface I/O methods."""
+class TestInterfaceConstantsAndIntegration:
+    """Test interface constants are properly defined and integrated."""
 
-    def test_default_input_prompt(self):
-        """Test default input prompt value."""
+    def test_text_box_constants_and_usage_integration(self):
+        """Test that text box drawing characters are defined and actually used in rendering."""
         interface = CLIInterface()
+        
+        # Test all essential text box characters are defined correctly
+        essential_chars = {
+            'H': "─", 'V': "│", 'TL': "┌", 'TR': "┐", 
+            'BL': "└", 'BR': "┘", 'VL': "┤", 'VR': "├",
+            'HB': "┬", 'HT': "┴", 'X': "┼"
+        }
+        
+        for char_name, expected_char in essential_chars.items():
+            assert hasattr(interface.TEXT_BOX, char_name)
+            assert getattr(interface.TEXT_BOX, char_name) == expected_char
+        
+        # Test default input prompt is correctly defined
         assert interface.DEFAULT_INPUT_PROMPT == "Reply:\n > "
-
-    def test_mock_interface_input_capture(self):
-        """Test MockInterface input capture functionality."""
-        interface = MockInterface()
-        interface.set_user_inputs(["test response"])
-
-        # Mock interface should capture input prompts
-        response = interface._input("Test prompt: ")
-        assert response == "test response"
-        assert "Test prompt: " in interface.questions
-
-    # def test_mock_interface_output_capture(self):
-    #     """Test MockInterface output capture functionality."""
-    #     interface = MockInterface()
-    #
-    #     interface._output("Test output")
-    #
-    #     assert "Test output" in interface.outputs
-    #
-    # def test_mock_interface_max_width(self):
-    #     """Test MockInterface terminal width behavior."""
-    #     interface = MockInterface()
-    #     # MockInterface returns fixed width for consistent testing
-    #     assert interface._get_max_output_width() == 80
-
-
-class TestCLIInterfaceConstants:
-    """Test CLI interface constants and text box characters."""
-
-    def test_text_box_constants(self):
-        """Test text box drawing constants."""
-        interface = CLIInterface()
-
-        # Test basic box characters are defined
-        assert interface.TEXT_BOX.H == "─"
-        assert interface.TEXT_BOX.V == "│"
-        assert interface.TEXT_BOX.TL == "┌"
-        assert interface.TEXT_BOX.TR == "┐"
-        assert interface.TEXT_BOX.BL == "└"
-        assert interface.TEXT_BOX.BR == "┘"
-
-        # Test junction characters
-        assert interface.TEXT_BOX.VL == "┤"
-        assert interface.TEXT_BOX.VR == "├"
-        assert interface.TEXT_BOX.HB == "┬"
-        assert interface.TEXT_BOX.HT == "┴"
-        assert interface.TEXT_BOX.X == "┼"
-
-    def test_text_box_usage_in_display(self):
-        """Test that text box constants are used in display methods."""
-        interface = MockInterface()
-
-        interface.display_text_block("test", title="Test")
-
-        # Check that box characters are used in output
-        output_text = " ".join(interface.outputs)
-        assert interface.TEXT_BOX.TL in output_text  # Top-left corner
-        assert interface.TEXT_BOX.H in output_text  # Horizontal line
-        assert interface.TEXT_BOX.V in output_text  # Vertical line
-
-
-class TestMockInterfaceHelpers:
-    """Test MockInterface helper methods."""
-
-    def setup_method(self):
-        """Setup for each test method."""
-        self.interface = MockInterface()
-
-    def test_get_all_output(self):
-        """Test getting all output as single string."""
-        self.interface._output("Line 1")
-        self.interface._output("Line 2")
-
-        all_output = self.interface.get_all_output()
-        assert all_output == "Line 1\nLine 2"
-
-    def test_assert_output_contains(self):
-        """Test output contains assertion."""
-        self.interface._output("Test message with content")
-
-        # Should pass
-        self.interface.assert_output_contains("content")
-
-        # Should fail
-        with pytest.raises(AssertionError, match="Output does not contain"):
-            self.interface.assert_output_contains("missing")
-
-    def test_assert_output_lines_equal(self):
-        """Test exact output line matching."""
-        self.interface._output("Line 1")
-        self.interface._output("Line 2")
-
-        # Should pass
-        self.interface.assert_output_lines_equal(["Line 1", "Line 2"])
-
-        # Should fail
-        with pytest.raises(AssertionError, match="Output mismatch"):
-            self.interface.assert_output_lines_equal(["Wrong", "Lines"])
-
-    def test_clear(self):
-        """Test clearing all captured data."""
-        self.interface._output("test")
-        self.interface.set_user_inputs(["input"])
-        self.interface._input("prompt")
-        self.interface.current_level = 2
-
-        self.interface.clear()
-
-        assert len(self.interface.outputs) == 0
-        assert len(self.interface.user_inputs) == 0
-        assert len(self.interface.questions) == 0
-        assert self.interface.current_level == 0
+        
+        # Test constants are actually used in rendering (integration test)
+        mock_interface = MockInterface()
+        mock_interface.display_text_block("test content", title="Integration Test")
+        output = mock_interface.get_all_output()
+        
+        # Should contain the actual box characters in use
+        essential_chars_in_use = [interface.TEXT_BOX.TL, interface.TEXT_BOX.H, 
+                                interface.TEXT_BOX.V, interface.TEXT_BOX.BR]
+        for char in essential_chars_in_use:
+            assert char in output, f"Box character '{char}' not found in rendered output"

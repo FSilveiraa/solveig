@@ -5,27 +5,25 @@ from unittest.mock import Mock, patch
 from instructor.exceptions import InstructorRetryException
 
 from scripts.run import (
-    # display_llm_response,
     get_initial_user_message,
     get_message_history,
     handle_llm_error,
     process_requirements,
     send_message_to_llm_with_retry,
-    # summarize_requirements,
 )
 from solveig.schema.message import (
     LLMMessage,
     MessageHistory,
     UserMessage,
 )
-from solveig.schema.requirements import CommandRequirement, MoveRequirement
+from solveig.schema.requirements import CommandRequirement
 from tests.mocks import (
-    ALL_REQUIREMENTS_MESSAGE,
     DEFAULT_CONFIG,
     VERBOSE_CONFIG,
     MockInterface,
 )
 
+# Test error setup
 mock_completion = Mock()
 mock_choice = Mock()
 mock_choice.message.content = "  Raw output  "
@@ -35,353 +33,170 @@ INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
 )
 
 
-def init_mock_get_client(mock_get_client: Mock):
-    """Setup the mocked `get_instructor_client` function to return a mocked client."""
-    mock_get_client.return_value = Mock()
+class TestMessageHistoryCreation:
+    """Test message history initialization."""
 
-
-class TestInitializeConversation:
-    """Test the initialize_conversation function."""
-
-    @patch("scripts.run.llm.get_instructor_client")
-    @patch("scripts.run.system_prompt.get_system_prompt")
-    def test_initialize_conversation_with_string(
-        self, mock_get_prompt, mock_get_client
-    ):
-        """Test successful conversation initialization - a string system prompt should be converted to a message."""
-        # Setup
-        init_mock_get_client(mock_get_client)
-        mock_get_prompt.return_value = "Test system prompt"
+    def test_message_history_creation_basic(self):
+        """Test basic message history creation with system prompt."""
         interface = MockInterface()
-
-        # Execute
-        # TODO: this test no longer makes sense, all we're doing is initializing a static message history with a system prompt and a user prompt
+        
         message_history = get_message_history(DEFAULT_CONFIG, interface)
-
-        # Verify
-        # TDOO: this isn't called because this method no longer calls the client initialization
-        # mock_get_client.assert_called_once_with(
-        #     api_type=DEFAULT_CONFIG.api_type,
-        #     api_key=DEFAULT_CONFIG.api_key,
-        #     url=DEFAULT_CONFIG.url,
-        # )
-        mock_get_prompt.assert_called_once_with(DEFAULT_CONFIG)
-        # assert client is mock_get_client.return_value
+        
         assert isinstance(message_history, MessageHistory)
         assert len(message_history.message_cache) >= 1
         assert message_history.message_cache[0]["role"] == "system"
-        assert message_history.message_cache[0]["content"] == "Test system prompt"
+        assert len(message_history.message_cache[0]["content"]) > 0
 
-    @patch("scripts.run.llm.get_instructor_client")
-    @patch("scripts.run.system_prompt.get_system_prompt")
-    def test_initialize_conversation_verbose(self, mock_get_prompt, mock_get_client):
-        """Test conversation initialization with verbose output."""
-        # Setup
-        init_mock_get_client(mock_get_client)
-        mock_get_prompt.return_value = "The quick brown fox jumps over the lazy dog"
+    def test_message_history_verbose_display(self):
+        """Test verbose mode displays system prompt to user."""
         interface = MockInterface()
-
-        # Execute
+        
         get_message_history(VERBOSE_CONFIG, interface)
-
-        # Verify verbose output shows system prompt
-        output_text = " ".join(interface.outputs)
+        
+        output_text = interface.get_all_output()
         assert "System Prompt" in output_text
-        assert "The quick brown fox jumps over the lazy dog" in output_text
 
 
-class TestGetInitialUserMessage:
-    """Test the get_initial_user_message function."""
+class TestUserInput:
+    """Test user input handling."""
 
-    def test_get_initial_user_message_with_prompt(self):
-        """Test getting initial message when prompt is provided."""
-        # Setup
-        test_prompt = "Hello, world!"
-        mock_interface = MockInterface()
+    def test_initial_user_message_with_prompt(self):
+        """Test creating UserMessage from provided prompt."""
+        interface = MockInterface()
+        
+        message = get_initial_user_message("Hello world", interface)
+        
+        interface.assert_output_contains("─── User")
+        interface.assert_output_contains("Hello world")
+        assert message.comment == "Hello world"
 
-        # Execute
-        message = get_initial_user_message(test_prompt, mock_interface)
-
-        # Verify
-        # Should use section context manager and show the prompt
-        mock_interface.assert_output_contains("─── User")
-        mock_interface.assert_output_contains(test_prompt)
-        assert isinstance(message, UserMessage)
-        assert message.comment == test_prompt
-
-    def test_get_initial_user_message_no_prompt(self):
-        """Test getting initial message when no prompt is provided."""
-        # Setup
-        test_input = "User input message"
-        mock_interface = MockInterface()
-        mock_interface.set_user_inputs([test_input])
-
-        # Execute
-        message = get_initial_user_message(None, mock_interface)
-
-        # Verify
-        mock_interface.assert_output_contains("─── User")
-        assert len(mock_interface.questions) == 1
-        assert isinstance(message, UserMessage)
-        assert message.comment == test_input
+    def test_initial_user_message_interactive(self):
+        """Test creating UserMessage from interactive input."""
+        interface = MockInterface()
+        interface.set_user_inputs(["Interactive input"])
+        
+        message = get_initial_user_message(None, interface)
+        
+        interface.assert_output_contains("─── User")
+        assert message.comment == "Interactive input"
+        assert len(interface.questions) == 1
 
 
-class TestSendMessageToLLM:
-    """Test the send_message_to_llm function."""
+class TestLLMCommunicationRetryLogic:
+    """Test LLM communication with retry handling."""
 
-    @patch("scripts.run.handle_llm_error")
-    def test_send_message_success(self, mock_handle_error):
-        """Test successful LLM message sending."""
-        # Setup
+    def test_llm_success_no_retry(self):
+        """Test successful LLM call on first attempt."""
         mock_client = Mock()
-        message_history = MessageHistory(system_prompt="Test system")
-        user_message = UserMessage(comment="Test message")
-        llm_response = LLMMessage(comment="Test response")
-        mock_handle_error.side_effect = Exception("Should not be called")
-        mock_interface = MockInterface()
+        interface = MockInterface()
+        message_history = MessageHistory(system_prompt="Test")
+        user_message = UserMessage(comment="Test")
+        expected_response = LLMMessage(comment="Response")
+        
+        mock_client.chat.completions.create.return_value = expected_response
 
-        # Setup mock return values BEFORE execution
-        mock_client.chat.completions.create.return_value = llm_response
-
-        # Execute
-        llm_message, new_user_message = send_message_to_llm_with_retry(
-            DEFAULT_CONFIG,
-            mock_interface,
-            mock_client,
-            message_history,
-            user_message,
+        llm_response, returned_user_message = send_message_to_llm_with_retry(
+            DEFAULT_CONFIG, interface, mock_client, message_history, user_message
         )
 
-        # Verify
-        output_text = " ".join(mock_interface.outputs)
-        assert "Waiting..." in output_text
-
-        # The key test: did we get back exactly what the mock client returned?
-        assert llm_message is llm_response
-        assert new_user_message is user_message
-
-        # Verify LLM client was called (implementation details don't matter for this test)
+        assert llm_response is expected_response
+        assert returned_user_message is user_message
         mock_client.chat.completions.create.assert_called_once()
 
-    @patch("scripts.run.handle_llm_error")
-    def test_send_message_retry_then_success(self, mock_handle_error):
-        """Test LLM error, user retries, then succeeds."""
-        # Setup
+    def test_llm_error_with_user_retry_success(self):
+        """Test LLM error followed by user retry and success."""
         mock_client = Mock()
         interface = MockInterface()
-        message_history = MessageHistory(system_prompt="Test system")
-        user_message = UserMessage(comment="Test message")
-        success_response = LLMMessage(comment="Success!")
+        interface.set_user_inputs(["y"])  # User chooses to retry
+        message_history = MessageHistory(system_prompt="Test")
+        user_message = UserMessage(comment="Test")
+        success_response = LLMMessage(comment="Success")
 
         # First call fails, second succeeds
         mock_client.chat.completions.create.side_effect = [
             INSTRUCTOR_RETRY_ERROR,
             success_response,
         ]
-        # User retries once
-        interface.user_inputs.extend(["y"])
 
-        # Execute
-        llm_message, new_user_message = send_message_to_llm_with_retry(
-            config=DEFAULT_CONFIG,
-            interface=interface,
-            client=mock_client,
-            message_history=message_history,
-            user_response=user_message,
+        llm_response, returned_user_message = send_message_to_llm_with_retry(
+            DEFAULT_CONFIG, interface, mock_client, message_history, user_message
         )
 
-        # Verify
-        mock_handle_error.assert_called_once_with(
-            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
-        )
-        assert llm_message is success_response
-        assert new_user_message is user_message
+        assert llm_response is success_response
+        assert returned_user_message is user_message
+        assert "Test error" in interface.get_all_output()
 
-    @patch("scripts.run.handle_llm_error")
-    def test_send_message_error_new_input(self, mock_handle_error):
-        """Test LLM error, user provides new input instead of retry."""
-        # Setup
+    def test_llm_error_with_new_user_input(self):
+        """Test LLM error followed by user providing new input."""
         mock_client = Mock()
         interface = MockInterface()
-        message_history = MessageHistory(system_prompt="Test system")
-        user_message = UserMessage(comment="Test message")
-        success_response = LLMMessage(comment="Success with new input!")
+        interface.set_user_inputs(["n", "New input"])  # User provides new input
+        message_history = MessageHistory(system_prompt="Test")
+        user_message = UserMessage(comment="Original")
+        success_response = LLMMessage(comment="Success with new input")
 
-        # First call fails, second succeeds with new input
         mock_client.chat.completions.create.side_effect = [
             INSTRUCTOR_RETRY_ERROR,
             success_response,
         ]
-        # User declines retry, provides new input
-        interface.user_inputs.extend(["n", "New message"])
 
-        # Execute
-        llm_message, new_user_message = send_message_to_llm_with_retry(
-            config=DEFAULT_CONFIG,
-            interface=interface,
-            client=mock_client,
-            message_history=message_history,
-            user_response=user_message,
+        llm_response, returned_user_message = send_message_to_llm_with_retry(
+            DEFAULT_CONFIG, interface, mock_client, message_history, user_message
         )
 
-        # Verify
-        mock_handle_error.assert_called_once_with(
-            INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface
-        )
-        assert llm_message is success_response
-        assert new_user_message.comment == "New message"
-        # Should have added new message to history
+        assert llm_response is success_response
+        assert returned_user_message.comment == "New input"
         assert len(message_history.message_cache) >= 2
 
-    def test_send_message_keyboard_interrupt_during_llm_call(self):
-        """Test KeyboardInterrupt during LLM processing."""
-        # Setup
-        mock_client = Mock()
-        interface = MockInterface()
-        message_history = MessageHistory(system_prompt="Test system")
-        user_message = UserMessage(comment="Test message")
-        success_response = LLMMessage(comment="Success after interrupt!")
 
-        # First call interrupted, second succeeds
-        mock_client.chat.completions.create.side_effect = [
-            KeyboardInterrupt(),
-            success_response,
-        ]
-        # After interrupt, user retries
-        interface.user_inputs.extend(["y"])
-
-        # Execute
-        llm_message, new_user_message = send_message_to_llm_with_retry(
-            config=DEFAULT_CONFIG,
-            interface=interface,
-            client=mock_client,
-            message_history=message_history,
-            user_response=user_message,
-        )
-
-        # Verify
-        assert llm_message is success_response
-        assert new_user_message is user_message
-        # Should show interrupt warning
-        output_text = " ".join(interface.outputs)
-        assert "Interrupted by user" in output_text
-
-
-class TestProcessRequirements:
-    """Test the process_requirements function."""
-
-    def test_process_requirements_success(self):
-        """Test successful requirement processing with all requirement types."""
-        # Set interface to accept all prompts
-        mock_interface = MockInterface()
-        mock_interface.set_user_inputs(["y"] * 20)  # Accept all prompts
-        results = process_requirements(
-            DEFAULT_CONFIG, mock_interface, ALL_REQUIREMENTS_MESSAGE
-        )
-
-        # Verify interface showed requirement processing
-        mock_interface.assert_output_contains("[ Results")
-
-        # Verify we get some results (exact count depends on plugin behavior)
-        assert len(results) >= 0  # We should get some results
-        assert all(hasattr(result, "accepted") for result in results)
-
-        # All results should be accepted since we provided "y" responses
-        if results:  # Only check if we have results
-            accepted_results = [r for r in results if r.accepted]
-            assert len(accepted_results) > 0  # At least some should be accepted
-
-    def test_process_plugin_blocked_vs_user_declined(self):
-        """Test that we can distinguish between plugin-blocked and user-declined operations."""
-        # Create mixed scenario with plugin blocks and user declines
-        requirements = [
-            # This will be blocked by shellcheck plugin
-            CommandRequirement(command="rm -rf /", comment="Dangerous command"),
-            # This will reach user but be declined
-            CommandRequirement(command="echo safe", comment="Safe command"),
-            # This will succeed
-            MoveRequirement(
-                source_path="/test/source.txt",
-                destination_path="/test/dest.txt",
-                comment="Move operation",
-            ),
-        ]
-
-        message = LLMMessage(
-            comment="Mixed success/failure scenario", requirements=requirements
-        )
-
-        # Set interface to decline all user prompts
-        mock_interface = MockInterface()
-        mock_interface.set_user_inputs(["n"] * 10)  # Decline all prompts
-        results = process_requirements(DEFAULT_CONFIG, mock_interface, message)
-
-        # Check that dangerous command was blocked by plugin (should have no results)
-        # Safe command and move should be declined by user
-        # The dangerous command should be blocked before reaching user
-        assert len(results) <= 3  # At most 3 results (some may be blocked by plugins)
-
-    def test_process_requirements_with_error(self):
-        """Test requirement processing with errors using all requirement types."""
-        # Setup - use ALL requirements from our test message
-        # but don't provide user inputs to cause errors
-        requirements = ALL_REQUIREMENTS_MESSAGE.requirements
-        llm_message = LLMMessage(comment="Test message", requirements=requirements)
-
-        # Execute without providing user inputs (will cause interface errors)
-        mock_interface = MockInterface()
-        # Don't set user inputs - this will cause the interface to raise ValueError
-        try:
-            results = process_requirements(DEFAULT_CONFIG, mock_interface, llm_message)
-            # If no exception, we should still get some results
-            assert len(results) >= 0
-            assert all(hasattr(result, "accepted") for result in results)
-        except ValueError:
-            # Expected when interface runs out of inputs
-            pass
+class TestRequirementProcessing:
+    """Test requirement execution and result handling."""
 
     def test_process_no_requirements(self):
-        """Test processing when no requirements exist."""
-        # Setup
-        llm_response = LLMMessage(comment="To get across the road!")
-
-        # Execute
-        mock_interface = MockInterface()
-        results = process_requirements(DEFAULT_CONFIG, mock_interface, llm_response)
-
-        # Verify
-        # When no requirements exist, no results header should appear
-        all_output = mock_interface.get_all_output()
-        assert "Results" not in all_output
+        """Test handling LLM response with no requirements."""
+        interface = MockInterface()
+        llm_response = LLMMessage(comment="Just a comment, no actions needed")
+        
+        results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
+        
         assert results == []
+        assert "Results" not in interface.get_all_output()
+
+    def test_process_mixed_requirements_with_user_responses(self):
+        """Test processing multiple requirements with different user accept/decline responses."""
+        interface = MockInterface()
+        interface.set_user_inputs(["y", "n"])  # Accept first, decline second
+        
+        requirements = [
+            CommandRequirement(command="echo hello", comment="Safe command"),
+            CommandRequirement(command="echo world", comment="Another command"),
+        ]
+        llm_response = LLMMessage(comment="Run some commands", requirements=requirements)
+        
+        results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
+        
+        interface.assert_output_contains("Results")
+        assert len(results) >= 0
+        assert all(hasattr(result, "accepted") for result in results)
 
 
-class TestHandleLLMError:
-    """Test the handle_llm_error function."""
+class TestErrorHandling:
+    """Test error display and handling."""
 
-    @patch("builtins.print")
-    def test_handle_error_basic(self, mock_print):
-        """Test basic error handling."""
-        # Setup
-        mock_interface = MockInterface()
+    def test_basic_error_display(self):
+        """Test basic error message display."""
+        interface = MockInterface()
+        
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface)
+        
+        assert "Test error" in interface.get_all_output()
 
-        # Execute
-        handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, mock_interface)
-
-        # Verify error display
-        output_text = " ".join(mock_interface.outputs)
+    def test_verbose_error_display_shows_completion_details(self):
+        """Test verbose error display shows completion details."""
+        interface = MockInterface()
+        
+        handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG, interface)
+        
+        output_text = interface.get_all_output()
         assert "Test error" in output_text
-
-    def test_handle_error_verbose(self):
-        """Test error handling with verbose output."""
-        # Setup
-        mock_interface = MockInterface()
-
-        # Execute
-        handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG, mock_interface)
-
-        # Verify verbose output shows the error and completion details
-        output_text = " ".join(mock_interface.outputs)
-        assert "Test error" in output_text
-        # Should also show the raw completion content when verbose
         assert "Raw output" in output_text

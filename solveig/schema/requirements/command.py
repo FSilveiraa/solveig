@@ -35,7 +35,7 @@ class CommandRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display command requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         interface.show(f"🗲  {self.command}")
 
     def create_error_result(

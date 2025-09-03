@@ -69,7 +69,7 @@ class SolveigInterface(ABC):
         listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
-        title: str | None = "Metadata",
+        title: str | None = None,
     ) -> None:
         """Utility method to display a block of text with metadata"""
         pass

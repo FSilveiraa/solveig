@@ -131,7 +131,8 @@ class Requirement(BaseModel, ABC):
 
     def display_header(self, interface: SolveigInterface) -> None:
         """Display the requirement header/summary using the interface directly."""
-        interface.display_comment(self.comment)
+        if self.comment:
+            interface.display_comment(self.comment)
 
     @abstractmethod
     def actually_solve(

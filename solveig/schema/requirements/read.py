@@ -34,7 +34,7 @@ class ReadRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display read requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=Filesystem._is_dir(abs_path)

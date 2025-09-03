@@ -33,7 +33,7 @@ class CopyRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display copy requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         abs_source = Filesystem.get_absolute_path(self.source_path)
         abs_dest = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(
