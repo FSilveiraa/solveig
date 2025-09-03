@@ -5,7 +5,7 @@ Tests core plugin functionality without over-engineering.
 
 from unittest.mock import patch
 
-from solveig.plugins.requirements.tree import TreeRequirement
+from solveig.plugins.schema.tree import TreeRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
@@ -97,7 +97,7 @@ class TestPluginRequirements:
         req = TreeRequirement(path="/test", comment="Test tree")
         interface = MockInterface()
 
-        result = req._actually_solve(DEFAULT_CONFIG, interface)
+        result = req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted is True
         assert result.total_files == 1

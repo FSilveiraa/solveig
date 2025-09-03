@@ -732,12 +732,14 @@ class TestRequirementErrorScenarios:
         move_req = MoveRequirement(
             source_path="/test/source.txt",
             destination_path="/test/dest.txt",
-            comment="Move with validation error"
+            comment="Move with validation error",
         )
         interface = MockInterface()
 
         # Mock validate_write_access to raise an exception during validation
-        with patch("solveig.utils.file.Filesystem.validate_write_access") as mock_validate:
+        with patch(
+            "solveig.utils.file.Filesystem.validate_write_access"
+        ) as mock_validate:
             mock_validate.side_effect = PermissionError("Write permission denied")
 
             result = move_req.solve(DEFAULT_CONFIG, interface)
@@ -758,12 +760,14 @@ class TestRequirementErrorScenarios:
         copy_req = CopyRequirement(
             source_path="/test/source.txt",
             destination_path="/test/dest.txt",
-            comment="Copy with validation error"
+            comment="Copy with validation error",
         )
         interface = MockInterface()
 
         # Mock validate_read_access to raise an exception during validation
-        with patch("solveig.utils.file.Filesystem.validate_read_access") as mock_validate:
+        with patch(
+            "solveig.utils.file.Filesystem.validate_read_access"
+        ) as mock_validate:
             mock_validate.side_effect = PermissionError("Read permission denied")
 
             result = copy_req.solve(DEFAULT_CONFIG, interface)

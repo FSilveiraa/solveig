@@ -66,7 +66,7 @@ class CommandRequirement(Requirement):
             return output, error
         raise ValueError("Empty command")
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CommandResult":
         if interface.ask_yes_no("Allow running command? [y/N]: "):

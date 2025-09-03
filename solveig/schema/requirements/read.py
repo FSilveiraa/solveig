@@ -55,7 +55,7 @@ class ReadRequirement(Requirement):
         """Return description of read capability."""
         return "read(path, metadata_only): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "ReadResult":
         abs_path = Filesystem.get_absolute_path(self.path)

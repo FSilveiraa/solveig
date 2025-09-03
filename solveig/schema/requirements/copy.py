@@ -60,7 +60,7 @@ class CopyRequirement(Requirement):
         """Return description of copy capability."""
         return "copy(source_path, destination_path): copies a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CopyResult":
         # Pre-flight validation - use utils/file.py validation

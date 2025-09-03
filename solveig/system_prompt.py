@@ -248,7 +248,7 @@ def get_available_capabilities() -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
     try:
-        from solveig.plugins.requirements import REQUIREMENTS
+        from solveig.plugins.schema.requirements import REQUIREMENTS
 
         active_requirements = list(REQUIREMENTS.registered.values())
     except ImportError:

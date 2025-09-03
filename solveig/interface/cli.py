@@ -113,17 +113,37 @@ class CLIInterface(SolveigInterface):
         #         entry_str = f"{'🗁' if entry_metadata.is_directory else '🗎'} {Path(entry_path).name}"
         #         # └ if it's the last item, otherwise ├
         #         text = f"{text}\n{self.TEXT_BOX.BL if n == (total_entries - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
-        self.display_text_block(self._get_element_text_box(metadata), title=title, level=level, max_lines=max_lines)
+        self.display_text_block(
+            "\n".join(self._get_tree_element_str(metadata)),
+            title=title,
+            level=level,
+            max_lines=max_lines,
+        )
 
-    def _get_element_text_box(self, metadata: Metadata, indent=0) -> str:
-        text = f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path.name}"
+    def _get_tree_element_str(self, metadata: Metadata, indent="  ") -> list[str]:
+        lines = [
+            f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path.name}"
+        ]
         if metadata.is_directory and metadata.listing:
-            for index, (sub_path, sub_metadata) in enumerate(sorted(metadata.listing.items())):
-                entry_str = self._get_element_text_box(sub_metadata, indent+1)
-                #  │ ├─🗎 run.sh.bak
-                #  │ └─🗎 stuff.txt
-                text = f"{text}\n{'  '*indent}{self.TEXT_BOX.BL if index == (len(metadata.listing) - 1) else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_str}"
-        return text
+            for index, (sub_path, sub_metadata) in enumerate(
+                sorted(metadata.listing.items())
+            ):
+                is_last = index == len(metadata.listing) - 1
+                entry_lines = self._get_tree_element_str(sub_metadata, indent=indent)
+
+                # ├─🗁 d1                                                                                                                │
+                lines.append(
+                    f"{indent}{self.TEXT_BOX.BL if is_last else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_lines[0]}"
+                )
+
+                for sub_entry in entry_lines[1:]:
+                # │  ├─🗁 sub-d1
+                # │  └─🗎 sub-f1
+                    lines.append(
+                        f"{indent}{'' if is_last else self.TEXT_BOX.V}{sub_entry}"
+                    )
+
+        return lines
 
     def display_text_block(
         self,

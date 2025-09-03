@@ -68,9 +68,89 @@ Solveig focuses on preventing dangerous operations through explicit user consent
 
 ### Is Solveig safe to run?
 
-Solveig requires your approval for every file read, write, or command execution. It uses Shellcheck to validate commands and catch dangerous patterns. However, you're ultimately responsible for reviewing and denying any request you don't understand.
+Mostly:
+- Solveig is unable to read file contents, run commands or send back anything unless you give it explicit consent
+- Interacts with files and tools through requirements, enforcing user control and allowing easy validation
+- Validates shell commands before they're even requested through the included shellcheck plugin (requires installing CLI tool `shellcheck`)
+- Open-source project, proper CI with 200+ test suite with 90%+ coverage and extensive scenario focus
 
-This is still a tool that connects an AI to your computer - always review what it wants to do.
+This is still a tool that connects an AI to your terminal - always review what it wants to do.
+
+### How does Solveig work?
+
+Solveig creates a conversation with an LLM using the initial prompt and establishes a loop where the LLM asks for requirements and you choose whether to execute them and send back their results.
+
+Most AI CLI assistants rely only on running Bash obtained from a model, which can be a shaky foundation for a security product. Instead, Solveig focuses on providing a safe interface for most behavior that bypasses shell commands, allowing for proper inspection and interface displaying. Basically, it's much easier to validate a read/write requirement for a file than validating a `cat` command to read or an `echo` pipe to write the same file.
+
+All core filesystem operations are covered by requirements, and you can extend this by adding new requirement plugins or interacting with requirements through hook plugins.
+
+### Why are there 2 kinds of plugins?
+
+You can extend Solveig in any of 2 ways:
+- By adding a new requirement, representing a new thing the LLM can request
+- By adding a hook that captures the requirement before or after it's been processed
+
+Requirements follow a simple interface with 3 methods and return a corresponding Result class:
+
+```python
+from typing import Literal
+
+from solveig.interface import SolveigInterface
+from solveig.schema.requirements.base import Requirement
+from solveig.schema.results.base import RequirementResult
+from solveig.plugins.schema import register_requirement
+
+
+class MyResult(RequirementResult):
+    """Example requirement result."""
+    response: str | None = None
+
+
+@register_requirement
+class MyRequirement(Requirement):
+    """Example requirement."""
+    title: Literal["myreq"] = "myreq"
+
+    def create_error_result(self, error_message: str, accepted: bool) -> MyResult:
+        """Create a result with an error."""
+        return MyResult(
+            requirement=self,
+            accepted=accepted,
+            error=error_message,
+        )
+
+    @classmethod
+    def get_description(cls) -> str:
+        """Return requirement description, using this format: name(args): description."""
+        return (
+            "myreq(name): description of what this requirement does"
+        )
+
+    def actually_solve(self, config, interface: SolveigInterface) -> MyResult:
+        """Solve the requirement and return the result."""
+        user_response = interface.ask_user("What to send back")
+        return MyResult(
+            requirement=self,
+            accepted=False,
+            response=user_response
+        )
+
+
+# Fix possible forward typing references
+MyResult.model_rebuild()
+```
+
+Hooks meanwhile latch onto existing (or new) requirements, either before or after they run
+
+You can add a requirement by itself, a hook for a new or existing requirement, or a combination of both.
+Some examples:
+- MySQL plugin
+  - SQLRequirement: runs a query on database
+- Web Search
+  - SearchRequirement: performs a HTTP request the URL
+  - @before hook: validates the URL against a blacklist/whitelist before running request
+- Anonymize Paths
+  - @after hook: privacy-focused plugin that converts expanded paths to fake ones (/home/user-name -> home/jdoe) in results
 
 ---
 
@@ -290,6 +370,7 @@ Solveig follows **strict testing guidelines** to ensure reliability and safety:
 **Test Safety Philosophy**: Unit tests must achieve high coverage while being completely safe to run. Our mocking approach ensures tests never touch real files, run real commands, or require user interaction.
 
 **Core Mocking Infrastructure**:
+- **MockClient
 - **MockFilesystem**: Elaborate wrapper around `@patch()` calls that simulates complete file operations
 - **MockInterface**: Wrapper around `@patch()` calls for user input/output without actual terminal interaction  
 - **Plugin isolation**: Tests call `filter_hooks()` with specific configs to ensure plugin state isolation
@@ -326,6 +407,9 @@ python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
 
 # Run all checks locally (same as CI) 
 black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
+
+# Running mock client (works with config)
+python -m tests.mocks.run_with_mock_client
 ```
 
 #### Test Organization

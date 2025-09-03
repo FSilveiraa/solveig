@@ -96,7 +96,7 @@ class Requirement(BaseModel, ABC):
 
             # Run the actual requirement solving
             try:
-                result = self._actually_solve(config, interface)
+                result = self.actually_solve(config, interface)
             except Exception as error:
                 interface.display_error(error)
                 error_info = "Execution error"
@@ -134,7 +134,7 @@ class Requirement(BaseModel, ABC):
         interface.display_comment(self.comment)
 
     @abstractmethod
-    def _actually_solve(
+    def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> RequirementResult:
         """Solve yourself as a requirement following the config"""

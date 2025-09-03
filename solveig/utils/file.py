@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-
-
 _SIZE_NOTATIONS = {
     "kib": 1024,
     "mib": 1024**2,
@@ -107,8 +105,12 @@ class Filesystem:
         is_dir = cls._is_dir(abs_path)
         if is_dir and descend_level != 0:
             listing = {
-                sub_path.name: cls.read_metadata(sub_path, descend_level=descend_level-1) for sub_path in
-                sorted([ cls.get_absolute_path(sub_path) for sub_path in abs_path.iterdir() ])
+                sub_path.name: cls.read_metadata(
+                    sub_path, descend_level=descend_level - 1
+                )
+                for sub_path in sorted(
+                    [cls.get_absolute_path(sub_path) for sub_path in abs_path.iterdir()]
+                )
             }
         else:
             listing = None
@@ -122,7 +124,7 @@ class Filesystem:
             group_name=grp.getgrgid(stats.st_gid).gr_name,
             is_readable=os.access(abs_path, os.R_OK),
             is_writable=os.access(abs_path, os.W_OK),
-            listing=listing
+            listing=listing,
         )
 
     @staticmethod

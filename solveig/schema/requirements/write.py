@@ -59,7 +59,7 @@ class WriteRequirement(Requirement):
         """Return description of write capability."""
         return "write(path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "WriteResult":
         abs_path = Filesystem.get_absolute_path(self.path)

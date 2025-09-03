@@ -52,7 +52,7 @@ class DeleteRequirement(Requirement):
         """Return description of delete capability."""
         return "delete(path): permanently deletes a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "DeleteResult":
         # Pre-flight validation - use utils/file.py validation

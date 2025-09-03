@@ -7,14 +7,13 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from solveig.interface import SolveigInterface
 from solveig.schema.requirements.base import Requirement, validate_non_empty_path
 from solveig.schema.results.base import RequirementResult
 from solveig.utils.file import Filesystem, Metadata
 
 # Import the registration decorator
-from . import register_requirement
-
-from solveig.interface import SolveigInterface
+from solveig.plugins.schema import register_requirement
 
 
 class TreeResult(RequirementResult):
@@ -28,7 +27,9 @@ class TreeRequirement(Requirement):
 
     title: Literal["tree"] = "tree"
     path: str = Field(..., description="Directory path to generate tree for")
-    max_depth: int = Field(default=-1, description="Maximum depth to explore (-1 for full tree)")
+    max_depth: int = Field(
+        default=-1, description="Maximum depth to explore (-1 for full tree)"
+    )
 
     @field_validator("path")
     @classmethod
@@ -52,14 +53,16 @@ class TreeRequirement(Requirement):
             "tree(path): generates a directory tree structure showing files and folders"
         )
 
-    def _actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
+    def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # Get complete tree metadata using new approach
         metadata = Filesystem.read_metadata(abs_path, descend_level=self.max_depth)
-        
+
         # Display the tree structure
-        interface.display_tree(metadata=metadata, listing=None, title=f"Tree: {abs_path}")
+        interface.display_tree(
+            metadata=metadata, listing=None, title=f"Tree: {abs_path}"
+        )
 
         return TreeResult(
             requirement=self,

@@ -62,7 +62,7 @@ def get_filtered_llm_message_class():
     """
     # Get ALL active requirements from the unified registry
     try:
-        from ..plugins.requirements import REQUIREMENTS
+        from solveig.plugins.schema import REQUIREMENTS
 
         all_active_requirements = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):

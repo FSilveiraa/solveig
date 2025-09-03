@@ -60,7 +60,7 @@ class MoveRequirement(Requirement):
         """Return description of move capability."""
         return "move(source_path, destination_path): moves a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "MoveResult":
         # Pre-flight validation - use utils/file.py validation

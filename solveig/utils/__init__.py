@@ -9,4 +9,4 @@ This module provides helper functions for:
 
 from solveig.utils import misc
 
-__all__ = ["_old_file.py", "misc"]
+__all__ = ["misc"]

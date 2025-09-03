@@ -7,7 +7,7 @@ from instructor.exceptions import InstructorRetryException
 from scripts.run import (
     # display_llm_response,
     get_initial_user_message,
-    get_llm_client,
+    get_message_history,
     handle_llm_error,
     process_requirements,
     send_message_to_llm_with_retry,
@@ -55,16 +55,18 @@ class TestInitializeConversation:
         interface = MockInterface()
 
         # Execute
-        client, message_history = get_llm_client(DEFAULT_CONFIG, interface)
+        # TODO: this test no longer makes sense, all we're doing is initializing a static message history with a system prompt and a user prompt
+        message_history = get_message_history(DEFAULT_CONFIG, interface)
 
         # Verify
-        mock_get_client.assert_called_once_with(
-            api_type=DEFAULT_CONFIG.api_type,
-            api_key=DEFAULT_CONFIG.api_key,
-            url=DEFAULT_CONFIG.url,
-        )
+        # TDOO: this isn't called because this method no longer calls the client initialization
+        # mock_get_client.assert_called_once_with(
+        #     api_type=DEFAULT_CONFIG.api_type,
+        #     api_key=DEFAULT_CONFIG.api_key,
+        #     url=DEFAULT_CONFIG.url,
+        # )
         mock_get_prompt.assert_called_once_with(DEFAULT_CONFIG)
-        assert client is mock_get_client.return_value
+        # assert client is mock_get_client.return_value
         assert isinstance(message_history, MessageHistory)
         assert len(message_history.message_cache) >= 1
         assert message_history.message_cache[0]["role"] == "system"
@@ -80,7 +82,7 @@ class TestInitializeConversation:
         interface = MockInterface()
 
         # Execute
-        get_llm_client(VERBOSE_CONFIG, interface)
+        get_message_history(VERBOSE_CONFIG, interface)
 
         # Verify verbose output shows system prompt
         output_text = " ".join(interface.outputs)
