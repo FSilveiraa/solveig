@@ -191,14 +191,14 @@ class TestTreeDisplay:
 
         output_lines = interface.get_all_output().split("\n")
         for expected_line in expected_lines:
-            # strip() the  expected_line since in the future we may add metadata to the tree view
+            # strip() the expected_line since in the future we may add metadata to the tree view
             assert any(expected_line.strip() in output_line for output_line in output_lines)
 
 
 class TestLLMResponseAndErrorDisplay:
     """Test LLM response and error display functionality."""
 
-    def test_llm_response_display_complete_behavior(self):
+    def test_display_llm_response(self):
         """Test complete LLM response display with comments and grouped requirements."""
         interface = MockInterface()
         
@@ -217,24 +217,30 @@ class TestLLMResponseAndErrorDisplay:
         interface.display_llm_response(message)
         output = interface.get_all_output()
         interface.clear()
-        
-        # Response with requirements tests
-        assert "I'll analyze these files and run some commands" in output
-        assert f"Requirements ({len(requirements)})" in output  # Should show requirements section
-        assert "/test/file1.txt" in output
-        assert "/test/file2.txt" in output
-        assert "ls -la" in output
-        assert "echo test" in output
+
+        expected_lines = """
+[ Requirements (4) ]
+  [ Read (2) ]
+    ❝  Read first file
+    🗎  /test/file1.txt
+    ❝  Read second file metadata
+    🗎  /test/file2.txt
+  [ Command (2) ]
+    ❝  List files
+    🗲  ls -la
+    ❝  Test command
+    🗲  echo test
+        """.strip().splitlines()
+
+        for line in expected_lines:
+            assert line in output
 
         # Test comment-only response
         simple_message = LLMMessage(comment="Just a simple response")
         interface.display_llm_response(simple_message)
-        response_output = interface.get_all_output()
-        
-        # Comment-only tests
-        assert "Just a simple response" in response_output
+        assert "❝  Just a simple response" in interface.get_all_output()
 
-    def test_error_display_complete_behavior(self):
+    def test_display_error(self):
         """Test complete error display for strings and exceptions with proper formatting."""
         interface = MockInterface()
         
