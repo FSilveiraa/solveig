@@ -4,7 +4,6 @@ import os
 import pwd
 import re
 import shutil
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -60,12 +59,20 @@ class Metadata:
     group_name: str
     path: Path
     size: int
-    modified_time: str
+    modified_time: int
     is_directory: bool
     is_readable: bool
     is_writable: bool
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
-    listing: dict[str, "Metadata"] | None = None
+    listing: dict[Path, "Metadata"] | None = None
+
+    def to_openai(self):
+        data = vars(self)
+        data["listing"] = {
+            str(path): sub_metadata
+            for path, sub_metadata in data["listing"].items()
+        }
+        return data
 
 
 class Filesystem:
@@ -118,7 +125,7 @@ class Filesystem:
         return Metadata(
             path=abs_path,
             size=stats.st_size,
-            modified_time=time.ctime(stats.st_mtime),
+            modified_time=int(stats.st_mtime),
             is_directory=is_dir,
             owner_name=pwd.getpwuid(stats.st_uid).pw_name,
             group_name=grp.getgrgid(stats.st_gid).gr_name,

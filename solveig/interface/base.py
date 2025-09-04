@@ -66,10 +66,10 @@ class SolveigInterface(ABC):
     def display_tree(
         self,
         metadata: Metadata,
-        listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = None,
+        display_metadata: bool = False,
     ) -> None:
         """Utility method to display a block of text with metadata"""
         pass

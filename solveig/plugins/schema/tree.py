@@ -61,7 +61,7 @@ class TreeRequirement(Requirement):
 
         # Display the tree structure
         interface.display_tree(
-            metadata=metadata, listing=None, title=f"Tree: {abs_path}"
+            metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
         )
 
         return TreeResult(

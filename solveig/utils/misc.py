@@ -43,12 +43,6 @@ def count_tokens(text: str) -> int:
     return len(encoding) if encoding else 0
 
 
-def print_line(title: str = ""):
-    if title:
-        title = f"--- { title.strip() } "
-    print(f"""\n{ title }{ "-" * (terminal_width - len(title)) }""")
-
-
 def default_json_serialize(o):
     """
     I use Path a lot on this project and can't be hotfixing every instance to convert to str, this does it autiomatically
@@ -57,3 +51,24 @@ def default_json_serialize(o):
     if isinstance(o, Path):
         return str(o)
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
+
+def convert_size_to_human_readable(num_bytes: int, decimal=False) -> str:
+    """
+    Convert a size in bytes into a human-readable string.
+
+    decimal=True  -> SI units (kB, MB, GB, ...) base 1000
+    decimal=False -> IEC units (KiB, MiB, GiB, ...) base 1024
+    """
+    if decimal:
+        step = 1000.0
+        units = ["B", "kB", "MB", "GB", "TB", "PB", "EB"]
+    else:
+        step = 1024.0
+        units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]
+
+    for unit in units:
+        if num_bytes < step:
+            return f"{num_bytes:.1f} {unit}"
+        num_bytes /= step
+    return f"{num_bytes:.1f} {units[-1]}"

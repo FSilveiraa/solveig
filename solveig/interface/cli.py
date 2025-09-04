@@ -8,9 +8,11 @@ import sys
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
 
@@ -95,22 +97,28 @@ class CLIInterface(SolveigInterface):
     def display_tree(
         self,
         metadata: Metadata,
-        listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
         title: str | None = None,
+        display_metadata: bool = False,
     ) -> None:
         self.display_text_block(
-            "\n".join(self._get_tree_element_str(metadata)),
+            "\n".join(self._get_tree_element_str(metadata, display_metadata)),
             title=title or str(metadata.path),
             level=level,
             max_lines=max_lines,
         )
 
-    def _get_tree_element_str(self, metadata: Metadata, indent="  ") -> list[str]:
-        lines = [
-            f"{'🗁' if metadata.is_directory else '🗎'} {metadata.path.name}"
-        ]
+    def _get_tree_element_str(self, metadata: Metadata, display_metadata: bool = False, indent="  ") -> list[str]:
+        line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
+        if display_metadata:
+            if not metadata.is_directory:
+                size_str = solveig.utils.misc.convert_size_to_human_readable(metadata.size)
+                line = f"{line}  |  size: {size_str}"
+            modified_time = datetime.fromtimestamp(metadata.modified_time).isoformat()
+            line = f"{line}  |  modified: {modified_time}"
+        lines = [ line ]
+
         if metadata.is_directory and metadata.listing:
             for index, (sub_path, sub_metadata) in enumerate(
                 sorted(metadata.listing.items())
@@ -123,9 +131,9 @@ class CLIInterface(SolveigInterface):
                     f"{indent}{self.TEXT_BOX.BL if is_last else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_lines[0]}"
                 )
 
-                for sub_entry in entry_lines[1:]:
                 # │  ├─🗁 sub-d1
                 # │  └─🗎 sub-f1
+                for sub_entry in entry_lines[1:]:
                     lines.append(
                         f"{indent}{'' if is_last else self.TEXT_BOX.V}{sub_entry}"
                     )

@@ -74,7 +74,7 @@ class ReadRequirement(Requirement):
             listing = Filesystem.get_dir_listing(abs_path)
         except NotADirectoryError:
             listing = None
-        interface.display_tree(metadata, listing)
+        interface.display_tree(metadata, title=f"Metadata: {abs_path}", display_metadata=True)
         content = None
 
         if (
@@ -92,7 +92,7 @@ class ReadRequirement(Requirement):
                 )
 
             content_output = "(Base64)" if encoding.lower() == "base64" else content
-            interface.display_text_block(content_output, title="Content")
+            interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if interface.ask_yes_no(
             f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "

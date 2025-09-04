@@ -166,7 +166,7 @@ class TestTreeDisplay:
         interface.max_lines = -1  # Ensure we see full structure
         
         complex_tree = self.create_complex_tree_metadata()
-        interface.display_tree(complex_tree, listing=None)
+        interface.display_tree(complex_tree)
 
         expected_lines = f"""
 ┌─── {complex_tree.path} ────────────────
