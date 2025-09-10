@@ -70,10 +70,6 @@ class ReadRequirement(Requirement):
             )
 
         metadata = Filesystem.read_metadata(abs_path)
-        try:
-            listing = Filesystem.get_dir_listing(abs_path)
-        except NotADirectoryError:
-            listing = None
         interface.display_tree(metadata, title=f"Metadata: {abs_path}", display_metadata=True)
         content = None
 
@@ -103,7 +99,6 @@ class ReadRequirement(Requirement):
                 accepted=True,
                 metadata=metadata,
                 content=content,
-                directory_listing=listing,
             )
         else:
             return ReadResult(requirement=self, path=abs_path, accepted=False)

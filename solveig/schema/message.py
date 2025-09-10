@@ -103,7 +103,7 @@ def get_filtered_llm_message_class():
 @dataclass
 class MessageContainer:
     message: BaseMessage
-    content: str = field(init=False)
+    # content: str = field(init=False)
     token_count: int = field(init=False)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     role: Literal["user", "assistant", "system"] = field(init=False)

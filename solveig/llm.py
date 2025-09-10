@@ -65,5 +65,3 @@ def get_instructor_client(
             raise ValueError(
                 "Google Generative AI client not available. Install with: pip install google-generativeai"
             ) from e
-    else:
-        raise ValueError(f"Unsupported API type: {api_type}")

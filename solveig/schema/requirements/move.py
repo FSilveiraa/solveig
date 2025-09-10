@@ -82,12 +82,8 @@ class MoveRequirement(Requirement):
             )
 
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        try:
-            source_listing = Filesystem.get_dir_listing(abs_source_path)
-        except NotADirectoryError:
-            source_listing = None
         interface.display_tree(
-            metadata=source_metadata, listing=source_listing, title="Source Metadata"
+            metadata=source_metadata, title="Source Metadata"
         )
 
         # Get user consent

@@ -1,4 +1,11 @@
 """Integration tests for complete conversation loops with mock LLM client."""
+import tempfile
+from pathlib import Path
+
+import pytest
+
+# Mark all tests in this module to skip file mocking
+pytestmark = pytest.mark.no_file_mocking
 
 from scripts.run import main_loop
 from solveig.schema.message import LLMMessage
@@ -47,40 +54,45 @@ class TestConversationLoop:
 
     def test_file_operations_flow(self, mock_all_file_operations):
         """Test file operations flow with mixed accept/decline responses.""" 
-        llm_response = LLMMessage(
-            comment="I'll help organize your files by reading the directory first.",
-            requirements=[
-                ReadRequirement(
-                    path="/tmp/test_dir", 
-                    metadata_only=False,
-                    comment="Examine directory contents"
-                ),
-                CommandRequirement(
-                    command="find /tmp/test_dir -name '*.txt'", 
-                    comment="Find text files"
-                ),
-            ],
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_file_path = temp_dir_path / "new_file.txt"
+            temp_file_path.write_text("Lorem ipsum")
 
-        mock_client = create_mock_client(llm_response)
-        interface = MockInterface()
-        interface.set_user_inputs([
-            "y",  # Accept read operation
-            "n",  # Decline find command
-            "exit",
-        ])
-
-        try:
-            main_loop(
-                DEFAULT_CONFIG,
-                interface,
-                "Help me organize files in /tmp/test_dir",
-                llm_client=mock_client,
+            llm_response = LLMMessage(
+                comment="I'll help organize your files by reading the directory first.",
+                requirements=[
+                    ReadRequirement(
+                        path=temp_dir,
+                        metadata_only=False,
+                        comment="Examine directory contents"
+                    ),
+                    CommandRequirement(
+                        command=f"find {temp_dir_path} -name '*.txt'",
+                        comment="Find text files"
+                    ),
+                ],
             )
-        except ValueError:
-            pass
 
-        # Verify mixed responses were handled
-        output = interface.get_all_output()
-        assert "organize your files" in output
-        assert "/tmp/test_dir" in output
+            mock_client = create_mock_client(llm_response)
+            interface = MockInterface()
+            interface.set_user_inputs([
+                "y",  # Accept read operation
+                "n",  # Decline find command
+                "exit",
+            ])
+
+            try:
+                main_loop(
+                    DEFAULT_CONFIG,
+                    interface,
+                    f"Help me organize files in {temp_dir_path}",
+                    llm_client=mock_client,
+                )
+            except ValueError:
+                pass
+
+            # Verify mixed responses were handled
+            output = interface.get_all_output()
+            assert "organize your files" in output
+            assert "new_file.txt" in output

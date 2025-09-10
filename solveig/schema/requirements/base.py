@@ -158,17 +158,3 @@ class Requirement(BaseModel, ABC):
         'read(path, only_read_metadata): reads a file or directory...'
         """
         pass
-
-
-# Intermediate classes for common patterns (if needed in future)
-# Keep these here in base.py to avoid artificial file proliferation
-
-
-class FileRequirement(Requirement):
-    """Base class for requirements that operate on files/directories.
-
-    Currently not used, but available if common file operation patterns emerge
-    that would benefit from shared implementation.
-    """
-
-    pass

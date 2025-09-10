@@ -7,7 +7,7 @@ touching real files.
 """
 
 from pathlib import Path
-
+from datetime import datetime
 import pytest
 
 from solveig.utils.file import (
@@ -15,6 +15,7 @@ from solveig.utils.file import (
     Metadata,
     parse_size_notation_into_bytes,
 )
+from tests.mocks.file import MockFilesystem
 
 
 class TestSizeNotationParsing:
@@ -66,7 +67,7 @@ class TestMetadata:
             group_name="test_group",
             path=Path("/test/file.txt"),
             size=1024,
-            modified_time="2024-01-01 12:00:00",
+            modified_time=int(datetime.fromisoformat("2024-01-01T12:00:00").timestamp()),
             is_directory=False,
             is_readable=True,
             is_writable=True,
@@ -102,6 +103,7 @@ class TestFilesystemValidation:
     def test_validate_read_access_success(self, mock_all_file_operations):
         """Test successful read access validation."""
         # Should not raise exception for existing readable file
+        assert mock_all_file_operations._exists(Path("/test/file.txt"))
         Filesystem.validate_read_access("/test/file.txt")
 
     def test_validate_read_access_nonexistent(self, mock_all_file_operations):
@@ -111,13 +113,12 @@ class TestFilesystemValidation:
 
     def test_validate_read_access_permission_denied(self, mock_all_file_operations):
         """Test read access validation for unreadable file."""
-        # Create unreadable file via mock
-        fs = mock_all_file_operations
-        fs.write_file("/test/unreadable.txt", "content")
+        # Create unreadable file via file utils
+        Filesystem.write_file("/test/unreadable.txt", "content")
 
         # Make it unreadable by modifying mock metadata
         abs_path = Filesystem.get_absolute_path("/test/unreadable.txt")
-        fs._paths[abs_path].metadata.is_readable = False
+        mock_all_file_operations._entries[abs_path].metadata.is_readable = False
 
         with pytest.raises(PermissionError, match="not readable"):
             Filesystem.validate_read_access("/test/unreadable.txt")
@@ -148,12 +149,10 @@ class TestFilesystemValidation:
         self, mock_all_file_operations
     ):
         """Test write access validation for existing non-writable file."""
-        fs = mock_all_file_operations
-
         # Create a file and make it non-writable
-        fs.write_file("/test/readonly.txt", "content")
+        mock_all_file_operations.write_file("/test/readonly.txt", "content")
         abs_path = Filesystem.get_absolute_path("/test/readonly.txt")
-        fs._paths[abs_path].metadata.is_writable = False
+        mock_all_file_operations._entries[abs_path].metadata.is_writable = False
 
         with pytest.raises(PermissionError, match="Cannot write into file"):
             Filesystem.validate_write_access("/test/readonly.txt")
@@ -169,11 +168,9 @@ class TestFilesystemValidation:
 
     def test_validate_delete_access_parent_not_writable(self, mock_all_file_operations):
         """Test delete access validation when parent directory is not writable."""
-        fs = mock_all_file_operations
-
         # Make parent directory non-writable
         parent_path = Filesystem.get_absolute_path("/test")
-        fs._paths[parent_path].metadata.is_writable = False
+        mock_all_file_operations._entries[parent_path].metadata.is_writable = False
 
         with pytest.raises(PermissionError, match="is not writable"):
             Filesystem.validate_delete_access("/test/file.txt")
@@ -195,14 +192,12 @@ class TestFilesystemHelpers:
         # Should find /test as the closest writable parent
         assert result == Filesystem.get_absolute_path("/test")
 
-    def test_closest_writable_parent_no_writable_found(self, mock_all_file_operations):
+    def test_closest_writable_parent_no_writable_found(self, mock_all_file_operations: MockFilesystem):
         """Test when no writable parent can be found."""
-        fs = mock_all_file_operations
-
         # Make all directories non-writable
-        for path in fs._paths:
-            if fs._paths[path].metadata.is_directory:
-                fs._paths[path].metadata.is_writable = False
+        for path, entry in mock_all_file_operations._entries.items():
+            if entry.metadata.is_directory:
+                entry.metadata.is_writable = False
 
         deep_path = Filesystem.get_absolute_path("/test/non/existent/path")
         result = Filesystem.closest_writable_parent(deep_path)
@@ -248,9 +243,8 @@ class TestFilesystemHighLevelOperations:
         Filesystem.write_file(test_path, "appended", append=True)
 
         # Check combined content through mock
-        fs = mock_all_file_operations
         abs_path = Filesystem.get_absolute_path(test_path)
-        content = fs._mock_read_text(abs_path)
+        content = mock_all_file_operations._mock_read_text(abs_path)
         assert content == "initial appended"
 
     def test_write_file_overwrite_mode(self, mock_all_file_operations):
@@ -264,9 +258,8 @@ class TestFilesystemHighLevelOperations:
         Filesystem.write_file(test_path, "new content")
 
         # Check only new content remains
-        fs = mock_all_file_operations
         abs_path = Filesystem.get_absolute_path(test_path)
-        content = fs._mock_read_text(abs_path)
+        content = mock_all_file_operations._mock_read_text(abs_path)
         assert content == "new content"
 
     def test_create_directory_new(self, mock_all_file_operations):
@@ -299,13 +292,12 @@ class TestFilesystemHighLevelOperations:
         Filesystem.copy(src_path, dest_path, min_space_left=0)
 
         # Verify through mock filesystem
-        fs = mock_all_file_operations
         src_abs = Filesystem.get_absolute_path(src_path)
         dest_abs = Filesystem.get_absolute_path(dest_path)
 
-        assert fs._mock_exists(dest_abs)
-        src_content = fs._mock_read_text(src_abs)
-        dest_content = fs._mock_read_text(dest_abs)
+        assert mock_all_file_operations._mock_exists(dest_abs)
+        src_content = mock_all_file_operations._mock_read_text(src_abs)
+        dest_content = mock_all_file_operations._mock_read_text(dest_abs)
         assert src_content == dest_content
 
     def test_copy_directory_operations(self, mock_all_file_operations):
@@ -317,10 +309,9 @@ class TestFilesystemHighLevelOperations:
         Filesystem.copy(src_dir, dest_dir, min_space_left=0)
 
         # Verify through mock filesystem
-        fs = mock_all_file_operations
         dest_abs = Filesystem.get_absolute_path(dest_dir)
-        assert fs._mock_exists(dest_abs)
-        assert fs._mock_is_dir(dest_abs)
+        assert mock_all_file_operations._mock_exists(dest_abs)
+        assert mock_all_file_operations._mock_is_dir(dest_abs)
 
     def test_move_file_operations(self, mock_all_file_operations):
         """Test file moving operations."""
@@ -331,18 +322,17 @@ class TestFilesystemHighLevelOperations:
         Filesystem.write_file(src_path, "move content")
 
         # Get original content
-        fs = mock_all_file_operations
         src_abs = Filesystem.get_absolute_path(src_path)
-        original_content = fs._mock_read_text(src_abs)
+        original_content = mock_all_file_operations._mock_read_text(src_abs)
 
         # Perform move
         Filesystem.move(src_path, dest_path)
 
         # Verify move completed
         dest_abs = Filesystem.get_absolute_path(dest_path)
-        assert not fs._mock_exists(src_abs)
-        assert fs._mock_exists(dest_abs)
-        assert fs._mock_read_text(dest_abs) == original_content
+        assert not mock_all_file_operations._mock_exists(src_abs)
+        assert mock_all_file_operations._mock_exists(dest_abs)
+        assert mock_all_file_operations._mock_read_text(dest_abs) == original_content
 
     def test_delete_file_operations(self, mock_all_file_operations):
         """Test file deletion operations."""
@@ -352,15 +342,14 @@ class TestFilesystemHighLevelOperations:
         Filesystem.write_file(test_path, "delete content")
 
         # Verify it exists
-        fs = mock_all_file_operations
         abs_path = Filesystem.get_absolute_path(test_path)
-        assert fs._mock_exists(abs_path)
+        assert mock_all_file_operations._mock_exists(abs_path)
 
         # Delete file
         Filesystem.delete(test_path)
 
         # Verify it's gone
-        assert not fs._mock_exists(abs_path)
+        assert not mock_all_file_operations._mock_exists(abs_path)
 
     def test_delete_directory_operations(self, mock_all_file_operations):
         """Test directory deletion operations."""
@@ -370,16 +359,15 @@ class TestFilesystemHighLevelOperations:
         Filesystem.create_directory(test_dir)
 
         # Verify it exists
-        fs = mock_all_file_operations
         abs_path = Filesystem.get_absolute_path(test_dir)
-        assert fs._mock_exists(abs_path)
-        assert fs._mock_is_dir(abs_path)
+        assert mock_all_file_operations._mock_exists(abs_path)
+        assert mock_all_file_operations._mock_is_dir(abs_path)
 
         # Delete directory
         Filesystem.delete(test_dir)
 
         # Verify it's gone
-        assert not fs._mock_exists(abs_path)
+        assert not mock_all_file_operations._mock_exists(abs_path)
 
     def test_get_directory_listing(self, mock_all_file_operations):
         """Test getting directory listings."""
@@ -481,7 +469,7 @@ class TestFilesystemErrorHandling:
 
         # Make test directory non-writable
         test_dir = Filesystem.get_absolute_path("/test")
-        fs._paths[test_dir].metadata.is_writable = False
+        fs._entries[test_dir].metadata.is_writable = False
 
         with pytest.raises(PermissionError, match="Cannot create parent directory"):
             Filesystem.write_file("/test/new_file.txt", "content")
@@ -552,17 +540,15 @@ class TestMockFilesystemSideEffects:
         self, mock_all_file_operations
     ):
         """Test various permission denied scenarios for reading."""
-        fs = mock_all_file_operations
-
         # Create file and make parent directory unreadable
         Filesystem.write_file("/test/subdir/restricted.txt", "content")
         parent_dir = Filesystem.get_absolute_path("/test/subdir")
-        fs._paths[parent_dir].metadata.is_readable = False
+        mock_all_file_operations._entries[parent_dir].metadata.is_readable = False
 
         # This should still work because the file itself is readable,
         # but let's test when the file itself is not readable
         file_path = Filesystem.get_absolute_path("/test/subdir/restricted.txt")
-        fs._paths[file_path].metadata.is_readable = False
+        mock_all_file_operations._entries[file_path].metadata.is_readable = False
 
         with pytest.raises(PermissionError, match="not readable"):
             Filesystem.validate_read_access("/test/subdir/restricted.txt")

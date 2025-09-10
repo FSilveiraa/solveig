@@ -188,8 +188,6 @@ class TestShellcheckPluginIntegration:
 
     def test_plugin_registration(self):
         """Test that shellcheck plugin is properly registered."""
-        # Import shellcheck plugin to ensure registration
-
         # Should have the shellcheck before hook loaded
         assert len(hooks.HOOKS.before) >= 1
         hook_names = [hook[0].__name__ for hook in hooks.HOOKS.before]

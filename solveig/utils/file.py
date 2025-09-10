@@ -67,11 +67,12 @@ class Metadata:
     listing: dict[Path, "Metadata"] | None = None
 
     def to_openai(self):
-        data = vars(self)
+        data = { k:v for k, v in vars(self).items() }
         data["listing"] = {
-            str(path): sub_metadata
-            for path, sub_metadata in data["listing"].items()
-        }
+            str(path): sub_metadata.to_openai()
+            for path, sub_metadata in self.listing.items()
+        } if self.listing else self.listing # None for files vs  empty list for empty dirs
+        data["path"] = str(self.path)
         return data
 
 
@@ -99,12 +100,13 @@ class Filesystem:
         return abs_path.is_dir()
 
     @classmethod
-    def read_metadata(cls, abs_path: Path, descend_level=0) -> Metadata:
+    def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
         """
         Read metadata and dir structure from filesystem
         :param abs_path: the absolute path to read metadata from
         :param descend_level: how far down to read, 0 meaning only reading metadata from current directory,
-        1 also reading listing from first descendants, 2 from second descendants, etc. -1 reads entire tree structure
+            1 also reading listing from first descendants, 2 from second descendants, etc.
+            -1 reads entire tree structure
         :return:
         """
         stats = abs_path.stat()
@@ -112,7 +114,7 @@ class Filesystem:
         is_dir = cls._is_dir(abs_path)
         if is_dir and descend_level != 0:
             listing = {
-                sub_path.name: cls.read_metadata(
+                sub_path: cls.read_metadata(
                     sub_path, descend_level=descend_level - 1
                 )
                 for sub_path in sorted(
@@ -420,7 +422,8 @@ class Filesystem:
             else:
                 raise PermissionError(f"Directory {abs_path} already exists")
         else:
-            if not cls._exists(abs_path.parent):
+            # if we're not at / and the above directory doesn't exist, recurse upwards
+            if abs_path != abs_path.parent and not cls._exists(abs_path.parent):
                 cls.create_directory(abs_path.parent, exist_ok=True)
             cls._create_directory(abs_path)
 

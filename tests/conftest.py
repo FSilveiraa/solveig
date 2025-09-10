@@ -5,6 +5,8 @@ Provides automatic mocking of all file I/O operations.
 
 import pytest
 
+from unittest.mock import patch
+
 from tests.mocks.file import mock_fs
 
 
@@ -26,6 +28,22 @@ def mock_all_file_operations(request):
     # Use the mock filesystem's context manager to handle all patching
     with mock_fs.patch_all_file_operations() as mocked_fs:
         yield mocked_fs
+
+
+@pytest.fixture(autouse=True, scope="function")
+def safe_external_operations(request):
+    """Provide safe defaults for external operations in tests."""
+    with patch("subprocess.run", side_effect = OSError("Cannot run actual processes")):
+
+        # Skip mocking for tests marked with @pytest.mark.no_file_mocking
+        if request.node.get_closest_marker("no_file_mocking"):
+            yield None
+            return
+
+        with patch("builtins.open", side_effect=OSError("Cannot use actual file I/O")):
+            with patch("builtins.input", side_effect=OSError("Cannot use actual input")):
+                with patch("builtins.print", side_effect=OSError("Cannot use actual print")):
+                    yield
 
 
 # Marker for tests that should use real file operations

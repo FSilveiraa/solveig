@@ -32,8 +32,8 @@ class RequirementResult(BaseModel):
                 continue
             if isinstance(value, Path):
                 data[key] = str(value)
-            elif isinstance(value, Metadata):
-                data[key] = value.to_openai()
+            # TODO: I actually dislike this solution, this is a ReadResult-only problem
+            # it poses the same problem as the requirements: what if in the future we have source_metadata and destination_metadata?
             else:
                 data[key] = value
         return data

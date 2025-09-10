@@ -12,3 +12,8 @@ class ReadResult(RequirementResult):
     metadata: Metadata | None = None
     content: str | None = None
 
+    def to_openai(self):
+        data = super().to_openai()
+        if self.metadata is not None:
+            data["metadata"] = self.metadata.to_openai()
+        return data

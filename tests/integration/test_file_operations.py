@@ -26,7 +26,10 @@ class TestReadRequirementIntegration:
     """Integration tests for ReadRequirement with real files."""
 
     def test_read_file_with_tilde_path(self):
-        """Test reading a file using tilde path expansion. ! This test performs actual file operations !"""
+        """
+        Test reading a file using tilde path expansion.
+        ! This test performs actual file operations on the user's home directory !
+        """
         # Create a test file in user's home directory
         home_test_dir = Path.home() / ".solveig_test_temp"
         home_test_dir.mkdir(exist_ok=True)
@@ -95,11 +98,11 @@ class TestReadRequirementIntegration:
 
             # Verify directory listing
             assert result.accepted
-            assert result.directory_listing is not None
-            assert len(result.directory_listing) == 3  # file1.txt, file2.py, subdir
+            assert result.metadata.listing is not None
+            assert len(result.metadata.listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = {item.name for item in result.directory_listing}
+            filenames = {item.name for item in result.metadata.listing}
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
@@ -489,7 +492,10 @@ class TestPathSecurityIntegration:
                 )
 
     def test_tilde_expansion_security(self):
-        """Test that tilde expansion works consistently and securely."""
+        """
+        Test that tilde expansion works consistently and securely.
+        Note that this test is particularly sensitive: it reads the actual user home's bashrc.
+        """
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
         home_path = str(Path.home())
@@ -500,6 +506,7 @@ class TestPathSecurityIntegration:
             comment="Tilde expansion test",
         )
 
+        # since we're using DEFAULT_CONFIG we know no plugins will interfere
         result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
         # Even if declined, path should be properly expanded

@@ -67,11 +67,7 @@ class DeleteRequirement(Requirement):
             )
 
         metadata = Filesystem.read_metadata(abs_path)
-        try:
-            listing = Filesystem.get_dir_listing(abs_path)
-        except NotADirectoryError:
-            listing = None
-        interface.display_tree(metadata=metadata, listing=listing)
+        interface.display_tree(metadata=metadata)
 
         # Get user consent (with extra warning)
         if interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
