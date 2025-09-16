@@ -49,9 +49,7 @@ class TestReadRequirementIntegration:
             )
 
             # Mock user consent by consenting to all file operations, but let real file operations happen
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify result
             assert result.accepted
@@ -92,9 +90,7 @@ class TestReadRequirementIntegration:
                 path=str(base_path), metadata_only=True, comment="Read directory"
             )
 
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory listing
             assert result.accepted
@@ -181,9 +177,7 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify write succeeded
             assert result.accepted
@@ -207,9 +201,7 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory creation
             assert result.accepted
@@ -237,9 +229,7 @@ class TestWriteRequirementIntegration:
             #     patch("builtins.print") as mock_print,
             # ):
 
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Should warn about existing path
             warning_calls = [
@@ -281,9 +271,7 @@ class TestMoveRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_move_consent", return_value=True):
-            result = req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify move succeeded
             assert result.accepted

@@ -9,7 +9,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import solveig.utils.misc
@@ -109,18 +108,24 @@ class CLIInterface(SolveigInterface):
             max_lines=max_lines,
         )
 
-    def _get_tree_element_str(self, metadata: Metadata, display_metadata: bool = False, indent="  ") -> list[str]:
+    def _get_tree_element_str(
+        self, metadata: Metadata, display_metadata: bool = False, indent="  "
+    ) -> list[str]:
         line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
         if display_metadata:
             if not metadata.is_directory:
-                size_str = solveig.utils.misc.convert_size_to_human_readable(metadata.size)
+                size_str = solveig.utils.misc.convert_size_to_human_readable(
+                    metadata.size
+                )
                 line = f"{line}  |  size: {size_str}"
-            modified_time = datetime.fromtimestamp(metadata.modified_time).isoformat()
+            modified_time = datetime.fromtimestamp(
+                float(metadata.modified_time)
+            ).isoformat()
             line = f"{line}  |  modified: {modified_time}"
-        lines = [ line ]
+        lines = [line]
 
         if metadata.is_directory and metadata.listing:
-            for index, (sub_path, sub_metadata) in enumerate(
+            for index, (_sub_path, sub_metadata) in enumerate(
                 sorted(metadata.listing.items())
             ):
                 is_last = index == len(metadata.listing) - 1

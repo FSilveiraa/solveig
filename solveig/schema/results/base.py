@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from solveig.utils.misc import dump_pydantic_field
-from pydantic import BaseModel, field_serializer, Field
+from pydantic import BaseModel, Field, field_serializer
 
-from ...utils.file import Metadata
+from solveig.utils.misc import dump_pydantic_field
 
 # Circular import fix:
 # - This module (base.py) needs Requirement classes for type hints

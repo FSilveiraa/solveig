@@ -11,4 +11,3 @@ class ReadResult(RequirementResult):
     path: str | Path
     metadata: Metadata | None = None
     content: str | None = None
-

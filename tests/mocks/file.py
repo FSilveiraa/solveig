@@ -3,16 +3,15 @@ Mock file system for testing file operations without touching real files.
 Only overrides the essential MockFileSystem low-level methods.
 """
 
-from datetime import datetime
 from contextlib import contextmanager
 from copy import copy
-from dataclasses import replace, dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from solveig.utils.file import Filesystem, Metadata
-
 
 DEFAULT_METADATA = Metadata(
     owner_name="test-user",
@@ -23,17 +22,16 @@ DEFAULT_METADATA = Metadata(
     is_directory=True,
     is_readable=True,
     is_writable=True,
-    encoding = None,
-    listing = None
+    encoding=None,
+    listing=None,
 )
 
-def create_metadata(path: Path, modified_time=int(datetime.now().timestamp()), **kwargs) -> Metadata:
-    return replace(
-        DEFAULT_METADATA,
-        path=path,
-        modified_time=modified_time,
-        **kwargs
-   )
+
+def create_metadata(path: Path, modified_time=-1, **kwargs) -> Metadata:
+    if modified_time is None or modified_time < 0:
+        modified_time = int(datetime.now().timestamp())
+    return replace(DEFAULT_METADATA, path=path, modified_time=modified_time, **kwargs)
+
 
 # def create_dir_metadata(path: Path, **kwargs) -> Metadata:
 #     return create_metadata(path, is_directory=True, size=4096, **kwargs)
@@ -51,13 +49,21 @@ class MockFileDir:
     @staticmethod
     def create_dir(path: Path, **kwargs) -> "MockFileDir":
         listing = kwargs.pop("listing", {})
-        return MockFileDir(metadata=create_metadata(path=path, is_directory=True, listing=listing, size=4096, **kwargs))
+        return MockFileDir(
+            metadata=create_metadata(
+                path=path, is_directory=True, listing=listing, size=4096, **kwargs
+            )
+        )
 
     @staticmethod
-    def create_file(abs_path: Path, content: str | None = None, **kwargs) -> "MockFileDir":
+    def create_file(
+        abs_path: Path, content: str | None = None, **kwargs
+    ) -> "MockFileDir":
         size = kwargs.pop("size", len(content.encode("utf-8")) if content else 0)
         return MockFileDir(
-            metadata=create_metadata(path=abs_path, is_directory=False, size=size, **kwargs),
+            metadata=create_metadata(
+                path=abs_path, is_directory=False, size=size, **kwargs
+            ),
             content=content,
         )
 
@@ -66,7 +72,9 @@ class MockFilesystem(Filesystem):
     def __init__(self, total_size=1000000000):  # 1GB
         # Store (content, metadata) tuples - single source of truth
         self._entries: dict[Path, MockFileDir] = {}
-        self.mocks = SimpleNamespace()  # Store references to mock objects for direct access
+        self.mocks = (
+            SimpleNamespace()
+        )  # Store references to mock objects for direct access
         self.total_size = total_size
 
     def reset(self):
@@ -158,7 +166,6 @@ class MockFilesystem(Filesystem):
                 assert parent_entry.metadata.is_directory
                 parent_entry.metadata.listing[path] = entry.metadata
 
-
     # ====  OVERRIDES  ====
 
     def _mock_exists(self, abs_path: Path) -> bool:
@@ -193,7 +200,9 @@ class MockFilesystem(Filesystem):
     def _mock_write_text(
         self, abs_path: Path, content: str = "", encoding="utf-8"
     ) -> None:
-        self._entries[abs_path] = MockFileDir.create_file(abs_path, content, encoding=encoding)
+        self._entries[abs_path] = MockFileDir.create_file(
+            abs_path, content, encoding=encoding
+        )
         self._update_directory_listings()
 
     def _mock_append_text(

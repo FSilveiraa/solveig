@@ -25,12 +25,12 @@ class TestCLIInterfaceCore:
     def test_section_display_behavior(self):
         """Test section header display with and without titles."""
         interface = MockInterface()
-        
+
         # Test section display with title
         interface.display_section("Test Section")
         assert re.match("^─+ Test Section ─+$", interface.get_all_output().strip())
         interface.clear()
-        
+
         # Test section display without title
         interface.display_section("")
         assert re.match("^─+$", interface.get_all_output().strip())
@@ -38,11 +38,13 @@ class TestCLIInterfaceCore:
     def test_text_box_complete_rendering(self):
         """Test complete text box rendering: top border with title, content lines, bottom border, truncation."""
         interface = MockInterface()
-        
+
         # Test complete text box with title and multiline content
-        lines = [f"Line {n}" for n in range(1, 5)] # 4 lines
+        lines = [f"Line {n}" for n in range(1, 5)]  # 4 lines
         interface.display_text_block("\n".join(lines), title="Test Box")
-        output_lines = [line for line in interface.get_all_output().split('\n') if line.strip()]
+        output_lines = [
+            line for line in interface.get_all_output().split("\n") if line.strip()
+        ]
 
         # Box header
         assert re.match("^┌─+ Test Box ─+┐$", output_lines[0].strip())
@@ -66,7 +68,7 @@ class TestCLIInterfaceCore:
         interface.display_text_block(long_text, title="Limited")
 
         output = interface.get_all_output().strip()
-        output_lines = output.split('\n')
+        output_lines = output.split("\n")
         assert "more..." in output_lines[-2].lower()
 
 
@@ -77,28 +79,34 @@ class TestTreeDisplay:
         """Test displaying complex nested directory structure with full depth visualization."""
         interface = MockInterface()
         interface.max_lines = -1  # Ensure we see full structure
-        
+
         # complex_tree = self.create_complex_tree_metadata()
-        tree = mock_filesystem.read_metadata(mock_filesystem.get_absolute_path("/test/dir2/"))
+        tree = mock_filesystem.read_metadata(
+            mock_filesystem.get_absolute_path("/test/dir2/")
+        )
         interface.display_tree(tree)
         expected_lines = f"""
 ┌─── {tree.path} ────────────────
-│ 🗁  {tree.path.name}             
-│   ├─🗎 f1                       
-│   └─🗁  sub-d1                  
-│     ├─🗁  sub-d2                
-│     │  └─🗎 f4                  
-│     └─🗁  sub-d3                
-│       └─🗎 f3                   
+│ 🗁  {tree.path.name}
+│   ├─🗎 f1
+│   └─🗁  sub-d1
+│     ├─🗁  sub-d2
+│     │  └─🗎 f4
+│     └─🗁  sub-d3
+│       └─🗎 f3
 └────────────────────────────────
         """.strip().splitlines()
 
         output_lines = interface.get_all_output().split("\n")
         for expected_line in expected_lines:
             try:
-                assert any(expected_line.strip() in output_line for output_line in output_lines)
+                assert any(
+                    expected_line.strip() in output_line for output_line in output_lines
+                )
             except AssertionError as e:
-                raise AssertionError(f"{expected_line} not found in output:\n{output_lines}") from e
+                raise AssertionError(
+                    f"{expected_line} not found in output:\n{output_lines}"
+                ) from e
 
 
 class TestLLMResponseAndErrorDisplay:
@@ -107,19 +115,25 @@ class TestLLMResponseAndErrorDisplay:
     def test_display_llm_response(self):
         """Test complete LLM response display with comments and grouped requirements."""
         interface = MockInterface()
-        
+
         # Test response with both comment and multiple requirement types
         requirements = [
-            ReadRequirement(path="/test/file1.txt", metadata_only=False, comment="Read first file"),
-            ReadRequirement(path="/test/file2.txt", metadata_only=True, comment="Read second file metadata"),
+            ReadRequirement(
+                path="/test/file1.txt", metadata_only=False, comment="Read first file"
+            ),
+            ReadRequirement(
+                path="/test/file2.txt",
+                metadata_only=True,
+                comment="Read second file metadata",
+            ),
             CommandRequirement(command="ls -la", comment="List files"),
             CommandRequirement(command="echo test", comment="Test command"),
         ]
         message = LLMMessage(
-            comment="I'll analyze these files and run some commands.", 
-            requirements=requirements
+            comment="I'll analyze these files and run some commands.",
+            requirements=requirements,
         )
-        
+
         interface.display_llm_response(message)
         output = interface.get_all_output()
         interface.clear()
@@ -149,12 +163,12 @@ class TestLLMResponseAndErrorDisplay:
     def test_display_error(self):
         """Test complete error display for strings and exceptions with proper formatting."""
         interface = MockInterface()
-        
+
         # Test string error
         interface.display_error(exception=FileNotFoundError("/test/missing.txt"))
         assert "✖  FileNotFoundError: /test/missing.txt" in interface.get_all_output()
         interface.clear()
-        
+
         # Test exception error
         exception = ValueError("Invalid input parameter")
         interface.display_error(exception)

@@ -1,17 +1,15 @@
 """Tests for scripts.init module."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 from scripts.init import (
     add_bash_timestamps,
     check_dependencies,
     create_example_config,
-    main
+    main,
 )
 from solveig import SolveigConfig
 from solveig.utils.file import Filesystem
-from tests.conftest import mock_filesystem
 from tests.mocks import MockInterface
 
 
@@ -28,7 +26,9 @@ class TestBashTimestamps:
         assert result is True
         assert (
             "export HISTTIMEFORMAT="
-            in mock_filesystem.read_file(mock_filesystem.mocks.default_bashrc_path).content
+            in mock_filesystem.read_file(
+                mock_filesystem.mocks.default_bashrc_path
+            ).content
         )
 
     def test_add_bash_timestamps_already_configured(self, mock_filesystem):
@@ -47,9 +47,7 @@ class TestBashTimestamps:
 
     def test_add_bash_timestamps_exception(self, mock_filesystem):
         """Test handling exceptions during timestamp setup."""
-        mock_filesystem.mocks.exists.side_effect = [
-            PermissionError("Access denied")
-        ]
+        mock_filesystem.mocks.exists.side_effect = [PermissionError("Access denied")]
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 

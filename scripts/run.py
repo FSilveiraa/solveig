@@ -179,9 +179,7 @@ def main_loop(
 
     # Create LLM client if none was supplied
     llm_client = llm_client or llm.get_instructor_client(
-        api_type=config.api_type,
-        api_key=config.api_key,
-        url=config.url
+        api_type=config.api_type, api_key=config.api_key, url=config.url
     )
 
     # Get user interface, LLM client and message history

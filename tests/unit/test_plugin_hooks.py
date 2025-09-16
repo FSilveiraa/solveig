@@ -60,7 +60,11 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def failing_validator(config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement):
+        def failing_validator(
+            config: SolveigConfig,
+            interface: SolveigInterface,
+            requirement: CommandRequirement,
+        ):
             interface.display_comment("I'm a plugin that fails on request")
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
@@ -82,7 +86,11 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def security_validator(config: SolveigConfig, interface: MockInterface, requirement: CommandRequirement):
+        def security_validator(
+            config: SolveigConfig,
+            interface: MockInterface,
+            requirement: CommandRequirement,
+        ):
             if "rm -rf" in requirement.command:
                 raise SecurityError("Dangerous command detected")
 
@@ -103,7 +111,11 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def passing_validator(config: SolveigConfig, interface: MockInterface, requirement: CommandRequirement):
+        def passing_validator(
+            config: SolveigConfig,
+            interface: MockInterface,
+            requirement: CommandRequirement,
+        ):
             # Just validate, don't throw
             assert requirement.command is not None
 

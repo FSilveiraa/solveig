@@ -8,8 +8,7 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from . import hooks
-from . import schema
+from . import hooks, schema
 from .exceptions import PluginException, ProcessingError, SecurityError, ValidationError
 
 __all__ = [

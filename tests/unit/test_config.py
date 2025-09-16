@@ -102,7 +102,9 @@ class TestCLIIntegration:
     def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "LOCAL", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args, interface=MockInterface())
+        config, prompt = SolveigConfig.parse_config_and_prompt(
+            cli_args=args, interface=MockInterface()
+        )
         assert isinstance(config, SolveigConfig)
         assert config.api_type == APIType.LOCAL
         assert prompt == "test prompt"
@@ -110,7 +112,9 @@ class TestCLIIntegration:
     def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args, interface=MockInterface())
+        config, prompt = SolveigConfig.parse_config_and_prompt(
+            cli_args=args, interface=MockInterface()
+        )
         assert config.temperature == 0.8
         assert config.verbose is True
         assert prompt == "test prompt"

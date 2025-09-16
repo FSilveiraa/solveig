@@ -6,8 +6,9 @@ The MockFilesystem patches the static _* methods to simulate filesystem behavior
 touching real files.
 """
 
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import pytest
 
 from solveig.utils.file import Filesystem, Metadata
@@ -29,13 +30,13 @@ class TestSizeNotationParsing:
         assert parse_human_readable_size("1 MB") == 1000000
         assert parse_human_readable_size("1 GB") == 1000000000
         assert parse_human_readable_size("1 KiB") == 1024
-        assert parse_human_readable_size("1 MiB") == 1024 ** 2
-        assert parse_human_readable_size("1 GiB") == 1024 ** 3
+        assert parse_human_readable_size("1 MiB") == 1024**2
+        assert parse_human_readable_size("1 GiB") == 1024**3
 
     def test_parse_decimal_sizes(self):
         """Test parsing decimal sizes."""
         assert parse_human_readable_size("1.5 KB") == 1500
-        assert parse_human_readable_size("2.5 GiB") == int(2.5 * 1024 ** 3)
+        assert parse_human_readable_size("2.5 GiB") == int(2.5 * 1024**3)
 
     def test_parse_invalid_unit(self):
         """Test parsing invalid units raises ValueError."""
@@ -64,7 +65,9 @@ class TestMetadata:
             group_name="test_group",
             path=Path("/test/file.txt"),
             size=1024,
-            modified_time=int(datetime.fromisoformat("2024-01-01T12:00:00").timestamp()),
+            modified_time=int(
+                datetime.fromisoformat("2024-01-01T12:00:00").timestamp()
+            ),
             is_directory=False,
             is_readable=True,
             is_writable=True,
@@ -142,9 +145,7 @@ class TestFilesystemValidation:
                 "/test/huge_file.txt", content_size=huge_size
             )
 
-    def test_validate_write_access_existing_file_not_writable(
-        self, mock_filesystem
-    ):
+    def test_validate_write_access_existing_file_not_writable(self, mock_filesystem):
         """Test write access validation for existing non-writable file."""
         # Create a file and make it non-writable
         mock_filesystem.write_file("/test/readonly.txt", "content")
@@ -190,10 +191,12 @@ class TestFilesystemHelpers:
         # Should find /test as the closest writable parent
         assert result == Filesystem.get_absolute_path("/test")
 
-    def test_closest_writable_parent_no_writable_found(self, mock_filesystem: MockFilesystem):
+    def test_closest_writable_parent_no_writable_found(
+        self, mock_filesystem: MockFilesystem
+    ):
         """Test when no writable parent can be found."""
         # Make all directories non-writable
-        for path, entry in mock_filesystem._entries.items():
+        for entry in mock_filesystem._entries.values():
             if entry.metadata.is_directory:
                 entry.metadata.is_writable = False
 
@@ -226,7 +229,9 @@ class TestFilesystemHighLevelOperations:
         assert mock_filesystem.exists(Filesystem.get_absolute_path(nested_path))
 
         # Verify content
-        content = mock_filesystem.read_file(Filesystem.get_absolute_path(nested_path)).content
+        content = mock_filesystem.read_file(
+            Filesystem.get_absolute_path(nested_path)
+        ).content
         assert content == "nested content"
 
     def test_write_file_append_mode(self, mock_filesystem):
@@ -399,7 +404,9 @@ class TestFilesystemHighLevelOperations:
 
         # Read should return base64 format
         read_result = Filesystem.read_file(binary_path)
-        assert read_result.content == "YmluYXJ5IGNvbnRlbnQ="  # base64 of "binary content"
+        assert (
+            read_result.content == "YmluYXJ5IGNvbnRlbnQ="
+        )  # base64 of "binary content"
         assert read_result.encoding == "base64"
 
     def test_read_file_directory_error(self):
@@ -467,9 +474,7 @@ class TestFilesystemErrorHandling:
         with pytest.raises(PermissionError, match="Cannot create parent directory"):
             Filesystem.write_file("/test/new_file.txt", "content")
 
-    def test_write_validation_with_minimum_space_requirements(
-        self, mock_filesystem
-    ):
+    def test_write_validation_with_minimum_space_requirements(self, mock_filesystem):
         """Test write validation with both insufficient space AND minimum space requirements."""
         # Save original total size and restore after test
         original_total_size = mock_filesystem.total_size
@@ -519,15 +524,15 @@ class TestMockFilesystemSideEffects:
     def test_mock_write_text_side_effect(self, mock_filesystem):
         """Test that write_text mock can have side effects."""
         # Set side effect on write operation
-        mock_filesystem.mocks.write_text.side_effect = PermissionError("Read-only filesystem")
+        mock_filesystem.mocks.write_text.side_effect = PermissionError(
+            "Read-only filesystem"
+        )
 
         # Write should fail with mock side effect
         with pytest.raises(PermissionError, match="Read-only filesystem"):
             Filesystem.write_file("/test/readonly_fs.txt", "content")
 
-    def test_validate_read_access_permission_denied_scenarios(
-        self, mock_filesystem
-    ):
+    def test_validate_read_access_permission_denied_scenarios(self, mock_filesystem):
         """Test various permission denied scenarios for reading."""
         # Create file and make parent directory unreadable
         Filesystem.write_file("/test/subdir/restricted.txt", "content")
@@ -563,9 +568,15 @@ class TestFilesystemIntegration:
         assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/src"))
         assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/tests"))
         assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/docs"))
-        assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/README.md"))
-        assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/src/main.py"))
-        assert mock_filesystem.exists(Filesystem.get_absolute_path(f"{base_dir}/tests/test_main.py"))
+        assert mock_filesystem.exists(
+            Filesystem.get_absolute_path(f"{base_dir}/README.md")
+        )
+        assert mock_filesystem.exists(
+            Filesystem.get_absolute_path(f"{base_dir}/src/main.py")
+        )
+        assert mock_filesystem.exists(
+            Filesystem.get_absolute_path(f"{base_dir}/tests/test_main.py")
+        )
 
         # Verify content
         readme_content = mock_filesystem.read_file(

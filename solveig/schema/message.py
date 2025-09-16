@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, field_serializer
+from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
 from .requirements import Requirement
@@ -51,7 +51,9 @@ class UserMessage(BaseMessage):
 # Note: This static class is kept for backwards compatibility but is replaced
 # at runtime by get_filtered_llm_message_class() which includes all active requirements
 class LLMMessage(BaseMessage):
-    requirements: list[Requirement] | None = None  # Simplified - actual schema generated dynamically
+    requirements: list[Requirement] | None = (
+        None  # Simplified - actual schema generated dynamically
+    )
 
 
 def get_filtered_llm_message_class():

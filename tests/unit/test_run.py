@@ -1,6 +1,6 @@
 """Unit tests for scripts.run module functions."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from instructor.exceptions import InstructorRetryException
 
@@ -34,9 +34,9 @@ class TestMessageHistoryCreation:
     def test_message_history_creation_basic(self):
         """Test basic message history creation with system prompt."""
         interface = MockInterface()
-        
+
         message_history = get_message_history(DEFAULT_CONFIG, interface)
-        
+
         assert isinstance(message_history, MessageHistory)
         assert len(message_history.message_cache) >= 1
         assert message_history.message_cache[0]["role"] == "system"
@@ -45,9 +45,9 @@ class TestMessageHistoryCreation:
     def test_message_history_verbose_display(self):
         """Test verbose mode displays system prompt to user."""
         interface = MockInterface()
-        
+
         get_message_history(VERBOSE_CONFIG, interface)
-        
+
         output_text = interface.get_all_output()
         assert "System Prompt" in output_text
 
@@ -58,9 +58,9 @@ class TestUserInput:
     def test_initial_user_message_with_prompt(self):
         """Test creating UserMessage from provided prompt."""
         interface = MockInterface()
-        
+
         message = get_initial_user_message("Hello world", interface)
-        
+
         assert "─── User" in interface.get_all_output()
         assert "Hello world" in interface.get_all_output()
         assert message.comment == "Hello world"
@@ -69,9 +69,9 @@ class TestUserInput:
         """Test creating UserMessage from interactive input."""
         interface = MockInterface()
         interface.set_user_inputs(["Interactive input"])
-        
+
         message = get_initial_user_message(None, interface)
-        
+
         assert "─── User" in interface.get_all_output()
         assert message.comment == "Interactive input"
         assert len(interface.questions) == 1
@@ -87,7 +87,7 @@ class TestLLMCommunicationRetryLogic:
         message_history = MessageHistory(system_prompt="Test")
         user_message = UserMessage(comment="Test")
         expected_response = LLMMessage(comment="Response")
-        
+
         mock_client.chat.completions.create.return_value = expected_response
 
         llm_response, returned_user_message = send_message_to_llm_with_retry(
@@ -151,9 +151,9 @@ class TestRequirementProcessing:
         """Test handling LLM response with no requirements."""
         interface = MockInterface()
         llm_response = LLMMessage(comment="Just a comment, no actions needed")
-        
+
         results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
-        
+
         assert results == []
         assert "Results" not in interface.get_all_output()
 
@@ -161,15 +161,17 @@ class TestRequirementProcessing:
         """Test processing multiple requirements with different user accept/decline responses."""
         interface = MockInterface()
         interface.set_user_inputs(["y", "n"])  # Accept first, decline second
-        
+
         requirements = [
             CommandRequirement(command="echo hello", comment="Safe command"),
             CommandRequirement(command="echo world", comment="Another command"),
         ]
-        llm_response = LLMMessage(comment="Run some commands", requirements=requirements)
-        
+        llm_response = LLMMessage(
+            comment="Run some commands", requirements=requirements
+        )
+
         results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
-        
+
         assert "Results" in interface.get_all_output()
         assert len(results) >= 0
         assert all(hasattr(result, "accepted") for result in results)
@@ -181,16 +183,16 @@ class TestErrorHandling:
     def test_basic_error_display(self):
         """Test basic error message display."""
         interface = MockInterface()
-        
+
         handle_llm_error(INSTRUCTOR_RETRY_ERROR, DEFAULT_CONFIG, interface)
-        
+
         assert "Test error" in interface.get_all_output()
 
     def test_verbose_error_display_shows_completion_details(self):
         """Test verbose error display shows completion details."""
         interface = MockInterface()
-        
+
         handle_llm_error(INSTRUCTOR_RETRY_ERROR, VERBOSE_CONFIG, interface)
-        
+
         output_text = interface.get_all_output()
         assert "Test error" in output_text

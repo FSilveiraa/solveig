@@ -1,4 +1,5 @@
 """Integration tests for complete conversation loops with mock LLM client."""
+
 import tempfile
 from pathlib import Path
 
@@ -22,18 +23,22 @@ class TestConversationLoop:
         llm_response = LLMMessage(
             comment="I'll help diagnose your system. Let me check resources and processes.",
             requirements=[
-                CommandRequirement(command="top -b -n1 | head -10", comment="Check CPU usage"),
+                CommandRequirement(
+                    command="top -b -n1 | head -10", comment="Check CPU usage"
+                ),
                 CommandRequirement(command="df -h", comment="Check disk space"),
             ],
         )
 
         mock_client = create_mock_client(llm_response)
         interface = MockInterface()
-        interface.set_user_inputs([
-            "y",  # Accept top command
-            "y",  # Accept df command  
-            "exit",  # End conversation
-        ])
+        interface.set_user_inputs(
+            [
+                "y",  # Accept top command
+                "y",  # Accept df command
+                "exit",  # End conversation
+            ]
+        )
 
         # Execute conversation
         try:
@@ -53,7 +58,7 @@ class TestConversationLoop:
         assert "df -h" in output
 
     def test_file_operations_flow(self):
-        """Test file operations flow with mixed accept/decline responses.""" 
+        """Test file operations flow with mixed accept/decline responses."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
             temp_file_path = temp_dir_path / "new_file.txt"
@@ -65,22 +70,24 @@ class TestConversationLoop:
                     ReadRequirement(
                         path=temp_dir,
                         metadata_only=False,
-                        comment="Examine directory contents"
+                        comment="Examine directory contents",
                     ),
                     CommandRequirement(
                         command=f"find {temp_dir_path} -name '*.txt'",
-                        comment="Find text files"
+                        comment="Find text files",
                     ),
                 ],
             )
 
             mock_client = create_mock_client(llm_response)
             interface = MockInterface()
-            interface.set_user_inputs([
-                "y",  # Accept read operation
-                "n",  # Decline find command
-                "exit",
-            ])
+            interface.set_user_inputs(
+                [
+                    "y",  # Accept read operation
+                    "n",  # Decline find command
+                    "exit",
+                ]
+            )
 
             try:
                 main_loop(

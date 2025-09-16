@@ -8,12 +8,12 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from solveig.interface import SolveigInterface
-from solveig.schema.requirements.base import Requirement, validate_non_empty_path
-from solveig.schema.results.base import RequirementResult
-from solveig.utils.file import Filesystem, Metadata
 
 # Import the registration decorator
 from solveig.plugins.schema import register_requirement
+from solveig.schema.requirements.base import Requirement, validate_non_empty_path
+from solveig.schema.results.base import RequirementResult
+from solveig.utils.file import Filesystem, Metadata
 
 
 class TreeResult(RequirementResult):

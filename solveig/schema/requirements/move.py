@@ -82,9 +82,7 @@ class MoveRequirement(Requirement):
             )
 
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        interface.display_tree(
-            metadata=source_metadata, title="Source Metadata"
-        )
+        interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
         if interface.ask_yes_no(

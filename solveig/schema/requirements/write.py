@@ -1,10 +1,15 @@
 """Write requirement - allows LLM to create/update files and directories."""
 
 from typing import TYPE_CHECKING, Literal
+
 from pydantic import Field, field_validator
 
+from solveig.schema.requirements.base import (
+    Requirement,
+    format_path_info,
+    validate_non_empty_path,
+)
 from solveig.utils.file import Filesystem
-from solveig.schema.requirements.base import Requirement, format_path_info, validate_non_empty_path
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig

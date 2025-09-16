@@ -18,11 +18,7 @@ mock_responses = [
                 comment="",
                 path="~/Sync",
             ),
-            ReadRequirement(
-                comment="",
-                path="~/Sync/hello.py",
-                metadata_only=False
-            )
+            ReadRequirement(comment="", path="~/Sync/hello.py", metadata_only=False),
         ],
     ),
 ]

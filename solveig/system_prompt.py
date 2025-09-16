@@ -83,7 +83,9 @@ script_chat.add_message(
                     group_name="user",
                     path=Path("/home/user/run.sh"),
                     size=101,
-                    modified_time="2025-07-17T02:54:43",
+                    modified_time=int(
+                        datetime.fromisoformat("2025-07-17T02:54:43").timestamp()
+                    ),
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,
@@ -196,7 +198,9 @@ tmpfs           784M   48K  784M   1% /run/user/1000
                     group_name="user",
                     path=Path("/home/user/Documents/my_app.log"),
                     size=11180,
-                    modified_time="2025-07-16T12:59:44",
+                    modified_time=int(
+                        datetime.fromisoformat("2025-07-16T12:59:44").timestamp()
+                    ),
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,

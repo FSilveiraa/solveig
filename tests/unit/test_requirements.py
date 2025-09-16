@@ -3,9 +3,10 @@ Reorganized unit tests for requirement classes, grouped by requirement type.
 Tests validation, error handling, and display methods with comprehensive coverage.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 from pydantic import ValidationError
-from unittest.mock import patch, Mock
 
 from solveig.plugins.hooks import filter_hooks
 from solveig.schema.requirements import (
@@ -16,7 +17,6 @@ from solveig.schema.requirements import (
     ReadRequirement,
     WriteRequirement,
 )
-from tests.conftest import mock_filesystem
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
@@ -451,9 +451,7 @@ class TestCopyRequirement:
         # Set up source files
         mock_filesystem.write_file("/test/source.txt", "source content")
         mock_filesystem.create_directory("/test/source_dir")
-        mock_filesystem.write_file(
-            "/test/source_dir/nested.txt", "nested content"
-        )
+        mock_filesystem.write_file("/test/source_dir/nested.txt", "nested content")
 
         # Test copy file operation
         copy_req = CopyRequirement(
@@ -524,9 +522,7 @@ class TestMoveRequirement:
         # Set up source files
         mock_filesystem.write_file("/test/source.txt", "source content")
         mock_filesystem.create_directory("/test/source_dir")
-        mock_filesystem.write_file(
-            "/test/source_dir/nested.txt", "nested content"
-        )
+        mock_filesystem.write_file("/test/source_dir/nested.txt", "nested content")
 
         # Test move file operation
         move_req = MoveRequirement(

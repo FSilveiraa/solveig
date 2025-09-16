@@ -5,8 +5,8 @@ import pwd
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-
 from typing import Literal
+
 from pydantic import Field
 
 from solveig.utils.misc import parse_human_readable_size
@@ -21,10 +21,10 @@ class Metadata:
     is_directory: bool
     is_readable: bool
     is_writable: bool
-    modified_time: int | str = Field(
+    modified_time: int = Field(
         ...,
-        description="Last modified time for file or dir. Either in representing the UNIX timestamp or an ISO datetime"
-    )  # int unix timestamp
+        description="Last modified time for file or dir as UNIX timestamp",
+    )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[Path, "Metadata"] | None = None
 
@@ -82,9 +82,7 @@ class Filesystem:
         is_dir = cls.is_dir(abs_path)
         if is_dir and descend_level != 0:
             listing = {
-                sub_path: cls.read_metadata(
-                    sub_path, descend_level=descend_level - 1
-                )
+                sub_path: cls.read_metadata(sub_path, descend_level=descend_level - 1)
                 for sub_path in sorted(
                     [cls.get_absolute_path(sub_path) for sub_path in abs_path.iterdir()]
                 )
@@ -333,10 +331,7 @@ class Filesystem:
             raise IsADirectoryError(f"Cannot read directory {abs_path}")
         try:
             if cls._is_text_file(abs_path):
-                return FileContent(
-                    content=cls._read_text(abs_path),
-                    encoding="text"
-                )
+                return FileContent(content=cls._read_text(abs_path), encoding="text")
             else:
                 raise Exception("utf-8", None, 0, -1, "Fallback to Base64")
         except Exception:

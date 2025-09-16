@@ -9,7 +9,6 @@ from solveig.llm import APIType
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import parse_human_readable_size
 
-
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
 
@@ -42,9 +41,7 @@ class SolveigConfig:
         # convert API type to enum
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = APIType[self.api_type]
-        self.min_disk_space_left = parse_human_readable_size(
-            self.min_disk_space_left
-        )
+        self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
         # split allowed paths in (path, mode)
         # TODO: allowed paths
@@ -175,7 +172,8 @@ class SolveigConfig:
         if not file_config:
             file_config = {}
             warning = "Failed to parse config file, falling back to defaults"
-            interface.display_error(warning)
+            if interface:
+                interface.display_error(warning)
 
         # Merge config from file and CLI
         merged_config: dict = {**file_config}

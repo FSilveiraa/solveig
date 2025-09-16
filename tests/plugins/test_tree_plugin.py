@@ -19,15 +19,15 @@ class TestTreePlugin:
         """Test tree plugin creates visual directory tree from real filesystem."""
 
         # TODO: use str result for visual value
-        expected_tree = """
-        ┌─── Tree: {tmp_path} ─────────────────────
-        │ 🗁 {tmp_name}            
-        │ ├─🗎 file1.txt                
-        │ ├─🗎 file2.py                 
-        │ └─🗁 subdir                                                               
-        │   └─🗎 nested.md              
-        └───────────────────────────────────────────
-        """.strip()
+        # expected_tree = """
+        # ┌─── Tree: {tmp_path} ─────────────────────
+        # │ 🗁 {tmp_name}
+        # │ ├─🗎 file1.txt
+        # │ ├─🗎 file2.py
+        # │ └─🗁 subdir
+        # │   └─🗎 nested.md
+        # └───────────────────────────────────────────
+        # """.strip()
 
         # Create real directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -39,7 +39,7 @@ class TestTreePlugin:
 
             # LLM requests tree inspection
             llm_response = LLMMessage(
-                comment=f"I'll show you the directory structure.",
+                comment="I'll show you the directory structure.",
                 requirements=[
                     TreeRequirement(comment="", path=str(temp_path), max_depth=2),
                 ],
@@ -64,6 +64,6 @@ class TestTreePlugin:
             output = interface.get_all_output()
             assert "Tree:" in output
             assert "file1.txt" in output
-            assert "file2.py" in output  
+            assert "file2.py" in output
             assert "subdir" in output
             assert "nested.md" in output

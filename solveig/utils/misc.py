@@ -1,7 +1,8 @@
-from pathlib import Path
 import re
+from dataclasses import fields, is_dataclass
+from pathlib import Path
 from typing import Any
-from dataclasses import is_dataclass, fields
+
 import tiktoken
 from pydantic import BaseModel
 
@@ -80,11 +81,13 @@ def convert_size_to_human_readable(num_bytes: int, decimal=False) -> str:
         step = 1024.0
         units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]
 
+    size: float = float(num_bytes)
     for unit in units:
-        if num_bytes < step:
-            return f"{num_bytes:.1f} {unit}"
-        num_bytes /= step
-    return f"{num_bytes:.1f} {units[-1]}"
+        if size < step:
+            return f"{size:.1f} {unit}"
+        size /= step
+    return f"{size:.1f} {units[-1]}"
+
 
 def parse_human_readable_size(size_notation: int | str) -> int:
     """
@@ -121,6 +124,7 @@ def parse_human_readable_size(size_notation: int | str) -> int:
                         f"'{size_notation}' is not a valid disk size"
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
+
 
 def dump_pydantic_field(obj: Any) -> Any:
     """Recursively convert dataclass → dict with Path → str."""

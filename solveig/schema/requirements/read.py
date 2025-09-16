@@ -70,7 +70,9 @@ class ReadRequirement(Requirement):
             )
 
         metadata = Filesystem.read_metadata(abs_path)
-        interface.display_tree(metadata, title=f"Metadata: {abs_path}", display_metadata=True)
+        interface.display_tree(
+            metadata, title=f"Metadata: {abs_path}", display_metadata=True
+        )
         content = None
 
         if (
@@ -88,7 +90,9 @@ class ReadRequirement(Requirement):
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
 
-            content_output = "(Base64)" if metadata.encoding.lower() == "base64" else content
+            content_output = (
+                "(Base64)" if metadata.encoding.lower() == "base64" else str(content)
+            )
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if interface.ask_yes_no(
@@ -99,7 +103,7 @@ class ReadRequirement(Requirement):
                 path=abs_path,
                 accepted=True,
                 metadata=metadata,
-                content=content,
+                content=str(content) if content is not None else None,
             )
         else:
             return ReadResult(requirement=self, path=abs_path, accepted=False)

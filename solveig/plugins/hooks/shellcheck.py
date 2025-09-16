@@ -39,7 +39,9 @@ def detect_shell(plugin_config) -> str:
 # linter to confirm whether it's correct BASH. I have no idea if this works on Windows
 # (tbh I have no idea if solveig itself works on anything besides Linux)
 @before(requirements=(CommandRequirement,))
-def check_command(config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement):
+def check_command(
+    config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement
+):
     plugin_config = config.plugins.get("shellcheck", {})
 
     # Check for obviously dangerous patterns first
@@ -74,15 +76,21 @@ def check_command(config: SolveigConfig, interface: SolveigInterface, requiremen
                 text=True,
             )
         except FileNotFoundError:
-            interface.display_warning("Shellcheck was activated as a plugin, but the `shellcheck` command is not available.")
-            interface.display_warning("Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing")
+            interface.display_warning(
+                "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
+            )
+            interface.display_warning(
+                "Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing"
+            )
             # if this throws an exception, then not having Shellcheck installed
             # prevents you from running commands at all
             return
 
         if result.returncode == 0:
             if config.verbose:
-                interface.display_success(f"Shellcheck: No issues with command `{requirement.command}`")
+                interface.display_success(
+                    f"Shellcheck: No issues with command `{requirement.command}`"
+                )
             return
 
         # Parse shellcheck warnings and raise validation error
