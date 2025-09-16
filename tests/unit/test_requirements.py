@@ -5,7 +5,9 @@ Tests validation, error handling, and display methods with comprehensive coverag
 
 import pytest
 from pydantic import ValidationError
+from unittest.mock import patch, Mock
 
+from solveig.plugins.hooks import filter_hooks
 from solveig.schema.requirements import (
     CommandRequirement,
     CopyRequirement,
@@ -99,8 +101,15 @@ class TestCommandRequirement:
         assert "command(command)" in description
         assert "execute shell commands" in description
 
-    def test_successful_command_execution(self):
+    @patch("subprocess.run")
+    def test_successful_command_execution(self, mock_subprocess):
         """Test successful command execution with various user responses."""
+        subprocess_result = Mock()
+        subprocess_result.returncode = 0
+        subprocess_result.stdout = "test"
+        subprocess_result.stderr = ""
+        mock_subprocess.return_value = subprocess_result
+
         req = CommandRequirement(command="echo test", comment="Test echo command")
         interface = MockInterface()
 
@@ -117,7 +126,7 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True
-        assert "test" in result.stdout
+        assert "test" == result.stdout
 
     def test_command_declined(self):
         """Test when user declines command execution."""
@@ -128,18 +137,27 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is False
 
-    def test_command_with_error_output(self):
+    @patch("subprocess.run")
+    def test_command_with_error_output(self, mock_subprocess):
         """Test command that produces error output but executes successfully."""
+        subprocess_result = Mock()
+        subprocess_result.returncode = 1
+        subprocess_result.stdout = ""
+        subprocess_result.stderr = "Command not found"
+        mock_subprocess.return_value = subprocess_result
+
         req = CommandRequirement(
             command="nonexistent_command_12345", comment="Invalid command"
         )
         interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept command and output
 
+        # TODO: hotfix to skip plugin usage - should be off by default
+        filter_hooks(interface=interface, enabled_plugins=DEFAULT_CONFIG)
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True  # Shell execution succeeded
-        assert "command not found" in result.error
+        assert "Command not found" in result.error
 
     def test_command_exception_handling(self):
         """Test command requirement exception handling during execution."""
@@ -221,8 +239,8 @@ class TestReadRequirement:
         assert content_result.accepted is True
         file_path = mock_filesystem.get_absolute_path("/test/readable.txt")
         file_content = mock_filesystem.read_file(file_path)
-        assert file_content in content_result.content
-        assert file_content in interface.get_all_output()
+        assert file_content.content in content_result.content
+        assert file_content.content in interface.get_all_output()
 
         # Test directory read with listing
         interface.clear()

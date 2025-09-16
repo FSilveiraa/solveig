@@ -16,7 +16,7 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 class TestConversationLoop:
     """Test complete conversation flows using mock LLM client."""
 
-    def test_command_execution_flow(self, mock_all_file_operations):
+    def test_command_execution_flow(self):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
         # LLM suggests diagnostic commands
         llm_response = LLMMessage(
@@ -52,7 +52,7 @@ class TestConversationLoop:
         assert "top -b -n1" in output
         assert "df -h" in output
 
-    def test_file_operations_flow(self, mock_all_file_operations):
+    def test_file_operations_flow(self):
         """Test file operations flow with mixed accept/decline responses.""" 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)

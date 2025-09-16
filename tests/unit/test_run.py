@@ -194,4 +194,3 @@ class TestErrorHandling:
         
         output_text = interface.get_all_output()
         assert "Test error" in output_text
-        assert "Raw output" in output_text

@@ -174,7 +174,6 @@ def filter_hooks(
             interface.show(
                 f"🕮  Hook filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
             )
-            return
 
 
 # Expose only what plugin developers and the main system need
