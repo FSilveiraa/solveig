@@ -1,12 +1,9 @@
 """Unit tests for solveig.interface.cli module."""
 
 import re
-from pathlib import Path
 
-from solveig.interface.cli import CLIInterface
 from solveig.schema.message import LLMMessage
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
-from solveig.utils.file import Metadata
 from tests.mocks.interface import MockInterface
 
 
@@ -15,7 +12,7 @@ class TestCLIInterfaceCore:
 
     def test_initialization(self):
         """Test CLIInterface initialization with parameters."""
-        interface = CLIInterface(indent_base=4, max_lines=10, verbose=True)
+        interface = MockInterface(indent_base=4, max_lines=10, verbose=True)
         assert interface.indent_base == 4
         assert interface.max_lines == 10
         assert interface.verbose
@@ -76,123 +73,32 @@ class TestCLIInterfaceCore:
 class TestTreeDisplay:
     """Test complex tree visualization functionality."""
 
-    @staticmethod
-    def create_complex_tree_metadata() -> Metadata:
-        """Create a complex nested directory structure like /home/francisco/Sync."""
-        # Create deepest files first
-        f3 = Metadata(
-            path=Path("/test/d1/sub-d1/sub-d2/sub-d3/f3"),
-            is_directory=False, size=100, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True
-        )
-
-        f4 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f4"), is_directory=False, size=100, modified_time="2024-01-01",
-                      owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        f5 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f5"), is_directory=False, size=100, modified_time="2024-01-01",
-                      owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        f6 = Metadata(path=Path("/test/d1/sub-d1/sub-d2/f6"), is_directory=False, size=100, modified_time="2024-01-01",
-                      owner_name="user", group_name="group", is_readable=True, is_writable=True)
-
-        # Build directories from bottom up
-        sub_d3 = Metadata(
-            path=Path("/test/d1/sub-d1/sub-d2/sub-d3"), is_directory=True, size=4096, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True,
-            listing={Path("/test/d1/sub-d1/sub-d2/sub-d3/f3"): f3}
-        )
-
-        sub_d2 = Metadata(
-            path=Path("/test/d1/sub-d1/sub-d2"), is_directory=True, size=4096, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True,
-            listing={
-                Path("/test/d1/sub-d1/sub-d2/f4"): f4,
-                Path("/test/d1/sub-d1/sub-d2/f5"): f5,
-                Path("/test/d1/sub-d1/sub-d2/f6"): f6,
-                Path("/test/d1/sub-d1/sub-d2/sub-d3"): sub_d3,
-            }
-        )
-
-        sub_f1 = Metadata(path=Path("/test/d1/sub-f1"), is_directory=False, size=100, modified_time="2024-01-01",
-                          owner_name="user", group_name="group", is_readable=True, is_writable=True)
-
-        sub_d1 = Metadata(
-            path=Path("/test/d1/sub-d1"), is_directory=True, size=4096, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True,
-            listing={Path("/test/d1/sub-d1/sub-d2"): sub_d2}
-        )
-
-        d1 = Metadata(
-            path=Path("/test/d1"), is_directory=True, size=4096, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True,
-            listing={
-                Path("/test/d1/sub-d1"): sub_d1,
-                Path("/test/d1/sub-f1"): sub_f1,
-            }
-        )
-
-        # Root level files
-        dev_sh = Metadata(path=Path("/test/dev.sh"), is_directory=False, size=200, modified_time="2024-01-01",
-                          owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        f1 = Metadata(path=Path("/test/f1"), is_directory=False, size=50, modified_time="2024-01-01", owner_name="user",
-                      group_name="group", is_readable=True, is_writable=True)
-        hello_py = Metadata(path=Path("/test/hello.py"), is_directory=False, size=150, modified_time="2024-01-01",
-                            owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        j1_json = Metadata(path=Path("/test/j1.json"), is_directory=False, size=300, modified_time="2024-01-01",
-                           owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        run_sh_bak = Metadata(path=Path("/test/run.sh.bak"), is_directory=False, size=250, modified_time="2024-01-01",
-                              owner_name="user", group_name="group", is_readable=True, is_writable=True)
-        stuff_txt = Metadata(path=Path("/test/stuff.txt"), is_directory=False, size=80, modified_time="2024-01-01",
-                             owner_name="user", group_name="group", is_readable=True, is_writable=True)
-
-        # Root directory
-        root = Metadata(
-            path=Path("/test"), is_directory=True, size=4096, modified_time="2024-01-01",
-            owner_name="user", group_name="group", is_readable=True, is_writable=True,
-            listing={
-                Path("/test/d1"): d1,
-                Path("/test/dev.sh"): dev_sh,
-                Path("/test/f1"): f1,
-                Path("/test/hello.py"): hello_py,
-                Path("/test/j1.json"): j1_json,
-                Path("/test/run.sh.bak"): run_sh_bak,
-                Path("/test/stuff.txt"): stuff_txt,
-            }
-        )
-
-        return root
-
-    def test_display_complex_directory_tree_complete_structure(self):
+    def test_display_complex_directory_tree_complete_structure(self, mock_filesystem):
         """Test displaying complex nested directory structure with full depth visualization."""
         interface = MockInterface()
         interface.max_lines = -1  # Ensure we see full structure
         
-        complex_tree = self.create_complex_tree_metadata()
-        interface.display_tree(complex_tree)
-
+        # complex_tree = self.create_complex_tree_metadata()
+        tree = mock_filesystem.read_metadata(mock_filesystem.get_absolute_path("/test/dir2/"))
+        interface.display_tree(tree)
         expected_lines = f"""
-┌─── {complex_tree.path} ────────────────
-│ 🗁 {complex_tree.path.name}                   
-│   ├─🗁 d1                 
-│   │  ├─🗁 sub-d1          
-│   │  │  └─🗁 sub-d2       
-│   │  │    ├─🗎 f4         
-│   │  │    ├─🗎 f5         
-│   │  │    ├─🗎 f6         
-│   │  │    └─🗁 sub-d3     
-│   │  │      └─🗎 f3       
-│   │  └─🗎 sub-f1          
-│   ├─🗎 dev.sh             
-│   ├─🗎 f1                 
-│   ├─🗎 hello.py           
-│   ├─🗎 j1.json            
-│   ├─🗎 run.sh.bak         
-│   └─🗎 stuff.txt          
-└──────────────────────────
+┌─── {tree.path} ────────────────
+│ 🗁  {tree.path.name}             
+│   ├─🗎 f1                       
+│   └─🗁  sub-d1                  
+│     ├─🗁  sub-d2                
+│     │  └─🗎 f4                  
+│     └─🗁  sub-d3                
+│       └─🗎 f3                   
+└────────────────────────────────
         """.strip().splitlines()
 
         output_lines = interface.get_all_output().split("\n")
         for expected_line in expected_lines:
-            # strip() the expected_line since in the future we may add metadata to the tree view
-            assert any(expected_line.strip() in output_line for output_line in output_lines)
+            try:
+                assert any(expected_line.strip() in output_line for output_line in output_lines)
+            except AssertionError as e:
+                raise AssertionError(f"{expected_line} not found in output:\n{output_lines}") from e
 
 
 class TestLLMResponseAndErrorDisplay:

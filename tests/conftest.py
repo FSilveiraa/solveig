@@ -11,7 +11,7 @@ from tests.mocks.file import mock_fs
 
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_all_file_operations(request):
+def mock_filesystem(request):
     """
     Automatically patch all utils.file operations for every test.
 
@@ -31,6 +31,17 @@ def mock_all_file_operations(request):
 
 
 @pytest.fixture(autouse=True, scope="function")
+def mock_subprocess(request):
+    # Skip mocking for tests marked with @pytest.mark.no_file_mocking
+    if request.node.get_closest_marker("no_subprocess_mocking"):
+        yield None
+        return
+
+    with patch("subprocess.run", side_effect=OSError("Cannot run actual processes")) as mocked_subprocess:
+        yield mocked_subprocess
+
+
+@pytest.fixture(autouse=True, scope="function")
 def safe_external_operations(request):
     """Provide safe defaults for external operations in tests."""
     with patch("subprocess.run", side_effect = OSError("Cannot run actual processes")):
@@ -40,9 +51,9 @@ def safe_external_operations(request):
             yield None
             return
 
-        with patch("builtins.open", side_effect=OSError("Cannot use actual file I/O")):
-            with patch("builtins.input", side_effect=OSError("Cannot use actual input")):
-                with patch("builtins.print", side_effect=OSError("Cannot use actual print")):
+        with patch("builtins.open", side_effect=OSError("Cannot use actual file I/O - use utils.file.Filesystem")):
+            with patch("builtins.input", side_effect=OSError("Cannot use actual `input` built-in - use SolveigInterface")):
+                with patch("builtins.print", side_effect=OSError("Cannot use actual `print` built-in - use SolveigInterface")):
                     yield
 
 

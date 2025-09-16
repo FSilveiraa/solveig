@@ -83,6 +83,14 @@ class MockFilesystem(Filesystem):
         self.create_directory("/test/dir/subdir")
         self.write_file("/test/dir/nested.txt")
 
+        self.create_directory("/test/dir2")
+        self.create_directory("test/dir2/sub-d1/sub-d2")
+        self.write_file("/test/dir2/sub-d1/sub-d2/f4", "This is f4")
+        self.write_file("/test/dir2/sub-d1/sub-d2/f4", "And this is f5")
+        self.write_file("/test/dir2/sub-d1/sub-d2/f4", "F6 here")
+        self.write_file("/test/dir2/sub-d1/sub-d3/f3", "One level down")
+        self.write_file("/test/dir2/f1")
+
     # def create_directory(self, path: str | Path) -> None:
     #     """Helper method to create a directory and ensure parent directories exist."""
     #     abs_path = Path(path).resolve()

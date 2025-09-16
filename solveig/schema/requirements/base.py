@@ -82,7 +82,7 @@ class Requirement(BaseModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        before_hook(config, self)
+                        before_hook(config, interface, self)
                     except ValidationError as e:
                         # Plugin validation failed - return appropriate error result
                         return self.create_error_result(
@@ -113,7 +113,7 @@ class Requirement(BaseModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        after_hook(config, self, result)
+                        after_hook(config, interface, self, result)
                     except ProcessingError as e:
                         # Plugin processing failed - return error result
                         return self.create_error_result(

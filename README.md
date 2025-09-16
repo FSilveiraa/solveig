@@ -249,13 +249,12 @@ The existing requirement types in `solveig/schema/requirements/` show patterns f
 <summary><b>Block dangerous commands with custom patterns</b></summary>
 
 ```python
-from solveig.config import SolveigConfig
 from solveig.plugins.hooks import before
 from solveig.plugins.exceptions import SecurityError
 from solveig.schema.requirements import CommandRequirement
 
 @before(requirements=(CommandRequirement,))
-def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirement):
+def block_dangerous_commands(config, interface, requirement):
     """Block commands that could be dangerous to system security."""
     dangerous_patterns = [
         "sudo chmod 777",
@@ -275,23 +274,21 @@ def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirem
 
 ```python
 import re
-
-from solveig.config import SolveigConfig
+from pathlib import Path
 from solveig.plugins.hooks import after
 from solveig.plugins.exceptions import ProcessingError
 from solveig.schema.requirements import ReadRequirement, WriteRequirement
-from solveig.schema.results import ReadResult, WriteResult
 
 @after(requirements=(ReadRequirement, WriteRequirement))
-def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
+def anonymize_paths(config, interface, requirement, result):
     """Anonymize file paths in results before sending to LLM."""
     try:
-        original_path = result.metadata['path']
+        original_path = str(result.metadata.path)
     except:
         return
     anonymous_path = re.sub(r"/home/\w+", "/home/jdoe", original_path)
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
-    result.metadata.path = anonymous_path
+    result.metadata.path = Path(anonymous_path)
 ```
 </details>
 
