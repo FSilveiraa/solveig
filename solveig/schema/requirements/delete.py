@@ -33,7 +33,7 @@ class DeleteRequirement(Requirement):
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem._is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
         interface.show(path_info)
         interface.display_warning("This operation is permanent and cannot be undone!")

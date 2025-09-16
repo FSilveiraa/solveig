@@ -105,11 +105,11 @@ class TestConfigDirectory:
 
         # Show the files doesn't exist before
         config_path = mock_filesystem.mocks.default_config_path
-        assert not mock_filesystem._exists(config_path)
-        assert not mock_filesystem._exists(config_path.parent)
+        assert not mock_filesystem.exists(config_path)
+        assert not mock_filesystem.exists(config_path.parent)
         # Confirm using the mocks is the same as calling Path.exists() directly
-        assert not Filesystem._exists(config_path)
-        assert not Filesystem._exists(config_path.parent)
+        assert not Filesystem.exists(config_path)
+        assert not Filesystem.exists(config_path.parent)
 
         # Execute
         create_example_config(interface)
@@ -125,7 +125,7 @@ class TestConfigDirectory:
         assert config_path.parent in mock_filesystem._entries
         # Use Filesystem methods to confirm mocks are working, despite obviously
         # this path not existing in the real filesystem
-        assert Filesystem._exists(config_path.parent)
+        assert Filesystem.exists(config_path.parent)
         content = Filesystem.read_file(config_path).content
         assert content == SolveigConfig().to_json()
         mock_content = mock_filesystem._mock_read_text(config_path)
@@ -141,8 +141,8 @@ class TestConfigDirectory:
         interface.set_user_inputs(["n"])
 
         # Show the files doesn't exist before
-        assert not Filesystem._exists(default_config_path.parent)
-        assert not Filesystem._exists(default_config_path)
+        assert not Filesystem.exists(default_config_path.parent)
+        assert not Filesystem.exists(default_config_path)
 
         create_example_config(interface)
 
@@ -150,8 +150,8 @@ class TestConfigDirectory:
         assert "Skipped config file creation." in interface.get_all_output()
 
         # Confirm the config path was not created
-        assert not Filesystem._exists(default_config_path.parent)
-        assert not Filesystem._exists(default_config_path)
+        assert not Filesystem.exists(default_config_path.parent)
+        assert not Filesystem.exists(default_config_path)
 
     def test_create_config_exception(self, mock_filesystem):
         """Test handling exceptions during directory creation."""
@@ -166,11 +166,11 @@ class TestConfigDirectory:
         interface.set_user_inputs(["y"])
 
         # The file doesn't exist before
-        assert not Filesystem._exists(default_config_path)
+        assert not Filesystem.exists(default_config_path)
 
         create_example_config(interface)
 
-        assert not Filesystem._exists(default_config_path)
+        assert not Filesystem.exists(default_config_path)
         assert (
             "Failed to create config file: Access denied" in interface.get_all_output()
         )

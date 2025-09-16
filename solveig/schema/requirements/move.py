@@ -39,7 +39,7 @@ class MoveRequirement(Requirement):
         path_info = format_path_info(
             path=self.source_path,
             abs_path=source_abs,
-            is_dir=Filesystem._is_dir(source_abs),
+            is_dir=Filesystem.is_dir(source_abs),
             destination_path=self.destination_path,
             absolute_destination_path=dest_abs,
         )

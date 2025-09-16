@@ -60,11 +60,11 @@ class Filesystem:
         return Path(path).expanduser().resolve()
 
     @staticmethod
-    def _exists(abs_path: Path) -> bool:
+    def exists(abs_path: Path) -> bool:
         return abs_path.exists()
 
     @staticmethod
-    def _is_dir(abs_path: Path) -> bool:
+    def is_dir(abs_path: Path) -> bool:
         return abs_path.is_dir()
 
     @classmethod
@@ -79,7 +79,7 @@ class Filesystem:
         """
         stats = abs_path.stat()
 
-        is_dir = cls._is_dir(abs_path)
+        is_dir = cls.is_dir(abs_path)
         if is_dir and descend_level != 0:
             listing = {
                 sub_path: cls.read_metadata(
@@ -178,13 +178,13 @@ class Filesystem:
     """Helpers"""
 
     @classmethod
-    def closest_writable_parent(cls, abs_dir_path: Path) -> Path | None:
+    def _closest_writable_parent(cls, abs_dir_path: Path) -> Path | None:
         """
         Check that a directory can be created by walking up the tree
         until we find an existing directory and checking its permissions.
         """
         while True:
-            if cls._exists(abs_dir_path):
+            if cls.exists(abs_dir_path):
                 return abs_dir_path if cls.is_writable(abs_dir_path) else None
             # Reached root dir without being writable
             if abs_dir_path == abs_dir_path.parent:
@@ -219,7 +219,7 @@ class Filesystem:
             PermissionError: If file is not readable
         """
         abs_path = cls.get_absolute_path(file_path)
-        if not cls._exists(abs_path):
+        if not cls.exists(abs_path):
             raise FileNotFoundError(f"Path {abs_path} does not exist")
         # if cls._is_dir(abs_path):
         #     raise IsADirectoryError(f"File {abs_path} is a directory")
@@ -240,7 +240,7 @@ class Filesystem:
             PermissionError: If file is not readable
         """
         abs_path = cls.get_absolute_path(path)
-        if not cls._exists(abs_path):
+        if not cls.exists(abs_path):
             raise FileNotFoundError(f"File {abs_path} does not exist")
         if not cls.is_writable(abs_path.parent):
             raise PermissionError(f"File {abs_path.parent} is not writable")
@@ -274,8 +274,8 @@ class Filesystem:
         # Check if path already exists, if it's a directory we cannot overwrite,
         # if it does not exist then we need to check permissions on the parent
         # parent_to_write_into = abs_path.parent
-        if cls._exists(abs_path):
-            if cls._is_dir(abs_path):
+        if cls.exists(abs_path):
+            if cls.is_dir(abs_path):
                 raise IsADirectoryError(
                     f"Cannot overwrite existing directory {abs_path}"
                 )
@@ -284,7 +284,7 @@ class Filesystem:
         # If the path does not exist, or it exists and is a file, then we need to find the closest
         # writable parent - so if we have /test/ and we're trying to write /test/dir1/dir2/file1.txt,
         # that would we /test/
-        closest_writable_parent = cls.closest_writable_parent(abs_path.parent)
+        closest_writable_parent = cls._closest_writable_parent(abs_path.parent)
         if not closest_writable_parent:
             raise PermissionError(f"Cannot create parent directory {abs_path.parent}")
 
@@ -329,7 +329,7 @@ class Filesystem:
         """
         abs_path = cls.get_absolute_path(path)
         cls.validate_read_access(abs_path)
-        if cls._is_dir(abs_path):
+        if cls.is_dir(abs_path):
             raise IsADirectoryError(f"Cannot read directory {abs_path}")
         try:
             if cls._is_text_file(abs_path):
@@ -359,7 +359,7 @@ class Filesystem:
         )
         cls.create_directory(dest_path.parent)
 
-        if cls._is_dir(src_path):
+        if cls.is_dir(src_path):
             cls._copy_dir(src_path, dest_path)
         else:
             cls._copy_file(src_path, dest_path)
@@ -379,7 +379,7 @@ class Filesystem:
     def delete(cls, path: str | Path) -> None:
         abs_path = cls.get_absolute_path(path)
         cls.validate_delete_access(abs_path)
-        if cls._is_dir(abs_path):
+        if cls.is_dir(abs_path):
             cls._delete_dir(abs_path)
         else:
             cls._delete_file(abs_path)
@@ -387,14 +387,14 @@ class Filesystem:
     @classmethod
     def create_directory(cls, dir_path: str | Path, exist_ok=True) -> None:
         abs_path = cls.get_absolute_path(dir_path)
-        if cls._exists(abs_path):
+        if cls.exists(abs_path):
             if exist_ok:
                 return
             else:
                 raise PermissionError(f"Directory {abs_path} already exists")
         else:
             # if we're not at / and the above directory doesn't exist, recurse upwards
-            if abs_path != abs_path.parent and not cls._exists(abs_path.parent):
+            if abs_path != abs_path.parent and not cls.exists(abs_path.parent):
                 cls.create_directory(abs_path.parent, exist_ok=True)
             cls._create_directory(abs_path)
 
@@ -413,7 +413,7 @@ class Filesystem:
             abs_path, content_size=size, min_disk_size_left=min_space_left
         )
         cls.create_directory(abs_path.parent, exist_ok=True)
-        if append and cls._exists(abs_path):
+        if append and cls.exists(abs_path):
             cls._append_text(abs_path, content, encoding=encoding)
         else:
             cls._write_text(abs_path, content, encoding=encoding)
@@ -422,7 +422,7 @@ class Filesystem:
     def get_dir_listing(cls, dir_path: str | Path) -> dict[Path, Metadata]:
         abs_path = cls.get_absolute_path(dir_path)
         cls.validate_read_access(abs_path)
-        if not cls._is_dir(abs_path):
+        if not cls.is_dir(abs_path):
             raise NotADirectoryError(f"File {abs_path} is not a directory")
         dir_listing = cls._get_listing(abs_path)
         return {path: cls.read_metadata(path) for path in dir_listing}

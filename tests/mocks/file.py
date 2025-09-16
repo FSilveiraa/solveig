@@ -240,10 +240,10 @@ class MockFilesystem(Filesystem):
         """Context manager that patches all file operations to use this mock filesystem."""
         with (
             patch.object(
-                Filesystem, "_exists", MagicMock(side_effect=self._mock_exists)
+                Filesystem, "exists", MagicMock(side_effect=self._mock_exists)
             ) as patch_exists,
             patch.object(
-                Filesystem, "_is_dir", MagicMock(side_effect=self._mock_is_dir)
+                Filesystem, "is_dir", MagicMock(side_effect=self._mock_is_dir)
             ) as patch_is_dir,
             patch.object(
                 Filesystem,

@@ -1,7 +1,7 @@
 """Unit tests for plugin requirements system."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from solveig.plugins.schema.tree import TreeRequirement, TreeResult
 from solveig.utils.file import Metadata
@@ -55,43 +55,14 @@ class TestTreeRequirement:
         assert error_result.metadata is None
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
-    def test_tree_complete_execution_flow(self, mock_all_file_operations):
+    def test_tree_complete_execution_flow(self, mock_filesystem):
         """Test complete tree execution: filesystem interaction, display, and result generation."""
-        # Create realistic nested metadata structure
-        # file_metadata = Metadata(
-        #     path=Path("/test/file.txt"), is_directory=False, size=100,
-        #     modified_time="2023-01-01", owner_name="user", group_name="group",
-        #     is_readable=True, is_writable=True
-        # )
-        #
-        # nested_file = Metadata(
-        #     path=Path("/test/subdir/nested.txt"), is_directory=False, size=50,
-        #     modified_time="2023-01-01", owner_name="user", group_name="group",
-        #     is_readable=True, is_writable=True
-        # )
-        #
-        # subdir_metadata = Metadata(
-        #     path=Path("/test/subdir"), is_directory=True, size=4096,
-        #     modified_time="2023-01-01", owner_name="user", group_name="group",
-        #     is_readable=True, is_writable=True,
-        #     listing={Path("/test/subdir/nested.txt"): nested_file}
-        # )
-        #
-        # root_metadata = Metadata(
-        #     path=Path("/test"), is_directory=True, size=4096,
-        #     modified_time="2023-01-01", owner_name="user", group_name="group",
-        #     is_readable=True, is_writable=True,
-        #     listing={
-        #         Path("/test/file.txt"): file_metadata,
-        #         Path("/test/subdir"): subdir_metadata,
-        #     }
-        # )
-        
-        # mock_all_file_operations.mocks.read_metadata.return_value = root_metadata
-        mock_all_file_operations.create_directory("/test")
-        mock_all_file_operations.write_file("/test/file.txt", "file one here shntpdsohnwtd")
-        mock_all_file_operations.create_directory("/test/subdir")
-        mock_all_file_operations.write_file("/test/subdir/nested.txt", "file two ufsufutfuuuuuudurrrr")
+        # clear the filesystem and write a smaller structure to ensure it fits on the window
+        mock_filesystem._entries.clear()
+        mock_filesystem.create_directory("/test")
+        mock_filesystem.write_file("/test/file.txt", "file one here shntpdsohnwtd")
+        mock_filesystem.create_directory("/test/subdir")
+        mock_filesystem.write_file("/test/subdir/nested.txt", "file two ufsufutfuuuuuudurrrr")
         
         # Execute tree requirement
         req = TreeRequirement(path="/test", comment="Test tree")
@@ -105,27 +76,17 @@ class TestTreeRequirement:
         assert result.error is None
 
         assert result.metadata.path == Path("/test")
-        # for entry in result.metadata.listing:
-        #     if entry.path == Path("/test/subdir"):
-        #         pass
-        #     elif entry.path == Path("/test/file.txt"):
-        # assert any(entry.path == Path("/test/") for entry in result.metadata.listing)
-        #
-        # # esult.metadata.listing
-        #
-        # assert result.metadata == root_metadata
-        # assert str(result.path) == "/test"
-        #
+
         # Verify tree visualization was displayed
         output = interface.get_all_output()
         assert "Tree:" in output
-        assert "🗁 test" in output  # Root directory
+        assert "🗁  test" in output  # Root directory
         assert "🗎 file.txt" in output  # Root file
-        assert "🗁 subdir" in output  # Subdirectory
+        assert "🗁  subdir" in output  # Subdirectory
         assert "🗎 nested.txt" in output  # Nested file
         
         # Verify filesystem was called correctly
-        mock_all_file_operations.read_metadata.assert_called_once_with("/test", descend_level=-1)
+        mock_filesystem.read_metadata.assert_called_with(Path("/test"), descend_level=-1)
 
     @patch("solveig.utils.file.Filesystem.read_metadata") 
     def test_tree_depth_limiting_and_user_interaction(self, mock_read_metadata):

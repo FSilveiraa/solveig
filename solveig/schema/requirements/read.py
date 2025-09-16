@@ -37,7 +37,7 @@ class ReadRequirement(Requirement):
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem._is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
         interface.show(path_info)
 
@@ -79,15 +79,16 @@ class ReadRequirement(Requirement):
             and interface.ask_yes_no("Allow reading file contents? [y/N]: ")
         ):
             try:
-                content, encoding = Filesystem.read_file(abs_path)
-                metadata.encoding = encoding
+                read_result = Filesystem.read_file(abs_path)
+                content = read_result.content
+                metadata.encoding = read_result.encoding
             except (PermissionError, OSError, UnicodeDecodeError) as e:
                 interface.display_error(f"Failed to read file contents: {e}")
                 return ReadResult(
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
 
-            content_output = "(Base64)" if encoding.lower() == "base64" else content
+            content_output = "(Base64)" if metadata.encoding.lower() == "base64" else content
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if interface.ask_yes_no(

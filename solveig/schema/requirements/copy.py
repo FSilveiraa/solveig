@@ -39,7 +39,7 @@ class CopyRequirement(Requirement):
         path_info = format_path_info(
             path=self.source_path,
             abs_path=abs_source,
-            is_dir=Filesystem._is_dir(abs_source),
+            is_dir=Filesystem.is_dir(abs_source),
             destination_path=self.destination_path,
             absolute_destination_path=abs_dest,
         )
