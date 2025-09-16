@@ -2,55 +2,14 @@ import base64
 import grp
 import os
 import pwd
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+
 from typing import Literal
+from pydantic import Field
 
-_SIZE_NOTATIONS = {
-    "kib": 1024,
-    "mib": 1024**2,
-    "gib": 1024**3,
-    "tib": 1024**4,
-    "kb": 1000,
-    "mb": 1000**2,
-    "gb": 1000**3,
-    "tb": 1000**4,
-}
-
-_SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
-
-
-def parse_size_notation_into_bytes(size_notation: int | str) -> int:
-    if size_notation is not None:
-        if isinstance(size_notation, int):
-            return size_notation
-        else:
-            try:
-                return int(size_notation)
-            except ValueError:
-                try:
-                    match_result = _SIZE_PATTERN.match(size_notation)
-                    if match_result is None:
-                        raise ValueError(f"'{size_notation}' is not a valid disk size")
-                    size, unit = match_result.groups()
-                    unit = unit.strip().lower()
-                    try:
-                        return int(float(size) * _SIZE_NOTATIONS[unit])
-                    except KeyError:
-                        supported = [
-                            f"{supported_unit[0].upper()}{supported_unit[1:-1]}{supported_unit[-1].upper()}"
-                            for supported_unit in _SIZE_NOTATIONS
-                        ]
-                        raise ValueError(
-                            f"'{unit}' is not a valid disk size unit. Supported: {supported}"
-                        ) from None
-                except (AttributeError, ValueError):
-                    raise ValueError(
-                        f"'{size_notation}' is not a valid disk size"
-                    ) from None
-    return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
+from solveig.utils.misc import parse_human_readable_size
 
 
 @dataclass
@@ -59,21 +18,30 @@ class Metadata:
     group_name: str
     path: Path
     size: int
-    modified_time: int
     is_directory: bool
     is_readable: bool
     is_writable: bool
+    modified_time: int | str = Field(
+        ...,
+        description="Last modified time for file or dir. Either in representing the UNIX timestamp or an ISO datetime"
+    )  # int unix timestamp
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[Path, "Metadata"] | None = None
 
-    def to_openai(self):
-        data = { k:v for k, v in vars(self).items() }
-        data["listing"] = {
-            str(path): sub_metadata.to_openai()
-            for path, sub_metadata in self.listing.items()
-        } if self.listing else self.listing # None for files vs  empty list for empty dirs
-        data["path"] = str(self.path)
-        return data
+    # def to_openai(self):
+    #     data = { k:v for k, v in vars(self).items() }
+    #     data["listing"] = {
+    #         str(path): sub_metadata.to_openai()
+    #         for path, sub_metadata in self.listing.items()
+    #     } if self.listing else self.listing # None for files vs  empty list for empty dirs
+    #     data["path"] = str(self.path)
+    #     return data
+
+
+@dataclass
+class FileContent:
+    content: str | bytes
+    encoding: Literal["text", "base64"]
 
 
 class Filesystem:
@@ -301,7 +269,7 @@ class Filesystem:
             OSError: If there would not enough disk space left after writing
         """
         abs_path = cls.get_absolute_path(path)
-        min_disk_bytes_left = parse_size_notation_into_bytes(min_disk_size_left)
+        min_disk_bytes_left = parse_human_readable_size(min_disk_size_left)
 
         # Check if path already exists, if it's a directory we cannot overwrite,
         # if it does not exist then we need to check permissions on the parent
@@ -352,7 +320,7 @@ class Filesystem:
     """
 
     @classmethod
-    def read_file(cls, path: str | Path) -> tuple[str, Literal["text", "base64"]]:
+    def read_file(cls, path: str | Path) -> FileContent:
         """
         Reads a file.
 
@@ -365,13 +333,16 @@ class Filesystem:
             raise IsADirectoryError(f"Cannot read directory {abs_path}")
         try:
             if cls._is_text_file(abs_path):
-                return (cls._read_text(abs_path), "text")
+                return FileContent(
+                    content=cls._read_text(abs_path),
+                    encoding="text"
+                )
             else:
                 raise Exception("utf-8", None, 0, -1, "Fallback to Base64")
         except Exception:
-            return (
-                base64.b64encode(cls._read_bytes(abs_path)).decode("utf-8"),
-                "base64",
+            return FileContent(
+                content=base64.b64encode(cls._read_bytes(abs_path)).decode("utf-8"),
+                encoding="base64",
             )
 
     @classmethod

@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from solveig.utils.misc import dump_pydantic_field
+from pydantic import BaseModel, field_serializer, Field
 
 from ...utils.file import Metadata
 
@@ -21,19 +22,13 @@ class RequirementResult(BaseModel):
     # then when JSON'ing we usually keep a couple of its fields in the result's body
     # We keep paths separately from the requirement, since we want to preserve both the path(s) the LLM provided
     # and their absolute value (~/Documents vs /home/jdoe/Documents)
-    requirement: Requirement
+    requirement: Requirement = Field(exclude=True)
     accepted: bool
     error: str | None = None
 
+    @field_serializer("*")
+    def serialize_all_fields(self, v, _info):
+        return dump_pydantic_field(v)
+
     def to_openai(self):
-        data = {}
-        for key, value in self.model_dump().items():
-            if key == "requirement":
-                continue
-            if isinstance(value, Path):
-                data[key] = str(value)
-            # TODO: I actually dislike this solution, this is a ReadResult-only problem
-            # it poses the same problem as the requirements: what if in the future we have source_metadata and destination_metadata?
-            else:
-                data[key] = value
-        return data
+        return self.model_dump()

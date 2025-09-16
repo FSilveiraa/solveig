@@ -7,18 +7,18 @@ from scripts.init import (
     add_bash_timestamps,
     check_dependencies,
     create_example_config,
-    main,
+    main
 )
 from solveig import SolveigConfig
 from solveig.utils.file import Filesystem
+from tests.conftest import mock_filesystem
 from tests.mocks import MockInterface
 
 
-# @patch("scripts.init.DEFAULT_CONFIG_PATH", new=Path("/home/_test_user_/solveig_config.json"))
 class TestBashTimestamps:
     """Test bash timestamp functionality."""
 
-    def test_add_bash_timestamps_new_bashrc(self, mock_all_file_operations):
+    def test_add_bash_timestamps_new_bashrc(self, mock_filesystem):
         """Test adding timestamps to empty .bashrc."""
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
@@ -26,20 +26,17 @@ class TestBashTimestamps:
         result = add_bash_timestamps(interface)
 
         assert result is True
-        assert Path("/home/_test_user_/.bashrc") in mock_all_file_operations._paths
         assert (
             "export HISTTIMEFORMAT="
-            in mock_all_file_operations._paths[
-                Path("/home/_test_user_/.bashrc")
-            ].content
+            in mock_filesystem.read_file(mock_filesystem.mocks.default_bashrc_path).content
         )
 
-    def test_add_bash_timestamps_already_configured(self, mock_all_file_operations):
+    def test_add_bash_timestamps_already_configured(self, mock_filesystem):
         """Test when timestamps are already configured."""
         # Create a bashrc file with timestamps already configured
-        bashrc_path = "/home/_test_user_/.bashrc"
+        bashrc_path = mock_filesystem.mocks.default_bashrc_path
         bashrc_content = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "\nexport PS1="$ "'
-        mock_all_file_operations.write_file(bashrc_path, bashrc_content)
+        mock_filesystem.write_file(bashrc_path, bashrc_content)
 
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
@@ -48,12 +45,11 @@ class TestBashTimestamps:
 
         assert result is True
 
-    def test_add_bash_timestamps_exception(self, mock_all_file_operations):
+    def test_add_bash_timestamps_exception(self, mock_filesystem):
         """Test handling exceptions during timestamp setup."""
-        mock_all_file_operations.mocks.exists.side_effect = [
+        mock_filesystem.mocks.exists.side_effect = [
             PermissionError("Access denied")
         ]
-        # mock_exists.side_effect = PermissionError("Access denied")
         interface = MockInterface()
         interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
@@ -101,51 +97,44 @@ class TestDependencyCheck:
 class TestConfigDirectory:
     """Test configuration directory creation."""
 
-    @patch(
-        "scripts.init.DEFAULT_CONFIG_PATH",
-        new=Path("/home/_test_user_/solveig_config.json"),
-    )
-    def test_create_config_success(self, mock_all_file_operations):
+    def test_create_config_success(self, mock_filesystem):
         """Test successful config directory creation."""
         # User agrees to create an example config
         interface = MockInterface()
         interface.set_user_inputs(["y"])
 
-        default_config_path = Path("/home/_test_user_/solveig_config.json")
         # Show the files doesn't exist before
-        assert not mock_all_file_operations._mock_exists(default_config_path)
-        assert not mock_all_file_operations._mock_exists(default_config_path.parent)
+        config_path = mock_filesystem.mocks.default_config_path
+        assert not mock_filesystem._exists(config_path)
+        assert not mock_filesystem._exists(config_path.parent)
         # Confirm using the mocks is the same as calling Path.exists() directly
-        assert not Filesystem._exists(default_config_path)
-        assert not Filesystem._exists(default_config_path.parent)
+        assert not Filesystem._exists(config_path)
+        assert not Filesystem._exists(config_path.parent)
 
         # Execute
         create_example_config(interface)
 
         # Check that success message appears in interface output
         assert (
-            f"Created example config file at {default_config_path}"
+            f"Created example config file at {config_path}"
             in interface.get_all_output()
         )
 
         # Confirm the config path was created
-        assert default_config_path in mock_all_file_operations._paths
-        assert default_config_path.parent in mock_all_file_operations._paths
-        # Use Filesystem methods to confirm mocks are working, despite obviously this path not existing
-        # in the real filesystem
-        assert Filesystem._exists(default_config_path.parent)
-        content, _ = Filesystem.read_file(default_config_path)
+        assert config_path in mock_filesystem._entries
+        assert config_path.parent in mock_filesystem._entries
+        # Use Filesystem methods to confirm mocks are working, despite obviously
+        # this path not existing in the real filesystem
+        assert Filesystem._exists(config_path.parent)
+        content = Filesystem.read_file(config_path).content
         assert content == SolveigConfig().to_json()
-        mock_content = mock_all_file_operations._mock_read_text(default_config_path)
+        mock_content = mock_filesystem._mock_read_text(config_path)
         assert content == mock_content
 
-    @patch(
-        "scripts.init.DEFAULT_CONFIG_PATH",
-        new=Path("/home/_test_user_/solveig_config.json"),
-    )
-    def test_create_config_denial(self, mock_all_file_operations):
+    def test_create_config_denial(self, mock_filesystem):
         """Test successful config directory creation."""
-        default_config_path = Path("/home/_test_user_/solveig_config.json")
+        # default_config_path = Path("/home/_test_user_/solveig_config.json")
+        default_config_path = mock_filesystem.mocks.default_config_path
 
         # User denies to create an example config
         interface = MockInterface()
@@ -158,23 +147,19 @@ class TestConfigDirectory:
         create_example_config(interface)
 
         # Check that success message appears in interface output
-        assert "○ Skipped config file creation." in interface.get_all_output()
+        assert "Skipped config file creation." in interface.get_all_output()
 
         # Confirm the config path was not created
         assert not Filesystem._exists(default_config_path.parent)
         assert not Filesystem._exists(default_config_path)
 
-    @patch(
-        "scripts.init.DEFAULT_CONFIG_PATH",
-        new=Path("/home/_test_user_/solveig_config.json"),
-    )
-    def test_create_config_exception(self, mock_all_file_operations):
+    def test_create_config_exception(self, mock_filesystem):
         """Test handling exceptions during directory creation."""
         # Set up the mock to fail when trying to create directories
-        mock_all_file_operations.mocks.create_directory.side_effect = PermissionError(
+        mock_filesystem.mocks.create_directory.side_effect = PermissionError(
             "Access denied"
         )
-        default_config_path = Path("/home/_test_user_/solveig_config.json")
+        default_config_path = mock_filesystem.mocks.default_config_path
 
         # User agrees to creating the file config
         interface = MockInterface()
@@ -189,65 +174,6 @@ class TestConfigDirectory:
         assert (
             "Failed to create config file: Access denied" in interface.get_all_output()
         )
-
-        # assert "/home/test/.config" not in mock_all_file_operations.files
-        # assert "/home/test/.config/solveig.json" not in mock_all_file_operations.files
-
-
-class TestOptionalTools:
-    """Test optional tools checking."""
-
-    # @patch("builtins.print")
-    # @patch("shutil.which")
-    # def test_check_optional_tools(self, mock_which, mock_print):
-    #     """Test checking for optional tools."""
-    #     mock_which.side_effect = lambda tool: tool == "git"  # Only git available
-    #
-    #     check_optional_tools()
-    #
-    #     # Should print status for both tools
-    #     print_calls = [call.args[0] for call in mock_print.call_args_list]
-    #     assert any("git" in call for call in print_calls)
-    #     assert any("shellcheck" in call for call in print_calls)
-
-
-# class TestYesNoPrompt:
-#     """Test yes/no prompt functionality."""
-#
-#     @patch("builtins.input", return_value="y")
-#     def test_ask_yes_no_yes(self, mock_input):
-#         """Test yes response."""
-#         result = ask_yes_no("Test question?")
-#         assert result is True
-#
-#     @patch("builtins.input", return_value="n")
-#     def test_ask_yes_no_no(self, mock_input):
-#         """Test no response."""
-#         result = ask_yes_no("Test question?")
-#         assert result is False
-#
-#     @patch("builtins.input", return_value="")
-#     def test_ask_yes_no_default_true(self, mock_input):
-#         """Test default True response."""
-#         result = ask_yes_no("Test question?", default=True)
-#         assert result is True
-#
-#     @patch("builtins.input", return_value="")
-#     def test_ask_yes_no_default_false(self, mock_input):
-#         """Test default False response."""
-#         result = ask_yes_no("Test question?", default=False)
-#         assert result is False
-#
-#     @patch("builtins.print")
-#     @patch("builtins.input")
-#     def test_ask_yes_no_invalid_then_valid(self, mock_input, mock_print):
-#         """Test invalid input followed by valid input."""
-#         mock_input.side_effect = ["maybe", "yes"]
-#
-#         result = ask_yes_no("Test question?")
-#
-#         assert result is True
-#         mock_print.assert_called_with("Please answer 'y' or 'n'")
 
 
 class TestMainFunction:

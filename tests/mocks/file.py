@@ -301,8 +301,10 @@ class MockFilesystem(Filesystem):
                 "_is_text_file",
                 MagicMock(side_effect=self._mock_is_text_file),
             ) as patch_is_text_file,
+            # ! Important: even though DEFAULT_CONFIG_PATH is defined in config.py,
+            # we have to patch where it's used which is on scripts/init.py
             patch(
-                "solveig.config.DEFAULT_CONFIG_PATH",
+                "scripts.init.DEFAULT_CONFIG_PATH",
                 Path("/home/_test_user_/.config.json"),
             ) as patch_default_config,
             patch(
@@ -330,8 +332,8 @@ class MockFilesystem(Filesystem):
                 delete_file=patch_delete_file,
                 delete_dir=patch_delete_dir,
                 is_text_file=patch_is_text_file,
-                default_bashrc=patch_default_bashrc,
-                default_config=patch_default_config,
+                default_bashrc_path=patch_default_bashrc,
+                default_config_path=patch_default_config,
             )
 
             yield self

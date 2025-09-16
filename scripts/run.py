@@ -131,7 +131,7 @@ def handle_llm_error(
     ):
         with interface.with_indent():
             for output in error.last_completion.choices:
-                interface.display_error(output.message.content.strip())
+                interface.display_error(output.message.to_openai())
 
 
 def process_requirements(

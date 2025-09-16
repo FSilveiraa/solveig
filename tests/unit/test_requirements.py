@@ -14,6 +14,7 @@ from solveig.schema.requirements import (
     ReadRequirement,
     WriteRequirement,
 )
+from tests.conftest import mock_filesystem
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
@@ -190,12 +191,12 @@ class TestReadRequirement:
         description = ReadRequirement.get_description()
         assert "read(path, metadata_only)" in description
 
-    def test_successful_reads_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_reads_with_mock_fs(self, mock_filesystem):
         """Test successful read operations using MockFilesystem fixture."""
         # Set up test files and directories - fixture automatically provides mock_fs
-        mock_all_file_operations.write_file("/test/readable.txt", "test content")
-        mock_all_file_operations.create_directory("/test/readable_dir")
-        mock_all_file_operations.write_file("/test/readable_dir/nested.txt", "nested")
+        mock_filesystem.write_file("/test/readable.txt", "test content")
+        mock_filesystem.create_directory("/test/readable_dir")
+        mock_filesystem.write_file("/test/readable_dir/nested.txt", "nested")
 
         # Test metadata-only read
         metadata_req = ReadRequirement(
@@ -218,7 +219,10 @@ class TestReadRequirement:
         interface.set_user_inputs(["y", "y"])  # Accept read, send to LLM
         content_result = content_req.solve(DEFAULT_CONFIG, interface)
         assert content_result.accepted is True
-        assert "test content" in content_result.content
+        file_path = mock_filesystem.get_absolute_path("/test/readable.txt")
+        file_content = mock_filesystem.read_file(file_path)
+        assert file_content in content_result.content
+        assert file_content in interface.get_all_output()
 
         # Test directory read with listing
         interface.clear()

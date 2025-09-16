@@ -10,11 +10,8 @@ from pathlib import Path
 from datetime import datetime
 import pytest
 
-from solveig.utils.file import (
-    Filesystem,
-    Metadata,
-    parse_size_notation_into_bytes,
-)
+from solveig.utils.file import Filesystem, Metadata
+from solveig.utils.misc import parse_human_readable_size
 from tests.mocks.file import MockFilesystem
 
 
@@ -23,38 +20,38 @@ class TestSizeNotationParsing:
 
     def test_parse_int_bytes(self):
         """Test parsing integer bytes."""
-        assert parse_size_notation_into_bytes(1024) == 1024
-        assert parse_size_notation_into_bytes("1024") == 1024
+        assert parse_human_readable_size(1024) == 1024
+        assert parse_human_readable_size("1024") == 1024
 
     def test_parse_size_units(self):
         """Test parsing various size units."""
-        assert parse_size_notation_into_bytes("1 KB") == 1000
-        assert parse_size_notation_into_bytes("1 MB") == 1000000
-        assert parse_size_notation_into_bytes("1 GB") == 1000000000
-        assert parse_size_notation_into_bytes("1 KiB") == 1024
-        assert parse_size_notation_into_bytes("1 MiB") == 1024**2
-        assert parse_size_notation_into_bytes("1 GiB") == 1024**3
+        assert parse_human_readable_size("1 KB") == 1000
+        assert parse_human_readable_size("1 MB") == 1000000
+        assert parse_human_readable_size("1 GB") == 1000000000
+        assert parse_human_readable_size("1 KiB") == 1024
+        assert parse_human_readable_size("1 MiB") == 1024 ** 2
+        assert parse_human_readable_size("1 GiB") == 1024 ** 3
 
     def test_parse_decimal_sizes(self):
         """Test parsing decimal sizes."""
-        assert parse_size_notation_into_bytes("1.5 KB") == 1500
-        assert parse_size_notation_into_bytes("2.5 GiB") == int(2.5 * 1024**3)
+        assert parse_human_readable_size("1.5 KB") == 1500
+        assert parse_human_readable_size("2.5 GiB") == int(2.5 * 1024 ** 3)
 
     def test_parse_invalid_unit(self):
         """Test parsing invalid units raises ValueError."""
         with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_size_notation_into_bytes("1 XB")
+            parse_human_readable_size("1 XB")
 
     def test_parse_invalid_format(self):
         """Test parsing invalid format raises ValueError."""
         with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_size_notation_into_bytes("invalid")
+            parse_human_readable_size("invalid")
         with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_size_notation_into_bytes("1.2.3 GB")
+            parse_human_readable_size("1.2.3 GB")
 
     def test_parse_none_returns_zero(self):
         """Test parsing None returns 0."""
-        assert parse_size_notation_into_bytes(None) == 0
+        assert parse_human_readable_size(None) == 0
 
 
 class TestMetadata:

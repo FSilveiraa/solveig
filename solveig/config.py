@@ -6,7 +6,9 @@ from typing import Any
 
 from solveig.interface import SolveigInterface
 from solveig.llm import APIType
-from solveig.utils.file import Filesystem, parse_size_notation_into_bytes
+from solveig.utils.file import Filesystem
+from solveig.utils.misc import parse_human_readable_size
+
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
 
@@ -32,7 +34,7 @@ class SolveigConfig:
     exclude_username: bool = False
     max_output_lines: int = 6
     max_output_size: int = 100
-    min_disk_space_left: int = parse_size_notation_into_bytes("1GiB")
+    min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -40,7 +42,7 @@ class SolveigConfig:
         # convert API type to enum
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = APIType[self.api_type]
-        self.min_disk_space_left = parse_size_notation_into_bytes(
+        self.min_disk_space_left = parse_human_readable_size(
             self.min_disk_space_left
         )
 

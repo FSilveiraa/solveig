@@ -1,13 +1,26 @@
-import shutil
 from pathlib import Path
-
+import re
+from typing import Any
+from dataclasses import is_dataclass, fields
 import tiktoken
+from pydantic import BaseModel
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
 INPUT_PROMPT = "Reply:\n > "
 
-terminal_width = shutil.get_terminal_size((80, 20)).columns
+SIZE_NOTATIONS = {
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "tib": 1024**4,
+    "kb": 1000,
+    "mb": 1000**2,
+    "gb": 1000**3,
+    "tb": 1000**4,
+}
+
+SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
 
 
 def format_output(
@@ -72,3 +85,58 @@ def convert_size_to_human_readable(num_bytes: int, decimal=False) -> str:
             return f"{num_bytes:.1f} {unit}"
         num_bytes /= step
     return f"{num_bytes:.1f} {units[-1]}"
+
+def parse_human_readable_size(size_notation: int | str) -> int:
+    """
+    Converts a size from human notation into number of bytes.
+
+    :param size_notation: Examples: 1MiB, 20 kb, 6 TB
+    :return: an integer representing the equivalent number of bytes
+    """
+    if size_notation is not None:
+        if isinstance(size_notation, int):
+            return size_notation
+        else:
+            try:
+                return int(size_notation)
+            except ValueError:
+                try:
+                    match_result = SIZE_PATTERN.match(size_notation)
+                    if match_result is None:
+                        raise ValueError(f"'{size_notation}' is not a valid disk size")
+                    size, unit = match_result.groups()
+                    unit = unit.strip().lower()
+                    try:
+                        return int(float(size) * SIZE_NOTATIONS[unit])
+                    except KeyError:
+                        supported = [
+                            f"{supported_unit[0].upper()}{supported_unit[1:-1]}{supported_unit[-1].upper()}"
+                            for supported_unit in SIZE_NOTATIONS
+                        ]
+                        raise ValueError(
+                            f"'{unit}' is not a valid disk size unit. Supported: {supported}"
+                        ) from None
+                except (AttributeError, ValueError):
+                    raise ValueError(
+                        f"'{size_notation}' is not a valid disk size"
+                    ) from None
+    return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
+
+def dump_pydantic_field(obj: Any) -> Any:
+    """Recursively convert dataclass → dict with Path → str."""
+    if is_dataclass(obj):
+        result = {}
+        for f in fields(obj):
+            val = getattr(obj, f.name)
+            result[f.name] = dump_pydantic_field(val)
+        return result
+    elif isinstance(obj, BaseModel):
+        return obj.model_dump()
+    elif isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, list):
+        return [dump_pydantic_field(v) for v in obj]
+    elif isinstance(obj, dict):
+        return {dump_pydantic_field(k): dump_pydantic_field(v) for k, v in obj.items()}
+    else:
+        return obj

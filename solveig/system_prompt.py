@@ -1,5 +1,6 @@
 import os
 import platform
+from datetime import datetime
 from pathlib import Path
 
 from .utils.file import Metadata
@@ -82,7 +83,7 @@ script_chat.add_message(
                     group_name="user",
                     path=Path("/home/user/run.sh"),
                     size=101,
-                    modified_time="Thu Jul 17 02:54:43 2025",
+                    modified_time="2025-07-17T02:54:43",
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,
@@ -195,7 +196,7 @@ tmpfs           784M   48K  784M   1% /run/user/1000
                     group_name="user",
                     path=Path("/home/user/Documents/my_app.log"),
                     size=11180,
-                    modified_time="Wed Jul 16 12:59:44 2025",
+                    modified_time="2025-07-16T12:59:44",
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,

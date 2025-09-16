@@ -23,13 +23,8 @@ from tests.mocks import (
     MockInterface,
 )
 
-# Test error setup
-mock_completion = Mock()
-mock_choice = Mock()
-mock_choice.message.content = "  Raw output  "
-mock_completion.choices = [mock_choice]
 INSTRUCTOR_RETRY_ERROR = InstructorRetryException(
-    "Test error", n_attempts=1, total_usage=0, last_completion=mock_completion
+    "Test error", n_attempts=1, total_usage=0
 )
 
 
@@ -66,8 +61,8 @@ class TestUserInput:
         
         message = get_initial_user_message("Hello world", interface)
         
-        interface.assert_output_contains("─── User")
-        interface.assert_output_contains("Hello world")
+        assert "─── User" in interface.get_all_output()
+        assert "Hello world" in interface.get_all_output()
         assert message.comment == "Hello world"
 
     def test_initial_user_message_interactive(self):
@@ -77,7 +72,7 @@ class TestUserInput:
         
         message = get_initial_user_message(None, interface)
         
-        interface.assert_output_contains("─── User")
+        assert "─── User" in interface.get_all_output()
         assert message.comment == "Interactive input"
         assert len(interface.questions) == 1
 
@@ -175,7 +170,7 @@ class TestRequirementProcessing:
         
         results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
         
-        interface.assert_output_contains("Results")
+        assert "Results" in interface.get_all_output()
         assert len(results) >= 0
         assert all(hasattr(result, "accepted") for result in results)
 
