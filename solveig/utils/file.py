@@ -28,15 +28,6 @@ class Metadata:
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[Path, "Metadata"] | None = None
 
-    # def to_openai(self):
-    #     data = { k:v for k, v in vars(self).items() }
-    #     data["listing"] = {
-    #         str(path): sub_metadata.to_openai()
-    #         for path, sub_metadata in self.listing.items()
-    #     } if self.listing else self.listing # None for files vs  empty list for empty dirs
-    #     data["path"] = str(self.path)
-    #     return data
-
 
 @dataclass
 class FileContent:
@@ -46,61 +37,17 @@ class FileContent:
 
 class Filesystem:
     """
-    Core functions
-
-    These are the methods that actually interact with the filesystem, mostly one-liners.
-    It's useful to keep them in inner methods that can be mocked or overridden in a MockFilesystem
-    Keep in mind these do not perform any path normalization or checks, so if you call fs._read_text(Path("~"))
-    it won't give you a proper error
+    Filesystem operations with three main sections:
+    - Private: Low-level filesystem operations (mocked in tests)
+    - Validation: Access and permission checking
+    - Operations: Public API for file/directory operations
     """
 
-    @staticmethod
-    def get_absolute_path(path: str | Path) -> Path:
-        """Convert path to absolute path. Using PurePath ensures no real filesystem ops can be done using Path"""
-        return Path(path).expanduser().resolve()
-
-    @staticmethod
-    def exists(abs_path: Path) -> bool:
-        return abs_path.exists()
-
-    @staticmethod
-    def is_dir(abs_path: Path) -> bool:
-        return abs_path.is_dir()
-
-    @classmethod
-    def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
-        """
-        Read metadata and dir structure from filesystem
-        :param abs_path: the absolute path to read metadata from
-        :param descend_level: how far down to read, 0 meaning only reading metadata from current directory,
-            1 also reading listing from first descendants, 2 from second descendants, etc.
-            -1 reads entire tree structure
-        :return:
-        """
-        stats = abs_path.stat()
-
-        is_dir = cls.is_dir(abs_path)
-        if is_dir and descend_level != 0:
-            listing = {
-                sub_path: cls.read_metadata(sub_path, descend_level=descend_level - 1)
-                for sub_path in sorted(
-                    [cls.get_absolute_path(sub_path) for sub_path in abs_path.iterdir()]
-                )
-            }
-        else:
-            listing = None
-
-        return Metadata(
-            path=abs_path,
-            size=stats.st_size,
-            modified_time=int(stats.st_mtime),
-            is_directory=is_dir,
-            owner_name=pwd.getpwuid(stats.st_uid).pw_name,
-            group_name=grp.getgrgid(stats.st_gid).gr_name,
-            is_readable=os.access(abs_path, os.R_OK),
-            is_writable=os.access(abs_path, os.W_OK),
-            listing=listing,
-        )
+    # =============================================================================
+    # PRIVATE - Low-level filesystem operations
+    # =============================================================================
+    # These directly interact with filesystem and are all mocked in unit tests
+    # Do not perform path normalization or validation
 
     @staticmethod
     def _get_listing(abs_path: Path) -> list[Path]:
@@ -170,10 +117,6 @@ class Filesystem:
                     return True
                 except UnicodeDecodeError:
                     return False
-        # mime_type = magic.from_file(abs_path, mime=True)
-        # return .startswith("text/")
-
-    """Helpers"""
 
     @classmethod
     def _closest_writable_parent(cls, abs_dir_path: Path) -> Path | None:
@@ -189,19 +132,9 @@ class Filesystem:
                 return None
             abs_dir_path = abs_dir_path.parent
 
-    @classmethod
-    def is_readable(cls, abs_path: Path) -> bool:
-        try:
-            return cls.read_metadata(abs_path).is_readable
-        except (PermissionError, OSError):
-            # If we can't read metadata, it's not readable
-            return False
-
-    @classmethod
-    def is_writable(cls, abs_path: Path) -> bool:
-        return cls.read_metadata(abs_path).is_writable
-
-    """Validation"""
+    # =============================================================================
+    # VALIDATION - Access and permission checking
+    # =============================================================================
 
     @classmethod
     def validate_read_access(cls, file_path: str | Path) -> None:
@@ -213,14 +146,11 @@ class Filesystem:
 
         Raises:
             FileNotFoundError: If trying to read a non-existing file
-            IsADirectoryError: If trying to read a directory
             PermissionError: If file is not readable
         """
         abs_path = cls.get_absolute_path(file_path)
         if not cls.exists(abs_path):
             raise FileNotFoundError(f"Path {abs_path} does not exist")
-        # if cls._is_dir(abs_path):
-        #     raise IsADirectoryError(f"File {abs_path} is a directory")
         if not cls.is_readable(abs_path):
             raise PermissionError(f"Path {abs_path} is not readable")
 
@@ -233,9 +163,8 @@ class Filesystem:
             path: Source file/directory path
 
         Raises:
-            FileNotFoundError: If trying to read a non-existing file
-            IsADirectoryError: If trying to read a directory
-            PermissionError: If file is not readable
+            FileNotFoundError: If trying to delete a non-existing file
+            PermissionError: If parent directory is not writable
         """
         abs_path = cls.get_absolute_path(path)
         if not cls.exists(abs_path):
@@ -247,31 +176,28 @@ class Filesystem:
     def validate_write_access(
         cls,
         path: str | Path,
-        content: str | None = None,
+        content: str | bytes | None = None,
         content_size: int | None = None,
         min_disk_size_left: str | int = 0,
     ) -> None:
         """
         Validate that a file or directory can be written.
-        Regardless if the path is for a directory or a file, it checks whether that path can be written to its parent.
 
         Args:
             path: Source file/directory path
+            content: Content to write (for size calculation)
             content_size: Optional size to be written (omitted for directories)
             min_disk_size_left: Optional minimum disk space left in bytes after writing
 
         Raises:
             IsADirectoryError: If trying to overwrite an existing directory
-            PermissionError: If parent directory does not exist and cannot be created,
-                    or parent directory exists and is not writable
-            OSError: If there would not enough disk space left after writing
+            PermissionError: If parent directory cannot be created or is not writable
+            OSError: If there would not be enough disk space left after writing
         """
         abs_path = cls.get_absolute_path(path)
         min_disk_bytes_left = parse_human_readable_size(min_disk_size_left)
 
-        # Check if path already exists, if it's a directory we cannot overwrite,
-        # if it does not exist then we need to check permissions on the parent
-        # parent_to_write_into = abs_path.parent
+        # Check if path already exists
         if cls.exists(abs_path):
             if cls.is_dir(abs_path):
                 raise IsADirectoryError(
@@ -279,56 +205,114 @@ class Filesystem:
                 )
             elif not cls.is_writable(abs_path):
                 raise PermissionError(f"Cannot write into file {abs_path}")
-        # If the path does not exist, or it exists and is a file, then we need to find the closest
-        # writable parent - so if we have /test/ and we're trying to write /test/dir1/dir2/file1.txt,
-        # that would we /test/
+
+        # Find the closest writable parent for new files/directories
         closest_writable_parent = cls._closest_writable_parent(abs_path.parent)
         if not closest_writable_parent:
             raise PermissionError(f"Cannot create parent directory {abs_path.parent}")
 
-        # If the parent directory does not exist, check if it's possible to create it
-        # abs_parent = abs_path.parent
-        # closest_writable_parent = abs_parent
-        # if not cls._exists(abs_parent):
-        #     closest_writable_parent = cls.closest_writable_parent(abs_parent)
-        #     if not closest_writable_parent:
-        #         raise PermissionError(f"Cannot create parent directory {abs_parent}")
-
-        # If the parent directory exists check if it can be written to
-        # elif not cls.is_writable(abs_parent):
-        #     raise PermissionError(f"Cannot write to parent directory {abs_parent}")
-
-        # Check if there is enough space after writing
+        # Check disk space
         if not content_size and content is not None:
-            content_size = len(content.encode("utf-8"))
+            content_size = len(content.encode("utf-8") if isinstance(content, str) else content)
         if content_size is not None:
             free_space = cls._get_free_space(closest_writable_parent)
             free_after_write = free_space - content_size
-            if not free_space - content_size > min_disk_bytes_left:
+            if free_after_write <= min_disk_bytes_left:
                 raise OSError(
-                    f"Insufficient disk space: After writing {content_size} to {abs_path} bytes, only {free_after_write} "
-                    f"bytes would be available, minimum configured is {min_disk_bytes_left} bytes"
+                    f"Insufficient disk space: After writing {content_size} bytes to {abs_path}, "
+                    f"only {free_after_write} bytes would be available, minimum configured is {min_disk_bytes_left} bytes"
                 )
 
-    """
-    File operations
+    # =============================================================================
+    # OPERATIONS - Public API for file/directory operations
+    # =============================================================================
+    # These perform validation and accept string/relative paths
+    # Some of these are mocked in unit tests
 
-    These are the ones you're supposed to use in the project
-    These do checks, validation and accept string and relative/unexpanded paths
-    """
+    @staticmethod
+    def get_absolute_path(path: str | Path) -> Path:
+        """Convert path to absolute path with user expansion."""
+        return Path(path).expanduser().resolve()
+
+    @staticmethod
+    def exists(abs_path: Path) -> bool:
+        """Check if path exists."""
+        return abs_path.exists()
+
+    @staticmethod
+    def is_dir(abs_path: Path) -> bool:
+        """Check if path is a directory."""
+        return abs_path.is_dir()
+
+    @classmethod
+    def is_readable(cls, abs_path: Path) -> bool:
+        """Check if path is readable."""
+        try:
+            return cls.read_metadata(abs_path).is_readable
+        except (PermissionError, OSError):
+            return False
+
+    @classmethod
+    def is_writable(cls, abs_path: Path) -> bool:
+        """Check if path is writable."""
+        try:
+            return cls.read_metadata(abs_path).is_writable
+        except (PermissionError, OSError):
+            return False
+
+    @classmethod
+    def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
+        """
+        Read metadata and dir structure from filesystem.
+
+        Args:
+            abs_path: The absolute path to read metadata from
+            descend_level: How far down to read (0=current only, 1=first level, -1=entire tree)
+
+        Returns:
+            Metadata object with file/directory information
+        """
+        stats = abs_path.stat()
+
+        is_dir = cls.is_dir(abs_path)
+        if is_dir and descend_level != 0:
+            listing = {
+                sub_path: cls.read_metadata(sub_path, descend_level=descend_level - 1)
+                for sub_path in sorted(
+                    [cls.get_absolute_path(sub_path) for sub_path in abs_path.iterdir()]
+                )
+            }
+        else:
+            listing = None
+
+        return Metadata(
+            path=abs_path,
+            size=stats.st_size,
+            modified_time=int(stats.st_mtime),
+            is_directory=is_dir,
+            owner_name=pwd.getpwuid(stats.st_uid).pw_name,
+            group_name=grp.getgrgid(stats.st_gid).gr_name,
+            is_readable=os.access(abs_path, os.R_OK),
+            is_writable=os.access(abs_path, os.W_OK),
+            listing=listing,
+        )
 
     @classmethod
     def read_file(cls, path: str | Path) -> FileContent:
         """
-        Reads a file.
+        Read file contents with automatic text/binary detection.
 
         Args:
-            path: Source file/directory path
+            path: File path to read
+
+        Returns:
+            FileContent with content and encoding type
         """
         abs_path = cls.get_absolute_path(path)
         cls.validate_read_access(abs_path)
         if cls.is_dir(abs_path):
             raise IsADirectoryError(f"Cannot read directory {abs_path}")
+        
         try:
             if cls._is_text_file(abs_path):
                 return FileContent(content=cls._read_text(abs_path), encoding="text")
@@ -341,9 +325,47 @@ class Filesystem:
             )
 
     @classmethod
+    def write_file(
+        cls,
+        file_path: str | Path,
+        content: str = "",
+        encoding: str = "utf-8",
+        min_space_left: int = 0,
+        append=False,
+    ) -> None:
+        """Write content to file with validation and parent directory creation."""
+        abs_path = cls.get_absolute_path(file_path)
+        size = len(content.encode(encoding))
+        cls.validate_write_access(
+            abs_path, content_size=size, min_disk_size_left=min_space_left
+        )
+        cls.create_directory(abs_path.parent, exist_ok=True)
+        
+        if append and cls.exists(abs_path):
+            cls._append_text(abs_path, content, encoding=encoding)
+        else:
+            cls._write_text(abs_path, content, encoding=encoding)
+
+    @classmethod
+    def create_directory(cls, dir_path: str | Path, exist_ok=True) -> None:
+        """Create directory with recursive parent creation."""
+        abs_path = cls.get_absolute_path(dir_path)
+        if cls.exists(abs_path):
+            if exist_ok:
+                return
+            else:
+                raise PermissionError(f"Directory {abs_path} already exists")
+        else:
+            # Recursively create parent directories
+            if abs_path != abs_path.parent and not cls.exists(abs_path.parent):
+                cls.create_directory(abs_path.parent, exist_ok=True)
+            cls._create_directory(abs_path)
+
+    @classmethod
     def copy(
         cls, src_path: str | Path, dest_path: str | Path, min_space_left: int
     ) -> None:
+        """Copy file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
 
@@ -361,6 +383,7 @@ class Filesystem:
 
     @classmethod
     def move(cls, src_path: str | Path, dest_path: str | Path) -> None:
+        """Move file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
 
@@ -372,6 +395,7 @@ class Filesystem:
 
     @classmethod
     def delete(cls, path: str | Path) -> None:
+        """Delete file or directory with validation."""
         abs_path = cls.get_absolute_path(path)
         cls.validate_delete_access(abs_path)
         if cls.is_dir(abs_path):
@@ -380,41 +404,8 @@ class Filesystem:
             cls._delete_file(abs_path)
 
     @classmethod
-    def create_directory(cls, dir_path: str | Path, exist_ok=True) -> None:
-        abs_path = cls.get_absolute_path(dir_path)
-        if cls.exists(abs_path):
-            if exist_ok:
-                return
-            else:
-                raise PermissionError(f"Directory {abs_path} already exists")
-        else:
-            # if we're not at / and the above directory doesn't exist, recurse upwards
-            if abs_path != abs_path.parent and not cls.exists(abs_path.parent):
-                cls.create_directory(abs_path.parent, exist_ok=True)
-            cls._create_directory(abs_path)
-
-    @classmethod
-    def write_file(
-        cls,
-        file_path: str | Path,
-        content: str = "",
-        encoding: str = "utf-8",
-        min_space_left: int = 0,
-        append=False,
-    ) -> None:
-        abs_path = cls.get_absolute_path(file_path)
-        size = len(content.encode(encoding))
-        cls.validate_write_access(
-            abs_path, content_size=size, min_disk_size_left=min_space_left
-        )
-        cls.create_directory(abs_path.parent, exist_ok=True)
-        if append and cls.exists(abs_path):
-            cls._append_text(abs_path, content, encoding=encoding)
-        else:
-            cls._write_text(abs_path, content, encoding=encoding)
-
-    @classmethod
     def get_dir_listing(cls, dir_path: str | Path) -> dict[Path, Metadata]:
+        """Get directory listing with metadata for each entry."""
         abs_path = cls.get_absolute_path(dir_path)
         cls.validate_read_access(abs_path)
         if not cls.is_dir(abs_path):

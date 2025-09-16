@@ -33,14 +33,6 @@ def create_metadata(path: Path, modified_time=-1, **kwargs) -> Metadata:
     return replace(DEFAULT_METADATA, path=path, modified_time=modified_time, **kwargs)
 
 
-# def create_dir_metadata(path: Path, **kwargs) -> Metadata:
-#     return create_metadata(path, is_directory=True, size=4096, **kwargs)
-#
-# def create_file_metadata(path: Path, size: int, **kwargs) -> Metadata:
-#     return create_metadata(path, is_directory=False, size=size, **kwargs)
-
-
-# MockFileDir = namedtuple("MockFileDir", ["content", "metadata"])
 @dataclass
 class MockFileDir:
     metadata: Metadata
@@ -98,59 +90,6 @@ class MockFilesystem(Filesystem):
         self.write_file("/test/dir2/sub-d1/sub-d2/f4", "F6 here")
         self.write_file("/test/dir2/sub-d1/sub-d3/f3", "One level down")
         self.write_file("/test/dir2/f1")
-
-    # def create_directory(self, path: str | Path) -> None:
-    #     """Helper method to create a directory and ensure parent directories exist."""
-    #     abs_path = Path(path).resolve()
-    #
-    #     # Ensure parent directories exist
-    #     for parent in reversed(abs_path.parents):
-    #         if parent not in self._entries:
-    #             self._create_directory(parent)
-    #
-    #     self._create_directory(abs_path)
-    #
-    # def write_file(self, path: str | Path, content: str = "") -> None:
-    #     """Helper method to write a file and ensure parent directories exist."""
-    #     abs_path = Path(path).resolve()
-    #
-    #     # Ensure parent directories exist
-    #     for parent in reversed(abs_path.parents):
-    #         if parent not in self._entries:
-    #             self._create_directory(parent)
-    #
-    #     self._write_text(abs_path, content)
-
-    # def _create_directory(self, abs_path: Path) -> None:
-    #     """Create directory entry with proper metadata."""
-    #     # metadata = Metadata(
-    #     #     path=abs_path,
-    #     #     size=4096,
-    #     #     modified_time=datetime.now().isoformat(),
-    #     #     is_directory=True,
-    #     #     owner_name="test-user",
-    #     #     group_name="test-group",
-    #     #     is_readable=True,
-    #     #     is_writable=True,
-    #     #     listing={}  # Will be populated by _update_directory_listings
-    #     # )
-    #     self._entries[abs_path] = ("", create_dir_metadata(abs_path))  # Directories have no content
-    #     self._update_directory_listings()
-
-    # def _write_text(self, abs_path: Path, content: str = "", encoding = "utf-8") -> None:
-    #     """Write file entry with proper metadata."""
-    #     # metadata = Metadata(
-    #     #     path=abs_path,
-    #     #     size=len(content.encode("utf-8")),
-    #     #     modified_time=datetime.datetime.now().isoformat(),
-    #     #     is_directory=False,
-    #     #     owner_name="test-user",
-    #     #     group_name="test-group",
-    #     #     is_readable=True,
-    #     #     is_writable=True
-    #     # )
-    #     self._entries[abs_path] = MockFileDir.create_file(abs_path, content, encoding=encoding)
-    #     self._update_directory_listings()
 
     def _update_directory_listings(self) -> None:
         """Update all directory listings to reflect current filesystem state."""
