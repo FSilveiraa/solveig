@@ -74,7 +74,7 @@ class SolveigConfig:
             return {}
         abs_path = Filesystem.get_absolute_path(config_path)
         try:
-            content, _ = Filesystem.read_file(abs_path)
+            content = Filesystem.read_file(abs_path).content
             return json.loads(content)
         except FileNotFoundError:
             return {}
@@ -175,10 +175,7 @@ class SolveigConfig:
         if not file_config:
             file_config = {}
             warning = "Failed to parse config file, falling back to defaults"
-            if interface:
-                interface.display_error(warning)
-            else:
-                print(f"Warning: {warning}")
+            interface.display_error(warning)
 
         # Merge config from file and CLI
         merged_config: dict = {**file_config}

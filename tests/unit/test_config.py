@@ -53,19 +53,19 @@ class TestConfigFileParsing:
         result = SolveigConfig.parse_from_file(config_path)
         assert result == {}
 
-    def test_parse_from_file_success(self, mock_all_file_operations):
+    def test_parse_from_file_success(self, mock_filesystem):
         """Test successful config file parsing."""
         test_config = {"api_type": "LOCAL", "temperature": 0.7}
         config_path = "/test/config.json"
-        mock_all_file_operations.write_file(config_path, json.dumps(test_config))
+        mock_filesystem.write_file(config_path, json.dumps(test_config))
 
         result = SolveigConfig.parse_from_file(config_path)
         assert result == test_config
 
-    def test_parse_from_file_malformed_json(self, mock_all_file_operations):
+    def test_parse_from_file_malformed_json(self, mock_filesystem):
         """Test malformed JSON raises JSONDecodeError."""
         config_path = "/test/bad_config.json"
-        mock_all_file_operations.write_file(config_path, "{invalid json")
+        mock_filesystem.write_file(config_path, "{invalid json")
 
         with pytest.raises(JSONDecodeError):
             SolveigConfig.parse_from_file(config_path)
@@ -102,7 +102,7 @@ class TestCLIIntegration:
     def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "LOCAL", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args)
+        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args, interface=MockInterface())
         assert isinstance(config, SolveigConfig)
         assert config.api_type == APIType.LOCAL
         assert prompt == "test prompt"
@@ -110,16 +110,16 @@ class TestCLIIntegration:
     def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args)
+        config, prompt = SolveigConfig.parse_config_and_prompt(cli_args=args, interface=MockInterface())
         assert config.temperature == 0.8
         assert config.verbose is True
         assert prompt == "test prompt"
 
-    def test_file_and_cli_merge(self, mock_all_file_operations):
+    def test_file_and_cli_merge(self, mock_filesystem):
         """Test file config merges with CLI overrides."""
         file_config = {"verbose": True, "temperature": 0.2}
         config_path = "/test/config.json"
-        mock_all_file_operations.write_file(config_path, json.dumps(file_config))
+        mock_filesystem.write_file(config_path, json.dumps(file_config))
 
         args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
         config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
