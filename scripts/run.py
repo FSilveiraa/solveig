@@ -13,7 +13,7 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
 from solveig.plugins.hooks import filter_hooks
-from solveig.plugins.requirements import filter_requirements
+from solveig.plugins.schema import filter_requirements
 from solveig.schema.message import (
     LLMMessage,
     MessageHistory,
@@ -22,13 +22,10 @@ from solveig.schema.message import (
 )
 
 
-def get_llm_client(
+def get_message_history(
     config: SolveigConfig, interface: SolveigInterface
-) -> tuple[Instructor, MessageHistory]:
-    """Initialize the LLM client and conversation state."""
-    client: Instructor = llm.get_instructor_client(
-        api_type=config.api_type, api_key=config.api_key, url=config.url
-    )
+) -> MessageHistory:
+    """Initialize the conversation store."""
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
@@ -38,7 +35,7 @@ def get_llm_client(
     # if config.verbose:
     #     print(f"[ System Prompt ]\n{sys_prompt}\n")
     message_history = MessageHistory(system_prompt=sys_prompt)
-    return client, message_history
+    return message_history
 
 
 def get_initial_user_message(
@@ -134,7 +131,7 @@ def handle_llm_error(
     ):
         with interface.with_indent():
             for output in error.last_completion.choices:
-                interface.display_error(output.message.content.strip())
+                interface.display_error(output.message.to_openai())
 
 
 def process_requirements(
@@ -163,6 +160,7 @@ def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface | None = None,
     user_prompt: str = "",
+    llm_client: Instructor | None = None,
 ):
     # Configure logging for instructor debug output when verbose
     if config.verbose:
@@ -179,8 +177,13 @@ def main_loop(
     filter_requirements(enabled_plugins=config, interface=interface)
     filter_hooks(enabled_plugins=config, interface=interface)
 
+    # Create LLM client if none was supplied
+    llm_client = llm_client or llm.get_instructor_client(
+        api_type=config.api_type, api_key=config.api_key, url=config.url
+    )
+
     # Get user interface, LLM client and message history
-    client, message_history = get_llm_client(config, interface)
+    message_history = get_message_history(config, interface)
 
     # interface.display_section("User")
     user_prompt = user_prompt.strip() if user_prompt else ""
@@ -193,7 +196,7 @@ def main_loop(
         message_history.add_message(user_message)
 
         llm_response, user_message = send_message_to_llm_with_retry(
-            config, interface, client, message_history, user_message
+            config, interface, llm_client, message_history, user_message
         )
 
         if llm_response is None:

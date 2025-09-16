@@ -6,7 +6,6 @@ import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from solveig.utils.file import Metadata
@@ -66,10 +65,10 @@ class SolveigInterface(ABC):
     def display_tree(
         self,
         metadata: Metadata,
-        listing: dict[Path, Metadata] | None,
         level: int | None = None,
         max_lines: int | None = None,
-        title: str | None = "Metadata",
+        title: str | None = None,
+        display_metadata: bool = False,
     ) -> None:
         """Utility method to display a block of text with metadata"""
         pass
@@ -132,7 +131,7 @@ class SolveigInterface(ABC):
         self.show(f"✓  {message}")
 
     def display_error(
-        self, message: str | Exception | None, exception: Exception | None = None
+        self, message: str | Exception | None = None, exception: Exception | None = None
     ) -> None:
         if not exception and not message:
             raise RuntimeError("Need to specify message or exception")

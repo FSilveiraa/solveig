@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.plugins.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import before
 from solveig.schema.requirements import CommandRequirement
@@ -38,13 +39,13 @@ def detect_shell(plugin_config) -> str:
 # linter to confirm whether it's correct BASH. I have no idea if this works on Windows
 # (tbh I have no idea if solveig itself works on anything besides Linux)
 @before(requirements=(CommandRequirement,))
-def check_command(config: SolveigConfig, requirement: CommandRequirement):
+def check_command(
+    config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement
+):
     plugin_config = config.plugins.get("shellcheck", {})
-    print("    [ Plugin: Shellcheck ]")
 
     # Check for obviously dangerous patterns first
     if is_obviously_dangerous(requirement.command):
-        print("      ! Security warning: this command contains dangerous patterns !")
         raise SecurityError(
             f"Command contains dangerous pattern: {requirement.command}"
         )
@@ -75,31 +76,36 @@ def check_command(config: SolveigConfig, requirement: CommandRequirement):
                 text=True,
             )
         except FileNotFoundError:
-            print(
-                "      ! Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
+            interface.display_warning(
+                "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
             )
-            print(
-                "      ! Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing"
+            interface.display_warning(
+                "Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing"
             )
-            return  # otherwise not having Shellcheck installed prevents you from running commands at all
+            # if this throws an exception, then not having Shellcheck installed
+            # prevents you from running commands at all
+            return
 
         if result.returncode == 0:
-            print("      No problems found")
+            if config.verbose:
+                interface.display_success(
+                    f"Shellcheck: No issues with command `{requirement.command}`"
+                )
             return
 
         # Parse shellcheck warnings and raise validation error
         try:
             output = json.loads(result.stdout)
-            warnings = [f"[{item['level']}] {item['message']}" for item in output]
-            if warnings:
-                print("      Failed to validate command:")
-                for warning in warnings:
-                    print("        " + warning)
+            errors = [f"[{item['level']}] {item['message']}" for item in output]
+            if errors:
+                with interface.with_group(""):
+                    for error in errors:
+                        interface.display_error(error)
                 raise ValidationError(
-                    f"Shellcheck validation failed: {'; '.join(warnings)}"
+                    f"Shellcheck validation failed for command `{requirement.command}`"
                 )
         except json.JSONDecodeError as e:
-            print(f"      Failed to parse shellcheck output: {e}")
+            # print(f"      Failed to parse shellcheck output: {e}")
             raise ValidationError(f"Shellcheck output parsing failed: {e}") from e
 
     finally:

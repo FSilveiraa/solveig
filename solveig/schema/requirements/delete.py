@@ -30,10 +30,10 @@ class DeleteRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display delete requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem._is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
         interface.show(path_info)
         interface.display_warning("This operation is permanent and cannot be undone!")
@@ -52,7 +52,7 @@ class DeleteRequirement(Requirement):
         """Return description of delete capability."""
         return "delete(path): permanently deletes a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "DeleteResult":
         # Pre-flight validation - use utils/file.py validation
@@ -67,11 +67,7 @@ class DeleteRequirement(Requirement):
             )
 
         metadata = Filesystem.read_metadata(abs_path)
-        try:
-            listing = Filesystem.get_dir_listing(abs_path)
-        except NotADirectoryError:
-            listing = None
-        interface.display_tree(metadata=metadata, listing=listing)
+        interface.display_tree(metadata=metadata)
 
         # Get user consent (with extra warning)
         if interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):

@@ -82,7 +82,7 @@ class Requirement(BaseModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        before_hook(config, self)
+                        before_hook(config, interface, self)
                     except ValidationError as e:
                         # Plugin validation failed - return appropriate error result
                         return self.create_error_result(
@@ -96,7 +96,7 @@ class Requirement(BaseModel, ABC):
 
             # Run the actual requirement solving
             try:
-                result = self._actually_solve(config, interface)
+                result = self.actually_solve(config, interface)
             except Exception as error:
                 interface.display_error(error)
                 error_info = "Execution error"
@@ -113,7 +113,7 @@ class Requirement(BaseModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        after_hook(config, self, result)
+                        after_hook(config, interface, self, result)
                     except ProcessingError as e:
                         # Plugin processing failed - return error result
                         return self.create_error_result(
@@ -131,10 +131,11 @@ class Requirement(BaseModel, ABC):
 
     def display_header(self, interface: SolveigInterface) -> None:
         """Display the requirement header/summary using the interface directly."""
-        interface.display_comment(self.comment)
+        if self.comment:
+            interface.display_comment(self.comment)
 
     @abstractmethod
-    def _actually_solve(
+    def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> RequirementResult:
         """Solve yourself as a requirement following the config"""
@@ -157,17 +158,3 @@ class Requirement(BaseModel, ABC):
         'read(path, only_read_metadata): reads a file or directory...'
         """
         pass
-
-
-# Intermediate classes for common patterns (if needed in future)
-# Keep these here in base.py to avoid artificial file proliferation
-
-
-class FileRequirement(Requirement):
-    """Base class for requirements that operate on files/directories.
-
-    Currently not used, but available if common file operation patterns emerge
-    that would benefit from shared implementation.
-    """
-
-    pass

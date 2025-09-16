@@ -1,19 +1,41 @@
-"""
-Simple unit tests for plugin requirements system.
-Tests core plugin functionality without over-engineering.
-"""
+"""Unit tests for plugin requirements system."""
 
+from pathlib import Path
 from unittest.mock import patch
 
-from solveig.plugins.requirements.tree import TreeRequirement
+import pytest
+
+from solveig.plugins.schema.tree import TreeRequirement, TreeResult
+from solveig.utils.file import Metadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
-class TestPluginRequirements:
-    """Test plugin requirements functionality."""
+class TestTreeRequirement:
+    """Test TreeRequirement plugin functionality."""
 
-    def test_tree_requirement_complete_flow(self):
-        """Test TreeRequirement validation, display, error creation, and solve."""
+    def test_tree_requirement_creation_and_validation(self):
+        """Test TreeRequirement creation, validation, and configuration."""
+        # Valid creation with default settings
+        req = TreeRequirement(path="     /test/dir   ", comment="Generate tree listing")
+        assert req.path == "/test/dir"  # test whitespace stripping
+        assert req.comment == "Generate tree listing"
+        assert req.max_depth == -1  # Default unlimited depth
+
+        # Custom max_depth configuration
+        req_limited = TreeRequirement(path="/test", max_depth=3, comment="test")
+        assert req_limited.max_depth == 3
+
+        # Validation: empty path should fail
+        with pytest.raises(ValueError):
+            TreeRequirement(path="", comment="empty path")
+
+        # Class description
+        description = TreeRequirement.get_description()
+        assert "tree(path)" in description
+        assert "directory tree structure" in description
+
+    def test_tree_requirement_display_and_error_handling(self):
+        """Test TreeRequirement display functionality and error result creation."""
         req = TreeRequirement(path="/test/dir", comment="Generate tree listing")
         interface = MockInterface()
 
@@ -21,84 +43,90 @@ class TestPluginRequirements:
         req.display_header(interface)
         output = interface.get_all_output()
         assert "Generate tree listing" in output
-        interface.clear()
 
-        # Test create_error_result
+        # Test error result creation
         error_result = req.create_error_result("Directory not found", accepted=False)
+
+        assert isinstance(error_result, TreeResult)
         assert error_result.requirement == req
         assert error_result.accepted is False
         assert error_result.error == "Directory not found"
-        assert error_result.tree_output == ""
-        assert error_result.total_files == 0
+        assert error_result.metadata is None
+        assert str(error_result.path).startswith("/")  # Path should be absolute
 
-        # Test solve with non-existent directory (error path)
-        interface.set_user_inputs(["n"])  # Decline if asked about errors
-        result = req.solve(DEFAULT_CONFIG, interface)
-        assert result.requirement == req
-
-        # Test get_description
-        description = TreeRequirement.get_description()
-        assert "tree(path)" in description
-        assert "directory tree structure" in description
-
-    def test_tree_requirement_validation(self):
-        """Test TreeRequirement path validation."""
-        # Valid path should work
-        req = TreeRequirement(path="/valid/path", comment="test")
-        assert req.path == "/valid/path"
-
-        # Path should be stripped of whitespace
-        req_strip = TreeRequirement(path="  /test/path  ", comment="test")
-        assert req_strip.path == "/test/path"
-
-        # Empty path should fail validation
-        try:
-            TreeRequirement(path="", comment="empty path")
-            raise AssertionError("Should have raised validation error")
-        except Exception:
-            pass  # Expected validation error
-
-    @patch("solveig.utils.file.Filesystem.read_metadata")
-    @patch("solveig.utils.file.Filesystem._is_dir")
-    @patch("solveig.utils.file.Filesystem.get_dir_listing")
-    def test_tree_successful_directory_processing(
-        self, mock_listing, mock_is_dir, mock_metadata
-    ):
-        """Test tree requirement with successful directory processing."""
-        from pathlib import Path
-
-        from solveig.utils.file import Metadata
-
-        # Mock successful directory access
-        mock_metadata.return_value = Metadata(
-            owner_name="user",
-            group_name="group",
-            path=Path("/test"),
-            size=0,
-            modified_time="2023-01-01",
-            is_directory=True,
-            is_readable=True,
-            is_writable=True,
+    def test_tree_complete_execution_flow(self, mock_filesystem):
+        """Test complete tree execution: filesystem interaction, display, and result generation."""
+        # clear the filesystem and write a smaller structure to ensure it fits on the window
+        mock_filesystem._entries.clear()
+        mock_filesystem.create_directory("/test")
+        mock_filesystem.write_file("/test/file.txt", "file one here shntpdsohnwtd")
+        mock_filesystem.create_directory("/test/subdir")
+        mock_filesystem.write_file(
+            "/test/subdir/nested.txt", "file two ufsufutfuuuuuudurrrr"
         )
-        mock_is_dir.return_value = True
-        mock_listing.return_value = {
-            Path("/test/file.txt"): Metadata(
-                owner_name="user",
-                group_name="group",
-                path=Path("/test/file.txt"),
-                size=100,
-                modified_time="2023-01-01",
-                is_directory=False,
-                is_readable=True,
-                is_writable=True,
-            )
-        }
 
+        # Execute tree requirement
         req = TreeRequirement(path="/test", comment="Test tree")
         interface = MockInterface()
 
-        result = req._actually_solve(DEFAULT_CONFIG, interface)
+        result = req.actually_solve(DEFAULT_CONFIG, interface)
 
+        # Verify complete result
+        assert isinstance(result, TreeResult)
         assert result.accepted is True
-        assert result.total_files == 1
-        assert result.total_dirs == 1
+        assert result.error is None
+
+        assert result.metadata.path == Path("/test")
+
+        # Verify tree visualization was displayed
+        output = interface.get_all_output()
+        assert "Tree:" in output
+        assert "🗁  test" in output  # Root directory
+        assert "🗎 file.txt" in output  # Root file
+        assert "🗁  subdir" in output  # Subdirectory
+        assert "🗎 nested.txt" in output  # Nested file
+
+        # Verify filesystem was called correctly
+        mock_filesystem.read_metadata.assert_called_with(
+            Path("/test"), descend_level=-1
+        )
+
+    @patch("solveig.utils.file.Filesystem.read_metadata")
+    def test_tree_depth_limiting_and_user_interaction(self, mock_read_metadata):
+        """Test tree with depth limits and user interaction through solve() method."""
+        # Test depth limiting
+        root_metadata = Metadata(
+            path=Path("/test"),
+            is_directory=True,
+            size=4096,
+            modified_time="2023-01-01",
+            owner_name="user",
+            group_name="group",
+            is_readable=True,
+            is_writable=True,
+            listing={},
+        )
+        mock_read_metadata.return_value = root_metadata
+
+        req = TreeRequirement(path="/test", max_depth=2, comment="Limited depth tree")
+        interface = MockInterface()
+
+        result = req.actually_solve(DEFAULT_CONFIG, interface)
+
+        # Verify depth limit was passed to filesystem
+        mock_read_metadata.assert_called_once()
+        call_args = mock_read_metadata.call_args
+        assert str(call_args[0][0]) == "/test"  # First argument (path)
+        assert call_args[1]["descend_level"] == 2  # Depth limit
+        assert result.accepted is True
+
+        # Test user interaction with error case
+        interface.clear()
+        interface.set_user_inputs(["n"])  # User declines if error prompt appears
+
+        error_req = TreeRequirement(path="/nonexistent", comment="Test tree")
+        result = error_req.solve(DEFAULT_CONFIG, interface)
+
+        # Should return a result regardless of success/failure
+        assert isinstance(result, TreeResult)
+        assert result.requirement == error_req

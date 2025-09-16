@@ -3,6 +3,7 @@ Tests for the refactored exception-based plugin system.
 """
 
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.plugins import hooks
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult
@@ -59,7 +60,12 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def failing_validator(config: SolveigConfig, requirement: CommandRequirement):
+        def failing_validator(
+            config: SolveigConfig,
+            interface: SolveigInterface,
+            requirement: CommandRequirement,
+        ):
+            interface.display_comment("I'm a plugin that fails on request")
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
 
@@ -80,7 +86,11 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def security_validator(config: SolveigConfig, requirement: CommandRequirement):
+        def security_validator(
+            config: SolveigConfig,
+            interface: MockInterface,
+            requirement: CommandRequirement,
+        ):
             if "rm -rf" in requirement.command:
                 raise SecurityError("Dangerous command detected")
 
@@ -101,7 +111,11 @@ class TestPluginHookSystem:
 
         # Setup
         @hooks.before(requirements=(CommandRequirement,))
-        def passing_validator(config: SolveigConfig, requirement: CommandRequirement):
+        def passing_validator(
+            config: SolveigConfig,
+            interface: MockInterface,
+            requirement: CommandRequirement,
+        ):
             # Just validate, don't throw
             assert requirement.command is not None
 
@@ -124,6 +138,7 @@ class TestPluginHookSystem:
         @hooks.after(requirements=(CommandRequirement,))
         def failing_processor(
             config: SolveigConfig,
+            interface: MockInterface,
             requirement: CommandRequirement,
             result: CommandResult,
         ):
@@ -147,11 +162,11 @@ class TestPluginHookSystem:
         execution_order = []
 
         @hooks.before(requirements=(CommandRequirement,))
-        def first_validator(config, requirement):
+        def first_validator(config, interface, requirement):
             execution_order.append("first")
 
         @hooks.before(requirements=(CommandRequirement,))
-        def second_validator(config, requirement):
+        def second_validator(config, interface, requirement):
             execution_order.append("second")
 
         req = CommandRequirement(command="echo test", comment="Test")
@@ -170,11 +185,11 @@ class TestPluginHookSystem:
         called = []
 
         @hooks.before(requirements=(CommandRequirement,))
-        def command_only_hook(config, requirement):
+        def command_only_hook(config, interface, requirement):
             called.append("command_hook")
 
         @hooks.before(requirements=(ReadRequirement,))
-        def read_only_hook(config, requirement):
+        def read_only_hook(config, interface, requirement):
             called.append("read_hook")
 
         # Execute
@@ -206,7 +221,7 @@ class TestPluginHookSystem:
             return f"universal_{type(requirement).__name__}"
 
         @hooks.before()  # No schema filter
-        def universal_hook(config, requirement):
+        def universal_hook(config, interface, requirement):
             called.append(get_requirement_name(requirement))
 
         # Test with different requirement types
@@ -254,7 +269,7 @@ class TestPluginFiltering:
         called = []
 
         @hooks.before(requirements=(CommandRequirement,))
-        def test_plugin_hook(config, requirement):
+        def test_plugin_hook(config, interface, requirement):
             called.append("test_plugin_executed")
 
         # Simulate plugin registration (normally done by load_plugins)
@@ -286,7 +301,7 @@ class TestPluginFiltering:
         called = []
 
         @hooks.before(requirements=(CommandRequirement,))
-        def test_plugin_hook(config, requirement):
+        def test_plugin_hook(config, interface, requirement):
             called.append("test_plugin_executed")
 
         # Simulate plugin registration
@@ -345,7 +360,7 @@ class TestPluginFiltering:
         received_config = []
 
         @hooks.before(requirements=(CommandRequirement,))
-        def configurable_plugin_hook(config, requirement):
+        def configurable_plugin_hook(config, interface, requirement):
             plugin_config = config.plugins.get("configurable_plugin", {})
             received_config.append(plugin_config)
 

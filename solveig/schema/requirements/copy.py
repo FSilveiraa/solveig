@@ -33,13 +33,13 @@ class CopyRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display copy requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         abs_source = Filesystem.get_absolute_path(self.source_path)
         abs_dest = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(
             path=self.source_path,
             abs_path=abs_source,
-            is_dir=Filesystem._is_dir(abs_source),
+            is_dir=Filesystem.is_dir(abs_source),
             destination_path=self.destination_path,
             absolute_destination_path=abs_dest,
         )
@@ -60,7 +60,7 @@ class CopyRequirement(Requirement):
         """Return description of copy capability."""
         return "copy(source_path, destination_path): copies a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CopyResult":
         # Pre-flight validation - use utils/file.py validation
@@ -82,14 +82,7 @@ class CopyRequirement(Requirement):
             )
 
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        try:
-            source_listing = Filesystem.get_dir_listing(abs_source_path)
-        except NotADirectoryError:
-            source_listing = None
-
-        interface.display_tree(
-            metadata=source_metadata, listing=source_listing, title="Source Metadata"
-        )
+        interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
         if interface.ask_yes_no(

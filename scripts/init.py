@@ -41,8 +41,8 @@ export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
             try:
                 # Check if timestamps are already configured
                 abs_bashrc_path = Filesystem.get_absolute_path(bashrc_path)
-                if Filesystem._exists(abs_bashrc_path):
-                    content, _ = Filesystem.read_file(bashrc_path)
+                if Filesystem.exists(abs_bashrc_path):
+                    content = Filesystem.read_file(bashrc_path).content
                     if "HISTTIMEFORMAT" in content:
                         interface.display_success(
                             "Bash history timestamps were already configured"

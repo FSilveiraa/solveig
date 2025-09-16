@@ -8,12 +8,12 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from . import hooks, requirements
+from . import hooks, schema
 from .exceptions import PluginException, ProcessingError, SecurityError, ValidationError
 
 __all__ = [
     "hooks",
-    "requirements",
+    "schema",
     "PluginException",
     "ValidationError",
     "ProcessingError",

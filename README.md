@@ -68,9 +68,89 @@ Solveig focuses on preventing dangerous operations through explicit user consent
 
 ### Is Solveig safe to run?
 
-Solveig requires your approval for every file read, write, or command execution. It uses Shellcheck to validate commands and catch dangerous patterns. However, you're ultimately responsible for reviewing and denying any request you don't understand.
+Mostly:
+- Solveig is unable to read file contents, run commands or send back anything unless you give it explicit consent
+- Interacts with files and tools through requirements, enforcing user control and allowing easy validation
+- Validates shell commands before they're even requested through the included shellcheck plugin (requires installing CLI tool `shellcheck`)
+- Open-source project, proper CI with 200+ test suite with 90%+ coverage and extensive scenario focus
 
-This is still a tool that connects an AI to your computer - always review what it wants to do.
+This is still a tool that connects an AI to your terminal - always review what it wants to do.
+
+### How does Solveig work?
+
+Solveig creates a conversation with an LLM using the initial prompt and establishes a loop where the LLM asks for requirements and you choose whether to execute them and send back their results.
+
+Most AI CLI assistants rely only on running Bash obtained from a model, which can be a shaky foundation for a security product. Instead, Solveig focuses on providing a safe interface for most behavior that bypasses shell commands, allowing for proper inspection and interface displaying. Basically, it's much easier to validate a read/write requirement for a file than validating a `cat` command to read or an `echo` pipe to write the same file.
+
+All core filesystem operations are covered by requirements, and you can extend this by adding new requirement plugins or interacting with requirements through hook plugins.
+
+### Why are there 2 kinds of plugins?
+
+You can extend Solveig in any of 2 ways:
+- By adding a new requirement, representing a new thing the LLM can request
+- By adding a hook that captures the requirement before or after it's been processed
+
+Requirements follow a simple interface with 3 methods and return a corresponding Result class:
+
+```python
+from typing import Literal
+
+from solveig.interface import SolveigInterface
+from solveig.schema.requirements.base import Requirement
+from solveig.schema.results.base import RequirementResult
+from solveig.plugins.schema import register_requirement
+
+
+class MyResult(RequirementResult):
+    """Example requirement result."""
+    response: str | None = None
+
+
+@register_requirement
+class MyRequirement(Requirement):
+    """Example requirement."""
+    title: Literal["myreq"] = "myreq"
+
+    def create_error_result(self, error_message: str, accepted: bool) -> MyResult:
+        """Create a result with an error."""
+        return MyResult(
+            requirement=self,
+            accepted=accepted,
+            error=error_message,
+        )
+
+    @classmethod
+    def get_description(cls) -> str:
+        """Return requirement description, using this format: name(args): description."""
+        return (
+            "myreq(name): description of what this requirement does"
+        )
+
+    def actually_solve(self, config, interface: SolveigInterface) -> MyResult:
+        """Solve the requirement and return the result."""
+        user_response = interface.ask_user("What to send back")
+        return MyResult(
+            requirement=self,
+            accepted=False,
+            response=user_response
+        )
+
+
+# Fix possible forward typing references
+MyResult.model_rebuild()
+```
+
+Hooks meanwhile latch onto existing (or new) requirements, either before or after they run
+
+You can add a requirement by itself, a hook for a new or existing requirement, or a combination of both.
+Some examples:
+- MySQL plugin
+  - SQLRequirement: runs a query on database
+- Web Search
+  - SearchRequirement: performs a HTTP request the URL
+  - @before hook: validates the URL against a blacklist/whitelist before running request
+- Anonymize Paths
+  - @after hook: privacy-focused plugin that converts expanded paths to fake ones (/home/user-name -> home/jdoe) in results
 
 ---
 
@@ -169,13 +249,12 @@ The existing requirement types in `solveig/schema/requirements/` show patterns f
 <summary><b>Block dangerous commands with custom patterns</b></summary>
 
 ```python
-from solveig.config import SolveigConfig
 from solveig.plugins.hooks import before
 from solveig.plugins.exceptions import SecurityError
 from solveig.schema.requirements import CommandRequirement
 
 @before(requirements=(CommandRequirement,))
-def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirement):
+def block_dangerous_commands(config, interface, requirement):
     """Block commands that could be dangerous to system security."""
     dangerous_patterns = [
         "sudo chmod 777",
@@ -195,23 +274,21 @@ def block_dangerous_commands(config: SolveigConfig, requirement: CommandRequirem
 
 ```python
 import re
-
-from solveig.config import SolveigConfig
+from pathlib import Path
 from solveig.plugins.hooks import after
 from solveig.plugins.exceptions import ProcessingError
 from solveig.schema.requirements import ReadRequirement, WriteRequirement
-from solveig.schema.results import ReadResult, WriteResult
 
 @after(requirements=(ReadRequirement, WriteRequirement))
-def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteRequirement, result: ReadResult|WriteResult):
+def anonymize_paths(config, interface, requirement, result):
     """Anonymize file paths in results before sending to LLM."""
     try:
-        original_path = result.metadata['path']
+        original_path = str(result.metadata.path)
     except:
         return
     anonymous_path = re.sub(r"/home/\w+", "/home/jdoe", original_path)
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
-    result.metadata['path'] = anonymous_path
+    result.metadata.path = Path(anonymous_path)
 ```
 </details>
 
@@ -219,81 +296,43 @@ def anonymize_paths(config: SolveigConfig, requirement: ReadRequirement|WriteReq
 <summary><b>Create a new requirement type: Directory tree listing</b></summary>
 
 ```python
-# solveig/schema/requirements/tree.py
+# solveig/plugins/requirements/tree.py
 from pathlib import Path
-from typing import TYPE_CHECKING
+from pydantic import Field
 
-from .base import Requirement, validate_non_empty_path
+from solveig.schema.requirements.base import Requirement, validate_non_empty_path
+from solveig.schema.results.base import RequirementResult
+from solveig.interface import SolveigInterface
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import TreeResult
 
-class TreeRequirement(Requirement):
+class MyResult(RequirementResult):
+    path: str | Path
+    accepted: bool
+    
+class MyRequirement(Requirement):
     """Generate a directory tree listing showing file structure."""
     
-    path: str = Field(..., validator=validate_non_empty_path)
-    max_depth: int = Field(default=3, ge=1, le=10)
-    show_hidden: bool = Field(default=False)
+    # Use descriptive fields, with a description string that the LLM will have access to,
+    # as well as validation methods
+    path: str = Field(..., description="The path to look from", validator=validate_non_empty_path)
+    show_hidden: bool = Field(description="Look at hidden files and directories", default=False)
     
     def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
-        from solveig.schema.results import TreeResult
-        
-        abs_path = Path(self.path).expanduser().resolve()
-        
-        # Generate tree structure
-        tree_lines = self._generate_tree(abs_path, self.max_depth, self.show_hidden)
-        
-        return TreeResult(
-            requirement=self,
-            accepted=True,
-            path=abs_path,
-            tree_output="\n".join(tree_lines),
-            total_files=len([line for line in tree_lines if "📄" in line]),
-            total_dirs=len([line for line in tree_lines if "📁" in line])
-        )
-    
-    def _generate_tree(self, path: Path, max_depth: int, show_hidden: bool) -> list[str]:
-        """Generate tree structure lines."""
-        lines = [f"📁 {path.name}/"]
-        
-        def _walk_dir(current_path: Path, prefix: str, depth: int):
-            if depth >= max_depth:
-                return
-                
-            try:
-                entries = list(current_path.iterdir())
-                if not show_hidden:
-                    entries = [e for e in entries if not e.name.startswith('.')]
-                    
-                entries.sort(key=lambda x: (x.is_file(), x.name.lower()))
-                
-                for i, entry in enumerate(entries):
-                    is_last = i == len(entries) - 1
-                    current_prefix = "└── " if is_last else "├── "
-                    next_prefix = prefix + ("    " if is_last else "│   ")
-                    
-                    if entry.is_dir():
-                        lines.append(f"{prefix}{current_prefix}📁 {entry.name}/")
-                        _walk_dir(entry, next_prefix, depth + 1)
-                    else:
-                        lines.append(f"{prefix}{current_prefix}📄 {entry.name}")
-                        
-            except PermissionError:
-                lines.append(f"{prefix}└── ❌ Permission denied")
-        
-        _walk_dir(path, "", 0)
-        return lines
-
-# solveig/schema/results/tree.py  
-from pathlib import Path
-from .base import RequirementResult
-
-class TreeResult(RequirementResult):
-    path: str | Path
-    tree_output: str
-    total_files: int = 0
-    total_dirs: int = 0
+        # Access the config, use the interface, solve the requirement and return a result
+        try:
+            if config.plugins.myplugin.is_active:
+                return MyResult(
+                    requirement=self,
+                    accepted=interface.ask_yes_no("Proceed?"),
+                    path=self.path
+                )
+        except Exception as e:
+            return MyResult(
+                requirement=self,
+                accepted=False,
+                path=self.path,
+                error=str(e)
+            )
 ```
 
 Then update `solveig/schema/requirements/__init__.py` and `solveig/schema/results/__init__.py` to export the new classes, and add examples to the system prompt showing the LLM how to use `TreeRequirement`.
@@ -328,6 +367,7 @@ Solveig follows **strict testing guidelines** to ensure reliability and safety:
 **Test Safety Philosophy**: Unit tests must achieve high coverage while being completely safe to run. Our mocking approach ensures tests never touch real files, run real commands, or require user interaction.
 
 **Core Mocking Infrastructure**:
+- **MockClient
 - **MockFilesystem**: Elaborate wrapper around `@patch()` calls that simulates complete file operations
 - **MockInterface**: Wrapper around `@patch()` calls for user input/output without actual terminal interaction  
 - **Plugin isolation**: Tests call `filter_hooks()` with specific configs to ensure plugin state isolation
@@ -364,6 +404,9 @@ python -m pytest tests/unit/test_main.py::TestInitializeConversation -v
 
 # Run all checks locally (same as CI) 
 black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
+
+# Running mock client (works with config)
+python -m tests.mocks.run_with_mock_client
 ```
 
 #### Test Organization

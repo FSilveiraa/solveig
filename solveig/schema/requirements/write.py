@@ -4,9 +4,12 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator
 
+from solveig.schema.requirements.base import (
+    Requirement,
+    format_path_info,
+    validate_non_empty_path,
+)
 from solveig.utils.file import Filesystem
-
-from .base import Requirement, format_path_info, validate_non_empty_path
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
@@ -36,7 +39,7 @@ class WriteRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display write requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
@@ -59,7 +62,7 @@ class WriteRequirement(Requirement):
         """Return description of write capability."""
         return "write(path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "WriteResult":
         abs_path = Filesystem.get_absolute_path(self.path)

@@ -33,13 +33,13 @@ class MoveRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display move requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         source_abs = Filesystem.get_absolute_path(self.source_path)
         dest_abs = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(
             path=self.source_path,
             abs_path=source_abs,
-            is_dir=Filesystem._is_dir(source_abs),
+            is_dir=Filesystem.is_dir(source_abs),
             destination_path=self.destination_path,
             absolute_destination_path=dest_abs,
         )
@@ -60,7 +60,7 @@ class MoveRequirement(Requirement):
         """Return description of move capability."""
         return "move(source_path, destination_path): moves a file or directory"
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "MoveResult":
         # Pre-flight validation - use utils/file.py validation
@@ -82,13 +82,7 @@ class MoveRequirement(Requirement):
             )
 
         source_metadata = Filesystem.read_metadata(abs_source_path)
-        try:
-            source_listing = Filesystem.get_dir_listing(abs_source_path)
-        except NotADirectoryError:
-            source_listing = None
-        interface.display_tree(
-            metadata=source_metadata, listing=source_listing, title="Source Metadata"
-        )
+        interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
         if interface.ask_yes_no(

@@ -1,5 +1,6 @@
 import os
 import platform
+from datetime import datetime
 from pathlib import Path
 
 from .utils.file import Metadata
@@ -31,7 +32,7 @@ The user will analyze your requirements and accept or deny each, then provide th
 You will then analyze their response and respond to it, asking for more requirements if necessary.
 You will continue this process until the user's issue is solved.
 Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
-Prioritize asking for direct read/write requests over running commands file since it's safer for the user.
+Prioritize asking for direct file requests over running commands for those files since it's safer for the user.
 Use commands only when necessary for access or performance reasons.
 If you believe your solution will require multiple steps in sequence, ask only for what is necessary at the current stage.
 
@@ -82,7 +83,9 @@ script_chat.add_message(
                     group_name="user",
                     path=Path("/home/user/run.sh"),
                     size=101,
-                    modified_time="Thu Jul 17 02:54:43 2025",
+                    modified_time=int(
+                        datetime.fromisoformat("2025-07-17T02:54:43").timestamp()
+                    ),
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,
@@ -195,7 +198,9 @@ tmpfs           784M   48K  784M   1% /run/user/1000
                     group_name="user",
                     path=Path("/home/user/Documents/my_app.log"),
                     size=11180,
-                    modified_time="Wed Jul 16 12:59:44 2025",
+                    modified_time=int(
+                        datetime.fromisoformat("2025-07-16T12:59:44").timestamp()
+                    ),
                     is_directory=False,
                     is_readable=True,
                     is_writable=True,
@@ -248,7 +253,7 @@ def get_available_capabilities() -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
     try:
-        from solveig.plugins.requirements import REQUIREMENTS
+        from solveig.plugins.schema.requirements import REQUIREMENTS
 
         active_requirements = list(REQUIREMENTS.registered.values())
     except ImportError:

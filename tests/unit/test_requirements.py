@@ -3,9 +3,12 @@ Reorganized unit tests for requirement classes, grouped by requirement type.
 Tests validation, error handling, and display methods with comprehensive coverage.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 from pydantic import ValidationError
 
+from solveig.plugins.hooks import filter_hooks
 from solveig.schema.requirements import (
     CommandRequirement,
     CopyRequirement,
@@ -98,8 +101,15 @@ class TestCommandRequirement:
         assert "command(command)" in description
         assert "execute shell commands" in description
 
-    def test_successful_command_execution(self):
+    @patch("subprocess.run")
+    def test_successful_command_execution(self, mock_subprocess):
         """Test successful command execution with various user responses."""
+        subprocess_result = Mock()
+        subprocess_result.returncode = 0
+        subprocess_result.stdout = "test"
+        subprocess_result.stderr = ""
+        mock_subprocess.return_value = subprocess_result
+
         req = CommandRequirement(command="echo test", comment="Test echo command")
         interface = MockInterface()
 
@@ -116,7 +126,7 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True
-        assert "test" in result.stdout
+        assert "test" == result.stdout
 
     def test_command_declined(self):
         """Test when user declines command execution."""
@@ -127,18 +137,27 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is False
 
-    def test_command_with_error_output(self):
+    @patch("subprocess.run")
+    def test_command_with_error_output(self, mock_subprocess):
         """Test command that produces error output but executes successfully."""
+        subprocess_result = Mock()
+        subprocess_result.returncode = 1
+        subprocess_result.stdout = ""
+        subprocess_result.stderr = "Command not found"
+        mock_subprocess.return_value = subprocess_result
+
         req = CommandRequirement(
             command="nonexistent_command_12345", comment="Invalid command"
         )
         interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept command and output
 
+        # TODO: hotfix to skip plugin usage - should be off by default
+        filter_hooks(interface=interface, enabled_plugins=DEFAULT_CONFIG)
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True  # Shell execution succeeded
-        assert "not found" in result.error  # Works across different shell environments
+        assert "Command not found" in result.error
 
     def test_command_exception_handling(self):
         """Test command requirement exception handling during execution."""
@@ -190,12 +209,12 @@ class TestReadRequirement:
         description = ReadRequirement.get_description()
         assert "read(path, metadata_only)" in description
 
-    def test_successful_reads_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_read(self, mock_filesystem):
         """Test successful read operations using MockFilesystem fixture."""
         # Set up test files and directories - fixture automatically provides mock_fs
-        mock_all_file_operations.write_file("/test/readable.txt", "test content")
-        mock_all_file_operations.create_directory("/test/readable_dir")
-        mock_all_file_operations.write_file("/test/readable_dir/nested.txt", "nested")
+        mock_filesystem.write_file("/test/readable.txt", "test content")
+        mock_filesystem.create_directory("/test/readable_dir")
+        mock_filesystem.write_file("/test/readable_dir/nested.txt", "nested")
 
         # Test metadata-only read
         metadata_req = ReadRequirement(
@@ -218,7 +237,10 @@ class TestReadRequirement:
         interface.set_user_inputs(["y", "y"])  # Accept read, send to LLM
         content_result = content_req.solve(DEFAULT_CONFIG, interface)
         assert content_result.accepted is True
-        assert "test content" in content_result.content
+        file_path = mock_filesystem.get_absolute_path("/test/readable.txt")
+        file_content = mock_filesystem.read_file(file_path)
+        assert file_content.content in content_result.content
+        assert file_content.content in interface.get_all_output()
 
         # Test directory read with listing
         interface.clear()
@@ -229,9 +251,9 @@ class TestReadRequirement:
         dir_result = dir_req.solve(DEFAULT_CONFIG, interface)
         assert dir_result.accepted is True
 
-    def test_read_declined_scenarios(self, mock_all_file_operations):
+    def test_read_declined_scenarios(self, mock_filesystem):
         """Test various user decline scenarios for read operations."""
-        mock_all_file_operations.write_file("/test/readable.txt", "test content")
+        mock_filesystem.write_file("/test/readable.txt", "test content")
 
         # Test: Accept read, decline sending to LLM
         read_req = ReadRequirement(
@@ -302,9 +324,9 @@ class TestWriteRequirement:
         description = WriteRequirement.get_description()
         assert "write(path, is_directory" in description
 
-    def test_successful_writes_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_writes_with_mock_fs(self, mock_filesystem):
         """Test successful write operations using MockFilesystem fixture."""
-        mock_all_file_operations.total_size = 10000000000  # 10GB to avoid space issues
+        mock_filesystem.total_size = 10000000000  # 10GB to avoid space issues
 
         # Test write file
         write_req = WriteRequirement(
@@ -361,10 +383,10 @@ class TestDeleteRequirement:
         assert "delete(path)" in description
         assert "permanently deletes" in description
 
-    def test_successful_delete_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_delete_with_mock_fs(self, mock_filesystem):
         """Test successful delete operation using MockFilesystem fixture."""
         # Set up file to delete
-        mock_all_file_operations.write_file("/test/delete_me.txt", "content")
+        mock_filesystem.write_file("/test/delete_me.txt", "content")
 
         delete_req = DeleteRequirement(
             path="/test/delete_me.txt", comment="Delete file"
@@ -374,9 +396,9 @@ class TestDeleteRequirement:
         delete_result = delete_req.solve(DEFAULT_CONFIG, interface)
         assert delete_result.accepted is True
 
-    def test_delete_declined(self, mock_all_file_operations):
+    def test_delete_declined(self, mock_filesystem):
         """Test when user declines delete operation."""
-        mock_all_file_operations.write_file("/test/to_delete.txt", "content")
+        mock_filesystem.write_file("/test/to_delete.txt", "content")
         delete_req = DeleteRequirement(
             path="/test/to_delete.txt", comment="Delete declined"
         )
@@ -422,16 +444,14 @@ class TestCopyRequirement:
         description = CopyRequirement.get_description()
         assert "copy(source_path, destination_path)" in description
 
-    def test_successful_copy_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_copy_with_mock_fs(self, mock_filesystem):
         """Test successful copy operations using MockFilesystem fixture."""
-        mock_all_file_operations.total_size = 10000000000  # 10GB
+        mock_filesystem.total_size = 10000000000  # 10GB
 
         # Set up source files
-        mock_all_file_operations.write_file("/test/source.txt", "source content")
-        mock_all_file_operations.create_directory("/test/source_dir")
-        mock_all_file_operations.write_file(
-            "/test/source_dir/nested.txt", "nested content"
-        )
+        mock_filesystem.write_file("/test/source.txt", "source content")
+        mock_filesystem.create_directory("/test/source_dir")
+        mock_filesystem.write_file("/test/source_dir/nested.txt", "nested content")
 
         # Test copy file operation
         copy_req = CopyRequirement(
@@ -456,10 +476,10 @@ class TestCopyRequirement:
         copy_dir_result = copy_dir_req.solve(DEFAULT_CONFIG, interface)
         assert copy_dir_result.accepted is True
 
-    def test_copy_declined(self, mock_all_file_operations):
+    def test_copy_declined(self, mock_filesystem):
         """Test when user declines copy operation."""
         # Create the initial file, so it doesn't throw an exception
-        mock_all_file_operations.write_file("/src/file.txt", "source content")
+        mock_filesystem.write_file("/src/file.txt", "source content")
         req = CopyRequirement(
             source_path="/src/file.txt",
             destination_path="/dst/copy.txt",
@@ -495,16 +515,14 @@ class TestMoveRequirement:
         description = MoveRequirement.get_description()
         assert "move(source_path, destination_path)" in description
 
-    def test_successful_move_with_mock_fs(self, mock_all_file_operations):
+    def test_successful_move_with_mock_fs(self, mock_filesystem):
         """Test successful move operations using MockFilesystem fixture."""
-        mock_all_file_operations.total_size = 10000000000  # 10GB
+        mock_filesystem.total_size = 10000000000  # 10GB
 
         # Set up source files
-        mock_all_file_operations.write_file("/test/source.txt", "source content")
-        mock_all_file_operations.create_directory("/test/source_dir")
-        mock_all_file_operations.write_file(
-            "/test/source_dir/nested.txt", "nested content"
-        )
+        mock_filesystem.write_file("/test/source.txt", "source content")
+        mock_filesystem.create_directory("/test/source_dir")
+        mock_filesystem.write_file("/test/source_dir/nested.txt", "nested content")
 
         # Test move file operation
         move_req = MoveRequirement(
@@ -528,10 +546,10 @@ class TestMoveRequirement:
         move_dir_result = move_dir_req.solve(DEFAULT_CONFIG, interface)
         assert move_dir_result.accepted is True
 
-    def test_move_declined(self, mock_all_file_operations):
+    def test_move_declined(self, mock_filesystem):
         """Test when user declines move operation."""
         # Create the initial file, so it doesn't throw an exception
-        mock_all_file_operations.write_file("/src/file.txt", "source content")
+        mock_filesystem.write_file("/src/file.txt", "source content")
         req = MoveRequirement(
             source_path="/src/file.txt",
             destination_path="/dst/moved.txt",
@@ -571,10 +589,10 @@ class TestRequirementErrorCreation:
 class TestRequirementErrorScenarios:
     """Test specific error scenarios to improve coverage."""
 
-    def test_write_file_already_exists(self, mock_all_file_operations):
+    def test_write_file_already_exists(self, mock_filesystem):
         """Test WriteRequirement when file already exists - covers lines 75-79."""
         # Create existing file
-        mock_all_file_operations.write_file("/test/existing.txt", "existing content")
+        mock_filesystem.write_file("/test/existing.txt", "existing content")
 
         write_req = WriteRequirement(
             path="/test/existing.txt",
@@ -592,12 +610,12 @@ class TestRequirementErrorScenarios:
         assert "This file already exists" in output
         assert result.accepted is True
 
-    def test_write_operation_exception(self, mock_all_file_operations):
+    def test_write_operation_exception(self, mock_filesystem):
         """Test WriteRequirement exception handling - covers lines 103-105."""
         from unittest.mock import patch
 
         # Ensure plenty of disk space to avoid validation errors
-        mock_all_file_operations.total_size = 10000000000  # 10GB
+        mock_filesystem.total_size = 10000000000  # 10GB
 
         write_req = WriteRequirement(
             path="/test/error_file.txt",
@@ -620,12 +638,12 @@ class TestRequirementErrorScenarios:
             output = interface.get_all_output()
             assert "Found error when writing file" in output
 
-    def test_copy_operation_exception(self, mock_all_file_operations):
+    def test_copy_operation_exception(self, mock_filesystem):
         """Test CopyRequirement exception handling - covers lines 113-123."""
         from unittest.mock import patch
 
         # Set up source file
-        mock_all_file_operations.write_file("/test/source.txt", "content")
+        mock_filesystem.write_file("/test/source.txt", "content")
 
         copy_req = CopyRequirement(
             source_path="/test/source.txt",
@@ -647,12 +665,12 @@ class TestRequirementErrorScenarios:
             output = interface.get_all_output()
             assert "Found error when copying" in output
 
-    def test_move_operation_exception(self, mock_all_file_operations):
+    def test_move_operation_exception(self, mock_filesystem):
         """Test MoveRequirement exception handling - covers lines 109-119."""
         from unittest.mock import patch
 
         # Set up source file
-        mock_all_file_operations.write_file("/test/source.txt", "content")
+        mock_filesystem.write_file("/test/source.txt", "content")
 
         move_req = MoveRequirement(
             source_path="/test/source.txt",
@@ -674,12 +692,12 @@ class TestRequirementErrorScenarios:
             output = interface.get_all_output()
             assert "Found error when moving" in output
 
-    def test_delete_operation_exception(self, mock_all_file_operations):
+    def test_delete_operation_exception(self, mock_filesystem):
         """Test DeleteRequirement exception handling - covers lines 84-86."""
         from unittest.mock import patch
 
         # Set up file to delete
-        mock_all_file_operations.write_file("/test/delete_me.txt", "content")
+        mock_filesystem.write_file("/test/delete_me.txt", "content")
 
         delete_req = DeleteRequirement(
             path="/test/delete_me.txt", comment="Delete with error"
@@ -699,12 +717,12 @@ class TestRequirementErrorScenarios:
             output = interface.get_all_output()
             assert "Found error when deleting" in output
 
-    def test_read_operation_exception(self, mock_all_file_operations):
+    def test_read_operation_exception(self, mock_filesystem):
         """Test ReadRequirement exception handling - covers lines 88-90."""
         from unittest.mock import patch
 
         # Set up file to read
-        mock_all_file_operations.write_file("/test/readable.txt", "content")
+        mock_filesystem.write_file("/test/readable.txt", "content")
 
         read_req = ReadRequirement(
             path="/test/readable.txt", metadata_only=False, comment="Read with error"
@@ -722,12 +740,12 @@ class TestRequirementErrorScenarios:
             assert result.accepted is False
             assert "Permission denied" in result.error
 
-    def test_move_validation_exception(self, mock_all_file_operations):
+    def test_move_validation_exception(self, mock_filesystem):
         """Test MoveRequirement validation exception handling - covers lines 74-76."""
         from unittest.mock import patch
 
         # Set up source file
-        mock_all_file_operations.write_file("/test/source.txt", "content")
+        mock_filesystem.write_file("/test/source.txt", "content")
 
         move_req = MoveRequirement(
             source_path="/test/source.txt",
@@ -750,12 +768,12 @@ class TestRequirementErrorScenarios:
             output = interface.get_all_output()
             assert "Skipping: Write permission denied" in output
 
-    def test_copy_validation_exception(self, mock_all_file_operations):
+    def test_copy_validation_exception(self, mock_filesystem):
         """Test CopyRequirement validation exception handling - covers lines 74-76."""
         from unittest.mock import patch
 
         # Set up source file
-        mock_all_file_operations.write_file("/test/source.txt", "content")
+        mock_filesystem.write_file("/test/source.txt", "content")
 
         copy_req = CopyRequirement(
             source_path="/test/source.txt",

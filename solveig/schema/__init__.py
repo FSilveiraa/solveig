@@ -44,7 +44,7 @@ from .. import plugins
 # Register core requirements in the unified registry
 def _register_core_requirements():
     """Register all core requirement types in the plugin registry for unified access."""
-    from ..plugins.requirements import REQUIREMENTS, register_requirement
+    from solveig.plugins.schema import REQUIREMENTS, register_requirement
 
     # Core requirement classes
     core_requirements = [
@@ -65,5 +65,5 @@ def _register_core_requirements():
 _register_core_requirements()
 
 # Load plugin requirements and hooks
-plugins.requirements.load_requirements()
+plugins.schema.load_requirements()
 plugins.hooks.load_hooks()

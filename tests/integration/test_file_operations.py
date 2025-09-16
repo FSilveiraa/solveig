@@ -26,7 +26,10 @@ class TestReadRequirementIntegration:
     """Integration tests for ReadRequirement with real files."""
 
     def test_read_file_with_tilde_path(self):
-        """Test reading a file using tilde path expansion. ! This test performs actual file operations !"""
+        """
+        Test reading a file using tilde path expansion.
+        ! This test performs actual file operations on the user's home directory !
+        """
         # Create a test file in user's home directory
         home_test_dir = Path.home() / ".solveig_test_temp"
         home_test_dir.mkdir(exist_ok=True)
@@ -46,9 +49,7 @@ class TestReadRequirementIntegration:
             )
 
             # Mock user consent by consenting to all file operations, but let real file operations happen
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify result
             assert result.accepted
@@ -89,17 +90,15 @@ class TestReadRequirementIntegration:
                 path=str(base_path), metadata_only=True, comment="Read directory"
             )
 
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory listing
             assert result.accepted
-            assert result.directory_listing is not None
-            assert len(result.directory_listing) == 3  # file1.txt, file2.py, subdir
+            assert result.metadata.listing is not None
+            assert len(result.metadata.listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = {item.name for item in result.directory_listing}
+            filenames = {item.name for item in result.metadata.listing}
             assert "file1.txt" in filenames
             assert "file2.py" in filenames
             assert "subdir" in filenames
@@ -115,7 +114,7 @@ class TestReadRequirementIntegration:
         )
         mock_interface = MockInterface()
 
-        result = req._actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+        result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
         # Should fail gracefully
         assert not result.accepted
@@ -141,7 +140,7 @@ class TestReadRequirementIntegration:
                     comment="Read restricted file",
                 )
 
-                result = req._actually_solve(
+                result = req.actually_solve(
                     config=DEFAULT_CONFIG, interface=mock_interface
                 )
 
@@ -178,9 +177,7 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify write succeeded
             assert result.accepted
@@ -204,9 +201,7 @@ class TestWriteRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_write_consent", return_value=True):
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify directory creation
             assert result.accepted
@@ -234,9 +229,7 @@ class TestWriteRequirementIntegration:
             #     patch("builtins.print") as mock_print,
             # ):
 
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Should warn about existing path
             warning_calls = [
@@ -278,9 +271,7 @@ class TestMoveRequirementIntegration:
             mock_interface.user_inputs.append("y")
 
             # with patch.object(req, "_ask_move_consent", return_value=True):
-            result = req._actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify move succeeded
             assert result.accepted
@@ -312,7 +303,7 @@ class TestMoveRequirementIntegration:
                 comment="Move directory",
             )
 
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify directory move
             assert result.accepted
@@ -331,7 +322,7 @@ class TestMoveRequirementIntegration:
             comment="Move missing file",
         )
 
-        result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+        result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
         # Should fail gracefully
         assert not result.accepted
@@ -361,7 +352,7 @@ class TestCopyRequirementIntegration:
                 comment="Copy file",
             )
 
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify copy succeeded
             assert result.accepted
@@ -392,7 +383,7 @@ class TestCopyRequirementIntegration:
                 comment="Copy directory tree",
             )
 
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify directory tree copy
             assert result.accepted
@@ -419,7 +410,7 @@ class TestDeleteRequirementIntegration:
 
             req = DeleteRequirement(path=str(test_file), comment="Delete test file")
 
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify deletion
             assert result.accepted
@@ -441,7 +432,7 @@ class TestDeleteRequirementIntegration:
 
             req = DeleteRequirement(path=str(test_dir), comment="Delete directory tree")
 
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify directory deletion
             assert result.accepted
@@ -455,7 +446,7 @@ class TestDeleteRequirementIntegration:
             path="/nonexistent/file.txt", comment="Delete missing file"
         )
 
-        result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+        result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
         # Should fail gracefully
         assert not result.accepted
@@ -479,7 +470,7 @@ class TestPathSecurityIntegration:
             )
 
             # The path should be resolved safely (though this specific file may not exist)
-            result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify the resolved path doesn't contain traversal patterns
             if result.accepted:
@@ -489,7 +480,10 @@ class TestPathSecurityIntegration:
                 )
 
     def test_tilde_expansion_security(self):
-        """Test that tilde expansion works consistently and securely."""
+        """
+        Test that tilde expansion works consistently and securely.
+        Note that this test is particularly sensitive: it reads the actual user home's bashrc.
+        """
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
         home_path = str(Path.home())
@@ -500,7 +494,8 @@ class TestPathSecurityIntegration:
             comment="Tilde expansion test",
         )
 
-        result = req._actually_solve(DEFAULT_CONFIG, mock_interface)
+        # since we're using DEFAULT_CONFIG we know no plugins will interfere
+        result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
         # Even if declined, path should be properly expanded
         assert str(result.path).startswith(home_path)
@@ -528,7 +523,7 @@ class TestCompleteWorkflowIntegration:
                 ["y", "y"]  # yes to read, yes to send back
             )
 
-            read_result = read_req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            read_result = read_req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert read_result.accepted
             original_content = read_result.content
@@ -548,7 +543,7 @@ class TestCompleteWorkflowIntegration:
                     "y",  # yes to write
                 ]
             )
-            write_result = write_req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            write_result = write_req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert write_result.accepted
 
@@ -577,7 +572,7 @@ class TestCompleteWorkflowIntegration:
                 comment="Create backup",
             )
 
-            copy_result = copy_req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            copy_result = copy_req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert copy_result.accepted
             assert backup_file.exists()
@@ -591,7 +586,7 @@ class TestCompleteWorkflowIntegration:
                 comment="Modify original",
             )
 
-            write_result = write_req._actually_solve(DEFAULT_CONFIG, mock_interface)
+            write_result = write_req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             assert write_result.accepted
 

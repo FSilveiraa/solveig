@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_serializer
+
+from solveig.utils.misc import dump_pydantic_field
 
 # Circular import fix:
 # - This module (base.py) needs Requirement classes for type hints
@@ -19,16 +20,13 @@ class RequirementResult(BaseModel):
     # then when JSON'ing we usually keep a couple of its fields in the result's body
     # We keep paths separately from the requirement, since we want to preserve both the path(s) the LLM provided
     # and their absolute value (~/Documents vs /home/jdoe/Documents)
-    requirement: Requirement
+    requirement: Requirement = Field(exclude=True)
     accepted: bool
     error: str | None = None
 
+    @field_serializer("*")
+    def serialize_all_fields(self, v, _info):
+        return dump_pydantic_field(v)
+
     def to_openai(self):
-        data = self.model_dump()
-        data.pop("requirement")
-        # convert all Paths to str when serializing
-        data = {
-            key: str(value) if isinstance(value, Path) else value
-            for key, value in data.items()
-        }
-        return data
+        return self.model_dump()

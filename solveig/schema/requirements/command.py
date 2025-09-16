@@ -35,7 +35,7 @@ class CommandRequirement(Requirement):
 
     def display_header(self, interface: "SolveigInterface") -> None:
         """Display command requirement header."""
-        interface.display_comment(self.comment)
+        super().display_header(interface)
         interface.show(f"🗲  {self.command}")
 
     def create_error_result(
@@ -66,7 +66,7 @@ class CommandRequirement(Requirement):
             return output, error
         raise ValueError("Empty command")
 
-    def _actually_solve(
+    def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CommandResult":
         if interface.ask_yes_no("Allow running command? [y/N]: "):

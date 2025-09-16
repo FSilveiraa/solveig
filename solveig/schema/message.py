@@ -16,7 +16,7 @@ class BaseMessage(BaseModel):
     comment: str = ""
 
     def to_openai(self) -> str:
-        return json.dumps(self.model_dump())
+        return json.dumps(self.model_dump(), default=utils.misc.default_json_serialize)
 
     @field_validator("comment", mode="before")
     @classmethod
@@ -51,7 +51,9 @@ class UserMessage(BaseMessage):
 # Note: This static class is kept for backwards compatibility but is replaced
 # at runtime by get_filtered_llm_message_class() which includes all active requirements
 class LLMMessage(BaseMessage):
-    requirements: list | None = None  # Simplified - actual schema generated dynamically
+    requirements: list[Requirement] | None = (
+        None  # Simplified - actual schema generated dynamically
+    )
 
 
 def get_filtered_llm_message_class():
@@ -62,7 +64,7 @@ def get_filtered_llm_message_class():
     """
     # Get ALL active requirements from the unified registry
     try:
-        from ..plugins.requirements import REQUIREMENTS
+        from solveig.plugins.schema import REQUIREMENTS
 
         all_active_requirements = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):
@@ -103,8 +105,6 @@ def get_filtered_llm_message_class():
 @dataclass
 class MessageContainer:
     message: BaseMessage
-    content: str = field(init=False)
-    token_count: int = field(init=False)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     role: Literal["user", "assistant", "system"] = field(init=False)
 
@@ -126,8 +126,10 @@ class MessageContainer:
         else:
             # Fallback - shouldn't happen but ensures role is always set
             self.role = "assistant"
-        self.content = message.to_openai()
-        self.token_count = utils.misc.count_tokens(self.content)
+
+    @property
+    def token_count(self):
+        return utils.misc.count_tokens(self.message.to_openai())
 
     def to_openai(self) -> dict:
         return {
