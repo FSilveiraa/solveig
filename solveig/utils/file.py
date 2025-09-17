@@ -213,7 +213,9 @@ class Filesystem:
 
         # Check disk space
         if not content_size and content is not None:
-            content_size = len(content.encode("utf-8") if isinstance(content, str) else content)
+            content_size = len(
+                content.encode("utf-8") if isinstance(content, str) else content
+            )
         if content_size is not None:
             free_space = cls._get_free_space(closest_writable_parent)
             free_after_write = free_space - content_size
@@ -312,7 +314,7 @@ class Filesystem:
         cls.validate_read_access(abs_path)
         if cls.is_dir(abs_path):
             raise IsADirectoryError(f"Cannot read directory {abs_path}")
-        
+
         try:
             if cls._is_text_file(abs_path):
                 return FileContent(content=cls._read_text(abs_path), encoding="text")
@@ -340,7 +342,7 @@ class Filesystem:
             abs_path, content_size=size, min_disk_size_left=min_space_left
         )
         cls.create_directory(abs_path.parent, exist_ok=True)
-        
+
         if append and cls.exists(abs_path):
             cls._append_text(abs_path, content, encoding=encoding)
         else:

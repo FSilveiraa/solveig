@@ -609,7 +609,6 @@ class TestRequirementErrorScenarios:
 
     def test_write_operation_exception(self, mock_filesystem):
         """Test WriteRequirement exception handling - covers lines 103-105."""
-        from unittest.mock import patch
 
         # Ensure plenty of disk space to avoid validation errors
         mock_filesystem.total_size = 10000000000  # 10GB
@@ -637,7 +636,6 @@ class TestRequirementErrorScenarios:
 
     def test_copy_operation_exception(self, mock_filesystem):
         """Test CopyRequirement exception handling - covers lines 113-123."""
-        from unittest.mock import patch
 
         # Set up source file
         mock_filesystem.write_file("/test/source.txt", "content")
@@ -664,7 +662,6 @@ class TestRequirementErrorScenarios:
 
     def test_move_operation_exception(self, mock_filesystem):
         """Test MoveRequirement exception handling - covers lines 109-119."""
-        from unittest.mock import patch
 
         # Set up source file
         mock_filesystem.write_file("/test/source.txt", "content")
@@ -691,7 +688,6 @@ class TestRequirementErrorScenarios:
 
     def test_delete_operation_exception(self, mock_filesystem):
         """Test DeleteRequirement exception handling - covers lines 84-86."""
-        from unittest.mock import patch
 
         # Set up file to delete
         mock_filesystem.write_file("/test/delete_me.txt", "content")
@@ -716,7 +712,6 @@ class TestRequirementErrorScenarios:
 
     def test_read_operation_exception(self, mock_filesystem):
         """Test ReadRequirement exception handling - covers lines 88-90."""
-        from unittest.mock import patch
 
         # Set up file to read
         mock_filesystem.write_file("/test/readable.txt", "content")
@@ -739,7 +734,6 @@ class TestRequirementErrorScenarios:
 
     def test_move_validation_exception(self, mock_filesystem):
         """Test MoveRequirement validation exception handling - covers lines 74-76."""
-        from unittest.mock import patch
 
         # Set up source file
         mock_filesystem.write_file("/test/source.txt", "content")
@@ -767,7 +761,6 @@ class TestRequirementErrorScenarios:
 
     def test_copy_validation_exception(self, mock_filesystem):
         """Test CopyRequirement validation exception handling - covers lines 74-76."""
-        from unittest.mock import patch
 
         # Set up source file
         mock_filesystem.write_file("/test/source.txt", "content")

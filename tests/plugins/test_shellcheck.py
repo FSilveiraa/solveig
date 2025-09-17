@@ -5,7 +5,7 @@ This tests the shellcheck plugin in isolation from other plugins.
 
 # Config with shellcheck plugin enabled - manually create to avoid copy issues
 from dataclasses import replace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 

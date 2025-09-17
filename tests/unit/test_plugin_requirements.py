@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from solveig.plugins.schema.tree import TreeRequirement, TreeResult
-from solveig.utils.file import Metadata
+from solveig.plugins.schema.tree import TreeRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 

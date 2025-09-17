@@ -8,7 +8,6 @@ from solveig.plugins import hooks, initialize_plugins
 from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult, WriteRequirement
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
-from tests.conftest import mock_filesystem
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
@@ -277,7 +276,7 @@ class TestPluginFiltering:
             is_directory=False,
             content="bananas pineapples",
         )
-        interface.set_user_inputs(["y", "y"]) # read file, send back
+        interface.set_user_inputs(["y", "y"])  # read file, send back
         result = req.solve(config_with_plugin, interface)
 
         # Verify plugin executed
@@ -325,7 +324,7 @@ class TestPluginFiltering:
         because the entire plugin import mechanism needs testing with actual plugin files
         """
         from solveig.plugins import initialize_plugins
-        
+
         # Config without shellcheck (default state)
         config_no_shellcheck = SolveigConfig(
             url="test-url", api_key="test-key", plugins={}  # Shellcheck not configured
@@ -387,27 +386,27 @@ class TestPluginFiltering:
 
         interface = MockInterface()
         test_config = SolveigConfig(
-            url="test-url", 
-            api_key="test-key", 
-            plugins={"shellcheck": {}}
+            url="test-url", api_key="test-key", plugins={"shellcheck": {}}
         )
 
         def count_hooks(plugin_name="shellcheck"):
             before, after = hooks.HOOKS._all_hooks[plugin_name]
             return len(before) + len(after)
-        
+
         # Initialize plugins multiple times
         initialize_plugins(config=test_config, interface=interface)
         first_load_count = count_hooks()
-        
+
         initialize_plugins(config=test_config, interface=interface)
         second_load_count = count_hooks()
-        
-        initialize_plugins(config=test_config, interface=interface) 
+
+        initialize_plugins(config=test_config, interface=interface)
         third_load_count = count_hooks()
-        
+
         # Registry should have same number of hooks after multiple loads
-        assert first_load_count == second_load_count == third_load_count == 1, "Should have exactly one shellcheck hook"
-        
+        assert (
+            first_load_count == second_load_count == third_load_count == 1
+        ), "Should have exactly one shellcheck hook"
+
         # And active hooks should match registry (since plugin is enabled)
         assert len(hooks.HOOKS.before) == first_load_count

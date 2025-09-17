@@ -37,6 +37,7 @@ CopyResult.model_rebuild()
 DeleteResult.model_rebuild()
 RequirementResult.model_rebuild()
 
+
 # Register core requirements in the unified registry
 def _register_core_requirements():
     """Register all core requirement types in the plugin registry for unified access."""

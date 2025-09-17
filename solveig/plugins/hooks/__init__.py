@@ -1,6 +1,6 @@
-import sys
 import importlib
 import pkgutil
+import sys
 from collections.abc import Callable
 
 from solveig import SolveigConfig
@@ -131,7 +131,9 @@ def filter_hooks(
         # enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
-        with interface.with_group("Filtering hook plugins", count=len(HOOKS._all_hooks)):
+        with interface.with_group(
+            "Filtering hook plugins", count=len(HOOKS._all_hooks)
+        ):
             # Clear current hooks and rebuild from registry
             HOOKS.before.clear()
             HOOKS.after.clear()

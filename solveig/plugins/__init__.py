@@ -8,13 +8,13 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from . import hooks, schema
-from .exceptions import PluginException, ProcessingError, SecurityError, ValidationError
 from .. import SolveigConfig
 from ..interface import SolveigInterface
+from . import hooks, schema
+from .exceptions import PluginException, ProcessingError, SecurityError, ValidationError
 
 
-def initialize_plugins(config: SolveigConfig = None, interface: SolveigInterface | None = None):
+def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
     """
     Initialize plugins with optional config filtering.
 
@@ -25,7 +25,7 @@ def initialize_plugins(config: SolveigConfig = None, interface: SolveigInterface
     This should be called explicitly by the main application, not on import.
     It's also important that it happens here and not in the plugins
     """
-    from . import schema, hooks
+    from . import hooks, schema
 
     # Load plugin requirements and hooks
     schema.load_requirements(interface=interface)
@@ -35,6 +35,7 @@ def initialize_plugins(config: SolveigConfig = None, interface: SolveigInterface
     if config is not None:
         schema.filter_requirements(interface=interface, enabled_plugins=config)
         hooks.filter_hooks(interface=interface, enabled_plugins=config)
+
 
 def clear_plugins():
     hooks.HOOKS.before.clear()

@@ -146,7 +146,11 @@ class MockFilesystem(Filesystem):
         self, abs_path: Path, content: str = "", encoding="utf-8"
     ) -> None:
         self._entries[abs_path] = MockFileDir.create_file(
-            abs_path, content, encoding=encoding, owner_name=self.default_user, group_name=self.default_user
+            abs_path,
+            content,
+            encoding=encoding,
+            owner_name=self.default_user,
+            group_name=self.default_user,
         )
         self._update_directory_listings()
 
@@ -200,7 +204,9 @@ class MockFilesystem(Filesystem):
                 Filesystem, "is_dir", MagicMock(side_effect=self._mock_is_dir)
             ) as patch_is_dir,
             patch.object(
-                Filesystem, "get_absolute_path", MagicMock(side_effect=self._mock_get_absolute_path)
+                Filesystem,
+                "get_absolute_path",
+                MagicMock(side_effect=self._mock_get_absolute_path),
             ) as patch_get_absolute_path,
             patch.object(
                 Filesystem,
