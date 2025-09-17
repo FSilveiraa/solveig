@@ -1,7 +1,6 @@
 """Unit tests for plugin requirements system."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -97,22 +96,13 @@ class TestTreeRequirement:
             Path("/test"), descend_level=-1
         )
 
-    @patch("solveig.utils.file.Filesystem.read_metadata")
-    def test_tree_depth_limiting_and_user_interaction(self, mock_read_metadata):
+    def test_tree_depth_limiting_and_user_interaction(self, mock_filesystem):
         """Test tree with depth limits and user interaction through solve() method."""
-        # Test depth limiting
-        root_metadata = Metadata(
-            path=Path("/test"),
-            is_directory=True,
-            size=4096,
-            modified_time="2023-01-01",
-            owner_name="user",
-            group_name="group",
-            is_readable=True,
-            is_writable=True,
-            listing={},
-        )
-        mock_read_metadata.return_value = root_metadata
+        # Create directory structure in mock filesystem
+        mock_filesystem.create_directory("/test")
+        mock_filesystem.write_file("/test/file1.txt", "content1")
+        mock_filesystem.create_directory("/test/subdir")
+        mock_filesystem.write_file("/test/subdir/file2.txt", "content2")
 
         req = TreeRequirement(path="/test", max_depth=2, comment="Limited depth tree")
         interface = MockInterface()
@@ -120,8 +110,7 @@ class TestTreeRequirement:
         result = req.actually_solve(DEFAULT_CONFIG, interface)
 
         # Verify depth limit was passed to filesystem
-        mock_read_metadata.assert_called_once()
-        call_args = mock_read_metadata.call_args
+        call_args = mock_filesystem.read_metadata.call_args
         assert str(call_args[0][0]) == "/test"  # First argument (path)
         assert call_args[1]["descend_level"] == 2  # Depth limit
         assert result.accepted is True
