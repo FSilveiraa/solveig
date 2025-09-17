@@ -37,10 +37,6 @@ CopyResult.model_rebuild()
 DeleteResult.model_rebuild()
 RequirementResult.model_rebuild()
 
-# Auto-load plugins after schema is fully initialized
-from .. import plugins
-
-
 # Register core requirements in the unified registry
 def _register_core_requirements():
     """Register all core requirement types in the plugin registry for unified access."""
@@ -63,7 +59,3 @@ def _register_core_requirements():
 
 
 _register_core_requirements()
-
-# Load plugin requirements and hooks
-plugins.schema.load_requirements()
-plugins.hooks.load_hooks()

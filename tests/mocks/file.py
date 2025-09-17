@@ -61,13 +61,14 @@ class MockFileDir:
 
 
 class MockFilesystem(Filesystem):
-    def __init__(self, total_size=1000000000):  # 1GB
+    def __init__(self, total_size=20000000000, default_user="_test_user_/"):  # 1GB
         # Store (content, metadata) tuples - single source of truth
         self._entries: dict[Path, MockFileDir] = {}
         self.mocks = (
             SimpleNamespace()
         )  # Store references to mock objects for direct access
         self.total_size = total_size
+        self.default_user = default_user
 
     def reset(self):
         """Reset the mock file system to default test state."""
@@ -114,6 +115,11 @@ class MockFilesystem(Filesystem):
         entry = self._entries.get(abs_path, None)
         return entry.metadata.is_directory if entry else False
 
+    def _mock_get_absolute_path(self, path: Path) -> Path:
+        """Mock get_absolute_path to prevent ~ expansion to real home directory."""
+        path_str = str(path).replace("~", f"/home/{self.default_user}")
+        return Path(path_str).resolve()
+
     # TODO: find a way to account for descending level
     def _mock_read_metadata(self, abs_path: Path, descend_level=1) -> Metadata:
         try:
@@ -140,7 +146,7 @@ class MockFilesystem(Filesystem):
         self, abs_path: Path, content: str = "", encoding="utf-8"
     ) -> None:
         self._entries[abs_path] = MockFileDir.create_file(
-            abs_path, content, encoding=encoding
+            abs_path, content, encoding=encoding, owner_name=self.default_user, group_name=self.default_user
         )
         self._update_directory_listings()
 
@@ -193,6 +199,9 @@ class MockFilesystem(Filesystem):
             patch.object(
                 Filesystem, "is_dir", MagicMock(side_effect=self._mock_is_dir)
             ) as patch_is_dir,
+            patch.object(
+                Filesystem, "get_absolute_path", MagicMock(side_effect=self._mock_get_absolute_path)
+            ) as patch_get_absolute_path,
             patch.object(
                 Filesystem,
                 "read_metadata",
@@ -264,6 +273,7 @@ class MockFilesystem(Filesystem):
 
             # Store mock references in a namespace for direct access in tests
             self.mocks = SimpleNamespace(
+                get_absolute_path=patch_get_absolute_path,
                 exists=patch_exists,
                 is_dir=patch_is_dir,
                 read_metadata=patch_read_metadata,

@@ -46,7 +46,7 @@ def _get_plugin_name_from_class(cls: type) -> str:
     return "unknown"
 
 
-def load_requirements(interface: SolveigInterface | None = None):
+def load_requirements(interface: SolveigInterface):
     """
     Discover and load requirement plugin files in the requirements directory.
     Similar to hooks.load_hooks() but for requirement types.

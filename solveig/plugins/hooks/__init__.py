@@ -1,9 +1,10 @@
+import sys
 import importlib
 import pkgutil
 from collections.abc import Callable
 
 from solveig import SolveigConfig
-from solveig.interface import CLIInterface, SolveigInterface
+from solveig.interface import SolveigInterface
 
 
 class HOOKS:
@@ -22,7 +23,6 @@ class HOOKS:
         raise TypeError("HOOKS is a static registry and cannot be instantiated")
 
 
-# def announce_register(plugin_name: str, before: list[tuple[Callable, list[type]]], after: list[tuple[Callable, list[type]]]):
 def announce_register(
     verb, fun: Callable, requirements, plugin_name: str, interface: SolveigInterface
 ):
@@ -42,23 +42,15 @@ def _get_plugin_name_from_function(fun: Callable) -> str:
     if ".hooks." in module:
         # Extract plugin name from module path like 'solveig.plugins.hooks.shellcheck'
         return module.split(".hooks.")[-1]
-    return "unknown"
+    return fun.__name__
 
 
 def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
-        # _announce_register("before", fun, requirements, plugin_name)
-
-        # Store in both active hooks and all hooks registry
-        hook_entry = (fun, requirements)
-        HOOKS.before.append(hook_entry)
-
-        # Store by plugin name for filtering
         if plugin_name not in HOOKS._all_hooks:
             HOOKS._all_hooks[plugin_name] = ([], [])
-        HOOKS._all_hooks[plugin_name][0].append(hook_entry)
-
+        HOOKS._all_hooks[plugin_name][0].append((fun, requirements))
         return fun
 
     return register
@@ -67,17 +59,9 @@ def before(requirements: tuple[type] | None = None):
 def after(requirements: tuple[type] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
-        # _announce_register("after", fun, requirements, plugin_name)
-
-        # Store in both active hooks and all hooks registry
-        hook_entry = (fun, requirements)
-        HOOKS.after.append(hook_entry)
-
-        # Store by plugin name for filtering
         if plugin_name not in HOOKS._all_hooks:
             HOOKS._all_hooks[plugin_name] = ([], [])
-        HOOKS._all_hooks[plugin_name][1].append(hook_entry)
-
+        HOOKS._all_hooks[plugin_name][1].append((fun, requirements))
         return fun
 
     return register
@@ -85,14 +69,12 @@ def after(requirements: tuple[type] | None = None):
 
 # Auto-discovery of hook plugins - any .py file in this directory
 # that uses @before/@after decorators will be automatically registered
-def load_hooks(interface: SolveigInterface | None = None):
+def load_hooks(interface: SolveigInterface):
     """
     Discover and load plugin files in the hooks directory.
     """
-    interface = interface or CLIInterface()
-    # print("⌖ Loading plugin hooks...")
 
-    import sys
+    HOOKS._all_hooks.clear()
 
     # Iterate through modules in this package
     total_files = 0
@@ -126,10 +108,6 @@ def load_hooks(interface: SolveigInterface | None = None):
                                 "after", fun, requirements, plugin_name, interface
                             )
 
-                        # interface.show(f"✓ Loaded plugin file: {plugin_name}")
-                    # Not an error: we could have a schema-only plugin
-                    # else:
-                    #     print(f"   ✗ Plugin loaded, but failed to register: {plugin_name}: {e}")
                 except Exception as e:
                     interface.display_error(f"Failed to load plugin {plugin_name}: {e}")
 
@@ -150,17 +128,17 @@ def filter_hooks(
     :return:
     """
     if HOOKS._all_hooks:
-        enabled_plugins = enabled_plugins or set()
+        # enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
-        with interface.with_group("Filtering hook plugins", count=len(enabled_plugins)):
+        with interface.with_group("Filtering hook plugins", count=len(HOOKS._all_hooks)):
             # Clear current hooks and rebuild from registry
             HOOKS.before.clear()
             HOOKS.after.clear()
 
             interface.current_level += 1
             for plugin_name in HOOKS._all_hooks:
-                if plugin_name in enabled_plugins:
+                if enabled_plugins is None or plugin_name in enabled_plugins:
                     before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
                     HOOKS.before.extend(before_hooks)
                     HOOKS.after.extend(after_hooks)
@@ -172,7 +150,7 @@ def filter_hooks(
 
             total_hooks = len(HOOKS.before) + len(HOOKS.after)
             interface.show(
-                f"🕮  Hook filtering complete: {len(enabled_plugins)} plugins, {total_hooks} hooks active"
+                f"🕮  Hook filtering complete: {len(HOOKS._all_hooks)} hook plugins, {total_hooks} active"
             )
 
 

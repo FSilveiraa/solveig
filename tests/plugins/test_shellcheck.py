@@ -9,8 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from solveig.plugins import hooks
-from solveig.plugins.hooks import filter_hooks
+from solveig.plugins import hooks, initialize_plugins
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -22,9 +21,8 @@ class TestShellcheckPlugin:
     """Test the shellcheck plugin functionality in isolation."""
 
     def setup_method(self):
-        """Ensure shellcheck plugin is properly loaded before each test."""
-        interface = MockInterface()
-        filter_hooks(interface, SHELLCHECK_CONFIG)
+        """Load shellcheck plugin for each test."""
+        initialize_plugins(config=SHELLCHECK_CONFIG, interface=MockInterface())
 
     def test_dangerous_patterns_detection(self):
         """Test that dangerous patterns are correctly identified."""
@@ -70,7 +68,11 @@ class TestShellcheckPlugin:
 
     @pytest.mark.no_subprocess_mocking
     def test_normal_command_passes_validation(self):
-        """Test that normal commands pass shellcheck validation."""
+        """
+        Test that normal commands pass shellcheck validation.
+        Note that this test runs the actual shellcheck command on the user's shell, it doesn't
+        just get rid of the mock's exception, and will likely fail if shellcheck isn't installed
+        """
         cmd_req = CommandRequirement(
             command="echo 'hello world'", comment="Test normal command"
         )
@@ -84,10 +86,9 @@ class TestShellcheckPlugin:
         assert not result.accepted
         assert result.error is None  # No plugin validation error
 
-    @patch("subprocess.run")
     def test_shellcheck_validation_success(self, mock_subprocess):
         """Test successful shellcheck validation."""
-        # Mock shellcheck returning success (no issues)
+        mock_subprocess.side_effect = None  # Remove the OSError
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
 
         cmd_req = CommandRequirement(
@@ -103,9 +104,9 @@ class TestShellcheckPlugin:
         assert result.error is None  # No validation error
         mock_subprocess.assert_called_once()
 
-    @patch("subprocess.run")
     def test_shellcheck_validation_failure(self, mock_subprocess):
         """Test shellcheck finding validation issues."""
+        mock_subprocess.side_effect = None  # Remove the OSError
         # Mock shellcheck finding issues
         mock_issues = [
             {"level": "error", "message": "Missing quotes around variable"},
@@ -124,11 +125,9 @@ class TestShellcheckPlugin:
 
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
-        # assert "missing quotes" in result.error.lower()
-        # TODO: investigate what shellcheck actually returns and whether to improve this test
+        assert "missing quotes" in interface.get_all_output().lower()
         mock_subprocess.assert_called_once()
 
-    @patch("subprocess.run")
     def test_shellcheck_not_available(self, mock_subprocess):
         """Test graceful handling when shellcheck command is not found."""
         # Mock shellcheck command not found
@@ -145,9 +144,9 @@ class TestShellcheckPlugin:
         assert not result.accepted  # Declined by user
         assert result.error is None  # No plugin error
 
-    @patch("subprocess.run")
     def test_multiple_shellcheck_issues(self, mock_subprocess):
         """Test handling multiple shellcheck warnings and errors."""
+        mock_subprocess.side_effect = None  # Remove the OSError
         # Mock shellcheck finding multiple issues
         mock_issues = [
             {"level": "error", "message": "Missing quotes around variable"},
@@ -177,9 +176,8 @@ class TestShellcheckPlugin:
         assert not result.accepted
         assert "shellcheck validation failed" in result.error.lower()
         # Should mention multiple types of issues
-        # assert "error" in result.error.lower()
-        # assert "warning" in result.error.lower()
-        # TODO: view above, in test_shellcheck_validation_failure
+        assert "error" in interface.get_all_output().lower()
+        assert "warning" in interface.get_all_output().lower()
         mock_subprocess.assert_called_once()
 
 
@@ -187,9 +185,8 @@ class TestShellcheckPluginIntegration:
     """Test shellcheck plugin integration with Solveig core."""
 
     def setup_method(self):
-        """Ensure shellcheck plugin is properly loaded before each test."""
-        interface = MockInterface()
-        filter_hooks(interface, SHELLCHECK_CONFIG)
+        """Load shellcheck plugin for integration testing."""
+        initialize_plugins(config=SHELLCHECK_CONFIG, interface=MockInterface())
 
     def test_plugin_registration(self):
         """Test that shellcheck plugin is properly registered."""

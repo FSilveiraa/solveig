@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from solveig.plugins import clear_plugins
 from tests.mocks.file import mock_fs
 
 
@@ -68,20 +69,16 @@ def mock_user_interface(request):
             ),
         ):
             yield
-    # with patch("subprocess.run", side_effect = OSError("Cannot run actual processes")):
-
-    # # Skip mocking for tests marked with @pytest.mark.no_file_mocking
-    # if request.node.get_closest_marker("no_file_mocking"):
-    #     yield None
-    #     return
-    #
-    # with patch("builtins.open", side_effect=OSError("Cannot use actual file I/O - use utils.file.Filesystem")):
-    #     with patch("builtins.input", side_effect=OSError("Cannot use actual `input` built-in - use SolveigInterface")):
-    #         with patch("builtins.print", side_effect=OSError("Cannot use actual `print` built-in - use SolveigInterface")):
-    #             yield
 
 
-# Marker for tests that should use real file operations
+@pytest.fixture(autouse=True, scope="function")
+def clean_plugin_state():
+    """Clean plugin state after each test to prevent cross-test interference."""
+    yield  # Let the test run first
+    # Clean up plugin state after each test
+    clear_plugins()
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(

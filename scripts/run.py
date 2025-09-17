@@ -12,8 +12,7 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
-from solveig.plugins.hooks import filter_hooks
-from solveig.plugins.schema import filter_requirements
+from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
     LLMMessage,
     MessageHistory,
@@ -173,9 +172,8 @@ def main_loop(
         verbose=config.verbose, max_lines=config.max_output_lines
     )
 
-    # Configure plugins based on config
-    filter_requirements(enabled_plugins=config, interface=interface)
-    filter_hooks(enabled_plugins=config, interface=interface)
+    # Initialize plugins based on config
+    initialize_plugins(config=config, interface=interface)
 
     # Create LLM client if none was supplied
     llm_client = llm_client or llm.get_instructor_client(

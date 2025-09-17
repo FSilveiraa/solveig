@@ -47,7 +47,10 @@ class TestTreeRequirement:
         # Test error result creation
         error_result = req.create_error_result("Directory not found", accepted=False)
 
+        # Python reloads the plugin requirement class before each test and gives it a different class ID
+        from solveig.plugins.schema.tree import TreeResult
         assert isinstance(error_result, TreeResult)
+
         assert error_result.requirement == req
         assert error_result.accepted is False
         assert error_result.error == "Directory not found"
@@ -71,8 +74,11 @@ class TestTreeRequirement:
 
         result = req.actually_solve(DEFAULT_CONFIG, interface)
 
-        # Verify complete result
+        # Python reloads the plugin requirement class before each test and gives it a different class ID
+        from solveig.plugins.schema.tree import TreeResult
         assert isinstance(result, TreeResult)
+
+        # Verify complete result
         assert result.accepted is True
         assert result.error is None
 
@@ -128,5 +134,6 @@ class TestTreeRequirement:
         result = error_req.solve(DEFAULT_CONFIG, interface)
 
         # Should return a result regardless of success/failure
+        from solveig.plugins.schema.tree import TreeResult
         assert isinstance(result, TreeResult)
         assert result.requirement == error_req

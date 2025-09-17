@@ -8,7 +8,6 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import ValidationError
 
-from solveig.plugins.hooks import filter_hooks
 from solveig.schema.requirements import (
     CommandRequirement,
     CopyRequirement,
@@ -101,9 +100,9 @@ class TestCommandRequirement:
         assert "command(command)" in description
         assert "execute shell commands" in description
 
-    @patch("subprocess.run")
     def test_successful_command_execution(self, mock_subprocess):
         """Test successful command execution with various user responses."""
+        mock_subprocess.side_effect = None
         subprocess_result = Mock()
         subprocess_result.returncode = 0
         subprocess_result.stdout = "test"
@@ -137,9 +136,9 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is False
 
-    @patch("subprocess.run")
     def test_command_with_error_output(self, mock_subprocess):
         """Test command that produces error output but executes successfully."""
+        mock_subprocess.side_effect = None
         subprocess_result = Mock()
         subprocess_result.returncode = 1
         subprocess_result.stdout = ""
@@ -152,8 +151,6 @@ class TestCommandRequirement:
         interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept command and output
 
-        # TODO: hotfix to skip plugin usage - should be off by default
-        filter_hooks(interface=interface, enabled_plugins=DEFAULT_CONFIG)
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True  # Shell execution succeeded

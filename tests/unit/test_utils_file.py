@@ -80,12 +80,12 @@ class TestMetadata:
 class TestFilesystemCore:
     """Test core filesystem methods without mocking."""
 
-    def test_get_absolute_path(self):
+    def test_get_absolute_path(self, mock_filesystem):
         """Test path normalization."""
         # Test home expansion
         result = Filesystem.get_absolute_path("~/test.txt")
         assert result.is_absolute()
-        assert result == Path.home().joinpath("test.txt")
+        assert result == Path(f"/home/{mock_filesystem.default_user}").joinpath("test.txt")
 
         # Test relative path conversion
         result = Filesystem.get_absolute_path("test.txt")
