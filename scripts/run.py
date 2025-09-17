@@ -29,11 +29,12 @@ def get_message_history(
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
         interface.display_text_block(sys_prompt, title="System Prompt")
-        # with interface.with_group("System Prompt"):
-        #     interface.show(sys_prompt, level=interface.current_level + 1)
-    # if config.verbose:
-    #     print(f"[ System Prompt ]\n{sys_prompt}\n")
-    message_history = MessageHistory(system_prompt=sys_prompt)
+    message_history = MessageHistory(
+        system_prompt=sys_prompt,
+        max_context=config.max_context,
+        api_type=config.api_type,
+        model=config.model,
+    )
     return message_history
 
 
@@ -121,8 +122,6 @@ def handle_llm_error(
     """Display LLM parsing error details."""
 
     interface.display_error(error)
-    # print("  " + str(error))
-    # print("  Failed to parse message")
     if (
         config.verbose
         and isinstance(error, InstructorRetryException)
@@ -139,7 +138,6 @@ def process_requirements(
     """Process all requirements from LLM response and return results."""
     results = []
     if llm_response.requirements:
-        # interface.display_results_header(len(llm_response.requirements))
         with interface.with_group("Results", count=len(llm_response.requirements)):
             for requirement in llm_response.requirements:
                 try:

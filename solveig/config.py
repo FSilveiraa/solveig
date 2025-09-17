@@ -26,6 +26,7 @@ class SolveigConfig:
     api_key: str | None = None
     model: str | None = None
     temperature: float = 0
+    max_context: int = -1  # -1 means no limit
     # allowed_commands: List[str] = field(default_factory=list)
     # allowed_paths: List[SolveigPath] = field(default_factory=list)
     add_examples: bool = False
@@ -160,6 +161,11 @@ class SolveigConfig:
             type=str,
             default="1GiB",
             help='The minimum disk space allowed for the system to use, either in bytes or size notation (1024, "1.3 GB", etc)',
+        )
+        parser.add_argument(
+            "--max-context",
+            type=int,
+            help="Maximum context length in tokens (-1 for no limit, default: -1)",
         )
         parser.add_argument("--verbose", "-v", action="store_true", default=None)
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")

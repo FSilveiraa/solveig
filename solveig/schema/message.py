@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from .. import utils
+from ..llm import APIType
 from .requirements import Requirement
 from .results import RequirementResult
 
@@ -142,38 +143,53 @@ class MessageContainer:
         return f"{data['role']}: {data['content']}"
 
 
-# @dataclass
+@dataclass
 class MessageHistory:
+    system_prompt: str
     max_context: int = -1
-    messages: list[MessageContainer]
-    message_cache: list[dict]
+    api_type: type[APIType.BaseAPI] | None = None
+    model: str | None = None # TODO: this is very bad design, but it works
+    messages: list[MessageContainer] = field(default_factory=list)
+    message_cache: list[dict] = field(default_factory=list)
 
-    def __init__(
-        self,
-        system_prompt,
-        messages: list[MessageContainer] | None = None,
-        message_cache: list[dict] | None = None,
-    ):
-        self.messages = messages or []
-        self.message_cache = message_cache or []
-        self.add_message(SystemMessage(comment=system_prompt), role="system")
+    def __post_init__(self):
+        """Initialize with system message after dataclass init."""
+        if not self.message_cache:  # Only add if not already present
+            self.add_message(SystemMessage(comment=self.system_prompt), role="system")
 
-    def get_token_count(self):
-        return sum(
-            utils.misc.count_tokens(message["content"])
-            for message in self.message_cache
-        )
+    def get_token_count(self) -> int:
+        """Get total token count for the message cache using API-specific counting."""
+        if self.api_type:
+            return sum(
+                self.api_type.count_tokens(message["content"], self.model)
+                for message in self.message_cache
+            )
+        else:
+            # Fallback to default counting
+            return sum(
+                utils.misc.count_tokens(message["content"])
+                for message in self.message_cache
+            )
 
     def prune_message_cache(self):
-        if self.max_context >= 0:
-            while self.get_token_count() > self.max_context:
-                self.message_cache.pop(0)
+        """Remove old messages to stay under context limit, preserving system message."""
+        if self.max_context <= 0:
+            return
+            
+        while self.get_token_count() > self.max_context and len(self.message_cache) > 1:
+            # Always preserve the first message (system prompt) if possible
+            if len(self.message_cache) > 1:
+                # Remove the second message (oldest non-system message)
+                removed_message = self.message_cache.pop(1)
+            else:
+                break  # Can't remove system message
 
     def add_message(
         self,
         message: BaseMessage,
         role: Literal["system", "user", "assistant"] | None = None,
     ):
+        """Add a message and automatically prune if over context limit."""
         message_container = MessageContainer(message, role=role)
         self.messages.append(message_container)
         self.message_cache.append(message_container.to_openai())
