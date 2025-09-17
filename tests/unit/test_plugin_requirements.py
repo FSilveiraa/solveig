@@ -47,6 +47,7 @@ class TestTreeRequirement:
 
         # Python reloads the plugin requirement class before each test and gives it a different class ID
         from solveig.plugins.schema.tree import TreeResult
+
         assert isinstance(error_result, TreeResult)
 
         assert error_result.requirement == req
@@ -74,6 +75,7 @@ class TestTreeRequirement:
 
         # Python reloads the plugin requirement class before each test and gives it a different class ID
         from solveig.plugins.schema.tree import TreeResult
+
         assert isinstance(result, TreeResult)
 
         # Verify complete result
@@ -123,5 +125,6 @@ class TestTreeRequirement:
 
         # Should return a result regardless of success/failure
         from solveig.plugins.schema.tree import TreeResult
+
         assert isinstance(result, TreeResult)
         assert result.requirement == error_req
