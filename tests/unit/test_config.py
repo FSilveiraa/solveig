@@ -27,8 +27,8 @@ class TestSolveigConfigCore:
         assert config.api_type == APIType.OPENAI
 
     def test_api_type_conversion_failure(self):
-        """Test invalid API type string raises KeyError."""
-        with pytest.raises(KeyError):
+        """Test invalid API type string raises ValueError."""
+        with pytest.raises(ValueError):
             SolveigConfig(api_type="INVALID_API_TYPE")
 
     def test_disk_space_parsing_success(self):
@@ -75,10 +75,10 @@ class TestConfigSerialization:
     """Test configuration serialization methods."""
 
     def test_to_dict_enum_conversion(self):
-        """Test to_dict converts enums to strings."""
+        """Test to_dict converts api_type to strings."""
         config = SolveigConfig(api_type=APIType.LOCAL)
         result = config.to_dict()
-        assert result["api_type"] == "LOCAL"
+        assert result["api_type"] == "local"
 
     def test_to_json_works(self):
         """Test to_json produces valid JSON."""
@@ -86,7 +86,7 @@ class TestConfigSerialization:
         json_str = config.to_json()
         parsed = json.loads(json_str)
         assert parsed["verbose"] is True
-        assert parsed["api_type"] == "GEMINI"
+        assert parsed["api_type"] == "gemini"
 
     def test_serialization_round_trip(self):
         """Test serialization preserves config data."""
@@ -101,7 +101,7 @@ class TestCLIIntegration:
 
     def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
-        args = ["--api-type", "LOCAL", "test prompt"]
+        args = ["--api-type", "local", "test prompt"]
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )

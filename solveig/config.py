@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from solveig.interface import SolveigInterface
-from solveig.llm import APIType
+from solveig.llm import APIType, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import parse_human_readable_size
 
@@ -22,7 +22,7 @@ class SolveigConfig:
     # w: read and write
     # n: negate (useful for denying access to sub-paths contained in another allowed path)
     url: str = "http://localhost:5001/v1/"
-    api_type: APIType = APIType.LOCAL
+    api_type: type[APIType.BaseAPI] = APIType.LOCAL
     api_key: str | None = None
     model: str | None = None
     temperature: float = 0
@@ -38,9 +38,9 @@ class SolveigConfig:
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self):
-        # convert API type to enum
+        # convert API type string to class
         if self.api_type and isinstance(self.api_type, str):
-            self.api_type = APIType[self.api_type]
+            self.api_type = parse_api_type(self.api_type)
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
         # split allowed paths in (path, mode)
@@ -102,8 +102,8 @@ class SolveigConfig:
             "--api-type",
             "-a",
             type=str,
-            choices={api_type.name for api_type in APIType},
-            help="Type of API to use (default: OpenAI)",
+            choices=["openai", "local", "anthropic", "gemini"],
+            help="Type of API to use (default: local)",
         )
         parser.add_argument("--api-key", "-k", type=str)
         parser.add_argument(
@@ -188,7 +188,8 @@ class SolveigConfig:
         config_dict = {}
 
         for field_name, field_value in vars(self).items():
-            if isinstance(field_value, APIType):
+            if field_name == "api_type" and hasattr(field_value, "name"):
+                # Convert class to string name using static attribute
                 config_dict[field_name] = field_value.name
             else:
                 config_dict[field_name] = field_value

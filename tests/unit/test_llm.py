@@ -89,6 +89,7 @@ class TestInstructorClientFactory:
             api_type=APIType.GEMINI,
             api_key="test-gemini-key",
             url="https://generativelanguage.googleapis.com/v1beta",
+            model=None,  # Explicitly pass None to test default behavior
         )
 
         mock_configure.assert_called_once_with(api_key="test-gemini-key")
@@ -98,7 +99,7 @@ class TestInstructorClientFactory:
 
     def test_get_instructor_client_anthropic_import_error(self):
         """Test Anthropic client creation when anthropic package is not installed."""
-        with patch("builtins.__import__", side_effect=ImportError):
+        with patch("anthropic.Anthropic", side_effect=ImportError):
             with pytest.raises(ValueError, match="Anthropic client not available"):
                 llm.get_instructor_client(
                     api_type=APIType.ANTHROPIC,
@@ -108,7 +109,7 @@ class TestInstructorClientFactory:
 
     def test_get_instructor_client_gemini_import_error(self):
         """Test Gemini client creation when google-generativeai package is not installed."""
-        with patch("builtins.__import__", side_effect=ImportError):
+        with patch("google.generativeai.configure", side_effect=ImportError):
             with pytest.raises(
                 ValueError, match="Google Generative AI client not available"
             ):
