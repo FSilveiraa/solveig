@@ -42,7 +42,7 @@ def clear_plugins():
     hooks.HOOKS.after.clear()
     hooks.HOOKS._all_hooks.clear()
     schema.REQUIREMENTS.registered.clear()
-    schema.REQUIREMENTS._all_requirements.clear()
+    schema.REQUIREMENTS.all_requirements.clear()
 
 
 __all__ = [

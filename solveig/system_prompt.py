@@ -14,8 +14,9 @@ from .config import SolveigConfig
 from .schema.message import LLMMessage, MessageHistory, UserMessage
 
 # TODO: Make conversation examples dynamic rather than hardcoded
-from .schema.requirements import CommandRequirement, ReadRequirement
-from .schema.results import CommandResult, ReadResult
+from solveig.schema import REQUIREMENTS
+from solveig.schema.requirements import CommandRequirement, ReadRequirement
+from solveig.schema.results import CommandResult, ReadResult
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.
@@ -252,14 +253,7 @@ def get_basic_os_info(exclude_username=False):
 def get_available_capabilities() -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
-    try:
-        from solveig.plugins.schema.requirements import REQUIREMENTS
-
-        active_requirements = list(REQUIREMENTS.registered.values())
-    except ImportError:
-        # Fallback if registry not available
-        active_requirements = []
-
+    active_requirements = list(REQUIREMENTS.registered.values())
     return "\n".join(
         f"- {req_class.get_description()}" for req_class in active_requirements
     )

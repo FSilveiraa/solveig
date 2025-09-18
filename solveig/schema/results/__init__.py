@@ -6,6 +6,7 @@ from .copy import CopyResult
 from .delete import DeleteResult
 from .move import MoveResult
 from .read import ReadResult
+from .task import TaskResult
 from .write import WriteResult
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "MoveResult",
     "CopyResult",
     "DeleteResult",
+    "TaskResult",
 ]

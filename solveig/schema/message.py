@@ -65,7 +65,7 @@ def get_filtered_llm_message_class():
     """
     # Get ALL active requirements from the unified registry
     try:
-        from solveig.plugins.schema import REQUIREMENTS
+        from solveig.schema import REQUIREMENTS
 
         all_active_requirements = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):
@@ -146,8 +146,8 @@ class MessageContainer:
 @dataclass
 class MessageHistory:
     system_prompt: str
+    api_type: type[APIType.BaseAPI] = APIType.BaseAPI
     max_context: int = -1
-    api_type: type[APIType.BaseAPI] | None = None
     model: str | None = None # TODO: this is very bad design, but it works
     messages: list[MessageContainer] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
@@ -159,17 +159,10 @@ class MessageHistory:
 
     def get_token_count(self) -> int:
         """Get total token count for the message cache using API-specific counting."""
-        if self.api_type:
-            return sum(
-                self.api_type.count_tokens(message["content"], self.model)
-                for message in self.message_cache
-            )
-        else:
-            # Fallback to default counting
-            return sum(
-                utils.misc.count_tokens(message["content"])
-                for message in self.message_cache
-            )
+        return sum(
+            self.api_type.count_tokens(message["content"], self.model)
+            for message in self.message_cache
+        )
 
     def prune_message_cache(self):
         """Remove old messages to stay under context limit, preserving system message."""

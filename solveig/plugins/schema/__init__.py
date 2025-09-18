@@ -2,39 +2,10 @@
 
 import importlib
 import pkgutil
-from typing import TYPE_CHECKING
 
+from solveig.config import SolveigConfig
 from solveig.interface import CLIInterface, SolveigInterface
-
-if TYPE_CHECKING:
-    from solveig import SolveigConfig
-    from solveig.schema.requirements.base import Requirement
-
-
-class REQUIREMENTS:
-    """Registry for dynamically discovered requirement plugins."""
-
-    registered: dict[str, type["Requirement"]] = {}
-    _all_requirements: dict[str, type["Requirement"]] = {}
-
-    def __new__(cls, *args, **kwargs):
-        raise TypeError("REQUIREMENTS is a static registry and cannot be instantiated")
-
-
-def register_requirement(requirement_class: type["Requirement"]):
-    """
-    Decorator to register a requirement plugin.
-
-    Usage:
-    @register_requirement
-    class MyRequirement(Requirement):
-        ...
-    """
-    # Store in both active and all requirements registry
-    REQUIREMENTS.registered[requirement_class.__name__] = requirement_class
-    REQUIREMENTS._all_requirements[requirement_class.__name__] = requirement_class
-
-    return requirement_class
+from solveig.schema import REQUIREMENTS
 
 
 def _get_plugin_name_from_class(cls: type) -> str:
@@ -63,11 +34,10 @@ def load_requirements(interface: SolveigInterface):
             if not is_pkg and not module_name.endswith(".__init__"):
                 total_files += 1
                 plugin_name = module_name.split(".")[-1]
-                # current_count = len(REQUIREMENTS._all_requirements)
 
                 try:
                     # Get the keys that existed before loading this module
-                    before_keys = list(REQUIREMENTS._all_requirements.keys())
+                    before_keys = list(REQUIREMENTS.all_requirements.keys())
 
                     # Import the module
                     if module_name in sys.modules:
@@ -78,7 +48,7 @@ def load_requirements(interface: SolveigInterface):
                     # Find newly added requirements
                     new_requirement_names = [
                         name
-                        for name in REQUIREMENTS._all_requirements.keys()
+                        for name in REQUIREMENTS.all_requirements.keys()
                         if name not in before_keys
                     ]
 
@@ -112,9 +82,8 @@ def filter_requirements(
                     If None, loads all discovered requirements (used during schema init).
     :return:
     """
-    from solveig import SolveigConfig
 
-    if REQUIREMENTS._all_requirements:
+    if REQUIREMENTS.all_requirements:
         enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
@@ -125,7 +94,7 @@ def filter_requirements(
             REQUIREMENTS.registered.clear()
 
             interface.current_level += 1
-            for req_name, req_class in REQUIREMENTS._all_requirements.items():
+            for req_name, req_class in REQUIREMENTS.all_requirements.items():
                 module = req_class.__module__
 
                 # Core requirements (from schema.requirements) are always enabled
@@ -160,7 +129,6 @@ def get_all_requirements() -> dict[str, type["Requirement"]]:
 # Expose the essential interface
 __all__ = [
     "REQUIREMENTS",
-    "register_requirement",
     "load_requirements",
     "filter_requirements",
     "get_all_requirements",
