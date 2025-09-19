@@ -46,8 +46,6 @@ def load_extra_requirements(interface: SolveigInterface):
     # See note above
     from solveig.schema import REQUIREMENTS
 
-    interface = interface or CLIInterface()
-
     total_files = 0
     total_requirements = 0
 
