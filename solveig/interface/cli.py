@@ -6,6 +6,7 @@ import asyncio
 import shutil
 import sys
 import random
+import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
+from rich.console import Console, Text
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -24,8 +26,8 @@ class CLIInterface(SolveigInterface):
     """Command-line interface implementation."""
 
     DEFAULT_INPUT_PROMPT = "Reply:\n > "
-    PADDING_LEFT = " "
-    PADDING_RIGHT = " "
+    PADDING_LEFT = Text(" ")
+    PADDING_RIGHT = Text(" ")
 
     class TEXT_BOX:
         # Basic
@@ -44,18 +46,27 @@ class CLIInterface(SolveigInterface):
         # Cross
         X = "┼"
 
+    class COLORS:
+        title = "thistle1"
+        error = "red"
+        warning = "orange3"
+        text_block = "grey93"
+
     def __init__(self, animation_interval: float = 0.1, **kwargs) -> None:
         super().__init__(**kwargs)
         self.animation_interval = animation_interval
+        self.console = Console()
 
-    def _output(self, text: str) -> None:
-        print(f"{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
+    def _output(self, text: str | Text, **kwargs) -> None:
+        # Use rich console for all output to get color support
+        # self.console.print(f"{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
+        self.console.print(self.PADDING_LEFT + text + self.PADDING_RIGHT, **kwargs)
 
     def _output_inline(self, text: str) -> None:
         sys.stdout.write(f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
         sys.stdout.flush()
 
-    def _input(self, prompt: str) -> str:
+    def _input(self, prompt: str, **kwargs) -> str:
         user_input = input(f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}")
         return user_input
 
@@ -74,7 +85,7 @@ class CLIInterface(SolveigInterface):
             if terminal_width > 0
             else ""
         )
-        self._output(f"\n{title_formatted}{padding}")
+        self._output(f"\n\n{title_formatted}{padding}", style=self.COLORS.warning)
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
         """Display the LLM response and requirements summary."""
@@ -154,6 +165,8 @@ class CLIInterface(SolveigInterface):
         title: str | None = None,
         level: int | None = None,
         max_lines: int | None = None,
+        box_style: str = COLORS.title,
+        text_style: str | None = COLORS.text_block,
     ) -> None:
         if not self.max_lines or not text:
             return
@@ -162,15 +175,17 @@ class CLIInterface(SolveigInterface):
         max_width = self._get_max_output_width()
 
         # ┌─── Content ─────────────────────────────┐
-        top_bar = f"{indent}{self.TEXT_BOX.TL}"
+        top_bar = Text(f"{indent}{self.TEXT_BOX.TL}", style=box_style)
         if title:
-            top_bar = f"{top_bar}{self.TEXT_BOX.H * 3} {title} "
-        self._output(
-            f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR} "
-        )
+            top_bar.append(f"{self.TEXT_BOX.H * 3}")
+            top_bar.append(f" {title} ", style=f"bold {box_style}")
+        top_bar.append(f"{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR}")
+        self._output(top_bar)
+        #     f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR} "
+        # )
 
-        vertical_bar_left = f"{indent}{self.TEXT_BOX.V} "
-        vertical_bar_right = f" {self.TEXT_BOX.V} "
+        vertical_bar_left = Text(f"{indent}{self.TEXT_BOX.V} ", style=box_style)
+        vertical_bar_right = Text(f" {self.TEXT_BOX.V} ", style=box_style)
         max_line_length = (
             self._get_max_output_width()
             - len(vertical_bar_left)
@@ -186,18 +201,21 @@ class CLIInterface(SolveigInterface):
                 truncated_line = (
                     f"{truncated_line}{' ' * (max_line_length - len(truncated_line))}"
                 )
-                self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
+                line_text = Text(truncated_line)
+                self._output(vertical_bar_left + line_text + vertical_bar_right)
                 break
 
             if len(line) > max_line_length:
                 truncated_line = f"{line[0:max_line_length - 3]}..."
             else:
                 truncated_line = f"{line}{' ' * (max_line_length - len(line))}"
-            self._output(f"{vertical_bar_left}{truncated_line}{vertical_bar_right}")
+            line_text = Text(truncated_line, style=text_style)
+            self._output(vertical_bar_left + line_text + vertical_bar_right)
 
         # └─────────────────────────────────────────┘
         self._output(
-            f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 3)}{self.TEXT_BOX.BR} "
+            f"{indent}{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - len(indent) - 3)}{self.TEXT_BOX.BR} ",
+            style=box_style,
         )
 
     def display_animation_while(
@@ -205,6 +223,38 @@ class CLIInterface(SolveigInterface):
     ) -> None:
         animation = Animation(animation_type=animation_type)
         return asyncio.run(animation.animate_while(self, run_this, message))
+
+    def display_warning(self, message: str) -> None:
+        """Override to add orange color for CLI warnings."""
+        self.show(f"⚠  {message}", style=self.COLORS.warning)
+        # indent = self._indent()
+        # self.console.print(f"{self.PADDING_LEFT}{indent}⚠  {message}{self.PADDING_RIGHT}", style="orange3")
+
+    def display_error(
+        self, message: str | Exception | None = None, exception: Exception | None = None
+    ) -> None:
+        """Override to add red color for CLI errors."""
+        # Handle the error formatting logic from base class
+        if not exception and not message:
+            raise RuntimeError("Need to specify message or exception")
+        if isinstance(message, Exception) and not exception:
+            exception = message
+            message = ""
+        message = message or str(f"{exception.__class__.__name__}: {exception}")
+        
+        # Display with red color
+        indent = self._indent()
+        self.show(f"✖  {message}", style=self.COLORS.error)
+        # self.console.print(f"{self.PADDING_LEFT}{indent}✖  {message}{self.PADDING_RIGHT}", style="red")
+        
+        # Handle verbose traceback
+        if exception and self.verbose:
+            traceback_block = "".join(
+                traceback.format_exception(
+                    type(exception), exception, exception.__traceback__
+                )
+            )
+            self.display_text_block(traceback_block, title=exception.__class__.__name__, box_style=self.COLORS.error)
 
 
 class Animation:

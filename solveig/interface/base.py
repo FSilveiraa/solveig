@@ -29,19 +29,19 @@ class SolveigInterface(ABC):
     # Implement these:
 
     @abstractmethod
-    def _output(self, text: str) -> None:
+    def _output(self, text: str, **kwargs) -> None:
         """Raw output method - implemented by concrete interfaces"""
         pass
 
     @abstractmethod
-    def _input(self, prompt: str) -> str:
+    def _input(self, prompt: str, **kwargs) -> str:
         """Get text input from user."""
         pass
 
-    @abstractmethod
-    def _get_max_output_width(self) -> int:
-        """Get terminal width - implemented by concrete interfaces (-1 to disable)"""
-        pass
+    # @abstractmethod
+    # def _get_max_output_width(self) -> int:
+    #     """Get terminal width - implemented by concrete interfaces (-1 to disable)"""
+    #     pass
 
     @abstractmethod
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
@@ -94,10 +94,10 @@ class SolveigInterface(ABC):
         actual_level = level if level is not None else self.current_level
         return " " * (actual_level * self.indent_base)
 
-    def show(self, content: str, level: int | None = None) -> None:
+    def show(self, content: str, level: int | None = None, **kwargs) -> None:
         """Display content at specified or current indent level"""
         indent = self._indent(level)
-        self._output(f"{indent}{content}")
+        self._output(f"{indent}{content}", **kwargs)
 
     @contextmanager
     def with_indent(self) -> Generator[None, None, None]:
@@ -133,22 +133,23 @@ class SolveigInterface(ABC):
     def display_error(
         self, message: str | Exception | None = None, exception: Exception | None = None
     ) -> None:
+        raise NotImplementedError()
         if not exception and not message:
             raise RuntimeError("Need to specify message or exception")
         # If we got an exception in the place of a message, or if we get an explicit exception and no message,
         # the message becomes the exception's description
-        if isinstance(message, Exception) and not exception:
-            exception = message
-            message = ""
-        message = message or str(f"{exception.__class__.__name__}: {exception}")
-        self.show(f"✖  {message}")
-        if exception and self.verbose:
-            traceback_block = "".join(
-                traceback.format_exception(
-                    type(exception), exception, exception.__traceback__
-                )
-            )
-            self.display_text_block(traceback_block, title=exception.__class__.__name__)
+        # if isinstance(message, Exception) and not exception:
+        #     exception = message
+        #     message = ""
+        # message = message or str(f"{exception.__class__.__name__}: {exception}")
+        # self.show(f"✖  {message}")
+        # if exception and self.verbose:
+        #     traceback_block = "".join(
+        #         traceback.format_exception(
+        #             type(exception), exception, exception.__traceback__
+        #         )
+        #     )
+        #     self.display_text_block(traceback_block, title=exception.__class__.__name__)
 
     def display_warning(self, message: str) -> None:
         self.show(f"⚠  {message}")
