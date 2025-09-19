@@ -5,6 +5,7 @@ CLI implementation of Solveig interface.
 import asyncio
 import shutil
 import sys
+import random
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +24,8 @@ class CLIInterface(SolveigInterface):
     """Command-line interface implementation."""
 
     DEFAULT_INPUT_PROMPT = "Reply:\n > "
+    PADDING_LEFT = " "
+    PADDING_RIGHT = " "
 
     class TEXT_BOX:
         # Basic
@@ -46,18 +49,18 @@ class CLIInterface(SolveigInterface):
         self.animation_interval = animation_interval
 
     def _output(self, text: str) -> None:
-        print(text)
+        print(f"{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
 
     def _output_inline(self, text: str) -> None:
-        sys.stdout.write(f"\r{text}")
+        sys.stdout.write(f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
         sys.stdout.flush()
 
     def _input(self, prompt: str) -> str:
-        user_input = input(prompt)
+        user_input = input(f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}")
         return user_input
 
     def _get_max_output_width(self) -> int:
-        return shutil.get_terminal_size((80, 20)).columns
+        return shutil.get_terminal_size((80, 20)).columns - len(self.PADDING_LEFT) - len(self.PADDING_RIGHT)
 
     def display_section(self, title: str) -> None:
         """
@@ -198,36 +201,41 @@ class CLIInterface(SolveigInterface):
         )
 
     def display_animation_while(
-        self, run_this: Callable, message: str | None = None
+        self, run_this: Callable, message: str | None = None, animation_type: str | None = None
     ) -> None:
-        animation = Animation()
+        animation = Animation(animation_type=animation_type)
         return asyncio.run(animation.animate_while(self, run_this, message))
 
 
 class Animation:
     SPINNERS = {
-        "dots": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-        "line": ["|", "/", "-", "\\"],
+        "spin": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+        # "line": ["|", "/", "-", "\\"],
         "bounce": ["⠁", "⠂", "⠄", "⠂"],
-        "pulse": ["●", "○", "●", "○"],
-        "thinking": ["🤔", "💭", "🧠", "✨"],
-        "processing": ["⚡", "⚡", "⚡", "✨"],
+        "dots": ["․", "⁚", "⁖", "⁘", "⁙", "⁜", "⁙", "⁘", "⁖", "⁚"],
+        # "pulse": ["●", "○", "●", "○"],
+        # "moon_color": ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
+        "moon": ["◯", "☽", "◑", "●", "◐", "❨"],
+        "growing": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"],
+        # "bold": ["🞅", "🞆", "🞇", "🞈", "🞉", "🞈", "🞇", "🞆", "🞅"],
+        "cool": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"],
     }
 
     def __init__(
         self,
-        animation_type: str | None = "dots",
+        animation_type: str | None = None,
         frames: list[str] | None = None,
-        interval: float = 0.1,
+        interval: float = 0.2,
     ):
         """
         Initialize async spinner.
 
         Args:
+            animation_type: Type of animation to use (None=random).
             frames: List of icon frames to cycle through
             interval: Time between frame changes in seconds
         """
-        self.frames = frames or self.SPINNERS[animation_type or "dots"]
+        self.frames = frames or self.SPINNERS[animation_type or random.choice(list(self.SPINNERS.keys()))]
         self.interval = interval
         self._current_frame = 0
         self._task: asyncio.Task | None = None
@@ -260,7 +268,7 @@ class Animation:
         while not self._stopped:
             # Show current frame with message
             frame = self.frames[self._current_frame]
-            display_text = f"{frame} {message}" if message else frame
+            display_text = f"{frame}  {message}" if message else frame
             interface._output_inline(display_text)
 
             # Advance to next frame

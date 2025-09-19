@@ -80,6 +80,7 @@ def send_message_to_llm(
     return interface.display_animation_while(
         run_this=blocking_llm_call,
         message="Waiting... (Ctrl+C to stop)",
+        # animation_type="dots"
     )
 
 

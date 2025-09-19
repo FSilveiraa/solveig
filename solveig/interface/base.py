@@ -83,7 +83,7 @@ class SolveigInterface(ABC):
 
     @abstractmethod
     def display_animation_while(
-        self, run_this: Callable, message: str | None = None
+        self, run_this: Callable, message: str | None = None, animation_type: str | None = None
     ) -> Any:
         pass
 

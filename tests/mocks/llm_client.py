@@ -1,5 +1,5 @@
 """Simple mock LLM client for testing conversation loops."""
-
+import time
 from unittest.mock import MagicMock
 
 from solveig.schema.message import LLMMessage
@@ -8,7 +8,7 @@ from solveig.schema.message import LLMMessage
 class MockLLMClient:
     """Thin wrapper around instructor client that returns predefined responses."""
 
-    def __init__(self, responses: list[LLMMessage | Exception]):
+    def __init__(self, responses: list[LLMMessage | Exception], sleep_seconds: float = 0):
         """
         Args:
             responses: List of LLMMessage responses or exceptions to return in sequence
@@ -20,6 +20,7 @@ class MockLLMClient:
         self.chat = MagicMock()
         self.chat.completions = MagicMock()
         self.chat.completions.create = self._create_completion
+        self.sleep_seconds = sleep_seconds
 
     def _create_completion(self, **kwargs) -> LLMMessage:
         """Return next response or raise next exception."""
@@ -29,6 +30,8 @@ class MockLLMClient:
 
             if isinstance(response, Exception):
                 raise response
+
+            time.sleep(self.sleep_seconds)
             return response
 
         # No more responses - return simple default
@@ -39,7 +42,7 @@ class MockLLMClient:
         return self.call_count
 
 
-def create_mock_client(*messages: str | LLMMessage | Exception) -> MockLLMClient:
+def create_mock_client(*messages: str | LLMMessage | Exception, sleep_seconds: float = 0) -> MockLLMClient:
     """Create mock client with responses. Strings become LLMMessage objects."""
     responses = []
     for msg in messages:
@@ -47,4 +50,4 @@ def create_mock_client(*messages: str | LLMMessage | Exception) -> MockLLMClient
             responses.append(LLMMessage(comment=msg))
         else:
             responses.append(msg)
-    return MockLLMClient(responses)
+    return MockLLMClient(responses, sleep_seconds)
