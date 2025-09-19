@@ -652,3 +652,56 @@ class TestFilesystemIntegration:
         assert not mock_filesystem._mock_exists(old_path)
         assert mock_filesystem.exists(new_path)
         assert mock_filesystem.read_file(new_path).content == "root level"
+
+
+class TestPathMatching:
+    """Test the path matching utility for auto-allow patterns."""
+    
+    def test_path_matches_patterns_exact_match(self):
+        """Test exact path matching."""
+        patterns = ["/test/file.txt", "/other/path.py"]
+        
+        assert Filesystem.path_matches_patterns("/test/file.txt", patterns)
+        assert Filesystem.path_matches_patterns("/other/path.py", patterns)
+        assert not Filesystem.path_matches_patterns("/test/other.txt", patterns)
+    
+    def test_path_matches_patterns_wildcard(self):
+        """Test wildcard pattern matching."""
+        patterns = ["/test/*.txt", "/docs/**/*.py"]
+        
+        assert Filesystem.path_matches_patterns("/test/file.txt", patterns)
+        assert Filesystem.path_matches_patterns("/test/another.txt", patterns)
+        assert not Filesystem.path_matches_patterns("/test/file.py", patterns)
+        assert not Filesystem.path_matches_patterns("/test/subdir/file.txt", patterns)
+        
+        assert Filesystem.path_matches_patterns("/docs/module.py", patterns)
+        assert Filesystem.path_matches_patterns("/docs/subdir/script.py", patterns)
+        assert Filesystem.path_matches_patterns("/docs/deep/nested/file.py", patterns)
+        assert not Filesystem.path_matches_patterns("/docs/readme.txt", patterns)
+    
+    def test_path_matches_patterns_tilde_expansion(self):
+        """Test that ~ expansion works correctly in patterns."""
+        patterns = ["~/Documents/*.txt", "~/Projects/**/*.py"]
+        home = Filesystem.get_absolute_path("~")
+        
+        # Test that tilde gets expanded properly
+        assert Filesystem.path_matches_patterns(f"{home}/Documents/test.txt", patterns)
+        assert Filesystem.path_matches_patterns(f"{home}/Projects/src/main.py", patterns)
+        assert not Filesystem.path_matches_patterns(f"{home}/Downloads/file.txt", patterns)
+    
+    def test_path_matches_patterns_relative_and_edge_cases(self):
+        """Test relative paths, parent directories, and edge cases."""
+        patterns = ["src/*.py", "tests/**/*.py", "../config/*.json"]
+        
+        # Relative paths should be resolved against current working directory
+        cwd = Filesystem.get_absolute_path(".")
+        assert Filesystem.path_matches_patterns(f"{cwd}/src/main.py", patterns)
+        assert Filesystem.path_matches_patterns(f"{cwd}/tests/unit/test_file.py", patterns)
+        
+        # Test parent directory patterns (..)
+        parent = Filesystem.get_absolute_path("..")
+        assert Filesystem.path_matches_patterns(f"{parent}/config/settings.json", patterns)
+        
+        # Test edge cases: empty patterns and no matches
+        assert not Filesystem.path_matches_patterns("/any/path.txt", [])
+        assert not Filesystem.path_matches_patterns(f"{cwd}/docs/readme.md", patterns)

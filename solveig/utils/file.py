@@ -1,4 +1,5 @@
 import base64
+import fnmatch
 import grp
 import os
 import pwd
@@ -414,3 +415,27 @@ class Filesystem:
             raise NotADirectoryError(f"File {abs_path} is not a directory")
         dir_listing = cls._get_listing(abs_path)
         return {path: cls.read_metadata(path) for path in dir_listing}
+
+    @classmethod
+    def path_matches_patterns(cls, file_path: str | Path, patterns: list[str]) -> bool:
+        """Check if a file path matches any of the given glob patterns.
+        
+        Args:
+            file_path: The path to check
+            patterns: List of glob patterns (e.g., ['~/Documents/**/*.py', '/tmp/*'])
+            
+        Returns:
+            True if the path matches any pattern, False otherwise
+        """
+        if not patterns:
+            return False
+        
+        resolved_path = cls.get_absolute_path(file_path)
+
+        # Use pathlib.Path.match() for proper glob pattern matching
+        for pattern in patterns:
+            pattern_path = cls.get_absolute_path(pattern)
+            if resolved_path.match(str(pattern_path)):
+                return True
+                
+        return False

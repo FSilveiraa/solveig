@@ -37,6 +37,8 @@ class SolveigConfig:
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
+    auto_allow_paths: list[str] = field(default_factory=list)
+    auto_send: bool = False
 
     def __post_init__(self):
         # convert API type string to class
@@ -168,6 +170,19 @@ class SolveigConfig:
             help="Maximum context length in tokens (-1 for no limit, default: -1)",
         )
         parser.add_argument("--verbose", "-v", action="store_true", default=None)
+        parser.add_argument(
+            "--auto-allow-paths",
+            type=str,
+            nargs="*",
+            dest="auto_allow_paths",
+            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py')"
+        )
+        parser.add_argument(
+            "--auto-send",
+            action="store_true",
+            default=None,
+            help="Automatically send requirement results back to the LLM without asking"
+        )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
         args = parser.parse_args(cli_args)
