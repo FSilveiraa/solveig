@@ -20,7 +20,7 @@ class TestSolveigConfigCore:
         assert config.api_key is None
         assert config.verbose is False
         assert config.plugins == {}
-        assert config.auto_allow_paths == []
+        assert config.auto_allowed_paths == []
         assert config.auto_send is False
 
     def test_api_type_conversion_success(self):

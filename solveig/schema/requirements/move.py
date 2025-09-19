@@ -85,9 +85,13 @@ class MoveRequirement(Requirement):
         interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
-        if interface.ask_yes_no(
+        if ((
+                Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
+                and Filesystem.path_matches_patterns(abs_destination_path, config.auto_allowed_paths)
+            )
+                or interface.ask_yes_no(
             f"Allow moving {abs_source_path} to {abs_destination_path}? [y/N]: "
-        ):
+        )):
             try:
                 # Perform the move operation - use utils/file.py method
                 Filesystem.move(abs_source_path, abs_destination_path)

@@ -410,16 +410,6 @@ class Filesystem:
         else:
             cls._delete_file(abs_path)
 
-    # @classmethod
-    # def get_dir_listing(cls, dir_path: str | PurePath) -> dict[PurePath, Metadata]:
-    #     """Get directory listing with metadata for each entry."""
-    #     abs_path = cls.get_absolute_path(dir_path)
-    #     cls.validate_read_access(abs_path)
-    #     if not cls.is_dir(abs_path):
-    #         raise NotADirectoryError(f"File {abs_path} is not a directory")
-    #     dir_listing = cls._get_listing(abs_path)
-    #     return {path: cls.read_metadata(path) for path in dir_listing}
-
     @classmethod
     def path_matches_patterns(cls, abs_path: PurePath, patterns: list[PurePath]) -> bool:
         """Check if a file path matches any of the given glob patterns.

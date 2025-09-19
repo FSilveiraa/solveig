@@ -68,7 +68,10 @@ class DeleteRequirement(Requirement):
         interface.display_tree(metadata=metadata)
 
         # Get user consent (with extra warning)
-        if interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
+        if (
+                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+                or interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: ")
+        ):
             try:
                 # Perform the delete operation - use utils/file.py method
                 Filesystem.delete(abs_path)

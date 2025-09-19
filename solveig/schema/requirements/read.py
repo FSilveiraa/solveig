@@ -68,6 +68,7 @@ class ReadRequirement(Requirement):
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
 
+        auto_read_send = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
         metadata = Filesystem.read_metadata(abs_path)
         interface.display_tree(
             metadata, title=f"Metadata: {abs_path}", display_metadata=True
@@ -77,7 +78,7 @@ class ReadRequirement(Requirement):
         if (
             not metadata.is_directory
             and not self.metadata_only
-            and interface.ask_yes_no("Allow reading file contents? [y/N]: ")
+            and (auto_read_send or interface.ask_yes_no("Allow reading file contents? [y/N]: "))
         ):
             try:
                 read_result = Filesystem.read_file(abs_path)
@@ -94,9 +95,14 @@ class ReadRequirement(Requirement):
             )
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
-        if interface.ask_yes_no(
+        if (
+                config.auto_send
+                # if we can automatically read any file within a pattern,
+                # it makes sense to also automatically send back the contents
+                or auto_read_send
+                or interface.ask_yes_no(
             f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
-        ):
+        )):
             return ReadResult(
                 requirement=self,
                 path=abs_path,

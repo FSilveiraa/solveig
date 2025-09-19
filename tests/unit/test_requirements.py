@@ -117,7 +117,7 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is True
         assert result.success is True
-        assert result.stdout == ""  # Output cleared
+        assert result.stdout == "<hidden>"  # Output hidden
         interface.clear()
 
         # Test: user accepts both command and output

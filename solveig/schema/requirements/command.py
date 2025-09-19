@@ -70,9 +70,6 @@ class CommandRequirement(Requirement):
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CommandResult":
         if interface.ask_yes_no("Allow running command? [y/N]: "):
-            # TODO review the whole 'accepted' thing. If I run a command, but don't send the output,
-            #  that's confusing and should be differentiated from not running the command at all.
-            #  or if anything at all is refused, maybe just say that in the error
             try:
                 output: str | None
                 error: str | None
@@ -97,8 +94,8 @@ class CommandRequirement(Requirement):
             if error:
                 with interface.with_group("Error"):
                     interface.display_text_block(error, title="Error")
-            if not interface.ask_yes_no("Allow sending output? [y/N]: "):
-                output = ""
+            if not (config.auto_send or interface.ask_yes_no("Allow sending output? [y/N]: ")):
+                output = "<hidden>"
                 error = ""
             return CommandResult(
                 requirement=self,

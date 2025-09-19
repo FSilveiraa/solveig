@@ -88,7 +88,10 @@ class WriteRequirement(Requirement):
             f"{'directory' if self.is_directory else 'file'}"
             f"{' and contents' if not self.is_directory else ''}? [y/N]: "
         )
-        if interface.ask_yes_no(question):
+        if (
+                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+                or interface.ask_yes_no(question)
+        ):
             try:
                 # Perform the write operation - use utils/file.py methods
                 if self.is_directory:

@@ -37,13 +37,18 @@ class SolveigConfig:
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
-    auto_allow_paths: list[str] = field(default_factory=list)
+    auto_allowed_paths: list[PurePath] = field(default_factory=list)
     auto_send: bool = False
 
     def __post_init__(self):
         # convert API type string to class
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = parse_api_type(self.api_type)
+        if self.auto_allowed_paths:
+            self.auto_allowed_paths = [
+                Filesystem.get_absolute_path(path)
+                for path in self.auto_allowed_paths
+            ]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
         # split allowed paths in (path, mode)
@@ -171,10 +176,10 @@ class SolveigConfig:
         )
         parser.add_argument("--verbose", "-v", action="store_true", default=None)
         parser.add_argument(
-            "--auto-allow-paths",
+            "--auto-allowed-paths",
             type=str,
             nargs="*",
-            dest="auto_allow_paths",
+            dest="auto_allowed_paths",
             help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py')"
         )
         parser.add_argument(
