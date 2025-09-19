@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from copy import copy
 from dataclasses import dataclass, replace
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -27,7 +27,7 @@ DEFAULT_METADATA = Metadata(
 )
 
 
-def create_metadata(path: Path, modified_time=-1, **kwargs) -> Metadata:
+def create_metadata(path: PurePath, modified_time=-1, **kwargs) -> Metadata:
     if modified_time is None or modified_time < 0:
         modified_time = int(datetime.now().timestamp())
     return replace(DEFAULT_METADATA, path=path, modified_time=modified_time, **kwargs)
@@ -39,7 +39,7 @@ class MockFileDir:
     content: str | None = None
 
     @staticmethod
-    def create_dir(path: Path, **kwargs) -> "MockFileDir":
+    def create_dir(path: PurePath, **kwargs) -> "MockFileDir":
         listing = kwargs.pop("listing", {})
         return MockFileDir(
             metadata=create_metadata(
@@ -49,7 +49,7 @@ class MockFileDir:
 
     @staticmethod
     def create_file(
-        abs_path: Path, content: str | None = None, **kwargs
+        abs_path: PurePath, content: str | None = None, **kwargs
     ) -> "MockFileDir":
         size = kwargs.pop("size", len(content.encode("utf-8")) if content else 0)
         return MockFileDir(
@@ -63,7 +63,7 @@ class MockFileDir:
 class MockFilesystem(Filesystem):
     def __init__(self, total_size=20000000000, default_user="_test_user_/"):  # 1GB
         # Store (content, metadata) tuples - single source of truth
-        self._entries: dict[Path, MockFileDir] = {}
+        self._entries: dict[PurePath, MockFileDir] = {}
         self.mocks = (
             SimpleNamespace()
         )  # Store references to mock objects for direct access
@@ -73,7 +73,7 @@ class MockFilesystem(Filesystem):
     def reset(self):
         """Reset the mock file system to default test state."""
         self._entries.clear()
-        self.create_directory(Path("/"))
+        self.create_directory(PurePath("/"))
         # Add some default test files that tests expect
         self.write_file("/test/dir1/dir2/file.txt", "test content")
         self.write_file("/test/file.txt", "test content")
@@ -108,42 +108,42 @@ class MockFilesystem(Filesystem):
 
     # ====  OVERRIDES  ====
 
-    def _mock_exists(self, abs_path: Path) -> bool:
+    def _mock_exists(self, abs_path: PurePath) -> bool:
         return abs_path in self._entries
 
-    def _mock_is_dir(self, abs_path: Path) -> bool:
+    def _mock_is_dir(self, abs_path: PurePath) -> bool:
         entry = self._entries.get(abs_path, None)
         return entry.metadata.is_directory if entry else False
 
-    def _mock_get_absolute_path(self, path: Path) -> Path:
+    def _mock_get_absolute_path(self, path: PurePath) -> PurePath:
         """Mock get_absolute_path to prevent ~ expansion to real home directory."""
         path_str = str(path).replace("~", f"/home/{self.default_user}")
-        return Path(path_str).resolve()
+        return PurePath(Path(path_str).resolve())
 
     # TODO: find a way to account for descending level
-    def _mock_read_metadata(self, abs_path: Path, descend_level=1) -> Metadata:
+    def _mock_read_metadata(self, abs_path: PurePath, descend_level=1) -> Metadata:
         try:
             return self._entries[abs_path].metadata
         except KeyError as e:
             raise FileNotFoundError(abs_path) from e
 
-    def _mock_get_listing(self, abs_path: Path) -> list[Path]:
+    def _mock_get_listing(self, abs_path: PurePath) -> list[PurePath]:
         return sorted(
             path for path, file in self._entries.items() if path.parent == abs_path
         )
 
-    def _mock_read_text(self, abs_path: Path) -> str:
+    def _mock_read_text(self, abs_path: PurePath) -> str:
         return self._entries[abs_path].content
 
-    def _mock_read_bytes(self, abs_path: Path) -> bytes:
+    def _mock_read_bytes(self, abs_path: PurePath) -> bytes:
         return self._entries[abs_path].content.encode("utf-8")
 
-    def _mock_create_directory(self, abs_path: Path) -> None:
+    def _mock_create_directory(self, abs_path: PurePath) -> None:
         self._entries[abs_path] = MockFileDir.create_dir(abs_path)
         self._update_directory_listings()
 
     def _mock_write_text(
-        self, abs_path: Path, content: str = "", encoding="utf-8"
+        self, abs_path: PurePath, content: str = "", encoding="utf-8"
     ) -> None:
         self._entries[abs_path] = MockFileDir.create_file(
             abs_path,
@@ -155,42 +155,35 @@ class MockFilesystem(Filesystem):
         self._update_directory_listings()
 
     def _mock_append_text(
-        self, abs_path: Path, content: str = "", encoding="utf-8"
+        self, abs_path: PurePath, content: str = "", encoding="utf-8"
     ) -> None:
         entry = self._entries[abs_path]
         entry.content = entry.content + content
         entry.metadata.modified_time = int(datetime.now().timestamp())
         entry.metadata.size = len(content.encode("utf-8"))
 
-    def _mock_copy_file(self, abs_src_path: Path, abs_dest_path: Path) -> None:
+    def _mock_copy_file(self, abs_src_path: PurePath, abs_dest_path: PurePath) -> None:
         self._entries[abs_dest_path] = copy(self._entries[abs_src_path])
 
-    def _mock_copy_dir(self, src_path: Path, dest_path: Path) -> None:
+    def _mock_copy_dir(self, src_path: PurePath, dest_path: PurePath) -> None:
         self._mock_copy_file(src_path, dest_path)
 
-    def _mock_move(self, src_path: Path, dest_path: Path) -> None:
+    def _mock_move(self, src_path: PurePath, dest_path: PurePath) -> None:
         self._mock_copy_file(src_path, dest_path)
         del self._entries[src_path]
 
-    # def _is_readable(abs_path: Path) -> bool:
-    #     return os.access(abs_path, os.R_OK)
-    #
-    # @staticmethod
-    # def _is_writable(abs_path: Path) -> bool:
-    #     return os.access(abs_path, os.W_OK)
-
-    def _mock_get_free_space(self, abs_path: Path) -> int:
+    def _mock_get_free_space(self, abs_path: PurePath) -> int:
         return self.total_size - sum(
             file.metadata.size for file in self._entries.values()
         )
 
-    def _mock_delete_file(self, abs_path: Path) -> None:
+    def _mock_delete_file(self, abs_path: PurePath) -> None:
         del self._entries[abs_path]
 
-    def _mock_delete_dir(self, abs_path: Path) -> None:
+    def _mock_delete_dir(self, abs_path: PurePath) -> None:
         self._mock_delete_file(abs_path)
 
-    def _mock_is_text_file(self, abs_path: Path) -> bool:
+    def _mock_is_text_file(self, abs_path: PurePath) -> bool:
         return True
 
     @contextmanager
@@ -268,10 +261,10 @@ class MockFilesystem(Filesystem):
             # we have to patch where it's used which is on scripts/init.py
             patch(
                 "scripts.init.DEFAULT_CONFIG_PATH",
-                Path("/home/_test_user_/.config.json"),
+                PurePath("/home/_test_user_/.config.json"),
             ) as patch_default_config,
             patch(
-                "scripts.init.DEFAULT_BASHRC_PATH", Path("/home/_test_user_/.bashrc")
+                "scripts.init.DEFAULT_BASHRC_PATH", PurePath("/home/_test_user_/.bashrc")
             ) as patch_default_bashrc,
         ):
             # Reset to clean state

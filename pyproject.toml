@@ -16,13 +16,13 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Security",
     "Topic :: System :: Systems Administration",
 ]
 keywords = ["ai", "automation", "security", "llm", "assistant"]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "distro==1.9.0",
     "instructor==1.9.2", 
@@ -64,10 +64,10 @@ addopts = ["--cov=solveig", "--cov-report=term-missing"]
 
 [tool.black]
 line-length = 88
-target-version = ['py312']
+target-version = ['py313']
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]

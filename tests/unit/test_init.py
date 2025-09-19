@@ -131,7 +131,6 @@ class TestConfigDirectory:
 
     def test_create_config_denial(self, mock_filesystem):
         """Test successful config directory creation."""
-        # default_config_path = Path("/home/_test_user_/solveig_config.json")
         default_config_path = mock_filesystem.mocks.default_config_path
 
         # User denies to create an example config

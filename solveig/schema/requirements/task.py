@@ -1,7 +1,6 @@
 """Task requirement - allows LLM to create and track task lists."""
 
 from typing import TYPE_CHECKING, Literal
-
 from pydantic import Field
 
 from .base import Requirement

@@ -1,6 +1,6 @@
 """Unit tests for plugin requirements system."""
 
-from pathlib import Path
+from pathlib import PurePath
 
 import pytest
 
@@ -82,7 +82,7 @@ class TestTreeRequirement:
         assert result.accepted is True
         assert result.error is None
 
-        assert result.metadata.path == Path("/test")
+        assert result.metadata.path == PurePath("/test")
 
         # Verify tree visualization was displayed
         output = interface.get_all_output()
@@ -94,7 +94,7 @@ class TestTreeRequirement:
 
         # Verify filesystem was called correctly
         mock_filesystem.read_metadata.assert_called_with(
-            Path("/test"), descend_level=-1
+            PurePath("/test"), descend_level=-1
         )
 
     def test_tree_depth_limiting_and_user_interaction(self, mock_filesystem):

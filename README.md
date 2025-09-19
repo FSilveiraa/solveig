@@ -274,9 +274,9 @@ def block_dangerous_commands(config, interface, requirement):
 
 ```python
 import re
-from pathlib import Path
+from pathlib import PurePath
 from solveig.plugins.hooks import after
-from solveig.plugins.exceptions import ProcessingError
+from solveig.exceptions import ProcessingError
 from solveig.schema.requirements import ReadRequirement, WriteRequirement
 
 @after(requirements=(ReadRequirement, WriteRequirement))
@@ -288,55 +288,8 @@ def anonymize_paths(config, interface, requirement, result):
         return
     anonymous_path = re.sub(r"/home/\w+", "/home/jdoe", original_path)
     anonymous_path = re.sub(r"^([A-Z]:\\Users\\)[^\\]+", r"\1JohnDoe", anonymous_path, flags=re.IGNORECASE)
-    result.metadata.path = Path(anonymous_path)
+    result.metadata.path = PurePath(anonymous_path)
 ```
-</details>
-
-<details>
-<summary><b>Create a new requirement type: Directory tree listing</b></summary>
-
-```python
-# solveig/plugins/requirements/tree.py
-from pathlib import Path
-from pydantic import Field
-
-from solveig.schema.requirements.base import Requirement, validate_non_empty_path
-from solveig.schema.results.base import RequirementResult
-from solveig.interface import SolveigInterface
-
-
-class MyResult(RequirementResult):
-    path: str | Path
-    accepted: bool
-    
-class MyRequirement(Requirement):
-    """Generate a directory tree listing showing file structure."""
-    
-    # Use descriptive fields, with a description string that the LLM will have access to,
-    # as well as validation methods
-    path: str = Field(..., description="The path to look from", validator=validate_non_empty_path)
-    show_hidden: bool = Field(description="Look at hidden files and directories", default=False)
-    
-    def _actually_solve(self, config, interface: "SolveigInterface") -> "TreeResult":
-        # Access the config, use the interface, solve the requirement and return a result
-        try:
-            if config.plugins.myplugin.is_active:
-                return MyResult(
-                    requirement=self,
-                    accepted=interface.ask_yes_no("Proceed?"),
-                    path=self.path
-                )
-        except Exception as e:
-            return MyResult(
-                requirement=self,
-                accepted=False,
-                path=self.path,
-                error=str(e)
-            )
-```
-
-Then update `solveig/schema/requirements/__init__.py` and `solveig/schema/results/__init__.py` to export the new classes, and add examples to the system prompt showing the LLM how to use `TreeRequirement`.
-
 </details>
 
 ---

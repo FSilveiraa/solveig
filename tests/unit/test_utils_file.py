@@ -7,7 +7,7 @@ touching real files.
 """
 
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -373,16 +373,21 @@ class TestFilesystemHighLevelOperations:
         assert not mock_filesystem.exists(abs_path)
 
     def test_get_directory_listing(self):
-        """Test getting directory listings."""
-        # Get listing of test directory
-        listing = Filesystem.get_dir_listing("/test")
+        """Test getting directory listings via read_metadata."""
+        # Get listing of test directory using read_metadata
+        metadata = Filesystem.read_metadata(Filesystem.get_absolute_path("/test"), descend_level=1)
+        listing = metadata.listing
+        assert listing is not None
+        
+        # Check expected files exist in listing
+        listing_names = {path.name for path in listing.keys()}
         for name in {"file.txt", "dir"}:
-            assert Filesystem.get_absolute_path(Path("/test").joinpath(name)) in listing
+            assert name in listing_names
 
     def test_get_directory_listing_not_directory(self):
-        """Test directory listing on non-directory raises exception."""
-        with pytest.raises(NotADirectoryError, match="not a directory"):
-            Filesystem.get_dir_listing("/test/file.txt")
+        """Test reading metadata on file (not directory) doesn't include listing."""
+        metadata = Filesystem.read_metadata(Filesystem.get_absolute_path("/test/file.txt"))
+        assert metadata.listing is None  # Files don't have listings
 
     def test_read_file_text_format(self):
         """Test reading text files returns correct format."""
@@ -629,9 +634,9 @@ class TestFilesystemIntegration:
         Filesystem.write_file(f"{base}/level1/mid.txt", "middle level")
         Filesystem.write_file(f"{base}/level1/level2/deep.txt", "deep level")
 
-        # Get directory listing
-        level1_listing = Filesystem.get_dir_listing(f"{base}/level1")
-        names = [p.name for p in level1_listing]
+        # Get directory listing using read_metadata
+        level1_metadata = Filesystem.read_metadata(Filesystem.get_absolute_path(f"{base}/level1"), descend_level=1)
+        names = [p.name for p in level1_metadata.listing.keys()]
         assert "mid.txt" in names
         assert "level2" in names
 
@@ -659,49 +664,58 @@ class TestPathMatching:
     
     def test_path_matches_patterns_exact_match(self):
         """Test exact path matching."""
-        patterns = ["/test/file.txt", "/other/path.py"]
+        patterns = [PurePath("/test/file.txt"), PurePath("/other/path.py")]
         
-        assert Filesystem.path_matches_patterns("/test/file.txt", patterns)
-        assert Filesystem.path_matches_patterns("/other/path.py", patterns)
-        assert not Filesystem.path_matches_patterns("/test/other.txt", patterns)
+        assert Filesystem.path_matches_patterns(PurePath("/test/file.txt"), patterns)
+        assert Filesystem.path_matches_patterns(PurePath("/other/path.py"), patterns)
+        assert not Filesystem.path_matches_patterns(PurePath("/test/other.txt"), patterns)
     
     def test_path_matches_patterns_wildcard(self):
         """Test wildcard pattern matching."""
-        patterns = ["/test/*.txt", "/docs/**/*.py"]
+        # Convert patterns to resolved PurePath (since they're absolute patterns)
+        patterns = [
+            Filesystem.get_absolute_path("/test/*.txt"),
+            Filesystem.get_absolute_path("/docs/**/*.py")
+        ]
         
-        assert Filesystem.path_matches_patterns("/test/file.txt", patterns)
-        assert Filesystem.path_matches_patterns("/test/another.txt", patterns)
-        assert not Filesystem.path_matches_patterns("/test/file.py", patterns)
-        assert not Filesystem.path_matches_patterns("/test/subdir/file.txt", patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/test/file.txt"), patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/test/another.txt"), patterns)
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/test/file.py"), patterns)
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/test/subdir/file.txt"), patterns)
         
-        assert Filesystem.path_matches_patterns("/docs/module.py", patterns)
-        assert Filesystem.path_matches_patterns("/docs/subdir/script.py", patterns)
-        assert Filesystem.path_matches_patterns("/docs/deep/nested/file.py", patterns)
-        assert not Filesystem.path_matches_patterns("/docs/readme.txt", patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/docs/module.py"), patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/docs/subdir/script.py"), patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/docs/deep/nested/file.py"), patterns)
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/docs/readme.txt"), patterns)
     
     def test_path_matches_patterns_tilde_expansion(self):
         """Test that ~ expansion works correctly in patterns."""
-        patterns = ["~/Documents/*.txt", "~/Projects/**/*.py"]
-        home = Filesystem.get_absolute_path("~")
+        patterns = [
+            Filesystem.get_absolute_path("~/Documents/*.txt"),
+            Filesystem.get_absolute_path("~/Projects/**/*.py")
+        ]
         
         # Test that tilde gets expanded properly
-        assert Filesystem.path_matches_patterns(f"{home}/Documents/test.txt", patterns)
-        assert Filesystem.path_matches_patterns(f"{home}/Projects/src/main.py", patterns)
-        assert not Filesystem.path_matches_patterns(f"{home}/Downloads/file.txt", patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"~/Documents/test.txt"), patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"~/Projects/src/main.py"), patterns)
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"~/Downloads/file.txt"), patterns)
     
     def test_path_matches_patterns_relative_and_edge_cases(self):
         """Test relative paths, parent directories, and edge cases."""
-        patterns = ["src/*.py", "tests/**/*.py", "../config/*.json"]
+        patterns = [
+            Filesystem.get_absolute_path("src/*.py"),
+            Filesystem.get_absolute_path("tests/**/*.py"),
+            Filesystem.get_absolute_path("../config/*.json")
+        ]
         
         # Relative paths should be resolved against current working directory
         cwd = Filesystem.get_absolute_path(".")
-        assert Filesystem.path_matches_patterns(f"{cwd}/src/main.py", patterns)
-        assert Filesystem.path_matches_patterns(f"{cwd}/tests/unit/test_file.py", patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"./src/main.py"), patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"./tests/unit/test_file.py"), patterns)
         
         # Test parent directory patterns (..)
-        parent = Filesystem.get_absolute_path("..")
-        assert Filesystem.path_matches_patterns(f"{parent}/config/settings.json", patterns)
+        assert Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"../config/settings.json"), patterns)
         
         # Test edge cases: empty patterns and no matches
-        assert not Filesystem.path_matches_patterns("/any/path.txt", [])
-        assert not Filesystem.path_matches_patterns(f"{cwd}/docs/readme.md", patterns)
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path("/any/path.txt"), [])
+        assert not Filesystem.path_matches_patterns(Filesystem.get_absolute_path(f"./docs/readme.md"), patterns)

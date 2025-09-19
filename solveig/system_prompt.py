@@ -1,7 +1,7 @@
 import os
 import platform
 from datetime import datetime
-from pathlib import Path
+from pathlib import PurePath
 
 from .utils.file import Metadata
 
@@ -82,7 +82,7 @@ script_chat.add_message(
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=Path("/home/user/run.sh"),
+                    path=PurePath("/home/user/run.sh"),
                     size=101,
                     modified_time=int(
                         datetime.fromisoformat("2025-07-17T02:54:43").timestamp()
@@ -197,7 +197,7 @@ tmpfs           784M   48K  784M   1% /run/user/1000
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=Path("/home/user/Documents/my_app.log"),
+                    path=PurePath("/home/user/Documents/my_app.log"),
                     size=11180,
                     modified_time=int(
                         datetime.fromisoformat("2025-07-16T12:59:44").timestamp()

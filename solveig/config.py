@@ -1,7 +1,7 @@
 import argparse
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import PurePath
 from typing import Any
 
 from solveig.interface import SolveigInterface
@@ -9,7 +9,7 @@ from solveig.llm import APIType, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import parse_human_readable_size
 
-DEFAULT_CONFIG_PATH = Path.home() / ".config/solveig.json"
+DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
 
 
 @dataclass()
@@ -69,7 +69,7 @@ class SolveigConfig:
         """
 
     @classmethod
-    def parse_from_file(cls, config_path: Path | str) -> dict:
+    def parse_from_file(cls, config_path: PurePath | str) -> dict:
         if not config_path:
             return {}
         abs_path = Filesystem.get_absolute_path(config_path)

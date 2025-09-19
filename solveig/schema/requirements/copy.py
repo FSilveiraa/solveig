@@ -1,9 +1,7 @@
 """Copy requirement - allows LLM to copy files and directories."""
 
 from typing import TYPE_CHECKING, Literal
-
 from pydantic import Field, field_validator
-
 from solveig.utils.file import Filesystem
 
 from .base import Requirement, format_path_info, validate_non_empty_path

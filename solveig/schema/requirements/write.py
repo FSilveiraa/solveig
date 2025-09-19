@@ -1,7 +1,6 @@
 """Write requirement - allows LLM to create/update files and directories."""
 
 from typing import TYPE_CHECKING, Literal
-
 from pydantic import Field, field_validator
 
 from solveig.schema.requirements.base import (

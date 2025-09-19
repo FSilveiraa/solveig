@@ -1,6 +1,6 @@
 import re
 from dataclasses import fields, is_dataclass
-from pathlib import Path
+from pathlib import PurePath
 from typing import Any
 
 import tiktoken
@@ -62,7 +62,7 @@ def default_json_serialize(o):
     I use Path a lot on this project and can't be hotfixing every instance to convert to str, this does it autiomatically
     json.dumps(model, default=default_json_serialize)
     """
-    if isinstance(o, Path):
+    if isinstance(o, PurePath):
         return str(o)
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 
@@ -136,7 +136,7 @@ def dump_pydantic_field(obj: Any) -> Any:
         return result
     elif isinstance(obj, BaseModel):
         return obj.model_dump()
-    elif isinstance(obj, Path):
+    elif isinstance(obj, PurePath):
         return str(obj)
     elif isinstance(obj, list):
         return [dump_pydantic_field(v) for v in obj]

@@ -5,7 +5,7 @@ import os
 import pwd
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Literal
 
 from pydantic import Field
@@ -17,7 +17,7 @@ from solveig.utils.misc import parse_human_readable_size
 class Metadata:
     owner_name: str
     group_name: str
-    path: Path
+    path: PurePath
     size: int
     is_directory: bool
     is_readable: bool
@@ -27,7 +27,7 @@ class Metadata:
         description="Last modified time for file or dir as UNIX timestamp",
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
-    listing: dict[Path, "Metadata"] | None = None
+    listing: dict[PurePath, "Metadata"] | None = None
 
 
 @dataclass
@@ -51,61 +51,61 @@ class Filesystem:
     # Do not perform path normalization or validation
 
     @staticmethod
-    def _get_listing(abs_path: Path) -> list[Path]:
-        return sorted(abs_path.iterdir())
+    def _get_listing(abs_path: PurePath) -> list[PurePath]:
+        return sorted(Path(abs_path).iterdir())
 
     @staticmethod
-    def _read_text(abs_path: Path) -> str:
-        return abs_path.read_text()
+    def _read_text(abs_path: PurePath) -> str:
+        return Path(abs_path).read_text()
 
     @staticmethod
-    def _read_bytes(abs_path: Path) -> bytes:
-        return abs_path.read_bytes()
+    def _read_bytes(abs_path: PurePath) -> bytes:
+        return Path(abs_path).read_bytes()
 
     @staticmethod
-    def _create_directory(abs_path: Path) -> None:
-        abs_path.mkdir()
+    def _create_directory(abs_path: PurePath) -> None:
+        Path(abs_path).mkdir()
 
     @staticmethod
-    def _write_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
-        abs_path.write_text(content, encoding=encoding)
+    def _write_text(abs_path: PurePath, content: str = "", encoding="utf-8") -> None:
+        Path(abs_path).write_text(content, encoding=encoding)
 
     @staticmethod
-    def _append_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
+    def _append_text(abs_path: PurePath, content: str = "", encoding="utf-8") -> None:
         with open(abs_path, "a", encoding=encoding) as fd:
             fd.write(content)
 
     @staticmethod
-    def _copy_file(abs_src_path: Path, abs_dest_path: Path) -> None:
+    def _copy_file(abs_src_path: PurePath, abs_dest_path: PurePath) -> None:
         shutil.copy2(abs_src_path, abs_dest_path)
 
     @staticmethod
-    def _copy_dir(src_path: Path, dest_path: Path) -> None:
+    def _copy_dir(src_path: PurePath, dest_path: PurePath) -> None:
         shutil.copytree(src_path, dest_path)
 
     @staticmethod
-    def _move(src_path: Path, dest_path: Path) -> None:
+    def _move(src_path: PurePath, dest_path: PurePath) -> None:
         shutil.move(src_path, dest_path)
 
     @staticmethod
-    def _get_free_space(abs_path: Path) -> int:
+    def _get_free_space(abs_path: PurePath) -> int:
         return shutil.disk_usage(abs_path).free
 
     @staticmethod
-    def _delete_file(abs_path: Path) -> None:
-        abs_path.unlink()
+    def _delete_file(abs_path: PurePath) -> None:
+        Path(abs_path).unlink()
 
     @staticmethod
-    def _delete_dir(abs_path: Path) -> None:
+    def _delete_dir(abs_path: PurePath) -> None:
         shutil.rmtree(abs_path)
 
     @staticmethod
-    def _is_text_file(abs_path: Path, _blocksize: int = 512) -> bool:
+    def _is_text_file(abs_path: PurePath, _blocksize: int = 512) -> bool:
         """
         Believe it or not, the most reliable way to tell if a real file
         is to read a piece of it and find b'\x00'
         """
-        with abs_path.open("rb") as fd:
+        with Path(abs_path).open("rb") as fd:
             chunk = fd.read(_blocksize)
             if b"\x00" in chunk:
                 return False
@@ -120,7 +120,7 @@ class Filesystem:
                     return False
 
     @classmethod
-    def _closest_writable_parent(cls, abs_dir_path: Path) -> Path | None:
+    def _closest_writable_parent(cls, abs_dir_path: PurePath) -> PurePath | None:
         """
         Check that a directory can be created by walking up the tree
         until we find an existing directory and checking its permissions.
@@ -138,7 +138,7 @@ class Filesystem:
     # =============================================================================
 
     @classmethod
-    def validate_read_access(cls, file_path: str | Path) -> None:
+    def validate_read_access(cls, file_path: str | PurePath) -> None:
         """
         Validate that a file can be read.
 
@@ -156,7 +156,7 @@ class Filesystem:
             raise PermissionError(f"Path {abs_path} is not readable")
 
     @classmethod
-    def validate_delete_access(cls, path: str | Path) -> None:
+    def validate_delete_access(cls, path: str | PurePath) -> None:
         """
         Validate that a file or directory can be deleted.
 
@@ -176,7 +176,7 @@ class Filesystem:
     @classmethod
     def validate_write_access(
         cls,
-        path: str | Path,
+        path: str | PurePath,
         content: str | bytes | None = None,
         content_size: int | None = None,
         min_disk_size_left: str | int = 0,
@@ -233,38 +233,41 @@ class Filesystem:
     # Some of these are mocked in unit tests
 
     @staticmethod
-    def get_absolute_path(path: str | Path) -> Path:
-        """Convert path to absolute path with user expansion."""
-        return Path(path).expanduser().resolve()
+    def get_absolute_path(path: str | PurePath) -> PurePath:
+        """
+        Convert path to absolute path with user expansion.
+        We expand into the real path and return a PurePath that can't do filesystem operations.
+        """
+        return PurePath(Path(path).expanduser().resolve())
 
     @staticmethod
-    def exists(abs_path: Path) -> bool:
+    def exists(abs_path: PurePath) -> bool:
         """Check if path exists."""
-        return abs_path.exists()
+        return Path(abs_path).exists()
 
     @staticmethod
-    def is_dir(abs_path: Path) -> bool:
+    def is_dir(abs_path: PurePath) -> bool:
         """Check if path is a directory."""
-        return abs_path.is_dir()
+        return Path(abs_path).is_dir()
 
     @classmethod
-    def is_readable(cls, abs_path: Path) -> bool:
+    def is_readable(cls, abs_path: PurePath) -> bool:
         """Check if path is readable."""
         try:
-            return cls.read_metadata(abs_path).is_readable
+            return cls.read_metadata(abs_path, descend_level=0).is_readable
         except (PermissionError, OSError):
             return False
 
     @classmethod
-    def is_writable(cls, abs_path: Path) -> bool:
+    def is_writable(cls, abs_path: PurePath) -> bool:
         """Check if path is writable."""
         try:
-            return cls.read_metadata(abs_path).is_writable
+            return cls.read_metadata(abs_path, descend_level=0).is_writable
         except (PermissionError, OSError):
             return False
 
     @classmethod
-    def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
+    def read_metadata(cls, abs_path: PurePath, descend_level=1) -> Metadata:
         """
         Read metadata and dir structure from filesystem.
 
@@ -275,6 +278,7 @@ class Filesystem:
         Returns:
             Metadata object with file/directory information
         """
+        abs_path = Path(abs_path)
         stats = abs_path.stat()
 
         is_dir = cls.is_dir(abs_path)
@@ -289,7 +293,7 @@ class Filesystem:
             listing = None
 
         return Metadata(
-            path=abs_path,
+            path=PurePath(abs_path),
             size=stats.st_size,
             modified_time=int(stats.st_mtime),
             is_directory=is_dir,
@@ -301,7 +305,7 @@ class Filesystem:
         )
 
     @classmethod
-    def read_file(cls, path: str | Path) -> FileContent:
+    def read_file(cls, path: str | PurePath) -> FileContent:
         """
         Read file contents with automatic text/binary detection.
 
@@ -330,7 +334,7 @@ class Filesystem:
     @classmethod
     def write_file(
         cls,
-        file_path: str | Path,
+        file_path: str | PurePath,
         content: str = "",
         encoding: str = "utf-8",
         min_space_left: int = 0,
@@ -350,7 +354,7 @@ class Filesystem:
             cls._write_text(abs_path, content, encoding=encoding)
 
     @classmethod
-    def create_directory(cls, dir_path: str | Path, exist_ok=True) -> None:
+    def create_directory(cls, dir_path: str | PurePath, exist_ok=True) -> None:
         """Create directory with recursive parent creation."""
         abs_path = cls.get_absolute_path(dir_path)
         if cls.exists(abs_path):
@@ -366,13 +370,13 @@ class Filesystem:
 
     @classmethod
     def copy(
-        cls, src_path: str | Path, dest_path: str | Path, min_space_left: int
+        cls, src_path: str | PurePath, dest_path: str | PurePath, min_space_left: int
     ) -> None:
         """Copy file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
 
-        src_size = cls.read_metadata(src_path).size
+        src_size = cls.read_metadata(src_path, descend_level=0).size
         cls.validate_read_access(src_path)
         cls.validate_write_access(
             dest_path, content_size=src_size, min_disk_size_left=min_space_left
@@ -385,7 +389,7 @@ class Filesystem:
             cls._copy_file(src_path, dest_path)
 
     @classmethod
-    def move(cls, src_path: str | Path, dest_path: str | Path) -> None:
+    def move(cls, src_path: str | PurePath, dest_path: str | PurePath) -> None:
         """Move file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
@@ -397,7 +401,7 @@ class Filesystem:
         cls._move(src_path, dest_path)
 
     @classmethod
-    def delete(cls, path: str | Path) -> None:
+    def delete(cls, path: str | PurePath) -> None:
         """Delete file or directory with validation."""
         abs_path = cls.get_absolute_path(path)
         cls.validate_delete_access(abs_path)
@@ -406,36 +410,28 @@ class Filesystem:
         else:
             cls._delete_file(abs_path)
 
-    @classmethod
-    def get_dir_listing(cls, dir_path: str | Path) -> dict[Path, Metadata]:
-        """Get directory listing with metadata for each entry."""
-        abs_path = cls.get_absolute_path(dir_path)
-        cls.validate_read_access(abs_path)
-        if not cls.is_dir(abs_path):
-            raise NotADirectoryError(f"File {abs_path} is not a directory")
-        dir_listing = cls._get_listing(abs_path)
-        return {path: cls.read_metadata(path) for path in dir_listing}
+    # @classmethod
+    # def get_dir_listing(cls, dir_path: str | PurePath) -> dict[PurePath, Metadata]:
+    #     """Get directory listing with metadata for each entry."""
+    #     abs_path = cls.get_absolute_path(dir_path)
+    #     cls.validate_read_access(abs_path)
+    #     if not cls.is_dir(abs_path):
+    #         raise NotADirectoryError(f"File {abs_path} is not a directory")
+    #     dir_listing = cls._get_listing(abs_path)
+    #     return {path: cls.read_metadata(path) for path in dir_listing}
 
     @classmethod
-    def path_matches_patterns(cls, file_path: str | Path, patterns: list[str]) -> bool:
+    def path_matches_patterns(cls, abs_path: PurePath, patterns: list[PurePath]) -> bool:
         """Check if a file path matches any of the given glob patterns.
         
         Args:
-            file_path: The path to check
-            patterns: List of glob patterns (e.g., ['~/Documents/**/*.py', '/tmp/*'])
+            abs_path: The path to check
+            patterns: List of glob patterns already expanded (e.g., ['/home/user/Documents/**/*.py', '/tmp/*'])
             
         Returns:
             True if the path matches any pattern, False otherwise
         """
-        if not patterns:
-            return False
-        
-        resolved_path = cls.get_absolute_path(file_path)
-
-        # Use pathlib.Path.match() for proper glob pattern matching
-        for pattern in patterns:
-            pattern_path = cls.get_absolute_path(pattern)
-            if resolved_path.match(str(pattern_path)):
-                return True
-                
-        return False
+        return any(
+            abs_path.full_match(pattern)
+            for pattern in patterns
+        )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import PurePath
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -17,7 +17,7 @@ from solveig.utils.file import Filesystem, Metadata
 
 
 class TreeResult(RequirementResult):
-    path: str | Path
+    path: str | PurePath
     metadata: Metadata | None  # Complete tree metadata
 
 
