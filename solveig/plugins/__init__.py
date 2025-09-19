@@ -10,8 +10,8 @@ Currently supports:
 
 from .. import SolveigConfig
 from ..interface import SolveigInterface
-from . import hooks, schema
-from .exceptions import PluginException, ProcessingError, SecurityError, ValidationError
+from ..exceptions import PluginException, ProcessingError, SecurityError, ValidationError
+from . import hooks, schema as plugin_schema
 
 
 def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
@@ -25,31 +25,26 @@ def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
     This should be called explicitly by the main application, not on import.
     It's also important that it happens here and not in the plugins
     """
-    from . import hooks, schema
+    # from . import hooks, schema
 
     # Load plugin requirements and hooks
-    schema.load_requirements(interface=interface)
-    hooks.load_hooks(interface=interface)
+    plugin_schema.load_extra_requirements(interface=interface)
+    hooks.load_requirement_hooks(interface=interface)
 
     # Filter based on config if provided
     if config is not None:
-        schema.filter_requirements(interface=interface, enabled_plugins=config)
+        plugin_schema.filter_requirements(interface=interface, enabled_plugins=config)
         hooks.filter_hooks(interface=interface, enabled_plugins=config)
 
 
 def clear_plugins():
-    hooks.HOOKS.before.clear()
-    hooks.HOOKS.after.clear()
-    hooks.HOOKS._all_hooks.clear()
-    schema.REQUIREMENTS.registered.clear()
-    schema.REQUIREMENTS.all_requirements.clear()
+    hooks.clear_hooks()
+    plugin_schema.clear_requirements()
 
 
 __all__ = [
     "initialize_plugins",
     "clear_plugins",
-    "hooks",
-    "schema",
     "PluginException",
     "ValidationError",
     "ProcessingError",

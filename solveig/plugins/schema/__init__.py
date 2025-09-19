@@ -5,7 +5,27 @@ import pkgutil
 
 from solveig.config import SolveigConfig
 from solveig.interface import CLIInterface, SolveigInterface
-from solveig.schema import REQUIREMENTS
+
+"""
+Note on local imports: this is required to fix a circular import error.
+
+Requirements and the Plugins system rely on each other. requirements/base.py has to import plugins so
+they can run hooks, and plugins/schema/__init__.py (this file) has to import 
+requirements/__init__.py::REQUIREMENTS so it can register plugin requirements on it, creating an import loop.
+It's also important to stress that the ordering of all this matters: we need to first load core schema
+requirements, then plugin requirements, then finally hooks. Currently this is done by just importing
+solveig.schema (which runs REQUIREMENTS.register_core_requirements()), then run.py calls
+plugins/__init__.py::initialize_plugins() which in turn first loads the extra requirements (here), then
+loads the hooks, then filters both in the same order.
+Both the loading and filtering of extra requirements do a local import of the central REQUIREMENTS registry.
+Any alternative solution I can think of that attempts to break this involves either a convoluted 3rd layer
+that joins  requirements+hooks and runs the whole thing (aka requirements no longer run hooks themselves),
+or registering plugin requirements separately and having message.py join them, and the order above still
+has to be maintained.
+ 
+This doesn't mean core requirements or core solveig code relies on individual plugins.
+It means the CORE Requirements system relies on the CORE Plugins system, and vice-versa.
+"""
 
 
 def _get_plugin_name_from_class(cls: type) -> str:
@@ -17,14 +37,16 @@ def _get_plugin_name_from_class(cls: type) -> str:
     return "unknown"
 
 
-def load_requirements(interface: SolveigInterface):
+def load_extra_requirements(interface: SolveigInterface):
     """
     Discover and load requirement plugin files in the requirements directory.
     Similar to hooks.load_hooks() but for requirement types.
     """
-    interface = interface or CLIInterface()
-
     import sys
+    # See note above
+    from solveig.schema import REQUIREMENTS
+
+    interface = interface or CLIInterface()
 
     total_files = 0
     total_requirements = 0
@@ -82,6 +104,8 @@ def filter_requirements(
                     If None, loads all discovered requirements (used during schema init).
     :return:
     """
+    # See note above
+    from solveig.schema import REQUIREMENTS
 
     if REQUIREMENTS.all_requirements:
         enabled_plugins = enabled_plugins or set()
@@ -121,15 +145,15 @@ def filter_requirements(
             return
 
 
-def get_all_requirements() -> dict[str, type["Requirement"]]:
-    """Get all registered requirement types for use by the system."""
-    return REQUIREMENTS.registered.copy()
+def clear_requirements():
+    # See note above
+    from solveig.schema import REQUIREMENTS
+    REQUIREMENTS.registered.clear()
+    REQUIREMENTS.all_requirements.clear()
 
 
 # Expose the essential interface
 __all__ = [
-    "REQUIREMENTS",
-    "load_requirements",
+    "load_extra_requirements",
     "filter_requirements",
-    "get_all_requirements",
 ]

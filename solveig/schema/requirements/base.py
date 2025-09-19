@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
-from solveig.plugins.exceptions import PluginException, ProcessingError, ValidationError
+from solveig.exceptions import PluginException, ProcessingError, ValidationError
 from solveig.plugins.hooks import HOOKS
 
 if TYPE_CHECKING:

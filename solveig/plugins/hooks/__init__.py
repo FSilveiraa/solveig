@@ -10,7 +10,7 @@ from solveig.interface import SolveigInterface
 class HOOKS:
     before: list[tuple[Callable, tuple[type] | None]] = []
     after: list[tuple[Callable, tuple[type] | None]] = []
-    _all_hooks: dict[
+    all_hooks: dict[
         str,
         tuple[
             list[tuple[Callable, tuple[type] | None]],
@@ -48,9 +48,9 @@ def _get_plugin_name_from_function(fun: Callable) -> str:
 def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
-        if plugin_name not in HOOKS._all_hooks:
-            HOOKS._all_hooks[plugin_name] = ([], [])
-        HOOKS._all_hooks[plugin_name][0].append((fun, requirements))
+        if plugin_name not in HOOKS.all_hooks:
+            HOOKS.all_hooks[plugin_name] = ([], [])
+        HOOKS.all_hooks[plugin_name][0].append((fun, requirements))
         return fun
 
     return register
@@ -59,9 +59,9 @@ def before(requirements: tuple[type] | None = None):
 def after(requirements: tuple[type] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
-        if plugin_name not in HOOKS._all_hooks:
-            HOOKS._all_hooks[plugin_name] = ([], [])
-        HOOKS._all_hooks[plugin_name][1].append((fun, requirements))
+        if plugin_name not in HOOKS.all_hooks:
+            HOOKS.all_hooks[plugin_name] = ([], [])
+        HOOKS.all_hooks[plugin_name][1].append((fun, requirements))
         return fun
 
     return register
@@ -69,12 +69,12 @@ def after(requirements: tuple[type] | None = None):
 
 # Auto-discovery of hook plugins - any .py file in this directory
 # that uses @before/@after decorators will be automatically registered
-def load_hooks(interface: SolveigInterface):
+def load_requirement_hooks(interface: SolveigInterface):
     """
     Discover and load plugin files in the hooks directory.
     """
 
-    HOOKS._all_hooks.clear()
+    HOOKS.all_hooks.clear()
 
     # Iterate through modules in this package
     total_files = 0
@@ -83,7 +83,7 @@ def load_hooks(interface: SolveigInterface):
             if not is_pkg and not module_name.endswith(".__init__"):
                 total_files += 1
                 plugin_name = module_name.split(".")[-1]
-                current_count = len(HOOKS._all_hooks)
+                current_count = len(HOOKS.all_hooks)
                 try:
                     # If module is already loaded and hooks were cleared, reload it
                     if module_name in sys.modules:
@@ -91,12 +91,12 @@ def load_hooks(interface: SolveigInterface):
                     else:
                         importlib.import_module(module_name)
                     # check if we actually loaded something
-                    if len(HOOKS._all_hooks) <= current_count:
+                    if len(HOOKS.all_hooks) <= current_count:
                         interface.display_warning(
                             "Plugin `{}` was loaded, but did not register"
                         )
 
-                    registered = HOOKS._all_hooks[plugin_name]
+                    registered = HOOKS.all_hooks[plugin_name]
                     if registered:
                         # announce_register(plugin_name, before_hooks, after_hooks)
                         for fun, requirements in registered[0]:
@@ -112,7 +112,7 @@ def load_hooks(interface: SolveigInterface):
                     interface.display_error(f"Failed to load plugin {plugin_name}: {e}")
 
         interface.show(
-            f"🕮  Hook plugin loading complete: {total_files} files, {len(HOOKS._all_hooks)} hooks"
+            f"🕮  Hook plugin loading complete: {total_files} files, {len(HOOKS.all_hooks)} hooks"
         )
 
 
@@ -127,21 +127,21 @@ def filter_hooks(
                     If None, loads all discovered plugins (used during schema init).
     :return:
     """
-    if HOOKS._all_hooks:
+    if HOOKS.all_hooks:
         # enabled_plugins = enabled_plugins or set()
         if isinstance(enabled_plugins, SolveigConfig):
             enabled_plugins = set(enabled_plugins.plugins.keys())
         with interface.with_group(
-            "Filtering hook plugins", count=len(HOOKS._all_hooks)
+            "Filtering hook plugins", count=len(HOOKS.all_hooks)
         ):
             # Clear current hooks and rebuild from registry
             HOOKS.before.clear()
             HOOKS.after.clear()
 
             interface.current_level += 1
-            for plugin_name in HOOKS._all_hooks:
+            for plugin_name in HOOKS.all_hooks:
                 if enabled_plugins is None or plugin_name in enabled_plugins:
-                    before_hooks, after_hooks = HOOKS._all_hooks[plugin_name]
+                    before_hooks, after_hooks = HOOKS.all_hooks[plugin_name]
                     HOOKS.before.extend(before_hooks)
                     HOOKS.after.extend(after_hooks)
                 else:
@@ -152,8 +152,14 @@ def filter_hooks(
 
             total_hooks = len(HOOKS.before) + len(HOOKS.after)
             interface.show(
-                f"🕮  Hook filtering complete: {len(HOOKS._all_hooks)} hook plugins, {total_hooks} active"
+                f"🕮  Hook filtering complete: {len(HOOKS.all_hooks)} hook plugins, {total_hooks} active"
             )
+
+
+def clear_hooks():
+    HOOKS.before.clear()
+    HOOKS.after.clear()
+    HOOKS.all_hooks.clear()
 
 
 # Expose only what plugin developers and the main system need

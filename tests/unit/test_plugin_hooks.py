@@ -5,7 +5,7 @@ Tests for the refactored exception-based plugin system.
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins import hooks, initialize_plugins
-from solveig.plugins.exceptions import ProcessingError, SecurityError, ValidationError
+from solveig.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.schema import CommandResult, WriteRequirement
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -390,7 +390,7 @@ class TestPluginFiltering:
         )
 
         def count_hooks(plugin_name="shellcheck"):
-            before, after = hooks.HOOKS._all_hooks[plugin_name]
+            before, after = hooks.HOOKS.all_hooks[plugin_name]
             return len(before) + len(after)
 
         # Initialize plugins multiple times

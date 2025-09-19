@@ -1,7 +1,9 @@
 """
-Exception classes for plugin validation and processing.
-Plugins raise these exceptions to signal validation failures or processing errors.
-The requirement layer catches these and wraps them into appropriate result objects.
+Domain exception classes for Solveig.
+
+These are core domain exceptions used throughout the system by both
+core requirements and plugins. They represent validation failures,
+processing errors, and security issues.
 """
 
 
@@ -13,7 +15,7 @@ class PluginException(Exception):
 
 class ValidationError(PluginException):
     """
-    Raised when a plugin validation fails.
+    Raised when validation fails.
     Used by before hooks to indicate a requirement should not proceed.
     """
 
@@ -22,7 +24,7 @@ class ValidationError(PluginException):
 
 class ProcessingError(PluginException):
     """
-    Raised when a plugin post-processing operation fails.
+    Raised when post-processing operation fails.
     Used by after hooks to indicate result processing failed.
     """
 
@@ -31,7 +33,7 @@ class ProcessingError(PluginException):
 
 class SecurityError(ValidationError):
     """
-    Raised when a plugin detects a security issue.
+    Raised when a security issue is detected.
     Special case of validation error for dangerous operations.
     """
 
