@@ -8,6 +8,7 @@ import sys
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 
+from . import BANNER
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
@@ -169,6 +170,8 @@ def main_loop(
     interface = interface or CLIInterface(
         verbose=config.verbose, max_lines=config.max_output_lines
     )
+
+    interface.show(BANNER)
 
     # Initialize plugins based on config
     initialize_plugins(config=config, interface=interface)

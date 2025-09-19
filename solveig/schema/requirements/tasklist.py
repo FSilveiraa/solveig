@@ -15,8 +15,8 @@ else:
     from solveig.schema.results.task import Task
 
 
-class TaskRequirement(Requirement):
-    title: Literal["tasks"] = "tasks"
+class TaskListRequirement(Requirement):
+    title: Literal["tasks"] = "task-list"
     tasks: list[Task] = Field(
         default_factory=list,
         description="List of tasks to track and display"

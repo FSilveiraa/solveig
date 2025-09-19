@@ -16,7 +16,7 @@ from .requirements import (  # noqa: F401
     ReadRequirement,
     Requirement,
     WriteRequirement,
-    TaskRequirement,
+    TaskListRequirement,
 )
 from .results import (  # noqa: F401
     CommandResult,
@@ -77,7 +77,7 @@ class REQUIREMENTS:
             MoveRequirement,
             CopyRequirement,
             DeleteRequirement,
-            TaskRequirement,
+            TaskListRequirement,
         ]
 
         for requirement_class in core_requirements:
