@@ -11,7 +11,7 @@ from solveig.interface import SolveigInterface
 
 # Import the registration decorator
 from solveig.schema import register_requirement
-from solveig.schema.requirements.base import Requirement, validate_non_empty_path
+from solveig.schema.requirements.base import Requirement, format_path_info, validate_non_empty_path
 from solveig.schema.results.base import RequirementResult
 from solveig.utils.file import Filesystem, Metadata
 
@@ -35,6 +35,15 @@ class TreeRequirement(Requirement):
     @classmethod
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
+
+    def display_header(self, interface: "SolveigInterface") -> None:
+        """Display tree requirement header."""
+        super().display_header(interface)
+        abs_path = Filesystem.get_absolute_path(self.path)
+        path_info = format_path_info(
+            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
+        )
+        interface.show(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
         """Create TreeResult with error."""

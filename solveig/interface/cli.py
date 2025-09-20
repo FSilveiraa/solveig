@@ -2,14 +2,14 @@
 CLI implementation of Solveig interface.
 """
 
-import asyncio
 import shutil
 import sys
 import random
 import traceback
+import threading
+import time
 from collections import defaultdict
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Generator
@@ -48,8 +48,8 @@ class CLIInterface(SolveigInterface):
         X = "┼"
 
     class COLORS:
-        title = "thistle1"
-        group = "dark_sea_green3"
+        title = "thistle3"
+        group = "dark_sea_green"
         error = "red"
         warning = "orange3"
         text_block = "grey93"
@@ -238,9 +238,9 @@ class CLIInterface(SolveigInterface):
 
     def display_animation_while(
         self, run_this: Callable, message: str | None = None, animation_type: str | None = None
-    ) -> None:
+    ) -> Any:
         animation = Animation(animation_type=animation_type)
-        return asyncio.run(animation.animate_while(self, run_this, message))
+        return animation.animate_while(self, run_this, message)
 
     def display_warning(self, message: str) -> None:
         """Override to add orange color for CLI warnings."""
@@ -278,14 +278,11 @@ class CLIInterface(SolveigInterface):
 class Animation:
     SPINNERS = {
         "spin": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-        # "line": ["|", "/", "-", "\\"],
         "bounce": ["⠁", "⠂", "⠄", "⠂"],
         "dots": ["․", "⁚", "⁖", "⁘", "⁙", "⁜", "⁙", "⁘", "⁖", "⁚"],
-        # "pulse": ["●", "○", "●", "○"],
         # "moon_color": ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
         "moon": ["◯", "☽", "◑", "●", "◐", "❨"],
         "growing": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"],
-        # "bold": ["🞅", "🞆", "🞇", "🞈", "🞉", "🞈", "🞇", "🞆", "🞅"],
         "cool": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"],
     }
 
@@ -296,7 +293,7 @@ class Animation:
         interval: float = 0.2,
     ):
         """
-        Initialize async spinner.
+        Initialize spinner.
 
         Args:
             animation_type: Type of animation to use (None=random).
@@ -306,34 +303,12 @@ class Animation:
         self.frames = frames or self.SPINNERS[animation_type or random.choice(list(self.SPINNERS.keys()))]
         self.interval = interval
         self._current_frame = 0
-        self._task: asyncio.Task | None = None
-        self._stopped = False
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
 
-    async def start(self, interface: CLIInterface, message: str) -> None:
-        """Start the animation."""
-        if self._task is None:
-            self._task = asyncio.create_task(self._animate(interface, message))
-        else:
-            interface.display_error(
-                "Interface error: Tried to start animation while previous one was not cancelled"
-            )
-
-    async def stop(self, completion_message: str = "✅ Done"):
-        """Stop the animation and show completion message."""
-        self._stopped = True
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
-
-    async def _animate(
-        self, interface: CLIInterface, message: str | None = None
-    ) -> None:
+    def _animate(self, interface: CLIInterface, message: str | None = None) -> None:
         """Run the animation loop."""
-        while not self._stopped:
+        while not self._stop_event.is_set():
             # Show current frame with message
             frame = self.frames[self._current_frame]
             display_text = f"{frame}  {message}" if message else frame
@@ -342,17 +317,18 @@ class Animation:
             # Advance to next frame
             self._current_frame = (self._current_frame + 1) % len(self.frames)
 
-            # Wait for next frame
-            await asyncio.sleep(self.interval)
+            # Wait for next frame, but check for stop event
+            if self._stop_event.wait(self.interval):
+                break
 
-    async def animate_while(
+    def animate_while(
         self,
         interface: CLIInterface,
         run_this: Callable,
         message: str | None = None,
     ) -> Any:
         """
-        Run a blocking function in a thread while showing an animated spinner.
+        Run a blocking function while showing an animated spinner.
 
         Args:
             interface: The CLIInterface instance to use for displaying information
@@ -362,19 +338,21 @@ class Animation:
         Returns:
             Result from the blocking function
         """
-        # Start spinner
-        await self.start(interface, message or "")
+        # Start spinner in background thread
+        self._thread = threading.Thread(
+            target=self._animate, 
+            args=(interface, message or "Waiting... (Ctrl+C to stop)"),
+            daemon=True
+        )
+        self._thread.start()
 
         try:
-            # Run blocking function in thread pool
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                result = await loop.run_in_executor(executor, run_this)
-
-            # Stop spinner with success message
-            await self.stop()
+            # Run the blocking function in the main thread
+            result = run_this()
             return result
-
         finally:
-            interface.show("")
-            await self.stop()
+            # Stop the animation
+            self._stop_event.set()
+            if self._thread:
+                self._thread.join(timeout=0.5)  # Give it a moment to stop gracefully
+            interface.show("")  # Clear the animation line

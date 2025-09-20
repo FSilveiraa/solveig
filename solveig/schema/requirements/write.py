@@ -66,22 +66,18 @@ class WriteRequirement(Requirement):
     ) -> "WriteResult":
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        # Confirm if path exists and validate write access - use utils/file.py validation
-        try:
-            Filesystem.validate_write_access(
-                path=abs_path,
-                content=self.content,
-                min_disk_size_left=config.min_disk_space_left,
-            )
-            metadata = Filesystem.read_metadata(abs_path)
-            already_exists = True
+        Filesystem.validate_write_access(
+            path=abs_path,
+            content=self.content,
+            min_disk_size_left=config.min_disk_space_left,
+        )
+        # metadata = Filesystem.read_metadata(abs_path)
 
-            if already_exists:
-                interface.display_warning("This file already exists")
-                interface.display_tree(metadata, None)
-        except FileNotFoundError:
-            # File does not exist
-            already_exists = False
+        already_exists = Filesystem.exists(abs_path)
+        if already_exists:
+            interface.display_warning("This file already exists")
+            file_content = Filesystem.read_file(abs_path)
+            interface.display_text_block(file_content.content, title=str(abs_path))
 
         question = (
             f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
