@@ -67,21 +67,23 @@ class DeleteRequirement(Requirement):
         metadata = Filesystem.read_metadata(abs_path)
         interface.display_tree(metadata=metadata)
 
+        auto_delete = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        if auto_delete:
+            interface.show(f"Deleting {abs_path} since it matches config.auto_allowed_paths")
+
         # Get user consent (with extra warning)
-        if (
-                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
-                or interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: ")
-        ):
-            try:
-                # Perform the delete operation - use utils/file.py method
-                Filesystem.delete(abs_path)
-                with interface.with_indent():
-                    interface.display_success("Deleted")
-                return DeleteResult(requirement=self, path=abs_path, accepted=True)
-            except (PermissionError, OSError) as e:
-                interface.display_error(f"Found error when deleting: {e}")
-                return DeleteResult(
-                    requirement=self, accepted=False, error=str(e), path=abs_path
-                )
-        else:
+        elif not interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
             return DeleteResult(requirement=self, accepted=False, path=abs_path)
+
+        try:
+            # Perform the delete operation - use utils/file.py method
+            Filesystem.delete(abs_path)
+            with interface.with_indent():
+                interface.display_success("Deleted")
+            return DeleteResult(requirement=self, path=abs_path, accepted=True)
+        except (PermissionError, OSError) as e:
+            interface.display_error(f"Found error when deleting: {e}")
+            return DeleteResult(
+                requirement=self, accepted=False, error=str(e), path=abs_path
+            )
+

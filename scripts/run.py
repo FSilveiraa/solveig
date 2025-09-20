@@ -141,7 +141,7 @@ def process_requirements(
     """Process all requirements from LLM response and return results."""
     results = []
     if llm_response.requirements:
-        with interface.with_group("Results", count=len(llm_response.requirements)):
+        with interface.with_group(f"Results ({len(llm_response.requirements)})"):
             for requirement in llm_response.requirements:
                 try:
                     result = requirement.solve(config, interface)

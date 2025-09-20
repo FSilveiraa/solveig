@@ -98,7 +98,7 @@ def check_command(
             output = json.loads(result.stdout)
             errors = [f"[{item['level']}] {item['message']}" for item in output]
             if errors:
-                with interface.with_group(""):
+                with interface.with_group("Shellcheck Errors"):
                     for error in errors:
                         interface.display_error(error)
                 raise ValidationError(

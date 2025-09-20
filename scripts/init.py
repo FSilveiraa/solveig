@@ -86,7 +86,7 @@ def check_dependencies(interface: SolveigInterface) -> bool:
 
         if missing_packages:
             interface.display_error("Found missing packages")
-            with interface.with_group("Missing", count=len(missing_packages)):
+            with interface.with_group(f"Missing ({len(missing_packages)})"):
                 for package in missing_packages:
                     interface.display_error(f"{package}")
             interface.display_error("Run: pip install -e .")

@@ -13,8 +13,8 @@ class HOOKS:
     all_hooks: dict[
         str,
         tuple[
-            list[tuple[Callable, tuple[type] | None]],
-            list[tuple[Callable, tuple[type] | None]],
+            dict[str, tuple[Callable, tuple[type] | None]],
+            dict[str, tuple[Callable, tuple[type] | None]],
         ],
     ] = {}
 
@@ -49,8 +49,9 @@ def before(requirements: tuple[type] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
         if plugin_name not in HOOKS.all_hooks:
-            HOOKS.all_hooks[plugin_name] = ([], [])
-        HOOKS.all_hooks[plugin_name][0].append((fun, requirements))
+            HOOKS.all_hooks[plugin_name] = ({}, {})
+        # Use function name as key to prevent duplicates
+        HOOKS.all_hooks[plugin_name][0][fun.__name__] = (fun, requirements)
         return fun
 
     return register
@@ -60,21 +61,22 @@ def after(requirements: tuple[type] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
         if plugin_name not in HOOKS.all_hooks:
-            HOOKS.all_hooks[plugin_name] = ([], [])
-        HOOKS.all_hooks[plugin_name][1].append((fun, requirements))
+            HOOKS.all_hooks[plugin_name] = ({}, {})
+        # Use function name as key to prevent duplicates
+        HOOKS.all_hooks[plugin_name][1][fun.__name__] = (fun, requirements)
         return fun
 
     return register
 
 
 def load_and_filter_hooks(
-    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None
+    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None, allow_all: bool = False
 ) -> dict[str, int]:
     """
     Discover, load, and filter hook plugins in one step.
     Returns statistics dictionary.
     """
-    HOOKS.all_hooks.clear()
+    # HOOKS.all_hooks.clear()
     HOOKS.before.clear()
     HOOKS.after.clear()
     
@@ -85,34 +87,33 @@ def load_and_filter_hooks(
     loaded_plugins = []
     active_hooks = 0
     
-    # Load all hook plugins
+    # First: Load filesystem-based hook plugins (this registers them via decorators)
     for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
         if not is_pkg and not module_name.endswith(".__init__"):
             plugin_name = module_name.split(".")[-1]
             
             try:
-                # Import/reload module
+                # Import/reload module (this registers hooks in HOOKS.all_hooks via decorators)
                 if module_name in sys.modules:
                     importlib.reload(sys.modules[module_name])
                 else:
                     importlib.import_module(module_name)
-                
-                # Check if plugin should be enabled
-                if plugin_name in HOOKS.all_hooks:
-                    loaded_plugins.append(plugin_name)
-                    
-                    if enabled_plugins is None or plugin_name in enabled_plugins:
-                        # Add to active hooks
-                        before_hooks, after_hooks = HOOKS.all_hooks[plugin_name]
-                        HOOKS.before.extend(before_hooks)
-                        HOOKS.after.extend(after_hooks)
-                        active_hooks += len(before_hooks) + len(after_hooks)
-                        interface.show(f"'{plugin_name}': Loaded")
-                    else:
-                        interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
                         
             except Exception as e:
                 interface.display_error(f"Hook plugin {plugin_name}: {e}")
+    
+    # Second: Process ALL plugins in HOOKS.all_hooks (filesystem + memory-registered)
+    for plugin_name, (before_dict, after_dict) in HOOKS.all_hooks.items():
+        loaded_plugins.append(plugin_name)
+        
+        if allow_all or (enabled_plugins and plugin_name in enabled_plugins):
+            # Add to active hooks (convert dict values back to list)
+            HOOKS.before.extend(before_dict.values())
+            HOOKS.after.extend(after_dict.values())
+            active_hooks += len(before_dict) + len(after_dict)
+            interface.show(f"'{plugin_name}': Loaded")
+        else:
+            interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
     
     interface.show(
         f"Hooks: {len(loaded_plugins)} plugins loaded, {active_hooks} active"

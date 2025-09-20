@@ -38,7 +38,7 @@ def _get_plugin_name_from_class(cls: type) -> str:
 
 
 def load_and_filter_requirements(
-    interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
+    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None, allow_all: bool = False
 ) -> dict[str, int]:
     """
     Discover, load, and filter requirement plugins in one step.
@@ -90,7 +90,7 @@ def load_and_filter_requirements(
                     loaded_plugins += 1
                     
                     # Filter - add to active if enabled
-                    if enabled_plugins is None or plugin_name in enabled_plugins:
+                    if allow_all or (enabled_plugins and plugin_name in enabled_plugins):
                         for req_name in new_requirement_names:
                             req_class = REQUIREMENTS.all_requirements[req_name]
                             REQUIREMENTS.registered[req_name] = req_class

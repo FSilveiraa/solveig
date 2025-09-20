@@ -2,7 +2,6 @@
 Base interface classes for Solveig user interaction.
 """
 
-import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -94,10 +93,10 @@ class SolveigInterface(ABC):
         actual_level = level if level is not None else self.current_level
         return " " * (actual_level * self.indent_base)
 
-    def show(self, content: str, level: int | None = None, **kwargs) -> None:
+    def show(self, text: str, level: int | None = None, truncate_length: bool = False, **kwargs) -> None:
         """Display content at specified or current indent level"""
         indent = self._indent(level)
-        self._output(f"{indent}{content}", **kwargs)
+        self._output(f"{indent}{text}", **kwargs)
 
     @contextmanager
     def with_indent(self) -> Generator[None, None, None]:
@@ -110,15 +109,12 @@ class SolveigInterface(ABC):
             self.current_level = old_level
 
     @contextmanager
-    def with_group(
-        self, title: str, count: int | None = None
-    ) -> Generator[None, None, None]:
+    def with_group(self, title: str) -> Generator[None, None, None]:
         """
         Group/item header with optional count
         [ Requirements (3) ]
         """
-        count_str = f" ({count})" if count is not None else ""
-        self.show(f"[ {title}{count_str} ]")
+        self.show(f"[ {title} ]")
 
         # Use the with_indent context manager internally
         with self.with_indent():

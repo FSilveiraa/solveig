@@ -1,4 +1,6 @@
+from rich.console import Text
 from solveig.interface import CLIInterface
+
 
 
 class MockInterface(CLIInterface):
@@ -17,9 +19,9 @@ class MockInterface(CLIInterface):
         self.user_inputs = []
         self.questions = []
 
-    def _output(self, text: str, **kwargs) -> None:
+    def _output(self, text: str | Text, **kwargs) -> None:
         """Capture output instead of printing"""
-        self.outputs.append(text)
+        self.outputs.append(str(text))
 
     def _input(self, text: str, **kwargs) -> str:
         """Capture input instead of printing"""

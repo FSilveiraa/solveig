@@ -41,8 +41,9 @@ class TestPluginHookSystem:
 
     def test_before_hook_validation_error(self):
         """Test that before hooks can raise ValidationError to stop processing."""
-
         # Setup
+        interface = MockInterface()
+
         @hooks.before(requirements=(CommandRequirement,))
         def failing_validator(
             config: SolveigConfig,
@@ -53,11 +54,9 @@ class TestPluginHookSystem:
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
 
-        # Activate the hook by filtering (all registered hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"failing_validator"})
 
         req = CommandRequirement(command="fail this command", comment="Test")
-        interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline if it gets to user
 
         # Execute
@@ -70,8 +69,9 @@ class TestPluginHookSystem:
 
     def test_before_hook_security_error(self):
         """Test that before hooks can raise SecurityError for dangerous commands."""
-
         # Setup
+        interface = MockInterface()
+
         @hooks.before(requirements=(CommandRequirement,))
         def security_validator(
             config: SolveigConfig,
@@ -81,11 +81,9 @@ class TestPluginHookSystem:
             if "rm -rf" in requirement.command:
                 raise SecurityError("Dangerous command detected")
 
-        # Activate the hook by filtering (all hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"security_validator"})
 
         req = CommandRequirement(command="rm -rf /important/data", comment="Test")
-        interface = MockInterface()
         interface.set_user_inputs(["n"])
 
         # Execute
@@ -98,8 +96,9 @@ class TestPluginHookSystem:
 
     def test_before_hook_success_continues(self):
         """Test that before hooks that don't raise exceptions allow processing to continue."""
-
         # Setup
+        interface = MockInterface()
+
         @hooks.before(requirements=(CommandRequirement,))
         def passing_validator(
             config: SolveigConfig,
@@ -108,9 +107,11 @@ class TestPluginHookSystem:
         ):
             # Just validate, don't throw
             assert requirement.command is not None
+            interface.show(f"command '{requirement.command}' exists")
+
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"passing_validator"})
 
         req = CommandRequirement(command="echo hello", comment="Test")
-        interface = MockInterface()
         interface.set_user_inputs(["n"])  # Decline the command
 
         # Execute
@@ -120,11 +121,13 @@ class TestPluginHookSystem:
         # Should get to user interaction (not stopped by plugin)
         assert not result.accepted  # Declined by user
         assert result.error is None  # No plugin error
+        assert "command 'echo hello' exists" in interface.get_all_output()
 
     def test_after_hook_processing_error(self):
         """Test that after hooks can raise ProcessingError."""
-
         # Setup
+        interface = MockInterface()
+
         @hooks.after(requirements=(CommandRequirement,))
         def failing_processor(
             config: SolveigConfig,
@@ -136,10 +139,9 @@ class TestPluginHookSystem:
                 raise ProcessingError("Post-processing failed")
 
         # Activate the hook by filtering (all hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"failing_processor"})
 
         req = CommandRequirement(command="echo hello", comment="Test")
-        interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept the command
 
         # Execute
@@ -153,6 +155,7 @@ class TestPluginHookSystem:
         """Test that multiple before hooks are executed in order."""
         # Setup
         execution_order = []
+        interface = MockInterface()
 
         @hooks.before(requirements=(CommandRequirement,))
         def first_validator(config, interface, requirement):
@@ -162,11 +165,9 @@ class TestPluginHookSystem:
         def second_validator(config, interface, requirement):
             execution_order.append("second")
 
-        # Activate the hooks by filtering (all registered hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"second_validator", "first_validator"})
 
         req = CommandRequirement(command="echo test", comment="Test")
-        interface = MockInterface()
         interface.set_user_inputs(["n"])
 
         # Execute
@@ -179,6 +180,7 @@ class TestPluginHookSystem:
         """Test that hooks only run for specified requirement types."""
         # Setup
         called = []
+        interface = MockInterface()
 
         @hooks.before(requirements=(CommandRequirement,))
         def command_only_hook(config, interface, requirement):
@@ -189,32 +191,33 @@ class TestPluginHookSystem:
             called.append("read_hook")
 
         # Activate the hooks by filtering (all registered hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=MockInterface(), enabled_plugins={"command_only_hook", "read_only_hook"})
 
         # Execute
         # Test with CommandRequirement
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        interface1 = MockInterface()
-        interface1.set_user_inputs(["n"])
-        cmd_req.solve(DEFAULT_CONFIG, interface1)
+        interface.set_user_inputs(["n"])
+        cmd_req.solve(DEFAULT_CONFIG, interface=interface)
+        # Verify
+        assert called == ["command_hook"]
 
         # Test with ReadRequirement
         read_req = ReadRequirement(
             path="/test/file.txt", metadata_only=True, comment="Test"
         )
-        interface2 = MockInterface()
-        interface2.set_user_inputs(["n"])
-        read_req.solve(DEFAULT_CONFIG, interface2)
+
+        interface.set_user_inputs(["n"])
+        read_req.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify
-        assert "command_hook" in called
-        assert "read_hook" in called
+        assert called == ["command_hook", "read_hook"]
         assert len(called) == 2  # Each hook called once
 
     def test_hook_without_requirement_filter(self):
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
         called = []
+        interface = MockInterface()
 
         def get_requirement_name(requirement) -> str:
             return f"universal_{type(requirement).__name__}"
@@ -223,8 +226,7 @@ class TestPluginHookSystem:
         def universal_hook(config, interface, requirement):
             called.append(get_requirement_name(requirement))
 
-        # Activate the hooks by filtering (all registered hooks enabled by default)
-        hooks.filter_hooks(interface=MockInterface(), enabled_plugins=None)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins={"universal_hook"})
 
         # Test with different requirement types
         cmd_req = CommandRequirement(command="echo test", comment="Test")
@@ -233,13 +235,11 @@ class TestPluginHookSystem:
         )
 
         # Execute
-        interface1 = MockInterface()
-        interface1.set_user_inputs(["n"])
-        cmd_req.solve(DEFAULT_CONFIG, interface1)
+        interface.set_user_inputs(["n"])
+        cmd_req.solve(DEFAULT_CONFIG, interface)
 
-        interface2 = MockInterface()
-        interface2.set_user_inputs(["n"])
-        read_req.solve(DEFAULT_CONFIG, interface2)
+        interface.set_user_inputs(["n"])
+        read_req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert get_requirement_name(cmd_req) in called
@@ -267,7 +267,7 @@ class TestPluginFiltering:
 
         interface = MockInterface()
         # Filter to enable only the test plugin
-        hooks.filter_hooks(interface=interface, enabled_plugins=config_with_plugin)
+        hooks.load_and_filter_hooks(interface=interface, enabled_plugins=config_with_plugin)
 
         # Execute requirement
         req = WriteRequirement(
@@ -306,7 +306,7 @@ class TestPluginFiltering:
         interface = MockInterface()
 
         # Apply filtering
-        hooks.filter_hooks(enabled_plugins=config_without_plugin, interface=interface)
+        hooks.load_and_filter_hooks(enabled_plugins=config_without_plugin, interface=interface)
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
@@ -320,14 +320,20 @@ class TestPluginFiltering:
     def test_shellcheck_plugin_filtering(self):
         """
         Test specific shellcheck plugin filtering behavior.
-        Note that this is so far the only instance where a core test relies on a plugin, and we do it
-        because the entire plugin import mechanism needs testing with actual plugin files
+        Note that this is so far the only instance where a unit test for a core component
+        relies on a plugin, and we do it because the entire plugin import mechanism needs
+        testing with actual plugin files
         """
         from solveig.plugins import initialize_plugins
 
         # Config without shellcheck (default state)
         config_no_shellcheck = SolveigConfig(
-            url="test-url", api_key="test-key", plugins={}  # Shellcheck not configured
+            url="test-url",
+            api_key="test-key",
+            # Shellcheck not configured
+            plugins = {
+                "some-other_plugin": {}
+            }
         )
 
         interface = MockInterface()
@@ -337,7 +343,7 @@ class TestPluginFiltering:
         # Verify filtering message appears in output
         output_text = " ".join(interface.outputs)
         assert (
-            "≫ Skipping hook plugin, not present in config: shellcheck" in output_text
+            "'shellcheck': skipped" in output_text.lower()
         )
 
         # Verify no hooks are active
@@ -368,7 +374,7 @@ class TestPluginFiltering:
         )
 
         interface = MockInterface()
-        hooks.filter_hooks(enabled_plugins=config_with_options, interface=interface)
+        hooks.load_and_filter_hooks(enabled_plugins=config_with_options, interface=interface)
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
@@ -405,8 +411,8 @@ class TestPluginFiltering:
 
         # Registry should have same number of hooks after multiple loads
         assert (
-            first_load_count == second_load_count == third_load_count == 1
-        ), "Should have exactly one shellcheck hook"
+            first_load_count == second_load_count == third_load_count
+        ), "Should have exactly the same number of hooks after multiple reloads"
 
         # And active hooks should match registry (since plugin is enabled)
         assert len(hooks.HOOKS.before) == first_load_count

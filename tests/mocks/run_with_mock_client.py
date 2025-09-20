@@ -14,6 +14,16 @@ from tests.mocks.llm_client import create_mock_client
 # Define your mock responses here
 mock_responses = [
     LLMMessage(
+        comment="TEST LONG COMMAND",
+        requirements=[
+            CommandRequirement(
+                comment="LONG COMMAND",
+                command="python -m \"import sys\nimport os\nprint(\"Done\")"
+            )
+        ]
+    ),
+
+    LLMMessage(
         comment="I'll help you understand what ~/Sync contains",
         requirements=[
             TaskListRequirement(
@@ -36,7 +46,7 @@ It seems there are several files, the most relevant may be some .py and .sh scri
 """,
         requirements=[
             TaskListRequirement(
-                comment="I've identified the most worrisome files inside ~/Sync, I'll now read their contents",
+                comment="I've identified the most concerning files inside ~/Sync, I'll now read their contents",
                 tasks=[
                     Task(description="Read the contents of ~/Sync", status="completed"),
                     Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
@@ -96,9 +106,9 @@ if __name__ == "__main__":
                 """.strip(),
                 is_directory=False,
             ),
-        CommandRequirement(
+            CommandRequirement(
                 comment="Now execute it to make sure it works correctly",
-                command="python ~/Sync/hello_new.py; python ~/Sync/hello_new.py 'Solveig'",
+                command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
             ),
         ]
     ),

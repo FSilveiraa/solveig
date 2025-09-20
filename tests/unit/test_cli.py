@@ -112,6 +112,14 @@ class TestTreeDisplay:
 class TestLLMResponseAndErrorDisplay:
     """Test LLM response and error display functionality."""
 
+    _BIG_COMMAND = """
+grep -E "error|failure|critical|fatal|segfault|timeout|connection reset|out of memory|unreachable host|access denied|permission denied" /var/log/system/application/events.log
+tail -n 20 /var/log/system/application/events.log
+wc -l /var/log/system/application/events.log
+ls -lh /var/log/system/application/
+echo "Log check complete."
+    """
+
     def test_display_llm_response(self):
         """Test complete LLM response display with comments and grouped requirements."""
         interface = MockInterface()
@@ -126,8 +134,8 @@ class TestLLMResponseAndErrorDisplay:
                 metadata_only=True,
                 comment="Read second file metadata",
             ),
-            CommandRequirement(command="ls -la", comment="List files"),
-            CommandRequirement(command="echo test", comment="Test command"),
+            CommandRequirement(command="ls -la", comment="List files"), # one-liner
+            CommandRequirement(command=self._BIG_COMMAND, comment="Large command"), #
         ]
         message = LLMMessage(
             comment="I'll analyze these files and run some commands.",
@@ -139,17 +147,18 @@ class TestLLMResponseAndErrorDisplay:
         interface.clear()
 
         expected_lines = """
-[ Requirements (4) ]
-  [ Read (2) ]
+Requirements (4)
+  Read (2)
     ❝  Read first file
     🗎  /test/file1.txt
     ❝  Read second file metadata
     🗎  /test/file2.txt
-  [ Command (2) ]
+  Command (2)
     ❝  List files
     🗲  ls -la
-    ❝  Test command
-    🗲  echo test
+    ❝  Large command
+    🗲  grep -E "error|failure|critical|fatal|segfault|timeout|
+ ...(+4 lines)
         """.strip().splitlines()
 
         for line in expected_lines:

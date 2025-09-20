@@ -73,17 +73,44 @@ class CLIInterface(SolveigInterface):
     def _get_max_output_width(self) -> int:
         return shutil.get_terminal_size((80, 20)).columns - len(self.PADDING_LEFT) - len(self.PADDING_RIGHT)
 
+    def show(self, text: str, level: int | None = None, truncate: bool = False, **kwargs) -> None:
+        indent = self._indent(level)
+        text_formatted = f"{indent}{text}"
+        if truncate:
+            # We add this in either case - cut lines, cut length, or both
+            _ellipsis = ""
+
+            # Keep only the first line
+            suffix = ""
+            lines = text_formatted.splitlines()
+            if len(lines) > 1:
+                text_formatted = lines[0]
+                suffix = f"(+{len(lines) - 1} lines)"
+                # from here on we know we'll need it, but don't add it yet
+                _ellipsis = " ..."
+
+            # Shorten the line to the max possible width
+            max_width = (
+                    self._get_max_output_width()
+                    - len(suffix) # padding for " (+22 lines)" if necessary
+                    - 4           # padding for " ..." if necessary - even if it wasn't defined above
+            )
+            if len(text_formatted) > max_width:
+                text_formatted = f"{text_formatted[:max_width]}"
+                # if we didn't ... because of the lines, add because of the length
+                _ellipsis = " ..."
+            text_formatted = Text(text_formatted).append(_ellipsis, style=self.COLORS.title).append(suffix, style=self.COLORS.title)
+        self._output(text_formatted, **kwargs)
+
     @contextmanager
     def with_group(
-        self, title: str, count: int | None = None
+        self, title: str
     ) -> Generator[None, None, None]:
         """
         Group/item header with optional count
         [ Requirements (3) ]
         """
-        count_str = f" ({count})" if count is not None else ""
-        self.show(f"{title}{count_str}", style=f"bold {self.COLORS.group}")
-        # self.show(f"[ {title}{count_str} ]", style=f"bold {self.COLORS.group}")
+        self.show(f"{title}", style=f"bold {self.COLORS.group}")
 
         # Use the with_indent context manager internally
         with self.with_indent():
@@ -109,15 +136,13 @@ class CLIInterface(SolveigInterface):
             self.display_comment(llm_response.comment.strip())
 
         if llm_response.requirements:
-            with self.with_group("Requirements", len(llm_response.requirements)):
+            with self.with_group(f"Requirements ({len(llm_response.requirements)})"):
                 indexed_requirements = defaultdict(list)
                 for requirement in llm_response.requirements:
                     indexed_requirements[requirement.title].append(requirement)
 
                 for requirement_type, requirements in indexed_requirements.items():
-                    with self.with_group(
-                        requirement_type.title(), count=len(requirements)
-                    ):
+                    with self.with_group(f"{requirement_type.title()} ({len(requirements)})"):
                         for requirement in requirements:
                             requirement.display_header(interface=self)
 

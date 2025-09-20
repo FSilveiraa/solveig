@@ -79,34 +79,36 @@ class WriteRequirement(Requirement):
             file_content = Filesystem.read_file(abs_path)
             interface.display_text_block(file_content.content, title=str(abs_path))
 
-        question = (
-            f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
-            f"{'directory' if self.is_directory else 'file'}"
-            f"{' and contents' if not self.is_directory else ''}? [y/N]: "
-        )
-        if (
-                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
-                or interface.ask_yes_no(question)
-        ):
-            try:
-                # Perform the write operation - use utils/file.py methods
-                if self.is_directory:
-                    Filesystem.create_directory(abs_path)
-                else:
-                    Filesystem.write_file(abs_path, content=self.content or "")
-                interface.display_success(
-                    f"{'Updated' if already_exists else 'Created'}"
-                )
-
-                return WriteResult(requirement=self, path=abs_path, accepted=True)
-
-            except Exception as e:
-                interface.display_error(f"Found error when writing file: {e}")
-                return WriteResult(
-                    requirement=self,
-                    path=abs_path,
-                    accepted=False,
-                    error=f"Encoding error: {e}",
-                )
+        auto_write = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        if auto_write:
+            interface.show(f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths")
         else:
-            return WriteResult(requirement=self, path=abs_path, accepted=False)
+            question = (
+                f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
+                f"{'directory' if self.is_directory else 'file'}"
+                f"{' and contents' if not self.is_directory else ''}? [y/N]: "
+            )
+            if not interface.ask_yes_no(question):
+                return WriteResult(requirement=self, path=abs_path, accepted=False)
+
+        try:
+            # Perform the write operation - use utils/file.py methods
+            if self.is_directory:
+                Filesystem.create_directory(abs_path)
+            else:
+                Filesystem.write_file(abs_path, content=self.content or "")
+            interface.display_success(
+                f"{'Updated' if already_exists else 'Created'}"
+            )
+
+            return WriteResult(requirement=self, path=abs_path, accepted=True)
+
+        except Exception as e:
+            interface.display_error(f"Found error when writing file: {e}")
+            return WriteResult(
+                requirement=self,
+                path=abs_path,
+                accepted=False,
+                error=f"Encoding error: {e}",
+            )
+

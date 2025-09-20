@@ -70,6 +70,7 @@ class TestTreeRequirement:
         # Execute tree requirement
         req = TreeRequirement(path="/test", comment="Test tree")
         interface = MockInterface()
+        interface.set_user_inputs(["y"])
 
         result = req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -107,6 +108,7 @@ class TestTreeRequirement:
 
         req = TreeRequirement(path="/test", max_depth=2, comment="Limited depth tree")
         interface = MockInterface()
+        interface.set_user_inputs(["y"])
 
         result = req.actually_solve(DEFAULT_CONFIG, interface)
 
