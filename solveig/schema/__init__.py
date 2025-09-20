@@ -61,7 +61,7 @@ class REQUIREMENTS:
             ...
         """
         # Store in both active and all requirements registry
-        REQUIREMENTS.registered[requirement_class.__name__] = requirement_class
+        # REQUIREMENTS.registered[requirement_class.__name__] = requirement_class
         REQUIREMENTS.all_requirements[requirement_class.__name__] = requirement_class
 
         return requirement_class
@@ -84,6 +84,7 @@ class REQUIREMENTS:
             # Only register if not already registered
             if requirement_class.__name__ not in cls.registered:
                 cls.register_requirement(requirement_class)
+        cls.registered.update(cls.all_requirements)
 
 
 REQUIREMENTS.register_core_requirements()

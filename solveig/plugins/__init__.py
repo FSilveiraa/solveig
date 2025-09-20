@@ -25,16 +25,23 @@ def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
     This should be called explicitly by the main application, not on import.
     It's also important that it happens here and not in the plugins
     """
-    # from . import hooks, schema
+    with interface.with_group("Plugins"):
+        # Load and filter requirements
+        with interface.with_group("Requirements"):
+            req_stats = plugin_schema.load_and_filter_requirements(
+                interface=interface, enabled_plugins=config
+            )
 
-    # Load plugin requirements and hooks
-    plugin_schema.load_extra_requirements(interface=interface)
-    hooks.load_requirement_hooks(interface=interface)
+        with interface.with_group("Hooks"):
+            # Load and filter hooks
+            hook_stats = hooks.load_and_filter_hooks(
+                interface=interface, enabled_plugins=config
+            )
 
-    # Filter based on config if provided
-    if config is not None:
-        plugin_schema.filter_requirements(interface=interface, enabled_plugins=config)
-        hooks.filter_hooks(interface=interface, enabled_plugins=config)
+        # Summary
+        interface.show(
+            f"Plugin system ready: {req_stats['active']} requirements, {hook_stats['active']} hooks"
+        )
 
 
 def clear_plugins():

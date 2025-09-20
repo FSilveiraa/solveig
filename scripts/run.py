@@ -29,6 +29,7 @@ def get_message_history(
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
+        interface.show("\n")
         interface.display_text_block(sys_prompt, title="System Prompt")
     message_history = MessageHistory(
         system_prompt=sys_prompt,

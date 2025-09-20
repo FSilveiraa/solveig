@@ -49,7 +49,7 @@ class CLIInterface(SolveigInterface):
 
     class COLORS:
         title = "thistle1"
-        group = "honeydew2"
+        group = "dark_sea_green3"
         error = "red"
         warning = "orange3"
         text_block = "grey93"

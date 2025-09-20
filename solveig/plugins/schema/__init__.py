@@ -37,110 +37,92 @@ def _get_plugin_name_from_class(cls: type) -> str:
     return "unknown"
 
 
-def load_extra_requirements(interface: SolveigInterface):
+def load_and_filter_requirements(
+    interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
+) -> dict[str, int]:
     """
-    Discover and load requirement plugin files in the requirements directory.
-    Similar to hooks.load_hooks() but for requirement types.
+    Discover, load, and filter requirement plugins in one step.
+    Returns statistics dictionary.
     """
     import sys
-    # See note above
     from solveig.schema import REQUIREMENTS
-
-    total_files = 0
-    total_requirements = 0
-
-    with interface.with_group("Requirement Plugins"):
-        for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
-            if not is_pkg and not module_name.endswith(".__init__"):
-                total_files += 1
-                plugin_name = module_name.split(".")[-1]
-
-                try:
-                    # Get the keys that existed before loading this module
-                    before_keys = list(REQUIREMENTS.all_requirements.keys())
-
-                    # Import the module
-                    if module_name in sys.modules:
-                        importlib.reload(sys.modules[module_name])
-                    else:
-                        importlib.import_module(module_name)
-
-                    # Find newly added requirements
-                    new_requirement_names = [
-                        name
-                        for name in REQUIREMENTS.all_requirements.keys()
-                        if name not in before_keys
-                    ]
-
-                    if new_requirement_names:
-                        total_requirements += len(new_requirement_names)
+    
+    # Store core requirements before clearing
+    core_requirements = {}
+    for name, req_class in REQUIREMENTS.all_requirements.items():
+        if "schema.requirements" in req_class.__module__:
+            core_requirements[name] = req_class
+    
+    # Clear and restore core requirements
+    REQUIREMENTS.all_requirements.clear()
+    REQUIREMENTS.registered.clear()
+    REQUIREMENTS.all_requirements.update(core_requirements)
+    REQUIREMENTS.registered.update(core_requirements)  # Core requirements always active
+    
+    # Convert config to plugin set
+    if isinstance(enabled_plugins, SolveigConfig):
+        enabled_plugins = set(enabled_plugins.plugins.keys())
+    
+    loaded_plugins = 0
+    active_plugins = 0
+    
+    # Load all requirement plugins
+    for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
+        if not is_pkg and not module_name.endswith(".__init__"):
+            plugin_name = module_name.split(".")[-1]
+            
+            try:
+                before_keys = set(REQUIREMENTS.all_requirements.keys())
+                
+                # Import/reload module
+                if module_name in sys.modules:
+                    importlib.reload(sys.modules[module_name])
+                else:
+                    importlib.import_module(module_name)
+                
+                # Find newly added requirements
+                new_requirement_names = [
+                    name for name in REQUIREMENTS.all_requirements.keys()
+                    if name not in before_keys
+                ]
+                
+                if new_requirement_names:
+                    loaded_plugins += 1
+                    
+                    # Filter - add to active if enabled
+                    if enabled_plugins is None or plugin_name in enabled_plugins:
                         for req_name in new_requirement_names:
-                            interface.show(f"✓ Loaded {plugin_name}.{req_name}")
+                            req_class = REQUIREMENTS.all_requirements[req_name]
+                            REQUIREMENTS.registered[req_name] = req_class
+                        active_plugins += 1
+                        interface.show(f"'{plugin_name}': Loaded")
                     else:
-                        interface.show(
-                            f"≫ Plugin {plugin_name} loaded but registered no requirements"
-                        )
+                        interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
+                        
+            except Exception as e:
+                interface.display_error(f"Requirement plugin {module_name}.{plugin_name}: {e}")
+    
+    total_active = len(REQUIREMENTS.registered)
+    interface.show(
+        f"Requirements: {len(core_requirements)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
+    )
+    
+    return {
+        'loaded': loaded_plugins,
+        'active': total_active
+    }
 
-                except Exception as e:
-                    interface.display_error(
-                        f"Failed to load requirement plugin {plugin_name}: {e}"
-                    )
 
-        interface.show(
-            f"🕮  Requirement plugin loading complete: {total_files} files, {total_requirements} requirements"
-        )
-
+# Legacy function - kept for compatibility
+def load_extra_requirements(interface: SolveigInterface):
+    """Legacy function - use load_and_filter_requirements instead."""
+    return load_and_filter_requirements(interface, None)
 
 def filter_requirements(
     interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
 ):
-    """
-    Filters currently loaded requirements according to config
-
-    Args:
-    enabled_plugins: If provided, only activate requirements whose plugin names are in this set.
-                    If None, loads all discovered requirements (used during schema init).
-    :return:
-    """
-    # See note above
-    from solveig.schema import REQUIREMENTS
-
-    if REQUIREMENTS.all_requirements:
-        enabled_plugins = enabled_plugins or set()
-        if isinstance(enabled_plugins, SolveigConfig):
-            enabled_plugins = set(enabled_plugins.plugins.keys())
-        with interface.with_group(
-            "Filtering requirement plugins", count=len(enabled_plugins)
-        ):
-            # Clear current requirements and rebuild from registry
-            REQUIREMENTS.registered.clear()
-
-            interface.current_level += 1
-            for req_name, req_class in REQUIREMENTS.all_requirements.items():
-                module = req_class.__module__
-
-                # Core requirements (from schema.requirements) are always enabled
-                if "schema.requirements" in module:
-                    REQUIREMENTS.registered[req_name] = req_class
-                else:
-                    # Plugin requirements are filtered by config
-                    plugin_name = _get_plugin_name_from_class(req_class)
-                    if plugin_name in enabled_plugins:
-                        REQUIREMENTS.registered[req_name] = req_class
-                    else:
-                        interface.show(
-                            f"≫ Skipping requirement plugin, not present in config: {plugin_name}.{req_name}"
-                        )
-            interface.current_level -= 1
-
-            total_requirements = len(REQUIREMENTS.registered)
-            interface.show(
-                f"🕮  Requirement filtering complete: {len(enabled_plugins)} plugins, {total_requirements} requirements active"
-            )
-
-            # No need to rebuild LLMMessage - run.py uses get_filtered_llm_message_class()
-            # which dynamically creates the correct schema based on current filtering
-            return
+    """Legacy function - use load_and_filter_requirements instead."""
+    return load_and_filter_requirements(interface, enabled_plugins)
 
 
 def clear_requirements():
@@ -152,6 +134,7 @@ def clear_requirements():
 
 # Expose the essential interface
 __all__ = [
-    "load_extra_requirements",
-    "filter_requirements",
+    "load_and_filter_requirements",
+    "load_extra_requirements",  # legacy
+    "filter_requirements",      # legacy
 ]
