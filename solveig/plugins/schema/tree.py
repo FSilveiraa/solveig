@@ -36,7 +36,7 @@ class TreeRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display tree requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -72,6 +72,21 @@ class TreeRequirement(Requirement):
         interface.display_tree(
             metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
         )
+
+        if (
+                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+                or config.auto_send
+        ):
+            interface.show(f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}")
+
+        elif not interface.ask_yes_no("Allow sending tree?"):
+            return TreeResult(
+                requirement=self,
+                accepted=False,
+                path=abs_path,
+                metadata=None,
+            )
+
 
         return TreeResult(
             requirement=self,

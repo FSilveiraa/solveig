@@ -29,7 +29,7 @@ class CopyRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display copy requirement header."""
         super().display_header(interface)
         abs_source = Filesystem.get_absolute_path(self.source_path)

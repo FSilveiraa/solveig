@@ -31,7 +31,7 @@ class ReadRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display read requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -69,6 +69,8 @@ class ReadRequirement(Requirement):
             )
 
         auto_read_send = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        if auto_read_send:
+            interface.show(f"Reading {abs_path} since it matches config.allow_allowed_paths")
         metadata = Filesystem.read_metadata(abs_path)
         interface.display_tree(
             metadata, title=f"Metadata: {abs_path}", display_metadata=True
@@ -95,6 +97,8 @@ class ReadRequirement(Requirement):
             )
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
+        if config.auto_send or auto_read_send:
+            interface.show(f"Sending {"content" if content else "metadata"} since {f"{abs_path} matches config.allow_allowed_paths" if auto_read_send else "config.auto_send=True"}")
         if (
                 config.auto_send
                 # if we can automatically read any file within a pattern,

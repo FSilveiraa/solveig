@@ -26,7 +26,7 @@ class DeleteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display delete requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)

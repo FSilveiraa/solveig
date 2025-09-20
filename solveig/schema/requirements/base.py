@@ -73,7 +73,7 @@ class Requirement(BaseModel, ABC):
     def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""
         with interface.with_group(self.title.title()):
-            self.display_header(interface)
+            self.display_header(interface, detailed=True)
 
             # Run before hooks - they validate and can throw exceptions
             for before_hook, requirements in HOOKS.before:
@@ -129,7 +129,7 @@ class Requirement(BaseModel, ABC):
 
     ### Abstract methods to implement:
 
-    def display_header(self, interface: SolveigInterface) -> None:
+    def display_header(self, interface: SolveigInterface, detailed=False) -> None:
         """Display the requirement header/summary using the interface directly."""
         if self.comment:
             interface.display_comment(self.comment)

@@ -16,32 +16,33 @@ else:
 
 
 class TaskListRequirement(Requirement):
-    title: Literal["tasks"] = "task-list"
+    title: Literal["tasks"] = "task list"
     tasks: list[Task] = Field(
         default_factory=list,
         description="List of tasks to track and display"
     )
     
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display task list header."""
         super().display_header(interface)
-        if not self.tasks:
-            interface.show("📋 Empty task list")
-            return
-        
-        task_lines = []
-        for i, task in enumerate(self.tasks, 1):
-            status_emoji = {
-                "pending": "⏳",
-                "in_progress": "🔄",
-                "completed": "✅",
-                "failed": "❌"
-            }[task.status]
-            task_lines.append(f"  {i}. {status_emoji} {task.description}")
-        
-        interface.show("📋 Task List:")
-        for line in task_lines:
-            interface.show(line)
+        if detailed:
+            if not self.tasks:
+                interface.show("🗒 Empty task list")
+                return
+
+            task_lines = []
+            for i, task in enumerate(self.tasks, 1):
+                status_emoji = {
+                    "pending": "⚪",
+                    "in_progress": "🔵",
+                    "completed": "🟢",
+                    "failed": "🔴"
+                }[task.status]
+                task_lines.append(f"{"→" if task.status == "in_progress" else " "}  {i}. {status_emoji} {task.description}")
+
+            # interface.show("🗒 Task List")
+            for line in task_lines:
+                interface.show(line)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "TaskResult":
         """Create TaskResult with error (though tasks rarely error)."""

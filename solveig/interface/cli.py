@@ -7,7 +7,6 @@ import sys
 import random
 import traceback
 import threading
-import time
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -52,7 +51,7 @@ class CLIInterface(SolveigInterface):
         group = "dark_sea_green"
         error = "red"
         warning = "orange3"
-        text_block = "grey93"
+        text_block = "reset"
 
     def __init__(self, animation_interval: float = 0.1, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -61,7 +60,6 @@ class CLIInterface(SolveigInterface):
 
     def _output(self, text: str | Text, **kwargs) -> None:
         # Use rich console for all output to get color support
-        # self.console.print(f"{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
         self.console.print(self.PADDING_LEFT + text + self.PADDING_RIGHT, **kwargs)
 
     def _output_inline(self, text: str) -> None:

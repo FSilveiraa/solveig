@@ -35,7 +35,7 @@ You will continue this process until the user's issue is solved.
 Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
 Prioritize asking for direct file requests over running commands for those files since it's safer for the user.
 Use commands only when necessary for access or performance reasons.
-If you believe your solution will require multiple steps in sequence, ask only for what is necessary at the current stage.
+If you believe your solution will require multiple steps in sequence, order them using the task list.
 
 Output your response strictly following the `LLMMessage` format described below.
 """

@@ -36,7 +36,7 @@ class WriteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface") -> None:
+    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
         """Display write requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -44,7 +44,7 @@ class WriteRequirement(Requirement):
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
         )
         interface.show(path_info)
-        if self.content:
+        if self.content and detailed:
             interface.display_text_block(self.content, title="Content")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
@@ -75,7 +75,7 @@ class WriteRequirement(Requirement):
 
         already_exists = Filesystem.exists(abs_path)
         if already_exists:
-            interface.display_warning("This file already exists")
+            interface.display_warning("Overwriting existing file")
             file_content = Filesystem.read_file(abs_path)
             interface.display_text_block(file_content.content, title=str(abs_path))
 
@@ -94,10 +94,9 @@ class WriteRequirement(Requirement):
                     Filesystem.create_directory(abs_path)
                 else:
                     Filesystem.write_file(abs_path, content=self.content or "")
-                with interface.with_indent():
-                    interface.display_success(
-                        f"{'Updated' if already_exists else 'Created'}"
-                    )
+                interface.display_success(
+                    f"{'Updated' if already_exists else 'Created'}"
+                )
 
                 return WriteResult(requirement=self, path=abs_path, accepted=True)
 
