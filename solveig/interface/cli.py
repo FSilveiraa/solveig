@@ -10,8 +10,9 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generator
 
 import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
@@ -48,6 +49,7 @@ class CLIInterface(SolveigInterface):
 
     class COLORS:
         title = "thistle1"
+        group = "honeydew2"
         error = "red"
         warning = "orange3"
         text_block = "grey93"
@@ -73,6 +75,22 @@ class CLIInterface(SolveigInterface):
     def _get_max_output_width(self) -> int:
         return shutil.get_terminal_size((80, 20)).columns - len(self.PADDING_LEFT) - len(self.PADDING_RIGHT)
 
+    @contextmanager
+    def with_group(
+        self, title: str, count: int | None = None
+    ) -> Generator[None, None, None]:
+        """
+        Group/item header with optional count
+        [ Requirements (3) ]
+        """
+        count_str = f" ({count})" if count is not None else ""
+        self.show(f"{title}{count_str}", style=f"bold {self.COLORS.group}")
+        # self.show(f"[ {title}{count_str} ]", style=f"bold {self.COLORS.group}")
+
+        # Use the with_indent context manager internally
+        with self.with_indent():
+            yield
+
     def display_section(self, title: str) -> None:
         """
         Section header with line
@@ -85,7 +103,7 @@ class CLIInterface(SolveigInterface):
             if terminal_width > 0
             else ""
         )
-        self._output(f"\n\n{title_formatted}{padding}", style=self.COLORS.warning)
+        self._output(f"\n\n{title_formatted}{padding}", style=f"bold {self.COLORS.warning}")
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
         """Display the LLM response and requirements summary."""

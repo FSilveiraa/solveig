@@ -17,11 +17,11 @@ class MockInterface(CLIInterface):
         self.user_inputs = []
         self.questions = []
 
-    def _output(self, text: str) -> None:
+    def _output(self, text: str, **kwargs) -> None:
         """Capture output instead of printing"""
         self.outputs.append(text)
 
-    def _input(self, text: str) -> str:
+    def _input(self, text: str, **kwargs) -> str:
         """Capture input instead of printing"""
         self.questions.append(text)
         if self.user_inputs:

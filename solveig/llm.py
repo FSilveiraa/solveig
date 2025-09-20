@@ -137,7 +137,7 @@ def parse_api_type(api_type_str: str) -> type[APIType.BaseAPI]:
 
 
 def get_instructor_client(
-    api_type: type[APIType] | str,
+    api_type: type[APIType.BaseAPI] | str,
     api_key: str | None = None,
     url: str | None = None,
     model: str | None = None,

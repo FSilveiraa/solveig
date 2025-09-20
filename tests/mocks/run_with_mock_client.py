@@ -24,7 +24,7 @@ mock_responses = [
 ]
 
 if __name__ == "__main__":
-    mock_client = create_mock_client(*mock_responses, sleep_seconds=200)
+    mock_client = create_mock_client(*mock_responses, sleep_seconds=1)
     try:
         config, prompt = SolveigConfig.parse_config_and_prompt()
         main_loop(config=config, user_prompt=prompt, llm_client=mock_client)
