@@ -1,6 +1,10 @@
 """
 Tests for the refactored exception-based plugin system.
 """
+import tempfile
+from pathlib import PurePath, Path
+
+import pytest
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
@@ -249,7 +253,8 @@ class TestPluginHookSystem:
 class TestPluginFiltering:
     """Test plugin filtering based on configuration."""
 
-    def test_plugin_enabled_when_in_config(self, mock_filesystem):
+    @pytest.mark.no_file_mocking
+    def test_plugin_enabled_when_in_config(self):
         """Test that plugins are enabled when present in config.plugins."""
         # Create a test plugin
         called = []
@@ -269,22 +274,27 @@ class TestPluginFiltering:
         # Filter to enable only the test plugin
         hooks.load_and_filter_hooks(interface=interface, enabled_plugins=config_with_plugin)
 
-        # Execute requirement
-        req = WriteRequirement(
-            comment="Test write with a plugin",
-            path="/test/file.txt",
-            is_directory=False,
-            content="bananas pineapples",
-        )
-        interface.set_user_inputs(["y", "y"])  # read file, send back
-        result = req.solve(config_with_plugin, interface)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = Path(temp_dir) / "file.txt"
+            assert not temp_file.exists()
 
-        # Verify plugin executed
-        assert "test_plugin_executed" in called
-        assert result.accepted
-        assert result.error is None
+            # Execute requirement
+            req = WriteRequirement(
+                comment="Test write with a plugin",
+                path=str(temp_file),
+                is_directory=False,
+                content="bananas pineapples",
+            )
+            interface.set_user_inputs(["y", "y"])  # write file, send back
+            result = req.solve(config_with_plugin, interface)
+            assert temp_file.exists()
 
-        file_content = mock_filesystem.read_file("/test/file.txt").content
+            # Verify plugin executed
+            assert "test_plugin_executed" in called
+            assert result.accepted
+            assert result.error is None
+
+            file_content = temp_file.read_text()
         assert file_content == "bananas pineapples"
 
     def test_plugin_disabled_when_not_in_config(self):

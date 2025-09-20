@@ -1,13 +1,16 @@
 """Tests for solveig.config module."""
 
+import os
+import tempfile
 import json
 from json import JSONDecodeError
+from pathlib import Path, PurePath
 
 import pytest
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from tests.mocks import MockInterface
+from tests.mocks import MockInterface, DEFAULT_CONFIG
 
 
 class TestSolveigConfigCore:
@@ -55,22 +58,29 @@ class TestConfigFileParsing:
         result = SolveigConfig.parse_from_file(config_path)
         assert result == {}
 
-    def test_parse_from_file_success(self, mock_filesystem):
+    @pytest.mark.no_file_mocking
+    def test_parse_from_file_success(self):
         """Test successful config file parsing."""
-        test_config = {"api_type": "LOCAL", "temperature": 0.7}
-        config_path = "/test/config.json"
-        mock_filesystem.write_file(config_path, json.dumps(test_config))
 
-        result = SolveigConfig.parse_from_file(config_path)
-        assert result == test_config
+        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
+            temp_config.write(DEFAULT_CONFIG.to_json())
+            temp_config.flush()
+            config_path = PurePath(temp_config.name)
 
-    def test_parse_from_file_malformed_json(self, mock_filesystem):
+            result = SolveigConfig(**SolveigConfig.parse_from_file(config_path))
+            assert result == DEFAULT_CONFIG
+
+    @pytest.mark.no_file_mocking
+    def test_parse_from_file_malformed_json(self):
         """Test malformed JSON raises JSONDecodeError."""
-        config_path = "/test/bad_config.json"
-        mock_filesystem.write_file(config_path, "{invalid json")
+        
+        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
+            temp_config.write("{invalid json") # Ensure data is written to disk
+            temp_config.flush()
+            config_path = temp_config.name
 
-        with pytest.raises(JSONDecodeError):
-            SolveigConfig.parse_from_file(config_path)
+            with pytest.raises(JSONDecodeError):
+                SolveigConfig.parse_from_file(config_path)
 
 
 class TestConfigSerialization:
@@ -121,16 +131,21 @@ class TestCLIIntegration:
         assert config.verbose is True
         assert prompt == "test prompt"
 
-    def test_file_and_cli_merge(self, mock_filesystem):
+    @pytest.mark.no_file_mocking
+    def test_file_and_cli_merge(self):
         """Test file config merges with CLI overrides."""
+        
         file_config = {"verbose": True, "temperature": 0.2}
-        config_path = "/test/config.json"
-        mock_filesystem.write_file(config_path, json.dumps(file_config))
+        
+        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
+            json.dump(file_config, temp_config)
+            temp_config.flush()  # Ensure data is written to disk
+            config_path = temp_config.name
 
-        args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
-        config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert config.verbose is True  # From file
-        assert config.temperature == 0.5  # CLI override
+            args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
+            config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
+            assert config.verbose is True  # From file
+            assert config.temperature == 0.5  # CLI override
 
     def test_config_parse_failure_shows_warning(self):
         """Test warning shown when config file parsing fails."""
