@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from solveig.plugins import clear_plugins
-from tests.mocks.file import mock_fs
 
 
 @pytest.fixture(autouse=True, scope="function")
@@ -32,9 +31,8 @@ def mock_filesystem(request):
         side_effect=OSError(
             "Cannot use actual file I/O - use utils.file.Filesystem or mark with @pytest.mark.no_file_mocking"
         ),
-    ):
-        with mock_fs.patch_all_file_operations() as mocked_fs:
-            yield mocked_fs
+    ) as mock_open:
+        yield mock_open
 
 
 @pytest.fixture(autouse=True, scope="function")

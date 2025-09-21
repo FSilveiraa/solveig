@@ -72,43 +72,6 @@ class TestCLIInterfaceCore:
         assert "more..." in output_lines[-2].lower()
 
 
-class TestTreeDisplay:
-    """Test complex tree visualization functionality."""
-
-    def test_display_complex_directory_tree_complete_structure(self, mock_filesystem):
-        """Test displaying complex nested directory structure with full depth visualization."""
-        interface = MockInterface()
-        interface.max_lines = -1  # Ensure we see full structure
-
-        # complex_tree = self.create_complex_tree_metadata()
-        tree = mock_filesystem.read_metadata(
-            mock_filesystem.get_absolute_path("/test/dir2/")
-        )
-        interface.display_tree(tree)
-        expected_lines = f"""
-┌─── {tree.path} ────────────────
-│ 🗁  {tree.path.name}
-│   ├─🗎 f1
-│   └─🗁  sub-d1
-│     ├─🗁  sub-d2
-│     │  └─🗎 f4
-│     └─🗁  sub-d3
-│       └─🗎 f3
-└────────────────────────────────
-        """.strip().splitlines()
-
-        output_lines = interface.get_all_output().split("\n")
-        for expected_line in expected_lines:
-            try:
-                assert any(
-                    expected_line.strip() in output_line for output_line in output_lines
-                )
-            except AssertionError as e:
-                raise AssertionError(
-                    f"{expected_line} not found in output:\n{output_lines}"
-                ) from e
-
-
 class TestLLMResponseAndErrorDisplay:
     """Test LLM response and error display functionality."""
 

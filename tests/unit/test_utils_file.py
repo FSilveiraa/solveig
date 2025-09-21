@@ -7,13 +7,12 @@ do not touch the filesystem. The ones that do are tested within integration test
 """
 
 from datetime import datetime
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import pytest
 
-from solveig.utils.file import Filesystem, Metadata
+from solveig.utils.file import Metadata
 from solveig.utils.misc import parse_human_readable_size
-from tests.mocks.file import MockFilesystem
 
 
 class TestSizeNotationParsing:
