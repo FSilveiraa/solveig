@@ -97,8 +97,8 @@ echo "Log check complete."
                 metadata_only=True,
                 comment="Read second file metadata",
             ),
-            CommandRequirement(command="ls -la", comment="List files"), # one-liner
-            CommandRequirement(command=self._BIG_COMMAND, comment="Large command"), #
+            CommandRequirement(command="ls -la", comment="List files"),  # one-liner
+            CommandRequirement(command=self._BIG_COMMAND, comment="Large command"),  #
         ]
         message = LLMMessage(
             comment="I'll analyze these files and run some commands.",

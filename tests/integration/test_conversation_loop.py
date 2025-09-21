@@ -1,7 +1,7 @@
 """Integration tests for complete conversation loops with mock LLM client."""
 
 import tempfile
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import pytest
 

@@ -5,8 +5,13 @@ import sys
 from scripts.run import main_loop
 from solveig import SolveigConfig
 from solveig.plugins.schema.tree import TreeRequirement
-from solveig.schema.requirements import ReadRequirement, WriteRequirement, CommandRequirement, TaskListRequirement
 from solveig.schema.message import LLMMessage
+from solveig.schema.requirements import (
+    CommandRequirement,
+    ReadRequirement,
+    TaskListRequirement,
+    WriteRequirement,
+)
 from solveig.schema.results.task import Task
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -18,27 +23,30 @@ mock_responses = [
         requirements=[
             CommandRequirement(
                 comment="LONG COMMAND",
-                command="python -m \"import sys\nimport os\nprint(\"Done\")"
+                command='python -m "import sys\nimport os\nprint("Done")',
             )
-        ]
+        ],
     ),
-
     LLMMessage(
         comment="I'll help you understand what ~/Sync contains",
         requirements=[
             TaskListRequirement(
                 comment="I will first read the contents of ~/Sync, then individual files",
                 tasks=[
-                    Task(description="Read the contents of ~/Sync", status="in_progress"),
+                    Task(
+                        description="Read the contents of ~/Sync", status="in_progress"
+                    ),
                     Task(description="Read suspicious files inside ~/Sync"),
-                    Task(description="Provide a summary of contents, focused on safety and functionality"),
-                ]
+                    Task(
+                        description="Provide a summary of contents, focused on safety and functionality"
+                    ),
+                ],
             ),
             TreeRequirement(
                 comment="",
                 path="~/Sync",
             ),
-        ]
+        ],
     ),
     LLMMessage(
         comment="""
@@ -49,9 +57,14 @@ It seems there are several files, the most relevant may be some .py and .sh scri
                 comment="I've identified the most concerning files inside ~/Sync, I'll now read their contents",
                 tasks=[
                     Task(description="Read the contents of ~/Sync", status="completed"),
-                    Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
-                    Task(description="Provide a summary of contents, focused on safety and functionality"),
-                ]
+                    Task(
+                        description="Read suspicious files inside ~/Sync",
+                        status="in_progress",
+                    ),
+                    Task(
+                        description="Provide a summary of contents, focused on safety and functionality"
+                    ),
+                ],
             ),
             ReadRequirement(comment="", path="~/Sync/hello.py", metadata_only=False),
             ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False),
@@ -60,18 +73,24 @@ It seems there are several files, the most relevant may be some .py and .sh scri
     ),
     LLMMessage(
         comment="""
-This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents. 
+This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.
 """,
         requirements=[
             TaskListRequirement(
                 comment="I've analyzed the contents of ~/Sync and everything seems safe",
                 tasks=[
                     Task(description="Read the contents of ~/Sync", status="completed"),
-                    Task(description="Read suspicious files inside ~/Sync", status="completed"),
-                    Task(description="Provide a summary of contents, focused on safety and functionality", status="completed"),
-                ]
+                    Task(
+                        description="Read suspicious files inside ~/Sync",
+                        status="completed",
+                    ),
+                    Task(
+                        description="Provide a summary of contents, focused on safety and functionality",
+                        status="completed",
+                    ),
+                ],
             )
-        ]
+        ],
     ),
     LLMMessage(
         comment="""
@@ -82,11 +101,17 @@ I'll write and test an improved print script.
                 comment="Analyze the contents of ~/Sync, then improve print",
                 tasks=[
                     Task(description="Read the contents of ~/Sync", status="completed"),
-                    Task(description="Read suspicious files inside ~/Sync", status="completed"),
-                    Task(description="Provide a summary of contents, focused on safety and functionality", status="completed"),
+                    Task(
+                        description="Read suspicious files inside ~/Sync",
+                        status="completed",
+                    ),
+                    Task(
+                        description="Provide a summary of contents, focused on safety and functionality",
+                        status="completed",
+                    ),
                     Task(description="Write new print script", status="in_progress"),
                     Task(description="Test new print script", status="pending"),
-                ]
+                ],
             ),
             WriteRequirement(
                 comment="Write a better print script",
@@ -110,9 +135,10 @@ if __name__ == "__main__":
                 comment="Now execute it to make sure it works correctly",
                 command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
             ),
-        ]
+        ],
     ),
 ]
+
 
 def cleanup():
     Filesystem.delete("~/Sync/hello_new.py")

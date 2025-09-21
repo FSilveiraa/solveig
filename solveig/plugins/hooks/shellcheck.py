@@ -5,8 +5,8 @@ import subprocess
 import tempfile
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.exceptions import SecurityError, ValidationError
+from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import before
 from solveig.schema.requirements import CommandRequirement
 

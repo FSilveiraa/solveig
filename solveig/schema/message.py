@@ -148,7 +148,7 @@ class MessageHistory:
     system_prompt: str
     api_type: type[APIType.BaseAPI] = APIType.BaseAPI
     max_context: int = -1
-    model: str | None = None # TODO: this is very bad design, but it works
+    model: str | None = None  # TODO: this is very bad design, but it works
     messages: list[MessageContainer] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
 
@@ -168,12 +168,12 @@ class MessageHistory:
         """Remove old messages to stay under context limit, preserving system message."""
         if self.max_context <= 0:
             return
-            
+
         while self.get_token_count() > self.max_context and len(self.message_cache) > 1:
             # Always preserve the first message (system prompt) if possible
             if len(self.message_cache) > 1:
                 # Remove the second message (oldest non-system message)
-                removed_message = self.message_cache.pop(1)
+                self.message_cache.pop(1)
             else:
                 break  # Can't remove system message
 

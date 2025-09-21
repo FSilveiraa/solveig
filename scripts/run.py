@@ -8,7 +8,6 @@ import sys
 from instructor import Instructor
 from instructor.exceptions import InstructorRetryException
 
-from . import BANNER
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
@@ -20,6 +19,8 @@ from solveig.schema.message import (
     UserMessage,
     get_filtered_llm_message_class,
 )
+
+from . import BANNER
 
 
 def get_message_history(

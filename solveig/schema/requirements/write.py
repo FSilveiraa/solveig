@@ -1,6 +1,7 @@
 """Write requirement - allows LLM to create/update files and directories."""
 
 from typing import TYPE_CHECKING, Literal
+
 from pydantic import Field, field_validator
 
 from solveig.schema.requirements.base import (
@@ -36,7 +37,9 @@ class WriteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display write requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -79,9 +82,13 @@ class WriteRequirement(Requirement):
             file_content = Filesystem.read_file(abs_path)
             interface.display_text_block(file_content.content, title=str(abs_path))
 
-        auto_write = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        auto_write = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
         if auto_write:
-            interface.show(f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths")
+            interface.show(
+                f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths"
+            )
         else:
             question = (
                 f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
@@ -97,9 +104,7 @@ class WriteRequirement(Requirement):
                 Filesystem.create_directory(abs_path)
             else:
                 Filesystem.write_file(abs_path, content=self.content or "")
-            interface.display_success(
-                f"{'Updated' if already_exists else 'Created'}"
-            )
+            interface.display_success(f"{'Updated' if already_exists else 'Created'}")
 
             return WriteResult(requirement=self, path=abs_path, accepted=True)
 
@@ -111,4 +116,3 @@ class WriteRequirement(Requirement):
                 accepted=False,
                 error=f"Encoding error: {e}",
             )
-

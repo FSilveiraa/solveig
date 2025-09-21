@@ -1,5 +1,4 @@
 import base64
-import fnmatch
 import grp
 import os
 import pwd
@@ -411,17 +410,16 @@ class Filesystem:
             cls._delete_file(abs_path)
 
     @classmethod
-    def path_matches_patterns(cls, abs_path: PurePath, patterns: list[PurePath]) -> bool:
+    def path_matches_patterns(
+        cls, abs_path: PurePath, patterns: list[PurePath]
+    ) -> bool:
         """Check if a file path matches any of the given glob patterns.
-        
+
         Args:
             abs_path: The path to check
             patterns: List of glob patterns already expanded (e.g., ['/home/user/Documents/**/*.py', '/tmp/*'])
-            
+
         Returns:
             True if the path matches any pattern, False otherwise
         """
-        return any(
-            abs_path.full_match(pattern)
-            for pattern in patterns
-        )
+        return any(abs_path.full_match(pattern) for pattern in patterns)

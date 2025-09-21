@@ -15,8 +15,8 @@ from .requirements import (  # noqa: F401
     MoveRequirement,
     ReadRequirement,
     Requirement,
-    WriteRequirement,
     TaskListRequirement,
+    WriteRequirement,
 )
 from .results import (  # noqa: F401
     CommandResult,
@@ -25,8 +25,8 @@ from .results import (  # noqa: F401
     MoveResult,
     ReadResult,
     RequirementResult,
-    WriteResult,
     TaskResult,
+    WriteResult,
 )
 
 # Rebuild Pydantic models to resolve forward references
@@ -90,7 +90,4 @@ class REQUIREMENTS:
 REQUIREMENTS.register_core_requirements()
 
 register_requirement = REQUIREMENTS.register_requirement
-__all__ = [
-    "REQUIREMENTS",
-    "register_requirement"
-]
+__all__ = ["REQUIREMENTS", "register_requirement"]

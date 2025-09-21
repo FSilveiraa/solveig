@@ -1,6 +1,7 @@
 """Task requirement - allows LLM to create and track task lists."""
 
 from typing import TYPE_CHECKING, Literal
+
 from pydantic import Field
 
 from .base import Requirement
@@ -18,11 +19,12 @@ else:
 class TaskListRequirement(Requirement):
     title: Literal["tasks"] = "task list"
     tasks: list[Task] = Field(
-        default_factory=list,
-        description="List of tasks to track and display"
+        default_factory=list, description="List of tasks to track and display"
     )
-    
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display task list header."""
         super().display_header(interface)
         if detailed:
@@ -36,9 +38,11 @@ class TaskListRequirement(Requirement):
                     "pending": "⚪",
                     "in_progress": "🔵",
                     "completed": "🟢",
-                    "failed": "🔴"
+                    "failed": "🔴",
                 }[task.status]
-                task_lines.append(f"{"→" if task.status == "in_progress" else " "}  {i}. {status_emoji} {task.description}")
+                task_lines.append(
+                    f"{"→" if task.status == "in_progress" else " "}  {i}. {status_emoji} {task.description}"
+                )
 
             # interface.show("🗒 Task List")
             for line in task_lines:
@@ -47,10 +51,7 @@ class TaskListRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "TaskResult":
         """Create TaskResult with error (though tasks rarely error)."""
         return TaskResult(
-            requirement=self,
-            accepted=accepted,
-            error=error_message,
-            tasks=self.tasks
+            requirement=self, accepted=accepted, error=error_message, tasks=self.tasks
         )
 
     @classmethod

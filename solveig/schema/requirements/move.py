@@ -31,7 +31,9 @@ class MoveRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display move requirement header."""
         super().display_header(interface)
         source_abs = Filesystem.get_absolute_path(self.source_path)
@@ -85,13 +87,14 @@ class MoveRequirement(Requirement):
         interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
-        if ((
-                Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
-                and Filesystem.path_matches_patterns(abs_destination_path, config.auto_allowed_paths)
+        if (
+            Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
+            and Filesystem.path_matches_patterns(
+                abs_destination_path, config.auto_allowed_paths
             )
-                or interface.ask_yes_no(
+        ) or interface.ask_yes_no(
             f"Allow moving {abs_source_path} to {abs_destination_path}? [y/N]: "
-        )):
+        ):
             try:
                 # Perform the move operation - use utils/file.py method
                 Filesystem.move(abs_source_path, abs_destination_path)

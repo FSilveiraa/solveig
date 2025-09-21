@@ -70,7 +70,9 @@ def after(requirements: tuple[type] | None = None):
 
 
 def load_and_filter_hooks(
-    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None, allow_all: bool = False
+    interface: SolveigInterface,
+    enabled_plugins: set[str] | SolveigConfig | None,
+    allow_all: bool = False,
 ) -> dict[str, int]:
     """
     Discover, load, and filter hook plugins in one step.
@@ -79,33 +81,33 @@ def load_and_filter_hooks(
     # HOOKS.all_hooks.clear()
     HOOKS.before.clear()
     HOOKS.after.clear()
-    
+
     # Convert config to plugin set
     if isinstance(enabled_plugins, SolveigConfig):
         enabled_plugins = set(enabled_plugins.plugins.keys())
-    
+
     loaded_plugins = []
     active_hooks = 0
-    
+
     # First: Load filesystem-based hook plugins (this registers them via decorators)
     for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
         if not is_pkg and not module_name.endswith(".__init__"):
             plugin_name = module_name.split(".")[-1]
-            
+
             try:
                 # Import/reload module (this registers hooks in HOOKS.all_hooks via decorators)
                 if module_name in sys.modules:
                     importlib.reload(sys.modules[module_name])
                 else:
                     importlib.import_module(module_name)
-                        
+
             except Exception as e:
                 interface.display_error(f"Hook plugin {plugin_name}: {e}")
-    
+
     # Second: Process ALL plugins in HOOKS.all_hooks (filesystem + memory-registered)
     for plugin_name, (before_dict, after_dict) in HOOKS.all_hooks.items():
         loaded_plugins.append(plugin_name)
-        
+
         if allow_all or (enabled_plugins and plugin_name in enabled_plugins):
             # Add to active hooks (convert dict values back to list)
             HOOKS.before.extend(before_dict.values())
@@ -114,21 +116,19 @@ def load_and_filter_hooks(
             interface.show(f"'{plugin_name}': Loaded")
         else:
             interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
-    
+
     interface.show(
         f"Hooks: {len(loaded_plugins)} plugins loaded, {active_hooks} active"
     )
-    
-    return {
-        'loaded': len(loaded_plugins),
-        'active': active_hooks
-    }
+
+    return {"loaded": len(loaded_plugins), "active": active_hooks}
 
 
 # Legacy function - kept for compatibility
 def load_requirement_hooks(interface: SolveigInterface):
     """Legacy function - use load_and_filter_hooks instead."""
     return load_and_filter_hooks(interface, None)
+
 
 def filter_hooks(
     interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None

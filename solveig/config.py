@@ -46,8 +46,7 @@ class SolveigConfig:
             self.api_type = parse_api_type(self.api_type)
         if self.auto_allowed_paths:
             self.auto_allowed_paths = [
-                Filesystem.get_absolute_path(path)
-                for path in self.auto_allowed_paths
+                Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
             ]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
@@ -180,13 +179,13 @@ class SolveigConfig:
             type=str,
             nargs="*",
             dest="auto_allowed_paths",
-            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py')"
+            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py')",
         )
         parser.add_argument(
             "--auto-send",
             action="store_true",
             default=None,
-            help="Automatically send requirement results back to the LLM without asking"
+            help="Automatically send requirement results back to the LLM without asking",
         )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 

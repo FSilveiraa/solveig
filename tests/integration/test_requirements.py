@@ -4,10 +4,9 @@ These tests exercise the full stack from requirement validation to actual file o
 using real files in temporary directories. Only user interactions are mocked.
 """
 
-import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -183,16 +182,16 @@ class TestRequirementDisplay:
     def test_delete_requirement_display(self):
         """Test DeleteRequirement display and warnings."""
         req = DeleteRequirement(path="/test/delete_me.txt", comment="Delete test file")
-        
+
         # Test that both detailed modes produce same output for delete
         interface_basic = MockInterface()
         req.display_header(interface_basic, detailed=False)
         basic_output = interface_basic.get_all_output()
-        
+
         interface_detailed = MockInterface()
         req.display_header(interface_detailed, detailed=True)
         detailed_output = interface_detailed.get_all_output()
-        
+
         assert basic_output == detailed_output
         assert "Delete test file" in basic_output
         assert "/test/delete_me.txt" in basic_output
@@ -209,16 +208,16 @@ class TestRequirementDisplay:
             destination_path="/dst/file.txt",
             comment="Copy file",
         )
-        
+
         # Test that both detailed modes produce same output for copy
         interface_basic = MockInterface()
         req.display_header(interface_basic, detailed=False)
         basic_output = interface_basic.get_all_output()
-        
+
         interface_detailed = MockInterface()
         req.display_header(interface_detailed, detailed=True)
         detailed_output = interface_detailed.get_all_output()
-        
+
         assert basic_output == detailed_output
         assert "Copy file" in basic_output
         assert "/src/file.txt" in basic_output
@@ -235,16 +234,16 @@ class TestRequirementDisplay:
             destination_path="/dst/file.txt",
             comment="Move file",
         )
-        
+
         # Test that both detailed modes produce same output for move
         interface_basic = MockInterface()
         req.display_header(interface_basic, detailed=False)
         basic_output = interface_basic.get_all_output()
-        
+
         interface_detailed = MockInterface()
         req.display_header(interface_detailed, detailed=True)
         detailed_output = interface_detailed.get_all_output()
-        
+
         assert basic_output == detailed_output
         assert "Move file" in basic_output
         assert "/src/file.txt" in basic_output
@@ -285,8 +284,8 @@ class TestCommandRequirement:
         """Test command that produces error output."""
         # Use a predictable failing command that works cross-platform
         req = CommandRequirement(
-            command="python -c \"import sys; sys.stderr.write('test error\\n'); sys.exit(1)\"", 
-            comment="Command with error"
+            command="python -c \"import sys; sys.stderr.write('test error\\n'); sys.exit(1)\"",
+            comment="Command with error",
         )
         interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept command and output
@@ -311,15 +310,21 @@ class TestReadRequirement:
     def test_read_file_with_tilde_path(self):
         """Test reading a file using tilde path expansion."""
         # Create tempfile in real home directory to test tilde expansion
-        with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".solveig_test_read_", suffix=".txt", delete=False, mode='w') as temp_file:
+        with tempfile.NamedTemporaryFile(
+            dir=Path.home(),
+            prefix=".solveig_test_read_",
+            suffix=".txt",
+            delete=False,
+            mode="w",
+        ) as temp_file:
             test_content = "Hello from tilde expansion test!"
             temp_file.write(test_content)
             temp_file_path = Path(temp_file.name)
-            
+
         try:
             # Use ~ path that should expand to the tempfile we created
             tilde_path = f"~/{temp_file_path.name}"
-            
+
             mock_interface = MockInterface()
             mock_interface.user_inputs.extend(["y", "y"])
 
@@ -442,7 +447,9 @@ class TestReadRequirement:
                 comment="Read declined",
             )
             interface = MockInterface()
-            interface.set_user_inputs(["n", "n"])  # Decline metadata, decline error sending
+            interface.set_user_inputs(
+                ["n", "n"]
+            )  # Decline metadata, decline error sending
 
             result = read_req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is False
@@ -844,7 +851,9 @@ class TestRequirementErrorHandling:
 
             # Mock Filesystem.write_file to raise an encoding exception
             with patch("solveig.utils.file.Filesystem.write_file") as mock_write:
-                mock_write.side_effect = UnicodeEncodeError("utf-8", "", 0, 1, "test error")
+                mock_write.side_effect = UnicodeEncodeError(
+                    "utf-8", "", 0, 1, "test error"
+                )
 
                 interface.set_user_inputs(["y"])  # Accept operation
                 result = write_req.solve(DEFAULT_CONFIG, interface)
@@ -903,14 +912,16 @@ class TestRequirementErrorHandling:
                     comment="Read restricted file",
                 )
                 interface = MockInterface()
-                
+
                 result = read_req.actually_solve(DEFAULT_CONFIG, interface)
 
                 # Should fail with permission error
                 assert not result.accepted
                 assert result.error is not None
-                assert ("permission denied" in result.error.lower() or 
-                        "not readable" in result.error.lower())
+                assert (
+                    "permission denied" in result.error.lower()
+                    or "not readable" in result.error.lower()
+                )
 
             finally:
                 # Restore permissions for cleanup
@@ -932,14 +943,14 @@ class TestPathSecurity:
             secret_dir.mkdir()
             secret_file = secret_dir / "confidential.txt"
             secret_file.write_text("SECRET CONTENT")
-            
+
             # Create a subdirectory to traverse from
             subdir = temp_path / "public" / "subdir"
             subdir.mkdir(parents=True)
-            
+
             # Try to use path traversal to access the secret file
             traversal_path = str(subdir / ".." / ".." / "secret" / "confidential.txt")
-            
+
             req = ReadRequirement(
                 path=traversal_path,
                 metadata_only=True,
@@ -953,19 +964,23 @@ class TestPathSecurity:
             expected_resolved = Path(traversal_path).resolve()
             assert str(result.path) == str(expected_resolved)
             assert ".." not in str(result.path)  # No traversal patterns in final path
-            assert "secret/confidential.txt" in str(result.path)  # But does point to right file
+            assert "secret/confidential.txt" in str(
+                result.path
+            )  # But does point to right file
 
     def test_tilde_expansion_security(self):
         """Test that tilde expansion works consistently and securely."""
         # Create tempfile in real home directory to test tilde expansion
-        with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".solveig_test_", suffix=".config", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            dir=Path.home(), prefix=".solveig_test_", suffix=".config", delete=False
+        ) as temp_file:
             temp_file.write(b"config content")
             temp_file_path = Path(temp_file.name)
-            
+
         try:
             # Use ~ path that should expand to the tempfile we created
             tilde_path = f"~/{temp_file_path.name}"
-            
+
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
@@ -991,13 +1006,18 @@ class TestPathSecurity:
     def test_path_expansion_in_requirements(self):
         """Test that path expansion is handled properly in all requirements."""
         # Create tempfile in real home directory to test expansion across requirement types
-        with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".solveig_test_expansion_", suffix=".txt", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            dir=Path.home(),
+            prefix=".solveig_test_expansion_",
+            suffix=".txt",
+            delete=False,
+        ) as temp_file:
             temp_file_path = Path(temp_file.name)
-            
+
         try:
             # Use ~ path that should expand to the tempfile
             tilde_path = f"~/{temp_file_path.name}"
-            
+
             requirements = [
                 ReadRequirement(path=tilde_path, metadata_only=False, comment="Test"),
                 WriteRequirement(path=tilde_path, is_directory=False, comment="Test"),
@@ -1006,10 +1026,12 @@ class TestPathSecurity:
 
             for req in requirements:
                 interface = MockInterface()
-                interface.set_user_inputs(["n", "n"])  # Decline metadata, decline error sending
+                interface.set_user_inputs(
+                    ["n", "n"]
+                )  # Decline metadata, decline error sending
                 result = req.solve(DEFAULT_CONFIG, interface)
                 assert result.accepted is False
-                
+
                 # Verify path expansion happened - should contain home path, not ~
                 assert "~" not in str(result.path)
                 assert str(Path.home()) in str(result.path)

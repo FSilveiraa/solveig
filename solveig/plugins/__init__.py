@@ -9,9 +9,15 @@ Currently supports:
 """
 
 from .. import SolveigConfig
+from ..exceptions import (
+    PluginException,
+    ProcessingError,
+    SecurityError,
+    ValidationError,
+)
 from ..interface import SolveigInterface
-from ..exceptions import PluginException, ProcessingError, SecurityError, ValidationError
-from . import hooks, schema as plugin_schema
+from . import hooks
+from . import schema as plugin_schema
 
 
 def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):

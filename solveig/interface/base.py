@@ -82,7 +82,10 @@ class SolveigInterface(ABC):
 
     @abstractmethod
     def display_animation_while(
-        self, run_this: Callable, message: str | None = None, animation_type: str | None = None
+        self,
+        run_this: Callable,
+        message: str | None = None,
+        animation_type: str | None = None,
     ) -> Any:
         pass
 
@@ -93,13 +96,19 @@ class SolveigInterface(ABC):
         actual_level = level if level is not None else self.current_level
         return " " * (actual_level * self.indent_base)
 
-    def show(self, text: str, level: int | None = None, truncate_length: bool = False, **kwargs) -> None:
+    def show(
+        self,
+        text: str,
+        level: int | None = None,
+        truncate_length: bool = False,
+        **kwargs,
+    ) -> None:
         """Display content at specified or current indent level"""
         indent = self._indent(level)
         self._output(f"{indent}{text}", **kwargs)
 
     @contextmanager
-    def with_indent(self) -> Generator[None, None, None]:
+    def with_indent(self) -> Generator[None]:
         """Indents the current level until released"""
         old_level = self.current_level
         self.current_level += 1
@@ -109,7 +118,7 @@ class SolveigInterface(ABC):
             self.current_level = old_level
 
     @contextmanager
-    def with_group(self, title: str) -> Generator[None, None, None]:
+    def with_group(self, title: str) -> Generator[None]:
         """
         Group/item header with optional count
         [ Requirements (3) ]

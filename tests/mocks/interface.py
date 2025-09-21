@@ -1,6 +1,6 @@
 from rich.console import Text
-from solveig.interface import CLIInterface
 
+from solveig.interface import CLIInterface
 
 
 class MockInterface(CLIInterface):

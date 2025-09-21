@@ -1,6 +1,7 @@
 """Tests for scripts.init module."""
+
 import tempfile
-from pathlib import PurePath, Path
+from pathlib import PurePath
 from unittest.mock import patch
 
 import pytest
@@ -42,9 +43,10 @@ export PATH
             Filesystem.write_file(config_path, self._BASHRC_CONTENT)
             temp_bashrc.flush()
 
-            with patch("scripts.init.DEFAULT_BASHRC_PATH", config_path) as mock_bashrc:
+            with patch("scripts.init.DEFAULT_BASHRC_PATH", config_path):
                 # Ensure the mock worked correctly
                 from scripts.init import DEFAULT_BASHRC_PATH
+
                 assert config_path == DEFAULT_BASHRC_PATH
 
                 interface = MockInterface()
@@ -53,14 +55,19 @@ export PATH
                 result = add_bash_timestamps(interface)
 
                 assert result is True
-                assert ("export HISTTIMEFORMAT=" in Filesystem.read_file(config_path).content)
+                assert (
+                    "export HISTTIMEFORMAT="
+                    in Filesystem.read_file(config_path).content
+                )
 
     @pytest.mark.no_file_mocking
     def test_add_bash_timestamps_already_configured(self):
         """Test when timestamps are already configured."""
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".bashrc") as temp_bashrc:
             # Create bashrc with timestamps already configured
-            bashrc_content = 'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "\nexport PS1="$ "'
+            bashrc_content = (
+                'export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "\nexport PS1="$ "'
+            )
             config_path = PurePath(temp_bashrc.name)
             Filesystem.write_file(config_path, bashrc_content)
             temp_bashrc.flush()
@@ -78,9 +85,14 @@ export PATH
         """Test handling exceptions during timestamp setup."""
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".bashrc") as temp_bashrc:
             config_path = PurePath(temp_bashrc.name)
-            
-            with patch("scripts.init.DEFAULT_BASHRC_PATH", config_path), \
-                 patch("solveig.utils.file.Filesystem.exists", side_effect=PermissionError("Access denied")):
+
+            with (
+                patch("scripts.init.DEFAULT_BASHRC_PATH", config_path),
+                patch(
+                    "solveig.utils.file.Filesystem.exists",
+                    side_effect=PermissionError("Access denied"),
+                ),
+            ):
                 interface = MockInterface()
                 interface.set_user_inputs(["y"])  # User says yes to enabling timestamps
 
@@ -133,7 +145,7 @@ class TestConfigDirectory:
         """Test successful config directory creation."""
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             config_path = PurePath(temp_config.name)
-            
+
             with patch("scripts.init.DEFAULT_CONFIG_PATH", config_path):
                 # User agrees to create an example config
                 interface = MockInterface()
@@ -157,7 +169,7 @@ class TestConfigDirectory:
         """Test config creation denial."""
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             config_path = PurePath(temp_config.name)
-            
+
             with patch("scripts.init.DEFAULT_CONFIG_PATH", config_path):
                 # User denies to create an example config
                 interface = MockInterface()
@@ -172,9 +184,14 @@ class TestConfigDirectory:
         """Test handling exceptions during directory creation."""
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             config_path = PurePath(temp_config.name)
-            
-            with patch("scripts.init.DEFAULT_CONFIG_PATH", config_path), \
-                 patch("solveig.utils.file.Filesystem.write_file", side_effect=PermissionError("Access denied")):
+
+            with (
+                patch("scripts.init.DEFAULT_CONFIG_PATH", config_path),
+                patch(
+                    "solveig.utils.file.Filesystem.write_file",
+                    side_effect=PermissionError("Access denied"),
+                ),
+            ):
                 # User agrees to creating the file config
                 interface = MockInterface()
                 interface.set_user_inputs(["y"])
@@ -182,7 +199,8 @@ class TestConfigDirectory:
                 create_example_config(interface)
 
                 assert (
-                    "Failed to create config file: Access denied" in interface.get_all_output()
+                    "Failed to create config file: Access denied"
+                    in interface.get_all_output()
                 )
 
 

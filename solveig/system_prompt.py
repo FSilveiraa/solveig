@@ -10,13 +10,13 @@ try:
 except ImportError:
     distro = None  # type: ignore
 
-from .config import SolveigConfig
-from .schema.message import LLMMessage, MessageHistory, UserMessage
-
 # TODO: Make conversation examples dynamic rather than hardcoded
 from solveig.schema import REQUIREMENTS
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from solveig.schema.results import CommandResult, ReadResult
+
+from .config import SolveigConfig
+from .schema.message import LLMMessage, MessageHistory, UserMessage
 
 SYSTEM_PROMPT = """
 You are an AI assisting a user with whatever issues they may have with their computer.

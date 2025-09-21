@@ -1,12 +1,13 @@
 # from enum import Enum
 from typing import Any
-# from urllib.parse import urlparse, urlunparse
 
-import instructor
-import tiktoken
-import openai
 import anthropic
 import google.generativeai as google_ai
+
+# from urllib.parse import urlparse, urlunparse
+import instructor
+import openai
+import tiktoken
 
 
 class APIType:
@@ -32,13 +33,12 @@ class APIType:
 
         @staticmethod
         def get_client(
-                url: str = default_url,
-                api_key: str | None = None,
-                model: str | None = None,
-                instructor_mode: instructor.Mode | None = None
+            url: str = default_url,
+            api_key: str | None = None,
+            model: str | None = None,
+            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             raise NotImplementedError()
-
 
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
@@ -50,10 +50,10 @@ class APIType:
 
         @staticmethod
         def get_client(
-                url: str = default_url,
-                api_key: str | None = None,
-                model: str | None = None,
-                instructor_mode: instructor.Mode | None = None
+            url: str = default_url,
+            api_key: str | None = None,
+            model: str | None = None,
+            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
                 client = openai.OpenAI(api_key=api_key, base_url=url)
@@ -63,11 +63,9 @@ class APIType:
                     "OpenAI client not available. Install with: pip install openai"
                 ) from e
 
-
     class LOCAL(OPENAI):
         default_url = "https://localhost:5001/v1"
         name = "local"
-
 
     class ANTHROPIC(BaseAPI):
         _default_url = "https://api.anthropic.com/v1"
@@ -81,10 +79,10 @@ class APIType:
 
         @staticmethod
         def get_client(
-                url: str = _default_url,
-                api_key: str | None = None,
-                model: str | None = None,
-                instructor_mode: instructor.Mode | None = None
+            url: str = _default_url,
+            api_key: str | None = None,
+            model: str | None = None,
+            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
                 client = anthropic.Anthropic(api_key=api_key, base_url=url)
@@ -93,7 +91,6 @@ class APIType:
                 raise ValueError(
                     "Anthropic client not available. Install with: pip install anthropic"
                 ) from e
-
 
     class GEMINI(BaseAPI):
         default_url = "https://generativelanguage.googleapis.com/v1beta"
@@ -105,10 +102,10 @@ class APIType:
 
         @staticmethod
         def get_client(
-                url: str = default_url,
-                api_key: str | None = None,
-                model: str | None = None,
-                instructor_mode: instructor.Mode | None = None,
+            url: str = default_url,
+            api_key: str | None = None,
+            model: str | None = None,
+            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
                 google_ai.configure(api_key=api_key)
@@ -126,6 +123,7 @@ API_TYPES = {
     "ANTHROPIC": APIType.ANTHROPIC,
     "GEMINI": APIType.GEMINI,
 }
+
 
 def parse_api_type(api_type_str: str) -> type[APIType.BaseAPI]:
     """Convert string API type name to class."""
@@ -149,10 +147,7 @@ def get_instructor_client(
         api_class = parse_api_type(api_type)
     else:
         api_class = api_type
-    
+
     return api_class.get_client(
-        url=url,
-        api_key=api_key,
-        model=model,
-        instructor_mode=instructor_mode
+        url=url, api_key=api_key, model=model, instructor_mode=instructor_mode
     )

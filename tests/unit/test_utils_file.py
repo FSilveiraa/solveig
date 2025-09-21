@@ -1,9 +1,9 @@
 """
 Tests for solveig.utils.filesystem module.
 
-To avoid over-testing our mock filesystem implementation and also relying on
-real file operations in unit tests, we only test the parts of utils.file that
-do not touch the filesystem. The ones that do are tested within integration tests.
+The requirement tests were first implemented and they already test the
+actual file operations, so for now I'm focused on testing the data class
+and size parsing.
 """
 
 from datetime import datetime

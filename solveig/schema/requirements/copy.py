@@ -1,7 +1,9 @@
 """Copy requirement - allows LLM to copy files and directories."""
 
 from typing import TYPE_CHECKING, Literal
+
 from pydantic import Field, field_validator
+
 from solveig.utils.file import Filesystem
 
 from .base import Requirement, format_path_info, validate_non_empty_path
@@ -29,7 +31,9 @@ class CopyRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display copy requirement header."""
         super().display_header(interface)
         abs_source = Filesystem.get_absolute_path(self.source_path)
@@ -83,13 +87,14 @@ class CopyRequirement(Requirement):
         interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
-        if ((
-                Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
-                and Filesystem.path_matches_patterns(abs_destination_path, config.auto_allowed_paths)
-        )
-            or interface.ask_yes_no(
+        if (
+            Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
+            and Filesystem.path_matches_patterns(
+                abs_destination_path, config.auto_allowed_paths
+            )
+        ) or interface.ask_yes_no(
             f"Allow copying '{abs_source_path}' to '{abs_destination_path}'? [y/N]: "
-        )):
+        ):
             try:
                 # Perform the copy operation - use utils/file.py method
                 Filesystem.copy(

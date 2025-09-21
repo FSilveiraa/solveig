@@ -33,7 +33,9 @@ class CommandRequirement(Requirement):
             raise ValueError("Empty command") from e
         return command
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display command requirement header."""
         super().display_header(interface)
         if detailed and self.command:
@@ -104,7 +106,7 @@ class CommandRequirement(Requirement):
                 with interface.with_group("Error"):
                     interface.display_text_block(error, title="Error")
             if config.auto_send:
-                interface.show(f"Sending output since config.auto_send=True")
+                interface.show("Sending output since config.auto_send=True")
             elif not interface.ask_yes_no("Allow sending output? [y/N]: "):
                 output = "<hidden>"
                 error = ""

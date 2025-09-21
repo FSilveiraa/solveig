@@ -1,4 +1,5 @@
 """Simple mock LLM client for testing conversation loops."""
+
 import time
 from unittest.mock import MagicMock
 
@@ -8,7 +9,9 @@ from solveig.schema.message import LLMMessage
 class MockLLMClient:
     """Thin wrapper around instructor client that returns predefined responses."""
 
-    def __init__(self, responses: list[LLMMessage | Exception], sleep_seconds: float = 0):
+    def __init__(
+        self, responses: list[LLMMessage | Exception], sleep_seconds: float = 0
+    ):
         """
         Args:
             responses: List of LLMMessage responses or exceptions to return in sequence
@@ -42,7 +45,9 @@ class MockLLMClient:
         return self.call_count
 
 
-def create_mock_client(*messages: str | LLMMessage | Exception, sleep_seconds: float = 0) -> MockLLMClient:
+def create_mock_client(
+    *messages: str | LLMMessage | Exception, sleep_seconds: float = 0
+) -> MockLLMClient:
     """Create mock client with responses. Strings become LLMMessage objects."""
     responses = []
     for msg in messages:

@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator
+
 from solveig.utils.file import Filesystem
 
 from .base import Requirement, format_path_info, validate_non_empty_path
@@ -31,7 +32,9 @@ class ReadRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display read requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -68,9 +71,13 @@ class ReadRequirement(Requirement):
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
 
-        auto_read_send = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        auto_read_send = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
         if auto_read_send:
-            interface.show(f"Reading {abs_path} since it matches config.allow_allowed_paths")
+            interface.show(
+                f"Reading {abs_path} since it matches config.allow_allowed_paths"
+            )
         metadata = Filesystem.read_metadata(abs_path)
         interface.display_tree(
             metadata, title=f"Metadata: {abs_path}", display_metadata=True
@@ -80,7 +87,10 @@ class ReadRequirement(Requirement):
         if (
             not metadata.is_directory
             and not self.metadata_only
-            and (auto_read_send or interface.ask_yes_no("Allow reading file contents? [y/N]: "))
+            and (
+                auto_read_send
+                or interface.ask_yes_no("Allow reading file contents? [y/N]: ")
+            )
         ):
             try:
                 read_result = Filesystem.read_file(abs_path)
@@ -98,15 +108,18 @@ class ReadRequirement(Requirement):
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if config.auto_send or auto_read_send:
-            interface.show(f"Sending {"content" if content else "metadata"} since {f"{abs_path} matches config.allow_allowed_paths" if auto_read_send else "config.auto_send=True"}")
+            interface.show(
+                f"Sending {"content" if content else "metadata"} since {f"{abs_path} matches config.allow_allowed_paths" if auto_read_send else "config.auto_send=True"}"
+            )
         if (
-                config.auto_send
-                # if we can automatically read any file within a pattern,
-                # it makes sense to also automatically send back the contents
-                or auto_read_send
-                or interface.ask_yes_no(
-            f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
-        )):
+            config.auto_send
+            # if we can automatically read any file within a pattern,
+            # it makes sense to also automatically send back the contents
+            or auto_read_send
+            or interface.ask_yes_no(
+                f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
+            )
+        ):
             return ReadResult(
                 requirement=self,
                 path=abs_path,

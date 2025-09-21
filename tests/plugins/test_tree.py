@@ -133,7 +133,9 @@ class TestTreePlugin:
             file4.touch()
             (temp_path / "subdir6").mkdir()
 
-            req = TreeRequirement(path=str(temp_path), max_depth=2, comment="Limited depth tree")
+            req = TreeRequirement(
+                path=str(temp_path), max_depth=2, comment="Limited depth tree"
+            )
             interface = MockInterface()
             interface.set_user_inputs(["y"])
 
@@ -141,9 +143,9 @@ class TestTreePlugin:
             assert result.accepted is True
             # we have until subdir3
             assert result.metadata.listing[PurePath(temp_path / "subdir6/")]
-            final_level_metadata = result.metadata \
-                    .listing[PurePath(temp_path / "subdir2/")] \
-                    .listing[PurePath(temp_path / "subdir2/subdir3/")]
+            final_level_metadata = result.metadata.listing[
+                PurePath(temp_path / "subdir2/")
+            ].listing[PurePath(temp_path / "subdir2/subdir3/")]
             # however we don't get the metadata further down, even though it exists
             assert not final_level_metadata.listing
             assert final_subdir.exists()
@@ -152,7 +154,9 @@ class TestTreePlugin:
             interface.clear()
             interface.set_user_inputs(["n"])  # User declines if error prompt appears
 
-            error_req = TreeRequirement(path=str(temp_path / "nonexistent"), comment="Test tree")
+            error_req = TreeRequirement(
+                path=str(temp_path / "nonexistent"), comment="Test tree"
+            )
             result = error_req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is False
             assert result.error

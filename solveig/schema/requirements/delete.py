@@ -1,9 +1,11 @@
 """Delete requirement - allows LLM to delete files and directories."""
 
 from typing import TYPE_CHECKING, Literal
+
 from pydantic import Field, field_validator
 
 from solveig.utils.file import Filesystem
+
 from .base import Requirement, format_path_info, validate_non_empty_path
 
 if TYPE_CHECKING:
@@ -26,7 +28,9 @@ class DeleteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(self, interface: "SolveigInterface", detailed: bool = False) -> None:
+    def display_header(
+        self, interface: "SolveigInterface", detailed: bool = False
+    ) -> None:
         """Display delete requirement header."""
         super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
@@ -67,9 +71,13 @@ class DeleteRequirement(Requirement):
         metadata = Filesystem.read_metadata(abs_path)
         interface.display_tree(metadata=metadata)
 
-        auto_delete = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        auto_delete = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
         if auto_delete:
-            interface.show(f"Deleting {abs_path} since it matches config.auto_allowed_paths")
+            interface.show(
+                f"Deleting {abs_path} since it matches config.auto_allowed_paths"
+            )
 
         # Get user consent (with extra warning)
         elif not interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
@@ -86,4 +94,3 @@ class DeleteRequirement(Requirement):
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )
-

@@ -1,16 +1,15 @@
 """Tests for solveig.config module."""
 
-import os
-import tempfile
 import json
+import tempfile
 from json import JSONDecodeError
-from pathlib import Path, PurePath
+from pathlib import PurePath
 
 import pytest
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from tests.mocks import MockInterface, DEFAULT_CONFIG
+from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
 class TestSolveigConfigCore:
@@ -62,7 +61,7 @@ class TestConfigFileParsing:
     def test_parse_from_file_success(self):
         """Test successful config file parsing."""
 
-        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
+        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             temp_config.write(DEFAULT_CONFIG.to_json())
             temp_config.flush()
             config_path = PurePath(temp_config.name)
@@ -73,9 +72,9 @@ class TestConfigFileParsing:
     @pytest.mark.no_file_mocking
     def test_parse_from_file_malformed_json(self):
         """Test malformed JSON raises JSONDecodeError."""
-        
-        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
-            temp_config.write("{invalid json") # Ensure data is written to disk
+
+        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
+            temp_config.write("{invalid json")  # Ensure data is written to disk
             temp_config.flush()
             config_path = temp_config.name
 
@@ -134,10 +133,10 @@ class TestCLIIntegration:
     @pytest.mark.no_file_mocking
     def test_file_and_cli_merge(self):
         """Test file config merges with CLI overrides."""
-        
+
         file_config = {"verbose": True, "temperature": 0.2}
-        
-        with tempfile.NamedTemporaryFile(mode='r+', suffix='.json') as temp_config:
+
+        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             json.dump(file_config, temp_config)
             temp_config.flush()  # Ensure data is written to disk
             config_path = temp_config.name

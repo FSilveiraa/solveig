@@ -2,21 +2,22 @@
 CLI implementation of Solveig interface.
 """
 
+import random
 import shutil
 import sys
-import random
-import traceback
 import threading
+import traceback
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any
+
+from rich.console import Console, Text
 
 import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
-from rich.console import Console, Text
 
 if TYPE_CHECKING:
     from solveig.schema import LLMMessage
@@ -71,9 +72,15 @@ class CLIInterface(SolveigInterface):
         return user_input
 
     def _get_max_output_width(self) -> int:
-        return shutil.get_terminal_size((80, 20)).columns - len(self.PADDING_LEFT) - len(self.PADDING_RIGHT)
+        return (
+            shutil.get_terminal_size((80, 20)).columns
+            - len(self.PADDING_LEFT)
+            - len(self.PADDING_RIGHT)
+        )
 
-    def show(self, text: str, level: int | None = None, truncate: bool = False, **kwargs) -> None:
+    def show(
+        self, text: str, level: int | None = None, truncate: bool = False, **kwargs
+    ) -> None:
         indent = self._indent(level)
         text_formatted = f"{indent}{text}"
         if truncate:
@@ -91,21 +98,23 @@ class CLIInterface(SolveigInterface):
 
             # Shorten the line to the max possible width
             max_width = (
-                    self._get_max_output_width()
-                    - len(suffix) # padding for " (+22 lines)" if necessary
-                    - 4           # padding for " ..." if necessary - even if it wasn't defined above
+                self._get_max_output_width()
+                - len(suffix)  # padding for " (+22 lines)" if necessary
+                - 4  # padding for " ..." if necessary - even if it wasn't defined above
             )
             if len(text_formatted) > max_width:
                 text_formatted = f"{text_formatted[:max_width]}"
                 # if we didn't ... because of the lines, add because of the length
                 _ellipsis = " ..."
-            text_formatted = Text(text_formatted).append(_ellipsis, style=self.COLORS.title).append(suffix, style=self.COLORS.title)
+            text_formatted = (
+                Text(text_formatted)
+                .append(_ellipsis, style=self.COLORS.title)
+                .append(suffix, style=self.COLORS.title)
+            )
         self._output(text_formatted, **kwargs)
 
     @contextmanager
-    def with_group(
-        self, title: str
-    ) -> Generator[None, None, None]:
+    def with_group(self, title: str) -> Generator[None]:
         """
         Group/item header with optional count
         [ Requirements (3) ]
@@ -128,7 +137,9 @@ class CLIInterface(SolveigInterface):
             if terminal_width > 0
             else ""
         )
-        self._output(f"\n\n{title_formatted}{padding}", style=f"bold {self.COLORS.warning}")
+        self._output(
+            f"\n\n{title_formatted}{padding}", style=f"bold {self.COLORS.warning}"
+        )
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
         """Display the LLM response and requirements summary."""
@@ -142,7 +153,9 @@ class CLIInterface(SolveigInterface):
                     indexed_requirements[requirement.title].append(requirement)
 
                 for requirement_type, requirements in indexed_requirements.items():
-                    with self.with_group(f"{requirement_type.title()} ({len(requirements)})"):
+                    with self.with_group(
+                        f"{requirement_type.title()} ({len(requirements)})"
+                    ):
                         for requirement in requirements:
                             requirement.display_header(interface=self)
 
@@ -220,7 +233,9 @@ class CLIInterface(SolveigInterface):
         if title:
             top_bar.append(f"{self.TEXT_BOX.H * 3}")
             top_bar.append(f" {title} ", style=f"bold {box_style}")
-        top_bar.append(f"{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR}")
+        top_bar.append(
+            f"{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR}"
+        )
         self._output(top_bar)
         #     f"{top_bar}{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR} "
         # )
@@ -260,7 +275,10 @@ class CLIInterface(SolveigInterface):
         )
 
     def display_animation_while(
-        self, run_this: Callable, message: str | None = None, animation_type: str | None = None
+        self,
+        run_this: Callable,
+        message: str | None = None,
+        animation_type: str | None = None,
     ) -> Any:
         animation = Animation(animation_type=animation_type)
         return animation.animate_while(self, run_this, message)
@@ -268,8 +286,6 @@ class CLIInterface(SolveigInterface):
     def display_warning(self, message: str) -> None:
         """Override to add orange color for CLI warnings."""
         self.show(f"⚠  {message}", style=self.COLORS.warning)
-        # indent = self._indent()
-        # self.console.print(f"{self.PADDING_LEFT}{indent}⚠  {message}{self.PADDING_RIGHT}", style="orange3")
 
     def display_error(
         self, message: str | Exception | None = None, exception: Exception | None = None
@@ -282,12 +298,11 @@ class CLIInterface(SolveigInterface):
             exception = message
             message = ""
         message = message or str(f"{exception.__class__.__name__}: {exception}")
-        
+
         # Display with red color
-        indent = self._indent()
         self.show(f"✖  {message}", style=self.COLORS.error)
         # self.console.print(f"{self.PADDING_LEFT}{indent}✖  {message}{self.PADDING_RIGHT}", style="red")
-        
+
         # Handle verbose traceback
         if exception and self.verbose:
             traceback_block = "".join(
@@ -295,7 +310,11 @@ class CLIInterface(SolveigInterface):
                     type(exception), exception, exception.__traceback__
                 )
             )
-            self.display_text_block(traceback_block, title=exception.__class__.__name__, box_style=self.COLORS.error)
+            self.display_text_block(
+                traceback_block,
+                title=exception.__class__.__name__,
+                box_style=self.COLORS.error,
+            )
 
 
 class Animation:
@@ -323,7 +342,12 @@ class Animation:
             frames: List of icon frames to cycle through
             interval: Time between frame changes in seconds
         """
-        self.frames = frames or self.SPINNERS[animation_type or random.choice(list(self.SPINNERS.keys()))]
+        self.frames = (
+            frames
+            or self.SPINNERS[
+                animation_type or random.choice(list(self.SPINNERS.keys()))
+            ]
+        )
         self.interval = interval
         self._current_frame = 0
         self._stop_event = threading.Event()
@@ -363,9 +387,9 @@ class Animation:
         """
         # Start spinner in background thread
         self._thread = threading.Thread(
-            target=self._animate, 
+            target=self._animate,
             args=(interface, message or "Waiting... (Ctrl+C to stop)"),
-            daemon=True
+            daemon=True,
         )
         self._thread.start()
 
