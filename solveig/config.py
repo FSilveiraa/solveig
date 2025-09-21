@@ -25,6 +25,7 @@ class SolveigConfig:
     api_type: type[APIType.BaseAPI] = APIType.LOCAL
     api_key: str | None = None
     model: str | None = None
+    encoder: str | None = None
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
     # allowed_commands: List[str] = field(default_factory=list)
@@ -44,6 +45,7 @@ class SolveigConfig:
         # convert API type string to class
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = parse_api_type(self.api_type)
+        self.encoder = self.encoder or self.model
         if self.auto_allowed_paths:
             self.auto_allowed_paths = [
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
@@ -118,6 +120,12 @@ class SolveigConfig:
             "-m",
             type=str,
             help="Model name or path (ex: gpt-4.1, moonshotai/kimi-k2:free)",
+        )
+        parser.add_argument(
+            "--encoder",
+            "-e",
+            type=str,
+            help="Model encoder user for token counting (ex: gpt-4.1, moonshotai/kimi-k2:free, if not provided will use 'model' or API Type default)",
         )
         parser.add_argument(
             "--temperature",

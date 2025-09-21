@@ -31,7 +31,7 @@ def announce_register(
         if requirements
         else "any requirements"
     )
-    interface.show(
+    interface.display_text(
         f"ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
     )
 
@@ -113,11 +113,11 @@ def load_and_filter_hooks(
             HOOKS.before.extend(before_dict.values())
             HOOKS.after.extend(after_dict.values())
             active_hooks += len(before_dict) + len(after_dict)
-            interface.show(f"'{plugin_name}': Loaded")
+            interface.display_text(f"'{plugin_name}': Loaded")
         else:
             interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
 
-    interface.show(
+    interface.display_text(
         f"Hooks: {len(loaded_plugins)} plugins loaded, {active_hooks} active"
     )
 

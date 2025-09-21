@@ -37,7 +37,7 @@ class DeleteRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
-        interface.show(path_info)
+        interface.display_text(path_info)
         interface.display_warning("This operation is permanent and cannot be undone!")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "DeleteResult":
@@ -75,7 +75,7 @@ class DeleteRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_delete:
-            interface.show(
+            interface.display_text(
                 f"Deleting {abs_path} since it matches config.auto_allowed_paths"
             )
 

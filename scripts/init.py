@@ -52,7 +52,7 @@ export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
                 Filesystem.write_file(bashrc_path, timestamp_line, append=True)
 
                 interface.display_success("Added bash history timestamps to ~/.bashrc")
-                interface.show(
+                interface.display_text(
                     "Run 'source ~/.bashrc' or restart your terminal to apply changes."
                 )
                 return True
@@ -61,39 +61,8 @@ export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
                 interface.display_error(f"Failed to add bash timestamps: {e}")
                 return False
         else:
-            interface.show("○ Skipped bash history timestamp setup")
+            interface.display_text("○ Skipped bash history timestamp setup")
             return False
-
-
-def check_dependencies(interface: SolveigInterface) -> bool:
-    """Check if all required dependencies are installed."""
-    required_packages = [
-        "distro",
-        "instructor",
-        "openai",
-        "pydantic",
-        "tiktoken",
-    ]
-
-    missing_packages = []
-
-    with interface.with_group("Dependencies"):
-        for package in required_packages:
-            try:
-                __import__(package)
-            except ImportError:
-                missing_packages.append(package)
-
-        if missing_packages:
-            interface.display_error("Found missing packages")
-            with interface.with_group(f"Missing ({len(missing_packages)})"):
-                for package in missing_packages:
-                    interface.display_error(f"{package}")
-            interface.display_error("Run: pip install -e .")
-            return False
-        else:
-            interface.display_success("All required dependencies are installed.")
-            return True
 
 
 def create_example_config(interface: SolveigInterface):
@@ -119,12 +88,12 @@ def create_example_config(interface: SolveigInterface):
             interface.display_success(
                 f"Created example config file at {DEFAULT_CONFIG_PATH}"
             )
-            interface.show("Edit this file to customize your settings")
+            interface.display_text("Edit this file to customize your settings")
 
         except Exception as e:
             interface.display_error(f"Failed to create config file: {e}")
     else:
-        interface.show("○ Skipped config file creation.")
+        interface.display_text("○ Skipped config file creation.")
 
 
 def main(interface: SolveigInterface | None = None) -> int:
@@ -133,11 +102,7 @@ def main(interface: SolveigInterface | None = None) -> int:
     interface = interface or CLIInterface()
 
     interface.display_section("Setup")
-    interface.show("Setting up Solveig")
-
-    # Check dependencies first
-    if not check_dependencies(interface):
-        return 1
+    interface.display_text("Setting up Solveig")
 
     with interface.with_group("Configuration"):
         # Offer to create example config file

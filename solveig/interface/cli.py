@@ -4,8 +4,6 @@ CLI implementation of Solveig interface.
 
 import random
 import shutil
-import sys
-import threading
 import traceback
 from collections import defaultdict
 from collections.abc import Callable, Generator
@@ -13,7 +11,10 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
 from rich.console import Console, Text
+
 
 import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 class CLIInterface(SolveigInterface):
     """Command-line interface implementation."""
 
-    DEFAULT_INPUT_PROMPT = "Reply:\n > "
+    DEFAULT_INPUT_PROMPT = ">"
     PADDING_LEFT = Text(" ")
     PADDING_RIGHT = Text(" ")
 
@@ -49,28 +50,53 @@ class CLIInterface(SolveigInterface):
 
     # https://rich.readthedocs.io/en/stable/appendix/colors.html
     class COLORS:
+        # rich.console
         title = "rosy_brown"
         group = "dark_sea_green"
         error = "red"
         warning = "orange3"
         text_block = "reset"
 
+    class COLORS_INPUT:
+        title = "#bc8f8f"  # rosy_brown
+        group = "#8fbc8f"  # dark_sea_green
+        error = "#ff0000"  # red
+        warning = "#ff8700"  # orange3
+        text_block = "default"  # reset
+
+    # Allowed spinners (built-in Rich + our custom ones)
+    ALLOWED_SPINNERS = {
+        "star", "dots3", "dots10", "balloon",  # Selected from user testing
+        "growing", "cool"  # Custom spinners
+    }
+
+
     def __init__(self, animation_interval: float = 0.1, **kwargs) -> None:
         super().__init__(**kwargs)
         self.animation_interval = animation_interval
-        self.console = Console()
+        self.output_console = Console()
+        self.input_console = PromptSession()
+        # self.input_style = Style.from_dict({
+        #     k: v for k,v in vars(self.COLORS).items()
+        # })
 
-    def _output(self, text: str | Text, **kwargs) -> None:
-        # Use rich console for all output to get color support
-        self.console.print(self.PADDING_LEFT + text + self.PADDING_RIGHT, **kwargs)
+        from rich._spinners import SPINNERS as RICH_SPINNERS
 
-    def _output_inline(self, text: str) -> None:
-        sys.stdout.write(f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}")
-        sys.stdout.flush()
+        # Add custom spinners to Rich's SPINNERS dictionary
+        RICH_SPINNERS["growing"] = {
+            "interval": 150,
+            "frames": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
+        }
+        RICH_SPINNERS["cool"] = {
+            "interval": 120,
+            "frames": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
+        }
 
-    def _input(self, prompt: str, **kwargs) -> str:
-        user_input = input(f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}")
-        return user_input
+        # Pad the spinners
+        for spinner in self.ALLOWED_SPINNERS:
+            frames = list(RICH_SPINNERS[spinner]["frames"])
+            RICH_SPINNERS[spinner]["frames"] = [ f"{self.PADDING_LEFT}{frame}" for frame in frames]
+
 
     def _get_max_output_width(self) -> int:
         return (
@@ -79,7 +105,37 @@ class CLIInterface(SolveigInterface):
             - len(self.PADDING_RIGHT)
         )
 
-    def show(
+    def _output(self, text: str | Text, pad: bool = True, **kwargs) -> None:
+        # Use rich console for all output to get color support
+        self.output_console.print(
+            (self.PADDING_LEFT if pad else "") + text + (self.PADDING_RIGHT if pad else ""),
+            **kwargs
+        )
+
+    def _output_inline(self, text: str | Text, pad: bool = True) -> None:
+        # Use Rich console for inline output 
+        self.output_console.print(
+            (self.PADDING_LEFT if pad else "") + text + (self.PADDING_RIGHT if pad else ""),
+            end=""
+        )
+            # f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}", end="")
+
+    def _input(self, prompt: str, style: str = COLORS_INPUT.warning, **kwargs) -> str:
+        return self.input_console.prompt(
+            f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}",
+            style=Style.from_dict({"prompt": style}),
+            **kwargs
+        )
+
+    def ask_user(
+        self, question: str = DEFAULT_INPUT_PROMPT, level: int | None = None, **kwargs
+    ) -> str:
+        """Ask user a question and get a response."""
+        indent = self._indent(level)
+        text = f"{indent}{question}"
+        return self._input(text)
+
+    def display_text(
         self, text: str, level: int | None = None, truncate: bool = False, **kwargs
     ) -> None:
         indent = self._indent(level)
@@ -122,7 +178,7 @@ class CLIInterface(SolveigInterface):
         Group/item header with optional count
         [ Requirements (3) ]
         """
-        self.show(f"{title}", style=f"bold {self.COLORS.group}")
+        self.display_text(f"{title}", style=f"bold {self.COLORS.group}")
 
         # Use the with_indent context manager internally
         with self.with_indent():
@@ -133,7 +189,8 @@ class CLIInterface(SolveigInterface):
         Section header with line
         ─── User ───────────────
         """
-        terminal_width = self._get_max_output_width()
+        # hack to get unpadded terminal width
+        terminal_width = self._get_max_output_width() + len(self.PADDING_LEFT) + len(self.PADDING_RIGHT)
         title_formatted = f"{self.TEXT_BOX.H * 3} {title} " if title else ""
         padding = (
             self.TEXT_BOX.H * (terminal_width - len(title_formatted))
@@ -141,7 +198,9 @@ class CLIInterface(SolveigInterface):
             else ""
         )
         self._output(
-            f"\n\n{title_formatted}{padding}", style=f"bold {self.COLORS.warning}"
+            f"\n\n{title_formatted}{padding}",
+            style=f"bold {self.COLORS.warning}",
+            pad=False
         )
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
@@ -282,13 +341,28 @@ class CLIInterface(SolveigInterface):
         run_this: Callable,
         message: str | None = None,
         animation_type: str | None = None,
+        style: str = COLORS.warning,
     ) -> Any:
-        animation = Animation(animation_type=animation_type)
-        return animation.animate_while(self, run_this, message)
+        # Pick random spinner if none specified
+        if animation_type is None:
+            animation_type = random.choice(list(self.ALLOWED_SPINNERS))
+        
+        # Assert the spinner is in our allowed set
+        assert animation_type in self.ALLOWED_SPINNERS, f"Spinner '{animation_type}' not in allowed set: {self.ALLOWED_SPINNERS}"
+        
+        display_message = message or "Waiting... (Ctrl+C to stop)"
+        
+        # Use Rich status for styled animation that integrates with console
+        with self.output_console.status(
+            f"{self.PADDING_LEFT}{display_message}{self.PADDING_RIGHT}",
+            spinner=animation_type,
+            spinner_style=style
+        ):
+            return run_this()
 
     def display_warning(self, message: str) -> None:
         """Override to add orange color for CLI warnings."""
-        self.show(f"⚠  {message}", style=self.COLORS.warning)
+        self.display_text(f"⚠  {message}", style=self.COLORS.warning)
 
     def display_error(
         self, message: str | Exception | None = None, exception: Exception | None = None
@@ -303,7 +377,7 @@ class CLIInterface(SolveigInterface):
         message = message or str(f"{exception.__class__.__name__}: {exception}")
 
         # Display with red color
-        self.show(f"✖  {message}", style=self.COLORS.error)
+        self.display_text(f"✖  {message}", style=self.COLORS.error)
         # self.console.print(f"{self.PADDING_LEFT}{indent}✖  {message}{self.PADDING_RIGHT}", style="red")
 
         # Handle verbose traceback
@@ -318,91 +392,3 @@ class CLIInterface(SolveigInterface):
                 title=exception.__class__.__name__,
                 box_style=self.COLORS.error,
             )
-
-
-class Animation:
-    SPINNERS = {
-        "spin": ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-        "bounce": ["⠁", "⠂", "⠄", "⠂"],
-        "dots": ["․", "⁚", "⁖", "⁘", "⁙", "⁜", "⁙", "⁘", "⁖", "⁚"],
-        # "moon_color": ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
-        "moon": ["◯", "☽", "◑", "●", "◐", "❨"],
-        "growing": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"],
-        "cool": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"],
-    }
-
-    def __init__(
-        self,
-        animation_type: str | None = None,
-        frames: list[str] | None = None,
-        interval: float = 0.2,
-    ):
-        """
-        Initialize spinner.
-
-        Args:
-            animation_type: Type of animation to use (None=random).
-            frames: List of icon frames to cycle through
-            interval: Time between frame changes in seconds
-        """
-        self.frames = (
-            frames
-            or self.SPINNERS[
-                animation_type or random.choice(list(self.SPINNERS.keys()))
-            ]
-        )
-        self.interval = interval
-        self._current_frame = 0
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
-
-    def _animate(self, interface: CLIInterface, message: str | None = None) -> None:
-        """Run the animation loop."""
-        while not self._stop_event.is_set():
-            # Show current frame with message
-            frame = self.frames[self._current_frame]
-            display_text = f"{frame}  {message}" if message else frame
-            interface._output_inline(display_text)
-
-            # Advance to next frame
-            self._current_frame = (self._current_frame + 1) % len(self.frames)
-
-            # Wait for next frame, but check for stop event
-            if self._stop_event.wait(self.interval):
-                break
-
-    def animate_while(
-        self,
-        interface: CLIInterface,
-        run_this: Callable,
-        message: str | None = None,
-    ) -> Any:
-        """
-        Run a blocking function while showing an animated spinner.
-
-        Args:
-            interface: The CLIInterface instance to use for displaying information
-            run_this: Function to run while animation plays
-            message: Message to show with spinner
-
-        Returns:
-            Result from the blocking function
-        """
-        # Start spinner in background thread
-        self._thread = threading.Thread(
-            target=self._animate,
-            args=(interface, message or "Waiting... (Ctrl+C to stop)"),
-            daemon=True,
-        )
-        self._thread.start()
-
-        try:
-            # Run the blocking function in the main thread
-            result = run_this()
-            return result
-        finally:
-            # Stop the animation
-            self._stop_event.set()
-            if self._thread:
-                self._thread.join(timeout=0.5)  # Give it a moment to stop gracefully
-            interface.show("")  # Clear the animation line

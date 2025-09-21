@@ -6,7 +6,7 @@ import logging
 import sys
 
 from instructor import Instructor
-from instructor.exceptions import InstructorRetryException
+from instructor.core import InstructorRetryException
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
@@ -30,13 +30,13 @@ def get_message_history(
 
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
-        interface.show("\n")
+        interface.display_text("\n")
         interface.display_text_block(sys_prompt, title="System Prompt")
     message_history = MessageHistory(
         system_prompt=sys_prompt,
         max_context=config.max_context,
         api_type=config.api_type,
-        model=config.model,
+        encoder=config.encoder,
     )
     return message_history
 
@@ -47,10 +47,10 @@ def get_initial_user_message(
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
     if user_prompt:
-        interface.show(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}\n")
+        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}\n")
     else:
         user_prompt = interface.ask_user()
-        interface.show("")
+        interface.display_text("")
     return UserMessage(comment=user_prompt)
 
 
@@ -148,7 +148,7 @@ def process_requirements(
                     result = requirement.solve(config, interface)
                     if result:
                         results.append(result)
-                    interface.show("")
+                    interface.display_text("")
                 except Exception as e:
                     # this should not happen - all errors during plugin solve() should be caught inside
                     with interface.with_indent():
@@ -174,7 +174,7 @@ def main_loop(
         verbose=config.verbose, max_lines=config.max_output_lines
     )
 
-    interface.show(BANNER)
+    interface.display_text(BANNER)
 
     # Initialize plugins based on config
     initialize_plugins(config=config, interface=interface)
@@ -219,7 +219,7 @@ def main_loop(
             llm_response=llm_response, config=config, interface=interface
         )
         user_prompt = interface.ask_user()
-        interface.show("")
+        interface.display_text("")
         user_message = UserMessage(comment=user_prompt, results=results)
 
 

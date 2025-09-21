@@ -116,7 +116,7 @@ class TestPluginHookSystem:
         ):
             # Just validate, don't throw
             assert requirement.command is not None
-            interface.show(f"command '{requirement.command}' exists")
+            interface.display_text(f"command '{requirement.command}' exists")
 
         hooks.load_and_filter_hooks(
             interface=interface, enabled_plugins={"passing_validator"}

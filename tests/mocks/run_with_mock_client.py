@@ -68,7 +68,6 @@ It seems there are several files, the most relevant may be some .py and .sh scri
             ),
             ReadRequirement(comment="", path="~/Sync/hello.py", metadata_only=False),
             ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False),
-            ReadRequirement(comment="", path="~/Sync/run.sh.bak", metadata_only=False),
         ],
     ),
     LLMMessage(

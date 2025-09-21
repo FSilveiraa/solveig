@@ -41,7 +41,7 @@ class ReadRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
-        interface.show(path_info)
+        interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
@@ -75,7 +75,7 @@ class ReadRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_read_send:
-            interface.show(
+            interface.display_text(
                 f"Reading {abs_path} since it matches config.allow_allowed_paths"
             )
         metadata = Filesystem.read_metadata(abs_path)
@@ -108,7 +108,7 @@ class ReadRequirement(Requirement):
             interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if config.auto_send or auto_read_send:
-            interface.show(
+            interface.display_text(
                 f"Sending {"content" if content else "metadata"} since {f"{abs_path} matches config.allow_allowed_paths" if auto_read_send else "config.auto_send=True"}"
             )
         if (

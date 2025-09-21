@@ -45,7 +45,7 @@ class CopyRequirement(Requirement):
             destination_path=self.destination_path,
             absolute_destination_path=abs_dest,
         )
-        interface.show(path_info)
+        interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "CopyResult":
         """Create CopyResult with error."""

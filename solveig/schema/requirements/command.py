@@ -43,7 +43,7 @@ class CommandRequirement(Requirement):
         elif self.command:
             # Show truncated command in summary view
             # command_first_line = self.command.splitlines()[0]
-            interface.show(f"🗲  {self.command}", truncate=True)
+            interface.display_text(f"🗲  {self.command}", truncate=True)
             # if len(self.command) <= 50:
             #     interface.show(f"🗲  {self.command}")
             # else:
@@ -106,7 +106,7 @@ class CommandRequirement(Requirement):
                 with interface.with_group("Error"):
                     interface.display_text_block(error, title="Error")
             if config.auto_send:
-                interface.show("Sending output since config.auto_send=True")
+                interface.display_text("Sending output since config.auto_send=True")
             elif not interface.ask_yes_no("Allow sending output? [y/N]: "):
                 output = "<hidden>"
                 error = ""

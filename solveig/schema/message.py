@@ -148,7 +148,7 @@ class MessageHistory:
     system_prompt: str
     api_type: type[APIType.BaseAPI] = APIType.BaseAPI
     max_context: int = -1
-    model: str | None = None  # TODO: this is very bad design, but it works
+    encoder: str | None = None  # TODO: this is not-great design, but it works
     messages: list[MessageContainer] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
 
@@ -160,7 +160,7 @@ class MessageHistory:
     def get_token_count(self) -> int:
         """Get total token count for the message cache using API-specific counting."""
         return sum(
-            self.api_type.count_tokens(message["content"], self.model)
+            self.api_type.count_tokens(message["content"], self.encoder)
             for message in self.message_cache
         )
 

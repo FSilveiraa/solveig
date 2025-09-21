@@ -46,7 +46,7 @@ class WriteRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
         )
-        interface.show(path_info)
+        interface.display_text(path_info)
         if self.content and detailed:
             interface.display_text_block(self.content, title="Content")
 
@@ -93,7 +93,7 @@ class WriteRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_write:
-            interface.show(
+            interface.display_text(
                 f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths"
             )
         else:

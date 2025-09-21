@@ -101,7 +101,7 @@ def load_and_filter_requirements(
                             req_class = REQUIREMENTS.all_requirements[req_name]
                             REQUIREMENTS.registered[req_name] = req_class
                         active_plugins += 1
-                        interface.show(f"'{plugin_name}': Loaded")
+                        interface.display_text(f"'{plugin_name}': Loaded")
                     else:
                         interface.display_warning(
                             f"'{plugin_name}': Skipped (missing from config)"
@@ -113,7 +113,7 @@ def load_and_filter_requirements(
                 )
 
     total_active = len(REQUIREMENTS.registered)
-    interface.show(
+    interface.display_text(
         f"Requirements: {len(core_requirements)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
     )
 

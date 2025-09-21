@@ -45,7 +45,7 @@ def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
             )
 
         # Summary
-        interface.show(
+        interface.display_text(
             f"Plugin system ready: {req_stats['active']} requirements, {hook_stats['active']} hooks"
         )
 

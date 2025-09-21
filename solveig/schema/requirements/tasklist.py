@@ -29,7 +29,7 @@ class TaskListRequirement(Requirement):
         super().display_header(interface)
         if detailed:
             if not self.tasks:
-                interface.show("🗒 Empty task list")
+                interface.display_text("🗒 Empty task list")
                 return
 
             task_lines = []
@@ -41,12 +41,12 @@ class TaskListRequirement(Requirement):
                     "failed": "🔴",
                 }[task.status]
                 task_lines.append(
-                    f"{"→" if task.status == "in_progress" else " "}  {i}. {status_emoji} {task.description}"
+                    f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {task.description}"
                 )
 
             # interface.show("🗒 Task List")
             for line in task_lines:
-                interface.show(line)
+                interface.display_text(line)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "TaskResult":
         """Create TaskResult with error (though tasks rarely error)."""

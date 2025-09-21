@@ -20,20 +20,15 @@ class APIType:
         name = ""
 
         @classmethod
-        def count_tokens(cls, text: str, model: str | None = None) -> int:
-            encoder = cls._get_encoder(model)
-            return len(encoder.encode(text))
-
-        @classmethod
-        def _get_encoder(cls, model: str | None = None) -> Any:
+        def count_tokens(cls, text: str, encoder: str | None = None) -> int:
             try:
-                return cls._encoder_cache[model]
+                actual_encoder = cls._encoder_cache[encoder]
             except KeyError:
-                cls._encoder_cache[model] = encoder = cls._get_encoder(model)
-                return encoder
+                cls._encoder_cache[encoder] = actual_encoder = cls._get_encoder(encoder)
+            return len(actual_encoder.encode(text))
 
         @classmethod
-        def _find_encoder_for_model(cls, model: str) -> Any:
+        def _get_encoder(cls, encoder: str | None = None) -> Any:
             raise NotImplementedError()
 
         @staticmethod
@@ -50,8 +45,17 @@ class APIType:
         name = "openai"
 
         @classmethod
-        def _find_encoder_for_model(cls, model: str) -> Any:
-            return tiktoken.encoding_for_model(model)
+        def _get_encoder(cls, encoder: str | None = None) -> Any:
+            try:
+                return tiktoken.encoding_for_model(encoder)
+            except KeyError:
+                try:
+                    return tiktoken.get_encoding(encoder)
+                except ValueError:
+                    available = set(tiktoken.list_encoding_names())
+                    available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
+                    raise ValueError(f"Could not find an encoding for '{encoder}', use one of {available}")
+
 
         @classmethod
         def get_client(
@@ -83,7 +87,7 @@ class APIType:
         name = "anthropic"
 
         @classmethod
-        def _find_encoder_for_model(cls, model: str) -> Any:
+        def _get_encoder(cls, encoder: str | None = None) -> Any:
             # TODO: there's an official API for this, for now stick to the default one
             # https://docs.claude.com/en/docs/build-with-claude/token-counting
             return cls._encoder_cache[None]
@@ -111,8 +115,8 @@ class APIType:
         name = "gemini"
 
         @classmethod
-        def _find_encoder_for_model(cls, model: str) -> Any:
-            return google_ai.GenerativeModel(model)
+        def _get_encoder(cls, encoder: str | None = None) -> Any:
+            return google_ai.GenerativeModel(encoder)
 
         @staticmethod
         def get_client(

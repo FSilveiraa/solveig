@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from instructor.exceptions import InstructorRetryException
+from instructor.core import InstructorRetryException
 
 from scripts.run import (
     get_initial_user_message,

@@ -49,7 +49,7 @@ class TreeRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
         )
-        interface.show(path_info)
+        interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
         """Create TreeResult with error."""
@@ -83,7 +83,7 @@ class TreeRequirement(Requirement):
             Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
             or config.auto_send
         ):
-            interface.show(
+            interface.display_text(
                 f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}"
             )
 
