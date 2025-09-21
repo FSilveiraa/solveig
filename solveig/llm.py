@@ -16,27 +16,32 @@ class APIType:
         _encoder_cache: dict[str | None, Any] = {
             None: tiktoken.get_encoding("cl100k_base")
         }
-        default_url = None
+        default_url = ""
         name = ""
 
         @classmethod
         def count_tokens(cls, text: str, model: str | None = None) -> int:
-            try:
-                encoder = cls._encoder_cache[model]
-            except KeyError:
-                cls._encoder_cache[model] = encoder = cls._get_encoder(model)
+            encoder = cls._get_encoder(model)
             return len(encoder.encode(text))
 
         @classmethod
         def _get_encoder(cls, model: str | None = None) -> Any:
+            try:
+                return cls._encoder_cache[model]
+            except KeyError:
+                cls._encoder_cache[model] = encoder = cls._get_encoder(model)
+                return encoder
+
+        @classmethod
+        def _find_encoder_for_model(cls, model: str) -> Any:
             raise NotImplementedError()
 
         @staticmethod
         def get_client(
-            url: str = default_url,
+            instructor_mode: instructor.Mode,
+            url: str | None = default_url,
             api_key: str | None = None,
             model: str | None = None,
-            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             raise NotImplementedError()
 
@@ -45,18 +50,19 @@ class APIType:
         name = "openai"
 
         @classmethod
-        def _get_encoder(cls, model: str | None = None) -> Any:
+        def _find_encoder_for_model(cls, model: str) -> Any:
             return tiktoken.encoding_for_model(model)
 
-        @staticmethod
+        @classmethod
         def get_client(
-            url: str = default_url,
+            cls,
+            instructor_mode: instructor.Mode,
+            url: str | None = default_url,
             api_key: str | None = None,
             model: str | None = None,
-            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
-                client = openai.OpenAI(api_key=api_key, base_url=url)
+                client = openai.OpenAI(api_key=api_key, base_url=url or cls.default_url)
                 return instructor.from_openai(client, mode=instructor_mode)
             except ImportError as e:
                 raise ValueError(
@@ -67,25 +73,33 @@ class APIType:
         default_url = "https://localhost:5001/v1"
         name = "local"
 
+        @classmethod
+        def _find_encoder_for_model(cls, model: str) -> Any:
+            assert model
+            return tiktoken.encoding_for_model(model)
+
     class ANTHROPIC(BaseAPI):
-        _default_url = "https://api.anthropic.com/v1"
+        default_url = "https://api.anthropic.com/v1"
         name = "anthropic"
 
         @classmethod
-        def _get_encoder(cls, model: str | None = None) -> Any:
+        def _find_encoder_for_model(cls, model: str) -> Any:
             # TODO: there's an official API for this, for now stick to the default one
             # https://docs.claude.com/en/docs/build-with-claude/token-counting
-            return None
+            return cls._encoder_cache[None]
 
-        @staticmethod
+        @classmethod
         def get_client(
-            url: str = _default_url,
+            cls,
+            instructor_mode: instructor.Mode,
+            url: str | None = None,
             api_key: str | None = None,
             model: str | None = None,
-            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
-                client = anthropic.Anthropic(api_key=api_key, base_url=url)
+                client = anthropic.Anthropic(
+                    api_key=api_key, base_url=url or cls.default_url
+                )
                 return instructor.from_anthropic(client, mode=instructor_mode)
             except ImportError as e:
                 raise ValueError(
@@ -97,15 +111,15 @@ class APIType:
         name = "gemini"
 
         @classmethod
-        def _get_encoder(cls, model: str | None = None) -> Any:
+        def _find_encoder_for_model(cls, model: str) -> Any:
             return google_ai.GenerativeModel(model)
 
         @staticmethod
         def get_client(
-            url: str = default_url,
+            instructor_mode: instructor.Mode,
+            url: str | None = None,
             api_key: str | None = None,
             model: str | None = None,
-            instructor_mode: instructor.Mode | None = None,
         ) -> instructor.Instructor:
             try:
                 google_ai.configure(api_key=api_key)
@@ -139,7 +153,7 @@ def get_instructor_client(
     api_key: str | None = None,
     url: str | None = None,
     model: str | None = None,
-    instructor_mode: instructor.Mode | None = instructor.Mode.TOOLS,
+    instructor_mode: instructor.Mode = instructor.Mode.TOOLS,
 ) -> instructor.Instructor:
     """Get instructor client - backwards compatible interface."""
     # Handle legacy string API type names

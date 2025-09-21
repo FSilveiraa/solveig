@@ -106,12 +106,14 @@ class CLIInterface(SolveigInterface):
                 text_formatted = f"{text_formatted[:max_width]}"
                 # if we didn't ... because of the lines, add because of the length
                 _ellipsis = " ..."
-            text_formatted = (
+            self._output(
                 Text(text_formatted)
                 .append(_ellipsis, style=self.COLORS.title)
-                .append(suffix, style=self.COLORS.title)
+                .append(suffix, style=self.COLORS.title),
+                **kwargs,
             )
-        self._output(text_formatted, **kwargs)
+        else:
+            self._output(text_formatted, **kwargs)
 
     @contextmanager
     def with_group(self, title: str) -> Generator[None]:
@@ -220,7 +222,7 @@ class CLIInterface(SolveigInterface):
         level: int | None = None,
         max_lines: int | None = None,
         box_style: str = COLORS.title,
-        text_style: str | None = COLORS.text_block,
+        text_style: str = COLORS.text_block,
     ) -> None:
         if not self.max_lines or not text:
             return

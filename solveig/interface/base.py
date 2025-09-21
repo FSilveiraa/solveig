@@ -100,7 +100,7 @@ class SolveigInterface(ABC):
         self,
         text: str,
         level: int | None = None,
-        truncate_length: bool = False,
+        truncate: bool = False,
         **kwargs,
     ) -> None:
         """Display content at specified or current indent level"""

@@ -80,7 +80,14 @@ class WriteRequirement(Requirement):
         if already_exists:
             interface.display_warning("Overwriting existing file")
             file_content = Filesystem.read_file(abs_path)
-            interface.display_text_block(file_content.content, title=str(abs_path))
+            interface.display_text_block(
+                (
+                    str(file_content.content)
+                    if file_content.encoding == "text"
+                    else "( Binary Content )"
+                ),
+                title=str(abs_path),
+            )
 
         auto_write = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths

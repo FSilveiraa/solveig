@@ -17,7 +17,7 @@ else:
 
 
 class TaskListRequirement(Requirement):
-    title: Literal["tasks"] = "task list"
+    title: Literal["task list"] = "task list"
     tasks: list[Task] = Field(
         default_factory=list, description="List of tasks to track and display"
     )
