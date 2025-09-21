@@ -24,11 +24,12 @@ class APIType:
             try:
                 actual_encoder = cls._encoder_cache[encoder]
             except KeyError:
+                assert encoder is not None
                 cls._encoder_cache[encoder] = actual_encoder = cls._get_encoder(encoder)
             return len(actual_encoder.encode(text))
 
         @classmethod
-        def _get_encoder(cls, encoder: str | None = None) -> Any:
+        def _get_encoder(cls, encoder: str) -> Any:
             raise NotImplementedError()
 
         @staticmethod
@@ -45,17 +46,19 @@ class APIType:
         name = "openai"
 
         @classmethod
-        def _get_encoder(cls, encoder: str | None = None) -> Any:
+        def _get_encoder(cls, encoder: str) -> Any:
             try:
                 return tiktoken.encoding_for_model(encoder)
             except KeyError:
                 try:
                     return tiktoken.get_encoding(encoder)
-                except ValueError:
+                except ValueError as e:
                     available = set(tiktoken.list_encoding_names())
                     available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
-                    raise ValueError(f"Could not find an encoding for '{encoder}', use one of {available}")
-
+                    e.add_note(
+                        f"Could not find an encoding for '{encoder}', use one of {available}"
+                    )
+                    raise e
 
         @classmethod
         def get_client(
@@ -115,7 +118,7 @@ class APIType:
         name = "gemini"
 
         @classmethod
-        def _get_encoder(cls, encoder: str | None = None) -> Any:
+        def _get_encoder(cls, encoder: str) -> Any:
             return google_ai.GenerativeModel(encoder)
 
         @staticmethod

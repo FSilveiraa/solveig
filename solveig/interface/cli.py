@@ -15,7 +15,6 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from rich.console import Console, Text
 
-
 import solveig.utils.misc
 from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
@@ -66,16 +65,20 @@ class CLIInterface(SolveigInterface):
 
     # Allowed spinners (built-in Rich + our custom ones)
     ALLOWED_SPINNERS = {
-        "star", "dots3", "dots10", "balloon",  # Selected from user testing
-        "growing", "cool"  # Custom spinners
+        "star",
+        "dots3",
+        "dots10",
+        "balloon",
+        # Custom spinners
+        "growing",
+        "cool",
     }
-
 
     def __init__(self, animation_interval: float = 0.1, **kwargs) -> None:
         super().__init__(**kwargs)
         self.animation_interval = animation_interval
         self.output_console = Console()
-        self.input_console = PromptSession()
+        self.input_console: PromptSession = PromptSession()
         # self.input_style = Style.from_dict({
         #     k: v for k,v in vars(self.COLORS).items()
         # })
@@ -85,18 +88,20 @@ class CLIInterface(SolveigInterface):
         # Add custom spinners to Rich's SPINNERS dictionary
         RICH_SPINNERS["growing"] = {
             "interval": 150,
-            "frames": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
+            "frames": ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"],
         }
         RICH_SPINNERS["cool"] = {
             "interval": 120,
-            "frames": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
+            "frames": ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"],
         }
 
         # Pad the spinners
+        # This is a hack: we take a str and convert it to a list[str]
         for spinner in self.ALLOWED_SPINNERS:
-            frames = list(RICH_SPINNERS[spinner]["frames"])
-            RICH_SPINNERS[spinner]["frames"] = [ f"{self.PADDING_LEFT}{frame}" for frame in frames]
-
+            frames = RICH_SPINNERS[spinner]["frames"]
+            RICH_SPINNERS[spinner]["frames"] = [
+                f"{self.PADDING_LEFT}{frame}" for frame in frames  # type: ignore
+            ]
 
     def _get_max_output_width(self) -> int:
         return (
@@ -108,23 +113,27 @@ class CLIInterface(SolveigInterface):
     def _output(self, text: str | Text, pad: bool = True, **kwargs) -> None:
         # Use rich console for all output to get color support
         self.output_console.print(
-            (self.PADDING_LEFT if pad else "") + text + (self.PADDING_RIGHT if pad else ""),
-            **kwargs
+            (self.PADDING_LEFT if pad else Text(""))
+            + text
+            + (self.PADDING_RIGHT if pad else Text("")),
+            **kwargs,
         )
 
     def _output_inline(self, text: str | Text, pad: bool = True) -> None:
-        # Use Rich console for inline output 
+        # Use Rich console for inline output
         self.output_console.print(
-            (self.PADDING_LEFT if pad else "") + text + (self.PADDING_RIGHT if pad else ""),
-            end=""
+            (self.PADDING_LEFT if pad else Text(""))
+            + text
+            + (self.PADDING_RIGHT if pad else Text("")),
+            end="",
         )
-            # f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}", end="")
+        # f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}", end="")
 
     def _input(self, prompt: str, style: str = COLORS_INPUT.warning, **kwargs) -> str:
         return self.input_console.prompt(
             f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}",
             style=Style.from_dict({"prompt": style}),
-            **kwargs
+            **kwargs,
         )
 
     def ask_user(
@@ -190,7 +199,11 @@ class CLIInterface(SolveigInterface):
         ─── User ───────────────
         """
         # hack to get unpadded terminal width
-        terminal_width = self._get_max_output_width() + len(self.PADDING_LEFT) + len(self.PADDING_RIGHT)
+        terminal_width = (
+            self._get_max_output_width()
+            + len(self.PADDING_LEFT)
+            + len(self.PADDING_RIGHT)
+        )
         title_formatted = f"{self.TEXT_BOX.H * 3} {title} " if title else ""
         padding = (
             self.TEXT_BOX.H * (terminal_width - len(title_formatted))
@@ -200,7 +213,7 @@ class CLIInterface(SolveigInterface):
         self._output(
             f"\n\n{title_formatted}{padding}",
             style=f"bold {self.COLORS.warning}",
-            pad=False
+            pad=False,
         )
 
     def display_llm_response(self, llm_response: "LLMMessage") -> None:
@@ -346,17 +359,19 @@ class CLIInterface(SolveigInterface):
         # Pick random spinner if none specified
         if animation_type is None:
             animation_type = random.choice(list(self.ALLOWED_SPINNERS))
-        
+
         # Assert the spinner is in our allowed set
-        assert animation_type in self.ALLOWED_SPINNERS, f"Spinner '{animation_type}' not in allowed set: {self.ALLOWED_SPINNERS}"
-        
+        assert (
+            animation_type in self.ALLOWED_SPINNERS
+        ), f"Spinner '{animation_type}' not in allowed set: {self.ALLOWED_SPINNERS}"
+
         display_message = message or "Waiting... (Ctrl+C to stop)"
-        
+
         # Use Rich status for styled animation that integrates with console
         with self.output_console.status(
             f"{self.PADDING_LEFT}{display_message}{self.PADDING_RIGHT}",
             spinner=animation_type,
-            spinner_style=style
+            spinner_style=style,
         ):
             return run_this()
 

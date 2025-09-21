@@ -205,4 +205,3 @@ class TestMainFunction:
         # Should print skip message
         print_calls = [str(call) for call in mock_interface.outputs]
         assert any("Skipped bash history" in call for call in print_calls)
-

@@ -41,7 +41,7 @@ class TaskListRequirement(Requirement):
                     "failed": "🔴",
                 }[task.status]
                 task_lines.append(
-                    f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {task.description}"
+                    f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {i}. {task.description}"
                 )
 
             # interface.show("🗒 Task List")
