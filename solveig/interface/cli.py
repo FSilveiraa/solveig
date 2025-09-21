@@ -47,8 +47,9 @@ class CLIInterface(SolveigInterface):
         # Cross
         X = "┼"
 
+    # https://rich.readthedocs.io/en/stable/appendix/colors.html
     class COLORS:
-        title = "thistle3"
+        title = "rosy_brown"
         group = "dark_sea_green"
         error = "red"
         warning = "orange3"
