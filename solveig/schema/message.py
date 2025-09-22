@@ -3,16 +3,16 @@ from dataclasses import dataclass, field
 
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field, field_validator, field_serializer
+from pydantic import Field, field_validator
 
+from .base import BaseSolveigModel
 from .. import utils
 from ..llm import APIType
 from .requirements import Requirement
 from .results import RequirementResult
-from solveig.utils.misc import dump_pydantic_field
 
 
-class BaseMessage(BaseModel):
+class BaseMessage(BaseSolveigModel):
     role: Literal["system", "user", "assistant"]
     comment: str = ""
 
@@ -20,10 +20,6 @@ class BaseMessage(BaseModel):
     @classmethod
     def strip_comment(cls, comment):
         return (comment or "").strip()
-
-    @field_serializer("*")
-    def serialize_all_fields(self, v, _info):
-        return dump_pydantic_field(v)
 
     def to_openai(self) -> dict:
         data = self.model_dump()

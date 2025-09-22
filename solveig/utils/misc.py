@@ -125,22 +125,3 @@ def parse_human_readable_size(size_notation: int | str) -> int:
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
-
-def dump_pydantic_field(obj: Any) -> Any:
-    """Recursively convert dataclass → dict with Path → str."""
-    if is_dataclass(obj):
-        result = {}
-        for f in fields(obj):
-            val = getattr(obj, f.name)
-            result[f.name] = dump_pydantic_field(val)
-        return result
-    elif isinstance(obj, BaseModel):
-        return obj.model_dump()
-    elif isinstance(obj, PurePath):
-        return str(obj)
-    elif isinstance(obj, list):
-        return [dump_pydantic_field(v) for v in obj]
-    elif isinstance(obj, dict):
-        return {dump_pydantic_field(k): dump_pydantic_field(v) for k, v in obj.items()}
-    else:
-        return obj
