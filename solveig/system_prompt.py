@@ -408,6 +408,10 @@ It seems there are several files, the most relevant may be some .py and .sh scri
             ),
             ReadResult(
                 requirement=read_dev_sh_req,
+                content="""
+#!/bin/python
+print("Hello, world!")
+                """.strip(),
                 path=PurePath("/home/user/Sync/dev.sh"),
                 accepted=True,
                 metadata=Metadata(
@@ -473,7 +477,7 @@ task_list_4 = TaskListRequirement(
 )
 write_script_req = WriteRequirement(
     comment="Write a better print script",
-    path="/home/user/Sync/hello_new.py",
+    path="~/Sync/hello_new.py",
     content="""
 import sys
 
@@ -491,7 +495,7 @@ if __name__ == "__main__":
 )
 script_command_req = CommandRequirement(
     comment="Now execute it to make sure it works correctly",
-    command="python /home/user/Sync/hello_new.py;\npython /home/user/Sync/hello_new.py 'Solveig'",
+    command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
 )
 large_example.add_messages(
     AssistantMessage(
@@ -576,8 +580,8 @@ task_list_5 = TaskListRequirement(
 )
 script_move_req = MoveRequirement(
     comment="Over-write old print script with improved one",
-    source_path="/home/user/Sync/hello_new.py",
-    destination_path="/home/user/Sync/hello.py",
+    source_path="~/Sync/hello_new.py",
+    destination_path="~/Sync/hello.py",
 )
 large_example.add_messages(
     AssistantMessage(

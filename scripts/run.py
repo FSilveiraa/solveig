@@ -63,7 +63,7 @@ def send_message_to_llm(
 ) -> AssistantMessage | None:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
-        interface.display_text_block(user_response.to_openai(), title="Sending")
+        interface.display_text_block(str(user_response), title="Sending")
 
     # Show animated spinner during LLM processing
     def blocking_llm_call():
@@ -209,7 +209,7 @@ def main_loop(
         message_history.add_messages(llm_response)
         interface.display_section("Assistant")
         if config.verbose:
-            interface.display_text_block(llm_response.to_openai(), title="Response")
+            interface.display_text_block(str(llm_response), title="Response")
         interface.display_llm_response(llm_response)
         # Process requirements and get next user input
 
