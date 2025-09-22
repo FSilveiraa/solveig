@@ -1,10 +1,7 @@
 import re
-from dataclasses import fields, is_dataclass
 from pathlib import PurePath
-from typing import Any
 
 import tiktoken
-from pydantic import BaseModel
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "

@@ -34,4 +34,4 @@ class BaseSolveigModel(BaseModel):
 
     @field_serializer("*")
     def serialize_all_fields(self, obj, _info):
-        self._dump_pydantic_field(obj)
+        return self._dump_pydantic_field(obj)

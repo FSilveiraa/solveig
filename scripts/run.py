@@ -47,7 +47,7 @@ def get_initial_user_message(
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
     if user_prompt:
-        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}\n")
+        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT} {user_prompt}\n")
     else:
         user_prompt = interface.ask_user()
         interface.display_text("")
