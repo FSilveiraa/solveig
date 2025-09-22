@@ -7,7 +7,7 @@ This module defines the data structures used for:
 - Results and error handling
 """
 
-from .message import LLMMessage, MessageHistory, UserMessage  # noqa: F401
+from .message import AssistantMessage, MessageHistory, UserMessage  # noqa: F401
 from .requirements import (  # noqa: F401
     CommandRequirement,
     CopyRequirement,
@@ -25,7 +25,7 @@ from .results import (  # noqa: F401
     MoveResult,
     ReadResult,
     RequirementResult,
-    TaskResult,
+    TaskListResult,
     WriteResult,
 )
 
@@ -37,7 +37,7 @@ CommandResult.model_rebuild()
 MoveResult.model_rebuild()
 CopyResult.model_rebuild()
 DeleteResult.model_rebuild()
-TaskResult.model_rebuild()
+TaskListResult.model_rebuild()
 RequirementResult.model_rebuild()
 
 

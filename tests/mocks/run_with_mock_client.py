@@ -5,7 +5,7 @@ import sys
 from scripts.run import main_loop
 from solveig import SolveigConfig
 from solveig.plugins.schema.tree import TreeRequirement
-from solveig.schema.message import LLMMessage
+from solveig.schema.message import AssistantMessage
 from solveig.schema.requirements import (
     CommandRequirement,
     ReadRequirement,
@@ -18,7 +18,7 @@ from tests.mocks.llm_client import create_mock_client
 
 # Define your mock responses here
 mock_responses = [
-    LLMMessage(
+    AssistantMessage(
         comment="TEST LONG COMMAND",
         requirements=[
             CommandRequirement(
@@ -27,7 +27,7 @@ mock_responses = [
             )
         ],
     ),
-    LLMMessage(
+    AssistantMessage(
         comment="I'll help you understand what ~/Sync contains",
         requirements=[
             TaskListRequirement(
@@ -48,7 +48,7 @@ mock_responses = [
             ),
         ],
     ),
-    LLMMessage(
+    AssistantMessage(
         comment="""
 It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.
 """,
@@ -70,7 +70,7 @@ It seems there are several files, the most relevant may be some .py and .sh scri
             ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False),
         ],
     ),
-    LLMMessage(
+    AssistantMessage(
         comment="""
 This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.
 """,
@@ -91,7 +91,7 @@ This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.s
             )
         ],
     ),
-    LLMMessage(
+    AssistantMessage(
         comment="""
 I'll write and test an improved print script.
 """,

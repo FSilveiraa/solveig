@@ -3,18 +3,18 @@
 import time
 from unittest.mock import MagicMock
 
-from solveig.schema.message import LLMMessage
+from solveig.schema.message import AssistantMessage
 
 
 class MockLLMClient:
     """Thin wrapper around instructor client that returns predefined responses."""
 
     def __init__(
-        self, responses: list[LLMMessage | Exception], sleep_seconds: float = 0
+        self, responses: list[AssistantMessage | Exception], sleep_seconds: float = 0
     ):
         """
         Args:
-            responses: List of LLMMessage responses or exceptions to return in sequence
+            responses: List of AssistantMessage responses or exceptions to return in sequence
         """
         self.responses = responses
         self.call_count = 0
@@ -25,7 +25,7 @@ class MockLLMClient:
         self.chat.completions.create = self._create_completion
         self.sleep_seconds = sleep_seconds
 
-    def _create_completion(self, **kwargs) -> LLMMessage:
+    def _create_completion(self, **kwargs) -> AssistantMessage:
         """Return next response or raise next exception."""
         if self.call_count < len(self.responses):
             response = self.responses[self.call_count]
@@ -38,7 +38,7 @@ class MockLLMClient:
             return response
 
         # No more responses - return simple default
-        return LLMMessage(comment="No more responses configured")
+        return AssistantMessage(comment="No more responses configured")
 
     def get_call_count(self) -> int:
         """Get number of calls made."""
@@ -46,13 +46,13 @@ class MockLLMClient:
 
 
 def create_mock_client(
-    *messages: str | LLMMessage | Exception, sleep_seconds: float = 0
+    *messages: str | AssistantMessage | Exception, sleep_seconds: float = 0
 ) -> MockLLMClient:
-    """Create mock client with responses. Strings become LLMMessage objects."""
+    """Create mock client with responses. Strings become AssistantMessage objects."""
     responses = []
     for msg in messages:
         if isinstance(msg, str):
-            responses.append(LLMMessage(comment=msg))
+            responses.append(AssistantMessage(comment=msg))
         else:
             responses.append(msg)
     return MockLLMClient(responses, sleep_seconds)

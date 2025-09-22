@@ -9,7 +9,7 @@ import pytest
 pytestmark = pytest.mark.no_file_mocking
 
 from scripts.run import main_loop
-from solveig.schema.message import LLMMessage
+from solveig.schema.message import AssistantMessage
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
@@ -20,7 +20,7 @@ class TestConversationLoop:
     def test_command_execution_flow(self):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
         # LLM suggests diagnostic commands
-        llm_response = LLMMessage(
+        llm_response = AssistantMessage(
             comment="I'll help diagnose your system. Let me check resources and processes.",
             requirements=[
                 CommandRequirement(
@@ -64,7 +64,7 @@ class TestConversationLoop:
             temp_file_path = temp_dir_path / "new_file.txt"
             temp_file_path.write_text("Lorem ipsum")
 
-            llm_response = LLMMessage(
+            llm_response = AssistantMessage(
                 comment="I'll help organize your files by reading the directory first.",
                 requirements=[
                     ReadRequirement(

@@ -50,15 +50,15 @@ class UserMessage(BaseMessage):
 # - either a list of Requirements asking for more info
 # - or a response with the final answer
 # Note: This static class is kept for backwards compatibility but is replaced
-# at runtime by get_filtered_llm_message_class() which includes all active requirements
-class LLMMessage(BaseMessage):
+# at runtime by get_filtered_assistant_message_class() which includes all active requirements
+class AssistantMessage(BaseMessage):
     requirements: list[Requirement] | None = (
         None  # Simplified - actual schema generated dynamically
     )
 
 
-def get_filtered_llm_message_class():
-    """Get a dynamically created LLMMessage class with only filtered requirements.
+def get_filtered_assistant_message_class():
+    """Get a dynamically created AssistantMessage class with only filtered requirements.
 
     This is used by Instructor to get the correct schema without caching issues.
     Gets all active requirements from the unified registry (core + plugins).
@@ -75,10 +75,10 @@ def get_filtered_llm_message_class():
     # Handle empty registry case
     if not all_active_requirements:
         # Return a minimal class if no requirements are registered
-        class EmptyLLMMessage(BaseMessage):
+        class EmptyAssistantMessage(BaseMessage):
             requirements: list[Requirement] | None = None
 
-        return EmptyLLMMessage
+        return EmptyAssistantMessage
 
     # Create union dynamically from all registered requirements
     if len(all_active_requirements) == 1:
@@ -88,8 +88,8 @@ def get_filtered_llm_message_class():
         for req_type in all_active_requirements[1:]:
             requirements_union = requirements_union | req_type
 
-    # Create completely fresh LLMMessage class
-    class FilteredLLMMessage(BaseMessage):
+    # Create completely fresh AssistantMessage class
+    class AssistantMessage(BaseMessage):
         requirements: (
             list[
                 Annotated[
@@ -100,7 +100,7 @@ def get_filtered_llm_message_class():
             | None
         ) = None
 
-    return FilteredLLMMessage
+    return AssistantMessage
 
 
 @dataclass
@@ -122,11 +122,10 @@ class MessageContainer:
         elif isinstance(message, SystemMessage):
             self.role = "system"
         elif hasattr(message, "requirements"):
-            # Handle dynamically created LLMMessage classes
+            # Handle dynamically created AssistantMessage classes
             self.role = "assistant"
         else:
-            # Fallback - shouldn't happen but ensures role is always set
-            self.role = "assistant"
+            raise TypeError(f"Received message of unknown type '{type(message)}'")
 
     @property
     def token_count(self):
@@ -155,7 +154,7 @@ class MessageHistory:
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
         if not self.message_cache:  # Only add if not already present
-            self.add_message(SystemMessage(comment=self.system_prompt), role="system")
+            self.add_messages(SystemMessage(comment=self.system_prompt))
 
     def get_token_count(self) -> int:
         """Get total token count for the message cache using API-specific counting."""
@@ -177,19 +176,23 @@ class MessageHistory:
             else:
                 break  # Can't remove system message
 
-    def add_message(
+    def add_messages(
         self,
-        message: BaseMessage,
-        role: Literal["system", "user", "assistant"] | None = None,
+        *messages: SystemMessage | UserMessage | AssistantMessage,
     ):
         """Add a message and automatically prune if over context limit."""
-        message_container = MessageContainer(message, role=role)
-        self.messages.append(message_container)
-        self.message_cache.append(message_container.to_openai())
-        self.prune_message_cache()
+        for message in messages:
+            message_container = MessageContainer(message)
+            self.messages.append(message_container)
+            self.message_cache.append(message_container.to_openai())
+            self.prune_message_cache()
 
     def to_openai(self):
         return self.message_cache
 
     def to_example(self):
-        return "\n".join(message.to_example() for message in self.messages)
+        return "\n".join(
+            message.to_example()
+            for message in self.messages
+            if message.role != "system"
+        )

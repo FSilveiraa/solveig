@@ -18,7 +18,7 @@ class Task(BaseModel):
     )
 
 
-class TaskResult(RequirementResult):
+class TaskListResult(RequirementResult):
     """Result of a task requirement - just echoes the task list back to LLM."""
 
     tasks: list[Task] = []

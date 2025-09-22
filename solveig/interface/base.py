@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
-    from solveig.schema import LLMMessage
+    from solveig.schema import AssistantMessage
 
 
 class SolveigInterface(ABC):
@@ -38,8 +38,8 @@ class SolveigInterface(ABC):
         pass
 
     @abstractmethod
-    def display_llm_response(self, llm_response: "LLMMessage") -> None:
-        """Display the LLM's comment and requirements summary."""
+    def display_llm_response(self, llm_response: "AssistantMessage") -> None:
+        """Display the assistant's comment and requirements summary."""
         pass
 
     @abstractmethod

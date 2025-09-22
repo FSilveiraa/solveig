@@ -12,7 +12,7 @@ from scripts.run import (
     send_message_to_llm_with_retry,
 )
 from solveig.schema.message import (
-    LLMMessage,
+    AssistantMessage,
     MessageHistory,
     UserMessage,
 )
@@ -86,7 +86,7 @@ class TestLLMCommunicationRetryLogic:
         interface = MockInterface()
         message_history = MessageHistory(system_prompt="Test")
         user_message = UserMessage(comment="Test")
-        expected_response = LLMMessage(comment="Response")
+        expected_response = AssistantMessage(comment="Response")
 
         mock_client.chat.completions.create.return_value = expected_response
 
@@ -105,7 +105,7 @@ class TestLLMCommunicationRetryLogic:
         interface.set_user_inputs(["y"])  # User chooses to retry
         message_history = MessageHistory(system_prompt="Test")
         user_message = UserMessage(comment="Test")
-        success_response = LLMMessage(comment="Success")
+        success_response = AssistantMessage(comment="Success")
 
         # First call fails, second succeeds
         mock_client.chat.completions.create.side_effect = [
@@ -128,7 +128,7 @@ class TestLLMCommunicationRetryLogic:
         interface.set_user_inputs(["n", "New input"])  # User provides new input
         message_history = MessageHistory(system_prompt="Test")
         user_message = UserMessage(comment="Original")
-        success_response = LLMMessage(comment="Success with new input")
+        success_response = AssistantMessage(comment="Success with new input")
 
         mock_client.chat.completions.create.side_effect = [
             INSTRUCTOR_RETRY_ERROR,
@@ -150,7 +150,7 @@ class TestRequirementProcessing:
     def test_process_no_requirements(self):
         """Test handling LLM response with no requirements."""
         interface = MockInterface()
-        llm_response = LLMMessage(comment="Just a comment, no actions needed")
+        llm_response = AssistantMessage(comment="Just a comment, no actions needed")
 
         results = process_requirements(DEFAULT_CONFIG, interface, llm_response)
 
@@ -166,7 +166,7 @@ class TestRequirementProcessing:
             CommandRequirement(command="echo hello", comment="Safe command"),
             CommandRequirement(command="echo world", comment="Another command"),
         ]
-        llm_response = LLMMessage(
+        llm_response = AssistantMessage(
             comment="Run some commands", requirements=requirements
         )
 
