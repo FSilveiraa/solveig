@@ -45,6 +45,9 @@ class MockInterface(CLIInterface):
         """Get all captured output as single string"""
         return "\n".join(self.outputs)
 
+    def get_all_questions(self) -> str:
+        return "\n".join(self.questions)
+
     def clear(self) -> None:
         """Clear all captured data"""
         self.outputs.clear()

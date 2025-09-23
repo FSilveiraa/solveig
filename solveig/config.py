@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import PurePath
 from typing import Any
@@ -39,6 +40,7 @@ class SolveigConfig:
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     auto_allowed_paths: list[PurePath] = field(default_factory=list)
+    auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
 
     def __post_init__(self):
@@ -51,6 +53,13 @@ class SolveigConfig:
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
             ]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
+        
+        # Validate regex patterns for auto_execute_commands
+        for pattern in self.auto_execute_commands:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern in auto_execute_commands: '{pattern}': {e}")
 
         # split allowed paths in (path, mode)
         # TODO: allowed paths
@@ -187,7 +196,14 @@ class SolveigConfig:
             type=str,
             nargs="*",
             dest="auto_allowed_paths",
-            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py')",
+            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py') ! Use with caution !",
+        )
+        parser.add_argument(
+            "--auto-execute-commands",
+            type=str,
+            nargs="*",
+            dest="auto_execute_commands",
+            help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !"
         )
         parser.add_argument(
             "--auto-send",
@@ -213,6 +229,19 @@ class SolveigConfig:
         for k, v in args_dict.items():
             if v is not None:
                 merged_config[k] = v
+
+        # Display a warning if ".*" is in allowed_commands or / is in allowed_paths
+        # I know this looks bad, but it's so much easier than designing a regex to capture
+        # other regexes
+        concerning_command_patterns = { ".*", "^.*", ".*$", "^.*$" }
+        for pattern in merged_config.get("auto_execute_commands", []):
+            if pattern in concerning_command_patterns:
+                interface.display_warning(f"Warning: Very permissive command pattern '{pattern}' is auto-allowed to execute")
+
+        concerning_path_patterns = { "/", "/**", "/etc", "/boot", "/proc", "/sys", }
+        for pattern in merged_config.get("auto_allowed_paths", []):
+            if any(pattern.startswith(sig) for sig in concerning_path_patterns):
+                interface.display_warning(f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations")
 
         return (cls(**merged_config), user_prompt)
 
