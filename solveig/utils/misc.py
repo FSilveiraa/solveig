@@ -59,7 +59,7 @@ def default_json_serialize(o):
     I use Path a lot on this project and can't be hotfixing every instance to convert to str, this does it autiomatically
     json.dumps(model, default=default_json_serialize)
     """
-    if isinstance(o, PurePath):
+    if isinstance(o, PurePath) or isinstance(o, re.Pattern):
         return str(o)
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 

@@ -127,18 +127,32 @@ def load_extra_requirements(interface: SolveigInterface):
 
 
 def filter_requirements(
-    interface: SolveigInterface, enabled_plugins: "set[str] | SolveigConfig | None"
+    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None = None
 ):
     """Legacy function - use load_and_filter_requirements instead."""
     return load_and_filter_requirements(interface, enabled_plugins)
 
 
+def register_requirement(requirement_class):
+    """
+    Decorator to register a requirement plugin.
+
+    Usage:
+    @register_requirement
+    class MyRequirement(Requirement):
+        ...
+    """
+    # Import here to avoid circular imports
+    from solveig.schema import REQUIREMENTS
+    
+    return REQUIREMENTS.register_requirement(requirement_class)
+
+
 def clear_requirements():
-    # See note above
+    # Import here to avoid circular imports
     from solveig.schema import REQUIREMENTS
 
-    REQUIREMENTS.registered.clear()
-    REQUIREMENTS.all_requirements.clear()
+    REQUIREMENTS.clear_requirements()
 
 
 # Expose the essential interface
@@ -146,4 +160,5 @@ __all__ = [
     "load_and_filter_requirements",
     "load_extra_requirements",  # legacy
     "filter_requirements",  # legacy
+    "register_requirement",  # decorator for plugin requirements
 ]

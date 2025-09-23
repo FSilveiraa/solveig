@@ -57,7 +57,6 @@ def get_initial_user_message(
 _last_config_sent_to_llm = None
 _last_model_sent_to_llm = get_filtered_assistant_message_class()
 
-
 def send_message_to_llm(
     config: SolveigConfig,
     interface: SolveigInterface,

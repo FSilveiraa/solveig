@@ -10,7 +10,7 @@ from pydantic import Field, field_validator
 from solveig.interface import SolveigInterface
 
 # Import the registration decorator
-from solveig.schema import register_requirement
+from solveig.plugins.schema import register_requirement
 from solveig.schema.requirements.base import (
     Requirement,
     format_path_info,

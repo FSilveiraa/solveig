@@ -14,7 +14,9 @@ Create new operations that the LLM can request, like database queries or API cal
 
 ### Requirement Plugin: DateTime
 
-Create `solveig/plugins/schema/datetime.py`:
+Create a class that inherits from `solveig.schema.requirements.base.Requirement`
+Implement 3 required methods (you can optionally also re-define the display method)
+Register your new Requirement with `@solveig.schema.register_requirement`
 
 ```python
 from datetime import datetime
@@ -39,6 +41,12 @@ class DateTimeRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         return "datetime(): get current date and time as ISO timestamp"
+    
+    def display_header(
+        self, interface: SolveigInterface, detailed: bool = False
+    ) -> None:
+        """Display datetime requirement header."""
+        super().display_header(interface, detailed=detailed) # displays self.comment
 
     def create_error_result(self, error_message: str, accepted: bool) -> DateTimeResult:
         return DateTimeResult(
@@ -106,18 +114,6 @@ def normalize_to_utc(config, interface, requirement, result: DateTimeResult):
         utc_dt = dt.utctimetuple()
         result.timestamp = datetime(*utc_dt[:6]).isoformat() + 'Z'
 ```
-
-## Plugin Registration
-
-### Hook Plugins
-Just create the file with decorators - they auto-register when Solveig loads.
-
-### Requirement Plugins
-1. Create the requirement file as shown above
-2. Add import to `solveig/schema/requirements/__init__.py`:
-   ```python
-   from solveig.plugins.schema.datetime import DateTimeRequirement
-   ```
 
 ## Plugin Configuration
 

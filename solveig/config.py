@@ -8,7 +8,7 @@ from typing import Any
 from solveig.interface import SolveigInterface
 from solveig.llm import APIType, parse_api_type
 from solveig.utils.file import Filesystem
-from solveig.utils.misc import parse_human_readable_size
+from solveig.utils.misc import parse_human_readable_size, default_json_serialize
 
 DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
 
@@ -283,4 +283,4 @@ class SolveigConfig:
 
     def to_json(self, indent: int | None = 2, **kwargs) -> str:
         """Export config to JSON string."""
-        return json.dumps(self.to_dict(), indent=indent, **kwargs)
+        return json.dumps(self.to_dict(), default=default_json_serialize, indent=indent, **kwargs)
