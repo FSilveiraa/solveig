@@ -1,10 +1,15 @@
 # Solveig
 
-**AI agent framework with human oversight and extensible plugin architecture**
+**AI agent framework with deep configuration, safe defaults, a rich interface and an extensible plugin architecture**
 
 ![Demo GIF](./docs/demo.gif)
 
-Solveig is a safety-first AI agent that combines powerful file operations, command execution, and plugin extensibility with granular permission controls. Unlike other AI tools, Solveig puts you in control with transparent task tracking and configurable safety boundaries.
+[![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
+[![CI](https://github.com/FranciscoSilveira/solveig/workflows/CI/badge.svg)](https://github.com/FranciscoSilveira/solveig/actions)
+[![codecov](https://codecov.io/gh/FranciscoSilveira/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/FranciscoSilveira/solveig)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ## Installation
 
@@ -19,10 +24,7 @@ pip install solveig
 solveig -u "http://localhost:5001/v1" "Tell me a joke"
 
 # Run from a remote API like OpenRouter
-solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Summarize my day"
-
-# Use with OpenAI
-solveig -k "<OPENAI_API_KEY>" "Help me organize my project files"
+solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Refactor test_database.py to be more concise"
 ```
 
 ## Key Features
@@ -39,11 +41,3 @@ solveig -k "<OPENAI_API_KEY>" "Help me organize my project files"
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
 - **[About & Comparisons](./docs/about.md)** - Detailed features and how Solveig compares to alternatives
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
-
-## License
-
-[Your License Here]
-
----
-
-*Built with safety, extensibility, and developer experience in mind.*
