@@ -139,3 +139,6 @@ future alternatives like web interfaces with media rendering and HTML support.
 
 - **Industry standards** - Solveig adopts proven patterns from leading agentic AI tools. Several features were
 inspired by or functionally copied from other tools - see the [Market Comparison](#market-comparison) for details.
+
+- **Config reloading** - Although not yet implemented, assume that the configuration can change along the session,
+which influences the design behind otherwise static decisions like schema generation.

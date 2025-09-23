@@ -629,18 +629,19 @@ def get_basic_os_info(exclude_username=False):
     return info
 
 
-def get_available_capabilities() -> str:
+def get_available_capabilities(config: SolveigConfig) -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
     active_requirements = list(REQUIREMENTS.registered.values())
     return "\n".join(
         f"- {req_class.get_description()}" for req_class in active_requirements
+        if req_class != CommandRequirement or config.allow_commands
     )
 
 
 def get_system_prompt(config: SolveigConfig):
     # Generate dynamic capabilities list
-    capabilities_list = get_available_capabilities()
+    capabilities_list = get_available_capabilities(config)
     system_prompt = SYSTEM_PROMPT.strip().replace(
         "{CAPABILITIES_LIST}", capabilities_list
     )

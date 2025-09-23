@@ -42,6 +42,7 @@ class SolveigConfig:
     auto_allowed_paths: list[PurePath] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
+    allow_commands: bool = True
 
     def __post_init__(self):
         # convert API type string to class
@@ -211,6 +212,13 @@ class SolveigConfig:
             default=None,
             help="Automatically send requirement results back to the LLM without asking",
         )
+        parser.add_argument(
+            "--no-commands",
+            action="store_false",
+            dest="allow_commands",
+            default=None,
+            help="Disable command execution entirely (secure mode)",
+        )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
         args = parser.parse_args(cli_args)
@@ -258,6 +266,6 @@ class SolveigConfig:
 
         return config_dict
 
-    def to_json(self, indent: int = 2) -> str:
+    def to_json(self, indent: int | None = 2, **kwargs) -> str:
         """Export config to JSON string."""
-        return json.dumps(self.to_dict(), indent=indent)
+        return json.dumps(self.to_dict(), indent=indent, **kwargs)

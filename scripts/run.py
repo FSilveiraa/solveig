@@ -54,6 +54,9 @@ def get_initial_user_message(
     return UserMessage(comment=user_prompt)
 
 
+_last_config_sent_to_llm = None
+_last_model_sent_to_llm = get_filtered_assistant_message_class()
+
 def send_message_to_llm(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -67,12 +70,15 @@ def send_message_to_llm(
 
     # Show animated spinner during LLM processing
     def blocking_llm_call():
-        # Use filtered AssistantMessage class that respects plugin filtering
-        filtered_assistant_message_class = get_filtered_assistant_message_class()
+        # Check if the config changed since the last message sent, if so reload the message's model
+        config_hash = hash(config.to_json(indent=None, sort_keys=True))
+        global _last_model_sent_to_llm
+        if config_hash != _last_config_sent_to_llm:
+            _last_model_sent_to_llm = get_filtered_assistant_message_class(config)
 
         return client.chat.completions.create(
             messages=message_history.to_openai(),
-            response_model=filtered_assistant_message_class,
+            response_model=_last_model_sent_to_llm,
             strict=False,
             model=config.model,
             temperature=config.temperature,

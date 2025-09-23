@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Union
 from pydantic import Field, field_validator
 
 from .base import BaseSolveigModel
-from .. import utils
+from .. import utils, SolveigConfig
 from ..llm import APIType
 from .requirements import Requirement
 from .results import RequirementResult
@@ -65,13 +65,16 @@ class AssistantMessage(BaseMessage):
     requirements: list[Requirement] | None = None  # Simplified - actual schema generated dynamically
 
 
-def get_filtered_assistant_message_class():
+def get_filtered_assistant_message_class(config: SolveigConfig = None) -> type[BaseMessage]:
     """Get a dynamically created AssistantMessage class with only filtered requirements.
 
     This is used by Instructor to get the correct schema without caching issues.
     Gets all active requirements from the unified registry (core + plugins).
+    
+    Args:
+        config: SolveigConfig instance for filtering requirements based on settings
     """
-    # Get ALL active requirements from the unified registry
+   # Get ALL active requirements from the unified registry
     try:
         from solveig.schema import REQUIREMENTS
 
@@ -79,6 +82,14 @@ def get_filtered_assistant_message_class():
     except (ImportError, AttributeError):
         # Fallback - should not happen in normal operation
         all_active_requirements = []
+
+    # Filter out CommandRequirement if commands are disabled
+    if config and not config.allow_commands:
+        from solveig.schema.requirements.command import CommandRequirement
+        all_active_requirements = [
+            req for req in all_active_requirements 
+            if req != CommandRequirement
+        ]
 
     # Handle empty registry case
     if not all_active_requirements:
