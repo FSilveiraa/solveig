@@ -17,37 +17,47 @@ Solveig is an AI agent framework built on the principle that powerful AI tools s
 ## FAQ
 
 **What is Solveig?**
-A safety-first AI agent that bridges language models to your filesystem and shell with explicit user consent and visual transparency.
 
-**Is Solveig an LLM like ChatGPT?**
-No, Solveig is an agentic bridge that connects any language model to your computer's files and commands, with safety controls and user oversight.
+An AI agentic framework that bridges language models to your filesystem and shell with explicit user consent
+and visual transparency. It's not a model like nor is it really an agent either - Solveig provides the
+infrastructure that enables agentic behavior on a system to any model or backend you want to use.
 
 **Is Solveig safe to run?**
-Solveig prioritizes safety with clear information displays, sensible defaults, and comprehensive testing (127 tests, 88% coverage). However, it's ultimately a connection between an LLM and your computer's files and shell, which carries inherent risks. You remain responsible for any operations you approve.
+
+Solveig prioritizes safety with clear information displays, sensible defaults, and comprehensive testing.
+However, it's ultimately a connection between an LLM and your computer's files and shell, which carries inherent
+risks. You remain responsible for any operations you approve.
 
 **How does Solveig work?**
-The AI analyzes your request, creates a plan with specific requirements (read files, run commands, etc.), displays this plan with clear descriptions, asks for your permission, then executes approved operations and shows results.
+
+The agent analyzes your request, creates a plan with specific requirements (read files, run commands, etc.),
+displays this plan with clear descriptions, asks for your permission, then executes approved operations and
+shows results.
 
 **Why are there 2 types of plugins?**
-[You mentioned you'd fill this in]
+You can extend Solveig in any of 2 ways:
+- By adding a new requirement, representing a new thing the LLM can request
+- By adding a hook that captures the requirement before or after it's been processed
+
+See the [Plugins](./plugins.md) page for more information
 
 ## Market Comparison
 
 Solveig shares a space with several other tools, mature and with better user adoption that you should reasonably
-consider as alternatives. I believe Solveig offers a unique combination and intend for the project to both offer
+consider as alternatives. I believe Solveig offers fills in a relevant niche and intend for the project to both offer
 unique feature sets that no other tool does (like plugins) while also striving to make it the best at core shared
 features like user interface and granular consent modules. I still think all of these tools are worth using and
 I myself have tried some of them.
 
-| Feature               | Solveig              | Claude Code          | Cursor              | Cline          | Open Interpreter              | Aider     |
-|-----------------------|----------------------|----------------------|---------------------|----------------|-------------------------------|-----------|
-| **Granular Consent**  | ✅ Patterns           | 🆗 CLAUDE.md         | ✅ Autonomy Slider   | ✅              | 🆗 Yes/No + Safe Mode         | 🆗 Yes/No |
-| **Extensibility**     | ✅ Plugins            | ❌                    |                     | ✅ MCP          | ❌                             | ❌         |
-| **Provider Choice**   | ✅                    | ❌ Claude only        |                     | ✅              | ✅                             | ✅         |
-| **Command Execution** | ✅                    | ✅                    |                     | ✅              | ✅                             | ✅         |
-| **File API**          | ✅                    | ✅                    |                     | ✅              | ❌                             | ✅         |
-| **Agentic Features**  | 🆗 Simple task lists | ✅ Full task planning | ✅ Full task planning | ❌              | ❌                             | ❌         |
-| **Standalone Tool**   | ✅ CLI                | ✅ CLI                |                     | ❌ VS Code only | ✅ CLI + library + desktop app | ✅ CLI     |
+| Feature               | Solveig              | Claude Code          | Cursor               | Cline            | Open Interpreter      | Aider     |
+|-----------------------|----------------------|----------------------|----------------------|------------------|-----------------------|-----------|
+| **Granular Consent**  | ✅ Patterns           | 🆗 CLAUDE.md         | ✅ Autonomy Slider    | ✅                | 🆗 Yes/No + Safe Mode | 🆗 Yes/No |
+| **Extensibility**     | ✅ Plugins            | ❌                    | ✅ VS Code plugins    | ✅ MCP            | ❌                     | ❌         |
+| **Provider Choice**   | ✅                    | ❌ Claude only        | ✅                    | ✅                | ✅                     | ✅         |
+| **Command Execution** | ✅                    | ✅                    | ✅                    | ✅                | ✅                     | ✅         |
+| **File API**          | ✅                    | ✅                    | ✅                    | ✅                | ❌                     | ✅         |
+| **Agentic Features**  | 🆗 Simple task lists | ✅ Full task planning | ✅ Full task planning | ❌                | ❌                     | ❌         |
+| **Standalone Tool**   | ✅ CLI                | ✅ CLI                | ❌ GUI text editor    | ❌ VS Code plugin | ✅ CLI + GUI + library | ✅ CLI     |
 
 * **[Claude Code](https://claude.com/product/claude-code)** The current golden standard for a CLI AI assistant.
 It's a feature-superset of Solveig, offering all of its capabilities while being a much more mature project
@@ -107,30 +117,25 @@ Honestly, give Aider a try, it's a very useful tool  - people have built busines
 
 These are the core principles I use when creating Solveig:
 
-- **Balance safe defaults with configurability** Solveig has to be as safe as possible for casual users while
-offering deep configurability to power users. It should enforce sane default behavior like allowing command execution
-while requiring explicit consent for all operations. We should also acknowledge that different users and scenarios
-will benefit from extensive and granular configuration, from a very safety-concerned user who prefers to run Solveig
-entirely without commands, to someone running it in a VM with everything auto-approved or someone testing a local
-model. We should strive for very granular permissions using glob patterns and negative patterns.
+- **User consent and safety** - Built around explicit user permission for all operations with secure defaults.
+Solveig requires consent before reading files, executing commands, or making changes, ensuring users maintain
+control over their system at every step. Solveig also maintains a comprehensive test suite with wide coverage.
 
-- **File API over Shell commands:** Filesystem operations through our File API are safer than shell execution,
-and this has to be reflected across the project. The system prompt instructs the model to prioritize File
-Requirements and the configuration allows excluding commands entirely.
+- **Advanced configurability** - Offers extensive customization through glob patterns, permission rules and
+operation-specific controls. Power users can disable commands, auto-approve trusted paths, or create custom
+resources through plugins and configuration files.
 
-- **Plugin extensibility:** New capabilities should be additive, not require core modifications. Plugins
-have to be simple drop-in files, easy to develop, with a clear integration into any project components.
-This creates a new and more independent avenue for project expansion that doesn't require PRs to project code,
-anyone can add a new resource available to the LLM or interact with existing resources by creating an 80-line
-Python file.
+- **File API over Shell commands** - Filesystem operations through our File API are fundamentally safer
+than shell execution. The system prompt instructs models to prioritize File Requirements, and the
+configuration allows excluding commands entirely.
 
-- **Visual transparency:** Our interface has to be rich and clearly display relevant information for the user
-to make informed decisions by showing planned tasks, resolved file paths and contents, resorting to clear visual
-guidelines to clearly present relevant information. At the same time it's important that the interface's actual
-code interface is abstract enough to allow several reasonable alternatives. For example, right now Solveig is a
-CLI-focused tool, but there's no real reason not to consider a web interface in the future that offers valuable
-features like more customizable looks, media playing, HTML rendering, etc.
+- **Plugin extensibility** - New capabilities should be additive, not require core modifications. Plugins
+are simple drop-in files that anyone can develop - an 80-line Python file can add new LLM resources or
+interact with existing ones without requiring PRs to project code.
 
-- **Industry standards:** Solveig adopts patterns from other leading agentic AI tools and builds upon leading
-industry standards. Several features of Solveig were anywhere from inspired to functionally or visually copied 
-from other tools - see the [Market Comparison](#market-comparison) above for more.
+- **Visual transparency** - The interface displays planned tasks, resolved file paths, and contents with clear
+visual guidelines so users can make informed decisions. The code interface remains abstract enough to support
+future alternatives like web interfaces with media rendering and HTML support.
+
+- **Industry standards** - Solveig adopts proven patterns from leading agentic AI tools. Several features were
+inspired by or functionally copied from other tools - see the [Market Comparison](#market-comparison) for details.
