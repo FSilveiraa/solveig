@@ -13,8 +13,14 @@ except ImportError:
     distro = None  # type: ignore
 
 # TODO: Make conversation examples dynamic rather than hardcoded
-from solveig.schema import REQUIREMENTS, TaskListRequirement, WriteRequirement, WriteResult, DeleteRequirement, \
-    MoveRequirement, MoveResult
+from solveig.schema import (
+    REQUIREMENTS,
+    MoveRequirement,
+    MoveResult,
+    TaskListRequirement,
+    WriteRequirement,
+    WriteResult,
+)
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from solveig.schema.results import CommandResult, ReadResult
 
@@ -373,7 +379,9 @@ task_list_2 = TaskListRequirement(
         ),
     ],
 )
-read_hello_py_req = ReadRequirement(comment="", path="~/Sync/hello.py", metadata_only=False)
+read_hello_py_req = ReadRequirement(
+    comment="", path="~/Sync/hello.py", metadata_only=False
+)
 read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False)
 large_example.add_messages(
     AssistantMessage(
@@ -388,7 +396,9 @@ It seems there are several files, the most relevant may be some .py and .sh scri
     ),
     UserMessage(
         results=[
-            TaskListResult(requirement=task_list_2, accepted=True, tasks=task_list_2.tasks),
+            TaskListResult(
+                requirement=task_list_2, accepted=True, tasks=task_list_2.tasks
+            ),
             ReadResult(
                 requirement=read_hello_py_req,
                 path=PurePath("/home/user/Sync/hello.py"),
@@ -425,8 +435,8 @@ print("Hello, world!")
                     modified_time=1753389917,
                     encoding=None,
                     listing=None,
-                )
-            )
+                ),
+            ),
         ]
     ),
 )
@@ -458,19 +468,19 @@ This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.s
         comment="Thanks! Can you improve that print script to accept CLI args with a default?",
         results=[
             TaskListResult(
-                requirement=task_list_1,
-                accepted=True,
-                tasks=task_list_3.tasks
+                requirement=task_list_1, accepted=True, tasks=task_list_3.tasks
             )
         ],
-    )
-
+    ),
 )
 
 task_list_4 = TaskListRequirement(
     comment="Improve print utilities in project inside /home/user/Sync",
     tasks=[
-        Task(description="Analyze and explain the contents of /home/user/Sync", status="completed"),
+        Task(
+            description="Analyze and explain the contents of /home/user/Sync",
+            status="completed",
+        ),
         Task(description="Write new print script", status="in_progress"),
         Task(description="Test new print script", status="pending"),
     ],
@@ -527,15 +537,18 @@ large_example.add_messages(
 Hello, world!
 Hello, Solveig!
                 """.strip(),
-            )
-        ]
+            ),
+        ],
     ),
 )
 
 task_list_4 = TaskListRequirement(
     comment="Improve project in /home/user/Sync/ and delete old files",
     tasks=[
-        Task(description="Analyze and explain the contents of /home/user/Sync/", status="completed"),
+        Task(
+            description="Analyze and explain the contents of /home/user/Sync/",
+            status="completed",
+        ),
         Task(description="Write and test new print script", status="completed"),
         Task(description="Delete old print script", status="in_progress"),
         Task(description="Re-name the new print script", status="in_progress"),
@@ -551,7 +564,7 @@ large_example.add_messages(
         requirements=[
             task_list_4,
             script_delete_move_req,
-        ]
+        ],
     ),
     UserMessage(
         comment="I'd rather use a simple move operation for this",
@@ -565,9 +578,9 @@ large_example.add_messages(
                 requirement=script_delete_move_req,
                 accepted=False,
                 command=script_command_req.command,
-            )
+            ),
         ],
-    )
+    ),
 )
 
 task_list_5 = TaskListRequirement(
@@ -575,7 +588,10 @@ task_list_5 = TaskListRequirement(
     tasks=[
         Task(description="Write and test new print script", status="completed"),
         Task(description="Re-name new print script with command", status="failed"),
-        Task(description="Over-write old print script with improved one", status="in_progress"),
+        Task(
+            description="Over-write old print script with improved one",
+            status="in_progress",
+        ),
     ],
 )
 script_move_req = MoveRequirement(
@@ -589,7 +605,7 @@ large_example.add_messages(
         requirements=[
             task_list_5,
             script_move_req,
-        ]
+        ],
     ),
     UserMessage(
         comment="Great, thanks!",
@@ -605,8 +621,8 @@ large_example.add_messages(
                 source_path=script_move_req.source_path,
                 destination_path=script_move_req.destination_path,
             ),
-        ]
-    )
+        ],
+    ),
 )
 
 
@@ -634,7 +650,8 @@ def get_available_capabilities(config: SolveigConfig) -> str:
     # Get ALL active requirements from the unified registry (core + plugins)
     active_requirements = list(REQUIREMENTS.registered.values())
     return "\n".join(
-        f"- {req_class.get_description()}" for req_class in active_requirements
+        f"- {req_class.get_description()}"
+        for req_class in active_requirements
         if req_class != CommandRequirement or config.allow_commands
     )
 

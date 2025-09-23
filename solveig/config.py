@@ -54,13 +54,15 @@ class SolveigConfig:
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
             ]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
-        
+
         # Validate regex patterns for auto_execute_commands
         for pattern in self.auto_execute_commands:
             try:
                 re.compile(pattern)
             except re.error as e:
-                raise ValueError(f"Invalid regex pattern in auto_execute_commands: '{pattern}': {e}")
+                raise ValueError(
+                    f"Invalid regex pattern in auto_execute_commands: '{pattern}': {e}"
+                ) from e
 
         # split allowed paths in (path, mode)
         # TODO: allowed paths
@@ -204,7 +206,7 @@ class SolveigConfig:
             type=str,
             nargs="*",
             dest="auto_execute_commands",
-            help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !"
+            help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !",
         )
         parser.add_argument(
             "--auto-send",
@@ -228,9 +230,10 @@ class SolveigConfig:
         file_config = cls.parse_from_file(args_dict.pop("config"))
         if not file_config:
             file_config = {}
-            warning = "Failed to parse config file, falling back to defaults"
             if interface:
-                interface.display_error(warning)
+                interface.display_error(
+                    "Failed to parse config file, falling back to defaults"
+                )
 
         # Merge config from file and CLI
         merged_config: dict = {**file_config}
@@ -241,15 +244,27 @@ class SolveigConfig:
         # Display a warning if ".*" is in allowed_commands or / is in allowed_paths
         # I know this looks bad, but it's so much easier than designing a regex to capture
         # other regexes
-        concerning_command_patterns = { ".*", "^.*", ".*$", "^.*$" }
-        for pattern in merged_config.get("auto_execute_commands", []):
-            if pattern in concerning_command_patterns:
-                interface.display_warning(f"Warning: Very permissive command pattern '{pattern}' is auto-allowed to execute")
+        if interface:
+            concerning_command_patterns = {".*", "^.*", ".*$", "^.*$"}
+            for pattern in merged_config.get("auto_execute_commands", []):
+                if pattern in concerning_command_patterns:
+                    interface.display_warning(
+                        f"Warning: Very permissive command pattern '{pattern}' is auto-allowed to execute"
+                    )
 
-        concerning_path_patterns = { "/", "/**", "/etc", "/boot", "/proc", "/sys", }
-        for pattern in merged_config.get("auto_allowed_paths", []):
-            if any(pattern.startswith(sig) for sig in concerning_path_patterns):
-                interface.display_warning(f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations")
+            concerning_path_patterns = {
+                "/",
+                "/**",
+                "/etc",
+                "/boot",
+                "/proc",
+                "/sys",
+            }
+            for pattern in merged_config.get("auto_allowed_paths", []):
+                if any(pattern.startswith(sig) for sig in concerning_path_patterns):
+                    interface.display_warning(
+                        f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations"
+                    )
 
         return (cls(**merged_config), user_prompt)
 

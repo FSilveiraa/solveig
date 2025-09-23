@@ -121,4 +121,3 @@ def parse_human_readable_size(size_notation: int | str) -> int:
                         f"'{size_notation}' is not a valid disk size"
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
-

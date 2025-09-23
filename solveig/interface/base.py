@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
-    from solveig.schema import AssistantMessage
+    from solveig.schema.message import AssistantMessage
 
 
 class SolveigInterface(ABC):

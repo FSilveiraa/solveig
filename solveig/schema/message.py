@@ -1,13 +1,12 @@
 import json
 from dataclasses import dataclass, field
-
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator
 
-from .base import BaseSolveigModel
-from .. import utils, SolveigConfig
+from .. import SolveigConfig, utils
 from ..llm import APIType
+from .base import BaseSolveigModel
 from .requirements import Requirement
 from .results import RequirementResult
 
@@ -62,19 +61,23 @@ class UserMessage(BaseMessage):
 # at runtime by get_filtered_assistant_message_class() which includes all active requirements
 class AssistantMessage(BaseMessage):
     role: Literal["assistant"] = "assistant"
-    requirements: list[Requirement] | None = None  # Simplified - actual schema generated dynamically
+    requirements: list[Requirement] | None = (
+        None  # Simplified - actual schema generated dynamically
+    )
 
 
-def get_filtered_assistant_message_class(config: SolveigConfig = None) -> type[BaseMessage]:
+def get_filtered_assistant_message_class(
+    config: SolveigConfig | None = None,
+) -> type[BaseMessage]:
     """Get a dynamically created AssistantMessage class with only filtered requirements.
 
     This is used by Instructor to get the correct schema without caching issues.
     Gets all active requirements from the unified registry (core + plugins).
-    
+
     Args:
         config: SolveigConfig instance for filtering requirements based on settings
     """
-   # Get ALL active requirements from the unified registry
+    # Get ALL active requirements from the unified registry
     try:
         from solveig.schema import REQUIREMENTS
 
@@ -86,9 +89,9 @@ def get_filtered_assistant_message_class(config: SolveigConfig = None) -> type[B
     # Filter out CommandRequirement if commands are disabled
     if config and not config.allow_commands:
         from solveig.schema.requirements.command import CommandRequirement
+
         all_active_requirements = [
-            req for req in all_active_requirements 
-            if req != CommandRequirement
+            req for req in all_active_requirements if req != CommandRequirement
         ]
 
     # Handle empty registry case
@@ -101,8 +104,9 @@ def get_filtered_assistant_message_class(config: SolveigConfig = None) -> type[B
 
     # Create union dynamically from all registered requirements
     if len(all_active_requirements) == 1:
-        requirements_union = all_active_requirements[0]
+        requirements_union: Any = all_active_requirements[0]
     else:
+        # Create union using | operator (modern Python syntax)
         requirements_union = all_active_requirements[0]
         for req_type in all_active_requirements[1:]:
             requirements_union = requirements_union | req_type
@@ -110,20 +114,20 @@ def get_filtered_assistant_message_class(config: SolveigConfig = None) -> type[B
     # Create completely fresh AssistantMessage class
     class AssistantMessage(BaseMessage):
         requirements: (
-                list[
-                    Annotated[
-                        requirements_union,
-                        Field(discriminator="title"),
-                    ]
+            list[
+                Annotated[
+                    requirements_union,  # type: ignore[valid-type]
+                    Field(discriminator="title"),
                 ]
-                | None
+            ]
+            | None
         ) = None
 
     return AssistantMessage
 
 
 # Type alias for any message type
-Message = Union[SystemMessage, UserMessage, AssistantMessage]
+Message = SystemMessage | UserMessage | AssistantMessage
 UserMessage.model_rebuild()
 AssistantMessage.model_rebuild()
 
@@ -167,8 +171,8 @@ class MessageHistory:
                 break  # Can't remove system message
 
     def add_messages(
-            self,
-            *messages: Message,
+        self,
+        *messages: Message,
     ):
         """Add a message and automatically prune if over context limit."""
         for message in messages:
@@ -182,7 +186,5 @@ class MessageHistory:
 
     def to_example(self):
         return "\n".join(
-            str(message)
-            for message in self.messages
-            if message.role != "system"
+            str(message) for message in self.messages if message.role != "system"
         )

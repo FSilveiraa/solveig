@@ -6,7 +6,8 @@ This module defines the data structures used for:
 - Requirements (file operations, shell commands)
 - Results and error handling
 """
-from dataclasses import is_dataclass, fields
+
+from dataclasses import fields, is_dataclass
 from pathlib import PurePath
 
 from pydantic import BaseModel, field_serializer
@@ -28,7 +29,10 @@ class BaseSolveigModel(BaseModel):
         elif isinstance(obj, list):
             return [cls._dump_pydantic_field(v) for v in obj]
         elif isinstance(obj, dict):
-            return {cls._dump_pydantic_field(k): cls._dump_pydantic_field(v) for k, v in obj.items()}
+            return {
+                cls._dump_pydantic_field(k): cls._dump_pydantic_field(v)
+                for k, v in obj.items()
+            }
         else:
             return obj
 

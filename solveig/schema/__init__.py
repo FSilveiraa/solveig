@@ -6,7 +6,7 @@ This module defines the data structures used for:
 - Requirements (file operations, shell commands)
 - Results and error handling
 """
-from .message import AssistantMessage, Message, MessageHistory, UserMessage  # noqa: F401
+
 from .requirements import (  # noqa: F401
     CommandRequirement,
     CopyRequirement,

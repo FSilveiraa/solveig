@@ -86,10 +86,14 @@ class CommandRequirement(Requirement):
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
                 should_auto_execute = True
-                interface.display_text(f"Auto-executing {self.command} since it matches config.allow_allowed_paths")
+                interface.display_text(
+                    f"Auto-executing {self.command} since it matches config.allow_allowed_paths"
+                )
                 break
-        
-        if should_auto_execute or interface.ask_yes_no("Allow running command? [y/N]: "):
+
+        if should_auto_execute or interface.ask_yes_no(
+            "Allow running command? [y/N]: "
+        ):
             try:
                 output: str | None
                 error: str | None
