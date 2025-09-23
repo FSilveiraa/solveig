@@ -3,6 +3,8 @@ import platform
 from datetime import datetime
 from pathlib import PurePath
 
+from .plugins.schema.tree import TreeRequirement, TreeResult
+from .schema.results.task import Task, TaskListResult
 from .utils.file import Metadata
 
 try:
@@ -11,33 +13,29 @@ except ImportError:
     distro = None  # type: ignore
 
 # TODO: Make conversation examples dynamic rather than hardcoded
-from solveig.schema import REQUIREMENTS
+from solveig.schema import (
+    REQUIREMENTS,
+    MoveRequirement,
+    MoveResult,
+    TaskListRequirement,
+    WriteRequirement,
+    WriteResult,
+)
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from solveig.schema.results import CommandResult, ReadResult
 
 from .config import SolveigConfig
-from .schema.message import LLMMessage, MessageHistory, UserMessage
+from .schema.message import AssistantMessage, MessageHistory, UserMessage
 
 SYSTEM_PROMPT = """
-You are an AI assisting a user with whatever issues they may have with their computer.
+You are an AI assisting a user with whatever issues they may have.
 Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
 Always try to answer the user's question, no matter how redundant it may seem.
-
 You may request any of the following operations that you think are necessary:
 {CAPABILITIES_LIST}
-Any time you request any filesystem operations from the user, always explain why they're necessary.
-Any time you ask the user to execute anything, always explain why you need it, what each flag does, what you expect it to do and what the expected output is.
-Put the safety and integrity of user's system above everything else, do not suggest dangerous/destructive commands unless it's absolutely necessary.
-
-The user will analyze your requirements and accept or deny each, then provide the results.
-You will then analyze their response and respond to it, asking for more requirements if necessary.
-You will continue this process until the user's issue is solved.
-Request as few requirements as necessary to obtain what is needed. For example, don't ask for a file and also a command to read that file.
-Prioritize asking for direct file requests over running commands for those files since it's safer for the user.
-Use commands only when necessary for access or performance reasons.
-If you believe your solution will require multiple steps in sequence, order them using the task list.
-
-Output your response strictly following the `LLMMessage` format described below.
+Put system safety first - explain all operations, prefer file operations over commands, avoid destructive actions unless absolutely necessary.
+Plan ahead using tasks lists. If the user rejects a requirement, update your plan and suggest alternatives.
+Output your response strictly following the `AssistantMessage` format described below.
 """
 
 SYSTEM_PROMPT_OS_INFO = """
@@ -45,34 +43,34 @@ You have access to the following information regarding the user's system:
 """
 
 SYSTEM_PROMPT_EXAMPLES = (
-    "Use the following conversation examples to guide your expected output format"
+    "Use the following conversation example(s) to guide your expected output format"
 )
 CONVERSATION_EXAMPLES = []
 
 joke_chat = MessageHistory(
     system_prompt=""
 )  # we don't want system prompt for a chat history that itself will be used in our system prompt
-CONVERSATION_EXAMPLES.append(joke_chat)
-joke_chat.add_message(UserMessage(comment="Tell me a joke"))
-joke_chat.add_message(
-    LLMMessage(
+# CONVERSATION_EXAMPLES.append(joke_chat)
+joke_chat.add_messages(UserMessage(comment="Tell me a joke"))
+joke_chat.add_messages(
+    AssistantMessage(
         comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.",
         requirements=[],
     )
 )
 
 script_chat = MessageHistory(system_prompt="")
-CONVERSATION_EXAMPLES.append(script_chat)
-script_chat.add_message(UserMessage(comment="What does the script on ~/run.sh do?"))
+# CONVERSATION_EXAMPLES.append(script_chat)
+script_chat.add_messages(UserMessage(comment="What does the script on ~/run.sh do?"))
 file_req1 = ReadRequirement(
     metadata_only=True,
     path="~/run.sh",
     comment="To check what this script does, I need to read the contents of run.sh.",
 )
-script_chat.add_message(
-    LLMMessage(comment="Of course, let's take a look", requirements=[file_req1])
+script_chat.add_messages(
+    AssistantMessage(comment="Of course, let's take a look", requirements=[file_req1])
 )
-script_chat.add_message(
+script_chat.add_messages(
     UserMessage(
         comment="Ok here you go",
         results=[
@@ -102,8 +100,8 @@ echo "Project initialized." > tmp/init.flag
         ],
     )
 )
-script_chat.add_message(
-    LLMMessage(
+script_chat.add_messages(
+    AssistantMessage(
         comment="""
 This script initializes a project workspace.
 This script creates logs/ and tmp/, makes an empty logs/app.log, and writes “Project initialized.” to tmp/init.flag.
@@ -114,8 +112,8 @@ It’s safe—no deletions or overwrites.
 )
 
 multiple_issues_chat = MessageHistory(system_prompt="")
-CONVERSATION_EXAMPLES.append(multiple_issues_chat)
-multiple_issues_chat.add_message(
+# CONVERSATION_EXAMPLES.append(multiple_issues_chat)
+multiple_issues_chat.add_messages(
     UserMessage(
         comment="""
 My computer is slow, can you help me find which processes are using my CPU the most and what my disk usage is?
@@ -141,8 +139,8 @@ file_req_log = ReadRequirement(
     path="~/Documents/my_app.log",
     metadata_only=False,
 )
-multiple_issues_chat.add_message(
-    LLMMessage(
+multiple_issues_chat.add_messages(
+    AssistantMessage(
         comment="Sure! Let’s check these step by step.",
         requirements=[
             cmd_req_cpu_usage,
@@ -152,7 +150,7 @@ multiple_issues_chat.add_message(
         ],
     )
 )
-multiple_issues_chat.add_message(
+multiple_issues_chat.add_messages(
     UserMessage(
         comment="Here you go. I don't think it's necessary to get the metadata for my home folder, but you can have the rest",
         results=[
@@ -221,13 +219,410 @@ tmpfs           784M   48K  784M   1% /run/user/1000
         ],
     )
 )
-multiple_issues_chat.add_message(
-    LLMMessage(
+multiple_issues_chat.add_messages(
+    AssistantMessage(
         comment="""
 I understand. Based on the information you've shared, Firefox is using a lot of your CPU and could be responsible for it being slow.
 The file ~/my_app.log shows that someone tried to login as 'admin' around 09:12, but failed. Around the same time there was also a failed payment transaction.
 """
     )
+)
+
+
+large_example = MessageHistory(system_prompt="")
+CONVERSATION_EXAMPLES.append(large_example)
+
+task_list_1 = TaskListRequirement(
+    comment="I will first read the contents of ~/Sync, then individual files",
+    tasks=[
+        Task(description="Read the contents of ~/Sync", status="in_progress"),
+        Task(description="Read suspicious files inside ~/Sync"),
+        Task(
+            description="Provide a summary of contents, focused on safety and functionality"
+        ),
+    ],
+)
+tree_req = TreeRequirement(
+    comment="I'll analyze the tree structure of ~/Sync",
+    path="~/Sync",
+)
+tree_metadata = Metadata(
+    owner_name="user",
+    group_name="user",
+    path=PurePath("/home/user/Sync"),
+    size=4096,
+    is_directory=True,
+    is_readable=True,
+    is_writable=True,
+    modified_time=1758556702,
+    encoding=None,
+    listing={
+        PurePath("/home/user/Sync/config.json"): Metadata(
+            owner_name="user",
+            group_name="user",
+            path=PurePath("/home/user/Sync/config.json"),
+            size=132,
+            is_directory=False,
+            is_readable=True,
+            is_writable=True,
+            modified_time=1758556681,
+            encoding=None,
+            listing=None,
+        ),
+        PurePath("/home/user/Sync/d1"): Metadata(
+            owner_name="user",
+            group_name="user",
+            path=PurePath("/home/user/Sync/d1"),
+            size=4096,
+            is_directory=True,
+            is_readable=True,
+            is_writable=True,
+            modified_time=1758556735,
+            encoding=None,
+            listing={
+                PurePath("/home/user/Sync/d1/d2"): Metadata(
+                    owner_name="user",
+                    group_name="user",
+                    path=PurePath("/home/user/Sync/d1/d2"),
+                    size=4096,
+                    is_directory=True,
+                    is_readable=True,
+                    is_writable=True,
+                    modified_time=1758556743,
+                    encoding=None,
+                    listing={
+                        PurePath("/home/user/Sync/d1/d2/f1"): Metadata(
+                            owner_name="user",
+                            group_name="user",
+                            path=PurePath("/home/user/Sync/d1/d2/f1"),
+                            size=446,
+                            is_directory=False,
+                            is_readable=True,
+                            is_writable=True,
+                            modified_time=1758556767,
+                            encoding=None,
+                            listing=None,
+                        )
+                    },
+                )
+            },
+        ),
+        PurePath("/home/user/Sync/dev.sh"): Metadata(
+            owner_name="user",
+            group_name="user",
+            path=PurePath("/home/user/Sync/dev.sh"),
+            size=101,
+            is_directory=False,
+            is_readable=True,
+            is_writable=True,
+            modified_time=1753389917,
+            encoding=None,
+            listing=None,
+        ),
+        PurePath("/home/user/Sync/hello.py"): Metadata(
+            owner_name="user",
+            group_name="user",
+            path=PurePath("/home/user/Sync/hello.py"),
+            size=45,
+            is_directory=False,
+            is_readable=True,
+            is_writable=True,
+            modified_time=1753134710,
+            encoding=None,
+            listing=None,
+        ),
+    },
+)
+
+
+large_example.add_messages(
+    UserMessage(
+        comment="Hey I don't recognize the contents of ~/Sync, can you take a look to see if it looks suspicious?",
+    ),
+    AssistantMessage(
+        comment="I'll help you understand what ~/Sync contains",
+        requirements=[
+            task_list_1,
+            tree_req,
+        ],
+    ),
+    UserMessage(
+        comment="Here you go",
+        results=[
+            TaskListResult(
+                requirement=task_list_1,
+                accepted=True,
+                tasks=task_list_1.tasks,
+            ),
+            TreeResult(
+                requirement=tree_req,
+                accepted=True,
+                path=PurePath("/home/user/Sync/"),
+                metadata=tree_metadata,
+            ),
+        ],
+    ),
+)
+
+
+task_list_2 = TaskListRequirement(
+    comment="I've identified the most concerning files inside ~/Sync, I'll now read their contents",
+    tasks=[
+        Task(description="Read the contents of ~/Sync", status="completed"),
+        Task(
+            description="Read suspicious files inside ~/Sync",
+            status="completed",
+        ),
+        Task(
+            description="Provide a summary of contents, focused on safety and functionality",
+            status="in_progress",
+        ),
+    ],
+)
+read_hello_py_req = ReadRequirement(
+    comment="", path="~/Sync/hello.py", metadata_only=False
+)
+read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False)
+large_example.add_messages(
+    AssistantMessage(
+        comment="""
+It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.
+        """,
+        requirements=[
+            task_list_1,
+            read_hello_py_req,
+            read_dev_sh_req,
+        ],
+    ),
+    UserMessage(
+        results=[
+            TaskListResult(
+                requirement=task_list_2, accepted=True, tasks=task_list_2.tasks
+            ),
+            ReadResult(
+                requirement=read_hello_py_req,
+                path=PurePath("/home/user/Sync/hello.py"),
+                accepted=True,
+                metadata=Metadata(
+                    owner_name="user",
+                    group_name="user",
+                    path=PurePath("/home/user/Sync/hello.py"),
+                    size=45,
+                    is_directory=False,
+                    is_readable=True,
+                    is_writable=True,
+                    modified_time=1756916648,
+                    encoding=None,
+                    listing=None,
+                ),
+            ),
+            ReadResult(
+                requirement=read_dev_sh_req,
+                content="""
+#!/bin/python
+print("Hello, world!")
+                """.strip(),
+                path=PurePath("/home/user/Sync/dev.sh"),
+                accepted=True,
+                metadata=Metadata(
+                    owner_name="user",
+                    group_name="user",
+                    path=PurePath("/home/user/Sync/dev.sh"),
+                    size=101,
+                    is_directory=False,
+                    is_readable=True,
+                    is_writable=True,
+                    modified_time=1753389917,
+                    encoding=None,
+                    listing=None,
+                ),
+            ),
+        ]
+    ),
+)
+
+task_list_3 = TaskListRequirement(
+    comment="I've analyzed the contents of ~/Sync and everything seems safe",
+    tasks=[
+        Task(description="Read the contents of ~/Sync", status="completed"),
+        Task(
+            description="Read suspicious files inside ~/Sync",
+            status="completed",
+        ),
+        Task(
+            description="Provide a summary of contents, focused on safety and functionality",
+            status="completed",
+        ),
+    ],
+)
+large_example.add_messages(
+    AssistantMessage(
+        comment="""
+This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.
+        """,
+        requirements=[
+            task_list_3,
+        ],
+    ),
+    UserMessage(
+        comment="Thanks! Can you improve that print script to accept CLI args with a default?",
+        results=[
+            TaskListResult(
+                requirement=task_list_1, accepted=True, tasks=task_list_3.tasks
+            )
+        ],
+    ),
+)
+
+task_list_4 = TaskListRequirement(
+    comment="Improve print utilities in project inside /home/user/Sync",
+    tasks=[
+        Task(
+            description="Analyze and explain the contents of /home/user/Sync",
+            status="completed",
+        ),
+        Task(description="Write new print script", status="in_progress"),
+        Task(description="Test new print script", status="pending"),
+    ],
+)
+write_script_req = WriteRequirement(
+    comment="Write a better print script",
+    path="~/Sync/hello_new.py",
+    content="""
+import sys
+
+def run():
+    try:
+        name = sys.argv[1]
+    except IndexError:
+        name = "world"
+    print(f"Hello, {name}!")
+
+if __name__ == "__main__":
+    run()
+    """.strip(),
+    is_directory=False,
+)
+script_command_req = CommandRequirement(
+    comment="Now execute it to make sure it works correctly",
+    command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
+)
+large_example.add_messages(
+    AssistantMessage(
+        comment="I'll write and test an improved print script.",
+        requirements=[
+            task_list_4,
+            write_script_req,
+            script_command_req,
+        ],
+    ),
+    UserMessage(
+        comment="Cool, it works! Thanks, can you clean up the old file now?",
+        results=[
+            TaskListResult(
+                requirement=task_list_4,
+                accepted=True,
+                tasks=task_list_4.tasks,
+            ),
+            WriteResult(
+                requirement=write_script_req,
+                path=PurePath("/home/user/Sync/hello_new.py"),
+                accepted=True,
+            ),
+            CommandResult(
+                requirement=script_command_req,
+                accepted=True,
+                command=script_command_req.command,
+                stdout="""
+Hello, world!
+Hello, Solveig!
+                """.strip(),
+            ),
+        ],
+    ),
+)
+
+task_list_4 = TaskListRequirement(
+    comment="Improve project in /home/user/Sync/ and delete old files",
+    tasks=[
+        Task(
+            description="Analyze and explain the contents of /home/user/Sync/",
+            status="completed",
+        ),
+        Task(description="Write and test new print script", status="completed"),
+        Task(description="Delete old print script", status="in_progress"),
+        Task(description="Re-name the new print script", status="in_progress"),
+    ],
+)
+script_delete_move_req = CommandRequirement(
+    comment="Delete a script from /home/user/Sync/ and re-name the old one",
+    command="rm /home/user/Sync/hello.py; mv /home/user/Sync/hello_new.py /home/user/Sync/hello.py",
+)
+large_example.add_messages(
+    AssistantMessage(
+        comment="Of course! I'll delete the old script and re-name the new one",
+        requirements=[
+            task_list_4,
+            script_delete_move_req,
+        ],
+    ),
+    UserMessage(
+        comment="I'd rather use a simple move operation for this",
+        results=[
+            TaskListResult(
+                requirement=task_list_4,
+                accepted=True,
+                tasks=task_list_4.tasks,
+            ),
+            CommandResult(
+                requirement=script_delete_move_req,
+                accepted=False,
+                command=script_command_req.command,
+            ),
+        ],
+    ),
+)
+
+task_list_5 = TaskListRequirement(
+    comment="Improve project in /home/user/Sync/ and delete old files",
+    tasks=[
+        Task(description="Write and test new print script", status="completed"),
+        Task(description="Re-name new print script with command", status="failed"),
+        Task(
+            description="Over-write old print script with improved one",
+            status="in_progress",
+        ),
+    ],
+)
+script_move_req = MoveRequirement(
+    comment="Over-write old print script with improved one",
+    source_path="~/Sync/hello_new.py",
+    destination_path="~/Sync/hello.py",
+)
+large_example.add_messages(
+    AssistantMessage(
+        comment="I apologize, I'll use a move requirement instead",
+        requirements=[
+            task_list_5,
+            script_move_req,
+        ],
+    ),
+    UserMessage(
+        comment="Great, thanks!",
+        results=[
+            TaskListResult(
+                requirement=task_list_5,
+                accepted=True,
+                tasks=task_list_5.tasks,
+            ),
+            MoveResult(
+                requirement=script_move_req,
+                accepted=True,
+                source_path=script_move_req.source_path,
+                destination_path=script_move_req.destination_path,
+            ),
+        ],
+    ),
 )
 
 
@@ -250,18 +645,20 @@ def get_basic_os_info(exclude_username=False):
     return info
 
 
-def get_available_capabilities() -> str:
+def get_available_capabilities(config: SolveigConfig) -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
     active_requirements = list(REQUIREMENTS.registered.values())
     return "\n".join(
-        f"- {req_class.get_description()}" for req_class in active_requirements
+        f"- {req_class.get_description()}"
+        for req_class in active_requirements
+        if req_class != CommandRequirement or config.allow_commands
     )
 
 
 def get_system_prompt(config: SolveigConfig):
     # Generate dynamic capabilities list
-    capabilities_list = get_available_capabilities()
+    capabilities_list = get_available_capabilities(config)
     system_prompt = SYSTEM_PROMPT.strip().replace(
         "{CAPABILITIES_LIST}", capabilities_list
     )

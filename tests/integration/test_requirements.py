@@ -14,6 +14,9 @@ from pydantic import ValidationError
 # Mark all tests in this module to skip file mocking
 pytestmark = pytest.mark.no_file_mocking
 
+from unittest.mock import Mock
+
+from solveig.config import SolveigConfig
 from solveig.schema.requirements import (
     CommandRequirement,
     CopyRequirement,
@@ -257,9 +260,133 @@ class TestRequirementDisplay:
 class TestCommandRequirement:
     """Test CommandRequirement with real subprocess execution."""
 
-    @pytest.mark.no_subprocess_mocking
-    def test_successful_command_execution(self):
+    def test_auto_execute_matching_pattern(self, mock_subprocess):
+        """Test command auto-execution when pattern matches."""
+        # Configure mock subprocess
+        mock_subprocess.side_effect = None
+        mock_subprocess.return_value = Mock(
+            stdout="test output\n", stderr="", returncode=0
+        )
+
+        # Create config with auto-execute patterns
+        config = SolveigConfig(auto_execute_commands=["^ls\\s*$", "^pwd\\s*$"])
+        req = CommandRequirement(command="ls", comment="Test ls command")
+        interface = MockInterface()
+
+        # Auto-execute still asks about sending output
+        interface.set_user_inputs(["y"])
+
+        result = req.solve(config, interface)
+
+        # Verify result
+        assert result.accepted is True
+        assert result.success is True
+        assert result.command == "ls"
+        assert result.stdout == "test output"
+
+        # Verify auto-execute message was displayed
+        output = interface.get_all_output()
+        assert "Auto-executing ls" in output
+        # Should NOT ask about running command
+        assert "Allow running command?" not in output
+
+        # Verify subprocess was called
+        mock_subprocess.assert_called_once_with(
+            "ls", shell=True, capture_output=True, text=True, timeout=10
+        )
+
+    def test_auto_execute_non_matching_pattern(self, mock_subprocess):
+        """Test normal flow when command doesn't match auto-execute patterns."""
+        # Create config with auto-execute patterns
+        config = SolveigConfig(auto_execute_commands=["^ls\\s*$", "^pwd\\s*$"])
+        req = CommandRequirement(command="echo test", comment="Test echo command")
+        interface = MockInterface()
+
+        # Set user to decline the command
+        interface.set_user_inputs(["n"])
+
+        result = req.solve(config, interface)
+
+        # Verify normal prompt flow occurred
+        assert result.accepted is False
+        assert "Allow running command?" in interface.get_all_questions()
+        assert "Auto-executing" not in interface.get_all_output()
+
+        # Verify subprocess was NOT called since user declined
+        mock_subprocess.assert_not_called()
+
+    def test_auto_execute_with_flags(self, mock_subprocess):
+        """Test auto-execute with commands that have flags."""
+        # Configure mock subprocess for successful execution
+        mock_subprocess.side_effect = None
+        mock_subprocess.return_value = Mock(
+            stdout="file list\n", stderr="", returncode=0
+        )
+
+        # Pattern allows ls with -l and/or -a flags
+        config = SolveigConfig(auto_execute_commands=["^ls\\s+-[la]+\\s*$"])
+
+        test_cases = [
+            ("ls -l", True),
+            ("ls -a", True),
+            ("ls -la", True),
+            ("ls -al", True),
+            ("ls -xyz", False),  # Should not match
+            ("ls", False),  # Should not match (no flags)
+        ]
+
+        for command, should_auto_execute in test_cases:
+            mock_subprocess.reset_mock()  # Reset call count for each test
+            req = CommandRequirement(command=command, comment=f"Test {command}")
+            interface = MockInterface()
+
+            if should_auto_execute:
+                # Auto-execute still asks about sending output
+                interface.set_user_inputs(["y"])
+            else:
+                # Normal flow - decline command execution
+                interface.set_user_inputs(["n"])
+
+            result = req.solve(config, interface)
+            output = interface.get_all_output()
+
+            if should_auto_execute:
+                assert result.accepted is True
+                assert result.success is True
+                assert f"Auto-executing {command}" in output
+                assert "Allow running command?" not in interface.get_all_questions()
+                mock_subprocess.assert_called_once_with(
+                    command, shell=True, capture_output=True, text=True, timeout=10
+                )
+            else:
+                assert "Allow running command?" in interface.get_all_questions()
+                assert "Auto-executing" not in output
+                mock_subprocess.assert_not_called()
+
+    def test_auto_execute_empty_patterns(self, mock_subprocess):
+        """Test that empty auto_execute_commands list works normally."""
+        config = SolveigConfig(auto_execute_commands=[])
+        req = CommandRequirement(command="ls", comment="Test ls command")
+        interface = MockInterface()
+
+        interface.set_user_inputs(["n"])
+
+        result = req.solve(config, interface)
+
+        # Should follow normal prompt flow
+        assert result.accepted is False
+        assert "Allow running command?" in interface.get_all_questions()
+        assert "Auto-executing" not in interface.get_all_output()
+
+        # Verify subprocess was NOT called since user declined
+        mock_subprocess.assert_not_called()
+
+    def test_successful_command_execution(self, mock_subprocess):
         """Test successful command execution."""
+        # Configure mock subprocess for successful execution
+        mock_subprocess.side_effect = None
+        mock_subprocess.return_value = Mock(stdout="test\n", stderr="", returncode=0)
+
         req = CommandRequirement(command="echo test", comment="Test echo command")
         interface = MockInterface()
 
@@ -270,7 +397,12 @@ class TestCommandRequirement:
         assert result.success is True
         assert "test" in result.stdout
 
-    def test_command_declined(self):
+        # Verify subprocess was called correctly
+        mock_subprocess.assert_called_once_with(
+            "echo test", shell=True, capture_output=True, text=True, timeout=10
+        )
+
+    def test_command_declined(self, mock_subprocess):
         """Test when user declines command execution."""
         req = CommandRequirement(command="echo test", comment="Test echo command")
         interface = MockInterface()
@@ -279,12 +411,19 @@ class TestCommandRequirement:
         result = req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is False
 
-    @pytest.mark.no_subprocess_mocking
-    def test_command_with_error_output(self):
+        # Verify subprocess was NOT called since user declined
+        mock_subprocess.assert_not_called()
+
+    def test_command_with_error_output(self, mock_subprocess):
         """Test command that produces error output."""
-        # Use a predictable failing command that works cross-platform
+        # Configure mock subprocess to return error
+        mock_subprocess.side_effect = None
+        mock_subprocess.return_value = Mock(
+            stdout="", stderr="test error\n", returncode=1
+        )
+
         req = CommandRequirement(
-            command="python -c \"import sys; sys.stderr.write('test error\\n'); sys.exit(1)\"",
+            command="failing_command",
             comment="Command with error",
         )
         interface = MockInterface()
@@ -295,13 +434,20 @@ class TestCommandRequirement:
         assert result.success is True  # Shell execution succeeded (ran the command)
         assert "test error" in result.error  # Should have specific error content
 
-    def test_empty_command_execution(self):
+        mock_subprocess.assert_called_once_with(
+            "failing_command", shell=True, capture_output=True, text=True, timeout=10
+        )
+
+    def test_empty_command_execution(self, mock_subprocess):
         """Test _execute_command with empty command."""
         req = CommandRequirement(command="echo test", comment="Test")
         req.command = None  # Force empty command
 
         with pytest.raises(ValueError, match="Empty command"):
             req._execute_command(DEFAULT_CONFIG)
+
+        # Verify subprocess was NOT called for empty command
+        mock_subprocess.assert_not_called()
 
 
 class TestReadRequirement:

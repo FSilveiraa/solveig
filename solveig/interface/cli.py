@@ -20,7 +20,7 @@ from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
-    from solveig.schema import LLMMessage
+    from solveig.schema.message import AssistantMessage
 
 
 class CLIInterface(SolveigInterface):
@@ -216,7 +216,7 @@ class CLIInterface(SolveigInterface):
             pad=False,
         )
 
-    def display_llm_response(self, llm_response: "LLMMessage") -> None:
+    def display_llm_response(self, llm_response: "AssistantMessage") -> None:
         """Display the LLM response and requirements summary."""
         if llm_response.comment:
             self.display_comment(llm_response.comment.strip())

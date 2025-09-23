@@ -14,10 +14,10 @@ from solveig.interface import SolveigInterface
 from solveig.interface.cli import CLIInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
-    LLMMessage,
+    AssistantMessage,
     MessageHistory,
     UserMessage,
-    get_filtered_llm_message_class,
+    get_filtered_assistant_message_class,
 )
 
 from . import BANNER
@@ -47,11 +47,15 @@ def get_initial_user_message(
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
     if user_prompt:
-        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT}{user_prompt}\n")
+        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT} {user_prompt}\n")
     else:
         user_prompt = interface.ask_user()
         interface.display_text("")
     return UserMessage(comment=user_prompt)
+
+
+_last_config_sent_to_llm = None
+_last_model_sent_to_llm = get_filtered_assistant_message_class()
 
 
 def send_message_to_llm(
@@ -60,19 +64,22 @@ def send_message_to_llm(
     client: Instructor,
     message_history: MessageHistory,
     user_response: UserMessage,
-) -> LLMMessage | None:
+) -> AssistantMessage | None:
     """Send message to LLM and handle any errors. Returns None if error occurred and retry needed."""
     if config.verbose:
-        interface.display_text_block(user_response.to_openai(), title="Sending")
+        interface.display_text_block(str(user_response), title="Sending")
 
     # Show animated spinner during LLM processing
     def blocking_llm_call():
-        # Use filtered LLMMessage class that respects plugin filtering
-        filtered_llm_message_class = get_filtered_llm_message_class()
+        # Check if the config changed since the last message sent, if so reload the message's model
+        config_hash = hash(config.to_json(indent=None, sort_keys=True))
+        global _last_model_sent_to_llm
+        if config_hash != _last_config_sent_to_llm:
+            _last_model_sent_to_llm = get_filtered_assistant_message_class(config)
 
         return client.chat.completions.create(
             messages=message_history.to_openai(),
-            response_model=filtered_llm_message_class,
+            response_model=_last_model_sent_to_llm,
             strict=False,
             model=config.model,
             temperature=config.temperature,
@@ -92,7 +99,7 @@ def send_message_to_llm_with_retry(
     client: Instructor,
     message_history: MessageHistory,
     user_response: UserMessage,
-) -> tuple[LLMMessage | None, UserMessage]:
+) -> tuple[AssistantMessage | None, UserMessage]:
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
         try:
@@ -116,7 +123,7 @@ def send_message_to_llm_with_retry(
         if not retry:
             new_comment = interface.ask_user()
             user_response = UserMessage(comment=new_comment)
-            message_history.add_message(user_response)
+            message_history.add_messages(user_response)
         # If they said yes to retry, the loop continues with the same user_response
 
 
@@ -137,7 +144,7 @@ def handle_llm_error(
 
 
 def process_requirements(
-    config: SolveigConfig, interface: SolveigInterface, llm_response: LLMMessage
+    config: SolveigConfig, interface: SolveigInterface, llm_response: AssistantMessage
 ) -> list:
     """Process all requirements from LLM response and return results."""
     results = []
@@ -195,7 +202,7 @@ def main_loop(
     while True:
         """Each cycle starts with the previous/initial user response finalized, but not added to the message history or sent"""
         # Send message to LLM and handle any errors
-        message_history.add_message(user_message)
+        message_history.add_messages(user_message)
 
         llm_response, user_message = send_message_to_llm_with_retry(
             config, interface, llm_client, message_history, user_message
@@ -206,10 +213,10 @@ def main_loop(
             continue
 
         # Successfully got LLM response
-        message_history.add_message(llm_response)
+        message_history.add_messages(llm_response)
         interface.display_section("Assistant")
         if config.verbose:
-            interface.display_text_block(llm_response.to_openai(), title="Response")
+            interface.display_text_block(str(llm_response), title="Response")
         interface.display_llm_response(llm_response)
         # Process requirements and get next user input
 

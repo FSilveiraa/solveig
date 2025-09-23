@@ -9,10 +9,10 @@ from .base import Requirement
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
     from solveig.interface import SolveigInterface
-    from solveig.schema.results import TaskResult
+    from solveig.schema.results import TaskListResult
     from solveig.schema.results.task import Task
 else:
-    from solveig.schema.results import TaskResult
+    from solveig.schema.results import TaskListResult
     from solveig.schema.results.task import Task
 
 
@@ -48,21 +48,23 @@ class TaskListRequirement(Requirement):
             for line in task_lines:
                 interface.display_text(line)
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "TaskResult":
+    def create_error_result(
+        self, error_message: str, accepted: bool
+    ) -> "TaskListResult":
         """Create TaskResult with error (though tasks rarely error)."""
-        return TaskResult(
+        return TaskListResult(
             requirement=self, accepted=accepted, error=error_message, tasks=self.tasks
         )
 
     @classmethod
     def get_description(cls) -> str:
         """Return description of task capability."""
-        return "task(tasks): display and track a list of tasks with status. Use this to show your plan and track progress."
+        return "task(tasks): use to break down your plan into sorted actions. Update status as you progress. Condense completed task lists when starting new ones."
 
     def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "TaskResult":
+    ) -> "TaskListResult":
         """Task lists don't need user approval - just display and return."""
         # No user approval needed - this is just informational
         # The display already happened in display_header()
-        return TaskResult(accepted=True, tasks=self.tasks, requirement=self)
+        return TaskListResult(accepted=True, tasks=self.tasks, requirement=self)

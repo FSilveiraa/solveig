@@ -2,7 +2,7 @@
 
 import re
 
-from solveig.schema.message import LLMMessage
+from solveig.schema.message import AssistantMessage
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks.interface import MockInterface
 
@@ -100,7 +100,7 @@ echo "Log check complete."
             CommandRequirement(command="ls -la", comment="List files"),  # one-liner
             CommandRequirement(command=self._BIG_COMMAND, comment="Large command"),  #
         ]
-        message = LLMMessage(
+        message = AssistantMessage(
             comment="I'll analyze these files and run some commands.",
             requirements=requirements,
         )
@@ -128,7 +128,7 @@ Requirements (4)
             assert line in output
 
         # Test comment-only response
-        simple_message = LLMMessage(comment="Just a simple response")
+        simple_message = AssistantMessage(comment="Just a simple response")
         interface.display_llm_response(simple_message)
         assert "❝  Just a simple response" in interface.get_all_output()
 

@@ -7,7 +7,7 @@ import pytest
 
 from scripts.run import main_loop
 from solveig.plugins.schema.tree import TreeRequirement
-from solveig.schema.message import LLMMessage
+from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
 
@@ -38,7 +38,7 @@ class TestTreePlugin:
             (temp_path / "subdir" / "nested.md").write_text("# Nested file")
 
             # LLM requests tree inspection
-            llm_response = LLMMessage(
+            llm_response = AssistantMessage(
                 comment="I'll show you the directory structure.",
                 requirements=[
                     TreeRequirement(comment="", path=str(temp_path), max_depth=2),
