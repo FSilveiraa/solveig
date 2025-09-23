@@ -1,6 +1,32 @@
-# Plugin Development Guide
+# Plugin System
 
-Solveig's plugin system allows you to extend functionality without modifying core code. There are two types of plugins you can create.
+Solveig's plugin system allows you to extend functionality without modifying core code. Plugins must be explicitly enabled in configuration to be active.
+
+## Using Plugins
+
+### Configuration
+
+Add plugins to your config file to enable them:
+
+```json
+{
+  "plugins": {
+    "tree": {},
+    "shellcheck": {
+      "strict_mode": false
+    }
+  }
+}
+```
+
+**Important**: Plugins not listed in the `plugins` config section are automatically skipped, even if installed.
+
+### Available Plugins
+
+- **tree**: Generate directory tree structures (`tree(path)`)
+- **shellcheck**: Validate shell commands before execution (hook plugin)
+
+## Developing Plugins
 
 ## Plugin Types
 
@@ -16,7 +42,7 @@ Create new operations that the LLM can request, like database queries or API cal
 
 Create a class that inherits from `solveig.schema.requirements.base.Requirement`
 Implement 3 required methods (you can optionally also re-define the display method)
-Register your new Requirement with `@solveig.schema.register_requirement`
+Register your new Requirement with `@register_requirement`
 
 ```python
 from datetime import datetime
@@ -138,32 +164,12 @@ Access config in plugins:
 @before(requirements=(SomeRequirement,))
 def my_hook(config, interface, requirement):
     plugin_config = config.plugins.get("my_plugin", {})
-    if not plugin_config.get("enabled", True):
-        return  # Skip if disabled
+    strict_mode = plugin_config.get("strict_mode", False)
 ```
 
-## Testing Plugins
+## Testing
 
-Create `tests/plugins/test_datetime.py`:
-
-```python
-from datetime import datetime
-from solveig.plugins.schema.datetime import DateTimeRequirement
-from tests.mocks import MockInterface, DEFAULT_CONFIG
-
-class TestDateTimeRequirement:
-    def test_datetime_requirement_success(self):
-        """Test datetime requirement returns valid ISO timestamp."""
-        interface = MockInterface()
-        requirement = DateTimeRequirement()
-        
-        result = requirement.solve(DEFAULT_CONFIG, interface)
-        
-        assert result.accepted
-        assert result.timestamp is not None
-        # Verify it's valid ISO format
-        datetime.fromisoformat(result.timestamp.replace('Z', '+00:00'))
-```
+See [contributing.md](../CONTRIBUTING.md) for comprehensive testing guidelines and mock infrastructure.
 
 ## Plugin Guidelines
 
