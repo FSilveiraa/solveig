@@ -14,7 +14,7 @@ they can run hooks, and plugins/schema/__init__.py (this file) has to import
 requirements/__init__.py::REQUIREMENTS so it can register plugin requirements on it, creating an import loop.
 It's also important to stress that the ordering of all this matters: we need to first load core schema
 requirements, then plugin requirements, then finally hooks. Currently this is done by just importing
-solveig.schema (which runs REQUIREMENTS.register_core_requirements()), then run.py calls
+solveig.schema (which auto-registers core requirements), then run.py calls
 plugins/__init__.py::initialize_plugins() which in turn first loads the extra requirements (here), then
 loads the hooks, then filters both in the same order.
 Both the loading and filtering of extra requirements do a local import of the central REQUIREMENTS registry.
@@ -50,17 +50,15 @@ def load_and_filter_requirements(
 
     from solveig.schema import REQUIREMENTS
 
-    # Store core requirements before clearing
-    core_requirements = {}
-    for name, req_class in REQUIREMENTS.all_requirements.items():
-        if "schema.requirements" in req_class.__module__:
-            core_requirements[name] = req_class
-
-    # Clear and restore core requirements
-    REQUIREMENTS.all_requirements.clear()
-    REQUIREMENTS.registered.clear()
-    REQUIREMENTS.all_requirements.update(core_requirements)
-    REQUIREMENTS.registered.update(core_requirements)  # Core requirements always active
+    # Clear only plugin requirements, keep core requirements
+    plugin_names_to_remove = [
+        name
+        for name, req_class in REQUIREMENTS.all_requirements.items()
+        if "schema.requirements" not in req_class.__module__
+    ]
+    for name in plugin_names_to_remove:
+        REQUIREMENTS.all_requirements.pop(name, None)
+        REQUIREMENTS.registered.pop(name, None)
 
     # Convert config to plugin set
     if isinstance(enabled_plugins, SolveigConfig):
@@ -112,53 +110,17 @@ def load_and_filter_requirements(
                     f"Requirement plugin {module_name}.{plugin_name}: {e}"
                 )
 
+    from solveig.schema import CORE_REQUIREMENTS
+
     total_active = len(REQUIREMENTS.registered)
     interface.display_text(
-        f"Requirements: {len(core_requirements)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
+        f"Requirements: {len(CORE_REQUIREMENTS)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
     )
 
     return {"loaded": loaded_plugins, "active": total_active}
 
 
-# Legacy function - kept for compatibility
-def load_extra_requirements(interface: SolveigInterface):
-    """Legacy function - use load_and_filter_requirements instead."""
-    return load_and_filter_requirements(interface, None)
-
-
-def filter_requirements(
-    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None = None
-):
-    """Legacy function - use load_and_filter_requirements instead."""
-    return load_and_filter_requirements(interface, enabled_plugins)
-
-
-def register_requirement(requirement_class):
-    """
-    Decorator to register a requirement plugin.
-
-    Usage:
-    @register_requirement
-    class MyRequirement(Requirement):
-        ...
-    """
-    # Import here to avoid circular imports
-    from solveig.schema import REQUIREMENTS
-    
-    return REQUIREMENTS.register_requirement(requirement_class)
-
-
-def clear_requirements():
-    # Import here to avoid circular imports
-    from solveig.schema import REQUIREMENTS
-
-    REQUIREMENTS.clear_requirements()
-
-
 # Expose the essential interface
 __all__ = [
     "load_and_filter_requirements",
-    "load_extra_requirements",  # legacy
-    "filter_requirements",  # legacy
-    "register_requirement",  # decorator for plugin requirements
 ]

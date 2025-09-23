@@ -52,7 +52,10 @@ def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
 
 def clear_plugins():
     hooks.clear_hooks()
-    plugin_schema.clear_requirements()
+    # Clear requirements directly from schema registry
+    from solveig.schema import REQUIREMENTS
+
+    REQUIREMENTS.clear_requirements()
 
 
 __all__ = [

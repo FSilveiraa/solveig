@@ -28,7 +28,7 @@ from .results import (  # noqa: F401
     WriteResult,
 )
 
-CORE_REQUIREMENTS = [
+CORE_REQUIREMENTS: list[type[Requirement]] = [
     CommandRequirement,
     CopyRequirement,
     DeleteRequirement,
@@ -38,7 +38,7 @@ CORE_REQUIREMENTS = [
     WriteRequirement,
 ]
 
-CORE_RESULTS = [
+CORE_RESULTS: list[type[RequirementResult]] = [
     ReadResult,
     WriteResult,
     CommandResult,
@@ -71,12 +71,11 @@ class REQUIREMENTS:
     @classmethod
     def register_requirement(cls, requirement_class: type["Requirement"]):
         """
-        Register a plugin requirement class.
-        Used by a plugin decorator and here directly for core requirements
+        Register any requirement class (core or plugin).
+        Single unified registration method.
         """
-        REQUIREMENTS.all_requirements[requirement_class.__name__] = requirement_class
-        if requirement in CORE_REQUIREMENTS:
-            REQUIREMENTS.registered[requirement_class.__name__] = requirement_class
+        cls.all_requirements[requirement_class.__name__] = requirement_class
+        cls.registered[requirement_class.__name__] = requirement_class
         return requirement_class
 
     @classmethod
@@ -85,10 +84,12 @@ class REQUIREMENTS:
         cls.registered.clear()
         cls.all_requirements.clear()
 
+
 # Initialize with core requirements using the list
 for requirement in CORE_REQUIREMENTS:
     REQUIREMENTS.register_requirement(requirement)
 
+# Export the registration decorator for direct use
+register_requirement = REQUIREMENTS.register_requirement
 
-# Note: register_requirement moved to solveig.plugins.schema for better organization
-__all__ = ["REQUIREMENTS"]
+__all__ = ["REQUIREMENTS", "CORE_REQUIREMENTS", "register_requirement"]

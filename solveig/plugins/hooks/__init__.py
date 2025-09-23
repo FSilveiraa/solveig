@@ -124,19 +124,6 @@ def load_and_filter_hooks(
     return {"loaded": len(loaded_plugins), "active": active_hooks}
 
 
-# Legacy function - kept for compatibility
-def load_requirement_hooks(interface: SolveigInterface):
-    """Legacy function - use load_and_filter_hooks instead."""
-    return load_and_filter_hooks(interface, None)
-
-
-def filter_hooks(
-    interface: SolveigInterface, enabled_plugins: set[str] | SolveigConfig | None
-):
-    """Legacy function - use load_and_filter_hooks instead."""
-    return load_and_filter_hooks(interface, enabled_plugins)
-
-
 def clear_hooks():
     HOOKS.before.clear()
     HOOKS.after.clear()
@@ -144,4 +131,4 @@ def clear_hooks():
 
 
 # Expose only what plugin developers and the main system need
-__all__ = ["HOOKS", "before", "after", "load_and_filter_hooks", "filter_hooks"]
+__all__ = ["HOOKS", "before", "after", "load_and_filter_hooks"]
