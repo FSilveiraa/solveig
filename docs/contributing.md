@@ -6,7 +6,7 @@
 
 ```bash
 # Clone and install with dev dependencies
-git clone https://github.com/FranciscoSilveira/solveig.git
+git clone https://github.com/FSilveiraa/solveig.git
 cd solveig
 pip install -e .[dev]
 ```
