@@ -14,10 +14,10 @@ class MockInterface(CLIInterface):
         self,
         **kwargs,
     ):
-        super().__init__(**kwargs)
         self.outputs = []
         self.user_inputs = []
         self.questions = []
+        super().__init__(**kwargs)
 
     def _output(self, text: str | Text, **kwargs) -> None:
         """Capture output instead of printing"""
@@ -30,7 +30,7 @@ class MockInterface(CLIInterface):
             return self.user_inputs.pop(0)
         raise ValueError()
 
-    def _output_inline(self, text: str) -> None:
+    def _output_inline(self, text: str | Text, pad: bool = True) -> None:
         self._output(text)
 
     def _get_max_output_width(self) -> int:

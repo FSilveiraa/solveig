@@ -28,7 +28,7 @@ class TestCLIInterfaceCore:
 
         # Test section display with title
         interface.display_section("Test Section")
-        assert re.match("^─+ Test Section ─+$", interface.get_all_output().strip())
+        assert re.match("^\\s*─+ Test Section ─+$", interface.outputs[1])
         interface.clear()
 
         # Test section display without title
@@ -43,7 +43,10 @@ class TestCLIInterfaceCore:
         lines = [f"Line {n}" for n in range(1, 5)]  # 4 lines
         interface.display_text_block("\n".join(lines), title="Test Box")
         output_lines = [
-            line for line in interface.get_all_output().split("\n") if line.strip()
+            # skip the first line, it contains the note on the background color
+            line
+            for line in interface.get_all_output().split("\n")[1:]
+            if line.strip()
         ]
 
         # Box header
