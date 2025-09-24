@@ -9,7 +9,7 @@ Currently, the following plugins are included:
 
 ## Using Plugins
 
-- Place the plugin_name.py file in `solveig/plugins/schema/` or `solveig/plugins/requirements/`
+- Place the plugin_name.py file in `solveig/plugins/schema/` or `solveig/plugins/hooks/`
 - Enable and configure the plugins in your `solveig.json` config file
 
 ### Configuration
@@ -40,8 +40,9 @@ files.*
 ## Plugin Types
 
 ### Requirement Plugins
-Requirements represent resources and operations that the LLM can request. You can add new functionalities
-available to the assistant like database queries and HTTP requests by implementing them as Requirement plugins.
+Requirements (and their Results) represent resources and operations that the LLM can request. You can add new
+functionalities available to the assistant like database queries and HTTP requests by implementing them as
+plugins with a `Requirement` class that returns a `RequirementResult`.
 
 
 ### Hook Plugins
@@ -69,8 +70,10 @@ def run_for_all(config, interface, requirement):
 
 ### Requirement Plugin: DateTime
 
-- Create a class that inherits from `solveig.schema.requirements.base.Requirement`
-- Implement 3 required methods (you can optionally also re-define the display method)
+- Place a new plugin file in solveig/plugins/my_plugin.py
+- Create a Result class from `solveig.schema.results.base.RequirementResult`
+- Create a Requirement class from `solveig.schema.requirements.base.Requirement` that returns the Result
+- Set the requirement's `title` and implement 3 methods (you can optionally also re-define the display method)
 - Register your new Requirement with `@register_requirement`
 
 ```python
@@ -156,7 +159,7 @@ def rate_limit_requests(config, interface, requirement):
 
 ### @after Hook: Timezone Conversion
 
-Assuming we have the above `datetime.py` plugin inside `solveig/plugins/requirements/`
+Assuming we have the above `datetime.py` plugin inside `solveig/plugins/schema/`
 create `solveig/plugins/hooks/utc_normalize.py`:
 
 ```python

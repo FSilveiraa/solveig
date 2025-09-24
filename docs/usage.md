@@ -227,21 +227,25 @@ Configure plugins through the `plugins` section in your config file:
 }
 ```
 
-### Token Counting
+### Context Tokens
 
-Solveig automatically counts tokens for context management. You can specify a different encoder and/or a maximum
-context size:
+Solveig can manage the session context by keeping track of the token length of each message. This is done according using an encoder that to the API type and model, and
+you can specify a different encoder and/or a maximum context size:
 
 ```bash
-# Use gpt-4 encoder even with a different model and a limit to the context size
-solveig -m "custom-model" -e "gpt-4" "Your prompt" -s 
+# Use the default encoder for the specified model
+# Since no max_context is specified, the context isn't managed and all messages will always be sent
+solveig -m "gpt-4" "Create a backup of my config files before updating them"
+
+# Use a recent GPT encoder with the GPT-5 model and a limit to the context size
+solveig -e "cl200k_base" -m "gpt-5" -s 16384 "Analyze my project for security issues"
 ```
 
 ## Safety Guidelines
 
 1. **Review all operations**: Always read what Solveig plans to do before approving
 2. **Use no-commands mode**: For maximum safety, disable commands with `--no-commands`
-3. **Limit auto-approval**: Be very conservative with `--auto-allowed-paths` and `--auto-execute-commands`
+3. **Limit auto-approval**: Be very conservative with `--auto-allowed-paths` and `--auto-execute-commands`, especially if you're not familiar with glob or regex patterns
 4. **Test configurations**: Try new configurations on non-critical directories first
 5. **Regular backups**: Maintain backups of important files when using write operations
 

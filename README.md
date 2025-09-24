@@ -1,12 +1,12 @@
 # Solveig
 
-**A CLI bridge that enables safe, extensible agentic behavior from any model on your computer**
+**An agentic framework that enables secure, extensible and configurable AI automation from any model**
 
 ![Demo GIF](./docs/demo.gif)
 
 [![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
-[![CI](https://github.com/FranciscoSilveira/solveig/workflows/CI/badge.svg)](https://github.com/FranciscoSilveira/solveig/actions)
-[![codecov](https://codecov.io/gh/FranciscoSilveira/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/FranciscoSilveira/solveig)
+[![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions)
+[![codecov](https://codecov.io/gh/Fsilveiraa/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/Fsilveiraa/solveig)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -29,7 +29,7 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 ---
 
-## Key Features
+## Features
 
 📂 **Files and Commands** - Rich File API that prioritizes safe filesystem access, while also offering full shell capability.  
 🛡️ **Granular Permissions** - Safe defaults with explicit user consent. Supports granular configuration using patterns.  
@@ -41,9 +41,9 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 ## Documentation
 
+- **[About & Comparisons](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
 - **[Usage Guide](./docs/usage.md)** - Configuration options, examples, and advanced features
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
-- **[About & Comparisons](./docs/about.md)** - Detailed features and how Solveig compares to alternatives
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 
 ---

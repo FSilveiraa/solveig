@@ -1,6 +1,6 @@
 # About Solveig
 
-Solveig is an AI agent framework built on the principle that powerful AI tools should be both capable and trustworthy.
+Solveig is an AI agent framework built on the principle that AI assistants are unreliable by nature tools should be both capable and trustworthy.
 While other AI assistants operate on an "ask forgiveness" model, Solveig implements a consent-first approach that puts users in complete control.
 
 ## Key Features
@@ -178,3 +178,7 @@ different modules. I'd like to review and expand this module, maybe make it conf
 - **Web interface** - I've started the work on a web interface for solveig and I'm convinced it offers some real
 value - rendering generated HTML and images, allowing deeper visual customization, better visual structuring
 with collapsible directory trees, etc. However, this is not expected to be available anytime soon.
+
+- **Session awareness** - I'd like to have some sort of persistence. I think this should involve some kind of
+CLAUDE.md approach, although I would also like to consider some sort of progress tracking. I don't want to assume
+git is always available for reading.

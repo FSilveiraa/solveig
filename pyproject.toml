@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "solveig"
 version = "0.4.5"
-description = "A safe bridge between AI assistants and your computer"
+description = "An agentic framework that enables secure, extensible and configurable AI automation from any model"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
