@@ -43,6 +43,7 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 - **[About & Comparisons](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
 - **[Usage Guide](./docs/usage.md)** - Configuration options, examples, and advanced features
+- **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 

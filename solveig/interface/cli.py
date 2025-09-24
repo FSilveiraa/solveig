@@ -100,7 +100,7 @@ class CLIInterface(SolveigInterface):
                     f"The theme '{self.theme.name}' expects the following background color ({self.theme.background}): ",
                     style=self.theme.text,
                 )
-                + Text("𜴙𜵟██𜵖𜵓", style=self.theme.background)
+                + Text("𜴙𜵟███𜶆𜶀", style=self.theme.background)
             )
 
         from rich._spinners import SPINNERS as RICH_SPINNERS

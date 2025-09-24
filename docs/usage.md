@@ -95,15 +95,15 @@ see [Configuration Precedence](#configuration-precedence) for more.
 
 ### Interface
 
-| Option             | CLI Flag                        | Description                                  | Default      |
-|--------------------|---------------------------------|----------------------------------------------|--------------|
-| `verbose`          | `-v, --verbose`                 | Enable verbose logging                       | `false`      |
-| `add_examples`     | `--add-examples, --ex`          | Include examples in system prompt            | `false`      |
-| `add_os_info`      | `--add-os-info, --os`           | Include OS info in system prompt             | `false`      |
-| `exclude_username` | `--exclude-username, --no-user` | Exclude username from OS info                | `false`      |
-| `max_output_lines` | `-l, --max-output-lines`        | Max lines of output to display in a text box | `20`         |
-| `wait_before_user` | `-w, --wait-before-user`        | Time (seconds) before starting user response | `1.0`        |
-| `theme`            | `--theme`                       | CLI theme to use (`--theme none` to disable)   | `terracotta` |
+| Option             | CLI Flag                        | Description                                                            | Default      |
+|--------------------|---------------------------------|------------------------------------------------------------------------|--------------|
+| `verbose`          | `-v, --verbose`                 | Enable verbose logging                                                 | `false`      |
+| `add_examples`     | `--add-examples, --ex`          | Include examples in system prompt                                      | `false`      |
+| `add_os_info`      | `--add-os-info, --os`           | Include OS info in system prompt                                       | `false`      |
+| `exclude_username` | `--exclude-username, --no-user` | Exclude username from OS info                                          | `false`      |
+| `max_output_lines` | `-l, --max-output-lines`        | Max lines of output to display in a text box                           | `20`         |
+| `wait_before_user` | `-w, --wait-before-user`        | Time (seconds) between assistant and user response                     | `1.0`        |
+| `theme`            | `--theme`                       | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |
 
 ### System Resources
 
