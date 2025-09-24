@@ -11,6 +11,7 @@ DEFAULT_CONFIG = SolveigConfig(
     temperature=0.0,
     verbose=False,
     min_disk_space_left="1gb",
+    wait_before_user=0,
 )
 
 VERBOSE_CONFIG = SolveigConfig(
@@ -21,6 +22,7 @@ VERBOSE_CONFIG = SolveigConfig(
     temperature=0.0,
     verbose=True,
     min_disk_space_left="1gb",
+    wait_before_user=0,
 )
 
 __all__ = [

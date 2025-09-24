@@ -4,6 +4,7 @@ Main CLI entry point for Solveig.
 
 import logging
 import sys
+import time
 
 from instructor import Instructor
 from instructor.core import InstructorRetryException
@@ -178,7 +179,9 @@ def main_loop(
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
     interface = interface or CLIInterface(
-        verbose=config.verbose, max_lines=config.max_output_lines
+        verbose=config.verbose,
+        max_lines=config.max_output_lines,
+        theme=config.theme,
     )
 
     interface.display_text(BANNER)
@@ -219,6 +222,9 @@ def main_loop(
             interface.display_text_block(str(llm_response), title="Response")
         interface.display_llm_response(llm_response)
         # Process requirements and get next user input
+
+        if config.wait_before_user > 0:
+            time.sleep(config.wait_before_user)
 
         # Prepare user response
         interface.display_section("User")

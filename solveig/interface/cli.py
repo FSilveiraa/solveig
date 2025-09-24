@@ -79,9 +79,6 @@ class CLIInterface(SolveigInterface):
         self.animation_interval = animation_interval
         self.output_console = Console()
         self.input_console: PromptSession = PromptSession()
-        # self.input_style = Style.from_dict({
-        #     k: v for k,v in vars(self.COLORS).items()
-        # })
 
         from rich._spinners import SPINNERS as RICH_SPINNERS
 
@@ -129,7 +126,8 @@ class CLIInterface(SolveigInterface):
         )
         # f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}", end="")
 
-    def _input(self, prompt: str, style: str = COLORS_INPUT.warning, **kwargs) -> str:
+    def _input(self, prompt: str, style: str | None = None, **kwargs) -> str:
+        style = style or self.theme.prompt
         return self.input_console.prompt(
             f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}",
             style=Style.from_dict({"prompt": style}),
@@ -145,10 +143,16 @@ class CLIInterface(SolveigInterface):
         return self._input(text)
 
     def display_text(
-        self, text: str, level: int | None = None, truncate: bool = False, **kwargs
+        self,
+        text: str,
+        level: int | None = None,
+        truncate: bool = False,
+        style=None,
+        **kwargs,
     ) -> None:
         indent = self._indent(level)
         text_formatted = f"{indent}{text}"
+        style = style or self.theme.text
         if truncate:
             # We add this in either case - cut lines, cut length, or both
             _ellipsis = ""
@@ -173,13 +177,13 @@ class CLIInterface(SolveigInterface):
                 # if we didn't ... because of the lines, add because of the length
                 _ellipsis = " ..."
             self._output(
-                Text(text_formatted)
-                .append(_ellipsis, style=self.COLORS.title)
-                .append(suffix, style=self.COLORS.title),
+                Text(text_formatted, style=style)
+                .append(_ellipsis, style=self.theme.box)
+                .append(suffix, style=self.theme.box),
                 **kwargs,
             )
         else:
-            self._output(text_formatted, **kwargs)
+            self._output(Text(text_formatted, style=style), **kwargs)
 
     @contextmanager
     def with_group(self, title: str) -> Generator[None]:
@@ -187,7 +191,7 @@ class CLIInterface(SolveigInterface):
         Group/item header with optional count
         [ Requirements (3) ]
         """
-        self.display_text(f"{title}", style=f"bold {self.COLORS.group}")
+        self.display_text(f"{title}", style=f"bold {self.theme.group}")
 
         # Use the with_indent context manager internally
         with self.with_indent():
@@ -212,7 +216,7 @@ class CLIInterface(SolveigInterface):
         )
         self._output(
             f"\n\n{title_formatted}{padding}",
-            style=f"bold {self.COLORS.warning}",
+            style=f"bold {self.theme.section}",
             pad=False,
         )
 
@@ -274,7 +278,7 @@ class CLIInterface(SolveigInterface):
                 is_last = index == len(metadata.listing) - 1
                 entry_lines = self._get_tree_element_str(sub_metadata, indent=indent)
 
-                # ├─🗁 d1                                                                                                                │
+                # ├─🗁 d1
                 lines.append(
                     f"{indent}{self.TEXT_BOX.BL if is_last else self.TEXT_BOX.VR}{self.TEXT_BOX.H}{entry_lines[0]}"
                 )
@@ -294,14 +298,17 @@ class CLIInterface(SolveigInterface):
         title: str | None = None,
         level: int | None = None,
         max_lines: int | None = None,
-        box_style: str = COLORS.title,
-        text_style: str = COLORS.text_block,
+        box_style: str | None = None,
+        text_style: str | None = None,
     ) -> None:
         if not self.max_lines or not text:
             return
 
         indent = self._indent(level)
         max_width = self._get_max_output_width()
+
+        box_style = box_style or self.theme.box
+        text_style = text_style or self.theme.text
 
         # ┌─── Content ─────────────────────────────┐
         top_bar = Text(f"{indent}{self.TEXT_BOX.TL}", style=box_style)
@@ -354,8 +361,10 @@ class CLIInterface(SolveigInterface):
         run_this: Callable,
         message: str | None = None,
         animation_type: str | None = None,
-        style: str = COLORS.warning,
+        style: str | None = None,
     ) -> Any:
+        style = style or self.theme.section
+
         # Pick random spinner if none specified
         if animation_type is None:
             animation_type = random.choice(list(self.ALLOWED_SPINNERS))
@@ -369,7 +378,9 @@ class CLIInterface(SolveigInterface):
 
         # Use Rich status for styled animation that integrates with console
         with self.output_console.status(
-            f"{self.PADDING_LEFT}{display_message}{self.PADDING_RIGHT}",
+            Text(
+                f"{self.PADDING_LEFT}{display_message}{self.PADDING_RIGHT}", style=style
+            ),
             spinner=animation_type,
             spinner_style=style,
         ):
@@ -377,7 +388,7 @@ class CLIInterface(SolveigInterface):
 
     def display_warning(self, message: str) -> None:
         """Override to add orange color for CLI warnings."""
-        self.display_text(f"⚠  {message}", style=self.COLORS.warning)
+        self.display_text(f"⚠  {message}", style=self.theme.warning)
 
     def display_error(
         self, message: str | Exception | None = None, exception: Exception | None = None
@@ -392,7 +403,7 @@ class CLIInterface(SolveigInterface):
         message = message or str(f"{exception.__class__.__name__}: {exception}")
 
         # Display with red color
-        self.display_text(f"✖  {message}", style=self.COLORS.error)
+        self.display_text(f"✖  {message}", style=self.theme.error)
         # self.console.print(f"{self.PADDING_LEFT}{indent}✖  {message}{self.PADDING_RIGHT}", style="red")
 
         # Handle verbose traceback
@@ -405,5 +416,5 @@ class CLIInterface(SolveigInterface):
             self.display_text_block(
                 traceback_block,
                 title=exception.__class__.__name__,
-                box_style=self.COLORS.error,
+                box_style=self.theme.error,
             )

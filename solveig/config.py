@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePath
 from typing import Any
 
-from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface, themes
 from solveig.llm import APIType, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
@@ -42,6 +42,8 @@ class SolveigConfig:
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
     no_commands: bool = False
+    theme: type[themes.Palette] = themes.DEFAULT
+    wait_before_user: float = 1.0
 
     def __post_init__(self):
         # convert API type string to class
@@ -52,6 +54,8 @@ class SolveigConfig:
             self.auto_allowed_paths = [
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
             ]
+        if isinstance(self.theme, str):
+            self.theme = themes.THEMES[self.theme.strip().lower()]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
         # Validate regex patterns for auto_execute_commands
@@ -215,6 +219,19 @@ class SolveigConfig:
             default=False,
             help="Disable command execution entirely (secure mode)",
         )
+        parser.add_argument(
+            "--wait-before-user",
+            type=float,
+            default=1.0,
+            help="Time to wait between displaying the assistant response and beginning the user's. Testing has shown users are able to follow conversation flow better with a small delay (set to 0 to disable)",
+        )
+        parser.add_argument(
+            "--theme",
+            default=themes.DEFAULT,
+            type=str,
+            choices=themes.THEMES.keys(),
+            help="Interface theme",
+        )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 
         args = parser.parse_args(cli_args)
@@ -269,6 +286,8 @@ class SolveigConfig:
         for field_name, field_value in vars(self).items():
             if field_name == "api_type" and hasattr(field_value, "name"):
                 # Convert class to string name using static attribute
+                config_dict[field_name] = field_value.name
+            elif field_name == "theme":
                 config_dict[field_name] = field_value.name
             else:
                 config_dict[field_name] = field_value

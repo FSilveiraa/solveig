@@ -31,25 +31,6 @@ Output:
 ```
 """
 
-
-class TEXT_BOX:
-    # Basic
-    H = "─"
-    V = "│"
-    # Corners
-    TL = "┌"  # top-left
-    TR = "┐"  # top-right
-    BL = "└"  # bottom-left
-    BR = "┘"  # bottom-right
-    # Junctions
-    VL = "┤"
-    VR = "├"
-    HB = "┬"
-    HT = "┴"
-    # Cross
-    X = "┼"
-
-
 from .base import SolveigInterface
 from .cli import CLIInterface
 

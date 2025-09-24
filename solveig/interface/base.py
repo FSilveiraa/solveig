@@ -7,6 +7,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+from solveig.interface import themes
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
@@ -19,13 +20,18 @@ class SolveigInterface(ABC):
     DEFAULT_INPUT_PROMPT = ">  "
     DEFAULT_YES = {"y", "yes"}
 
-    def __init__(self, indent_base: int = 2, max_lines=6, verbose: bool = False):
+    def __init__(
+        self,
+        indent_base: int = 2,
+        max_lines=6,
+        theme: type[themes.Palette] = themes.DEFAULT,
+        verbose: bool = False,
+    ):
         self.indent_base = indent_base
         self.current_level = 0
         self.max_lines = max_lines
         self.verbose = verbose
-
-    # Implement these:
+        self.theme = theme
 
     @abstractmethod
     def _output(self, text: str, **kwargs) -> None:

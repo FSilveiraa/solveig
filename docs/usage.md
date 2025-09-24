@@ -241,6 +241,17 @@ solveig -m "gpt-4" "Create a backup of my config files before updating them"
 solveig -e "cl200k_base" -m "gpt-5" -s 16384 "Analyze my project for security issues"
 ```
 
+### Mock Client
+
+It's possible to run Solveig with a mocked LLM client, used mostly for testing and development, that just uses
+a pre-defined interaction loop (the one from the example conversations). However it can be useful for anyone
+trying to test Solveig without access to a model. It accepts all normal options, although obviously many of them
+won't apply.
+
+```bash
+python -m tests.mocks.run_with_mock_client -c ~/.config/solveig.json -v --no-commands --theme vercetti
+```
+
 ## Safety Guidelines
 
 1. **Review all operations**: Always read what Solveig plans to do before approving
