@@ -24,7 +24,7 @@ class SolveigInterface(ABC):
         self,
         indent_base: int = 2,
         max_lines=6,
-        theme: type[themes.Palette] = themes.DEFAULT,
+        theme: themes.Palette = themes.DEFAULT,
         verbose: bool = False,
     ):
         self.indent_base = indent_base

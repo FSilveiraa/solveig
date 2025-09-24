@@ -10,9 +10,13 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+from dataclasses import asdict
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.formatted_text import HTML
+
 from rich.console import Console, Text
 
 import solveig.utils.misc
@@ -21,6 +25,17 @@ from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
     from solveig.schema.message import AssistantMessage
+
+"""
+Important compatibility note:
+When using rich.Console for output and prompt_toolkit.PromptSession for input
+Use prompt_toolkit.path_stdout.patch_stdout() for threads that call console.print() while a PromptSession is active.
+
+from prompt_toolkit.patch_stdout import patch_stdout
+with patch_stdout():
+    with run_thread(output_console):
+        text = session.prompt("?")
+"""
 
 
 class CLIInterface(SolveigInterface):
@@ -78,7 +93,9 @@ class CLIInterface(SolveigInterface):
         super().__init__(**kwargs)
         self.animation_interval = animation_interval
         self.output_console = Console()
-        self.input_console: PromptSession = PromptSession()
+        self.input_console: PromptSession = PromptSession(color_depth=ColorDepth.TRUE_COLOR)
+        print({k:v for k,v in vars(self.theme).items()})
+        self._input_style_dict = self.theme.to_prompt_toolkit_style()
 
         from rich._spinners import SPINNERS as RICH_SPINNERS
 
@@ -127,10 +144,10 @@ class CLIInterface(SolveigInterface):
         # f"\r{self.PADDING_LEFT}{text}{self.PADDING_RIGHT}", end="")
 
     def _input(self, prompt: str, style: str | None = None, **kwargs) -> str:
-        style = style or self.theme.prompt
+        # style = style or self.theme.prompt
         return self.input_console.prompt(
-            f"{self.PADDING_LEFT}{prompt}{self.PADDING_RIGHT}",
-            style=Style.from_dict({"prompt": style}),
+            HTML(f"{self.PADDING_LEFT}<prompt>{prompt}</prompt>{self.PADDING_RIGHT}"),
+            style=self._input_style_dict,
             **kwargs,
         )
 

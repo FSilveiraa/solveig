@@ -29,12 +29,10 @@ class SolveigConfig:
     encoder: str | None = None
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
-    # allowed_commands: List[str] = field(default_factory=list)
-    # allowed_paths: List[SolveigPath] = field(default_factory=list)
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
-    max_output_lines: int = 6
+    max_output_lines: int = 20
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -42,7 +40,7 @@ class SolveigConfig:
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
     no_commands: bool = False
-    theme: type[themes.Palette] = themes.DEFAULT
+    theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT)
     wait_before_user: float = 1.0
 
     def __post_init__(self):
@@ -221,6 +219,7 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--wait-before-user",
+            "-w",
             type=float,
             default=1.0,
             help="Time to wait between displaying the assistant response and beginning the user's. Testing has shown users are able to follow conversation flow better with a small delay (set to 0 to disable)",
