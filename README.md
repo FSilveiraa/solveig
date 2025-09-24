@@ -24,7 +24,7 @@ pip install solveig
 solveig -u "http://localhost:5001/v1" "Create a demo BlackSheep webapp"
 
 # Run from a remote API like OpenRouter
-solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free" "Refactor test_database.py to be more concise"
+solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free"
 ```
 
 ---

@@ -10,10 +10,8 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-from dataclasses import asdict
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.styles import Style
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.formatted_text import HTML
 
@@ -94,8 +92,12 @@ class CLIInterface(SolveigInterface):
         self.animation_interval = animation_interval
         self.output_console = Console()
         self.input_console: PromptSession = PromptSession(color_depth=ColorDepth.TRUE_COLOR)
-        print({k:v for k,v in vars(self.theme).items()})
         self._input_style_dict = self.theme.to_prompt_toolkit_style()
+        if self.theme.background:
+            self._output(
+                Text(f"The theme '{self.theme.name}' expects the following background color ({self.theme.background}): ", style=self.theme.text)
+                + Text("𜴙𜵟██𜵖𜵓", style=self.theme.background)
+            )
 
         from rich._spinners import SPINNERS as RICH_SPINNERS
 
@@ -380,7 +382,7 @@ class CLIInterface(SolveigInterface):
         animation_type: str | None = None,
         style: str | None = None,
     ) -> Any:
-        style = style or self.theme.section
+        style = style or self.theme.prompt
 
         # Pick random spinner if none specified
         if animation_type is None:

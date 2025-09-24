@@ -4,6 +4,7 @@ from prompt_toolkit.styles import Style
 @dataclass
 class Palette:
     name: str
+    background: str
     text: str
     prompt: str
     box: str
@@ -13,53 +14,67 @@ class Palette:
     error: str
 
     def to_prompt_toolkit_style(self):
-        style_dict = { k:v for k,v in asdict(self).items() }
+        style_dict = { k: ("" if v == "reset" else v) for k,v in asdict(self).items() }
         style_dict.pop("name")
-        style_dict[""] = self.text
+        style_dict[""] = "" if self.text == "reset" else self.text
         return Style.from_dict(style_dict)
 
 
 no_theme = Palette(
     name = "none",
-    text = "reset",  # light grey
-    prompt = "reset",  # powder blue
-    box = "reset",  # pink
-    group = "reset",  # light blue
-    section = "reset",  # powder blue
-    warning = "reset",  # orange
-    error = "reset",  # orange
+    background = "",
+    text = "",  # light grey
+    prompt = "",  # powder blue
+    box = "",  # pink
+    group = "",  # light blue
+    section = "",  # powder blue
+    warning = "",  # orange
+    error = "",  # orange
 )
 
 
 terracotta = Palette(
-    # background: #461E52
     name = "terracotta",
+    background = "#221A0F",  # dark brown
     text = "#FFF1DB",  # beige
-    prompt = "#DA9842",  # burnt yellow
-    box = "#BC8F8F",  # rosy brown
+    prompt = "#CB9D63",  # faded yellow
+    box = "#CB9D63",  # faded yellow
     group = "#869F89",  # pale green
-    section = "#DA9842",  # burnt yellow
-    warning = "#BE5856",  # clay red
+    section = "#BE5856",  # clay red
+    warning = "#BC8F8F",  # rosy brown
     error = "#BE5856",  # clay red
 )
 
 
-solarized = Palette(
-    # background: #002b36
-    name = "solarized",
+solarized_dark = Palette(
+    name = "solarized-dark",
+    background = "#002b36",
     text = "#839496",  # base0
-    prompt = "#268bd2",  # blue
-    box = "#d33682",  # magenta
-    group = "#2aa198",  # cyan
-    section = "#268bd2",  # blue
-    warning = "#cb4b16",  # orange
-    error = "#dc322f",  # red
+    prompt = "#2aa198",  # cyan
+    box = "#268bd2",  # blue
+    group = "#859900",  # green #
+    section = "#D33682",  # magenta
+    warning = "#B58900",  # yellow
+    error = "#dc322f",  # red (more visible than orange)
+)
+
+
+solarized_light = Palette(
+    name = "solarized-light",
+    background = "#FDF6E3",  # base3
+    text = "#586E75",  # base01
+    prompt = "#2aa198",  # cyan
+    box = "#268bd2",  # blue
+    group = "#859900",  # green
+    section = "#D33682",  # magenta
+    warning = "#B58900",  # yellow
+    error = "#cb4b16",  # orange
 )
 
 
 forest = Palette(
-    # background: #1e3a2e
-    name = "forest",
+    name="forest",
+    background = "#152B21", # algae green
     text = "#d4d4aa",  # sage
     prompt = "#87ceeb",  # sky blue
     box = "#daa520",  # goldenrod
@@ -71,8 +86,8 @@ forest = Palette(
 
 
 midnight = Palette(
-    # background: #1a1a2e
-    name = "midnight",
+    name="midnight",
+    background = "#1a1a2e",
     text = "#e94560",  # bright pink
     prompt = "#0f3460",  # deep blue
     box = "#16213e",  # dark blue-grey
@@ -84,8 +99,8 @@ midnight = Palette(
 
 
 vice = Palette(
-    # background: #2d1b69
-    name = "vice",
+    name="vice",
+    background = "#2d1b69",
     text = "#ffffff",  # pure white
     prompt = "#ff10f0",  # electric magenta
     box = "#01cdfe",  # electric blue
@@ -102,7 +117,8 @@ THEMES = {
     for theme in [
         no_theme,
         terracotta,
-        solarized,
+        solarized_dark,
+        solarized_light,
         forest,
         midnight,
         vice
