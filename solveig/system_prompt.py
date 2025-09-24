@@ -652,7 +652,7 @@ def get_available_capabilities(config: SolveigConfig) -> str:
     return "\n".join(
         f"- {req_class.get_description()}"
         for req_class in active_requirements
-        if req_class != CommandRequirement or config.allow_commands
+        if req_class != CommandRequirement or not config.no_commands
     )
 
 

@@ -35,14 +35,13 @@ class SolveigConfig:
     add_os_info: bool = False
     exclude_username: bool = False
     max_output_lines: int = 6
-    max_output_size: int = 100
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     auto_allowed_paths: list[PurePath] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
-    allow_commands: bool = True
+    no_commands: bool = False
 
     def __post_init__(self):
         # convert API type string to class
@@ -176,12 +175,6 @@ class SolveigConfig:
             help="The maximum number of lines of file content or command output to print (-1 to disable)",
         )
         parser.add_argument(
-            "--max-output-size",
-            "-s",
-            type=int,
-            help="The maximum characters of file content or command output to print",
-        )
-        parser.add_argument(
             "--min-disk-space-left",
             "-d",
             type=str,
@@ -190,6 +183,7 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--max-context",
+            "-s",
             type=int,
             help="Maximum context length in tokens (-1 for no limit, default: -1)",
         )
@@ -216,9 +210,9 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--no-commands",
-            action="store_false",
-            dest="allow_commands",
-            default=None,
+            action="store_true",
+            dest="no_commands",
+            default=False,
             help="Disable command execution entirely (secure mode)",
         )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")

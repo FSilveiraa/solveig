@@ -22,7 +22,7 @@ The `[dev]` optional dependencies include:
 
 ### Required Checks
 
-All code must pass these checks (same as CI):
+All code submitted to the `main` branch must pass these checks (same as CI):
 
 ```bash
 # Format code
@@ -49,8 +49,10 @@ black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && py
 
 ### Test Structure
 
-- `tests/unit/` - Unit tests with full mocking (fast, safe)
-- `tests/integration/` - Integration tests with real filesystem (slower)
+- `tests/unit/` - Unit tests for individual components
+- `tests/integration/` - Integration tests (requirements)
+- `tests/system/` - Full end-to-end tests (mocks LLM client and CLI interface)
+- `tests/plugins/` - Tests specifically for plugins
 - `tests/mocks/` - Mock utilities and test helpers
 
 ### Running Tests
@@ -71,9 +73,15 @@ pytest --cov=solveig --cov-report=term-missing
 
 ### Test Safety
 
-- **Unit tests**: Automatically mock file I/O, subprocess, user input
-- **Integration tests**: Use real files (in temp directories) but mock user interaction
-- Tests are safe to run - they won't modify your system
+Solveig's test suite involved a lot of effort to achieve a high coverage with multiple scenarios, while
+mostly not touching the user's system unless absolutely necessary.
+
+- **Blocked Side-effects** - tests are blocked from using files, running commands or doing any kind of I/O 
+unless the test explicitly allows it. This explicit marking ensures it's always easy to find potentially
+dangerous tests.
+- **Mock Interface** - allows easy setup of user inputs and retrieval of outputs.
+- **Temporary Directories** - when tests do actual filesystem usage, it is always done using temporary
+directories created through the `tempfile` module.
 
 ## Plugin Development
 

@@ -45,7 +45,7 @@ def _get_plugin_name_from_function(fun: Callable) -> str:
     return fun.__name__
 
 
-def before(requirements: tuple[type] | None = None):
+def before(requirements: tuple[type, ...] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
         if plugin_name not in HOOKS.all_hooks:
@@ -57,7 +57,7 @@ def before(requirements: tuple[type] | None = None):
     return register
 
 
-def after(requirements: tuple[type] | None = None):
+def after(requirements: tuple[type, ...] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
         if plugin_name not in HOOKS.all_hooks:

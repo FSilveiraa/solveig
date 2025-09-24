@@ -24,7 +24,7 @@ class TestSolveigConfigCore:
         assert config.plugins == {}
         assert config.auto_allowed_paths == []
         assert config.auto_send is False
-        assert config.allow_commands is True
+        assert config.no_commands is False
 
     def test_api_type_conversion_success(self):
         """Test API type string to enum conversion."""
@@ -158,13 +158,13 @@ class TestCLIIntegration:
             "Failed to parse config file" in output for output in interface.outputs
         )
 
-    def test_no_commands_flag_sets_allow_commands_false(self):
+    def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
         args = ["--no-commands", "test prompt"]
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
-        assert config.allow_commands is False
+        assert config.no_commands is True
         assert prompt == "test prompt"
 
     def test_allow_commands_defaults_to_true(self):
@@ -173,5 +173,5 @@ class TestCLIIntegration:
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
-        assert config.allow_commands is True
+        assert config.no_commands is False
         assert prompt == "test prompt"

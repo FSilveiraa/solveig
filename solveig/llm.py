@@ -25,7 +25,11 @@ class APIType:
                 actual_encoder = cls._encoder_cache[encoder]
             except KeyError:
                 assert encoder is not None
-                cls._encoder_cache[encoder] = actual_encoder = cls._get_encoder(encoder)
+                try:
+                    actual_encoder = cls._get_encoder(encoder)
+                except:
+                    actual_encoder = cls._encoder_cache[None]
+                cls._encoder_cache[encoder] = actual_encoder
             return len(actual_encoder.encode(text))
 
         @classmethod

@@ -31,11 +31,11 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 ## Key Features
 
-📂 **Files and Commands** - Rich File API that prioritizes safe filesystem access, while also offering full shell capability  
-🛡️ **Granular Permissions** - Safe defaults with explicit user consent. Supports granular configuration using patterns  
-🔌 **Plugins** - Extensible requirement system for custom AI capabilities through simple drop-in plugins. Add an AI SQL query runner with 100 lines of Python  
-📋 **Clear Interface** - Clear progress tracking and content display that inform user consent and choices  
-🌐 **Provider Agnostic** - Works with any OpenAI-compatible API including local models, Claude and Gemini
+📂 **Files and Commands** - Rich File API that prioritizes safe filesystem access, while also offering full shell capability.  
+🛡️ **Granular Permissions** - Safe defaults with explicit user consent. Supports granular configuration using patterns.  
+🔌 **Plugins** - Extensible requirement system for custom AI capabilities through simple drop-in plugins. Add an AI SQL query runner with 100 lines of Python.  
+📋 **Clear Interface** - Clear progress tracking and content display that inform user consent and choices.  
+🌐 **Provider Agnostic** - Works with any OpenAI-compatible API including local models, Claude and Gemini.
 
 ---
 

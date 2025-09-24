@@ -1,19 +1,28 @@
-# Plugin System
+# Plugins
 
-Solveig's plugin system allows you to extend functionality without modifying core code. Plugins must be explicitly enabled in configuration to be active.
+Solveig's plugin system allows you to extend functionality without modifying core code.
+**Plugins must be explicitly enabled in the file configuration to be active.**
+
+Currently, the following plugins are included:
+- **tree**: Generate directory tree structures (`tree(path)`)
+- **shellcheck**: Validate shell commands before execution (hook plugin)
 
 ## Using Plugins
 
+- Place the plugin_name.py file in `solveig/plugins/schema/` or `solveig/plugins/requirements/`
+- Enable and configure the plugins in your `solveig.json` config file
+
 ### Configuration
 
-Add plugins to your config file to enable them:
+Add plugins to the `plugins` section of your config file to enable them.
+You can set individual parameters or use an empty configuration (`{}`) to keep all defaults:
 
 ```json
 {
   "plugins": {
     "tree": {},
     "shellcheck": {
-      "strict_mode": false
+      "shell": "bash"
     }
   }
 }
@@ -21,30 +30,51 @@ Add plugins to your config file to enable them:
 
 **Important**: Plugins not listed in the `plugins` config section are automatically skipped, even if installed.
 
-### Available Plugins
-
-- **tree**: Generate directory tree structures (`tree(path)`)
-- **shellcheck**: Validate shell commands before execution (hook plugin)
-
 ## Developing Plugins
+
+*Note: If a plugin includes both requirements and hooks, it needs to be split up into 2 files.
+Due to the way Hooks depend on Requirements for type filtering, all Requirements (core+plugins) have to be
+defined before any hooks are imported. Currently, the only way to assure this always happens is to use separate
+files.* 
 
 ## Plugin Types
 
-### Hook Plugins
-Use `@before` and `@after` decorators to validate or modify existing requirements.
+### Requirement Plugins
+Requirements represent resources and operations that the LLM can request. You can add new functionalities
+available to the assistant like database queries and HTTP requests by implementing them as Requirement plugins.
 
-### Requirement Plugins  
-Create new operations that the LLM can request, like database queries or API calls.
+
+### Hook Plugins
+Hooks can interact with existing requirement for data validation, displaying, altering, etc.
+Use `@before` and `@after` decorators, optionally filtered by a set of requirements to apply to:
+
+```python
+from solveig.schema.requirements import Requirement, WriteRequirement, DeleteRequirement
+from solveig.plugins.hooks import before
+
+# Runs for all requirements
+@before()
+def run_for_all(config, interface, requirement):
+    interface(f"Running for requirement type={type(requirement)}")
+
+# Runs only for write/delete
+@before(requirements=(WriteRequirement, DeleteRequirement))
+def run_for_all(config, interface, requirement):
+    req_type = type(requirement)
+    assert req_type in { WriteRequirement, DeleteRequirement }
+    interface(f"Running for requirement type={type(requirement)}")
+```
 
 ## Quick Examples
 
 ### Requirement Plugin: DateTime
 
-Create a class that inherits from `solveig.schema.requirements.base.Requirement`
-Implement 3 required methods (you can optionally also re-define the display method)
-Register your new Requirement with `@register_requirement`
+- Create a class that inherits from `solveig.schema.requirements.base.Requirement`
+- Implement 3 required methods (you can optionally also re-define the display method)
+- Register your new Requirement with `@register_requirement`
 
 ```python
+import zoneinfo
 from datetime import datetime
 from typing import Literal
 
@@ -67,12 +97,12 @@ class DateTimeRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         return "datetime(): get current date and time as ISO timestamp"
-    
+
     def display_header(
-        self, interface: SolveigInterface, detailed: bool = False
+            self, interface: SolveigInterface, detailed: bool = False
     ) -> None:
         """Display datetime requirement header."""
-        super().display_header(interface, detailed=detailed) # displays self.comment
+        super().display_header(interface, detailed=detailed)  # displays self.comment
 
     def create_error_result(self, error_message: str, accepted: bool) -> DateTimeResult:
         return DateTimeResult(
@@ -83,7 +113,9 @@ class DateTimeRequirement(Requirement):
 
     def actually_solve(self, config, interface: SolveigInterface) -> DateTimeResult:
         """Get current timestamp."""
-        timestamp = datetime.now().astimezone().isoformat()
+        timezone = config.plugins.get("datetime", {}).get("timezone") # ex: "America/Los_Angeles"
+        tz = zoneinfo.ZoneInfo(timezone) if timezone else None
+        timestamp = datetime.now(tz=tz).isoformat()
         return DateTimeResult(
             requirement=self,
             accepted=True,
@@ -122,72 +154,44 @@ def rate_limit_requests(config, interface, requirement):
     _last_request_times[req_type] = current_time
 ```
 
-### @after Hook: UTC Conversion
+### @after Hook: Timezone Conversion
 
-Create `solveig/plugins/hooks/utc_normalize.py`:
+Assuming we have the above `datetime.py` plugin inside `solveig/plugins/requirements/`
+create `solveig/plugins/hooks/utc_normalize.py`:
 
 ```python
 from datetime import datetime
+import zoneinfo
 from solveig.plugins.hooks import after
 from solveig.plugins.schema.datetime import DateTimeRequirement, DateTimeResult
 
 @after(requirements=(DateTimeRequirement,))
 def normalize_to_utc(config, interface, requirement, result: DateTimeResult):
-    """Convert timestamp to UTC."""
+    """Convert timestamp to another timezone, defaulting to UTC if not configured."""
     if result.timestamp and result.accepted:
-        # Parse the ISO timestamp and convert to UTC
+        plugin_config = config.plugins.get("utc_normalize", {})
+        timezone = zoneinfo.ZoneInfo(plugin_config.get("timezone", "UTC"))
         dt = datetime.fromisoformat(result.timestamp)
-        utc_dt = dt.utctimetuple()
-        result.timestamp = datetime(*utc_dt[:6]).isoformat() + 'Z'
-```
-
-## Plugin Configuration
-
-Add plugin settings to your config file:
-
-```json
-{
-  "plugins": {
-    "rate_limit": {
-      "enabled": true,
-      "min_interval": 2.0
-    },
-    "utc_normalize": {
-      "enabled": true
-    }
-  }
-}
-```
-
-Access config in plugins:
-```python
-@before(requirements=(SomeRequirement,))
-def my_hook(config, interface, requirement):
-    plugin_config = config.plugins.get("my_plugin", {})
-    strict_mode = plugin_config.get("strict_mode", False)
+        result.timestamp = dt.astimezone(timezone).isoformat()
 ```
 
 ## Testing
 
+Plugins are expected to include tests.
 See [contributing.md](../CONTRIBUTING.md) for comprehensive testing guidelines and mock infrastructure.
 
 ## Plugin Guidelines
 
 ### Best Practices
-- **Keep it simple**: Plugins should do one thing well
-- **Handle errors**: Always use try/except and return appropriate error results
-- **Test thoroughly**: Write tests for both success and failure cases
-- **Document behavior**: Clear docstrings explaining what the plugin does
-
-### Security Considerations
-- **Validate inputs**: Never trust requirement data without validation
-- **Fail safely**: When in doubt, block the operation
-- **Log actions**: Use the interface to communicate what's happening
-
-### Performance Tips
-- **Cache when possible**: Store expensive computations
-- **Avoid blocking**: Don't make long network requests in @before hooks
-- **Clean up**: Release resources properly
+- **Keep it simple**: Plugins should do one thing well.
+- **Interface integration**: Use the interface to communicate what's happening. Avoid directs print() or input().
+- **Handle errors**: Always use try/except and return appropriate error results.
+- **Test thoroughly**: Write tests for both success and failure cases. Use the existing mocks.
+- **Document behavior**: Use docstrings explaining what the plugin does - this is especially relevant for requirements,
+where the description string gets sent to the assistant and is crucial to ensure proper usage.
+- **Validate inputs**: Requirements are generated from the LLM - never trust requirement data without validation.
+- **Cache when possible**: Store expensive computations for re-using.
+- **Avoid blocking**: Don't make long network operations unless necessary. If you do, use the interface animations.
 
 ## Advanced Examples
 

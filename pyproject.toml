@@ -14,12 +14,17 @@ authors = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Code Generators", 
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Security",
-    "Topic :: System :: Systems Administration",
+    "Topic :: Terminals",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
 ]
 keywords = ["ai", "automation", "security", "llm", "assistant"]
 requires-python = ">=3.13"
@@ -41,16 +46,15 @@ dev = [
     "black>=24.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
-    "pre-commit>=4.0.0",
     "anthropic>=0.68.0",
     "google-generativeai>=0.8.5",
 ]
 
 [project.urls]
-Homepage = "https://github.com/FranciscoSilveira/solveig"
-Repository = "https://github.com/FranciscoSilveira/solveig"
-Issues = "https://github.com/FranciscoSilveira/solveig/issues"
-Documentation = "https://github.com/FranciscoSilveira/solveig#README.md"
+Homepage = "https://github.com/Fsilveiraa/solveig"
+Repository = "https://github.com/Fsilveiraa/solveig"
+Issues = "https://github.com/Fsilveiraa/solveig/issues"
+Documentation = "https://github.com/Fsilveiraa/solveig#README.md"
 
 [project.scripts]
 solveig = "scripts.run:cli_main"

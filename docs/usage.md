@@ -11,9 +11,9 @@ pip install solveig
 ### Development Installation
 
 ```bash
-git clone https://github.com/franciscobizi/solveig.git
+git clone https://github.com/FSilveiraa/solveig.git
 cd solveig
-pip install -r schema.txt
+pip install -e .[dev]
 ```
 
 ## Quick Start
@@ -42,50 +42,59 @@ Create a configuration file at `~/.config/solveig.json`:
   "model": "anthropic/claude-3.5-sonnet",
   "temperature": 0.1,
   "verbose": false,
-  "auto_allowed_paths": ["~/Documents/projects/**/*.py"],
-  "auto_execute_commands": ["^ls\\s*.*$", "^git status$"]
+  "auto_allowed_paths": [ "~/Documents/projects/**/*.py" ],
+  "auto_execute_commands": [ "^ls\\s*.*$", "^git status$" ]
 }
 ```
 
 ## Configuration Options
 
-### Connection Settings
+The CLI args are merged with, and take precedence over, the configuration file -
+see [Configuration Precedence](#configuration-precedence) for more.
 
-| Option | CLI Flag | Description | Default |
-|--------|----------|-------------|---------|
-| `url` | `-u, --url` | LLM endpoint URL | `http://localhost:5001/v1/` |
-| `api_type` | `-a, --api-type` | API provider (openai, local, anthropic, gemini) | `local` |
-| `api_key` | `-k, --api-key` | API key for remote services | `null` |
-| `model` | `-m, --model` | Model name/path | `null` |
-| `encoder` | `-e, --encoder` | Model encoder for token counting | Uses `model` value |
-| `temperature` | `-t, --temperature` | Model temperature | `0` |
-| `max_context` | `--max-context` | Maximum context length in tokens | `-1` (no limit) |
+### CLI-only args
 
-### Safety & Security
+| CLI Flag       | Description          | Default                  |
+|----------------|----------------------|--------------------------|
+| `-c, --config` | Config file location | `~/.config/solveig.json` |
 
-| Option | CLI Flag | Description | Default |
-|--------|----------|-------------|---------|
-| `allow_commands` | `--no-commands` | Disable command execution entirely | `true` |
-| `auto_allowed_paths` | `--auto-allowed-paths` | Glob patterns for auto-approved file operations | `[]` |
-| `auto_execute_commands` | `--auto-execute-commands` | Regex patterns for auto-approved commands | `[]` |
-| `auto_send` | `--auto-send` | Auto-send results without asking | `false` |
 
-### Interface & Display
+### Connection
 
-| Option | CLI Flag | Description | Default |
-|--------|----------|-------------|---------|
-| `verbose` | `-v, --verbose` | Enable verbose logging | `false` |
-| `add_examples` | `--add-examples, --ex` | Include examples in system prompt | `false` |
-| `add_os_info` | `--add-os-info, --os` | Include OS info in system prompt | `false` |
-| `exclude_username` | `--exclude-username, --no-user` | Exclude username from OS info | `false` |
-| `max_output_lines` | `-l, --max-output-lines` | Max lines of output to display | `6` |
-| `max_output_size` | `-s, --max-output-size` | Max characters of output to display | `100` |
+| Option        | CLI Flag            | Description                                     | Default                     |
+|---------------|---------------------|-------------------------------------------------|-----------------------------|
+| `url`         | `-u, --url`         | LLM endpoint URL                                | `http://localhost:5001/v1/` |
+| `api_type`    | `-a, --api-type`    | API provider (openai, local, anthropic, gemini) | `local`                     |
+| `api_key`     | `-k, --api-key`     | API key for remote services                     | `nu ll`                     |
+| `model`       | `-m, --model`       | Model name/path                                 | `null`                      |
+| `encoder`     | `-e, --encoder`     | Model encoder for token counting                | Uses `model` value          |
+| `temperature` | `-t, --temperature` | Model temperature                               | `0`                         |
+| `max_context` | `-s, --max-context` | Maximum context length in tokens                | `-1` (no limit)             |
+
+### Security
+
+| Option                  | CLI Flag                  | Description                                     | Default |
+|-------------------------|---------------------------|-------------------------------------------------|---------|
+| `no_commands`           | `--no-commands`           | Disable command execution entirely              | `false` |
+| `auto_allowed_paths`    | `--auto-allowed-paths`    | Glob patterns for auto-approved file operations | `[]`    |
+| `auto_execute_commands` | `--auto-execute-commands` | Regex patterns for auto-approved commands       | `[]`    |
+| `auto_send`             | `--auto-send`             | Auto-send results without asking                | `false` |
+
+### Interface
+
+| Option             | CLI Flag                        | Description                         | Default |
+|--------------------|---------------------------------|-------------------------------------|---------|
+| `verbose`          | `-v, --verbose`                 | Enable verbose logging              | `false` |
+| `add_examples`     | `--add-examples, --ex`          | Include examples in system prompt   | `false` |
+| `add_os_info`      | `--add-os-info, --os`           | Include OS info in system prompt    | `false` |
+| `exclude_username` | `--exclude-username, --no-user` | Exclude username from OS info       | `false` |
+| `max_output_lines` | `-l, --max-output-lines`        | Max lines of output to display      | `6`     |
 
 ### System Resources
 
-| Option | CLI Flag | Description | Default |
-|--------|----------|-------------|---------|
-| `min_disk_space_left` | `-d, --min-disk-space-left` | Minimum disk space required | `1GiB` |
+| Option                | CLI Flag                    | Description                 | Default  |
+|-----------------------|-----------------------------|-----------------------------|----------|
+| `min_disk_space_left` | `-d, --min-disk-space-left` | Minimum disk space required | `1GiB`   |
 
 ## Security Modes
 
@@ -97,7 +106,8 @@ Disable command execution entirely for maximum security:
 solveig --no-commands "Analyze this codebase structure"
 ```
 
-In this mode, Solveig can only perform file operations (read, write, copy, move, delete) and cannot execute shell commands.
+In this mode, Solveig can only perform file operations (read, write, copy, move, delete).
+It's not just that it can't execute shell commands, the Assistant isn't aware of commands as possible resource.
 
 ### Auto-Approval Patterns
 
@@ -126,31 +136,36 @@ solveig --auto-execute-commands "^ls\\s*.*$" "^git status$" "^pwd$" "Show me the
 
 **Warning**: Use with extreme caution. These patterns allow automatic command execution.
 
+
 ## API Providers
+
+Solveig itself doesn't force you to specify a model nor does it validate it as a name or path
+(e.g. "gpt-5" vs "openai/gpt-5"), however your backend might.
+Typically only local backends like Koboldcpp don't enforce it.
 
 ### Local Models
 
 ```bash
+# Koboldcpp
+solveig -u "http://localhost:5001/v1" "Your prompt"
+
 # Ollama (default port)
 solveig -u "http://localhost:11434/v1" -m "llama3.2" "Your prompt"
 
-# LM Studio
+# LM Studio  
 solveig -u "http://localhost:1234/v1" -m "local-model" "Your prompt"
-
-# Custom local server
-solveig -u "http://localhost:5001/v1" "Your prompt"
 ```
 
 ### OpenAI
 
 ```bash
-solveig -a openai -k "sk-your-openai-key" -m "gpt-4" "Your prompt"
+solveig -a openai -k "your-openai-key" -m "openai/gpt-5" "Your prompt"
 ```
 
 ### Anthropic (Claude)
 
 ```bash
-solveig -a anthropic -k "sk-ant-your-key" -m "claude-3-5-sonnet-20241022" "Your prompt"
+solveig -a anthropic -k "your-anthropic-key" -m "claude-3-5-sonnet-20241022" "Your prompt"
 ```
 
 ### Google Gemini
@@ -183,6 +198,20 @@ While not directly supported, you can use shell environment variables in your co
 solveig -k "$OPENAI_API_KEY" -m "gpt-4" "Your prompt"
 ```
 
+### Examples
+
+Solveig includes a lengthy example conversation that can optionally be included in the system prompt, to
+help the LLM understand a typical usage flow that includes practically every feature of solveig.
+It's generated at runtime from actual schema objects so that it always matches the current output format.
+From my testing it can be useful at helping the LLM understand what is expected, but be aware that it adds
+a significant token overhead (currently 2934 with examples vs 352 without).
+
+```bash
+# Add example conversation to system prompt
+solveig -u "https://localhost:5001/v1/" --add-examples "Review my config module"
+```
+
+
 ### Plugin Configuration
 
 Configure plugins through the `plugins` section in your config file:
@@ -191,8 +220,8 @@ Configure plugins through the `plugins` section in your config file:
 {
   "plugins": {
     "shellcheck": {
-      "enabled": true,
-      "severity": "warning"
+      "shell": "bash",
+      "ignore_codes": ["SC2076", "SC2016"]
     }
   }
 }
@@ -200,11 +229,12 @@ Configure plugins through the `plugins` section in your config file:
 
 ### Token Counting
 
-Solveig automatically counts tokens for context management. You can specify a different encoder:
+Solveig automatically counts tokens for context management. You can specify a different encoder and/or a maximum
+context size:
 
 ```bash
-# Use gpt-4 encoder even with a different model
-solveig -m "custom-model" -e "gpt-4" "Your prompt"
+# Use gpt-4 encoder even with a different model and a limit to the context size
+solveig -m "custom-model" -e "gpt-4" "Your prompt" -s 
 ```
 
 ## Safety Guidelines

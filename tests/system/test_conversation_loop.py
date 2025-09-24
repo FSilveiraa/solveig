@@ -1,4 +1,4 @@
-"""Integration tests for complete conversation loops with mock LLM client."""
+"""System tests for complete conversation loops with mock LLM client."""
 
 import tempfile
 from pathlib import Path

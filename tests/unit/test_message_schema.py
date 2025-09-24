@@ -12,7 +12,7 @@ class TestAssistantMessageClassGeneration:
 
     def test_get_filtered_class_with_commands_enabled(self):
         """Test schema includes CommandRequirement when commands are enabled."""
-        config = SolveigConfig(allow_commands=True)
+        config = SolveigConfig(no_commands=False)
 
         # Mock the REQUIREMENTS registry to contain CommandRequirement
         mock_requirements = {
@@ -30,7 +30,7 @@ class TestAssistantMessageClassGeneration:
 
     def test_get_filtered_class_with_commands_disabled(self):
         """Test schema excludes CommandRequirement when commands are disabled."""
-        config = SolveigConfig(allow_commands=False)
+        config = SolveigConfig(no_commands=True)
 
         # Mock the REQUIREMENTS registry to contain CommandRequirement
         mock_requirements = {
@@ -62,7 +62,7 @@ class TestAssistantMessageClassGeneration:
 
     def test_get_filtered_class_empty_registry(self):
         """Test empty registry returns EmptyAssistantMessage class."""
-        config = SolveigConfig(allow_commands=True)
+        config = SolveigConfig(no_commands=False)
 
         # Mock empty REQUIREMENTS registry
         with patch("solveig.schema.REQUIREMENTS.registered", {}):
@@ -80,7 +80,7 @@ class TestSchemaConsistency:
 
     def test_same_config_produces_different_class_instances(self):
         """Test that calling with same config produces equivalent but different class instances."""
-        config = SolveigConfig(allow_commands=True)
+        config = SolveigConfig(no_commands=False)
 
         mock_requirements = {
             "CommandRequirement": CommandRequirement,
@@ -100,8 +100,8 @@ class TestSchemaConsistency:
 
     def test_different_configs_produce_different_schemas(self):
         """Test that different configs produce different schemas."""
-        config_with_commands = SolveigConfig(allow_commands=True)
-        config_without_commands = SolveigConfig(allow_commands=False)
+        config_with_commands = SolveigConfig(no_commands=False)
+        config_without_commands = SolveigConfig(no_commands=True)
 
         mock_requirements = {
             "CommandRequirement": CommandRequirement,

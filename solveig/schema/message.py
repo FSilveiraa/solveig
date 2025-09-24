@@ -87,7 +87,7 @@ def get_filtered_assistant_message_class(
         all_active_requirements = []
 
     # Filter out CommandRequirement if commands are disabled
-    if config and not config.allow_commands:
+    if config and config.no_commands:
         from solveig.schema.requirements.command import CommandRequirement
 
         all_active_requirements = [
