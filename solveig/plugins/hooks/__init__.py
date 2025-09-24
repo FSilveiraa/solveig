@@ -8,13 +8,13 @@ from solveig.interface import SolveigInterface
 
 
 class HOOKS:
-    before: list[tuple[Callable, tuple[type] | None]] = []
-    after: list[tuple[Callable, tuple[type] | None]] = []
+    before: list[tuple[Callable, tuple[type, ...] | None]] = []
+    after: list[tuple[Callable, tuple[type, ...] | None]] = []
     all_hooks: dict[
         str,
         tuple[
-            dict[str, tuple[Callable, tuple[type] | None]],
-            dict[str, tuple[Callable, tuple[type] | None]],
+            dict[str, tuple[Callable, tuple[type, ...] | None]],
+            dict[str, tuple[Callable, tuple[type, ...] | None]],
         ],
     ] = {}
 

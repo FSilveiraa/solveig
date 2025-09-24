@@ -27,7 +27,7 @@ class APIType:
                 assert encoder is not None
                 try:
                     actual_encoder = cls._get_encoder(encoder)
-                except:
+                except Exception:
                     actual_encoder = cls._encoder_cache[None]
                 cls._encoder_cache[encoder] = actual_encoder
             return len(actual_encoder.encode(text))
