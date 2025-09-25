@@ -163,6 +163,8 @@ which influences early design decisions. It's hard to loosen a system that was b
 
 ## Roadmap
 
+- ~~**Proper theme support**~~ - ✅ Added
+
 - **Plugin config from CLI args** - Currently it's only possible to configure plugins from a file configuration.
 I'd like to extend this to CLI args, it seems easy to add without breaking anything, and it's just an expected
 feature. I also have to find a way to have the plugins have some sort of documentation with configuration. 
@@ -171,9 +173,6 @@ feature. I also have to find a way to have the plugins have some sort of documen
 display content visually formatted according to its type and giving users a clearer idea of exactly what is
 being changed. The diff view might be more than just graphical, especially for very large files it might be
 valuable to have some sort of localized per-line updated.
-
-- **Better theme support** - The current CLI theming is static and not very well internally organized across
-different modules. I'd like to review and expand this module, maybe make it configurable.
 
 - **Web interface** - I've started the work on a web interface for solveig and I'm convinced it offers some real
 value - rendering generated HTML and images, allowing deeper visual customization, better visual structuring
