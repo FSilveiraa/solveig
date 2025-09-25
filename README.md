@@ -52,6 +52,7 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
+- **[Roadmap](./docs/about.md#roadmap)** - Upcoming features
 
 ---
 

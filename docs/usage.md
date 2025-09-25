@@ -67,7 +67,13 @@ solveig -c ~/.config/solveig.json "Which files are taking up the most space?"
 
 ### Configuration File
 
-Create a JSON configuration file at `~/.config/solveig.json`:
+Run the `init` script:
+
+```bash
+solveig-init
+```
+
+Or create a JSON configuration file at `~/.config/solveig.json`:
 
 ```json
 {

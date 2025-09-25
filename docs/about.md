@@ -182,3 +182,7 @@ with collapsible directory trees, etc. However, this is not expected to be avail
 - **Session awareness** - I'd like to have some sort of persistence. I think this should involve some kind of
 CLAUDE.md approach, although I would also like to consider some sort of progress tracking. I don't want to assume
 git is always available for reading.
+
+- **Overall optimization** - The initial focus on Solveig's design was on security, not efficiency. This is
+mostly forgivable as network and assistant overhead impact runtime several orders of magnitude more than, for
+example, init'ing the token encoder once per message. Still, I'd like to clean up any unnecessary inefficiencies.
