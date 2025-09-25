@@ -94,7 +94,7 @@ class SolveigConfig:
     @classmethod
     def parse_from_file(cls, config_path: PurePath | str) -> dict:
         if not config_path:
-            return {}
+            raise FileNotFoundError("Config file not specified.")
         abs_path = Filesystem.get_absolute_path(config_path)
         try:
             content = Filesystem.read_file(abs_path).content

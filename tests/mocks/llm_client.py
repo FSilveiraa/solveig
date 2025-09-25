@@ -1,4 +1,5 @@
 """Simple mock LLM client for testing conversation loops."""
+
 import random
 import time
 from unittest.mock import MagicMock
@@ -10,7 +11,10 @@ class MockLLMClient:
     """Thin wrapper around instructor client that returns predefined responses."""
 
     def __init__(
-        self, responses: list[AssistantMessage | Exception], sleep_seconds: float = 0.0, sleep_delta: float = 1.5
+        self,
+        responses: list[AssistantMessage | Exception],
+        sleep_seconds: float = 0.0,
+        sleep_delta: float = 1.5,
     ):
         """
         Args:
@@ -36,8 +40,11 @@ class MockLLMClient:
                 raise response
 
             if self.sleep_seconds:
-                sleep_time = random.uniform(max(0.0, self.sleep_seconds - self.sleep_delta), self.sleep_seconds + self.sleep_delta)
-                print("Sleeping for {} seconds...".format(sleep_time))
+                sleep_time = random.uniform(
+                    max(0.0, self.sleep_seconds - self.sleep_delta),
+                    self.sleep_seconds + self.sleep_delta,
+                )
+                print(f"Sleeping for {sleep_time} seconds...")
                 time.sleep(sleep_time)
             return response
 
@@ -50,7 +57,9 @@ class MockLLMClient:
 
 
 def create_mock_client(
-    *messages: str | AssistantMessage | Exception, sleep_seconds: float = 0.0, sleep_delta: float = 1.5
+    *messages: str | AssistantMessage | Exception,
+    sleep_seconds: float = 0.0,
+    sleep_delta: float = 1.5,
 ) -> MockLLMClient:
     """Create mock client with responses. Strings become AssistantMessage objects."""
     responses = []
@@ -59,4 +68,6 @@ def create_mock_client(
             responses.append(AssistantMessage(comment=msg))
         else:
             responses.append(msg)
-    return MockLLMClient(responses, sleep_seconds=sleep_seconds, sleep_delta=sleep_delta)
+    return MockLLMClient(
+        responses, sleep_seconds=sleep_seconds, sleep_delta=sleep_delta
+    )

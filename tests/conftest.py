@@ -54,10 +54,14 @@ def mock_subprocess(request):
 @pytest.fixture(autouse=True, scope="function")
 def mock_user_interface(request):
     """Provide safe defaults for external operations in tests."""
+    if request.node.get_closest_marker("no_stdio_mocking"):
+        yield None
+        return
+
     with patch(
         "builtins.input",
         side_effect=OSError(
-            "Cannot use actual `input` built-in - use SolveigInterface"
+            "Cannot use actual `input` built-in - use SolveigInterface or mark with @pytest.mark.no_stdio_mocking"
         ),
     ):
         with patch(
@@ -80,9 +84,12 @@ def clean_plugin_state():
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
-        "markers", "no_file_mocking: mark test to skip automatic file operation mocking"
+        "markers", "no_stdio_mocking: mark test to allow print() and input()"
+    )
+    config.addinivalue_line(
+        "markers", "no_file_mocking: mark test to allow file open()"
     )
     config.addinivalue_line(
         "markers",
-        "no_subprocess_mocking: mark test to skip automatic subprocess mocking",
+        "no_subprocess_mocking: mark test to allow subprocess.run()",
     )

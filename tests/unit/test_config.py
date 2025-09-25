@@ -55,8 +55,21 @@ class TestConfigFileParsing:
     )
     def test_parse_from_file_invalid_path(self, config_path):
         """Test parsing from invalid path returns empty dict."""
-        result = SolveigConfig.parse_from_file(config_path)
-        assert result == {}
+        with pytest.raises(FileNotFoundError):
+            SolveigConfig.parse_from_file(config_path)
+
+    def test_parse_from_file_default_path_missing(self):
+        """Test parsing from missing default config path returns empty dict."""
+        from unittest.mock import patch
+
+        # Mock the DEFAULT_CONFIG_PATH to a non-existent path
+        with patch(
+            "solveig.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_solveig_config.json"
+        ):
+            result = SolveigConfig.parse_from_file(
+                "/tmp/nonexistent_solveig_config.json"
+            )
+            assert result == {}
 
     @pytest.mark.no_file_mocking
     def test_parse_from_file_success(self):
@@ -149,17 +162,25 @@ class TestCLIIntegration:
             assert config.api_type == APIType.GEMINI
             assert config.temperature == 0.5  # CLI override
 
-    def test_config_parse_failure_shows_warning(self):
-        """Test warning shown when config file parsing fails."""
-        args = ["--config", "/nonexistent/config.json", "test prompt"]
-        interface = MockInterface()
+    def test_default_config_missing_shows_warning(self):
+        """Test warning shown when default config file doesn't exist."""
+        from unittest.mock import patch
 
-        with pytest.raises(ValueError):
-            SolveigConfig.parse_config_and_prompt(cli_args=args, interface=interface)
+        # Mock default config to non-existent path
+        with patch(
+            "solveig.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
+        ):
+            args = ["--api-type", "local", "test prompt"]  # Must provide required args
+            interface = MockInterface()
 
-        assert any(
-            "Failed to parse config file" in output for output in interface.outputs
-        )
+            config, _ = SolveigConfig.parse_config_and_prompt(
+                cli_args=args, interface=interface
+            )
+
+            # Should succeed and show warning about missing default config
+            assert any(
+                "Failed to parse config file" in output for output in interface.outputs
+            )
 
     def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
