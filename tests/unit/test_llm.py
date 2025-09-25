@@ -100,7 +100,7 @@ class TestInstructorClientFactory:
     def test_get_instructor_client_anthropic_import_error(self):
         """Test Anthropic client creation when anthropic package is not installed."""
         with patch("anthropic.Anthropic", side_effect=ImportError):
-            with pytest.raises(ValueError, match="Anthropic client not available"):
+            with pytest.raises(ImportError, match="Install Anthropic support"):
                 llm.get_instructor_client(
                     api_type=APIType.ANTHROPIC,
                     api_key="test-key",
@@ -111,7 +111,7 @@ class TestInstructorClientFactory:
         """Test Gemini client creation when google-generativeai package is not installed."""
         with patch("google.generativeai.configure", side_effect=ImportError):
             with pytest.raises(
-                ValueError, match="Google Generative AI client not available"
+                ImportError, match="Install Google Generative AI support"
             ):
                 llm.get_instructor_client(
                     api_type=APIType.GEMINI,

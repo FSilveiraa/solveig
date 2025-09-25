@@ -1,9 +1,6 @@
 # from enum import Enum
 from typing import Any
 
-import anthropic
-import google.generativeai as google_ai
-
 # from urllib.parse import urlparse, urlunparse
 import instructor
 import openai
@@ -108,13 +105,15 @@ class APIType:
             model: str | None = None,
         ) -> instructor.Instructor:
             try:
+                import anthropic
+
                 client = anthropic.Anthropic(
                     api_key=api_key, base_url=url or cls.default_url
                 )
                 return instructor.from_anthropic(client, mode=instructor_mode)
             except ImportError as e:
-                raise ValueError(
-                    "Anthropic client not available. Install with: pip install anthropic"
+                raise ImportError(
+                    "Install Anthropic support: pip install solveig[anthropic]"
                 ) from e
 
     class GEMINI(BaseAPI):
@@ -123,7 +122,14 @@ class APIType:
 
         @classmethod
         def _get_encoder(cls, encoder: str) -> Any:
-            return google_ai.GenerativeModel(encoder)
+            try:
+                import google.generativeai as google_ai
+
+                return google_ai.GenerativeModel(encoder)
+            except ImportError as e:
+                raise ImportError(
+                    "Install Google Generative AI support: pip install solveig[google]"
+                ) from e
 
         @staticmethod
         def get_client(
@@ -133,12 +139,14 @@ class APIType:
             model: str | None = None,
         ) -> instructor.Instructor:
             try:
+                import google.generativeai as google_ai
+
                 google_ai.configure(api_key=api_key)
                 gemini_client = google_ai.GenerativeModel(model or "gemini-pro")
                 return instructor.from_gemini(gemini_client, mode=instructor_mode)
             except ImportError as e:
-                raise ValueError(
-                    "Google Generative AI client not available. Install with: pip install google-generativeai"
+                raise ImportError(
+                    "Install Google Generative AI support: pip install solveig[google]"
                 ) from e
 
 

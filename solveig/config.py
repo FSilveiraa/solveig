@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass, field
+from importlib.metadata import version
 from pathlib import PurePath
 from typing import Any
 
@@ -230,6 +231,11 @@ class SolveigConfig:
             type=str,
             choices=themes.THEMES.keys(),
             help="Interface theme",
+        )
+        parser.add_argument(
+            "--version",
+            action="version",
+            version=f"%(prog)s {version('solveig')}",
         )
         parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
 

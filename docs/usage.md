@@ -5,7 +5,13 @@
 ### PyPI Installation (Recommended)
 
 ```bash
+# Core installation (OpenAI + local models only)
 pip install solveig
+
+# With specific provider support
+pip install solveig[anthropic]  # Add Claude support
+pip install solveig[google]     # Add Gemini support
+pip install solveig[all]        # All providers
 ```
 
 ### Development Installation
@@ -13,7 +19,7 @@ pip install solveig
 ```bash
 git clone https://github.com/FSilveiraa/solveig.git
 cd solveig
-pip install -e .[dev]
+pip install -e .[dev]  # Includes all providers for testing
 ```
 
 ## Quick Start
@@ -157,6 +163,9 @@ solveig --auto-execute-commands "^ls\\s*.*$" "^git status$" "^pwd$" "Show me the
 Solveig itself doesn't force you to specify a model nor does it validate it as a name or path
 (e.g. "gpt-5" vs "openai/gpt-5"), however your backend might.
 Typically only local backends like Koboldcpp don't enforce it.
+
+**Note**: Anthropic and Google providers require additional packages. Install with `pip install solveig[anthropic]`
+or `pip install solveig[google]` respectively.
 
 ### Local Models
 

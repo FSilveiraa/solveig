@@ -14,7 +14,13 @@
 ## Installation
 
 ```bash
+# Core installation (OpenAI + local models)
 pip install solveig
+
+# With provider support
+pip install solveig[anthropic]  # Claude support
+pip install solveig[google]     # Gemini support  
+pip install solveig[all]        # All providers
 ```
 
 ## Quick Start

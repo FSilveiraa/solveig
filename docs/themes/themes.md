@@ -17,7 +17,7 @@ solveig -u https://localhost:5001/v1 --theme none
 
 ### Background Color
 
-If you use a theme (including the default one)t solveig will first print a message showing the intended
+If you use a theme (including the default one) solveig will first print a message showing the intended
 background color and the hex code:
 ![Background color note](./background-note.png)
 
@@ -27,7 +27,7 @@ background color and the hex code:
 ![Terracotta (default)](./terracotta.png)
 
 #### Forest
-![Fores](./forest.png)
+![Forest](./forest.png)
 
 #### Solarized Light
 ![Solarized Light](./solarized-light.png)
