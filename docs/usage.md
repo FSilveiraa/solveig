@@ -24,30 +24,36 @@ pip install -e .[dev]  # Includes all providers for testing
 
 ## Quick Start
 
+**Note**: You must specify either `url`, `api_type`, or both, either in the CLI args or the file config:
+- `api_type` only: Uses the API type's default URL
+- `url` only: Assumes OpenAI-compatible API
+- Both: Uses specified URL with the API type's client
+- Neither: Uses values from config file (defaults to ~/.config/solveig.json if not specified)
+
 ### User Prompt
 
 You can start solveig with an initial prompt that is immediately sent to the assistant,
 otherwise you will be prompted for one:
 
 ```bash
-# Provided initial prompt
-solveig -u "http://localhost:5001/v1" "Remove old filed from my Downloads directory"
+# Provided initial prompt using API type
+solveig --api-type local "Remove old files from my Downloads directory"
 
 # No initial prompt - solveig will ask you for one
-solveig -u "http://localhost:5001/v1"
+solveig --api-type local
 ```
 
 ### Basic Usage
 
 ```bash
-# Using a local model
-solveig -u "http://localhost:5001/v1" "Tell me about this directory"
+# Using a local model with explicit URL and API type
+solveig -u "http://localhost:5001/v1" -a "openai" "Tell me about this directory"
 
 # Using OpenRouter with API key
 solveig -u "https://openrouter.ai/api/v1" -k "sk-your-api-key" -m "anthropic/claude-3.5-sonnet" "Help me refactor this code"
 
-# Using a config file
-solveig -c ~/.config/solveig.json "What files are taking up the most space?"
+# Using a config file (must specify url or api_type in config)
+solveig -c ~/.config/solveig.json "Which files are taking up the most space?"
 ```
 
 ### Configuration File
@@ -56,6 +62,7 @@ Create a configuration file at `~/.config/solveig.json`:
 
 ```json
 {
+  "api_type": "openai",
   "url": "https://openrouter.ai/api/v1",
   "api_key": "sk-your-api-key",
   "model": "anthropic/claude-3.5-sonnet",
@@ -80,15 +87,15 @@ see [Configuration Precedence](#configuration-precedence) for more.
 
 ### Connection
 
-| Option        | CLI Flag            | Description                                     | Default                     |
-|---------------|---------------------|-------------------------------------------------|-----------------------------|
-| `url`         | `-u, --url`         | LLM endpoint URL                                | `http://localhost:5001/v1/` |
-| `api_type`    | `-a, --api-type`    | API provider (openai, local, anthropic, gemini) | `local`                     |
-| `api_key`     | `-k, --api-key`     | API key for remote services                     | `nu ll`                     |
-| `model`       | `-m, --model`       | Model name/path                                 | `null`                      |
-| `encoder`     | `-e, --encoder`     | Model encoder for token counting                | Uses `model` value          |
-| `temperature` | `-t, --temperature` | Model temperature                               | `0`                         |
-| `max_context` | `-s, --max-context` | Maximum context length in tokens                | `-1` (no limit)             |
+| Option        | CLI Flag            | Description                                                      | Default            |
+|---------------|---------------------|------------------------------------------------------------------|--------------------|
+| `url`         | `-u, --url`         | LLM endpoint URL (assumes OpenAI-compatible if no `api_type`)    | `""`               |
+| `api_type`    | `-a, --api-type`    | API provider (openai, local, anthropic, gemini)                  | -                  |
+| `api_key`     | `-k, --api-key`     | API key for remote services                                      | `""`               |
+| `model`       | `-m, --model`       | Model name/path                                                  | `null`             |
+| `encoder`     | `-e, --encoder`     | Model encoder for token counting                                 | Uses `model` value |
+| `temperature` | `-t, --temperature` | Model temperature                                                | `0`                |
+| `max_context` | `-s, --max-context` | Maximum context length in tokens                                 | `-1` (no limit)    |
 
 ### Security
 
@@ -124,7 +131,7 @@ see [Configuration Precedence](#configuration-precedence) for more.
 Disable command execution entirely for maximum security:
 
 ```bash
-solveig --no-commands "Analyze this codebase structure"
+solveig --api-type local --no-commands "Analyze this codebase structure"
 ```
 
 In this mode, Solveig can only perform file operations (read, write, copy, move, delete).
@@ -138,10 +145,10 @@ Auto-approve file operations matching glob patterns:
 
 ```bash
 # Auto-approve operations on Python files in projects directory
-solveig --auto-allowed-paths "~/Documents/projects/**/*.py" "Refactor this function"
+solveig --api-type local --auto-allowed-paths "~/Documents/projects/**/*.py" "Refactor this function"
 
 # Multiple patterns
-solveig --auto-allowed-paths "~/src/**/*.js" "~/tests/**/*.py" "Update the tests"
+solveig --api-type local --auto-allowed-paths "~/src/**/*.js" "~/tests/**/*.py" "Update the tests"
 ```
 
 **Warning**: Use with caution. These patterns bypass user consent for file operations.
@@ -152,7 +159,7 @@ Auto-approve commands matching regex patterns:
 
 ```bash
 # Auto-approve safe read-only commands
-solveig --auto-execute-commands "^ls\\s*.*$" "^git status$" "^pwd$" "Show me the repository status"
+solveig --api-type local --auto-execute-commands "^ls\\s*.*$" "^git status$" "^pwd$" "Show me the repository status"
 ```
 
 **Warning**: Use with extreme caution. These patterns allow automatic command execution.
@@ -170,7 +177,10 @@ or `pip install solveig[google]` respectively.
 ### Local Models
 
 ```bash
-# Koboldcpp
+# Using api-type (recommended - uses default URL)
+solveig --api-type local "Your prompt"
+
+# Koboldcpp with explicit URL
 solveig -u "http://localhost:5001/v1" "Your prompt"
 
 # Ollama (default port)
@@ -189,13 +199,13 @@ solveig -a openai -k "your-openai-key" -m "openai/gpt-5" "Your prompt"
 ### Anthropic (Claude)
 
 ```bash
-solveig -a anthropic -k "your-anthropic-key" -m "claude-3-5-sonnet-20241022" "Your prompt"
+solveig --api-type anthropic -k "your-anthropic-key" -m "claude-3-5-sonnet-20241022" "Your prompt"
 ```
 
 ### Google Gemini
 
 ```bash
-solveig -a gemini -k "your-gemini-key" -m "gemini-1.5-pro" "Your prompt"
+solveig --api-type gemini -k "your-gemini-key" -m "gemini-1.5-pro" "Your prompt"
 ```
 
 ### OpenRouter (Multiple Providers)
@@ -232,7 +242,7 @@ a significant token overhead (currently 2934 with examples vs 352 without).
 
 ```bash
 # Add example conversation to system prompt
-solveig -u "https://localhost:5001/v1/" --add-examples "Review my config module"
+solveig --api-type local --add-examples "Review my config module"
 ```
 
 
@@ -259,10 +269,10 @@ you can specify a different encoder and/or a maximum context size:
 ```bash
 # Use the default encoder for the specified model
 # Since no max_context is specified, the context isn't managed and all messages will always be sent
-solveig -m "gpt-4" "Create a backup of my config files before updating them"
+solveig --api-type openai -k "your-key" -m "gpt-4" "Create a backup of my config files before updating them"
 
-# Use a recent GPT encoder with the GPT-5 model and a limit to the context size
-solveig -e "cl200k_base" -m "gpt-5" -s 16384 "Analyze my project for security issues"
+# Use a recent GPT encoder with a custom URL and a limit to the context size
+solveig -u "https://api.openai.com/v1" -k "your-key" -e "cl200k_harmony" -m "gpt-5" -s 16384 "Analyze my project for security issues"
 ```
 
 ### Mock Client
@@ -289,23 +299,23 @@ python -m tests.mocks.run_with_mock_client -c ~/.config/solveig.json -v --no-com
 ### Code Review
 
 ```bash
-solveig --add-os-info "Review this Python project for potential issues"
+solveig --api-type anthropic -k "your-key" --add-os-info "Review this Python project for potential issues"
 ```
 
 ### Safe File Analysis
 
 ```bash
-solveig --no-commands "Analyze the structure of this project and suggest improvements"
+solveig -u "http://localhost:5001/v1" --no-commands "Analyze the structure of this project and suggest improvements"
 ```
 
 ### Development Workflow
 
 ```bash
-solveig --auto-allowed-paths "$(pwd)/**/*" --auto-execute-commands "^git status$" "Help me commit these changes with a good message"
+solveig --api-type local --auto-allowed-paths "$(pwd)/**/*" --auto-execute-commands "^git status$" "Help me commit these changes with a good message"
 ```
 
 ### Documentation Generation
 
 ```bash
-solveig --no-commands --auto-allowed-paths "$(pwd)/docs/**/*.md" "Update the documentation to reflect recent changes"
+solveig --api-type openai -k "your-key" --no-commands --auto-allowed-paths "$(pwd)/docs/**/*.md" "Update the documentation to reflect recent changes"
 ```
