@@ -24,11 +24,20 @@ pip install -e .[dev]  # Includes all providers for testing
 
 ## Quick Start
 
-**Note**: You must specify either `url`, `api_type`, or both, either in the CLI args or the file config:
-- `api_type` only: Uses the API type's default URL
-- `url` only: Assumes OpenAI-compatible API
-- Both: Uses specified URL with the API type's client
-- Neither: Uses values from config file (defaults to ~/.config/solveig.json if not specified)
+**Note**: Either `--url` or `--api-type` must be specified (via CLI args or config file).
+
+CLI arguments override config file settings. Examples:
+
+```bash
+# API type only (uses its default URL)
+solveig --api-type local "Your prompt"
+
+# URL only (assumes OpenAI-compatible)  
+solveig -u "http://localhost:5001/v1" "Your prompt"
+
+# Config file provides the required settings
+solveig "Your prompt"  # Will throw error if ~/.config/solveig.json does not have `url` or `api_type`
+```
 
 ### User Prompt
 
@@ -58,7 +67,7 @@ solveig -c ~/.config/solveig.json "Which files are taking up the most space?"
 
 ### Configuration File
 
-Create a configuration file at `~/.config/solveig.json`:
+Create a JSON configuration file at `~/.config/solveig.json`:
 
 ```json
 {
@@ -272,7 +281,7 @@ you can specify a different encoder and/or a maximum context size:
 solveig --api-type openai -k "your-key" -m "gpt-4" "Create a backup of my config files before updating them"
 
 # Use a recent GPT encoder with a custom URL and a limit to the context size
-solveig -u "https://api.openai.com/v1" -k "your-key" -e "cl200k_harmony" -m "gpt-5" -s 16384 "Analyze my project for security issues"
+solveig -u "https://api.openai.com/v1" -k "your-key" -e "cl200k_base" -m "gpt-5" -s 16384 "Analyze my project for security issues"
 ```
 
 ### Mock Client

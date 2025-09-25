@@ -1,5 +1,5 @@
 """Simple mock LLM client for testing conversation loops."""
-
+import random
 import time
 from unittest.mock import MagicMock
 
@@ -10,7 +10,7 @@ class MockLLMClient:
     """Thin wrapper around instructor client that returns predefined responses."""
 
     def __init__(
-        self, responses: list[AssistantMessage | Exception], sleep_seconds: float = 0
+        self, responses: list[AssistantMessage | Exception], sleep_seconds: float = 0.0, sleep_delta: float = 1.5
     ):
         """
         Args:
@@ -24,6 +24,7 @@ class MockLLMClient:
         self.chat.completions = MagicMock()
         self.chat.completions.create = self._create_completion
         self.sleep_seconds = sleep_seconds
+        self.sleep_delta = abs(sleep_delta)
 
     def _create_completion(self, **kwargs) -> AssistantMessage:
         """Return next response or raise next exception."""
@@ -34,7 +35,10 @@ class MockLLMClient:
             if isinstance(response, Exception):
                 raise response
 
-            time.sleep(self.sleep_seconds)
+            if self.sleep_seconds:
+                sleep_time = random.uniform(max(0.0, self.sleep_seconds - self.sleep_delta), self.sleep_seconds + self.sleep_delta)
+                print("Sleeping for {} seconds...".format(sleep_time))
+                time.sleep(sleep_time)
             return response
 
         # No more responses - return simple default
@@ -46,7 +50,7 @@ class MockLLMClient:
 
 
 def create_mock_client(
-    *messages: str | AssistantMessage | Exception, sleep_seconds: float = 0
+    *messages: str | AssistantMessage | Exception, sleep_seconds: float = 0.0, sleep_delta: float = 1.5
 ) -> MockLLMClient:
     """Create mock client with responses. Strings become AssistantMessage objects."""
     responses = []
@@ -55,4 +59,4 @@ def create_mock_client(
             responses.append(AssistantMessage(comment=msg))
         else:
             responses.append(msg)
-    return MockLLMClient(responses, sleep_seconds)
+    return MockLLMClient(responses, sleep_seconds=sleep_seconds, sleep_delta=sleep_delta)

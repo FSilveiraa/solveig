@@ -26,7 +26,7 @@ class SolveigConfig:
     url: str = ""
     api_type: type[APIType.BaseAPI] = APIType.LOCAL
     api_key: str = (
-        ""  # Local models can work with "" throught Intructor, but not with None
+        ""  # Local models can work with "" through Instructor, but not with None
     )
     model: str | None = None
     encoder: str | None = None
@@ -99,8 +99,11 @@ class SolveigConfig:
         try:
             content = Filesystem.read_file(abs_path).content
             return json.loads(content)
-        except FileNotFoundError:
-            return {}
+        except FileNotFoundError as e:
+            # Throw an error if we tried to read any non-default config path
+            if config_path == DEFAULT_CONFIG_PATH:
+                return {}
+            raise e
 
     @classmethod
     def parse_config_and_prompt(
