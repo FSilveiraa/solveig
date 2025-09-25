@@ -19,7 +19,7 @@ class TestSolveigConfigCore:
         """Test default configuration values."""
         config = SolveigConfig()
         assert config.api_type == APIType.LOCAL
-        assert config.api_key is None
+        assert config.api_key == ""
         assert config.verbose is False
         assert config.plugins == {}
         assert config.auto_allowed_paths == []
@@ -123,19 +123,20 @@ class TestCLIIntegration:
 
     def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
-        args = ["--temperature", "0.8", "--verbose", "test prompt"]
+        args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.temperature == 0.8
         assert config.verbose is True
+        assert config.api_type == APIType.OPENAI
         assert prompt == "test prompt"
 
     @pytest.mark.no_file_mocking
     def test_file_and_cli_merge(self):
         """Test file config merges with CLI overrides."""
 
-        file_config = {"verbose": True, "temperature": 0.2}
+        file_config = {"api_type": "gemini", "verbose": True, "temperature": 0.2}
 
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
             json.dump(file_config, temp_config)
@@ -145,6 +146,7 @@ class TestCLIIntegration:
             args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
             config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
             assert config.verbose is True  # From file
+            assert config.api_type == APIType.GEMINI
             assert config.temperature == 0.5  # CLI override
 
     def test_config_parse_failure_shows_warning(self):
@@ -152,7 +154,8 @@ class TestCLIIntegration:
         args = ["--config", "/nonexistent/config.json", "test prompt"]
         interface = MockInterface()
 
-        SolveigConfig.parse_config_and_prompt(cli_args=args, interface=interface)
+        with pytest.raises(ValueError):
+            SolveigConfig.parse_config_and_prompt(cli_args=args, interface=interface)
 
         assert any(
             "Failed to parse config file" in output for output in interface.outputs
@@ -160,7 +163,7 @@ class TestCLIIntegration:
 
     def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
-        args = ["--no-commands", "test prompt"]
+        args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
@@ -169,7 +172,7 @@ class TestCLIIntegration:
 
     def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
-        args = ["test prompt"]
+        args = ["-a", "local", "test prompt"]
         config, prompt = SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )

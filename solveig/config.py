@@ -23,9 +23,11 @@ class SolveigConfig:
     # r: read file and metadata
     # w: read and write
     # n: negate (useful for denying access to sub-paths contained in another allowed path)
-    url: str = "http://localhost:5001/v1/"
+    url: str = ""
     api_type: type[APIType.BaseAPI] = APIType.LOCAL
-    api_key: str | None = None
+    api_key: str = (
+        ""  # Local models can work with "" throught Intructor, but not with None
+    )
     model: str | None = None
     encoder: str | None = None
     temperature: float = 0
@@ -48,6 +50,7 @@ class SolveigConfig:
         # convert API type string to class
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = parse_api_type(self.api_type)
+
         self.encoder = self.encoder or self.model
         if self.auto_allowed_paths:
             self.auto_allowed_paths = [
@@ -120,13 +123,18 @@ class SolveigConfig:
             default=DEFAULT_CONFIG_PATH,
             help="Path to config file",
         )
-        parser.add_argument("--url", "-u", type=str)
+        parser.add_argument(
+            "--url",
+            "-u",
+            type=str,
+            help="LLM API endpoint URL (assumes OpenAI-compatible if --api-type not specified)",
+        )
         parser.add_argument(
             "--api-type",
             "-a",
             type=str,
             choices=["openai", "local", "anthropic", "gemini"],
-            help="Type of API to use (default: local)",
+            help="Type of API to use (uses API type's default URL if --url not specified)",
         )
         parser.add_argument("--api-key", "-k", type=str)
         parser.add_argument(
@@ -281,6 +289,33 @@ class SolveigConfig:
                     interface.display_warning(
                         f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations"
                     )
+
+        # Validate and apply smart defaults for URL/API type
+        user_provided_url = "url" in merged_config and merged_config["url"]
+        user_provided_api_type = (
+            "api_type" in merged_config and merged_config["api_type"]
+        )
+
+        if not user_provided_url and not user_provided_api_type:
+            raise ValueError(
+                "Either --url (-u) or --api-type (-a) must be specified. "
+                "Use --help to see available options."
+            )
+
+        if not user_provided_api_type:
+            # If URL provided but no API type, assume OpenAI-compatible
+            merged_config["api_type"] = "openai"
+
+        if not user_provided_url:
+            # If API type provided but no URL, we'll use the API type's default URL
+            # We need to parse the API type first to get its default URL
+            api_type_class = parse_api_type(merged_config["api_type"])
+            if not api_type_class.default_url:
+                raise ValueError(
+                    f"No URL provided and API type {api_type_class.name} has no default URL. "
+                    "Please specify --url or -u."
+                )
+            merged_config["url"] = api_type_class.default_url
 
         return (cls(**merged_config), user_prompt)
 
