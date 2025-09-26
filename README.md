@@ -1,6 +1,6 @@
 # Solveig
 
-**An agentic framework that enables secure, extensible and configurable AI automation from any model**
+**An agentic runtime that enables secure, extensible and configurable AI automation from any LLM**
 
 ![Demo GIF](./docs/demo.gif)
 
@@ -11,17 +11,31 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+<p align="center">
+    <span style="font-size: 1.17em; font-weight: bold;">
+        <a href="./docs/about.md#features-and-principles">Features</a> &nbsp;|&nbsp;
+        <a href="./docs/about.md#faq">FAQ</a> &nbsp;|&nbsp;
+        <a href="./docs/usage.md">Usage</a> &nbsp;|&nbsp;
+        <a href="./docs/plugins.md">Plugins</a> &nbsp;|&nbsp;
+        <a href="./docs/themes/themes.md">Themes</a> &nbsp;|&nbsp;
+        <a href="./docs/about.md#roadmap">Roadmap</a> &nbsp;|&nbsp;
+        <a href="./docs/contributing.md">Contributing</a>
+    </span>
+</p>
+
+---
+
 ## Installation
 
 ```bash
 # Core installation (OpenAI + local models)
 pip install solveig
 
-# With provider support
-pip install solveig[anthropic]  # Claude support
-pip install solveig[google]     # Gemini support  
-pip install solveig[all]        # All providers
+# With support for Claude and Gemini APIs
+pip install solveig[all]
 ```
+
+---
 
 ## Quick Start
 
@@ -37,11 +51,19 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 
 ## Features
 
-📂 **Files and Commands** - Rich File API that prioritizes safe filesystem access, while also offering full shell capability.  
-🛡️ **Granular Permissions** - Safe defaults with explicit user consent. Supports granular configuration using patterns.  
-🔌 **Plugins** - Extensible requirement system for custom AI capabilities through simple drop-in plugins. Add an AI SQL query runner with 100 lines of Python.  
-📋 **Clear Interface** - Clear progress tracking and content display that inform user consent and choices.  
-🌐 **Provider Agnostic** - Works with any OpenAI-compatible API including local models, Claude and Gemini.
+🤖 **AI Terminal Assistant** - Automate file management, code analysis, project setup, and system tasks using
+natural language in your terminal.
+
+🛡️ **Safe by Design** - Granular consent controls with pattern-based permissions and file operations
+prioritized over shell commands.
+
+🔌 **Plugin Architecture** - Extend capabilities through drop-in Python plugins. Add SQL queries, web scraping,
+or custom workflows with 100 lines of Python.
+
+📋 **Visual Task Management** - Clear progress tracking with task breakdowns, file previews, and rich metadata
+display for informed user decisions.
+
+🌐 **Provider Independence** - Works with OpenAI, Claude, Gemini, local models, or any OpenAI-compatible API.
 
 ---
 
@@ -51,8 +73,8 @@ solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:
 - **[Usage Guide](./docs/usage.md)** - Configuration options, examples, and advanced features
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
-- **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 - **[Roadmap](./docs/about.md#roadmap)** - Upcoming features
+- **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 
 ---
 
