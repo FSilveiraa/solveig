@@ -25,7 +25,9 @@
 
 ---
 
-## Installation
+## Quick Start
+
+### Installation
 
 ```bash
 # Core installation (OpenAI + local models)
@@ -35,9 +37,7 @@ pip install solveig
 pip install solveig[all]
 ```
 
----
-
-## Quick Start
+### Running
 
 ```bash
 # Run with a local model
