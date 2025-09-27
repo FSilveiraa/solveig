@@ -32,7 +32,7 @@ Gemini, and local models. Solveig is a free and open-source tool with no artific
 
 **Visual transparency** - Styled terminal output with progress tracking, clear task breakdowns, and rich metadata
 display. Informed decisions require clear information display. The interface remains abstract enough to support
-future alternatives like web interfaces - see the [Roadmap](./about.md#roadmap) for more.
+future alternatives like web interfaces - see the [Roadmap](https://github.com/FSilveiraa/solveig/discussions/2) for more.
 
 **Industry standards** - Adopts proven patterns from leading agentic AI tools. Several features were inspired
 by or functionally copied from other tools, building on what works rather than reinventing solutions - see
@@ -79,7 +79,8 @@ risks. You remain responsible for any operations you approve.
 
 **Does Solveig support multi-agent workflows?**
 
-Not currently, although it might in the future - check the [Roadmap](./about.md#roadmap).
+Not currently, although it might in the future - check the
+[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2).
 
 **How does Solveig work?**
 
@@ -172,44 +173,3 @@ One of its most interesting features is having a shorthand command to [scrape a 
 command](https://aider.chat/docs/install/optional.html#enable-playwright) that the assistant can then interact with.
 It's also very configurable - honestly, give Aider a try, it's a very useful tool, people have built businesses with
 it.
-
-
----
-
-
-## Roadmap
-
-- ~~**Proper theme support**~~ - ✅ Added
-
-- **Plugin config from CLI args** - Currently it's only possible to configure plugins from a file configuration.
-I'd like to extend this to CLI args, it seems easy to add without breaking anything, and it's just an expected
-feature. I also have to find a way to have the plugins have some sort of documentation with configuration. 
-
-- **Code linting and diff view** - Two very common features in this type of tool, allowing the interface to
-display content visually formatted according to its type and giving users a clearer idea of exactly what is
-being changed. The diff view might be more than just graphical, especially for very large files it might be
-valuable to have some sort of localized per-line updated.
-
-- **Web interface** - I've started the work on a web interface for solveig and I'm convinced it offers some real
-value - rendering generated HTML and images, allowing deeper visual customization, better visual structuring
-with collapsible directory trees, etc. However, this is not expected to be available anytime soon.
-
-- **Session awareness** - I'd like to have some sort of persistence. I think this should involve some kind of
-CLAUDE.md approach, although I would also like to consider some sort of progress tracking. I don't want to assume
-git is always available for reading.
-
-- **Overall optimization** - The initial focus on Solveig's design was on security, not efficiency. This is
-mostly forgivable as network and assistant overhead impact runtime several orders of magnitude more than, for
-example, init'ing the token encoder once per message. Still, I'd like to clean up any unnecessary inefficiencies.
-
-- **Multi-agent support** - As Solveig grows and abstracts more complex behavior into plugins, it might be
-valuable to integrate some simple multi-agent capability into Solveig, where the system prompt and available
-actions are constrained to a sub-set - e.g. if we can determine with some certainty that a request is only for
-file operations, then we should not present the possibility to run a command. Future plugins with complex
-functionality (like a `git` plugin) would especially benefit from this. But given the current capabilities,
-I don't see a big advantage.
-
-- **Workflows** - I should at least consider how this could be integrated. A very easy solution is to
-have some plugins return task lists - for example, the `create_django_webapp` requirement would return the
-tasks "1. write app.py", "create static/ dir" and "run app". In this way this is already "supported",
-although it's more of a guideline for the LLM instead of static rule that enforces behavior.

@@ -18,7 +18,7 @@
         <a href="./docs/usage.md">Usage</a> &nbsp;|&nbsp;
         <a href="./docs/plugins.md">Plugins</a> &nbsp;|&nbsp;
         <a href="./docs/themes/themes.md">Themes</a> &nbsp;|&nbsp;
-        <a href="./docs/about.md#roadmap">Roadmap</a> &nbsp;|&nbsp;
+        <a href="https://github.com/FSilveiraa/solveig/discussions/2">Roadmap</a> &nbsp;|&nbsp;
         <a href="./docs/contributing.md">Contributing</a>
     </span>
 </p>
@@ -73,7 +73,7 @@ display for informed user decisions.
 - **[Usage Guide](./docs/usage.md)** - Configuration options, examples, and advanced features
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
-- **[Roadmap](./docs/about.md#roadmap)** - Upcoming features
+- **[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2)** - Upcoming features
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 
 ---
