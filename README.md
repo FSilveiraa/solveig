@@ -2,7 +2,7 @@
 
 **An agentic runtime that enables secure, extensible and configurable AI automation from any LLM**
 
-![Demo GIF](./docs/demo.gif)
+[![Demo GIF](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo.svg)](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo)
 
 [![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
 [![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions)
