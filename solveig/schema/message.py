@@ -126,6 +126,41 @@ def get_filtered_assistant_message_class(
     return AssistantMessage
 
 
+def get_requirements_union_for_streaming(config: SolveigConfig | None = None):
+    """Get the requirements union type for streaming individual requirements."""
+    from typing import Union
+
+    # Get ALL active requirements from the unified registry
+    try:
+        from solveig.schema import REQUIREMENTS
+
+        all_active_requirements = list(REQUIREMENTS.registered.values())
+    except (ImportError, AttributeError):
+        # Fallback - should not happen in normal operation
+        all_active_requirements = []
+
+    # Filter out CommandRequirement if commands are disabled
+    if config and config.no_commands:
+        from solveig.schema.requirements.command import CommandRequirement
+
+        all_active_requirements = [
+            req for req in all_active_requirements if req != CommandRequirement
+        ]
+
+    # Handle empty registry case
+    if not all_active_requirements:
+        return None
+
+    # Create union using typing.Union for Instructor compatibility
+    if len(all_active_requirements) == 1:
+        requirements_union: Any = all_active_requirements[0]
+    else:
+        # Use typing.Union instead of | operator for better Instructor compatibility
+        requirements_union = Union[tuple(all_active_requirements)]
+
+    return requirements_union
+
+
 # Type alias for any message type
 Message = SystemMessage | UserMessage | AssistantMessage
 UserMessage.model_rebuild()

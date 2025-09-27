@@ -94,6 +94,56 @@ def send_message_to_llm(
     )
 
 
+def send_message_to_llm_streaming(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    client: Instructor,
+    message_history: MessageHistory,
+    user_response: UserMessage,
+) -> list:
+    """Stream individual requirements as they complete. Returns list of requirements."""
+    from solveig.schema.message import get_requirements_union_for_streaming
+
+    if config.verbose:
+        interface.display_text_block(str(user_response), title="Sending")
+
+    # Get the requirements union for streaming
+    requirements_union = get_requirements_union_for_streaming(config)
+    if not requirements_union:
+        interface.display_text("No requirements available for streaming")
+        return []
+
+    interface.display_text("Streaming requirements...")
+    collected_requirements = []
+
+    try:
+        # Enable token usage tracking for progress feedback
+        requirement_stream = client.chat.completions.create_iterable(
+            messages=message_history.to_openai(),
+            response_model=requirements_union,
+            model=config.model,
+            temperature=config.temperature,
+            stream_options={"include_usage": True},
+        )
+
+        requirement_count = 0
+        for requirement in requirement_stream:
+            requirement_count += 1
+            interface.display_text(f"Received {requirement_count}: {type(requirement).__name__}")
+            collected_requirements.append(requirement)
+
+        if collected_requirements:
+            interface.display_text(f"✓ Completed streaming {len(collected_requirements)} requirements")
+        else:
+            interface.display_text("No requirements generated")
+
+    except Exception as e:
+        interface.display_text(f"Streaming failed: {e}")
+        raise e  # Let caller handle fallback
+
+    return collected_requirements
+
+
 def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -104,9 +154,26 @@ def send_message_to_llm_with_retry(
     """Send message to LLM with retry logic. Returns (llm_response, potentially_updated_user_response)."""
     while True:
         try:
-            llm_response = send_message_to_llm(
-                config, interface, client, message_history, user_response
-            )
+            # llm_response = send_message_to_llm(
+            #     config, interface, client, message_history, user_response
+            # )
+            try:
+                streamed_requirements = send_message_to_llm_streaming(
+                    config=config,
+                    interface=interface,
+                    client=client,
+                    message_history=message_history,
+                    user_response=user_response,
+                )
+                # Convert back to AssistantMessage format for compatibility
+                from solveig.schema.message import get_filtered_assistant_message_class
+                message_class = get_filtered_assistant_message_class(config)
+                llm_response = message_class(requirements=streamed_requirements if streamed_requirements else None)
+            except Exception:
+                interface.display_text("Falling back to original method...")
+                llm_response = send_message_to_llm(
+                    config, interface, client, message_history, user_response
+                )
             if llm_response is not None:
                 return llm_response, user_response
 
