@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, field_validator
 
@@ -13,12 +13,6 @@ from .results import RequirementResult
 
 class BaseMessage(BaseSolveigModel):
     role: Literal["system", "user", "assistant"]
-    comment: str = ""
-
-    @field_validator("comment", mode="before")
-    @classmethod
-    def strip_comment(cls, comment):
-        return (comment or "").strip()
 
     def to_openai(self) -> dict:
         data = self.model_dump()
@@ -38,11 +32,12 @@ class BaseMessage(BaseSolveigModel):
 
 class SystemMessage(BaseMessage):
     role: Literal["system"] = "system"
+    system_prompt: str
 
     def to_openai(self) -> dict:
         return {
             "role": self.role,
-            "content": self.comment,
+            "content": self.system_prompt,
         }
 
 
@@ -51,7 +46,13 @@ class SystemMessage(BaseMessage):
 # - optionally the responses to results asked by the LLM
 class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
+    comment: str = ""
     results: list[RequirementResult] | None = None
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def strip_comment(cls, comment):
+        return (comment or "").strip()
 
 
 # The LLM's response can be:
@@ -126,9 +127,23 @@ def get_filtered_assistant_message_class(
     return AssistantMessage
 
 
-def get_requirements_union_for_streaming(config: SolveigConfig | None = None):
-    """Get the requirements union type for streaming individual requirements."""
-    from typing import Union
+# Cache for requirements union to avoid regenerating on every call
+_last_requirements_config_hash = None
+_last_requirements_union = None
+
+
+def get_requirements_union_for_streaming(config: SolveigConfig | None = None) -> Union[type[Requirement]] | None:
+    """Get the requirements union type for streaming individual requirements with caching."""
+    global _last_requirements_config_hash, _last_requirements_union
+
+    # Generate config hash for caching
+    config_hash = None
+    if config:
+        config_hash = hash(config.to_json(indent=None, sort_keys=True))
+
+    # Return cached union if config hasn't changed
+    if config_hash == _last_requirements_config_hash and _last_requirements_union is not None:
+        return _last_requirements_union
 
     # Get ALL active requirements from the unified registry
     try:
@@ -149,14 +164,19 @@ def get_requirements_union_for_streaming(config: SolveigConfig | None = None):
 
     # Handle empty registry case
     if not all_active_requirements:
+        _last_requirements_config_hash = config_hash
+        _last_requirements_union = None
         return None
 
     # Create union using typing.Union for Instructor compatibility
     if len(all_active_requirements) == 1:
-        requirements_union: Any = all_active_requirements[0]
+        requirements_union = all_active_requirements[0]
     else:
-        # Use typing.Union instead of | operator for better Instructor compatibility
         requirements_union = Union[tuple(all_active_requirements)]
+
+    # Cache the result
+    _last_requirements_config_hash = config_hash
+    _last_requirements_union = requirements_union
 
     return requirements_union
 
@@ -179,7 +199,7 @@ class MessageHistory:
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
         if not self.message_cache:  # Only add if not already present
-            self.add_messages(SystemMessage(comment=self.system_prompt))
+            self.add_messages(SystemMessage(system_prompt=self.system_prompt))
 
     def __iter__(self):
         """Allow iteration over messages: for message in message_history."""

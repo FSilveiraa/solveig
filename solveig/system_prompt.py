@@ -34,8 +34,7 @@ Always try to answer the user's question, no matter how redundant it may seem.
 You may request any of the following operations that you think are necessary:
 {CAPABILITIES_LIST}
 Put system safety first - explain all operations, prefer file operations over commands, avoid destructive actions unless absolutely necessary.
-Plan ahead using tasks lists. If the user rejects a requirement, update your plan and suggest alternatives.
-Output your response strictly following the `AssistantMessage` format described below.
+Plan ahead, using task lists as the first requirement if necessary. Adapt your plan to failure or user denial.
 """
 
 SYSTEM_PROMPT_OS_INFO = """

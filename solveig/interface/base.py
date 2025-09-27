@@ -43,10 +43,10 @@ class SolveigInterface(ABC):
         """Get text input from user."""
         pass
 
-    @abstractmethod
-    def display_llm_response(self, llm_response: "AssistantMessage") -> None:
-        """Display the assistant's comment and requirements summary."""
-        pass
+    # @abstractmethod
+    # def display_llm_response(self, llm_response: "AssistantMessage") -> None:
+    #     """Display the assistant's comment and requirements summary."""
+    #     pass
 
     @abstractmethod
     def display_text_block(

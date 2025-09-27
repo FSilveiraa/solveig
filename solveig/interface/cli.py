@@ -243,23 +243,23 @@ class CLIInterface(SolveigInterface):
             pad=False,
         )
 
-    def display_llm_response(self, llm_response: "AssistantMessage") -> None:
-        """Display the LLM response and requirements summary."""
-        if llm_response.comment:
-            self.display_comment(llm_response.comment.strip())
-
-        if llm_response.requirements:
-            with self.with_group(f"Requirements ({len(llm_response.requirements)})"):
-                indexed_requirements = defaultdict(list)
-                for requirement in llm_response.requirements:
-                    indexed_requirements[requirement.title].append(requirement)
-
-                for requirement_type, requirements in indexed_requirements.items():
-                    with self.with_group(
-                        f"{requirement_type.title()} ({len(requirements)})"
-                    ):
-                        for requirement in requirements:
-                            requirement.display_header(interface=self)
+    # def display_llm_response(self, llm_response: "AssistantMessage") -> None:
+    #     """Display the LLM response and requirements summary."""
+    #     if llm_response.comment:
+    #         self.display_comment(llm_response.comment.strip())
+    #
+    #     if llm_response.requirements:
+    #         with self.with_group(f"Requirements ({len(llm_response.requirements)})"):
+    #             indexed_requirements = defaultdict(list)
+    #             for requirement in llm_response.requirements:
+    #                 indexed_requirements[requirement.title].append(requirement)
+    #
+    #             for requirement_type, requirements in indexed_requirements.items():
+    #                 with self.with_group(
+    #                     f"{requirement_type.title()} ({len(requirements)})"
+    #                 ):
+    #                     for requirement in requirements:
+    #                         requirement.display_header(interface=self)
 
     # display_requirement removed - requirements now display themselves directly
 

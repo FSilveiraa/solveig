@@ -92,4 +92,4 @@ for requirement in CORE_REQUIREMENTS:
 # Export the registration decorator for direct use
 register_requirement = REQUIREMENTS.register_requirement
 
-__all__ = ["REQUIREMENTS", "CORE_REQUIREMENTS", "register_requirement"]
+__all__ = ["REQUIREMENTS", "CORE_REQUIREMENTS", "Requirement", "register_requirement"]
