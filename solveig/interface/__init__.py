@@ -33,5 +33,6 @@ Output:
 
 from .base import SolveigInterface
 from .cli import CLIInterface
+from .async_cli import AsyncCLIInterface
 
-__all__ = ["SolveigInterface", "CLIInterface"]
+__all__ = ["SolveigInterface", "CLIInterface", "AsyncCLIInterface"]

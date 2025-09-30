@@ -4,6 +4,7 @@ CLI implementation of Solveig interface.
 
 import random
 import shutil
+import sys
 import traceback
 from collections import defaultdict
 from collections.abc import Callable, Generator
@@ -441,3 +442,27 @@ class CLIInterface(SolveigInterface):
                 title=exception.__class__.__name__,
                 box_style=self.theme.error,
             )
+
+
+class CLIInterfaceWithInputBar(CLIInterface):
+    """Enhanced CLI interface with persistent bottom input bar."""
+
+    def _input(self, prompt: str, style: str | None = None, **kwargs) -> str:
+        """Override to use prompt_toolkit with bottom toolbar and proper stdout patching."""
+        from prompt_toolkit import prompt
+        from prompt_toolkit.formatted_text import FormattedText
+        from prompt_toolkit.patch_stdout import patch_stdout
+
+        # Use patch_stdout to handle concurrent output properly
+        try:
+            with patch_stdout():
+                result = prompt(
+                    FormattedText([('class:prompt', f"{self.PADDING_LEFT}{prompt}")]),
+                    style=self._input_style_dict,
+                    bottom_toolbar="Type your input above, press Enter to submit",
+                    multiline=False,
+                    **kwargs
+                )
+            return result
+        except KeyboardInterrupt:
+            raise

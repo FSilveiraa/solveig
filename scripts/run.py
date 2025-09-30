@@ -12,7 +12,7 @@ from instructor.core import InstructorRetryException
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.interface.cli import CLIInterface
+from solveig.interface.cli import CLIInterface, CLIInterfaceWithInputBar
 from solveig.plugins import initialize_plugins
 from solveig.schema import Requirement
 from solveig.schema.message import (
@@ -237,7 +237,7 @@ def main_loop(
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    interface = interface or CLIInterface(
+    interface = interface or CLIInterfaceWithInputBar(
         verbose=config.verbose,
         max_lines=config.max_output_lines,
         theme=config.theme,
