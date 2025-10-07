@@ -234,6 +234,8 @@ class TextualInterface(SolveigInterface):
     Textual interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
 
+    YES = { "yes", "y", }
+
     def __init__(self, color_palette: Palette = terracotta, **kwargs):
         self.app = SolveigTextualApp(color_palette=color_palette, interface_controller=self, **kwargs)
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -291,18 +293,11 @@ class TextualInterface(SolveigInterface):
         """Ask for any kind of input with a prompt."""
         return await self.app.ask_user(prompt, placeholder)
 
-    async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
+    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
-        if yes_values is None:
-            yes_values = ["y", "yes", "1", "true", "t"]
-        if no_values is None:
-            no_values = ["n", "no", "0", "false", "f", ""]
-
+        yes_values = yes_values or self.YES
         response = await self.ask_user(question, f"❓ {question} [y/N]: ")
-        result = response.lower().strip() in yes_values
-
-        self.display_text(f"❓ {question} → {'Yes' if result else 'No'}", "system")
-        return result
+        return response.lower().strip() in yes_values
 
 
     def set_status(self, status: str) -> None:

@@ -63,7 +63,7 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
+    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
         ...
 

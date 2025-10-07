@@ -23,6 +23,7 @@ class SimpleInterface(SolveigInterface):
     DEFAULT_INPUT_PROMPT = ">"
     PADDING_LEFT = Text(" ")
     PADDING_RIGHT = Text(" ")
+    YES = { "y", "yes" }
 
     class TEXT_BOX:
         H = "─"
@@ -48,16 +49,17 @@ class SimpleInterface(SolveigInterface):
         "cool",
     }
 
-    def __init__(self, color_palette: Palette = terracotta, animation_interval: float = 0.1, **kwargs):
+    def __init__(self, color_palette: Palette = terracotta, animation_interval: float = 0.1, indent_base: int = 2, **kwargs):
         self.color_palette = color_palette
         self.animation_interval = animation_interval
-        self.input_callback: Optional[Callable[[SolveigInterface, str], Union[None, Awaitable[None]]]] = None
+        self.indent_base = indent_base
+        self._current_indent = ""  # The actual indent string
 
         self.output_console = Console()
         self.input_console: PromptSession = PromptSession(
             color_depth=ColorDepth.TRUE_COLOR
         )
-        self._input_style_dict = self._create_prompt_toolkit_style()
+        self._input_style = self.color_palette.to_prompt_toolkit_style()
 
         self._setup_custom_spinners()
 
@@ -69,21 +71,20 @@ class SimpleInterface(SolveigInterface):
         )
 
     def _output(self, text: str | Text, pad: bool = True, **kwargs) -> None:
+        # Convert text to Text object if it's a string
+        if isinstance(text, str):
+            text = Text(text)
+
+        # Apply current indentation
+        indented_text = Text(self._current_indent) + text
+
         self.output_console.print(
             (self.PADDING_LEFT if pad else Text(""))
-            + text
+            + indented_text
             + (self.PADDING_RIGHT if pad else Text("")),
             **kwargs,
         )
 
-    def _create_prompt_toolkit_style(self):
-        """Create prompt_toolkit style from color palette."""
-        return {
-            'prompt': f'fg:{self.color_palette.prompt}',
-            'text': f'fg:{self.color_palette.text}',
-            'error': f'fg:{self.color_palette.error}',
-            'warning': f'fg:{self.color_palette.warning}',
-        }
 
     def _setup_custom_spinners(self):
         """Set up custom spinners for Rich animations."""
@@ -116,8 +117,8 @@ class SimpleInterface(SolveigInterface):
                 toolbar_text += "Press Enter to submit, Ctrl+C to cancel."
 
                 result = await self.input_console.prompt_async(
-                    FormattedText([('class:prompt', f"{self.PADDING_LEFT}{prompt}")]),
-                    style=self._input_style_dict,
+                    HTML(f"{self.PADDING_LEFT}<prompt>{prompt}</prompt>{self.PADDING_RIGHT}"),
+                    style=self._input_style,
                     bottom_toolbar=toolbar_text,
                     multiline=multiline,
                     **kwargs
@@ -127,56 +128,56 @@ class SimpleInterface(SolveigInterface):
             raise
 
     # SolveigInterface implementation
-    def display_text(self, text: str, style: str = "normal") -> None:
+    def display_text(self, text: str, style: str = "") -> None:
         """Display text with optional styling."""
-        if style == "error":
-            color = self.color_palette.error
-        elif style == "warning":
-            color = self.color_palette.warning
-        elif style == "success":
-            color = self.color_palette.group
-        elif style == "system":
-            color = self.color_palette.group
-        elif style == "user":
-            color = self.color_palette.prompt
-        else:
-            color = self.color_palette.text
-
-        self._output(Text(text, style=color))
+        style = style or self.color_palette.text
+        # if style == "error":
+        #     color = self.color_palette.error
+        # elif style == "warning":
+        #     color = self.color_palette.warning
+        # elif style == "success":
+        #     color = self.color_palette.group
+        # elif style == "system":
+        #     color = self.color_palette.group
+        # elif style == "user":
+        #     color = self.color_palette.prompt
+        # else:
+        #     color = self.color_palette.text
+        self._output(Text(text, style=style))
 
     def display_error(self, error: str) -> None:
         """Display an error message with standard formatting."""
-        self.display_text(f"❌ Error: {error}", "error")
+        self.display_text(f"❌ Error: {error}", style=self.color_palette.error)
 
     def display_warning(self, warning: str) -> None:
         """Display a warning message with standard formatting."""
-        self.display_text(f"⚠️  Warning: {warning}", "warning")
+        self.display_text(f"⚠️  Warning: {warning}", style=self.color_palette.warning)
 
     def display_success(self, message: str) -> None:
         """Display a success message with standard formatting."""
-        self.display_text(f"✅ {message}", "success")
+        self.display_text(f"✅ {message}")
 
     def display_comment(self, message: str) -> None:
         """Display a comment message."""
-        self.display_text(message, "system")
+        self.display_text(message)
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
         max_width = self._get_max_output_width()
 
         # Top bar
-        top_bar = Text(f"{self.TEXT_BOX.TL}", style=self.color_palette.group)
+        top_bar = Text(f"{self.TEXT_BOX.TL}", style=self.color_palette.box)
         if title:
             top_bar.append(f"{self.TEXT_BOX.H * 3}")
-            top_bar.append(f" {title} ", style=f"bold {self.color_palette.group}")
+            top_bar.append(f" {title} ", style=f"bold {self.color_palette.box}")
         top_bar.append(
             f"{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR}"
         )
         self._output(top_bar)
 
         # Content lines
-        vertical_bar_left = Text(f"{self.TEXT_BOX.V} ", style=self.color_palette.group)
-        vertical_bar_right = Text(f" {self.TEXT_BOX.V} ", style=self.color_palette.group)
+        vertical_bar_left = Text(f"{self.TEXT_BOX.V} ", style=self.color_palette.box)
+        vertical_bar_right = Text(f" {self.TEXT_BOX.V} ", style=self.color_palette.box)
         max_line_length = max_width - len(vertical_bar_left) - len(vertical_bar_right)
 
         lines = text.splitlines()
@@ -191,38 +192,33 @@ class SimpleInterface(SolveigInterface):
         # Bottom bar
         self._output(
             f"{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - 3)}{self.TEXT_BOX.BR}",
-            style=self.color_palette.group,
+            style=self.color_palette.box,
         )
 
     async def ask_user(self, prompt: str, placeholder: str = None, multiline: bool = False) -> str:
         """Ask for specific input with optional multi-line support."""
         if multiline:
             full_prompt = f"{prompt}: "
-            self.display_text("📝 Multi-line input mode enabled. Use Alt+Enter for new lines.", "system")
+            self.display_text("📝 Multi-line input mode enabled. Use Alt+Enter for new lines.", style=self.color_palette.prompt)
         else:
             full_prompt = f"{prompt}: "
         return await self._input(full_prompt, multiline=multiline)
 
     async def get_input(self) -> str:
         """Get user input for conversation flow."""
-        return await self._input("💬 ")
+        return await self._input(self.DEFAULT_INPUT_PROMPT)
 
-    async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
+    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
-        if yes_values is None:
-            yes_values = ["y", "yes", "1", "true", "t"]
-        if no_values is None:
-            no_values = ["n", "no", "0", "false", "f", ""]
-
+        yes_values = yes_values or self.YES
         response = await self.ask_user(question, f"❓ {question} [y/N]")
         result = response.lower().strip() in yes_values
-
-        self.display_text(f"❓ {question} → {'Yes' if result else 'No'}", "system")
+        # self.display_text(f"❓ {question} → {'Yes' if result else 'No'}", style=self.color_palette.prompt)
         return result
 
     def set_status(self, status: str) -> None:
         """Update status display (if supported)."""
-        self.display_text(f"Status: {status}", "system")
+        self.display_text(f"Status: {status}")
 
     async def start(self) -> None:
         """Start the interface (if needed)."""
@@ -247,18 +243,23 @@ class SimpleInterface(SolveigInterface):
         )
         self._output(
             f"\n\n{title_formatted}{padding}",
-            style=f"bold {self.color_palette.group}",
+            style=f"bold {self.color_palette.section}",
             pad=False,
         )
 
     @contextmanager
     def with_group(self, title: str):
         """Context manager for grouping related output."""
-        self.display_text(f"[ {title} ]", "system")
+        self.display_text(f"[ {title} ]", style=self.color_palette.group)
+
+        # Increase indentation
+        self._current_indent += " " * self.indent_base
+
         try:
             yield
         finally:
-            pass
+            # Decrease indentation
+            self._current_indent = self._current_indent[:-self.indent_base]
 
     @asynccontextmanager
     async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:

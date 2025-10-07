@@ -51,9 +51,9 @@ async def get_initial_user_message(
         interface.display_text(f"> {user_prompt}\n")
         return UserMessage(comment=user_prompt)
     else:
-        interface.display_text("💬 Enter your message:")
+        # interface.display_text("💬 Enter your message:")
         user_input = await interface.get_input()
-        interface.display_text(f"> {user_input}\n")
+        # interface.display_text(f"> {user_input}\n")
         return UserMessage(comment=user_input)
 
 
@@ -174,7 +174,7 @@ async def process_requirements(
     """Process requirements and return results."""
     results = []
 
-    interface.display_text(f"=== Results ({len(llm_response.requirements)}) ===", "system")
+    # interface.display_text(f"=== Results ({len(llm_response.requirements)}) ===", "system")
     for requirement in llm_response.requirements:
         try:
             # Requirements need to become async
