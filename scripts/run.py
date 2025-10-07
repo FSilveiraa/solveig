@@ -1,18 +1,16 @@
 """
-Main CLI entry point for Solveig.
+Modern async CLI entry point for Solveig using TextualCLI.
 """
 
+import asyncio
 import logging
-import sys
-import time
+import traceback
 
 from instructor import Instructor
-from instructor.core import InstructorRetryException
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.interface.cli import CLIInterface, CLIInterfaceWithInputBar
+from solveig.interface import SolveigInterface, CLIInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema import Requirement
 from solveig.schema.message import (
@@ -25,15 +23,15 @@ from solveig.schema.message import (
 from . import BANNER
 
 
-def get_message_history(
+async def get_message_history(
     config: SolveigConfig, interface: SolveigInterface
 ) -> MessageHistory:
     """Initialize the conversation store."""
-
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
         interface.display_text("\n")
         interface.display_text_block(sys_prompt, title="System Prompt")
+
     message_history = MessageHistory(
         system_prompt=sys_prompt,
         max_context=config.max_context,
@@ -43,20 +41,23 @@ def get_message_history(
     return message_history
 
 
-def get_initial_user_message(
-    user_prompt: str | None, interface: SolveigInterface
+async def get_initial_user_message(
+    user_prompt: str | None, interface: SolveigInterface, input_queue: asyncio.Queue
 ) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
+
     if user_prompt:
-        interface.display_text(f"{interface.DEFAULT_INPUT_PROMPT} {user_prompt}\n")
+        interface.display_text(f"> {user_prompt}\n")
+        return UserMessage(comment=user_prompt)
     else:
-        user_prompt = interface.ask_user()
-        interface.display_text("")
-    return UserMessage(comment=user_prompt)
+        interface.display_text("💬 Enter your message:")
+        user_input = await input_queue.get()
+        interface.display_text(f"> {user_input}\n")
+        return UserMessage(comment=user_input)
 
 
-def _send_basic_message(
+async def send_basic_message(
     config: SolveigConfig,
     interface: SolveigInterface,
     client: Instructor,
@@ -64,10 +65,8 @@ def _send_basic_message(
     requirements_union,
 ) -> list[Requirement]:
     """Send message to LLM using standard method. Returns list of requirements."""
-    # Show animated spinner during LLM processing
-    def _send():
-        # For standard method, we need to use create_iterable like streaming
-        # but collect all at once without showing progress
+    async with interface.with_animation("Waiting for LLM response..."):
+        # For standard method, we collect all requirements at once
         collected_requirements = []
         requirement_stream = client.chat.completions.create_iterable(
             messages=message_history.to_openai(),
@@ -76,18 +75,13 @@ def _send_basic_message(
             temperature=config.temperature,
         )
 
-        for requirement in requirement_stream:
+        async for requirement in requirement_stream:
             collected_requirements.append(requirement)
 
         return collected_requirements
 
-    return interface.display_animation_while(
-        run_this=_send,
-        message="Waiting... (Ctrl+C to stop)",
-    )
 
-
-def _send_streaming_message(
+async def send_streaming_message(
     config: SolveigConfig,
     interface: SolveigInterface,
     client: Instructor,
@@ -95,153 +89,137 @@ def _send_streaming_message(
     requirements_union,
 ) -> list[Requirement]:
     """Send message to LLM with streaming. Returns list of individual requirements."""
-    def _send():
-        # Collect requirements as they stream
+    async with interface.with_animation("Streaming LLM response..."):
         collected_requirements = []
         requirement_stream = client.chat.completions.create_iterable(
             messages=message_history.to_openai(),
             response_model=requirements_union,
             model=config.model,
             temperature=config.temperature,
-            stream_options={"include_usage": True}
         )
 
-        with interface.with_group("Requirements"):
-            for requirement in requirement_stream:
-                requirement.display_header(interface=interface)
-                # interface.display_text(f"  → {requirement.title}")
-                collected_requirements.append(requirement)
+        i = 0
+        async for requirement in requirement_stream:
+            collected_requirements.append(requirement)
+            interface.set_status(f"Processing requirement {i + 1}...")
+
+            # Show requirement as it comes in
+            interface.display_text(f"  → {requirement.title}")
+            i += 1
 
         return collected_requirements
 
-    return interface.display_animation_while(
-        run_this=_send,
-        message="Streaming response... (Ctrl+C to stop)",
-    )
 
-# Try streaming first
-_try_streaming = True
-
-def send_message_to_llm_with_retry(
+async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
     client: Instructor,
     message_history: MessageHistory,
-    user_response: UserMessage,
-) -> tuple[AssistantMessage, UserMessage]:
-    """Send message to LLM with retry logic. Returns (requirements_list, potentially_updated_user_response)."""
-    global _try_streaming
-
-    if config.verbose:
-        interface.display_text_block(str(user_response), title="Sending")
+    user_message: UserMessage,
+) -> tuple[AssistantMessage | None, UserMessage]:
+    """Send message to LLM with retry logic."""
+    requirements_union = get_requirements_union_for_streaming(config)
 
     while True:
         try:
-            # Get the requirements union (cached in message.py)
-            requirements_union = get_requirements_union_for_streaming(config)
-            if not requirements_union:
-                raise ValueError("Could not generate model schema")
-
-            try:
-                if _try_streaming:
-                    requirements = _send_streaming_message(
-                        config=config,
-                        interface=interface,
-                        client=client,
-                        message_history=message_history,
-                        requirements_union=requirements_union
+            # Try streaming first, fall back to basic
+            if hasattr(config, 'streaming') and config.streaming:
+                try:
+                    requirements = await send_streaming_message(
+                        config, interface, client, message_history, requirements_union
                     )
-                    return AssistantMessage(requirements=requirements), user_response
-            except Exception as streaming_error:
-                _try_streaming = False
-                interface.display_text(f"Streaming failed: {streaming_error}")
-                interface.display_text("Falling back to standard method...")
-
-            # This instead of an `else` allows both having failed above or in a previous attempt
-            if not _try_streaming:
-                # Fallback to standard method with same requirements_union
-                requirements = _send_basic_message(
-                    config=config,
-                    interface=interface,
-                    client=client,
-                    message_history=message_history,
-                    requirements_union=requirements_union
+                except Exception as streaming_error:
+                    interface.display_text(f"Streaming failed: {streaming_error}")
+                    interface.display_text("Falling back to standard method...")
+                    requirements = await send_basic_message(
+                        config, interface, client, message_history, requirements_union
+                    )
+            else:
+                requirements = await send_basic_message(
+                    config, interface, client, message_history, requirements_union
                 )
-                return AssistantMessage(requirements=requirements), user_response
+
+            # Create AssistantMessage with requirements
+            llm_response = AssistantMessage(requirements=requirements)
+            return llm_response, user_message
 
         except KeyboardInterrupt:
             interface.display_warning("Interrupted by user")
-
+            return None, user_message
         except Exception as e:
-            handle_llm_error(e, config, interface)
+            interface.display_error(f"Error: {e}")
+            interface.display_text_block(
+                title=f"{e.__class__.__name__}",
+                text=str(e) + traceback.format_exc()
+            )
 
-        # Error occurred, ask if user wants to retry or provide new input
-        retry = interface.ask_yes_no(
-            f"Re-send previous message{' and results' if user_response.results else ''}? [y/N]: "
-        )
+            # Ask if user wants to retry
+            retry = await interface.ask_yes_no(
+                "There was an error communicating with the LLM. Would you like to retry?",
+            )
+            if not retry:
+                return None, user_message
 
-        if not retry:
-            new_comment = interface.ask_user()
-            user_response = UserMessage(comment=new_comment)
-            message_history.add_messages(user_response)
-        # If they said yes to retry, the loop continues with the same user_response
-
-
-def handle_llm_error(
-    error: Exception, config: SolveigConfig, interface: SolveigInterface
-) -> None:
-    """Display LLM parsing error details."""
-
-    interface.display_error(error)
-    if (
-        config.verbose
-        and isinstance(error, InstructorRetryException)
-        and error.last_completion
-    ):
-        with interface.with_indent():
-            for output in error.last_completion.choices:
-                interface.display_error(output.message.to_openai())
+            # Ask for new comment if retrying
+            new_comment = await interface.ask_user("Enter a new message (or press Enter to retry with the same message)")
+            if new_comment.strip():
+                user_message = UserMessage(comment=new_comment)
 
 
-def process_requirements(
-    config: SolveigConfig, interface: SolveigInterface, llm_response: AssistantMessage
+async def process_requirements(
+    llm_response: AssistantMessage,
+    config: SolveigConfig,
+    interface: SolveigInterface,
 ) -> list:
-    """Process all requirements from LLM response and return results."""
+    """Process requirements and return results."""
     results = []
-    if llm_response.requirements:
-        with interface.with_group(f"Results ({len(llm_response.requirements)})"):
-            for requirement in llm_response.requirements:
-                try:
-                    result = requirement.solve(config, interface)
-                    if result:
-                        results.append(result)
-                    interface.display_text("")
-                except Exception as e:
-                    # this should not happen - all errors during plugin solve() should be caught inside
-                    with interface.with_indent():
-                        interface.display_error(e)
-        # print()
+
+    interface.display_text(f"=== Results ({len(llm_response.requirements)}) ===", "system")
+    for requirement in llm_response.requirements:
+        try:
+            # Requirements need to become async
+            result = await requirement.solve(config, interface)
+            if result:
+                results.append(result)
+            interface.display_text("")
+        except Exception as e:
+            interface.display_error(f"Error processing requirement: {e}")
+            interface.display_text_block(
+                title=f"{e.__class__.__name__}",
+                text=str(e) + traceback.format_exc()
+            )
+
     return results
 
 
-def main_loop(
+async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface | None = None,
     user_prompt: str = "",
     llm_client: Instructor | None = None,
 ):
+    """Main async conversation loop."""
     # Configure logging for instructor debug output when verbose
     if config.verbose:
         logging.basicConfig(level=logging.DEBUG)
-        # Enable debug logging for instructor and openai
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    interface = interface or CLIInterfaceWithInputBar(
-        verbose=config.verbose,
-        max_lines=config.max_output_lines,
-        theme=config.theme,
-    )
+    # Create interface if none provided
+    if interface is None:
+        interface = CLIInterface()
+
+    # Create input queue for user input
+    input_queue = asyncio.Queue()
+
+    # Set up input callback that puts data into the queue
+    async def handle_user_input(interface: SolveigInterface, user_input: str):
+        interface.display_section("User")
+        interface.display_text("This is only called upon handle_user_input, args: " + user_input)
+        interface.display_text("> " + user_input)
+        await input_queue.put(user_input)
+
+    interface.set_input_callback(handle_user_input)
 
     interface.display_text(BANNER)
 
@@ -253,57 +231,70 @@ def main_loop(
         api_type=config.api_type, api_key=config.api_key, url=config.url
     )
 
-    # Get user interface, LLM client and message history
-    message_history = get_message_history(config, interface)
+    # Get message history
+    message_history = await get_message_history(config, interface)
 
-    # interface.display_section("User")
+    # Get initial user message
     user_prompt = user_prompt.strip() if user_prompt else ""
-    user_message = get_initial_user_message(user_prompt, interface)
-    # message_history.add_message(user_response)
+    user_message = await get_initial_user_message(user_prompt, interface, input_queue)
 
     while True:
-        """Each cycle starts with the previous/initial user response finalized, but not added to the message history or sent"""
         # Send message to LLM and handle any errors
         message_history.add_messages(user_message)
 
         interface.display_section("Assistant")
-        llm_response, user_message = send_message_to_llm_with_retry(
+        llm_response, user_message = await send_message_to_llm_with_retry(
             config, interface, llm_client, message_history, user_message
         )
 
         if llm_response is None:
-            # This shouldn't happen with our retry logic, but just in case
             continue
 
         # Successfully got LLM response
         message_history.add_messages(llm_response)
         if config.verbose:
             interface.display_text_block(str(llm_response), title="Response")
-        # interface.display_llm_response(llm_response)
-        # Process requirements and get next user input
 
+        # Process requirements and get next user input
         if config.wait_before_user > 0:
-            time.sleep(config.wait_before_user)
+            await asyncio.sleep(config.wait_before_user)
 
         # Prepare user response
         interface.display_section("User")
-        results = process_requirements(
+        results = await process_requirements(
             llm_response=llm_response, config=config, interface=interface
         )
-        user_prompt = interface.ask_user()
+
+        user_prompt = await input_queue.get()
         interface.display_text("")
         user_message = UserMessage(comment=user_prompt, results=results)
 
 
-def cli_main():
-    """Entry point for the solveig CLI command."""
+async def textual_main():
+    """Entry point for the async textual CLI."""
     try:
+        # Parse config like the original CLI
         config, prompt = SolveigConfig.parse_config_and_prompt()
-        main_loop(config=config, user_prompt=prompt)
+
+        # Create TextualCLI interface
+        interface = CLIInterface()
+
+        # Set up the conversation flow as startup task
+        async def startup_conversation():
+            # Give the app time to be ready
+            await asyncio.sleep(0.5)
+            # Run the main loop (it will set up its own input queue)
+            await main_loop(config=config, interface=interface, user_prompt=prompt)
+
+        # Start the conversation as a background task
+        conversation_task = asyncio.create_task(startup_conversation())
+
+        # Start the interface (this abstracts away run_async for TextualCLI)
+        await interface.start()
+
     except KeyboardInterrupt:
         print("\n\nGoodbye!")
-        sys.exit(0)
 
 
 if __name__ == "__main__":
-    cli_main()
+    asyncio.run(textual_main())

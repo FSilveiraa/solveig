@@ -8,7 +8,7 @@ import pytest
 # Mark all tests in this module to skip file mocking
 pytestmark = pytest.mark.no_file_mocking
 
-from scripts.run import main_loop
+from scripts.old.sync_run import main_loop
 from solveig.schema.message import AssistantMessage
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client

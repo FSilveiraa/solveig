@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from instructor.core import InstructorRetryException
 
-from scripts.run import (
+from scripts.old.sync_run import (
     get_initial_user_message,
     get_message_history,
     handle_llm_error,

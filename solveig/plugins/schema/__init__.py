@@ -14,7 +14,7 @@ they can run hooks, and plugins/schema/__init__.py (this file) has to import
 requirements/__init__.py::REQUIREMENTS so it can register plugin requirements on it, creating an import loop.
 It's also important to stress that the ordering of all this matters: we need to first load core schema
 requirements, then plugin requirements, then finally hooks. Currently this is done by just importing
-solveig.schema (which auto-registers core requirements), then run.py calls
+solveig.schema (which auto-registers core requirements), then sync_run.py calls
 plugins/__init__.py::initialize_plugins() which in turn first loads the extra requirements (here), then
 loads the hooks, then filters both in the same order.
 Both the loading and filtering of extra requirements do a local import of the central REQUIREMENTS registry.

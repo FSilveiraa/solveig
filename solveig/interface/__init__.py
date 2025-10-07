@@ -1,38 +1,39 @@
 """
-Interface layer for Solveig - handles all user interaction and presentation.
+Modern interface layer for Solveig.
 
+Provides clean, async-first interfaces for user interaction:
 
-You're expected to use the interface with automatic indenting
-```
-interface = CLIINterface()
-interface.section("User")
+- TextualCLI: Modern terminal interface using Textual
+- SolveigInterface: Protocol for implementing new interface types
+- AsyncSolveigInterface: Base class for async interfaces
 
-# automatically enters and exits indent
-with interface.group("Input", count=57):
-    prompt = interface.ask_user("Message > ") # What time is it?
-    with interface.indent():
-        interface.show("Sending this:")
-        interface.display_text_box(prompt)
-    interface.show(f"Sent!")
-interface.show("⋆꙳·❅* ‧ ‧*❆ ₊⋆", level=4)
-```
-Output:
-```
+Example usage:
+```python
+from solveig.interface import TextualCLI
 
-─── User ────────────────────────────────────────────
-[ Input (57) ]
-  Message > What time is it?
-    Sending this:
-    ┌───────────────────────────────────────────────┐
-    │ What time is it?                              │
-    └───────────────────────────────────────────────┘
-  Sent!
-        ⋆꙳·❅* ‧ ‧*❆ ₊⋆
+# Create and start interface
+cli = TextualCLI()
+cli.set_input_callback(handle_user_input)
+await cli.start()
+
+# Display messages
+cli.display_text("Hello!")
+cli.display_success("Operation completed")
+cli.display_error("Something went wrong")
+
+# Get specific input
+name = await cli.ask_prompt("What's your name?")
+confirm = await cli.ask_yes_no("Continue?")
 ```
 """
 
-from .base import SolveigInterface
-from .cli import CLIInterface
-from .async_cli import AsyncCLIInterface
+from solveig.interface.base import SolveigInterface
+from solveig.interface.cli import CLIInterface
+from solveig.interface.themes import Palette, terracotta
 
-__all__ = ["SolveigInterface", "CLIInterface", "AsyncCLIInterface"]
+__all__ = [
+    "SolveigInterface",
+    "CLIInterface",
+    "Palette",
+    "terracotta",
+]

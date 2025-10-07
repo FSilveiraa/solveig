@@ -1,167 +1,104 @@
 """
-Base interface classes for Solveig user interaction.
+Base interface protocol for Solveig.
+
+Defines the minimal interface that any UI implementation (CLI, web, desktop) should provide.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
-
-from solveig.interface import themes
-from solveig.utils.file import Metadata
-
-if TYPE_CHECKING:
-    from solveig.schema.message import AssistantMessage
+from contextlib import contextmanager, asynccontextmanager
+from typing import Callable, Union, Awaitable, Optional, AsyncGenerator, Any
 
 
 class SolveigInterface(ABC):
-    """Abstract base class for all Solveig user interfaces."""
+    """
+    Abstract base class defining the core interface any Solveig UI must implement.
 
-    DEFAULT_INPUT_PROMPT = ">  "
-    DEFAULT_YES = {"y", "yes"}
+    This is intentionally minimal and focused on what Solveig actually needs:
+    - Display text with basic styling
+    - Get user input (both free-flow and prompt-based)
+    - Standard error/warning/success messaging
+    - Optional status display
+    """
 
-    def __init__(
-        self,
-        indent_base: int = 2,
-        max_lines=6,
-        theme: themes.Palette = themes.DEFAULT,
-        verbose: bool = False,
-    ):
-        self.indent_base = indent_base
-        self.current_level = 0
-        self.max_lines = max_lines
-        self.verbose = verbose
-        self.theme = theme
+    def __init__(self, **kwargs):
+        self.input_callback: Optional[Callable[["SolveigInterface", str], Union[None, Awaitable[None]]]] = None
+
+    # Core display methods
+    @abstractmethod
+    def display_text(self, text: str, style: str = "normal") -> None:
+        """Display text with optional styling."""
+        ...
 
     @abstractmethod
-    def _output(self, text: str, **kwargs) -> None:
-        """Raw output method - implemented by concrete interfaces"""
-        pass
+    def display_error(self, error: str) -> None:
+        """Display an error message with standard formatting."""
+        ...
 
     @abstractmethod
-    def _input(self, prompt: str, **kwargs) -> str:
-        """Get text input from user."""
-        pass
-
-    # @abstractmethod
-    # def display_llm_response(self, llm_response: "AssistantMessage") -> None:
-    #     """Display the assistant's comment and requirements summary."""
-    #     pass
+    def display_warning(self, warning: str) -> None:
+        """Display a warning message with standard formatting."""
+        ...
 
     @abstractmethod
-    def display_text_block(
-        self,
-        text: str,
-        title: str | None = None,
-        level: int | None = None,
-        max_lines: int | None = None,
-    ) -> None:
-        """Display a block of text."""
-        pass
+    def display_success(self, message: str) -> None:
+        """Display a success message with standard formatting."""
+        ...
 
     @abstractmethod
-    def display_tree(
-        self,
-        metadata: Metadata,
-        level: int | None = None,
-        max_lines: int | None = None,
-        title: str | None = None,
-        display_metadata: bool = False,
-    ) -> None:
-        """Utility method to display a block of text with metadata"""
-        pass
+    def display_comment(self, message: str) -> None:
+        """Display a comment message."""
+        ...
 
+    @abstractmethod
+    def display_text_block(self, text: str, title: str = None) -> None:
+        """Display a text block with optional title."""
+        ...
+
+    # Input methods
+    @abstractmethod
+    async def ask_user(self, prompt: str, placeholder: str = None) -> str:
+        """Ask for specific input, preserving any current typing."""
+        ...
+
+    @abstractmethod
+    async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
+        """Ask a yes/no question."""
+        ...
+
+    def set_input_callback(self, callback: Optional[Callable[["SolveigInterface", str], Union[None, Awaitable[None]]]]):
+        """Set callback for free-flow input (normal conversation)."""
+        self.input_callback = callback
+
+    # Optional methods
+    @abstractmethod
+    def set_status(self, status: str) -> None:
+        """Update status display (if supported)."""
+        ...
+
+    @abstractmethod
+    async def start(self) -> None:
+        """Start the interface (if needed)."""
+        ...
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """Stop the interface (if needed)."""
+        ...
+
+    # Additional methods for compatibility
     @abstractmethod
     def display_section(self, title: str) -> None:
-        """
-        Section header with line
-        --- User ---------------
-        """
-        pass
+        """Display a section header."""
+        ...
 
     @abstractmethod
-    def display_animation_while(
-        self,
-        run_this: Callable,
-        message: str | None = None,
-        animation_type: str | None = None,
-    ) -> Any:
-        pass
-
-    #####
-
-    def _indent(self, level: int | None = None) -> str:
-        """Calculate indentation for given level (or current level)"""
-        actual_level = level if level is not None else self.current_level
-        return " " * (actual_level * self.indent_base)
-
-    def display_text(
-        self,
-        text: str,
-        level: int | None = None,
-        truncate: bool = False,
-        **kwargs,
-    ) -> None:
-        """Display content at specified or current indent level"""
-        indent = self._indent(level)
-        self._output(f"{indent}{text}", **kwargs)
-
     @contextmanager
-    def with_indent(self) -> Generator[None]:
-        """Indents the current level until released"""
-        old_level = self.current_level
-        self.current_level += 1
-        try:
-            yield
-        finally:
-            self.current_level = old_level
+    def with_group(self, title: str):
+        """Context manager for grouping related output."""
+        ...
 
-    @contextmanager
-    def with_group(self, title: str) -> Generator[None]:
-        """
-        Group/item header with optional count
-        [ Requirements (3) ]
-        """
-        self.display_text(f"[ {title} ]")
-
-        # Use the with_indent context manager internally
-        with self.with_indent():
-            yield
-
-    def display_comment(self, message: str) -> None:
-        self.display_text(f"❝  {message}")
-
-    def display_success(self, message: str) -> None:
-        self.display_text(f"✓  {message}")
-
-    def display_error(
-        self, message: str | Exception | None = None, exception: Exception | None = None
-    ) -> None:
-        raise NotImplementedError()
-
-    def display_warning(self, message: str) -> None:
-        self.display_text(f"⚠  {message}")
-
-    def ask_user(
-        self, question: str = DEFAULT_INPUT_PROMPT, level: int | None = None
-    ) -> str:
-        """Ask user a question and get a response."""
-        indent = self._indent(level)
-        return self._input(f"{indent}?  {question}")
-
-    def ask_yes_no(
-        self,
-        question: str,
-        yes_values=None,
-        auto_format: bool = True,
-        level: int | None = None,
-    ) -> bool:
-        """Ask user a yes/no question."""
-        if auto_format:
-            question = f"{question.strip()} "
-            if "y/n" not in question.lower():
-                question = f"{question}[y/N]: "
-        response = self.ask_user(question, level=level)
-        if yes_values is None:
-            yes_values = self.DEFAULT_YES
-        return response.lower() in yes_values
+    @abstractmethod
+    @asynccontextmanager
+    async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
+        """Context manager for displaying animation during async operations."""
+        ...
