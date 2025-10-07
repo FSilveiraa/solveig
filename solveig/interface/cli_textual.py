@@ -1,9 +1,9 @@
 """
-Modern CLI interface for Solveig using Textual with composition pattern.
+Modern Textual interface for Solveig using Textual with composition pattern.
 """
 
 import asyncio
-from typing import Optional, Callable, Awaitable, Union, AsyncGenerator, Any
+from typing import Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager, contextmanager
 from textual.app import App as TextualApp, ComposeResult
 from textual.containers import ScrollableContainer
@@ -229,22 +229,23 @@ class SolveigTextualApp(TextualApp):
             pass  # App not ready yet
 
 
-class CLIInterface(SolveigInterface):
+class TextualInterface(SolveigInterface):
     """
-    CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
+    Textual interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
 
     def __init__(self, color_palette: Palette = terracotta, **kwargs):
         self.app = SolveigTextualApp(color_palette=color_palette, interface_controller=self, **kwargs)
-        self.input_callback = None
+        self._input_queue: asyncio.Queue[str] = asyncio.Queue()
 
     def _handle_input(self, user_input: str):
-        """Handle input from the textual app."""
-        if self.input_callback:
-            if asyncio.iscoroutinefunction(self.input_callback):
-                asyncio.create_task(self.input_callback(self, user_input))
-            else:
-                self.input_callback(self, user_input)
+        """Handle input from the textual app by putting it in the internal queue."""
+        # Put input into internal queue for get_input() to consume
+        try:
+            self._input_queue.put_nowait(user_input)
+        except asyncio.QueueFull:
+            # Handle queue full scenario gracefully
+            pass
 
     # SolveigInterface implementation
     def display_text(self, text: str, style: str = "normal") -> None:
@@ -282,6 +283,10 @@ class CLIInterface(SolveigInterface):
             self.display_text(f"│ {line:<{max_width}} │", "system")
         self.display_text(f"└{border}┘", "system")
 
+    async def get_input(self) -> str:
+        """Get user input for conversation flow by consuming from internal queue."""
+        return await self._input_queue.get()
+
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for any kind of input with a prompt."""
         return await self.app.ask_user(prompt, placeholder)
@@ -299,9 +304,6 @@ class CLIInterface(SolveigInterface):
         self.display_text(f"❓ {question} → {'Yes' if result else 'No'}", "system")
         return result
 
-    def set_input_callback(self, callback: Optional[Callable[[SolveigInterface, str], Union[None, Awaitable[None]]]]):
-        """Set callback for free-flow input."""
-        self.input_callback = callback
 
     def set_status(self, status: str) -> None:
         """Update the status."""

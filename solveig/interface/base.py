@@ -6,7 +6,7 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, asynccontextmanager
-from typing import Callable, Union, Awaitable, Optional, AsyncGenerator, Any
+from typing import AsyncGenerator, Any
 
 
 class SolveigInterface(ABC):
@@ -19,9 +19,6 @@ class SolveigInterface(ABC):
     - Standard error/warning/success messaging
     - Optional status display
     """
-
-    def __init__(self, **kwargs):
-        self.input_callback: Optional[Callable[["SolveigInterface", str], Union[None, Awaitable[None]]]] = None
 
     # Core display methods
     @abstractmethod
@@ -56,6 +53,11 @@ class SolveigInterface(ABC):
 
     # Input methods
     @abstractmethod
+    async def get_input(self) -> str:
+        """Get user input for conversation flow."""
+        ...
+
+    @abstractmethod
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for specific input, preserving any current typing."""
         ...
@@ -64,10 +66,6 @@ class SolveigInterface(ABC):
     async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
         """Ask a yes/no question."""
         ...
-
-    def set_input_callback(self, callback: Optional[Callable[["SolveigInterface", str], Union[None, Awaitable[None]]]]):
-        """Set callback for free-flow input (normal conversation)."""
-        self.input_callback = callback
 
     # Optional methods
     @abstractmethod

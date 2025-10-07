@@ -5,7 +5,6 @@ import sys
 
 from scripts.run import main_loop
 from solveig import SolveigConfig
-from solveig.interface.cli import CLIInterface
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -15,7 +14,9 @@ def cleanup():
     Filesystem.delete("~/Sync/hello_new.py")
 
 
-async def run_mock(mock_messages: list[AssistantMessage] | None = None):
+async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 0):
+    """Entry point for the async textual CLI."""
+
     if mock_messages is None:
         from solveig.system_prompt import CONVERSATION_EXAMPLES
 
@@ -24,27 +25,11 @@ async def run_mock(mock_messages: list[AssistantMessage] | None = None):
             for message in CONVERSATION_EXAMPLES[0]
             if isinstance(message, AssistantMessage)
         ]
-    mock_client = create_mock_client(*mock_messages, sleep_seconds=0)
+    mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
 
     try:
         config, prompt = SolveigConfig.parse_config_and_prompt()
-
-        # Create TextualCLI interface
-        interface = CLIInterface()
-
-        # Set up the conversation as a background task
-        async def startup_conversation():
-            # Give the app time to be ready
-            # await asyncio.sleep(0.5)
-            # Run the main loop with mock client
-            await main_loop(config=config, interface=interface, user_prompt=prompt, llm_client=mock_client)
-
-        # Start the conversation as a background task
-        conversation_task = asyncio.create_task(startup_conversation())
-
-        # Start the interface
-        await interface.start()
-
+        await main_loop(config=config, user_prompt=prompt, llm_client=mock_client)
     except KeyboardInterrupt:
         print("\n\nGoodbye!")
         sys.exit(0)
@@ -55,5 +40,8 @@ async def run_mock(mock_messages: list[AssistantMessage] | None = None):
             pass
 
 
+def main():
+    asyncio.run(run_async_mock())
+
 if __name__ == "__main__":
-    asyncio.run(run_mock())
+    main()

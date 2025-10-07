@@ -45,6 +45,7 @@ class SolveigConfig:
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT)
     wait_before_user: float = 1.0
+    simple_interface: bool = False
 
     def __post_init__(self):
         # convert API type string to class
@@ -242,6 +243,13 @@ class SolveigConfig:
             type=str,
             choices=themes.THEMES.keys(),
             help="Interface theme",
+        )
+        parser.add_argument(
+            "--simple",
+            action="store_true",
+            dest="simple_interface",
+            default=None,
+            help="Use simple CLI interface instead of Textual interface",
         )
         parser.add_argument(
             "--version",

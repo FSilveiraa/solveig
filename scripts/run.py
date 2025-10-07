@@ -10,7 +10,7 @@ from instructor import Instructor
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface, CLIInterface
+from solveig.interface import SolveigInterface, TextualInterface, SimpleInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema import Requirement
 from solveig.schema.message import (
@@ -42,7 +42,7 @@ async def get_message_history(
 
 
 async def get_initial_user_message(
-    user_prompt: str | None, interface: SolveigInterface, input_queue: asyncio.Queue
+    user_prompt: str | None, interface: SolveigInterface
 ) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
     interface.display_section("User")
@@ -52,7 +52,7 @@ async def get_initial_user_message(
         return UserMessage(comment=user_prompt)
     else:
         interface.display_text("💬 Enter your message:")
-        user_input = await input_queue.get()
+        user_input = await interface.get_input()
         interface.display_text(f"> {user_input}\n")
         return UserMessage(comment=user_input)
 
@@ -205,21 +205,16 @@ async def main_loop(
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    # Create interface if none provided
-    if interface is None:
-        interface = CLIInterface()
+    # Create interface based on config
+    if not interface:
+        if config.simple_interface:
+            interface = SimpleInterface(color_palette=config.theme)
+        else:
+            interface = TextualInterface()
 
-    # Create input queue for user input
-    input_queue = asyncio.Queue()
-
-    # Set up input callback that puts data into the queue
-    async def handle_user_input(interface: SolveigInterface, user_input: str):
-        interface.display_section("User")
-        interface.display_text("This is only called upon handle_user_input, args: " + user_input)
-        interface.display_text("> " + user_input)
-        await input_queue.put(user_input)
-
-    interface.set_input_callback(handle_user_input)
+        # Start interface as background, pass control to loop for initialization
+        asyncio.create_task(interface.start())
+        await asyncio.sleep(0.5)
 
     interface.display_text(BANNER)
 
@@ -236,7 +231,7 @@ async def main_loop(
 
     # Get initial user message
     user_prompt = user_prompt.strip() if user_prompt else ""
-    user_message = await get_initial_user_message(user_prompt, interface, input_queue)
+    user_message = await get_initial_user_message(user_prompt, interface)
 
     while True:
         # Send message to LLM and handle any errors
@@ -265,36 +260,24 @@ async def main_loop(
             llm_response=llm_response, config=config, interface=interface
         )
 
-        user_prompt = await input_queue.get()
+        user_prompt = await interface.get_input()
         interface.display_text("")
         user_message = UserMessage(comment=user_prompt, results=results)
 
 
-async def textual_main():
-    """Entry point for the async textual CLI."""
+async def run_async():
+    """Entry point for the async CLI."""
     try:
-        # Parse config like the original CLI
+        # Parse config and run main loop
         config, prompt = SolveigConfig.parse_config_and_prompt()
-
-        # Create TextualCLI interface
-        interface = CLIInterface()
-
-        # Set up the conversation flow as startup task
-        async def startup_conversation():
-            # Give the app time to be ready
-            await asyncio.sleep(0.5)
-            # Run the main loop (it will set up its own input queue)
-            await main_loop(config=config, interface=interface, user_prompt=prompt)
-
-        # Start the conversation as a background task
-        conversation_task = asyncio.create_task(startup_conversation())
-
-        # Start the interface (this abstracts away run_async for TextualCLI)
-        await interface.start()
+        await main_loop(config=config, user_prompt=prompt)
 
     except KeyboardInterrupt:
         print("\n\nGoodbye!")
 
 
+def main():
+    asyncio.run(run_async())
+
 if __name__ == "__main__":
-    asyncio.run(textual_main())
+    main()

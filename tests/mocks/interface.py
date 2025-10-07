@@ -1,17 +1,17 @@
 from contextlib import contextmanager, asynccontextmanager
 from typing import Optional, Callable, Union, Awaitable
 
-from solveig.interface.cli import CLIInterface
+from solveig.interface.cli_simple import SimpleInterface
 
 
-class MockInterface(CLIInterface):
+class MockInterface(SimpleInterface):
     """
     Mock interface for testing - captures all output without printing.
     Overrides methods to avoid textual dependency.
     """
 
     def __init__(self, **kwargs):
-        # Skip call to super().__init__(**kwargs) to avoid Textual app instantiation
+        # Skip call to super().__init__(**kwargs) to avoid rich.Console/PromptSession instantiation
         self.outputs = []
         self.user_inputs = []
         self.questions = []

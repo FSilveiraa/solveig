@@ -60,7 +60,7 @@ Issues = "https://github.com/Fsilveiraa/solveig/issues"
 Documentation = "https://github.com/Fsilveiraa/solveig#README.md"
 
 [project.scripts]
-solveig = "scripts.run:cli_main"
+solveig = "scripts.run:main"
 solveig-init = "scripts.init:main"
 
 [tool.setuptools.packages.find]
