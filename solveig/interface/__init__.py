@@ -28,14 +28,14 @@ confirm = await cli.ask_yes_no("Continue?")
 """
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.cli_textual import TextualInterface
 from solveig.interface.cli_simple import SimpleInterface
+from solveig.interface.cli_textual import TextualInterface
 from solveig.interface.themes import Palette, terracotta
 
 __all__ = [
     "SolveigInterface",
     "TextualInterface",
-    "SimpleCLII",
+    "SimpleInterface",
     "Palette",
     "terracotta",
 ]

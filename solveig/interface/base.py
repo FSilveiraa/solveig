@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager, asynccontextmanager
 from typing import AsyncGenerator, Any
 
+from solveig.utils.file import Metadata
+
 
 class SolveigInterface(ABC):
     """
@@ -44,6 +46,11 @@ class SolveigInterface(ABC):
     @abstractmethod
     def display_comment(self, message: str) -> None:
         """Display a comment message."""
+        ...
+
+    @abstractmethod
+    def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+        """Display a tree structure of a directory"""
         ...
 
     @abstractmethod

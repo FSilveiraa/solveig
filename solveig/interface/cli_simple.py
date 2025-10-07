@@ -5,6 +5,7 @@ Simple CLI interface for Solveig - fallback implementation without Textual.
 import random
 import shutil
 from contextlib import contextmanager, asynccontextmanager
+from datetime import datetime
 from typing import Optional, Callable, Union, Awaitable, AsyncGenerator, Any
 
 from prompt_toolkit import PromptSession
@@ -15,6 +16,8 @@ from rich.console import Console, Text
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import terracotta, Palette
+from solveig.utils.file import Metadata
+import solveig.utils.misc
 
 
 class SimpleInterface(SolveigInterface):
@@ -131,18 +134,6 @@ class SimpleInterface(SolveigInterface):
     def display_text(self, text: str, style: str = "") -> None:
         """Display text with optional styling."""
         style = style or self.color_palette.text
-        # if style == "error":
-        #     color = self.color_palette.error
-        # elif style == "warning":
-        #     color = self.color_palette.warning
-        # elif style == "success":
-        #     color = self.color_palette.group
-        # elif style == "system":
-        #     color = self.color_palette.group
-        # elif style == "user":
-        #     color = self.color_palette.prompt
-        # else:
-        #     color = self.color_palette.text
         self._output(Text(text, style=style))
 
     def display_error(self, error: str) -> None:
@@ -160,6 +151,56 @@ class SimpleInterface(SolveigInterface):
     def display_comment(self, message: str) -> None:
         """Display a comment message."""
         self.display_text(message)
+
+    def display_tree(
+        self,
+        metadata: Metadata,
+        title: str | None = None,
+        display_metadata: bool = False,
+    ) -> None:
+        tree_lines = self._get_tree_element_str(metadata, display_metadata)
+        self.display_text_block(
+            "\n".join(tree_lines),
+            title=title or str(metadata.path),
+        )
+
+    @classmethod
+    def _get_tree_element_str(
+        cls, metadata: Metadata, display_metadata: bool = False, indent="  "
+    ) -> list[str]:
+        line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
+        if display_metadata:
+            if not metadata.is_directory:
+                size_str = solveig.utils.misc.convert_size_to_human_readable(
+                    metadata.size
+                )
+                line = f"{line}  |  size: {size_str}"
+            modified_time = datetime.fromtimestamp(
+                float(metadata.modified_time)
+            ).isoformat()
+            line = f"{line}  |  modified: {modified_time}"
+        lines = [line]
+
+        if metadata.is_directory and metadata.listing:
+            for index, (_sub_path, sub_metadata) in enumerate(
+                sorted(metadata.listing.items())
+            ):
+                is_last = index == len(metadata.listing) - 1
+                entry_lines = cls._get_tree_element_str(sub_metadata, display_metadata, indent)
+
+                # ├─🗁 d1
+                lines.append(
+                    f"{indent}{cls.TEXT_BOX.BL if is_last else cls.TEXT_BOX.VR}{cls.TEXT_BOX.H}{entry_lines[0]}"
+                )
+
+                # │  ├─🗁 sub-d1
+                # │  └─🗎 sub-f1
+                for sub_entry in entry_lines[1:]:
+                    lines.append(
+                        f"{indent}{'' if is_last else cls.TEXT_BOX.V}{sub_entry}"
+                    )
+
+        return lines
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""

@@ -13,8 +13,10 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.timer import Timer
 
+from solveig.interface import SimpleInterface
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import terracotta, Palette
+from solveig.utils.file import Metadata
 
 
 class ConversationArea(ScrollableContainer):
@@ -269,6 +271,14 @@ class TextualInterface(SolveigInterface):
     def display_comment(self, message: str) -> None:
         """Display a comment message."""
         self.display_text(message, "system")
+
+    def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+        """Display a tree structure of a directory"""
+        tree_lines = SimpleInterface._get_tree_element_str(metadata, display_metadata)
+        self.display_text_block(
+            "\n".join(tree_lines),
+            title=title or str(metadata.path),
+        )
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
