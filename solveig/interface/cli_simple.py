@@ -66,11 +66,12 @@ class SimpleInterface(SolveigInterface):
 
         self._setup_custom_spinners()
 
-    def _get_max_output_width(self) -> int:
+    @classmethod
+    def _get_max_output_width(cls) -> int:
         return (
             shutil.get_terminal_size((80, 20)).columns
-            - len(self.PADDING_LEFT)
-            - len(self.PADDING_RIGHT)
+            - len(cls.PADDING_LEFT)
+            - len(cls.PADDING_RIGHT)
         )
 
     def _output(self, text: str | Text, pad: bool = True, **kwargs) -> None:
@@ -204,37 +205,61 @@ class SimpleInterface(SolveigInterface):
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
-        max_width = self._get_max_output_width()
+        rendered_lines = self._render_text_box(
+            text=text,
+            title=title,
+            max_width=self._get_max_output_width(),
+            box_style=self.color_palette.box,
+            text_style=self.color_palette.text
+        )
+
+        for line in rendered_lines:
+            self._output(line)
+
+    @classmethod
+    def _render_text_box(
+        cls,
+        text: str,
+        title: str = None,
+        max_width: int = 80,
+        box_style: str = "",
+        text_style: str = ""
+    ) -> list[Text]:
+        """Render a text box with optional title. Returns list of Text objects to display."""
+        lines = []
 
         # Top bar
-        top_bar = Text(f"{self.TEXT_BOX.TL}", style=self.color_palette.box)
+        top_bar = Text(f"{cls.TEXT_BOX.TL}", style=box_style)
         if title:
-            top_bar.append(f"{self.TEXT_BOX.H * 3}")
-            top_bar.append(f" {title} ", style=f"bold {self.color_palette.box}")
+            top_bar.append(f"{cls.TEXT_BOX.H * 3}")
+            top_bar.append(f" {title} ", style=f"bold {box_style}")
         top_bar.append(
-            f"{self.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{self.TEXT_BOX.TR}"
+            f"{cls.TEXT_BOX.H * (max_width - len(top_bar) - 2)}{cls.TEXT_BOX.TR}"
         )
-        self._output(top_bar)
+        lines.append(top_bar)
 
         # Content lines
-        vertical_bar_left = Text(f"{self.TEXT_BOX.V} ", style=self.color_palette.box)
-        vertical_bar_right = Text(f" {self.TEXT_BOX.V} ", style=self.color_palette.box)
+        vertical_bar_left = Text(f"{cls.TEXT_BOX.V} ", style=box_style)
+        vertical_bar_right = Text(f" {cls.TEXT_BOX.V} ", style=box_style)
         max_line_length = max_width - len(vertical_bar_left) - len(vertical_bar_right)
 
-        lines = text.splitlines()
-        for line in lines:
+        content_lines = text.splitlines()
+        for line in content_lines:
             if len(line) > max_line_length:
                 truncated_line = f"{line[0:max_line_length - 3]}..."
             else:
                 truncated_line = f"{line}{' ' * (max_line_length - len(line))}"
-            line_text = Text(truncated_line, style=self.color_palette.text)
-            self._output(vertical_bar_left + line_text + vertical_bar_right)
+            line_text = Text(truncated_line, style=text_style)
+            lines.append(vertical_bar_left + line_text + vertical_bar_right)
 
         # Bottom bar
-        self._output(
-            f"{self.TEXT_BOX.BL}{self.TEXT_BOX.H * (max_width - 3)}{self.TEXT_BOX.BR}",
-            style=self.color_palette.box,
+        bottom_bar = Text(
+            f"{cls.TEXT_BOX.BL}{cls.TEXT_BOX.H * (max_width - 3)}{cls.TEXT_BOX.BR}",
+            style=box_style
         )
+        lines.append(bottom_bar)
+
+        return lines
 
     async def ask_user(self, prompt: str, placeholder: str = None, multiline: bool = False) -> str:
         """Ask for specific input with optional multi-line support."""

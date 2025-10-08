@@ -24,6 +24,10 @@ class ConversationArea(ScrollableContainer):
 
     def add_text(self, text: str, style: str = "normal"):
         """Add text with specific styling."""
+        # Map hex colors to semantic style names using pre-calculated mapping
+        if style.startswith("#"):
+            style = self.interface_controller._color_to_style.get(style, "text")
+
         style_class = f"{style}_message" if style != "normal" else "normal_message"
         text_widget = Static(text, classes=style_class)
         self.mount(text_widget)
@@ -81,18 +85,18 @@ class SolveigTextualApp(TextualApp):
 
     def __init__(self, color_palette: Palette = terracotta, interface_controller=None, **kwargs):
         super().__init__(**kwargs)
-        self.color_palette = color_palette
         self.interface_controller = interface_controller
 
-        # Prompt handling state
-        self.prompt_future: Optional[asyncio.Future] = None
-        self._saved_input_text: str = ""
-        self._original_placeholder: str = ""
+        # Get color mapping and create CSS
+        color_dict = color_palette.to_textual_css()
+        self._color_to_style = {color: name for name, color in color_dict.items()}
 
-    @property
-    def CSS(self) -> str:
-        """Generate CSS from color palette."""
-        return f"""
+        # Generate CSS from the color dict
+        css_rules = []
+        for name, color in color_dict.items():
+            css_rules.append(f".{name}_message {{ color: {color}; margin: 0 1; }}")
+
+        self._css = f"""
         ConversationArea {{
             height: 1fr;
             margin: 1;
@@ -101,48 +105,35 @@ class SolveigTextualApp(TextualApp):
         Input {{
             dock: bottom;
             height: 3;
-            border: solid {self.color_palette.prompt};
+            border: solid {color_dict.get('prompt', '#000')};
             margin-bottom: 1;
         }}
 
         StatusBar {{
             dock: bottom;
             height: 1;
-            background: {self.color_palette.background};
-            color: {self.color_palette.text};
+            background: {color_dict.get('background', '#000')};
+            color: {color_dict.get('text', '#fff')};
             content-align: center middle;
         }}
 
         .normal_message {{
-            color: {self.color_palette.text};
+            color: {color_dict.get('text', '#fff')};
             margin: 0 1;
         }}
 
-        .user_message {{
-            color: {self.color_palette.prompt};
-            margin: 0 1;
-        }}
-
-        .system_message {{
-            color: {self.color_palette.group};
-            margin: 0 1;
-        }}
-
-        .error_message {{
-            color: {self.color_palette.error};
-            margin: 0 1;
-        }}
-
-        .warning_message {{
-            color: {self.color_palette.warning};
-            margin: 0 1;
-        }}
-
-        .success_message {{
-            color: {self.color_palette.group};
-            margin: 0 1;
-        }}
+        {"\n".join(css_rules)}
         """
+
+        # Prompt handling state
+        self.prompt_future: Optional[asyncio.Future] = None
+        self._saved_input_text: str = ""
+        self._original_placeholder: str = ""
+
+    @property
+    def CSS(self) -> str:
+        """Return the generated CSS."""
+        return self._css
 
     def compose(self) -> ComposeResult:
         """Create the main layout."""
@@ -189,7 +180,7 @@ class SolveigTextualApp(TextualApp):
             self.prompt_future = asyncio.Future()
             input_widget.value = ""
             input_widget.placeholder = placeholder or prompt
-            input_widget.styles.border = ("solid", self.color_palette.warning)
+            input_widget.styles.border = ("solid", "warning")
 
             # Focus the input
             input_widget.focus()
@@ -200,7 +191,7 @@ class SolveigTextualApp(TextualApp):
             # Restore state
             input_widget.placeholder = self._original_placeholder
             input_widget.value = self._saved_input_text
-            input_widget.styles.border = ("solid", self.color_palette.prompt)
+            input_widget.styles.border = ("solid", "prompt")
 
             # Restore focus
             input_widget.focus()
@@ -282,18 +273,31 @@ class TextualInterface(SolveigInterface):
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
-        if title:
-            self.display_text(f"📋 {title}", "system")
+        rendered_lines = SimpleInterface._render_text_box(
+            text=text,
+            title=title,
+            max_width=SimpleInterface._get_max_output_width(),
+            box_style="box",
+            text_style="text"
+        )
 
-        # Simple text block
-        lines = text.split('\n')
-        max_width = max(len(line) for line in lines) if lines else 0
-        border = "─" * min(max_width + 2, 80)
+        for line in rendered_lines:
+            self.display_text(str(line), line.style)
 
-        self.display_text(f"┌{border}┐", "system")
-        for line in lines:
-            self.display_text(f"│ {line:<{max_width}} │", "system")
-        self.display_text(f"└{border}┘", "system")
+    # def display_text_block(self, text: str, title: str = None) -> None:
+    #     """Display a text block with optional title."""
+    #     if title:
+    #         self.display_text(f"📋 {title}", "system")
+    #
+    #     # Simple text block
+    #     lines = text.split('\n')
+    #     max_width = max(len(line) for line in lines) if lines else 0
+    #     border = "─" * min(max_width + 2, 80)
+    #
+    #     self.display_text(f"┌{border}┐", "system")
+    #     for line in lines:
+    #         self.display_text(f"│ {line:<{max_width}} │", "system")
+    #     self.display_text(f"└{border}┘", "system")
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""

@@ -21,6 +21,17 @@ class Palette:
         style_dict[""] = "" if self.text == "reset" else self.text
         return Style.from_dict(style_dict)
 
+    def to_textual_css(self) -> dict:
+        """Generate Textual CSS rules from palette colors."""
+        palette_dict = asdict(self)
+        palette_dict.pop("name")  # Remove name field
+        return { name:color for name, color in palette_dict.items() if color }
+        # for field_name, color in palette_dict.items():
+        #     if color:  # Skip empty colors
+        #         css_rules.append(f".{field_name}_message {{ color: {color}; }}")
+        #
+        # return "\n".join(css_rules)
+
 
 no_theme = Palette(
     name="none",
