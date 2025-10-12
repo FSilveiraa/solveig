@@ -1,7 +1,7 @@
 """Command requirement - allows LLM to execute shell commands."""
 
+import asyncio
 import re
-import subprocess
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator
@@ -67,18 +67,22 @@ class CommandRequirement(Requirement):
         """Return description of command capability."""
         return "command(command): execute shell commands and inspect their output"
 
-    def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
+    async def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
-            result = subprocess.run(
-                self.command, shell=True, capture_output=True, text=True, timeout=10
+            proc = await asyncio.create_subprocess_shell(
+                self.command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                text=True
             )
-            output = result.stdout.strip() if result.stdout else ""
-            error = result.stderr.strip() if result.stderr else ""
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            output = stdout.strip() if stdout else ""
+            error = stderr.strip() if stderr else ""
             return output, error
         raise ValueError("Empty command")
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CommandResult":
         # Check if command matches auto-execute patterns
@@ -97,7 +101,7 @@ class CommandRequirement(Requirement):
             try:
                 output: str | None
                 error: str | None
-                output, error = self._execute_command(config)
+                output, error = await self._execute_command(config)
             except Exception as e:
                 error_str = str(e)
                 interface.display_error(

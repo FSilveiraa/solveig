@@ -71,7 +71,7 @@ class Requirement(BaseSolveigModel, ABC):
         ..., description="Brief explanation of why this operation is needed"
     )
 
-    def solve(self, config: SolveigConfig, interface: SolveigInterface):
+    async def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""
         with interface.with_group(self.title.title()):
             self.display_header(interface, detailed=True)
@@ -97,7 +97,7 @@ class Requirement(BaseSolveigModel, ABC):
 
             # Run the actual requirement solving
             try:
-                result = self.actually_solve(config, interface)
+                result = await self.actually_solve(config, interface)
             except Exception as error:
                 interface.display_error(error)
                 error_info = "Execution error"
@@ -136,7 +136,7 @@ class Requirement(BaseSolveigModel, ABC):
             interface.display_comment(self.comment)
 
     @abstractmethod
-    def actually_solve(
+    async def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> RequirementResult:
         """Solve yourself as a requirement following the config"""
