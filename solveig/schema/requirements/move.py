@@ -92,7 +92,7 @@ class MoveRequirement(Requirement):
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or interface.ask_yes_no(
+        ) or await interface.ask_yes_no(
             f"Allow moving {abs_source_path} to {abs_destination_path}? [y/N]: "
         ):
             try:

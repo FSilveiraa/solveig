@@ -87,7 +87,7 @@ class TreeRequirement(Requirement):
                 f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}"
             )
 
-        elif not interface.ask_yes_no("Allow sending tree?"):
+        elif not await interface.ask_yes_no("Allow sending tree?"):
             return TreeResult(
                 requirement=self,
                 accepted=False,

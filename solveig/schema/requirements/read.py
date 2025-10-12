@@ -90,7 +90,7 @@ class ReadRequirement(Requirement):
             and not self.metadata_only
             and (
                 auto_read
-                or interface.ask_yes_no("Allow reading file contents? [y/N]: ")
+                or await interface.ask_yes_no("Allow reading file contents? [y/N]: ")
             )
         ):
             try:
@@ -116,7 +116,7 @@ class ReadRequirement(Requirement):
             config.auto_send
             # if we can automatically read any file within a pattern,
             # it makes sense to also automatically send back the contents
-            or interface.ask_yes_no(
+            or await interface.ask_yes_no(
                 f"Allow sending {'file content and ' if content else ''}metadata? [y/N]: "
             )
         ):

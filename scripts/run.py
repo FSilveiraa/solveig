@@ -186,7 +186,6 @@ async def process_requirements(
             result = await requirement.solve(config, interface)
             if result:
                 results.append(result)
-            interface.display_text("")
         except Exception as e:
             interface.display_error(f"Error processing requirement: {e}")
             interface.display_text_block(
@@ -245,13 +244,12 @@ async def main_loop(
             await asyncio.sleep(config.wait_before_user)
 
         # Prepare user response
-        interface.display_section("User")
         results = await process_requirements(
             llm_response=llm_response, config=config, interface=interface
         )
 
+        interface.display_section("User")
         user_prompt = await interface.get_input()
-        interface.display_text("")
         user_message = UserMessage(comment=user_prompt, results=results)
 
 

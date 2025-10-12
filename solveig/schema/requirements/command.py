@@ -95,7 +95,7 @@ class CommandRequirement(Requirement):
                 )
                 break
 
-        if should_auto_execute or interface.ask_yes_no(
+        if should_auto_execute or await interface.ask_yes_no(
             "Allow running command? [y/N]: "
         ):
             try:
@@ -124,7 +124,7 @@ class CommandRequirement(Requirement):
                     interface.display_text_block(error, title="Error")
             if config.auto_send:
                 interface.display_text("Sending output since config.auto_send=True")
-            elif not interface.ask_yes_no("Allow sending output? [y/N]: "):
+            elif not await interface.ask_yes_no("Allow sending output? [y/N]: "):
                 output = "<hidden>"
                 error = ""
             return CommandResult(

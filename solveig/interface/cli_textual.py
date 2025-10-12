@@ -29,17 +29,24 @@ class TextBox(Static):
 
 
 class SectionHeader(Static):
-    """A section header widget."""
+    """A section header widget with line extending to the right."""
 
-    def __init__(self, title: str, **kwargs):
-        super().__init__(title, **kwargs)
+    def __init__(self, title: str, prefix: str = "", width: int = 80):
+        # Calculate the line with dashes
+        # Create the section line
+        header_prefix = f"━━━━ {title}"
+        remaining_width = width - len(header_prefix) - len(prefix) - 4
+        dashes = "━" * max(0, remaining_width)
+
+        section_line = f"{prefix}{header_prefix} {dashes}"
+        super().__init__(section_line)
         self.add_class("section_header")
 
 
 class ConversationArea(ScrollableContainer):
     """Scrollable area for displaying conversation messages."""
 
-    def add_text(self, text: str, style: str = "normal"):
+    def add_text(self, text: str, style: str = "text"):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "normal" else "normal_message"
         text_widget = Static(text, classes=style_class)
@@ -108,52 +115,46 @@ class SolveigTextualApp(TextualApp):
         self.interface_controller = interface_controller
 
         # Get color mapping and create CSS
-        color_dict = color_palette.to_textual_css()
-        self._color_to_style = {color: name for name, color in color_dict.items()}
+        self._style_to_color = color_palette.to_textual_css()
+        self._color_to_style = {color: name for name, color in self._style_to_color.items()}
 
         # Generate CSS from the color dict
         css_rules = []
-        for name, color in color_dict.items():
+        for name, color in self._style_to_color.items():
             css_rules.append(f".{name}_message {{ color: {color}; margin: 0 1; }}")
 
         self._css = f"""
         ConversationArea {{
+            background: {self._style_to_color.get('background', '#000')};
             height: 1fr;
-            margin: 1;
         }}
 
         Input {{
             dock: bottom;
             height: 3;
-            border: solid {color_dict.get('prompt', '#000')};
+            border: solid {self._style_to_color.get('prompt', '#000')};
             margin-bottom: 1;
         }}
 
         StatusBar {{
             dock: bottom;
             height: 1;
-            background: {color_dict.get('background', '#000')};
-            color: {color_dict.get('text', '#fff')};
+            color: {self._style_to_color.get('text', '#fff')};
             content-align: center middle;
         }}
 
-        .normal_message {{
-            color: {color_dict.get('text', '#fff')};
-            margin: 0 1;
-        }}
-
         TextBox {{
-            border: solid {color_dict.get('box', '#000')};
-            color: {color_dict.get('text', '#fff')};
+            border: solid {self._style_to_color.get('box', '#000')};
+            color: {self._style_to_color.get('text', '#fff')};
             margin: 1;
-            padding: 1;
+            padding: 0 1;
         }}
 
         SectionHeader {{
-            color: {color_dict.get('section', '#fff')};
+            color: {self._style_to_color.get('section', '#fff')};
             text-style: bold;
             margin: 1 0;
-            padding: 0 1;
+            padding: 0 0;
         }}
 
         {"\n".join(css_rules)}
@@ -217,10 +218,6 @@ class SolveigTextualApp(TextualApp):
         # Keep focus on input after submission
         event.input.focus()
 
-    # async def action_quit(self) -> None:
-    #     """Handle quit action (including Ctrl+C) by setting return code and exiting."""
-    #     raise KeyboardInterrupt()
-
     async def on_key(self, event) -> None:
         """Handle key events directly."""
         if event.key == "ctrl+c":
@@ -239,7 +236,7 @@ class SolveigTextualApp(TextualApp):
             self.prompt_future = asyncio.Future()
             self._input_widget.value = ""
             self._input_widget.placeholder = placeholder or prompt
-            self._input_widget.styles.border = ("solid", "warning")
+            self._input_widget.styles.border = ("solid", self._style_to_color["warning"])
 
             # Focus the input
             self._input_widget.focus()
@@ -250,7 +247,7 @@ class SolveigTextualApp(TextualApp):
             # Restore state
             self._input_widget.placeholder = self._original_placeholder
             self._input_widget.value = self._saved_input_text
-            self._input_widget.styles.border = ("solid", "prompt")
+            self._input_widget.styles.border = ("solid", self._style_to_color["prompt"])
 
             # Restore focus
             self._input_widget.focus()
@@ -262,7 +259,7 @@ class SolveigTextualApp(TextualApp):
 
 
 
-    def _add_text_to_ui(self, text: str, style: str = "normal") -> None:
+    def _add_text_to_ui(self, text: str, style: str = "text") -> None:
         """Internal method to add text to the UI."""
         self._conversation_area.add_text(text, style)
 
@@ -278,9 +275,11 @@ class TextualInterface(SolveigInterface):
 
     YES = { "yes", "y", }
 
-    def __init__(self, color_palette: Palette = terracotta, **kwargs):
+    def __init__(self, color_palette: Palette = terracotta, base_indent: int = 2, **kwargs):
         self.app = SolveigTextualApp(color_palette=color_palette, interface_controller=self, **kwargs)
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
+        self.base_indent = base_indent
+        self.current_prefix = ""
 
     def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
@@ -292,13 +291,21 @@ class TextualInterface(SolveigInterface):
             pass
 
     # SolveigInterface implementation
-    def display_text(self, text: str, style: str = "normal") -> None:
+    def display_text(self, text: str, style: str = "text") -> None:
         """Display text with optional styling."""
         # Map hex colors to semantic style names using pre-calculated mapping
         if style.startswith("#"):
             style = self.app._color_to_style.get(style, "text")
 
-        self.app._add_text_to_ui(text, style)
+        # Apply current prefix with proper coloring
+        if self.current_prefix:
+            # Get the group color from theme
+            group_color = self.app._style_to_color.get("group")
+            # Use rich markup to color the prefix differently from the content
+            prefixed_text = f"[{group_color}]{self.current_prefix}[/]{text}"
+            self.app._add_text_to_ui(prefixed_text, style)
+        else:
+            self.app._add_text_to_ui(text, style)
 
     def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
@@ -314,7 +321,7 @@ class TextualInterface(SolveigInterface):
 
     def display_comment(self, message: str) -> None:
         """Display a comment message."""
-        self.display_text(message, "system")
+        self.display_text(message)
 
     def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
         """Display a tree structure of a directory"""
@@ -330,18 +337,21 @@ class TextualInterface(SolveigInterface):
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""
-        return await self._input_queue.get()
+        user_input = (await self._input_queue.get()).strip()
+        self.display_text(user_input)
+        return user_input
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for any kind of input with a prompt."""
-        return await self.app.ask_user(prompt, placeholder)
+        response = await self.app.ask_user(prompt, placeholder)
+        self.display_text(f"[{self.app._style_to_color["prompt"]}]{prompt}[/]: {response}")
+        return response
 
     async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
         yes_values = yes_values or self.YES
-        response = await self.ask_user(question, f"❓ {question} [y/N]: ")
+        response = await self.ask_user(question, f"{question} [y/N]: ")
         return response.lower().strip() in yes_values
-
 
     def set_status(self, status: str) -> None:
         """Update the status."""
@@ -359,17 +369,33 @@ class TextualInterface(SolveigInterface):
         self.app.exit()
 
     def display_section(self, title: str) -> None:
-        """Display a section header."""
-        self.app._conversation_area.add_section_header(title)
+        """Display a section header with line extending to the right."""
+        # Get terminal width (fallback to 80 if not available)
+        try:
+            width = self.app.size.width
+        except:
+            width = 80
+
+        section_header = SectionHeader(title, prefix=self.current_prefix, width=width)
+        self.app._conversation_area.mount(section_header)
+        self.app._conversation_area.scroll_end()
 
     @contextmanager
     def with_group(self, title: str):
         """Context manager for grouping related output."""
-        self.display_text(f"[ {title} ]", "system")
+        self.display_text(f"┌─ [bold]{title}[/bold]", "group")
+
+        # Enter group: extend prefix with indentation + colored line
+        old_prefix = self.current_prefix
+        self.current_prefix += "│" + (" " * self.base_indent)
+
         try:
             yield
         finally:
-            pass  # No cleanup needed
+            # Add rounded corner cap to end the group and restore the old prefix
+            self.current_prefix = old_prefix
+            self.display_text("└──" + (" " * self.base_indent), "group")
+
 
     @asynccontextmanager
     async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:

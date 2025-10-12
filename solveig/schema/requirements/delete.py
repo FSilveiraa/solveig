@@ -80,7 +80,7 @@ class DeleteRequirement(Requirement):
             )
 
         # Get user consent (with extra warning)
-        elif not interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
+        elif not await interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
             return DeleteResult(requirement=self, accepted=False, path=abs_path)
 
         try:

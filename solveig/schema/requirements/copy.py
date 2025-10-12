@@ -93,7 +93,7 @@ class CopyRequirement(Requirement):
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or interface.ask_yes_no(
+        ) or await interface.ask_yes_no(
             f"Allow copying '{abs_source_path}' to '{abs_destination_path}'? [y/N]: "
         ):
             try:
@@ -103,8 +103,7 @@ class CopyRequirement(Requirement):
                     abs_destination_path,
                     min_space_left=config.min_disk_space_left,
                 )
-                with interface.with_indent():
-                    interface.display_success("Copied")
+                interface.display_success("Copied")
                 return CopyResult(
                     requirement=self,
                     accepted=True,

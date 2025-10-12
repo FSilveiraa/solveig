@@ -102,7 +102,7 @@ class WriteRequirement(Requirement):
                 f"{'directory' if self.is_directory else 'file'}"
                 f"{' and contents' if not self.is_directory else ''}? [y/N]: "
             )
-            if not interface.ask_yes_no(question):
+            if not await interface.ask_yes_no(question):
                 return WriteResult(requirement=self, path=abs_path, accepted=False)
 
         try:
