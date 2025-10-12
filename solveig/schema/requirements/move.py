@@ -45,7 +45,7 @@ class MoveRequirement(Requirement):
             destination_path=self.destination_path,
             absolute_destination_path=dest_abs,
         )
-        interface.display_text(path_info)
+        await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "MoveResult":
         """Create MoveResult with error."""
@@ -74,7 +74,7 @@ class MoveRequirement(Requirement):
             await Filesystem.validate_read_access(abs_source_path)
             await Filesystem.validate_write_access(abs_destination_path)
         except Exception as e:
-            interface.display_error(f"Skipping: {e}")
+            await interface.display_error(f"Skipping: {e}")
             return MoveResult(
                 requirement=self,
                 accepted=False,
@@ -84,7 +84,7 @@ class MoveRequirement(Requirement):
             )
 
         source_metadata = await Filesystem.read_metadata(abs_source_path)
-        interface.display_tree(metadata=source_metadata, title="Source Metadata")
+        await interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
         if (
@@ -100,7 +100,7 @@ class MoveRequirement(Requirement):
                 await Filesystem.move(abs_source_path, abs_destination_path)
 
                 # with interface.with_indent():
-                interface.display_success("Moved")
+                await interface.display_success("Moved")
                 return MoveResult(
                     requirement=self,
                     accepted=True,
@@ -108,7 +108,7 @@ class MoveRequirement(Requirement):
                     destination_path=abs_destination_path,
                 )
             except (PermissionError, OSError, FileExistsError) as e:
-                interface.display_error(f"Found error when moving: {e}")
+                await interface.display_error(f"Found error when moving: {e}")
                 return MoveResult(
                     requirement=self,
                     accepted=False,

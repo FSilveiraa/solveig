@@ -29,7 +29,7 @@ class TaskListRequirement(Requirement):
         await super().display_header(interface)
         if detailed:
             if not self.tasks:
-                interface.display_text("🗒 Empty task list")
+                await interface.display_text("🗒 Empty task list")
                 return
 
             task_lines = []
@@ -46,7 +46,7 @@ class TaskListRequirement(Requirement):
 
             # interface.show("🗒 Task List")
             for line in task_lines:
-                interface.display_text(line)
+                await interface.display_text(line)
 
     def create_error_result(
         self, error_message: str, accepted: bool

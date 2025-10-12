@@ -42,7 +42,7 @@ class ReadRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=is_dir
         )
-        interface.display_text(path_info)
+        await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
@@ -67,7 +67,7 @@ class ReadRequirement(Requirement):
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
-            interface.display_error(f"Cannot access {str(abs_path)}: {e}")
+            await interface.display_error(f"Cannot access {str(abs_path)}: {e}")
             return ReadResult(
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
@@ -76,11 +76,11 @@ class ReadRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_read:
-            interface.display_text(
+            await interface.display_text(
                 f"Reading {abs_path} since it matches config.allow_allowed_paths"
             )
         metadata = await Filesystem.read_metadata(abs_path)
-        interface.display_tree(
+        await interface.display_tree(
             metadata, title=f"Metadata: {abs_path}", display_metadata=True
         )
         content = None
@@ -98,7 +98,7 @@ class ReadRequirement(Requirement):
                 content = read_result.content
                 metadata.encoding = read_result.encoding
             except (PermissionError, OSError, UnicodeDecodeError) as e:
-                interface.display_error(f"Failed to read file contents: {e}")
+                await interface.display_error(f"Failed to read file contents: {e}")
                 return ReadResult(
                     requirement=self, path=abs_path, accepted=False, error=str(e)
                 )
@@ -106,10 +106,10 @@ class ReadRequirement(Requirement):
             content_output = (
                 "(Base64)" if metadata.encoding.lower() == "base64" else str(content)
             )
-            interface.display_text_block(content_output, title=f"Content: {abs_path}")
+            await interface.display_text_block(content_output, title=f"Content: {abs_path}")
 
         if config.auto_send:
-            interface.display_text(
+            await interface.display_text(
                 f"Sending {"content" if content else "metadata"} since config.auto_send=True"
             )
         if (

@@ -16,7 +16,7 @@ from solveig.utils.file import Filesystem
 DEFAULT_BASHRC_PATH = Filesystem.get_absolute_path("~/.bashrc")
 
 
-def add_bash_timestamps(interface: SolveigInterface) -> bool:
+async def add_bash_timestamps(interface: SolveigInterface) -> bool:
     """
     Add timestamp formatting to bash history.
 
@@ -32,8 +32,8 @@ def add_bash_timestamps(interface: SolveigInterface) -> bool:
 export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S "
 """
 
-    with interface.with_group("Bash History Timestamps"):
-        interface.display_text_block(
+    async with interface.with_group("Bash History Timestamps"):
+        await interface.display_text_block(
             "Adding timestamps to your bash history helps Solveig understand "
             + "when you executed commands, providing better context for assistance."
         )
@@ -96,7 +96,7 @@ def create_example_config(interface: SolveigInterface):
         interface.display_text("○ Skipped config file creation.")
 
 
-def main(interface: SolveigInterface | None = None) -> int:
+async def main(interface: SolveigInterface | None = None) -> int:
     """Main initialization function."""
     # All defaults for now
     interface = interface or CLIInterface()
@@ -104,7 +104,7 @@ def main(interface: SolveigInterface | None = None) -> int:
     interface.display_section("Setup")
     interface.display_text("Setting up Solveig")
 
-    with interface.with_group("Configuration"):
+    async with interface.with_group("Configuration"):
         # Offer to create example config file
         create_example_config(interface)
 

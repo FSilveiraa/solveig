@@ -46,9 +46,9 @@ class WriteRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
         )
-        interface.display_text(path_info)
+        await interface.display_text(path_info)
         if self.content and detailed:
-            interface.display_text_block(self.content, title="Content")
+            await interface.display_text_block(self.content, title="Content")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""
@@ -78,9 +78,9 @@ class WriteRequirement(Requirement):
 
         already_exists = await Filesystem.exists(abs_path)
         if already_exists:
-            interface.display_warning("Overwriting existing file")
+            await interface.display_warning("Overwriting existing file")
             file_content = await Filesystem.read_file(abs_path)
-            interface.display_text_block(
+            await interface.display_text_block(
                 (
                     str(file_content.content)
                     if file_content.encoding == "text"
@@ -93,7 +93,7 @@ class WriteRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_write:
-            interface.display_text(
+            await interface.display_text(
                 f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths"
             )
         else:
@@ -111,12 +111,12 @@ class WriteRequirement(Requirement):
                 await Filesystem.create_directory(abs_path)
             else:
                 await Filesystem.write_file(abs_path, content=self.content or "")
-            interface.display_success(f"{'Updated' if already_exists else 'Created'}")
+            await interface.display_success(f"{'Updated' if already_exists else 'Created'}")
 
             return WriteResult(requirement=self, path=abs_path, accepted=True)
 
         except Exception as e:
-            interface.display_error(f"Found error when writing file: {e}")
+            await interface.display_error(f"Found error when writing file: {e}")
             return WriteResult(
                 requirement=self,
                 path=abs_path,

@@ -37,7 +37,7 @@ def _get_plugin_name_from_class(cls: type) -> str:
     return "unknown"
 
 
-def load_and_filter_requirements(
+async def load_and_filter_requirements(
     interface: SolveigInterface,
     enabled_plugins: set[str] | SolveigConfig | None,
     allow_all: bool = False,
@@ -99,21 +99,21 @@ def load_and_filter_requirements(
                             req_class = REQUIREMENTS.all_requirements[req_name]
                             REQUIREMENTS.registered[req_name] = req_class
                         active_plugins += 1
-                        interface.display_text(f"'{plugin_name}': Loaded")
+                        await interface.display_text(f"'{plugin_name}': Loaded")
                     else:
-                        interface.display_warning(
+                        await interface.display_warning(
                             f"'{plugin_name}': Skipped (missing from config)"
                         )
 
             except Exception as e:
-                interface.display_error(
+                await interface.display_error(
                     f"Requirement plugin {module_name}.{plugin_name}: {e}"
                 )
 
     from solveig.schema import CORE_REQUIREMENTS
 
     total_active = len(REQUIREMENTS.registered)
-    interface.display_text(
+    await interface.display_text(
         f"Requirements: {len(CORE_REQUIREMENTS)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
     )
 

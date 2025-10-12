@@ -37,8 +37,8 @@ class DeleteRequirement(Requirement):
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=await Filesystem.is_dir(abs_path)
         )
-        interface.display_text(path_info)
-        interface.display_warning("This operation is permanent and cannot be undone!")
+        await interface.display_text(path_info)
+        await interface.display_warning("This operation is permanent and cannot be undone!")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "DeleteResult":
         """Create DeleteResult with error."""
@@ -63,19 +63,19 @@ class DeleteRequirement(Requirement):
         try:
             await Filesystem.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
-            interface.display_error(f"Skipping: {e}")
+            await interface.display_error(f"Skipping: {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )
 
         metadata = await Filesystem.read_metadata(abs_path)
-        interface.display_tree(metadata=metadata)
+        await interface.display_tree(metadata=metadata)
 
         auto_delete = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths
         )
         if auto_delete:
-            interface.display_text(
+            await interface.display_text(
                 f"Deleting {abs_path} since it matches config.auto_allowed_paths"
             )
 
@@ -86,10 +86,10 @@ class DeleteRequirement(Requirement):
         try:
             # Perform the delete operation - use utils/file.py method
             await Filesystem.delete(abs_path)
-            interface.display_success("Deleted")
+            await interface.display_success("Deleted")
             return DeleteResult(requirement=self, path=abs_path, accepted=True)
         except (PermissionError, OSError) as e:
-            interface.display_error(f"Found error when deleting: {e}")
+            await interface.display_error(f"Found error when deleting: {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )

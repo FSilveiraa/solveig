@@ -29,37 +29,37 @@ class SolveigInterface(ABC):
     
     # Core display methods
     @abstractmethod
-    def display_text(self, text: str, style: str = "normal") -> None:
+    async def display_text(self, text: str, style: str = "normal") -> None:
         """Display text with optional styling."""
         ...
 
     @abstractmethod
-    def display_error(self, error: str | Exception) -> None:
+    async def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
         ...
 
     @abstractmethod
-    def display_warning(self, warning: str) -> None:
+    async def display_warning(self, warning: str) -> None:
         """Display a warning message with standard formatting."""
         ...
 
     @abstractmethod
-    def display_success(self, message: str) -> None:
+    async def display_success(self, message: str) -> None:
         """Display a success message with standard formatting."""
         ...
 
     @abstractmethod
-    def display_comment(self, message: str) -> None:
+    async def display_comment(self, message: str) -> None:
         """Display a comment message."""
         ...
 
     @abstractmethod
-    def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+    async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
         """Display a tree structure of a directory"""
         ...
 
     @abstractmethod
-    def display_text_block(self, text: str, title: str = None) -> None:
+    async def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
         ...
 
@@ -97,13 +97,13 @@ class SolveigInterface(ABC):
 
     # Additional methods for compatibility
     @abstractmethod
-    def display_section(self, title: str) -> None:
+    async def display_section(self, title: str) -> None:
         """Display a section header."""
         ...
 
     @abstractmethod
-    @contextmanager
-    def with_group(self, title: str):
+    @asynccontextmanager
+    async def with_group(self, title: str):
         """Context manager for grouping related output."""
         ...
 

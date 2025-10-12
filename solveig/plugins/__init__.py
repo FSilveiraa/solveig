@@ -20,7 +20,7 @@ from . import hooks
 from . import schema as plugin_schema
 
 
-def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
+async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
     """
     Initialize plugins with optional config filtering.
 
@@ -31,21 +31,21 @@ def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
     This should be called explicitly by the main application, not on import.
     It's also important that it happens here and not in the plugins
     """
-    with interface.with_group("Plugins"):
+    async with interface.with_group("Plugins"):
         # Load and filter requirements
-        with interface.with_group("Requirements"):
-            req_stats = plugin_schema.load_and_filter_requirements(
+        async with interface.with_group("Requirements"):
+            req_stats = await plugin_schema.load_and_filter_requirements(
                 interface=interface, enabled_plugins=config
             )
 
-        with interface.with_group("Hooks"):
+        async with interface.with_group("Hooks"):
             # Load and filter hooks
-            hook_stats = hooks.load_and_filter_hooks(
+            hook_stats = await hooks.load_and_filter_hooks(
                 interface=interface, enabled_plugins=config
             )
 
         # Summary
-        interface.display_text(
+        await interface.display_text(
             f"Plugin system ready: {req_stats['active']} requirements, {hook_stats['active']} hooks"
         )
 

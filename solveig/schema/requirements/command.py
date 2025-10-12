@@ -40,11 +40,11 @@ class CommandRequirement(Requirement):
         """Display command requirement header."""
         await super().display_header(interface)
         if detailed and self.command:
-            interface.display_text_block(self.command, title="Command")
+            await interface.display_text_block(self.command, title="Command")
         elif self.command:
             # Show truncated command in summary view
             # command_first_line = self.command.splitlines()[0]
-            interface.display_text(f"🗲  {self.command}", truncate=True)
+            await interface.display_text(f"🗲  {self.command}", truncate=True)
             # if len(self.command) <= 50:
             #     interface.show(f"🗲  {self.command}")
             # else:
@@ -90,7 +90,7 @@ class CommandRequirement(Requirement):
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
                 should_auto_execute = True
-                interface.display_text(
+                await interface.display_text(
                     f"Auto-executing {self.command} since it matches config.allow_allowed_paths"
                 )
                 break
@@ -104,7 +104,7 @@ class CommandRequirement(Requirement):
                 output, error = await self._execute_command(config)
             except Exception as e:
                 error_str = str(e)
-                interface.display_error(
+                await interface.display_error(
                     f"Found error when running command: {error_str}"
                 )
                 return CommandResult(
@@ -116,14 +116,15 @@ class CommandRequirement(Requirement):
                 )
 
             if output:
-                interface.display_text_block(output, title="Output")
+                await interface.display_text_block(output, title="Output")
             else:
-                interface.with_group("No output")
+                async with interface.with_group("No output"):
+                    pass
             if error:
-                with interface.with_group("Error"):
-                    interface.display_text_block(error, title="Error")
+                async with interface.with_group("Error"):
+                    await interface.display_text_block(error, title="Error")
             if config.auto_send:
-                interface.display_text("Sending output since config.auto_send=True")
+                await interface.display_text("Sending output since config.auto_send=True")
             elif not await interface.ask_yes_no("Allow sending output? [y/N]: "):
                 output = "<hidden>"
                 error = ""

@@ -39,7 +39,7 @@ def detect_shell(plugin_config) -> str:
 # linter to confirm whether it's correct BASH. I have no idea if this works on Windows
 # (tbh I have no idea if solveig itself works on anything besides Linux)
 @before(requirements=(CommandRequirement,))
-def check_command(
+async def check_command(
     config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement
 ):
     plugin_config = config.plugins.get("shellcheck", {})
@@ -76,10 +76,10 @@ def check_command(
                 text=True,
             )
         except FileNotFoundError:
-            interface.display_warning(
+            await interface.display_warning(
                 "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
             )
-            interface.display_warning(
+            await interface.display_warning(
                 "Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing"
             )
             # if this throws an exception, then not having Shellcheck installed
@@ -88,7 +88,7 @@ def check_command(
 
         if result.returncode == 0:
             if config.verbose:
-                interface.display_success(
+                await interface.display_success(
                     f"Shellcheck: No issues with command `{requirement.command}`"
                 )
             return
@@ -98,9 +98,9 @@ def check_command(
             output = json.loads(result.stdout)
             errors = [f"[{item['level']}] {item['message']}" for item in output]
             if errors:
-                with interface.with_group("Shellcheck Errors"):
+                async with interface.with_group("Shellcheck Errors"):
                     for error in errors:
-                        interface.display_error(error)
+                        await interface.display_error(error)
                 raise ValidationError(
                     f"Shellcheck validation failed for command `{requirement.command}`"
                 )

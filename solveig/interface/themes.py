@@ -25,7 +25,7 @@ class Palette:
         """Generate Textual CSS rules from palette colors."""
         palette_dict = asdict(self)
         palette_dict.pop("name")  # Remove name field
-        return { name:color for name, color in palette_dict.items() if color }
+        return { name:color for name, color in palette_dict.items() }
         # for field_name, color in palette_dict.items():
         #     if color:  # Skip empty colors
         #         css_rules.append(f".{field_name}_message {{ color: {color}; }}")
@@ -91,7 +91,7 @@ forest = Palette(
     text="#d4d4aa",  # sage
     prompt="#87ceeb",  # sky blue
     box="#daa520",  # goldenrod
-    group="#90ee90",  # light green
+    group="#74BB74",  # light green
     section="#87ceeb",  # sky blue
     warning="#ff7f50",  # coral
     error="#cd5c5c",  # indian red
@@ -124,7 +124,7 @@ vice = Palette(
 )
 
 
-DEFAULT = terracotta
+DEFAULT_THEME = terracotta
 THEMES = {
     theme.name: theme
     for theme in [

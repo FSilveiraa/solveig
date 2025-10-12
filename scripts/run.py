@@ -30,8 +30,8 @@ async def get_message_history(
     """Initialize the conversation store."""
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
-        interface.display_text("\n")
-        interface.display_text_block(sys_prompt, title="System Prompt")
+        await interface.display_text("\n")
+        await interface.display_text_block(sys_prompt, title="System Prompt")
 
     message_history = MessageHistory(
         system_prompt=sys_prompt,
@@ -46,10 +46,10 @@ async def get_initial_user_message(
     user_prompt: str | None, interface: SolveigInterface
 ) -> UserMessage:
     """Get the initial user prompt and create a UserMessage."""
-    interface.display_section("User")
+    await interface.display_section("User")
 
     if user_prompt:
-        interface.display_text(f"> {user_prompt}\n")
+        await interface.display_text(f"> {user_prompt}\n")
         return UserMessage(comment=user_prompt)
     else:
         # interface.display_text("💬 Enter your message:")
@@ -109,7 +109,7 @@ async def send_streaming_message(
             interface.set_status(f"Processing requirement {i + 1}...")
 
             # Show requirement as it comes in
-            interface.display_text(f"  → {requirement.title}")
+            await interface.display_text(f"  → {requirement.title}")
             i += 1
 
         return collected_requirements
@@ -134,8 +134,8 @@ async def send_message_to_llm_with_retry(
                         config, interface, client, message_history, requirements_union
                     )
                 except Exception as streaming_error:
-                    interface.display_text(f"Streaming failed: {streaming_error}")
-                    interface.display_text("Falling back to standard method...")
+                    await interface.display_text(f"Streaming failed: {streaming_error}")
+                    await interface.display_text("Falling back to standard method...")
                     requirements = await send_basic_message(
                         config, interface, client, message_history, requirements_union
                     )
@@ -152,8 +152,8 @@ async def send_message_to_llm_with_retry(
             # Propagate to top-level so the app can exit cleanly
             raise
         except Exception as e:
-            interface.display_error(f"Error: {e}")
-            interface.display_text_block(
+            await interface.display_error(f"Error: {e}")
+            await interface.display_text_block(
                 title=f"{e.__class__.__name__}",
                 text=str(e) + traceback.format_exc()
             )
@@ -187,8 +187,8 @@ async def process_requirements(
             if result:
                 results.append(result)
         except Exception as e:
-            interface.display_error(f"Error processing requirement: {e}")
-            interface.display_text_block(
+            await interface.display_error(f"Error processing requirement: {e}")
+            await interface.display_text_block(
                 title=f"{e.__class__.__name__}",
                 text=str(e) + traceback.format_exc()
             )
@@ -210,10 +210,10 @@ async def main_loop(
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
     await interface.wait_until_ready()
-    interface.display_text(BANNER)
+    await interface.display_text(BANNER)
 
     # Initialize plugins based on config
-    initialize_plugins(config=config, interface=interface)
+    await initialize_plugins(config=config, interface=interface)
 
     # Get message history
     message_history = await get_message_history(config, interface)
@@ -226,7 +226,7 @@ async def main_loop(
         # Send message to LLM and handle any errors
         message_history.add_messages(user_message)
 
-        interface.display_section("Assistant")
+        await interface.display_section("Assistant")
         llm_response, user_message = await send_message_to_llm_with_retry(
             config, interface, llm_client, message_history, user_message
         )
@@ -237,7 +237,7 @@ async def main_loop(
         # Successfully got LLM response
         message_history.add_messages(llm_response)
         if config.verbose:
-            interface.display_text_block(str(llm_response), title="Response")
+            await interface.display_text_block(str(llm_response), title="Response")
 
         # Process requirements and get next user input
         if config.wait_before_user > 0:
@@ -248,7 +248,7 @@ async def main_loop(
             llm_response=llm_response, config=config, interface=interface
         )
 
-        interface.display_section("User")
+        await interface.display_section("User")
         user_prompt = await interface.get_input()
         user_message = UserMessage(comment=user_prompt, results=results)
 
@@ -271,7 +271,7 @@ async def run_async(llm_client: Instructor | None = None):
         if config.simple_interface:
             interface = SimpleInterface(color_palette=config.theme)
         else:
-            interface = TextualInterface()
+            interface = TextualInterface(color_palette=config.theme)
         
         # Run interface in foreground to properly capture exit, pass control to conversation loop
         loop_task = asyncio.create_task(main_loop(

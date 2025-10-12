@@ -69,7 +69,7 @@ def after(requirements: tuple[type, ...] | None = None):
     return register
 
 
-def load_and_filter_hooks(
+async def load_and_filter_hooks(
     interface: SolveigInterface,
     enabled_plugins: set[str] | SolveigConfig | None,
     allow_all: bool = False,
@@ -102,7 +102,7 @@ def load_and_filter_hooks(
                     importlib.import_module(module_name)
 
             except Exception as e:
-                interface.display_error(f"Hook plugin {plugin_name}: {e}")
+                await interface.display_error(f"Hook plugin {plugin_name}: {e}")
 
     # Second: Process ALL plugins in HOOKS.all_hooks (filesystem + memory-registered)
     for plugin_name, (before_dict, after_dict) in HOOKS.all_hooks.items():
@@ -113,11 +113,11 @@ def load_and_filter_hooks(
             HOOKS.before.extend(before_dict.values())
             HOOKS.after.extend(after_dict.values())
             active_hooks += len(before_dict) + len(after_dict)
-            interface.display_text(f"'{plugin_name}': Loaded")
+            await interface.display_text(f"'{plugin_name}': Loaded")
         else:
-            interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
+            await interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
 
-    interface.display_text(
+    await interface.display_text(
         f"Hooks: {len(loaded_plugins)} plugins loaded, {active_hooks} active"
     )
 

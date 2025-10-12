@@ -43,7 +43,7 @@ class SolveigConfig:
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
     no_commands: bool = False
-    theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT)
+    theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     wait_before_user: float = 1.0
     simple_interface: bool = False
 
@@ -240,7 +240,7 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--theme",
-            default=themes.DEFAULT,
+            default=themes.DEFAULT_THEME,
             type=str,
             choices=themes.THEMES.keys(),
             help="Interface theme",

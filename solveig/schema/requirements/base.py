@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from os import PathLike
 from anyio import Path
@@ -74,7 +75,7 @@ class Requirement(BaseSolveigModel, ABC):
 
     async def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""
-        with interface.with_group(self.title.title()):
+        async with interface.with_group(self.title.title()):
             await self.display_header(interface, detailed=True)
 
             # Run before hooks - they validate and can throw exceptions
@@ -84,7 +85,10 @@ class Requirement(BaseSolveigModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        before_hook(config, interface, self)
+                        # I'm actually kind of proud that this works
+                        hook_coroutine = before_hook(config, interface, self)
+                        if asyncio.iscoroutine(hook_coroutine):
+                            await hook_coroutine
                     except ValidationError as e:
                         # Plugin validation failed - return appropriate error result
                         return self.create_error_result(
@@ -100,7 +104,7 @@ class Requirement(BaseSolveigModel, ABC):
             try:
                 result = await self.actually_solve(config, interface)
             except Exception as error:
-                interface.display_error(error)
+                await interface.display_error(error)
                 error_info = "Execution error"
                 if interface.ask_yes_no(
                     "Send error message back to assistant? [y/N]: "
@@ -115,7 +119,9 @@ class Requirement(BaseSolveigModel, ABC):
                     for requirement_type in requirements
                 ):
                     try:
-                        after_hook(config, interface, self, result)
+                        after_coroutine = after_hook(config, interface, self, result)
+                        if asyncio.iscoroutine(after_coroutine):
+                            await after_coroutine
                     except ProcessingError as e:
                         # Plugin processing failed - return error result
                         return self.create_error_result(
@@ -134,7 +140,7 @@ class Requirement(BaseSolveigModel, ABC):
     async def display_header(self, interface: SolveigInterface, detailed=False) -> None:
         """Display the requirement header/summary using the interface directly."""
         if self.comment:
-            interface.display_comment(self.comment)
+            await interface.display_comment(self.comment)
 
     @abstractmethod
     async def actually_solve(
