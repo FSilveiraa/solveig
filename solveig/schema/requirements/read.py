@@ -32,14 +32,15 @@ class ReadRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display read requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
+        is_dir = await Filesystem.is_dir(abs_path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=is_dir
         )
         interface.display_text(path_info)
 
@@ -57,16 +58,16 @@ class ReadRequirement(Requirement):
         """Return description of read capability."""
         return "read(path, metadata_only): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "ReadResult":
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # Pre-flight validation - use utils/file.py validation
         try:
-            Filesystem.validate_read_access(abs_path)
+            await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
-            interface.display_error(f"Cannot access {abs_path}: {e}")
+            interface.display_error(f"Cannot access {str(abs_path)}: {e}")
             return ReadResult(
                 requirement=self, path=abs_path, accepted=False, error=str(e)
             )
@@ -78,7 +79,7 @@ class ReadRequirement(Requirement):
             interface.display_text(
                 f"Reading {abs_path} since it matches config.allow_allowed_paths"
             )
-        metadata = Filesystem.read_metadata(abs_path)
+        metadata = await Filesystem.read_metadata(abs_path)
         interface.display_tree(
             metadata, title=f"Metadata: {abs_path}", display_metadata=True
         )
@@ -93,7 +94,7 @@ class ReadRequirement(Requirement):
             )
         ):
             try:
-                read_result = Filesystem.read_file(abs_path)
+                read_result = await Filesystem.read_file(abs_path)
                 content = read_result.content
                 metadata.encoding = read_result.encoding
             except (PermissionError, OSError, UnicodeDecodeError) as e:

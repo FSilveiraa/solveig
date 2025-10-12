@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import PurePath
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -17,11 +16,11 @@ from solveig.schema.requirements.base import (
     validate_non_empty_path,
 )
 from solveig.schema.results.base import RequirementResult
-from solveig.utils.file import Filesystem, Metadata
+from solveig.utils.file import Filesystem, Metadata, SolveigPath
 
 
 class TreeResult(RequirementResult):
-    path: str | PurePath
+    path: SolveigPath
     metadata: Metadata | None  # Complete tree metadata
 
 
@@ -40,14 +39,15 @@ class TreeRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: SolveigInterface, detailed: bool = False
     ) -> None:
         """Display tree requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
+        is_dir = await Filesystem.is_dir(abs_path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=is_dir
         )
         interface.display_text(path_info)
 
@@ -68,11 +68,11 @@ class TreeRequirement(Requirement):
             "tree(path): generates a directory tree structure showing files and folders"
         )
 
-    def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
+    async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # Get complete tree metadata using new approach
-        metadata = Filesystem.read_metadata(abs_path, descend_level=self.max_depth)
+        metadata = await Filesystem.read_metadata(abs_path, descend_level=self.max_depth)
 
         # Display the tree structure
         interface.display_tree(

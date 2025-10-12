@@ -8,7 +8,7 @@ This module defines the data structures used for:
 """
 
 from dataclasses import fields, is_dataclass
-from pathlib import PurePath
+from os import PathLike
 
 from pydantic import BaseModel, field_serializer
 
@@ -24,7 +24,7 @@ class BaseSolveigModel(BaseModel):
             return result
         elif isinstance(obj, BaseModel):
             return obj.model_dump()
-        elif isinstance(obj, PurePath):
+        elif isinstance(obj, PathLike):
             return str(obj)
         elif isinstance(obj, list):
             return [cls._dump_pydantic_field(v) for v in obj]

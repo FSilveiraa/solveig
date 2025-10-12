@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import PurePath
-
 from .base import RequirementResult
+from solveig.utils.file import SolveigPath
 
 
 class DeleteResult(RequirementResult):
-    path: str | PurePath
+    path: SolveigPath

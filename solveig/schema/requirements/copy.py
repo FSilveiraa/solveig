@@ -31,17 +31,18 @@ class CopyRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display copy requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         abs_source = Filesystem.get_absolute_path(self.source_path)
         abs_dest = Filesystem.get_absolute_path(self.destination_path)
+        is_dir = await Filesystem.is_dir(abs_source)
         path_info = format_path_info(
             path=self.source_path,
             abs_path=abs_source,
-            is_dir=Filesystem.is_dir(abs_source),
+            is_dir=is_dir,
             destination_path=self.destination_path,
             absolute_destination_path=abs_dest,
         )
@@ -62,7 +63,7 @@ class CopyRequirement(Requirement):
         """Return description of copy capability."""
         return "copy(source_path, destination_path): copies a file or directory"
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CopyResult":
         # Pre-flight validation - use utils/file.py validation
@@ -71,8 +72,8 @@ class CopyRequirement(Requirement):
         error: Exception | None = None
 
         try:
-            Filesystem.validate_read_access(abs_source_path)
-            Filesystem.validate_write_access(abs_destination_path)
+            await Filesystem.validate_read_access(abs_source_path)
+            await Filesystem.validate_write_access(abs_destination_path)
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
             return CopyResult(
@@ -83,7 +84,7 @@ class CopyRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
-        source_metadata = Filesystem.read_metadata(abs_source_path)
+        source_metadata = await Filesystem.read_metadata(abs_source_path)
         interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
@@ -97,7 +98,7 @@ class CopyRequirement(Requirement):
         ):
             try:
                 # Perform the copy operation - use utils/file.py method
-                Filesystem.copy(
+                await Filesystem.copy(
                     abs_source_path,
                     abs_destination_path,
                     min_space_left=config.min_disk_space_left,

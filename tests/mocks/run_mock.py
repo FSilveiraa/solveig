@@ -8,8 +8,8 @@ from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
 
 
-def cleanup():
-    Filesystem.delete("~/Sync/hello_new.py")
+async def cleanup():
+    await Filesystem.delete("~/Sync/hello_new.py")
 
 
 async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 0):
@@ -29,7 +29,7 @@ async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sl
         await run_async(llm_client=mock_client)
     finally:
         try:
-            cleanup()
+            await cleanup()
         except FileNotFoundError:
             pass
 

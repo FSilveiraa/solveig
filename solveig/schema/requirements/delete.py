@@ -28,14 +28,14 @@ class DeleteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display delete requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=Filesystem.is_dir(abs_path)
+            path=self.path, abs_path=abs_path, is_dir=await Filesystem.is_dir(abs_path)
         )
         interface.display_text(path_info)
         interface.display_warning("This operation is permanent and cannot be undone!")
@@ -54,21 +54,21 @@ class DeleteRequirement(Requirement):
         """Return description of delete capability."""
         return "delete(path): permanently deletes a file or directory"
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "DeleteResult":
         # Pre-flight validation - use utils/file.py validation
         abs_path = Filesystem.get_absolute_path(self.path)
 
         try:
-            Filesystem.validate_delete_access(abs_path)
+            await Filesystem.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
             interface.display_error(f"Skipping: {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=abs_path
             )
 
-        metadata = Filesystem.read_metadata(abs_path)
+        metadata = await Filesystem.read_metadata(abs_path)
         interface.display_tree(metadata=metadata)
 
         auto_delete = Filesystem.path_matches_patterns(
@@ -85,9 +85,8 @@ class DeleteRequirement(Requirement):
 
         try:
             # Perform the delete operation - use utils/file.py method
-            Filesystem.delete(abs_path)
-            with interface.with_indent():
-                interface.display_success("Deleted")
+            await Filesystem.delete(abs_path)
+            interface.display_success("Deleted")
             return DeleteResult(requirement=self, path=abs_path, accepted=True)
         except (PermissionError, OSError) as e:
             interface.display_error(f"Found error when deleting: {e}")

@@ -260,7 +260,7 @@ async def run_async(llm_client: Instructor | None = None):
     loop_task = None
     try:
         # Parse config and run main loop
-        config, user_prompt = SolveigConfig.parse_config_and_prompt()
+        config, user_prompt = await SolveigConfig.parse_config_and_prompt()
 
         # Create LLM client if none was supplied
         llm_client = llm_client or llm.get_instructor_client(

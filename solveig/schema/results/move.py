@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import PurePath
-
 from .base import RequirementResult
+from solveig.utils.file import SolveigPath
 
 
 class MoveResult(RequirementResult):
-    source_path: str | PurePath
-    destination_path: str | PurePath
+    source_path: SolveigPath
+    destination_path: SolveigPath

@@ -34,11 +34,11 @@ class CommandRequirement(Requirement):
             raise ValueError("Empty command") from e
         return command
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display command requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         if detailed and self.command:
             interface.display_text_block(self.command, title="Command")
         elif self.command:
@@ -74,11 +74,11 @@ class CommandRequirement(Requirement):
                 self.command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                text=True
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-            output = stdout.strip() if stdout else ""
-            error = stderr.strip() if stderr else ""
+            # Decode bytes to strings
+            output = stdout.decode('utf-8').strip() if stdout else ""
+            error = stderr.decode('utf-8').strip() if stderr else ""
             return output, error
         raise ValueError("Empty command")
 

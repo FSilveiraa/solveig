@@ -31,17 +31,17 @@ class MoveRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display move requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         source_abs = Filesystem.get_absolute_path(self.source_path)
         dest_abs = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(
             path=self.source_path,
             abs_path=source_abs,
-            is_dir=Filesystem.is_dir(source_abs),
+            is_dir=await Filesystem.is_dir(source_abs),
             destination_path=self.destination_path,
             absolute_destination_path=dest_abs,
         )
@@ -62,7 +62,7 @@ class MoveRequirement(Requirement):
         """Return description of move capability."""
         return "move(source_path, destination_path): moves a file or directory"
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "MoveResult":
         # Pre-flight validation - use utils/file.py validation
@@ -71,8 +71,8 @@ class MoveRequirement(Requirement):
         error: Exception | None = None
 
         try:
-            Filesystem.validate_read_access(abs_source_path)
-            Filesystem.validate_write_access(abs_destination_path)
+            await Filesystem.validate_read_access(abs_source_path)
+            await Filesystem.validate_write_access(abs_destination_path)
         except Exception as e:
             interface.display_error(f"Skipping: {e}")
             return MoveResult(
@@ -83,7 +83,7 @@ class MoveRequirement(Requirement):
                 destination_path=abs_destination_path,
             )
 
-        source_metadata = Filesystem.read_metadata(abs_source_path)
+        source_metadata = await Filesystem.read_metadata(abs_source_path)
         interface.display_tree(metadata=source_metadata, title="Source Metadata")
 
         # Get user consent
@@ -97,10 +97,10 @@ class MoveRequirement(Requirement):
         ):
             try:
                 # Perform the move operation - use utils/file.py method
-                Filesystem.move(abs_source_path, abs_destination_path)
+                await Filesystem.move(abs_source_path, abs_destination_path)
 
-                with interface.with_indent():
-                    interface.display_success("Moved")
+                # with interface.with_indent():
+                interface.display_success("Moved")
                 return MoveResult(
                     requirement=self,
                     accepted=True,

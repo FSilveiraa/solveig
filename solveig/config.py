@@ -3,7 +3,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from importlib.metadata import version
-from pathlib import PurePath
+from anyio import Path
 from typing import Any
 
 from solveig.interface import SolveigInterface, themes
@@ -39,7 +39,7 @@ class SolveigConfig:
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
-    auto_allowed_paths: list[PurePath] = field(default_factory=list)
+    auto_allowed_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     auto_send: bool = False
     no_commands: bool = False
@@ -93,12 +93,13 @@ class SolveigConfig:
         """
 
     @classmethod
-    def parse_from_file(cls, config_path: PurePath | str) -> dict:
+    async def parse_from_file(cls, config_path: str) -> dict:
         if not config_path:
             raise FileNotFoundError("Config file not specified.")
         abs_path = Filesystem.get_absolute_path(config_path)
         try:
-            content = Filesystem.read_file(abs_path).content
+            file_content = await Filesystem.read_file(abs_path)
+            content = file_content.content
             return json.loads(content)
         except FileNotFoundError as e:
             # Throw an error if we tried to read any non-default config path
@@ -107,7 +108,7 @@ class SolveigConfig:
             raise e
 
     @classmethod
-    def parse_config_and_prompt(
+    async def parse_config_and_prompt(
         cls, interface: SolveigInterface | None = None, cli_args=None
     ):
         """Parse configuration from CLI arguments and config file.
@@ -262,7 +263,7 @@ class SolveigConfig:
         args_dict = vars(args)
         user_prompt = args_dict.pop("prompt")
 
-        file_config = cls.parse_from_file(args_dict.pop("config"))
+        file_config = await cls.parse_from_file(args_dict.pop("config"))
         if not file_config:
             file_config = {}
             if interface:

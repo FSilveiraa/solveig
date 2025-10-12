@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from typing import Literal
 from pydantic import Field
 
-from anyio import Path
+from os import PathLike
+
+from pathlib import Path as SyncPath
 import base64
 import grp
 import os
@@ -11,7 +13,18 @@ import pwd
 import shutil
 from pathlib import PurePath
 
-from solveig.utils.misc import parse_human_readable_size
+from typing import Annotated
+from pydantic import PlainValidator
+from anyio import Path
+
+# Define PathType here to avoid circular imports
+def _validate_path(v) -> Path:
+    """Convert string or PathLike to anyio.Path."""
+    if isinstance(v, Path):
+        return v
+    return Path(v)
+
+SolveigPath = Annotated[str, PlainValidator(_validate_path)]
 
 
 
@@ -19,7 +32,7 @@ from solveig.utils.misc import parse_human_readable_size
 class Metadata:
     owner_name: str
     group_name: str
-    path: PurePath
+    path: SolveigPath
     size: int
     is_directory: bool
     is_readable: bool
@@ -29,7 +42,7 @@ class Metadata:
         description="Last modified time for file or dir as UNIX timestamp",
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
-    listing: dict[PurePath, "Metadata"] | None = None
+    listing: dict[SolveigPath, "Metadata"] | None = None
 
 
 @dataclass
@@ -38,7 +51,7 @@ class FileContent:
     encoding: Literal["text", "base64"]
 
 
-class AsyncFilesystem:
+class Filesystem:
     """
     Async filesystem operations using AnyIO hybrid approach:
     - AnyIO for common operations (read, write, stat, exists, etc.)
@@ -50,77 +63,77 @@ class AsyncFilesystem:
     # =============================================================================
 
     @staticmethod
-    async def _get_listing(abs_path: PurePath) -> list[PurePath]:
+    async def _get_listing(abs_path: Path) -> list[Path]:
         """Async directory listing using AnyIO."""
         items = []
-        async for item in Path(abs_path).iterdir():
-            items.append(PurePath(item))
+        async for item in abs_path.iterdir():
+            items.append(item)
         return sorted(items)
 
     @staticmethod
-    async def _read_text(abs_path: PurePath) -> str:
+    async def _read_text(abs_path: Path) -> str:
         """Async text file reading using AnyIO."""
-        return await Path(abs_path).read_text()
+        return await abs_path.read_text()
 
     @staticmethod
-    async def _read_bytes(abs_path: PurePath) -> bytes:
+    async def _read_bytes(abs_path: Path) -> bytes:
         """Async binary file reading using AnyIO."""
-        return await Path(abs_path).read_bytes()
+        return await abs_path.read_bytes()
 
     @staticmethod
-    async def _create_directory(abs_path: PurePath) -> None:
+    async def _create_directory(abs_path: Path) -> None:
         """Async directory creation using AnyIO."""
-        await Path(abs_path).mkdir()
+        await abs_path.mkdir()
 
     @staticmethod
-    async def _write_text(abs_path: PurePath, content: str = "", encoding="utf-8") -> None:
+    async def _write_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
         """Async text file writing using AnyIO."""
-        await Path(abs_path).write_text(content, encoding=encoding)
+        await abs_path.write_text(content, encoding=encoding)
 
     @staticmethod
-    async def _append_text(abs_path: PurePath, content: str = "", encoding="utf-8") -> None:
+    async def _append_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
         """Async text file appending using AnyIO."""
         # AnyIO doesn't have append mode, so we read + write
         try:
-            existing = await Path(abs_path).read_text(encoding=encoding)
-            await Path(abs_path).write_text(existing + content, encoding=encoding)
+            existing = await abs_path.read_text(encoding=encoding)
+            await abs_path.write_text(existing + content, encoding=encoding)
         except FileNotFoundError:
-            await Path(abs_path).write_text(content, encoding=encoding)
+            await abs_path.write_text(content, encoding=encoding)
 
     @staticmethod
-    async def _copy_file(abs_src_path: PurePath, abs_dest_path: PurePath) -> None:
+    async def _copy_file(abs_src_path: Path, abs_dest_path: Path) -> None:
         """Async file copying - use shutil.copy2 for metadata preservation."""
-        await asyncio.to_thread(shutil.copy2, abs_src_path, abs_dest_path)
+        await asyncio.to_thread(shutil.copy2, PurePath(abs_src_path), PurePath(abs_dest_path))
 
     @staticmethod
-    async def _copy_dir(src_path: PurePath, dest_path: PurePath) -> None:
+    async def _copy_dir(src_path: Path, dest_path: Path) -> None:
         """Async directory copying - use shutil.copytree."""
-        await asyncio.to_thread(shutil.copytree, src_path, dest_path)
+        await asyncio.to_thread(shutil.copytree, PurePath(src_path), PurePath(dest_path))
 
     @staticmethod
-    async def _move(src_path: PurePath, dest_path: PurePath) -> None:
+    async def _move(src_path: Path, dest_path: Path) -> None:
         """Async file/directory moving - use shutil.move."""
-        await asyncio.to_thread(shutil.move, src_path, dest_path)
+        await asyncio.to_thread(shutil.move, PurePath(src_path), PurePath(dest_path))
 
     @staticmethod
-    async def _get_free_space(abs_path: PurePath) -> int:
+    async def _get_free_space(abs_path: Path) -> int:
         """Async disk space checking - use shutil.disk_usage."""
-        return await asyncio.to_thread(lambda: shutil.disk_usage(abs_path).free)
+        return await asyncio.to_thread(lambda: shutil.disk_usage(PurePath(abs_path)).free)
 
     @staticmethod
-    async def _delete_file(abs_path: PurePath) -> None:
+    async def _delete_file(abs_path: Path) -> None:
         """Async file deletion using AnyIO."""
-        await Path(abs_path).unlink()
+        await abs_path.unlink()
 
     @staticmethod
-    async def _delete_dir(abs_path: PurePath) -> None:
+    async def _delete_dir(abs_path: Path) -> None:
         """Async directory deletion - use shutil.rmtree."""
-        await asyncio.to_thread(shutil.rmtree, abs_path)
+        await asyncio.to_thread(shutil.rmtree, PurePath(abs_path))
 
     @staticmethod
-    async def _is_text_file(abs_path: PurePath, _blocksize: int = 512) -> bool:
+    async def _is_text_file(abs_path: Path, _blocksize: int = 512) -> bool:
         """Async text file detection using AnyIO."""
-        chunk = await Path(abs_path).read_bytes()
+        chunk = await abs_path.read_bytes()
         chunk = chunk[:_blocksize]  # Limit to blocksize
         if b"\x00" in chunk:
             return False
@@ -135,7 +148,7 @@ class AsyncFilesystem:
                 return False
 
     @classmethod
-    async def _closest_writable_parent(cls, abs_dir_path: PurePath) -> PurePath | None:
+    async def _closest_writable_parent(cls, abs_dir_path: Path) -> Path | None:
         """Async check for closest writable parent directory."""
         while True:
             if await cls.exists(abs_dir_path):
@@ -150,7 +163,7 @@ class AsyncFilesystem:
     # =============================================================================
 
     @classmethod
-    async def validate_read_access(cls, file_path: str | PurePath) -> None:
+    async def validate_read_access(cls, file_path: str | Path) -> None:
         """Async validation that a file can be read."""
         abs_path = cls.get_absolute_path(file_path)
         if not await cls.exists(abs_path):
@@ -159,7 +172,7 @@ class AsyncFilesystem:
             raise PermissionError(f"Path {abs_path} is not readable")
 
     @classmethod
-    async def validate_delete_access(cls, path: str | PurePath) -> None:
+    async def validate_delete_access(cls, path: str | Path) -> None:
         """Async validation that a file or directory can be deleted."""
         abs_path = cls.get_absolute_path(path)
         if not await cls.exists(abs_path):
@@ -170,7 +183,7 @@ class AsyncFilesystem:
     @classmethod
     async def validate_write_access(
         cls,
-        path: str | PurePath,
+        path: str | Path,
         content: str | bytes | None = None,
         content_size: int | None = None,
         min_disk_size_left: str | int = 0,
@@ -212,22 +225,22 @@ class AsyncFilesystem:
     # =============================================================================
 
     @staticmethod
-    def get_absolute_path(path: str | PurePath) -> PurePath:
+    def get_absolute_path(path: str|PathLike) -> Path:
         """Convert path to absolute path with user expansion (sync operation)."""
-        return PurePath(Path(path).expanduser().resolve())
+        return Path(SyncPath(path).expanduser().resolve())
 
     @staticmethod
-    async def exists(abs_path: PurePath) -> bool:
+    async def exists(abs_path: Path) -> bool:
         """Async check if path exists using AnyIO."""
-        return await Path(abs_path).exists()
+        return await abs_path.exists()
 
     @staticmethod
-    async def is_dir(abs_path: PurePath) -> bool:
+    async def is_dir(abs_path: Path) -> bool:
         """Async check if path is a directory using AnyIO."""
-        return await Path(abs_path).is_dir()
+        return await abs_path.is_dir()
 
     @classmethod
-    async def is_readable(cls, abs_path: PurePath) -> bool:
+    async def is_readable(cls, abs_path: Path) -> bool:
         """Async check if path is readable."""
         try:
             metadata = await cls.read_metadata(abs_path, descend_level=0)
@@ -236,7 +249,7 @@ class AsyncFilesystem:
             return False
 
     @classmethod
-    async def is_writable(cls, abs_path: PurePath) -> bool:
+    async def is_writable(cls, abs_path: Path) -> bool:
         """Async check if path is writable."""
         try:
             metadata = await cls.read_metadata(abs_path, descend_level=0)
@@ -245,10 +258,10 @@ class AsyncFilesystem:
             return False
 
     @classmethod
-    async def read_metadata(cls, abs_path: PurePath, descend_level=1) -> Metadata:
+    async def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
         """Async read metadata and dir structure from filesystem using AnyIO."""
         # Use AnyIO for stat operations
-        stats = await Path(abs_path).stat()
+        stats = await abs_path.stat()
         is_dir = await cls.is_dir(abs_path)
 
         if is_dir and descend_level != 0:
@@ -281,7 +294,7 @@ class AsyncFilesystem:
         owner_name, group_name, is_readable, is_writable = await asyncio.to_thread(_get_user_info)
 
         return Metadata(
-            path=PurePath(abs_path),
+            path=abs_path,
             size=stats.st_size,
             modified_time=int(stats.st_mtime),
             is_directory=is_dir,
@@ -293,7 +306,7 @@ class AsyncFilesystem:
         )
 
     @classmethod
-    async def read_file(cls, path: str | PurePath) -> FileContent:
+    async def read_file(cls, path: Path) -> FileContent:
         """Async read file contents with automatic text/binary detection."""
         abs_path = cls.get_absolute_path(path)
         await cls.validate_read_access(abs_path)
@@ -314,7 +327,7 @@ class AsyncFilesystem:
     @classmethod
     async def write_file(
         cls,
-        file_path: str | PurePath,
+        file_path: Path,
         content: str = "",
         encoding: str = "utf-8",
         min_space_left: int = 0,
@@ -334,7 +347,7 @@ class AsyncFilesystem:
             await cls._write_text(abs_path, content, encoding=encoding)
 
     @classmethod
-    async def create_directory(cls, dir_path: str | PurePath, exist_ok=True) -> None:
+    async def create_directory(cls, dir_path: Path, exist_ok=True) -> None:
         """Async create directory with recursive parent creation."""
         abs_path = cls.get_absolute_path(dir_path)
         if await cls.exists(abs_path):
@@ -350,7 +363,7 @@ class AsyncFilesystem:
 
     @classmethod
     async def copy(
-        cls, src_path: str | PurePath, dest_path: str | PurePath, min_space_left: int
+        cls, src_path: Path, dest_path: Path, min_space_left: int
     ) -> None:
         """Async copy file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
@@ -370,7 +383,7 @@ class AsyncFilesystem:
             await cls._copy_file(src_path, dest_path)
 
     @classmethod
-    async def move(cls, src_path: str | PurePath, dest_path: str | PurePath) -> None:
+    async def move(cls, src_path: Path, dest_path: Path) -> None:
         """Async move file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
@@ -382,7 +395,7 @@ class AsyncFilesystem:
         await cls._move(src_path, dest_path)
 
     @classmethod
-    async def delete(cls, path: str | PurePath) -> None:
+    async def delete(cls, path: Path) -> None:
         """Async delete file or directory with validation."""
         abs_path = cls.get_absolute_path(path)
         await cls.validate_delete_access(abs_path)
@@ -393,7 +406,7 @@ class AsyncFilesystem:
 
     @classmethod
     def path_matches_patterns(
-        cls, abs_path: PurePath, patterns: list[PurePath]
+        cls, abs_path: Path, patterns: list[Path]
     ) -> bool:
         """Check if a file path matches any of the given glob patterns (sync operation)."""
         return any(abs_path.match(str(pattern)) for pattern in patterns)

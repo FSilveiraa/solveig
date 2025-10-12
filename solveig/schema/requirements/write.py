@@ -37,11 +37,11 @@ class WriteRequirement(Requirement):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    def display_header(
+    async def display_header(
         self, interface: "SolveigInterface", detailed: bool = False
     ) -> None:
         """Display write requirement header."""
-        super().display_header(interface)
+        await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         path_info = format_path_info(
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
@@ -64,22 +64,22 @@ class WriteRequirement(Requirement):
         """Return description of write capability."""
         return "write(path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
 
-    def actually_solve(
+    async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "WriteResult":
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        Filesystem.validate_write_access(
+        await Filesystem.validate_write_access(
             path=abs_path,
             content=self.content,
             min_disk_size_left=config.min_disk_space_left,
         )
-        # metadata = Filesystem.read_metadata(abs_path)
+        # metadata = await Filesystem.read_metadata(abs_path)
 
-        already_exists = Filesystem.exists(abs_path)
+        already_exists = await Filesystem.exists(abs_path)
         if already_exists:
             interface.display_warning("Overwriting existing file")
-            file_content = Filesystem.read_file(abs_path)
+            file_content = await Filesystem.read_file(abs_path)
             interface.display_text_block(
                 (
                     str(file_content.content)
@@ -108,9 +108,9 @@ class WriteRequirement(Requirement):
         try:
             # Perform the write operation - use utils/file.py methods
             if self.is_directory:
-                Filesystem.create_directory(abs_path)
+                await Filesystem.create_directory(abs_path)
             else:
-                Filesystem.write_file(abs_path, content=self.content or "")
+                await Filesystem.write_file(abs_path, content=self.content or "")
             interface.display_success(f"{'Updated' if already_exists else 'Created'}")
 
             return WriteResult(requirement=self, path=abs_path, accepted=True)

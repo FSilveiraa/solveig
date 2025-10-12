@@ -141,7 +141,7 @@ class SimpleInterface(SolveigInterface):
         style = style or self.color_palette.text
         self._output(Text(text, style=style))
 
-    def display_error(self, error: str) -> None:
+    def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
         self.display_text(f"❌ Error: {error}", style=self.color_palette.error)
 

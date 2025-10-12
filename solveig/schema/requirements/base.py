@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import PurePath
+from os import PathLike
+from anyio import Path
 from typing import TYPE_CHECKING
 
 from pydantic import Field
@@ -31,10 +32,10 @@ def validate_non_empty_path(path: str) -> str:
 
 def format_path_info(
     path: str,
-    abs_path: PurePath,
+    abs_path: Path,
     is_dir: bool,
     destination_path: str | None = None,
-    absolute_destination_path: PurePath | None = None,
+    absolute_destination_path: Path | None = None,
 ) -> str:
     """Format path information for display - shared by all requirements."""
     # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
@@ -74,7 +75,7 @@ class Requirement(BaseSolveigModel, ABC):
     async def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""
         with interface.with_group(self.title.title()):
-            self.display_header(interface, detailed=True)
+            await self.display_header(interface, detailed=True)
 
             # Run before hooks - they validate and can throw exceptions
             for before_hook, requirements in HOOKS.before:
@@ -104,7 +105,7 @@ class Requirement(BaseSolveigModel, ABC):
                 if interface.ask_yes_no(
                     "Send error message back to assistant? [y/N]: "
                 ):
-                    error_info = f": {str(error)}"
+                    error_info = f": {error}"
                 result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions
@@ -130,7 +131,7 @@ class Requirement(BaseSolveigModel, ABC):
 
     ### Abstract methods to implement:
 
-    def display_header(self, interface: SolveigInterface, detailed=False) -> None:
+    async def display_header(self, interface: SolveigInterface, detailed=False) -> None:
         """Display the requirement header/summary using the interface directly."""
         if self.comment:
             interface.display_comment(self.comment)

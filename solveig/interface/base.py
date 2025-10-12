@@ -34,7 +34,7 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    def display_error(self, error: str) -> None:
+    def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
         ...
 
