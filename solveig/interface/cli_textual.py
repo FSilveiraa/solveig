@@ -9,8 +9,6 @@ from textual.app import App as TextualApp, ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Input, Static
 from textual.reactive import reactive
-from textual.binding import Binding
-from textual.css.query import NoMatches
 from textual.timer import Timer
 
 from solveig.interface import SimpleInterface
@@ -19,18 +17,45 @@ from solveig.interface.themes import terracotta, Palette
 from solveig.utils.file import Metadata
 
 
+class TextBox(Static):
+    """A text block widget with optional title and border."""
+
+    def __init__(self, content: str, title: str = None, **kwargs):
+        super().__init__(content, **kwargs)
+        self.border = "solid"
+        if title:
+            self.border_title = title
+        self.add_class("text_block")
+
+
+class SectionHeader(Static):
+    """A section header widget."""
+
+    def __init__(self, title: str, **kwargs):
+        super().__init__(title, **kwargs)
+        self.add_class("section_header")
+
+
 class ConversationArea(ScrollableContainer):
     """Scrollable area for displaying conversation messages."""
 
     def add_text(self, text: str, style: str = "normal"):
-        """Add text with specific styling."""
-        # Map hex colors to semantic style names using pre-calculated mapping
-        if style.startswith("#"):
-            style = self.interface_controller._color_to_style.get(style, "text")
-
+        """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "normal" else "normal_message"
         text_widget = Static(text, classes=style_class)
         self.mount(text_widget)
+        self.scroll_end()
+
+    def add_text_block(self, content: str, title: str = None):
+        """Add a text block with border and optional title."""
+        text_block = TextBox(content, title=title)
+        self.mount(text_block)
+        self.scroll_end()
+
+    def add_section_header(self, title: str):
+        """Add a section header."""
+        section_header = SectionHeader(title)
+        self.mount(section_header)
         self.scroll_end()
 
 
@@ -78,11 +103,6 @@ class SolveigTextualApp(TextualApp):
     Minimal TextualApp subclass with only essential Solveig customizations.
     """
 
-    BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit"),
-        Binding("ctrl+q", "quit", "Quit"),
-    ]
-
     def __init__(self, color_palette: Palette = terracotta, interface_controller=None, **kwargs):
         super().__init__(**kwargs)
         self.interface_controller = interface_controller
@@ -122,6 +142,20 @@ class SolveigTextualApp(TextualApp):
             margin: 0 1;
         }}
 
+        TextBox {{
+            border: solid {color_dict.get('box', '#000')};
+            color: {color_dict.get('text', '#fff')};
+            margin: 1;
+            padding: 1;
+        }}
+
+        SectionHeader {{
+            color: {color_dict.get('section', '#fff')};
+            text-style: bold;
+            margin: 1 0;
+            padding: 0 1;
+        }}
+
         {"\n".join(css_rules)}
         """
 
@@ -129,6 +163,14 @@ class SolveigTextualApp(TextualApp):
         self.prompt_future: Optional[asyncio.Future] = None
         self._saved_input_text: str = ""
         self._original_placeholder: str = ""
+
+        # Cached widget references (set in on_mount)
+        self._conversation_area: ConversationArea
+        self._input_widget: Input
+        self._status_bar: StatusBar
+
+        # Readyness event
+        self.is_ready = asyncio.Event()
 
     @property
     def CSS(self) -> str:
@@ -143,8 +185,17 @@ class SolveigTextualApp(TextualApp):
 
     def on_mount(self) -> None:
         """Called when the app is mounted and widgets are available."""
+        # Cache widget references
+        # print("___CALLED")
+        self._conversation_area = self.query_one("#conversation", ConversationArea)
+        self._input_widget = self.query_one("#input", Input)
+        self._status_bar = self.query_one("#status", StatusBar)
         # Focus the input widget so user can start typing immediately
-        self.query_one("#input", Input).focus()
+        self._input_widget.focus()
+
+    def on_ready(self) -> None:
+        # Announce interface is ready
+        self.is_ready.set()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission."""
@@ -166,40 +217,46 @@ class SolveigTextualApp(TextualApp):
         # Keep focus on input after submission
         event.input.focus()
 
+    # async def action_quit(self) -> None:
+    #     """Handle quit action (including Ctrl+C) by setting return code and exiting."""
+    #     raise KeyboardInterrupt()
+
+    async def on_key(self, event) -> None:
+        """Handle key events directly."""
+        if event.key == "ctrl+c":
+            # self.interrupted = True
+            self.exit()
+
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for any kind of input with a prompt."""
         try:
-            input_widget = self.query_one("#input", Input)
-
             # Save current state
-            self._saved_input_text = input_widget.value
-            self._original_placeholder = input_widget.placeholder
+            self._saved_input_text = self._input_widget.value
+            self._original_placeholder = self._input_widget.placeholder
 
             # Set up prompt
             self.prompt_future = asyncio.Future()
-            input_widget.value = ""
-            input_widget.placeholder = placeholder or prompt
-            input_widget.styles.border = ("solid", "warning")
+            self._input_widget.value = ""
+            self._input_widget.placeholder = placeholder or prompt
+            self._input_widget.styles.border = ("solid", "warning")
 
             # Focus the input
-            input_widget.focus()
+            self._input_widget.focus()
 
             # Wait for response
             response = await self.prompt_future
 
             # Restore state
-            input_widget.placeholder = self._original_placeholder
-            input_widget.value = self._saved_input_text
-            input_widget.styles.border = ("solid", "prompt")
+            self._input_widget.placeholder = self._original_placeholder
+            self._input_widget.value = self._saved_input_text
+            self._input_widget.styles.border = ("solid", "prompt")
 
             # Restore focus
-            input_widget.focus()
+            self._input_widget.focus()
 
             return response
 
-        except NoMatches:
-            return ""
         finally:
             self.prompt_future = None
 
@@ -207,19 +264,11 @@ class SolveigTextualApp(TextualApp):
 
     def _add_text_to_ui(self, text: str, style: str = "normal") -> None:
         """Internal method to add text to the UI."""
-        try:
-            conversation = self.query_one("#conversation", ConversationArea)
-            conversation.add_text(text, style)
-        except NoMatches:
-            pass  # App not ready yet
+        self._conversation_area.add_text(text, style)
 
     def _update_status_ui(self, status: str) -> None:
         """Internal method to update status in the UI."""
-        try:
-            status_bar = self.query_one("#status", StatusBar)
-            status_bar.status = status
-        except NoMatches:
-            pass  # App not ready yet
+        self._status_bar.status = status
 
 
 class TextualInterface(SolveigInterface):
@@ -245,6 +294,10 @@ class TextualInterface(SolveigInterface):
     # SolveigInterface implementation
     def display_text(self, text: str, style: str = "normal") -> None:
         """Display text with optional styling."""
+        # Map hex colors to semantic style names using pre-calculated mapping
+        if style.startswith("#"):
+            style = self.app._color_to_style.get(style, "text")
+
         self.app._add_text_to_ui(text, style)
 
     def display_error(self, error: str) -> None:
@@ -273,31 +326,7 @@ class TextualInterface(SolveigInterface):
 
     def display_text_block(self, text: str, title: str = None) -> None:
         """Display a text block with optional title."""
-        rendered_lines = SimpleInterface._render_text_box(
-            text=text,
-            title=title,
-            max_width=SimpleInterface._get_max_output_width(),
-            box_style="box",
-            text_style="text"
-        )
-
-        for line in rendered_lines:
-            self.display_text(str(line), line.style)
-
-    # def display_text_block(self, text: str, title: str = None) -> None:
-    #     """Display a text block with optional title."""
-    #     if title:
-    #         self.display_text(f"📋 {title}", "system")
-    #
-    #     # Simple text block
-    #     lines = text.split('\n')
-    #     max_width = max(len(line) for line in lines) if lines else 0
-    #     border = "─" * min(max_width + 2, 80)
-    #
-    #     self.display_text(f"┌{border}┐", "system")
-    #     for line in lines:
-    #         self.display_text(f"│ {line:<{max_width}} │", "system")
-    #     self.display_text(f"└{border}┘", "system")
+        self.app._conversation_area.add_text_block(text, title=title)
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""
@@ -318,6 +347,9 @@ class TextualInterface(SolveigInterface):
         """Update the status."""
         self.app._update_status_ui(status)
 
+    async def wait_until_ready(self):
+        await self.app.is_ready.wait()
+
     async def start(self) -> None:
         """Start the interface."""
         await self.app.run_async()
@@ -328,7 +360,7 @@ class TextualInterface(SolveigInterface):
 
     def display_section(self, title: str) -> None:
         """Display a section header."""
-        self.display_text(f"=== {title} ===", "system")
+        self.app._conversation_area.add_section_header(title)
 
     @contextmanager
     def with_group(self, title: str):

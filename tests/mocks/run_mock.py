@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Run async Solveig with TextualCLI and mock LLM client."""
 import asyncio
-import sys
 
-from scripts.run import main_loop
-from solveig import SolveigConfig
+from scripts.run import run_async
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -28,11 +26,7 @@ async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sl
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
 
     try:
-        config, prompt = SolveigConfig.parse_config_and_prompt()
-        await main_loop(config=config, user_prompt=prompt, llm_client=mock_client)
-    except KeyboardInterrupt:
-        print("\n\nGoodbye!")
-        sys.exit(0)
+        await run_async(llm_client=mock_client)
     finally:
         try:
             cleanup()

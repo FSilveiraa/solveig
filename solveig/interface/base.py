@@ -22,6 +22,11 @@ class SolveigInterface(ABC):
     - Optional status display
     """
 
+    @abstractmethod
+    async def wait_until_ready(self):
+        """Wait until the interface is ready to be used."""
+        ...
+    
     # Core display methods
     @abstractmethod
     def display_text(self, text: str, style: str = "normal") -> None:

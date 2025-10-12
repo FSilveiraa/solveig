@@ -3,6 +3,7 @@ Modern async CLI entry point for Solveig using TextualCLI.
 """
 
 import asyncio
+import contextlib
 import logging
 import traceback
 
@@ -76,6 +77,8 @@ async def send_basic_message(
         )
 
         async for requirement in requirement_stream:
+            # if interface.was_interrupted():
+            #     raise KeyboardInterrupt()
             collected_requirements.append(requirement)
 
         return collected_requirements
@@ -100,6 +103,8 @@ async def send_streaming_message(
 
         i = 0
         async for requirement in requirement_stream:
+            # if interface.was_interrupted():
+            #     raise KeyboardInterrupt()
             collected_requirements.append(requirement)
             interface.set_status(f"Processing requirement {i + 1}...")
 
@@ -144,8 +149,8 @@ async def send_message_to_llm_with_retry(
             return llm_response, user_message
 
         except KeyboardInterrupt:
-            interface.display_warning("Interrupted by user")
-            return None, user_message
+            # Propagate to top-level so the app can exit cleanly
+            raise
         except Exception as e:
             interface.display_error(f"Error: {e}")
             interface.display_text_block(
@@ -196,7 +201,7 @@ async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface | None = None,
     user_prompt: str = "",
-    llm_client: Instructor | None = None,
+    llm_client: Instructor = None,
 ):
     """Main async conversation loop."""
     # Configure logging for instructor debug output when verbose
@@ -205,26 +210,11 @@ async def main_loop(
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    # Create interface based on config
-    if not interface:
-        if config.simple_interface:
-            interface = SimpleInterface(color_palette=config.theme)
-        else:
-            interface = TextualInterface()
-
-        # Start interface as background, pass control to loop for initialization
-        asyncio.create_task(interface.start())
-        await asyncio.sleep(0.5)
-
+    await interface.wait_until_ready()
     interface.display_text(BANNER)
 
     # Initialize plugins based on config
     initialize_plugins(config=config, interface=interface)
-
-    # Create LLM client if none was supplied
-    llm_client = llm_client or llm.get_instructor_client(
-        api_type=config.api_type, api_key=config.api_key, url=config.url
-    )
 
     # Get message history
     message_history = await get_message_history(config, interface)
@@ -265,15 +255,44 @@ async def main_loop(
         user_message = UserMessage(comment=user_prompt, results=results)
 
 
-async def run_async():
+async def run_async(llm_client: Instructor | None = None):
     """Entry point for the async CLI."""
+    loop_task = None
     try:
         # Parse config and run main loop
-        config, prompt = SolveigConfig.parse_config_and_prompt()
-        await main_loop(config=config, user_prompt=prompt)
+        config, user_prompt = SolveigConfig.parse_config_and_prompt()
 
-    except KeyboardInterrupt:
-        print("\n\nGoodbye!")
+        # Create LLM client if none was supplied
+        llm_client = llm_client or llm.get_instructor_client(
+            api_type=config.api_type,
+            api_key=config.api_key,
+            url=config.url
+        )
+
+        # Create interface based on config
+        if config.simple_interface:
+            interface = SimpleInterface(color_palette=config.theme)
+        else:
+            interface = TextualInterface()
+        
+        # Run interface in foreground to properly capture exit, pass control to conversation loop
+        loop_task = asyncio.create_task(main_loop(
+            interface=interface,
+            config=config,
+            llm_client=llm_client,
+            user_prompt=user_prompt
+        ))
+        await interface.start()
+    
+    except Exception as e:
+        print(f"Error: {e}")
+        traceback.print_exc()
+    
+    finally:
+        if loop_task:
+            loop_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await loop_task
 
 
 def main():

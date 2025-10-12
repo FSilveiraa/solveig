@@ -3,6 +3,7 @@ Simple CLI interface for Solveig - fallback implementation without Textual.
 """
 
 import random
+import asyncio
 import shutil
 from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime
@@ -57,14 +58,17 @@ class SimpleInterface(SolveigInterface):
         self.animation_interval = animation_interval
         self.indent_base = indent_base
         self._current_indent = ""  # The actual indent string
+        self._stop_event: asyncio.Event = asyncio.Event()
 
         self.output_console = Console()
         self.input_console: PromptSession = PromptSession(
             color_depth=ColorDepth.TRUE_COLOR
         )
         self._input_style = self.color_palette.to_prompt_toolkit_style()
-
         self._setup_custom_spinners()
+
+    async def wait_until_ready(self):
+        pass
 
     @classmethod
     def _get_max_output_width(cls) -> int:
@@ -287,12 +291,13 @@ class SimpleInterface(SolveigInterface):
         self.display_text(f"Status: {status}")
 
     async def start(self) -> None:
-        """Start the interface (if needed)."""
-        pass
+        """Start the interface lifecycle and block until stopped."""
+        self._stop_event.clear()
+        await self._stop_event.wait()
 
     async def stop(self) -> None:
-        """Stop the interface (if needed)."""
-        pass
+        """Signal the interface lifecycle to stop, unblocking start()."""
+        self._stop_event.set()
 
     def display_section(self, title: str) -> None:
         """Display a section header."""
