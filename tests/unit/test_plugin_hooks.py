@@ -44,22 +44,23 @@ class TestPluginExceptions:
 class TestPluginHookSystem:
     """Test the exception-based plugin hook system."""
 
-    def test_before_hook_validation_error(self):
+    @pytest.mark.anyio
+    async def test_before_hook_validation_error(self):
         """Test that before hooks can raise ValidationError to stop processing."""
         # Setup
         interface = MockInterface()
 
         @hooks.before(requirements=(CommandRequirement,))
-        def failing_validator(
+        async def failing_validator(
             config: SolveigConfig,
             interface: SolveigInterface,
             requirement: CommandRequirement,
         ):
-            interface.display_comment("I'm a plugin that fails on request")
+            await interface.display_comment("I'm a plugin that fails on request")
             if "fail" in requirement.command:
                 raise ValidationError("Command validation failed")
 
-        hooks.load_and_filter_hooks(
+        await hooks.load_and_filter_hooks(
             interface=interface, enabled_plugins={"failing_validator"}
         )
 
@@ -67,7 +68,7 @@ class TestPluginHookSystem:
         interface.set_user_inputs(["n"])  # Decline if it gets to user
 
         # Execute
-        result = req.solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert not result.accepted

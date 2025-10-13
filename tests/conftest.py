@@ -81,6 +81,12 @@ def clean_plugin_state():
     clear_plugins()
 
 
+@pytest.fixture
+def anyio_backend():
+    """Configure anyio to only use asyncio backend, not trio."""
+    return 'asyncio'
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
