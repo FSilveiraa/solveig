@@ -4,12 +4,12 @@ Modern Textual interface for Solveig using Textual with composition pattern.
 
 import asyncio
 import time
+import random
 from typing import Optional, AsyncGenerator, Any
 from contextlib import asynccontextmanager
 from textual.app import App as TextualApp, ComposeResult, Timer
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
-from textual._context import active_app
 from rich.spinner import Spinner
 
 from solveig.interface import SimpleInterface
@@ -119,7 +119,6 @@ class StatusBar(Static):
         self._tokens = None
         self._model = None
         self._spinner = None
-        self.spinner_bank = []
         self._timer: Optional[Timer] = None
 
     def update_status_info(self, status: str = None, tokens: int = None, model: str = None):
@@ -141,8 +140,6 @@ class StatusBar(Static):
             frame = self._spinner.render(time.time())
             # Convert Rich text to plain string
             spinner_char = frame.plain if hasattr(frame, 'plain') else str(frame)
-            # TODO: DEBUG, add it to the bank
-            self.spinner_bank.append(spinner_char)
             status_text = f"{spinner_char} {status_text}"
 
         # Get available sections
@@ -366,6 +363,27 @@ class TextualInterface(SolveigInterface):
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
 
+        # Rich's implementation forces us to create custom spinners by
+        # starting from an existing spinner and altering it
+        growing_spinner = Spinner("dots", speed=1.0)
+        growing_spinner.frames = ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
+        growing_spinner.interval = 150
+
+        cool_spinner = Spinner("dots", speed=1.0)
+        cool_spinner.frames = ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
+        cool_spinner.interval = 120
+
+        # Available spinner options (built-in + custom)
+        self.spinners = {
+            "star": Spinner("star", speed=1.0),
+            "dots3": Spinner("dots3", speed=1.0),
+            "dots10": Spinner("dots10", speed=1.0),
+            "balloon": Spinner("balloon", speed=1.0),
+            # Add custom spinners by creating them manually
+            "growing": growing_spinner,
+            "cool": cool_spinner,
+        }
+
     def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
         # Put input into internal queue for get_input() to consume
@@ -436,6 +454,9 @@ class TextualInterface(SolveigInterface):
 
     async def wait_until_ready(self):
         await self.app.is_ready.wait()
+        # HACK - Set active_app context since the interface was started from a separate asyncio task
+        from textual._context import active_app
+        active_app.set(self.app)
 
     async def start(self) -> None:
         """Start the interface."""
@@ -471,17 +492,11 @@ class TextualInterface(SolveigInterface):
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)
 
-        # Set up spinner directly like the working test
+        # Pick random spinner and set up animation
         status_bar = self.app._status_bar
-        status_bar._spinner = Spinner("dots", speed=1.0)
-
-        # Set active_app context since main_loop task doesn't have it
-        active_app.set(self.app)
-
-        # Start timer from app context (not StatusBar context)
+        spinner_name = random.choice(list(self.spinners.keys()))
+        status_bar._spinner = self.spinners[spinner_name]
         status_bar._timer = self.app.set_interval(0.1, status_bar._refresh_display)
-
-        await self.display_text(f"DEBUG: Started animation, {len(status_bar.spinner_bank)} items")
         try:
             yield
         finally:
@@ -493,7 +508,3 @@ class TextualInterface(SolveigInterface):
             status_bar._refresh_display()  # Refresh to remove spinner
 
             await self.update_status(final_status)
-            await self.display_text(f"DEBUG: Stopped animation, {len(status_bar.spinner_bank)} items")
-            for item in status_bar.spinner_bank:
-                if item:
-                    await self.display_text(f"  - {item}")
