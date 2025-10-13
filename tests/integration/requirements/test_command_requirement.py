@@ -44,14 +44,8 @@ class TestCommandDisplay:
         req = CommandRequirement(command="echo test", comment="Test echo command")
         interface = MockInterface()
 
-        # Test display header (summary mode)
-        await req.display_header(interface, detailed=False)
-        output = interface.get_all_output()
-        assert "Test echo command" in output
-        interface.clear()
-
-        # Test display header (detailed mode)
-        await req.display_header(interface, detailed=True)
+        # Test display header
+        await req.display_header(interface)
         output = interface.get_all_output()
         assert "Test echo command" in output
         assert "echo test" in output  # Command should be shown in text block

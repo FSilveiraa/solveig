@@ -31,7 +31,8 @@ class TestMoveValidation:
 class TestMoveDisplay:
     """Test MoveRequirement display methods."""
 
-    def test_move_requirement_display(self):
+    @pytest.mark.anyio
+    async def test_move_requirement_display(self):
         """Test MoveRequirement display patterns."""
         req = MoveRequirement(
             source_path="/src/file.txt",
@@ -39,19 +40,13 @@ class TestMoveDisplay:
             comment="Move file",
         )
 
-        # Test that both detailed modes produce same output for move
-        interface_basic = MockInterface()
-        req.display_header(interface_basic, detailed=False)
-        basic_output = interface_basic.get_all_output()
+        interface = MockInterface()
+        await req.display_header(interface)
+        output = interface.get_all_output()
 
-        interface_detailed = MockInterface()
-        req.display_header(interface_detailed, detailed=True)
-        detailed_output = interface_detailed.get_all_output()
-
-        assert basic_output == detailed_output
-        assert "Move file" in basic_output
-        assert "/src/file.txt" in basic_output
-        assert "/dst/file.txt" in basic_output
+        assert "Move file" in output
+        assert "/src/file.txt" in output
+        assert "/dst/file.txt" in output
 
         # Test get_description
         description = MoveRequirement.get_description()
@@ -61,7 +56,8 @@ class TestMoveDisplay:
 class TestMoveFileOperations:
     """Test MoveRequirement with real file moves."""
 
-    def test_move_file(self):
+    @pytest.mark.anyio
+    async def test_move_file(self):
         """Test moving a file from one location to another."""
         mock_interface = MockInterface()
 
@@ -82,7 +78,7 @@ class TestMoveFileOperations:
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
-            result = req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Verify move succeeded
             assert result.accepted
@@ -94,7 +90,8 @@ class TestMoveFileOperations:
             assert Path(str(result.source_path)).is_absolute()
             assert Path(str(result.destination_path)).is_absolute()
 
-    def test_move_directory(self):
+    @pytest.mark.anyio
+    async def test_move_directory(self):
         """Test moving an entire directory."""
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
@@ -114,7 +111,7 @@ class TestMoveFileOperations:
                 comment="Move directory",
             )
 
-            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify directory move
             assert result.accepted
@@ -123,7 +120,8 @@ class TestMoveFileOperations:
             assert (dest_dir / "file1.txt").read_text() == "File 1 content"
             assert (dest_dir / "file2.txt").read_text() == "File 2 content"
 
-    def test_move_nonexistent_source(self):
+    @pytest.mark.anyio
+    async def test_move_nonexistent_source(self):
         """Test moving a file that doesn't exist."""
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
@@ -133,13 +131,14 @@ class TestMoveFileOperations:
             comment="Move missing file",
         )
 
-        result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
         # Should fail gracefully
         assert not result.accepted
         assert result.error is not None
 
-    def test_move_declined(self):
+    @pytest.mark.anyio
+    async def test_move_declined(self):
         """Test when user declines move operation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -154,7 +153,7 @@ class TestMoveFileOperations:
             )
             interface = MockInterface()
             interface.set_user_inputs(["n"])
-            result = req.solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is False
 
 

@@ -42,19 +42,13 @@ class TestDeleteDisplay:
         """Test DeleteRequirement display and warnings."""
         req = DeleteRequirement(path="/test/delete_me.txt", comment="Delete test file")
 
-        # Test that both detailed modes produce same output for delete
-        interface_basic = MockInterface()
-        await req.display_header(interface_basic, detailed=False)
-        basic_output = interface_basic.get_all_output()
+        interface = MockInterface()
+        await req.display_header(interface)
+        output = interface.get_all_output()
 
-        interface_detailed = MockInterface()
-        await req.display_header(interface_detailed, detailed=True)
-        detailed_output = interface_detailed.get_all_output()
-
-        assert basic_output == detailed_output
-        assert "Delete test file" in basic_output
-        assert "/test/delete_me.txt" in basic_output
-        assert "permanent" in basic_output.lower()
+        assert "Delete test file" in output
+        assert "/test/delete_me.txt" in output
+        assert "permanent" in output.lower()
 
         # Test get_description
         description = DeleteRequirement.get_description()

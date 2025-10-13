@@ -54,15 +54,8 @@ class TestReadDisplay:
         )
         interface = MockInterface()
 
-        # Test display header (summary mode)
-        await req.display_header(interface, detailed=False)
-        output = interface.get_all_output()
-        assert "Read test file" in output
-        assert "🗎  /test/file.txt" in output
-        interface.clear()
-
         # Test display header (detailed mode - same as summary for reads)
-        await req.display_header(interface, detailed=True)
+        await req.display_header(interface)
         output = interface.get_all_output()
         assert "Read test file" in output
         assert "🗎  /test/file.txt" in output

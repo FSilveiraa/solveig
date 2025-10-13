@@ -51,32 +51,20 @@ class TestWriteDisplay:
         interface = MockInterface()
 
         # Test file display (summary mode)
-        await file_req.display_header(interface, detailed=False)
+        await file_req.display_header(interface)
         output = interface.get_all_output()
         assert "Create file" in output
         assert "🗎  /test/file.txt" in output
-        interface.clear()
-
-        # Test file display (detailed mode - should show content)
-        await file_req.display_header(interface, detailed=True)
-        output = interface.get_all_output()
-        assert "Create file" in output
-        assert "test" in output  # Content should be shown in text block
         interface.clear()
 
         # Test directory creation display (summary mode)
         dir_req = WriteRequirement(
             path="/test/dir", is_directory=True, comment="Create directory"
         )
-        await dir_req.display_header(interface, detailed=False)
+        await dir_req.display_header(interface)
         output = interface.get_all_output()
         assert "🗁  /test/dir" in output
         interface.clear()
-
-        # Test directory display (detailed mode - no content to show)
-        await dir_req.display_header(interface, detailed=True)
-        output = interface.get_all_output()
-        assert "🗁  /test/dir" in output
 
         # Test get_description
         description = WriteRequirement.get_description()

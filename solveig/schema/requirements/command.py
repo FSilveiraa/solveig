@@ -35,7 +35,7 @@ class CommandRequirement(Requirement):
         return command
 
     async def display_header(
-        self, interface: "SolveigInterface", detailed: bool = False
+        self, interface: "SolveigInterface"
     ) -> None:
         """Display command requirement header."""
         await super().display_header(interface)

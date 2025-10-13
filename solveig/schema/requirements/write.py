@@ -45,7 +45,7 @@ class WriteRequirement(Requirement):
             path=self.path, abs_path=abs_path, is_dir=self.is_directory
         )
         await interface.display_text(path_info)
-        if self.content and detailed:
+        if self.content:
             await interface.display_text_block(self.content, title="Content")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":

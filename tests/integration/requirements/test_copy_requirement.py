@@ -32,7 +32,8 @@ class TestCopyValidation:
 class TestCopyDisplay:
     """Test CopyRequirement display methods."""
 
-    def test_copy_requirement_display(self):
+    @pytest.mark.anyio
+    async def test_copy_requirement_display(self):
         """Test CopyRequirement display patterns."""
         req = CopyRequirement(
             source_path="/src/file.txt",
@@ -40,19 +41,13 @@ class TestCopyDisplay:
             comment="Copy file",
         )
 
-        # Test that both detailed modes produce same output for copy
-        interface_basic = MockInterface()
-        req.display_header(interface_basic, detailed=False)
-        basic_output = interface_basic.get_all_output()
+        interface = MockInterface()
+        await req.display_header(interface)
+        output = interface.get_all_output()
 
-        interface_detailed = MockInterface()
-        req.display_header(interface_detailed, detailed=True)
-        detailed_output = interface_detailed.get_all_output()
-
-        assert basic_output == detailed_output
-        assert "Copy file" in basic_output
-        assert "/src/file.txt" in basic_output
-        assert "/dst/file.txt" in basic_output
+        assert "Copy file" in output
+        assert "/src/file.txt" in output
+        assert "/dst/file.txt" in output
 
         # Test get_description
         description = CopyRequirement.get_description()
@@ -62,7 +57,8 @@ class TestCopyDisplay:
 class TestCopyFileOperations:
     """Test CopyRequirement with real file copying."""
 
-    def test_copy_file(self):
+    @pytest.mark.anyio
+    async def test_copy_file(self):
         """Test copying a file to new location."""
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
@@ -82,7 +78,7 @@ class TestCopyFileOperations:
                 comment="Copy file",
             )
 
-            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify copy succeeded
             assert result.accepted
@@ -91,7 +87,8 @@ class TestCopyFileOperations:
             assert source_file.read_text() == test_content
             assert dest_file.read_text() == test_content
 
-    def test_copy_directory_tree(self):
+    @pytest.mark.anyio
+    async def test_copy_directory_tree(self):
         """Test copying an entire directory tree."""
         mock_interface = MockInterface()
         mock_interface.user_inputs.append("y")
@@ -113,7 +110,7 @@ class TestCopyFileOperations:
                 comment="Copy directory tree",
             )
 
-            result = req.actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
 
             # Verify directory tree copy
             assert result.accepted
@@ -122,7 +119,8 @@ class TestCopyFileOperations:
             assert (dest_dir / "file.txt").read_text() == "Root file"
             assert (dest_dir / "subdir" / "nested.txt").read_text() == "Nested file"
 
-    def test_copy_declined(self):
+    @pytest.mark.anyio
+    async def test_copy_declined(self):
         """Test when user declines copy operation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -137,7 +135,7 @@ class TestCopyFileOperations:
             )
             interface = MockInterface()
             interface.set_user_inputs(["n"])
-            result = req.solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is False
 
 
@@ -154,7 +152,8 @@ class TestCopyErrorHandling:
         assert error_result.accepted is False
         assert error_result.error == "Test error"
 
-    def test_copy_with_insufficient_space_error(self):
+    @pytest.mark.anyio
+    async def test_copy_with_insufficient_space_error(self):
         """Test CopyRequirement handling real disk space errors."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -174,7 +173,7 @@ class TestCopyErrorHandling:
                 mock_copy.side_effect = OSError("No space left on device")
 
                 interface.set_user_inputs(["y"])  # Accept operation
-                result = copy_req.solve(DEFAULT_CONFIG, interface)
+                result = await copy_req.solve(DEFAULT_CONFIG, interface)
 
                 # Should handle disk space error
                 assert result.accepted is False
