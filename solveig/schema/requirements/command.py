@@ -39,16 +39,7 @@ class CommandRequirement(Requirement):
     ) -> None:
         """Display command requirement header."""
         await super().display_header(interface)
-        if detailed and self.command:
-            await interface.display_text_block(self.command, title="Command")
-        elif self.command:
-            # Show truncated command in summary view
-            # command_first_line = self.command.splitlines()[0]
-            await interface.display_text(f"🗲  {self.command}", truncate=True)
-            # if len(self.command) <= 50:
-            #     interface.show(f"🗲  {self.command}")
-            # else:
-            #     interface.show(f"🗲  {self.command[:47]}...")
+        await interface.display_text_block(self.command, title="Command")
 
     def create_error_result(
         self, error_message: str, accepted: bool

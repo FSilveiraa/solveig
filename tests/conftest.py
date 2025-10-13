@@ -3,7 +3,7 @@ pytest configuration and fixtures for Solveig tests.
 Provides automatic mocking of all file I/O operations.
 """
 
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import pytest
 
@@ -29,7 +29,7 @@ def mock_filesystem(request):
     with patch(
         "builtins.open",
         side_effect=OSError(
-            "Cannot use actual file I/O - use utils.file.Filesystem or mark with @pytest.mark.no_file_mocking"
+            "Cannot use file I/O in tests - use utils.file.Filesystem or mark with @pytest.mark.no_file_mocking"
         ),
     ) as mock_open:
         yield mock_open
@@ -45,10 +45,24 @@ def mock_subprocess(request):
     with patch(
         "subprocess.run",
         side_effect=OSError(
-            'Cannot run actual processes - use @patch("subprocess.run") or mark with @pytest.mark.no_subprocess_mocking'
+            'Cannot run processes in tests - use the mock fixture, @patch("subprocess.run") or mark with @pytest.mark.no_subprocess_mocking'
         ),
-    ) as mocked_subprocess:
-        yield mocked_subprocess
+    ):
+        # Create a mock process object with communicate method
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(
+            side_effect=OSError(
+                'Cannot run processes in tests - use the mock fixture, @patch("asyncio.create_subprocess_shell") or mark with @pytest.mark.no_subprocess_mocking'
+            )
+        )
+
+        with patch(
+            "asyncio.create_subprocess_shell",
+            new_callable=AsyncMock,
+        ) as mocked_subprocess:
+            # make create_subprocess_shell return the mock process
+            mocked_subprocess.return_value = mock_process
+            yield mock_process
 
 
 @pytest.fixture(autouse=True, scope="function")
@@ -61,13 +75,13 @@ def mock_user_interface(request):
     with patch(
         "builtins.input",
         side_effect=OSError(
-            "Cannot use actual `input` built-in - use SolveigInterface or mark with @pytest.mark.no_stdio_mocking"
+            "Cannot use `input` built-in in tests - use SolveigInterface or mark with @pytest.mark.no_stdio_mocking"
         ),
     ):
         with patch(
             "builtins.print",
             side_effect=OSError(
-                "Cannot use actual `print` built-in - use SolveigInterface"
+                "Cannot use `print` built-in in tests - use MockInterface"
             ),
         ):
             yield

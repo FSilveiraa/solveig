@@ -76,7 +76,7 @@ class Requirement(BaseSolveigModel, ABC):
     async def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this requirement with plugin integration and error handling."""
         async with interface.with_group(self.title.title()):
-            await self.display_header(interface, detailed=True)
+            await self.display_header(interface)
 
             # Run before hooks - they validate and can throw exceptions
             for before_hook, requirements in HOOKS.before:
@@ -137,7 +137,7 @@ class Requirement(BaseSolveigModel, ABC):
 
     ### Abstract methods to implement:
 
-    async def display_header(self, interface: SolveigInterface, detailed=False) -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display the requirement header/summary using the interface directly."""
         if self.comment:
             await interface.display_comment(self.comment)

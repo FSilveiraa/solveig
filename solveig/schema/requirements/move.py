@@ -31,9 +31,7 @@ class MoveRequirement(Requirement):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    async def display_header(
-        self, interface: "SolveigInterface", detailed: bool = False
-    ) -> None:
+    async def display_header(self, interface: "SolveigInterface") -> None:
         """Display move requirement header."""
         await super().display_header(interface)
         source_abs = Filesystem.get_absolute_path(self.source_path)

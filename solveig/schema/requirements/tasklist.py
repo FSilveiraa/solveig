@@ -25,31 +25,28 @@ class TaskListRequirement(Requirement):
         default_factory=list, description="List of tasks to track and display"
     )
 
-    async def display_header(
-        self, interface: "SolveigInterface", detailed: bool = False
-    ) -> None:
+    async def display_header(self, interface: "SolveigInterface") -> None:
         """Display task list header."""
         await super().display_header(interface)
-        if detailed:
-            if not self.tasks:
-                await interface.display_text("🗒 Empty task list")
-                return
+        if not self.tasks:
+            await interface.display_text("🗒 Empty task list")
+            return
 
-            task_lines = []
-            for i, task in enumerate(self.tasks, 1):
-                status_emoji = {
-                    "pending": "⚪",
-                    "in_progress": "🔵",
-                    "completed": "🟢",
-                    "failed": "🔴",
-                }[task.status]
-                task_lines.append(
-                    f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {i}. {task.description}"
-                )
+        task_lines = []
+        for i, task in enumerate(self.tasks, 1):
+            status_emoji = {
+                "pending": "⚪",
+                "in_progress": "🔵",
+                "completed": "🟢",
+                "failed": "🔴",
+            }[task.status]
+            task_lines.append(
+                f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {i}. {task.description}"
+            )
 
-            # interface.show("🗒 Task List")
-            for line in task_lines:
-                await interface.display_text(line)
+        # interface.show("🗒 Task List")
+        for line in task_lines:
+            await interface.display_text(line)
 
     def create_error_result(
         self, error_message: str, accepted: bool
