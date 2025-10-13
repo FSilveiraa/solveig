@@ -1,132 +1,91 @@
 """
 Unit tests for solveig.llm module.
-Tests LLM client factory functions (no network I/O).
+Tests core token counting and API type parsing.
 """
 
-from unittest.mock import Mock, patch
-
 import pytest
-
-from solveig import llm
-from solveig.config import APIType
+from solveig.llm import APIType, parse_api_type
 
 
-class TestInstructorClientFactory:
-    """Test get_instructor_client factory function."""
+# NOTE: tiktoken requires filesystem access for some reason
+@pytest.mark.no_file_mocking
+class TestTokenCounting:
+    """Test core token counting functionality."""
 
-    @patch("solveig.llm.instructor")
-    @patch("openai.OpenAI")
-    def test_get_instructor_client_openai(self, mock_openai, mock_instructor):
-        """Test creating instructor client for OpenAI API."""
-        mock_openai_client = Mock()
-        mock_openai.return_value = mock_openai_client
-        mock_instructor_client = Mock()
-        mock_instructor.from_openai.return_value = mock_instructor_client
+    LOREM_IPSUM = """
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi malesuada lacinia dignissim. Quisque in eleifend urna. Donec vel varius est. Nulla pharetra elit id pretium molestie. Sed vitae ex interdum, aliquam lectus eu, egestas justo. Praesent ut nibh nec nulla efficitur scelerisque tincidunt ut libero. Donec tempus placerat nunc non porttitor. Cras nec rutrum mauris. Nunc sed enim dignissim, laoreet eros ac, bibendum lacus. Proin eu libero vel diam luctus venenatis. Maecenas eu erat urna. Nunc id felis erat. Nam a felis nec lacus vehicula tincidunt sed non odio. Vestibulum at lacus nec erat molestie rhoncus. Suspendisse lacinia finibus arcu at varius. Aliquam feugiat pellentesque lorem, ac viverra sapien scelerisque vel.
 
-        result = llm.get_instructor_client(
-            api_type=APIType.OPENAI,
-            api_key="test-api-key",
-            url="https://api.openai.com/v1",
-        )
+Quisque nec volutpat sem. Integer viverra sollicitudin enim, vitae euismod sapien varius sed. Vestibulum molestie facilisis mauris, id condimentum diam lobortis eu. Praesent cursus lobortis neque eget tempus. Donec ipsum risus, laoreet nec massa ac, sollicitudin ornare ligula. Vivamus dignissim neque vitae aliquet hendrerit. Suspendisse lorem dui, interdum et tortor eget, maximus dignissim tortor. Sed in vehicula massa, vel laoreet metus. Nam nunc risus, condimentum vel eleifend quis, suscipit eu tortor. Sed at diam ultrices mauris pulvinar gravida.
 
-        mock_openai.assert_called_once_with(
-            api_key="test-api-key", base_url="https://api.openai.com/v1"
-        )
-        mock_instructor.from_openai.assert_called_once()
-        assert result == mock_instructor_client
+Suspendisse a magna efficitur, malesuada metus at, ultrices quam. Fusce placerat est sit amet nulla finibus, ac vulputate sem gravida. Curabitur sodales dolor sem, sed sodales felis semper et. Fusce nunc nisi, pellentesque eget ex rhoncus, consectetur viverra arcu. Aenean malesuada dui nisi, in pulvinar mi condimentum eget. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc fermentum magna in fringilla scelerisque. Sed pellentesque est nisl, in rhoncus erat maximus vitae. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Vestibulum eu mi nunc. Nullam eu sem suscipit, facilisis quam id, sollicitudin enim. Proin feugiat mauris ligula, quis bibendum lacus faucibus at. Nam et scelerisque dolor, sed accumsan libero.
 
-    @patch("solveig.llm.instructor")
-    @patch("anthropic.Anthropic")
-    def test_get_instructor_client_anthropic(self, mock_anthropic, mock_instructor):
-        """Test creating instructor client for Anthropic API."""
-        mock_anthropic_client = Mock()
-        mock_anthropic.return_value = mock_anthropic_client
-        mock_instructor_client = Mock()
-        mock_instructor.from_anthropic.return_value = mock_instructor_client
+Curabitur pretium elementum cursus. Duis eget massa ante. Proin et turpis pretium, pulvinar sapien vel, convallis lacus. Aenean sit amet nulla nec augue semper fermentum nec at ex. Integer dignissim elementum ullamcorper. Nulla sollicitudin mollis augue, bibendum condimentum est commodo et. Nulla nec nulla at ligula dignissim laoreet. Donec eleifend, felis quis sagittis bibendum, est velit vestibulum dui, nec rhoncus velit turpis in dui. Curabitur egestas nibh ac leo placerat, vitae malesuada orci tincidunt.
 
-        result = llm.get_instructor_client(
-            api_type=APIType.ANTHROPIC,
-            api_key="test-anthropic-key",
-            url="https://api.anthropic.com/v1",
-        )
+Mauris ut elementum est, at malesuada ante. Suspendisse gravida purus at tellus semper, a elementum est sollicitudin. Donec vestibulum ac neque sed sagittis. Duis vestibulum odio sit amet ante maximus dapibus. Suspendisse facilisis sapien non tortor blandit, sit amet ultricies metus aliquet. Quisque porttitor finibus diam id convallis. Donec tempus tellus sed turpis lobortis, non dictum sem congue. Duis vehicula justo eu rhoncus molestie. Nullam convallis metus in libero sagittis ornare. Vestibulum venenatis dignissim neque, sit amet vehicula justo elementum nec. Mauris eleifend et orci in imperdiet. Morbi ligula nibh, efficitur sed nisl eu, maximus sollicitudin ante. Praesent ac mauris nec risus ultrices auctor. Nunc tempus eros non quam porttitor ullamcorper quis eget diam. Suspendisse a lobortis ante.
+""".strip()
 
-        mock_anthropic.assert_called_once_with(
-            api_key="test-anthropic-key", base_url="https://api.anthropic.com/v1"
-        )
-        mock_instructor.from_anthropic.assert_called_once()
-        assert result == mock_instructor_client
+    def test_basic_token_counting(self):
+        """Test basic token counting works with strings."""
+        count = APIType.OPENAI.count_tokens("hello world")
+        assert isinstance(count, int)
+        assert count > 0
 
-    @patch("solveig.llm.instructor")
-    @patch("openai.OpenAI")
-    def test_get_instructor_client_custom_provider(self, mock_openai, mock_instructor):
-        """Test creating instructor client with custom provider URL."""
-        mock_openai.return_value = Mock()
-        mock_instructor.from_openai.return_value = Mock()
+    def test_message_format_counting(self):
+        """Test counting OpenAI message format."""
+        message = {"role": "user", "content": "hello"}
+        count = APIType.OPENAI.count_tokens(message)
+        assert isinstance(count, int)
+        assert count > 0
 
-        llm.get_instructor_client(
-            api_type=APIType.OPENAI,
-            api_key="test-key",
-            url="https://custom-llm-provider.com/v1",
-        )
+    def test_empty_inputs(self):
+        """Test empty inputs return zero."""
+        assert APIType.OPENAI.count_tokens("") == 0
+        assert APIType.OPENAI.count_tokens({"role": "", "content": ""}) == 0
 
-        mock_openai.assert_called_once_with(
-            api_key="test-key", base_url="https://custom-llm-provider.com/v1"
-        )
+    def test_known_token_count_cl100k_base(self):
+        """Test known token count for Lorem Ipsum with cl100k_base encoder."""
+        count = APIType.OPENAI.count_tokens(self.LOREM_IPSUM)
+        # Known value: cl100k_base produces 1003 tokens for this text
+        assert count == 1003
 
-    @patch("solveig.llm.instructor")
-    @patch("google.generativeai.GenerativeModel")
-    @patch("google.generativeai.configure")
-    def test_get_instructor_client_gemini(
-        self, mock_configure, mock_model, mock_instructor
-    ):
-        """Test creating instructor client for Gemini API."""
-        mock_gemini_client = Mock()
-        mock_model.return_value = mock_gemini_client
-        mock_instructor_client = Mock()
-        mock_instructor.from_gemini.return_value = mock_instructor_client
+    def test_known_token_count_o200k_models(self):
+        """Test known token count for Lorem Ipsum with o200k_base models."""
+        # Test with gpt-4.1 model name and with o200k_base encoder directly
+        count_model = APIType.OPENAI.count_tokens(self.LOREM_IPSUM, encoder_or_model="gpt-4.1")
+        count_encoder = APIType.OPENAI.count_tokens(self.LOREM_IPSUM, "o200k_base")
 
-        result = llm.get_instructor_client(
-            api_type=APIType.GEMINI,
-            api_key="test-gemini-key",
-            url="https://generativelanguage.googleapis.com/v1beta",
-            model=None,  # Explicitly pass None to test default behavior
-        )
+        # Both should produce 763 tokens for this text
+        assert count_model == 763
+        assert count_encoder == 763
 
-        mock_configure.assert_called_once_with(api_key="test-gemini-key")
-        mock_model.assert_called_once_with("gemini-pro")
-        mock_instructor.from_gemini.assert_called_once()
-        assert result == mock_instructor_client
+    def test_all_api_types_use_same_token_counting(self):
+        """Test that all API types use the same BaseAPI token counting."""
+        text = "hello world"
 
-    def test_get_instructor_client_anthropic_import_error(self):
-        """Test Anthropic client creation when anthropic package is not installed."""
-        with patch("anthropic.Anthropic", side_effect=ImportError):
-            with pytest.raises(ImportError, match="Install Anthropic support"):
-                llm.get_instructor_client(
-                    api_type=APIType.ANTHROPIC,
-                    api_key="test-key",
-                    url="https://api.anthropic.com/v1",
-                )
+        openai_count = APIType.OPENAI.count_tokens(text)
+        anthropic_count = APIType.ANTHROPIC.count_tokens(text)
+        gemini_count = APIType.GEMINI.count_tokens(text)
+        local_count = APIType.LOCAL.count_tokens(text)
 
-    def test_get_instructor_client_gemini_import_error(self):
-        """Test Gemini client creation when google-generativeai package is not installed."""
-        with patch("google.generativeai.configure", side_effect=ImportError):
-            with pytest.raises(
-                ImportError, match="Install Google Generative AI support"
-            ):
-                llm.get_instructor_client(
-                    api_type=APIType.GEMINI,
-                    api_key="test-key",
-                    url="https://generativelanguage.googleapis.com/v1beta",
-                )
+        # All should be the same since they all use BaseAPI.count_tokens now
+        assert openai_count == anthropic_count == gemini_count == local_count
 
-    @patch("openai.OpenAI")
-    def test_client_creation_error_handling(self, mock_openai):
-        """Test that client creation errors are propagated."""
-        mock_openai.side_effect = Exception("OpenAI client creation failed")
 
-        with pytest.raises(Exception, match="OpenAI client creation failed"):
-            llm.get_instructor_client(
-                api_type=APIType.OPENAI,
-                api_key="test-key",
-                url="https://api.openai.com/v1",
-            )
+class TestAPITypeParsing:
+    """Test API type parsing."""
+
+    def test_valid_api_types(self):
+        """Test parsing valid API types."""
+        assert parse_api_type("openai") == APIType.OPENAI
+        assert parse_api_type("OPENAI") == APIType.OPENAI  # Case insensitive
+        assert parse_api_type("local") == APIType.LOCAL
+        assert parse_api_type("anthropic") == APIType.ANTHROPIC
+        assert parse_api_type("gemini") == APIType.GEMINI
+
+    def test_invalid_api_type(self):
+        """Test invalid API type raises error."""
+        with pytest.raises(ValueError, match="Unknown API type"):
+            parse_api_type("invalid")
+
+        with pytest.raises(ValueError, match="Unknown API type"):
+            parse_api_type("")

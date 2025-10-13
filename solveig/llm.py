@@ -15,25 +15,37 @@ class APIType:
         name = ""
 
         @classmethod
-        def count_tokens(cls, text: str|dict, encoder: str | None = None) -> int:
+        def count_tokens(cls, text: str|dict, encoder_or_model: str | None = None) -> int:
             # account for openai-format message
             if isinstance(text, dict):
                 text = text.get("content", "") + text.get("role", "")
 
             try:
-                actual_encoder = cls._encoder_cache[encoder]
+                encoder = cls._encoder_cache[encoder_or_model]
             except KeyError:
-                assert encoder is not None
+                assert encoder_or_model is not None
                 try:
-                    actual_encoder = cls._get_encoder(encoder)
-                except Exception:
-                    actual_encoder = cls._encoder_cache[None]
-                cls._encoder_cache[encoder] = actual_encoder
-            return len(actual_encoder.encode(text))
+                    encoder = tiktoken.encoding_for_model(encoder_or_model)
+                except:
+                    try:
+                        encoder = tiktoken.get_encoding(encoder_or_model)
+                    except Exception as e:
+                        available = set(tiktoken.list_encoding_names())
+                        available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
+                        e.add_note(
+                            f"Could not find an encoding for '{encoder_or_model}', use one of {available}"
+                        )
+                        raise e
+                cls._encoder_cache[encoder_or_model] = encoder
+            return len(encoder.encode(text))
 
-        @classmethod
-        def _get_encoder(cls, encoder: str) -> Any:
-            raise NotImplementedError()
+        # @classmethod
+        # def _get_encoder(cls, encoder_name: str) -> Any:
+        #     raise NotImplementedError()
+        #
+        # @classmethod
+        # def _encoder_count(cls, encoder, text):
+        #     raise NotImplementedError()
 
         @staticmethod
         def get_client(
@@ -49,19 +61,22 @@ class APIType:
         name = "openai"
 
         @classmethod
-        def _get_encoder(cls, encoder: str) -> Any:
+        def _get_encoder(cls, encoder_name: str) -> Any:
             try:
-                return tiktoken.encoding_for_model(encoder)
+                return tiktoken.encoding_for_model(encoder_name)
             except KeyError:
                 try:
-                    return tiktoken.get_encoding(encoder)
+                    return tiktoken.get_encoding(encoder_name)
                 except ValueError as e:
                     available = set(tiktoken.list_encoding_names())
                     available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
                     e.add_note(
-                        f"Could not find an encoding for '{encoder}', use one of {available}"
+                        f"Could not find an encoding for '{encoder_name}', use one of {available}"
                     )
                     raise e
+
+        # def _encoder_count(self, encoder, text):
+        #     return encoder.count_tokens(text)
 
         @classmethod
         def get_client(
@@ -92,11 +107,14 @@ class APIType:
         default_url = "https://api.anthropic.com/v1"
         name = "anthropic"
 
-        @classmethod
-        def _get_encoder(cls, encoder: str | None = None) -> Any:
-            # TODO: there's an official API for this, for now stick to the default one
-            # https://docs.claude.com/en/docs/build-with-claude/token-counting
-            return cls._encoder_cache[None]
+        # TODO: there's an official API for this, for now stick to the default one
+        # https://docs.claude.com/en/docs/build-with-claude/token-counting
+        # @classmethod
+        # def _get_encoder(cls, encoder: str | None = None) -> Any:
+        #      if config.use_anthropic_api:
+        #          ...
+        #      else:
+        #          return OPENAI._get_encoder(encoder)
 
         @classmethod
         def get_client(
@@ -121,17 +139,6 @@ class APIType:
     class GEMINI(BaseAPI):
         default_url = "https://generativelanguage.googleapis.com/v1beta"
         name = "gemini"
-
-        @classmethod
-        def _get_encoder(cls, encoder: str) -> Any:
-            try:
-                import google.generativeai as google_ai
-
-                return google_ai.GenerativeModel(encoder)
-            except ImportError as e:
-                raise ImportError(
-                    "Install Google Generative AI support: pip install solveig[google]"
-                ) from e
 
         @staticmethod
         def get_client(
