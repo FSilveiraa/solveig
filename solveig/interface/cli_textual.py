@@ -85,7 +85,6 @@ class ConversationArea(ScrollableContainer):
         target = self._group_stack[-1] if self._group_stack else self
 
         # Print title before adding group
-        # title_corner = Static(f"┌─ [bold]{title}[/]", classes="group_top")
         title_corner = Static(f"┏━ [bold]{title}[/]", classes="group_top")
         await target.mount(title_corner)
 
@@ -104,7 +103,6 @@ class ConversationArea(ScrollableContainer):
             self.scroll_end()
 
             # Print end cap after exiting group
-            # end_corner = Static("└──", classes="group_bottom")
             end_corner = Static("┗━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
@@ -114,26 +112,33 @@ class StatusBar(Static):
     """Status bar showing current application state with Rich spinner support."""
 
     def __init__(self, **kwargs):
-        super().__init__("Status: Ready", **kwargs)
-        self._status = "Ready"
-        self._tokens = None
-        self._model = None
+        super().__init__("Initializing", **kwargs)
+        self._status = "Initializing"
+        self._tokens = "0↑ / 0↓"
+        self._model = ""
+        self._url = ""
         self._spinner = None
         self._timer: Optional[Timer] = None
 
-    def update_status_info(self, status: str = None, tokens: int = None, model: str = None):
+    def update_status_info(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None):
         """Update status bar with multiple pieces of information."""
         if status is not None:
             self._status = status
         if tokens is not None:
-            self._tokens = tokens
+            if isinstance(tokens, int):
+                self._tokens = str(tokens)
+            else:
+                # tokens is (sent, received)
+                self._tokens = f"{tokens[0]}↑ / {tokens[1]}↓"
         if model is not None:
             self._model = model
+        if url is not None:
+            self._url = url
 
         self._refresh_display()
 
     def _refresh_display(self):
-        """Refresh the status bar display with equally-sized sections."""
+        """Refresh the status bar display with dynamic sections."""
         status_text = self._status
 
         if self._spinner:
@@ -142,13 +147,15 @@ class StatusBar(Static):
             spinner_char = frame.plain if hasattr(frame, 'plain') else str(frame)
             status_text = f"{spinner_char} {status_text}"
 
-        # Get available sections
-        sections = [status_text]
+        # Build sections only for fields that have content
+        sections = [status_text]  # Status always shown
 
-        if self._model:
-            sections.append(f"Model: {self._model}")
         if self._tokens:
             sections.append(f"Tokens: {self._tokens}")
+        if self._url:
+            sections.append(f"URL: {self._url}")
+        if self._model:
+            sections.append(f"Model: {self._model}")
 
         # Get terminal width
         try:
@@ -205,10 +212,15 @@ class SolveigTextualApp(TextualApp):
             border: solid {self._style_to_color['prompt']};
             margin: 0 0 1 0;
         }}
+        
+        Input > .input--placeholder {{
+            text-style: italic;
+        }}
 
         StatusBar {{
             dock: bottom;
             height: 1;
+            background: {self._style_to_color.get('background', '#000')};
             color: {self._style_to_color.get('text', '#fff')};
             content-align: center middle;
         }}
@@ -269,7 +281,7 @@ class SolveigTextualApp(TextualApp):
     def compose(self) -> ComposeResult:
         """Create the main layout."""
         yield ConversationArea(id="conversation")
-        yield Input(placeholder="Type your message and press Enter...", id="input")
+        yield Input(placeholder="Click to focus, type your message and press Enter to send", id="input")
         yield StatusBar(id="status")
 
     def on_mount(self) -> None:
@@ -432,8 +444,12 @@ class TextualInterface(SolveigInterface):
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""
+        await self.update_status(status="Awaiting input")
         user_input = (await self._input_queue.get()).strip()
-        await self.display_text(" " + user_input)
+        if user_input:
+            await self.display_text(user_input)
+        else:
+            await self.display_text(" (empty)", style="warning")
         return user_input
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
@@ -448,9 +464,9 @@ class TextualInterface(SolveigInterface):
         response = await self.ask_user(question, f"{question} [y/N]: ")
         return response.lower().strip() in yes_values
 
-    async def update_status(self, status: str = None, tokens: int = None, model: str = None) -> None:
+    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
         """Update status bar with multiple pieces of information."""
-        self.app._status_bar.update_status_info(status=status, tokens=tokens, model=model)
+        self.app._status_bar.update_status_info(status=status, tokens=tokens, model=model, url=url)
 
     async def wait_until_ready(self):
         await self.app.is_ready.wait()

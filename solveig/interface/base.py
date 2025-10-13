@@ -108,6 +108,6 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def update_status(self, status: str = None, tokens: int = None, model: str = None) -> None:
+    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None) -> None:
         """Update status bar with multiple pieces of information."""
         ...

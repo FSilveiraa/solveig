@@ -1,7 +1,5 @@
-# from enum import Enum
 from typing import Any
 
-# from urllib.parse import urlparse, urlunparse
 import instructor
 import openai
 import tiktoken
@@ -17,7 +15,11 @@ class APIType:
         name = ""
 
         @classmethod
-        def count_tokens(cls, text: str, encoder: str | None = None) -> int:
+        def count_tokens(cls, text: str|dict, encoder: str | None = None) -> int:
+            # account for openai-format message
+            if isinstance(text, dict):
+                text = text.get("content", "") + text.get("role", "")
+
             try:
                 actual_encoder = cls._encoder_cache[encoder]
             except KeyError:

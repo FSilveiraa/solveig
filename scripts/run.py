@@ -13,7 +13,6 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface, TextualInterface, SimpleInterface
 from solveig.plugins import initialize_plugins
-from solveig.schema import Requirement
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
@@ -22,6 +21,8 @@ from solveig.schema.message import (
 )
 
 from . import BANNER
+
+
 
 
 async def get_message_history(
@@ -58,60 +59,55 @@ async def get_initial_user_message(
         return UserMessage(comment=user_input)
 
 
-async def send_basic_message(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    client: Instructor,
-    message_history: MessageHistory,
-    requirements_union,
-) -> list[Requirement]:
-    """Send message to LLM using standard method. Returns list of requirements."""
-    # async with interface.with_animation("Waiting for LLM response..."):
-    # For standard method, we collect all requirements at once
-    collected_requirements = []
-    requirement_stream = client.chat.completions.create_iterable(
-        messages=message_history.to_openai(),
-        response_model=requirements_union,
-        model=config.model,
-        temperature=config.temperature,
-    )
+# async def send_basic_message(
+#     config: SolveigConfig,
+#     interface: SolveigInterface,
+#     client: Instructor,
+#     message_history: MessageHistory,
+#     requirements_union,
+# ) -> list[Requirement]:
+#     """Send message to LLM using standard method. Returns list of requirements."""
+#     # async with interface.with_animation("Waiting for LLM response..."):
+#     # For standard method, we collect all requirements at once
+#     collected_requirements = []
+#     requirement_stream = client.chat.completions.create_iterable(
+#         messages=message_history.to_openai(update_sent_count=True),
+#         response_model=requirements_union,
+#         model=config.model,
+#         temperature=config.temperature,
+#     )
+#     await interface.update_status(tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+#     async for requirement in requirement_stream:
+#         # if interface.was_interrupted():
+#         #     raise KeyboardInterrupt()
+#         collected_requirements.append(requirement)
+#
+#     return collected_requirements
 
-    async for requirement in requirement_stream:
-        # if interface.was_interrupted():
-        #     raise KeyboardInterrupt()
-        collected_requirements.append(requirement)
 
-    return collected_requirements
-
-
-async def send_streaming_message(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    client: Instructor,
-    message_history: MessageHistory,
-    requirements_union,
-) -> list[Requirement]:
-    """Send message to LLM with streaming. Returns list of individual requirements."""
-    # async with interface.with_animation("Streaming LLM response..."):
-    collected_requirements = []
-    requirement_stream = client.chat.completions.create_iterable(
-        messages=message_history.to_openai(),
-        response_model=requirements_union,
-        model=config.model,
-        temperature=config.temperature,
-    )
-
-    i = 0
-    async for requirement in requirement_stream:
-        # if interface.was_interrupted():
-        #     raise KeyboardInterrupt()
-        collected_requirements.append(requirement)
-
-        # Show requirement as it comes in
-        # await interface.display_text(f"  → {requirement.title}")
-        i += 1
-
-    return collected_requirements
+# async def send_streaming_message(
+#     config: SolveigConfig,
+#     interface: SolveigInterface,
+#     client: Instructor,
+#     message_history: MessageHistory,
+#     requirements_union,
+# ) -> list[Requirement]:
+#     """Send message to LLM with streaming. Returns list of individual requirements."""
+#     # async with interface.with_animation("Streaming LLM response..."):
+#     collected_requirements = []
+#     requirement_stream = client.chat.completions.create_iterable(
+#         messages=message_history.to_openai(update_sent_count=True),
+#         response_model=requirements_union,
+#         model=config.model,
+#         temperature=config.temperature,
+#     )
+#     await interface.update_status(tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+#     async for requirement in requirement_stream:
+#         # if interface.was_interrupted():
+#         #     raise KeyboardInterrupt()
+#         collected_requirements.append(requirement)
+#
+#     return collected_requirements
 
 
 async def send_message_to_llm_with_retry(
@@ -127,24 +123,44 @@ async def send_message_to_llm_with_retry(
     while True:
         try:
             # Try streaming first, fall back to basic
-            if hasattr(config, 'streaming') and config.streaming:
-                try:
-                    requirements = await send_streaming_message(
-                        config, interface, client, message_history, requirements_union
-                    )
-                except Exception as streaming_error:
-                    await interface.display_text(f"Streaming failed: {streaming_error}")
-                    await interface.display_text("Falling back to standard method...")
-                    requirements = await send_basic_message(
-                        config, interface, client, message_history, requirements_union
-                    )
-            else:
-                requirements = await send_basic_message(
-                    config, interface, client, message_history, requirements_union
-                )
+            # if hasattr(config, 'streaming') and config.streaming:
+            #     try:
+            message_history_dumped = message_history.to_openai(update_sent_count=True)
+            await interface.update_status(
+                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+
+            requirements = []
+            requirement_stream = client.chat.completions.create_iterable(
+                messages=message_history_dumped,
+                response_model=requirements_union,
+                model=config.model,
+                temperature=config.temperature,
+            )
+
+            # requirements = await send_streaming_message(
+            #     config, interface, client, message_history_dumped, requirements_union
+            # )
+            async for requirement in requirement_stream:
+                # if interface.was_interrupted():
+                #     raise KeyboardInterrupt()
+                requirements.append(requirement)
+            #     except Exception as streaming_error:
+            #         await interface.display_text(f"Streaming failed: {streaming_error}")
+            #         await interface.display_text("Falling back to standard method...")
+            #         requirements = await send_basic_message(
+            #             config, interface, client, message_history, requirements_union
+            #         )
+            # else:
+            #     requirements = await send_basic_message(
+            #         config, interface, client, message_history, requirements_union
+            #     )
 
             # Create AssistantMessage with requirements
             llm_response = AssistantMessage(requirements=requirements)
+            await interface.update_status(
+                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+            message_history.add_messages(llm_response)
+
             return llm_response, user_message
 
         except KeyboardInterrupt:
@@ -222,7 +238,6 @@ async def main_loop(
     user_message = await get_initial_user_message(user_prompt, interface)
 
     while True:
-        await interface.update_status(status="Sending")
         # Send message to LLM and handle any errors
         message_history.add_messages(user_message)
 
@@ -237,7 +252,7 @@ async def main_loop(
 
         # Successfully got LLM response
         message_history.add_messages(llm_response)
-        await interface.update_status(tokens=message_history.get_token_count())
+        await interface.update_status(tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
         if config.verbose:
             await interface.display_text_block(str(llm_response), title="Response")
 
@@ -252,7 +267,6 @@ async def main_loop(
         )
 
         await interface.display_section("User")
-        await interface.update_status(status="Awaiting input")
         user_prompt = await interface.get_input()
         user_message = UserMessage(comment=user_prompt, results=results)
 

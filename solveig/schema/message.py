@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal, Union, Optional
 
 from pydantic import Field, field_validator
 
@@ -12,6 +12,7 @@ from .results import RequirementResult
 
 
 class BaseMessage(BaseSolveigModel):
+    token_count: int = 0
     role: Literal["system", "user", "assistant"]
 
     def to_openai(self) -> dict:
@@ -22,9 +23,8 @@ class BaseMessage(BaseSolveigModel):
             "content": json.dumps(data, default=utils.misc.default_json_serialize),
         }
 
-    @property
-    def token_count(self):
-        return utils.misc.count_tokens(str(self))
+    # def get_token_count(self, api_type: APIType.BaseAPI, encoder: Optional[str] = None) -> int:
+    #     return api_type.count_tokens(se, encoder)
 
     def __str__(self) -> str:
         return f"{self.role}: {self.to_openai()["content"]}"
@@ -195,6 +195,9 @@ class MessageHistory:
     encoder: str | None = None
     messages: list[Message] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
+    token_count: int = field(default=0)  # Current cache size for pruning
+    total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
+    total_tokens_received: int = field(default=0)  # Total received from LLM
 
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
@@ -205,23 +208,17 @@ class MessageHistory:
         """Allow iteration over messages: for message in message_history."""
         return iter(self.messages)
 
-    def get_token_count(self) -> int:
-        """Get total token count for the message cache using API-specific counting."""
-        return sum(
-            self.api_type.count_tokens(message["content"], self.encoder)
-            for message in self.message_cache
-        )
-
     def prune_message_cache(self):
         """Remove old messages to stay under context limit, preserving system message."""
         if self.max_context <= 0:
             return
 
-        while self.get_token_count() > self.max_context and len(self.message_cache) > 1:
+        while self.token_count > self.max_context and len(self.message_cache) > 1:
             # Always preserve the first message (system prompt) if possible
             if len(self.message_cache) > 1:
                 # Remove the second message (oldest non-system message)
-                self.message_cache.pop(1)
+                message = self.message_cache.pop(1)
+                self.token_count -= self.api_type.count_tokens(message, self.encoder)
             else:
                 break  # Can't remove system message
 
@@ -231,12 +228,24 @@ class MessageHistory:
     ):
         """Add a message and automatically prune if over context limit."""
         for message in messages:
-            # message_container = MessageContainer(message)
-            self.messages.append(message)
-            self.message_cache.append(message.to_openai())
-            self.prune_message_cache()
+            message_dumped = message.to_openai()
+            token_count = self.api_type.count_tokens(message_dumped["content"], self.encoder)
 
-    def to_openai(self):
+            # Update current cache size for pruning
+            self.token_count += token_count
+
+            # Track total received tokens for assistant messages
+            if message.role == "assistant":
+                self.total_tokens_received += token_count
+
+            self.messages.append(message)
+            self.message_cache.append(message_dumped)
+        self.prune_message_cache()
+
+    def to_openai(self, update_sent_count=False):
+        """Return cache for OpenAI API. If update_sent_count=True, add current cache size to total_tokens_sent."""
+        if update_sent_count:
+            self.total_tokens_sent += self.token_count
         return self.message_cache
 
     def to_example(self):
