@@ -1,9 +1,15 @@
 """Tests for message schema generation and filtering."""
 
+import json
 from unittest.mock import patch
 
 from solveig.config import SolveigConfig
-from solveig.schema.message import get_filtered_assistant_message_class
+from solveig.schema.message import (
+    get_filtered_assistant_message_class,
+    SystemMessage,
+    UserMessage,
+    AssistantMessage,
+)
 from solveig.schema.requirements.command import CommandRequirement
 
 
@@ -125,3 +131,44 @@ class TestSchemaConsistency:
             # Both should be valid AssistantMessage instances
             assert hasattr(instance_with, "requirements")
             assert hasattr(instance_without, "requirements")
+
+
+class TestMessageSerialization:
+    """Test basic message serialization to OpenAI format."""
+
+    def test_user_message_serialization_and_validation(self):
+        """Test UserMessage serialization with validation."""
+        # Test comment stripping validation
+        message = UserMessage(comment="  test comment  ", results=[])
+        assert message.comment == "test comment"  # Should strip whitespace
+
+        # Test serialization
+        openai_dict = message.to_openai()
+        assert openai_dict["role"] == "user"
+        assert "content" in openai_dict
+
+        # Verify it's valid JSON
+        content = json.loads(openai_dict["content"])
+        assert "comment" in content
+        assert content["comment"] == "test comment"
+
+    def test_system_message_serialization(self):
+        """Test SystemMessage uses direct content, not JSON."""
+        message = SystemMessage(system_prompt="You are helpful")
+        openai_dict = message.to_openai()
+
+        assert openai_dict == {
+            "role": "system",
+            "content": "You are helpful"
+        }
+        # SystemMessage should NOT use JSON serialization
+        assert not openai_dict["content"].startswith("{")
+
+    def test_assistant_message_basic_serialization(self):
+        """Test AssistantMessage basic serialization."""
+        message = AssistantMessage(role="assistant", requirements=None)
+        openai_dict = message.to_openai()
+
+        assert openai_dict["role"] == "assistant"
+        content = json.loads(openai_dict["content"])
+        assert "requirements" in content

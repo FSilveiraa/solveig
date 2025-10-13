@@ -20,10 +20,6 @@ from solveig.schema.message import (
     get_requirements_union_for_streaming,
 )
 
-from . import BANNER
-
-
-
 
 async def get_message_history(
     config: SolveigConfig, interface: SolveigInterface
@@ -155,7 +151,6 @@ async def main_loop(
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
     await interface.wait_until_ready()
-    await interface.display_text(BANNER)
     await interface.update_status(
         url=config.url,
         model=config.model,

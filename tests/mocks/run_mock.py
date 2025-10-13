@@ -2,7 +2,7 @@
 """Run async Solveig with TextualCLI and mock LLM client."""
 import asyncio
 
-from scripts.run import run_async
+from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client

@@ -18,6 +18,21 @@ from solveig.interface.themes import Palette, DEFAULT_THEME
 from solveig.utils.file import Metadata
 
 
+BANNER = """
+                              888                                  d8b
+                              888                                  Y8P
+                              888
+  .d8888b        .d88b.       888      888  888       .d88b.       888       .d88b.
+  88K           d88""88b      888      888  888      d8P  Y8b      888      d88P"88b
+  "Y8888b.      888  888      888      Y88  88P      88888888      888      888  888
+       X88      Y88..88P      888       Y8bd8P       Y8b.          888      Y88b 888
+   88888P'       "Y88P"       888        Y88P         "Y8888       888       "Y88888
+                                                                                 888
+                                                                            Y8b d88P
+                                                                             "Y88P"
+"""
+
+
 class TextBox(Static):
     """A text block widget with optional title and border."""
 
@@ -476,6 +491,8 @@ class TextualInterface(SolveigInterface):
         # HACK - Set active_app context since the interface was started from a separate asyncio task
         from textual._context import active_app
         active_app.set(self.app)
+        # Print banner
+        await self.display_text(BANNER)
 
     async def start(self) -> None:
         """Start the interface."""

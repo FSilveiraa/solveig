@@ -62,11 +62,10 @@ Issues = "https://github.com/Fsilveiraa/solveig/issues"
 Documentation = "https://github.com/Fsilveiraa/solveig#README.md"
 
 [project.scripts]
-solveig = "scripts.run:main"
-solveig-init = "scripts.init:main"
+solveig = "solveig.run:main"
 
 [tool.setuptools.packages.find]
-include = ["solveig*", "scripts*"]
+include = ["solveig*"]
 
 # Development tool configurations for future use
 [tool.pytest.ini_options]

@@ -1,9 +1,8 @@
 """
 Tests for solveig.utils.filesystem module.
 
-The requirement tests were first implemented and they already test the
-actual file operations, so for now I'm focused on testing the data class
-and size parsing.
+The requirement tests were first implemented and they already test the actual file
+operations, so this file focuses on testing the metadata class and size parsing.
 """
 
 from datetime import datetime
