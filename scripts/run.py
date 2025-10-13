@@ -50,7 +50,7 @@ async def get_initial_user_message(
     await interface.display_section("User")
 
     if user_prompt:
-        await interface.display_text(f"> {user_prompt}\n")
+        await interface.display_text(f" {user_prompt}")
         return UserMessage(comment=user_prompt)
     else:
         # interface.display_text("💬 Enter your message:")
@@ -226,6 +226,10 @@ async def main_loop(
 
     await interface.wait_until_ready()
     await interface.display_text(BANNER)
+    await interface.update_status(
+        url=config.url,
+        model=config.model,
+    )
 
     # Initialize plugins based on config
     await initialize_plugins(config=config, interface=interface)
@@ -242,7 +246,7 @@ async def main_loop(
         message_history.add_messages(user_message)
 
         await interface.display_section("Assistant")
-        async with interface.with_animation("Waiting..."):
+        async with interface.with_animation("Waiting", "Processing"):
             llm_response, user_message = await send_message_to_llm_with_retry(
                 config, interface, llm_client, message_history, user_message
             )
@@ -261,7 +265,6 @@ async def main_loop(
             await asyncio.sleep(config.wait_before_user)
 
         # Prepare user response
-        await interface.update_status(status="Processing")
         results = await process_requirements(
             llm_response=llm_response, config=config, interface=interface
         )

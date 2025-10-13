@@ -17,6 +17,9 @@ from typing import Annotated
 from pydantic import PlainValidator
 from anyio import Path
 
+from solveig.utils.misc import parse_human_readable_size
+
+
 # Define PathType here to avoid circular imports
 def _validate_path(v) -> Path:
     """Convert string or PathLike to anyio.Path."""
