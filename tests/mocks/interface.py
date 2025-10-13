@@ -1,74 +1,115 @@
-from contextlib import contextmanager, asynccontextmanager
-from typing import Optional, Callable, Union, Awaitable
+from contextlib import asynccontextmanager
+from typing import Optional, AsyncGenerator, Any
 
-from solveig.interface.cli_simple import SimpleInterface
+from solveig.interface.base import SolveigInterface
+from solveig.utils.file import Metadata
 
 
-class MockInterface(SimpleInterface):
+class MockInterface(SolveigInterface):
     """
-    Mock interface for testing - captures all output without printing.
-    Overrides methods to avoid textual dependency.
+    Mock interface for testing - captures all output without external dependencies.
+    Implements the complete SolveigInterface contract for async testing.
     """
 
     def __init__(self, **kwargs):
-        # Skip call to super().__init__(**kwargs) to avoid rich.Console/PromptSession instantiation
         self.outputs = []
         self.user_inputs = []
         self.questions = []
-        self.input_callback: Optional[Callable[[str], Union[None, Awaitable[None]]]] = None
+        self.sections = []
+        self.status_updates = []
+        self.groups = []
 
-    def display_text(self, text: str, style: str = "normal") -> None:
-        self.outputs.append(str(text))
+    # Core async display methods
+    async def display_text(self, text: str, style: str = "normal") -> None:
+        self.outputs.append(f"[{style}] {text}")
 
-    # def display_error(self, error: str) -> None:
-    #     self.outputs.append(f"❌ Error: {error}")
-    #
-    # def display_warning(self, warning: str) -> None:
-    #     self.outputs.append(f"⚠️  Warning: {warning}")
-    #
-    # def display_success(self, message: str) -> None:
-    #     self.outputs.append(f"✅ {message}")
-    #
-    # def display_text_block(self, text: str, title: str = None) -> None:
-    #     if title:
-    #         self.outputs.append(f"📋 {title}")
-    #     self.outputs.append(text)
+    async def display_error(self, error: str | Exception) -> None:
+        self.outputs.append(f"❌ Error: {error}")
+
+    async def display_warning(self, warning: str) -> None:
+        self.outputs.append(f"⚠  Warning: {warning}")
+
+    async def display_success(self, message: str) -> None:
+        self.outputs.append(f"✅ {message}")
+
+    async def display_comment(self, message: str) -> None:
+        self.outputs.append(f"🗩  {message}")
+
+    async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+        tree_title = title or str(metadata.path)
+        self.outputs.append(f"📁 Tree: {tree_title}")
+
+    async def display_text_block(self, text: str, title: str = None) -> None:
+        if title:
+            self.outputs.append(f"📋 {title}")
+        self.outputs.append(text)
+
+    async def display_section(self, title: str) -> None:
+        self.sections.append(title)
+        self.outputs.append(f"=== {title} ===")
+
+    # Input methods
+    async def get_input(self) -> str:
+        if self.user_inputs:
+            user_input = self.user_inputs.pop(0)
+            self.outputs.append(f" {user_input}")
+            return user_input
+        return ""
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         self.questions.append(prompt)
         if self.user_inputs:
-            return self.user_inputs.pop(0)
+            response = self.user_inputs.pop(0)
+            self.outputs.append(f"{prompt}  {response}")
+            return response
         return ""
 
-    # async def ask_yes_no(self, question: str, yes_values=None, no_values=None) -> bool:
-    #     response = await self.ask_user(question)
-    #     if yes_values is None:
-    #         yes_values = ["y", "yes", "1", "true", "t"]
-    #     return response.lower().strip() in yes_values
+    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
+        response = await self.ask_user(question)
+        if yes_values is None:
+            yes_values = ["y", "yes", "1", "true", "t"]
+        return response.lower().strip() in yes_values
 
-    # def set_input_callback(self, callback: Optional[Callable[[str], Union[None, Awaitable[None]]]]):
-    #     self.input_callback = callback
-
-    def set_status(self, status: str) -> None:
-        pass  # Mock - do nothing
-
-    async def start(self) -> None:
-        pass
-
-    async def stop(self) -> None:
-        pass
-
-    # def display_section(self, title: str) -> None:
-    #     self.outputs.append(f"=== {title} ===")
-    #
-    # @contextmanager
-    # def with_group(self, title: str):
-    #     self.outputs.append(f"[ {title} ]")
-    #     yield
+    # Context managers
+    @asynccontextmanager
+    async def with_group(self, title: str):
+        self.groups.append(f"START: {title}")
+        self.outputs.append(f"┏━ {title}")
+        try:
+            yield
+        finally:
+            self.groups.append(f"END: {title}")
+            self.outputs.append("┗━━")
 
     @asynccontextmanager
-    async def with_animation(self, status: str = "Processing", final_status: str = "Ready"):
-        yield
+    async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
+        await self.update_status(status)
+        try:
+            yield
+        finally:
+            await self.update_status(final_status)
+
+    # Status and lifecycle
+    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
+        status_info = {}
+        if status is not None:
+            status_info['status'] = status
+        if tokens is not None:
+            status_info['tokens'] = tokens
+        if model is not None:
+            status_info['model'] = model
+        if url is not None:
+            status_info['url'] = url
+        self.status_updates.append(status_info)
+
+    async def start(self) -> None:
+        self.outputs.append("INTERFACE_STARTED")
+
+    async def wait_until_ready(self):
+        self.outputs.append("INTERFACE_READY")
+
+    async def stop(self) -> None:
+        self.outputs.append("INTERFACE_STOPPED")
 
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:
@@ -82,9 +123,17 @@ class MockInterface(SimpleInterface):
     def get_all_questions(self) -> str:
         return "\n".join(self.questions)
 
+    def get_all_sections(self) -> list[str]:
+        return self.sections.copy()
+
+    def get_status_updates(self) -> list[dict]:
+        return self.status_updates.copy()
+
     def clear(self) -> None:
         """Clear all captured data"""
         self.outputs.clear()
         self.user_inputs.clear()
         self.questions.clear()
-        self.current_level = 0
+        self.sections.clear()
+        self.status_updates.clear()
+        self.groups.clear()

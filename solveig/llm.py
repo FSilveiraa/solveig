@@ -72,7 +72,7 @@ class APIType:
             model: str | None = None,
         ) -> instructor.Instructor:
             try:
-                client = openai.OpenAI(api_key=api_key, base_url=url or cls.default_url)
+                client = openai.AsyncOpenAI(api_key=api_key, base_url=url or cls.default_url)
                 return instructor.from_openai(client, mode=instructor_mode)
             except ImportError as e:
                 raise ValueError(

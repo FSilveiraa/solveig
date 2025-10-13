@@ -447,7 +447,7 @@ class TextualInterface(SolveigInterface):
         await self.update_status(status="Awaiting input")
         user_input = (await self._input_queue.get()).strip()
         if user_input:
-            await self.display_text(user_input)
+            await self.display_text(" " + user_input)
         else:
             await self.display_text(" (empty)", style="warning")
         return user_input

@@ -18,6 +18,9 @@ else:
 
 class TaskListRequirement(Requirement):
     title: Literal["task list"] = "task list"
+    comment: str = Field(
+        ..., description="Plan description and/or conversation with user"
+    )
     tasks: list[Task] = Field(
         default_factory=list, description="List of tasks to track and display"
     )
@@ -59,7 +62,7 @@ class TaskListRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of task capability."""
-        return "task(tasks): use to break down your plan into sorted actions. Update status as you progress. Condense completed task lists when starting new ones."
+        return "task(tasks): use to break down your plan into sorted actions or communicate with user. Update status as you progress. Condense completed task lists when starting new ones. Use comment to communicate with the user"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
