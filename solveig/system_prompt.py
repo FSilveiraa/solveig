@@ -35,7 +35,7 @@ You may request any of the following operations that you think are necessary:
 {CAPABILITIES_LIST}
 Put system safety first - explain all operations, prefer file operations over commands, avoid destructive actions unless absolutely necessary.
 Use task lists as the first requirement if necessary to plan ahead or communicate with the user.
-Use the task list comment field to answer questions or ask for information, regardless of further required actions.
+Use the task list comment field to answer the user's request or ask for more information, regardless of further required actions.
 The task list comment is your primary way to communicate with the user.
 Adapt your plan to failure or user denial.
 """

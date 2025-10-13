@@ -53,12 +53,14 @@ class TestConfigFileParsing:
     @pytest.mark.parametrize(
         "config_path", ["", "/nonexistent/path.json"]  # invalid path  # inexistent path
     )
-    def test_parse_from_file_invalid_path(self, config_path):
+    @pytest.mark.anyio
+    async def test_parse_from_file_invalid_path(self, config_path):
         """Test parsing from invalid path returns empty dict."""
         with pytest.raises(FileNotFoundError):
-            SolveigConfig.parse_from_file(config_path)
+            await SolveigConfig.parse_from_file(config_path)
 
-    def test_parse_from_file_default_path_missing(self):
+    @pytest.mark.anyio
+    async def test_parse_from_file_default_path_missing(self):
         """Test parsing from missing default config path returns empty dict."""
         from unittest.mock import patch
 
@@ -66,13 +68,14 @@ class TestConfigFileParsing:
         with patch(
             "solveig.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_solveig_config.json"
         ):
-            result = SolveigConfig.parse_from_file(
+            result = await SolveigConfig.parse_from_file(
                 "/tmp/nonexistent_solveig_config.json"
             )
             assert result == {}
 
     @pytest.mark.no_file_mocking
-    def test_parse_from_file_success(self):
+    @pytest.mark.anyio
+    async def test_parse_from_file_success(self):
         """Test successful config file parsing."""
 
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
@@ -80,11 +83,12 @@ class TestConfigFileParsing:
             temp_config.flush()
             config_path = PurePath(temp_config.name)
 
-            result = SolveigConfig(**SolveigConfig.parse_from_file(config_path))
+            result = SolveigConfig(**(await SolveigConfig.parse_from_file(config_path)))
             assert result == DEFAULT_CONFIG
 
     @pytest.mark.no_file_mocking
-    def test_parse_from_file_malformed_json(self):
+    @pytest.mark.anyio
+    async def test_parse_from_file_malformed_json(self):
         """Test malformed JSON raises JSONDecodeError."""
 
         with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
@@ -93,7 +97,7 @@ class TestConfigFileParsing:
             config_path = temp_config.name
 
             with pytest.raises(JSONDecodeError):
-                SolveigConfig.parse_from_file(config_path)
+                await SolveigConfig.parse_from_file(config_path)
 
 
 class TestConfigSerialization:
@@ -124,20 +128,22 @@ class TestConfigSerialization:
 class TestCLIIntegration:
     """Test CLI argument parsing and integration."""
 
-    def test_parse_config_returns_config_and_prompt(self):
+    @pytest.mark.anyio
+    async def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "local", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(
+        config, prompt = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert isinstance(config, SolveigConfig)
         assert config.api_type == APIType.LOCAL
         assert prompt == "test prompt"
 
-    def test_cli_overrides_work(self):
+    @pytest.mark.anyio
+    async def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(
+        config, prompt = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.temperature == 0.8
@@ -146,7 +152,8 @@ class TestCLIIntegration:
         assert prompt == "test prompt"
 
     @pytest.mark.no_file_mocking
-    def test_file_and_cli_merge(self):
+    @pytest.mark.anyio
+    async def test_file_and_cli_merge(self):
         """Test file config merges with CLI overrides."""
 
         file_config = {"api_type": "gemini", "verbose": True, "temperature": 0.2}
@@ -157,12 +164,13 @@ class TestCLIIntegration:
             config_path = temp_config.name
 
             args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
-            config, _ = SolveigConfig.parse_config_and_prompt(cli_args=args)
+            config, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
             assert config.verbose is True  # From file
             assert config.api_type == APIType.GEMINI
             assert config.temperature == 0.5  # CLI override
 
-    def test_default_config_missing_shows_warning(self):
+    @pytest.mark.anyio
+    async def test_default_config_missing_shows_warning(self):
         """Test warning shown when default config file doesn't exist."""
         from unittest.mock import patch
 
@@ -173,7 +181,7 @@ class TestCLIIntegration:
             args = ["--api-type", "local", "test prompt"]  # Must provide required args
             interface = MockInterface()
 
-            config, _ = SolveigConfig.parse_config_and_prompt(
+            config, _ = await SolveigConfig.parse_config_and_prompt(
                 cli_args=args, interface=interface
             )
 
@@ -182,19 +190,21 @@ class TestCLIIntegration:
                 "Failed to parse config file" in output for output in interface.outputs
             )
 
-    def test_no_commands_flag_sets_no_commands_true(self):
+    @pytest.mark.anyio
+    async def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
         args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(
+        config, prompt = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.no_commands is True
         assert prompt == "test prompt"
 
-    def test_allow_commands_defaults_to_true(self):
+    @pytest.mark.anyio
+    async def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
         args = ["-a", "local", "test prompt"]
-        config, prompt = SolveigConfig.parse_config_and_prompt(
+        config, prompt = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.no_commands is False

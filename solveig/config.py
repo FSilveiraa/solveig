@@ -267,7 +267,7 @@ class SolveigConfig:
         if not file_config:
             file_config = {}
             if interface:
-                interface.display_error(
+                await interface.display_error(
                     "Failed to parse config file, falling back to defaults"
                 )
 
@@ -284,7 +284,7 @@ class SolveigConfig:
             concerning_command_patterns = {".*", "^.*", ".*$", "^.*$"}
             for pattern in merged_config.get("auto_execute_commands", []):
                 if pattern in concerning_command_patterns:
-                    interface.display_warning(
+                    await interface.display_warning(
                         f"Warning: Very permissive command pattern '{pattern}' is auto-allowed to execute"
                     )
 
@@ -298,7 +298,7 @@ class SolveigConfig:
             }
             for pattern in merged_config.get("auto_allowed_paths", []):
                 if any(pattern.startswith(sig) for sig in concerning_path_patterns):
-                    interface.display_warning(
+                    await interface.display_warning(
                         f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations"
                     )
 

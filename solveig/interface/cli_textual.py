@@ -461,7 +461,10 @@ class TextualInterface(SolveigInterface):
     async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
         yes_values = yes_values or self.YES
-        response = await self.ask_user(question, f"{question} [y/N]: ")
+        question = question.strip()
+        if not "[y/n]" in question.lower():
+            question = f"{question} [y/N]:"
+        response = await self.ask_user(question)
         return response.lower().strip() in yes_values
 
     async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
