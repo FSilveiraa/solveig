@@ -23,8 +23,18 @@ class SolveigInterface(ABC):
     """
 
     @abstractmethod
+    async def start(self) -> None:
+        """Start the interface (if needed)."""
+        ...
+
+    @abstractmethod
     async def wait_until_ready(self):
         """Wait until the interface is ready to be used."""
+        ...
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """Stop the interface (if needed)."""
         ...
     
     # Core display methods
@@ -79,22 +89,6 @@ class SolveigInterface(ABC):
         """Ask a yes/no question."""
         ...
 
-    # Optional methods
-    @abstractmethod
-    def set_status(self, status: str) -> None:
-        """Update status display (if supported)."""
-        ...
-
-    @abstractmethod
-    async def start(self) -> None:
-        """Start the interface (if needed)."""
-        ...
-
-    @abstractmethod
-    async def stop(self) -> None:
-        """Stop the interface (if needed)."""
-        ...
-
     # Additional methods for compatibility
     @abstractmethod
     async def display_section(self, title: str) -> None:
@@ -111,4 +105,9 @@ class SolveigInterface(ABC):
     @asynccontextmanager
     async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
         """Context manager for displaying animation during async operations."""
+        ...
+
+    @abstractmethod
+    async def update_status(self, status: str = None, tokens: int = None, model: str = None) -> None:
+        """Update status bar with multiple pieces of information."""
         ...

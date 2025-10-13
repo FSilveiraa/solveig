@@ -5,12 +5,12 @@ Modern Textual interface for Solveig using Textual with composition pattern.
 import asyncio
 import time
 from typing import Optional, AsyncGenerator, Any
-from contextlib import asynccontextmanager, contextmanager
-from textual.app import App as TextualApp, ComposeResult
+from contextlib import asynccontextmanager
+from textual.app import App as TextualApp, ComposeResult, Timer
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
-from textual.reactive import reactive
-from textual.timer import Timer
+from textual._context import active_app
+from rich.spinner import Spinner
 
 from solveig.interface import SimpleInterface
 from solveig.interface.base import SolveigInterface
@@ -111,42 +111,69 @@ class ConversationArea(ScrollableContainer):
 
 
 class StatusBar(Static):
-    """Status bar showing current application state with animation support."""
-
-    status = reactive("Ready")
-    is_animating = reactive(False)
+    """Status bar showing current application state with Rich spinner support."""
 
     def __init__(self, **kwargs):
         super().__init__("Status: Ready", **kwargs)
-        self._animation_timer: Optional[Timer] = None
-        self._animation_dots = 0
+        self._status = "Ready"
+        self._tokens = None
+        self._model = None
+        self._spinner = None
+        self.spinner_bank = []
+        self._timer: Optional[Timer] = None
 
-    def watch_status(self, status: str):
-        """Update status display when status changes."""
-        if self.is_animating:
-            self.update(f"Status: {status}{'.' * self._animation_dots}")
-        else:
-            self.update(f"Status: {status}")
+    def update_status_info(self, status: str = None, tokens: int = None, model: str = None):
+        """Update status bar with multiple pieces of information."""
+        if status is not None:
+            self._status = status
+        if tokens is not None:
+            self._tokens = tokens
+        if model is not None:
+            self._model = model
 
-    def start_animation(self):
-        """Start animated status (dots cycling)."""
-        self.is_animating = True
-        self._animation_dots = 0
-        # Update dots every 500ms
-        self._animation_timer = self.set_interval(0.5, self._update_animation)
+        self._refresh_display()
 
-    def stop_animation(self):
-        """Stop animated status."""
-        self.is_animating = False
-        if self._animation_timer:
-            self._animation_timer.stop()
-            self._animation_timer = None
-        self.watch_status(self.status)  # Refresh display without dots
+    def _refresh_display(self):
+        """Refresh the status bar display with equally-sized sections."""
+        status_text = self._status
 
-    def _update_animation(self):
-        """Update animation dots."""
-        self._animation_dots = (self._animation_dots + 1) % 4
-        self.watch_status(self.status)
+        if self._spinner:
+            frame = self._spinner.render(time.time())
+            # Convert Rich text to plain string
+            spinner_char = frame.plain if hasattr(frame, 'plain') else str(frame)
+            # TODO: DEBUG, add it to the bank
+            self.spinner_bank.append(spinner_char)
+            status_text = f"{spinner_char} {status_text}"
+
+        # Get available sections
+        sections = [status_text]
+
+        if self._model:
+            sections.append(f"Model: {self._model}")
+        if self._tokens:
+            sections.append(f"Tokens: {self._tokens}")
+
+        # Get terminal width
+        try:
+            total_width = self.app.size.width if hasattr(self, 'app') else 80
+        except:
+            total_width = 80
+
+        # Calculate section width
+        section_width = total_width // len(sections)
+
+        # Format each section to fit its allocated width
+        formatted_sections = []
+        for section in sections:
+            if len(section) > section_width - 1:
+                formatted = section[:section_width - 4] + "..."
+            else:
+                formatted = section.center(section_width - 1)
+            formatted_sections.append(formatted)
+
+        # Join with separators
+        display_text = "│".join(formatted_sections)
+        self.update(display_text)
 
 
 class SolveigTextualApp(TextualApp):
@@ -326,10 +353,6 @@ class SolveigTextualApp(TextualApp):
         """Internal method to add text to the UI."""
         await self._conversation_area.add_text(text, style)
 
-    def update_status_ui(self, status: str) -> None:
-        """Internal method to update status in the UI."""
-        self._status_bar.status = status
-
 
 class TextualInterface(SolveigInterface):
     """
@@ -407,9 +430,9 @@ class TextualInterface(SolveigInterface):
         response = await self.ask_user(question, f"{question} [y/N]: ")
         return response.lower().strip() in yes_values
 
-    def set_status(self, status: str) -> None:
-        """Update the status."""
-        self.app.update_status_ui(status)
+    async def update_status(self, status: str = None, tokens: int = None, model: str = None) -> None:
+        """Update status bar with multiple pieces of information."""
+        self.app._status_bar.update_status_info(status=status, tokens=tokens, model=model)
 
     async def wait_until_ready(self):
         await self.app.is_ready.wait()
@@ -445,11 +468,32 @@ class TextualInterface(SolveigInterface):
     @asynccontextmanager
     async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
         """Context manager for displaying animation during async operations."""
-        # For now, just update status - animation can be added later
-        self.set_status(status)
+        # Start animation using working pattern - set up timer directly in interface context
+        await self.update_status(status)
+
+        # Set up spinner directly like the working test
+        status_bar = self.app._status_bar
+        status_bar._spinner = Spinner("dots", speed=1.0)
+
+        # Set active_app context since main_loop task doesn't have it
+        active_app.set(self.app)
+
+        # Start timer from app context (not StatusBar context)
+        status_bar._timer = self.app.set_interval(0.1, status_bar._refresh_display)
+
+        await self.display_text(f"DEBUG: Started animation, {len(status_bar.spinner_bank)} items")
         try:
             yield
         finally:
-            self.set_status(final_status)
+            # Stop animation - clean up timer and spinner
+            if status_bar._timer:
+                status_bar._timer.stop()
+                status_bar._timer = None
+            status_bar._spinner = None
+            status_bar._refresh_display()  # Refresh to remove spinner
 
-
+            await self.update_status(final_status)
+            await self.display_text(f"DEBUG: Stopped animation, {len(status_bar.spinner_bank)} items")
+            for item in status_bar.spinner_bank:
+                if item:
+                    await self.display_text(f"  - {item}")

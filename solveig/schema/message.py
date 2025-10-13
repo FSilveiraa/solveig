@@ -192,7 +192,7 @@ class MessageHistory:
     system_prompt: str
     api_type: type[APIType.BaseAPI] = APIType.BaseAPI
     max_context: int = -1
-    encoder: str | None = None  # TODO: this is not-great design, but it works
+    encoder: str | None = None
     messages: list[Message] = field(default_factory=list)
     message_cache: list[dict] = field(default_factory=list)
 

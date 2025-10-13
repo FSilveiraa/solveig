@@ -66,22 +66,22 @@ async def send_basic_message(
     requirements_union,
 ) -> list[Requirement]:
     """Send message to LLM using standard method. Returns list of requirements."""
-    async with interface.with_animation("Waiting for LLM response..."):
-        # For standard method, we collect all requirements at once
-        collected_requirements = []
-        requirement_stream = client.chat.completions.create_iterable(
-            messages=message_history.to_openai(),
-            response_model=requirements_union,
-            model=config.model,
-            temperature=config.temperature,
-        )
+    # async with interface.with_animation("Waiting for LLM response..."):
+    # For standard method, we collect all requirements at once
+    collected_requirements = []
+    requirement_stream = client.chat.completions.create_iterable(
+        messages=message_history.to_openai(),
+        response_model=requirements_union,
+        model=config.model,
+        temperature=config.temperature,
+    )
 
-        async for requirement in requirement_stream:
-            # if interface.was_interrupted():
-            #     raise KeyboardInterrupt()
-            collected_requirements.append(requirement)
+    async for requirement in requirement_stream:
+        # if interface.was_interrupted():
+        #     raise KeyboardInterrupt()
+        collected_requirements.append(requirement)
 
-        return collected_requirements
+    return collected_requirements
 
 
 async def send_streaming_message(
@@ -92,27 +92,26 @@ async def send_streaming_message(
     requirements_union,
 ) -> list[Requirement]:
     """Send message to LLM with streaming. Returns list of individual requirements."""
-    async with interface.with_animation("Streaming LLM response..."):
-        collected_requirements = []
-        requirement_stream = client.chat.completions.create_iterable(
-            messages=message_history.to_openai(),
-            response_model=requirements_union,
-            model=config.model,
-            temperature=config.temperature,
-        )
+    # async with interface.with_animation("Streaming LLM response..."):
+    collected_requirements = []
+    requirement_stream = client.chat.completions.create_iterable(
+        messages=message_history.to_openai(),
+        response_model=requirements_union,
+        model=config.model,
+        temperature=config.temperature,
+    )
 
-        i = 0
-        async for requirement in requirement_stream:
-            # if interface.was_interrupted():
-            #     raise KeyboardInterrupt()
-            collected_requirements.append(requirement)
-            interface.set_status(f"Processing requirement {i + 1}...")
+    i = 0
+    async for requirement in requirement_stream:
+        # if interface.was_interrupted():
+        #     raise KeyboardInterrupt()
+        collected_requirements.append(requirement)
 
-            # Show requirement as it comes in
-            await interface.display_text(f"  → {requirement.title}")
-            i += 1
+        # Show requirement as it comes in
+        # await interface.display_text(f"  → {requirement.title}")
+        i += 1
 
-        return collected_requirements
+    return collected_requirements
 
 
 async def send_message_to_llm_with_retry(
@@ -223,19 +222,22 @@ async def main_loop(
     user_message = await get_initial_user_message(user_prompt, interface)
 
     while True:
+        await interface.update_status(status="Sending")
         # Send message to LLM and handle any errors
         message_history.add_messages(user_message)
 
         await interface.display_section("Assistant")
-        llm_response, user_message = await send_message_to_llm_with_retry(
-            config, interface, llm_client, message_history, user_message
-        )
+        async with interface.with_animation("Waiting..."):
+            llm_response, user_message = await send_message_to_llm_with_retry(
+                config, interface, llm_client, message_history, user_message
+            )
 
         if llm_response is None:
             continue
 
         # Successfully got LLM response
         message_history.add_messages(llm_response)
+        await interface.update_status(tokens=message_history.get_token_count())
         if config.verbose:
             await interface.display_text_block(str(llm_response), title="Response")
 
@@ -244,11 +246,13 @@ async def main_loop(
             await asyncio.sleep(config.wait_before_user)
 
         # Prepare user response
+        await interface.update_status(status="Processing")
         results = await process_requirements(
             llm_response=llm_response, config=config, interface=interface
         )
 
         await interface.display_section("User")
+        await interface.update_status(status="Awaiting input")
         user_prompt = await interface.get_input()
         user_message = UserMessage(comment=user_prompt, results=results)
 

@@ -12,7 +12,7 @@ async def cleanup():
     await Filesystem.delete("~/Sync/hello_new.py")
 
 
-async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 0):
+async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 5):
     """Entry point for the async textual CLI."""
 
     if mock_messages is None:
