@@ -22,9 +22,6 @@ class BaseMessage(BaseModel):
             "content": json.dumps(data, default=utils.misc.default_json_serialize),
         }
 
-    # def get_token_count(self, api_type: APIType.BaseAPI, encoder: Optional[str] = None) -> int:
-    #     return api_type.count_tokens(se, encoder)
-
     def __str__(self) -> str:
         return f"{self.role}: {self.to_openai()["content"]}"
 

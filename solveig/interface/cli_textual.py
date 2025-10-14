@@ -226,7 +226,8 @@ class SolveigTextualApp(TextualApp):
         for name, color in self._style_to_color.items():
             css_rules.append(f".{name}_message {{ color: {color}; }}")
 
-        self._css = f"""
+        # Set CSS as class attribute for Textual
+        SolveigTextualApp.CSS = f"""
         ConversationArea {{
             background: {self._style_to_color.get('background', '#000')};
             color: {self._style_to_color.get('text', '#000')};
@@ -300,8 +301,6 @@ class SolveigTextualApp(TextualApp):
 
         # Readyness event
         self.is_ready = asyncio.Event()
-
-    # CSS = ""  # Will be set during __init__
 
     def compose(self) -> ComposeResult:
         """Create the main layout."""

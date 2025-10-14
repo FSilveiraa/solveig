@@ -32,11 +32,6 @@ class SolveigInterface(ABC):
         """Wait until the interface is ready to be used."""
         ...
 
-    # @abstractmethod
-    # async def stop(self) -> None:
-    #     """Stop the interface (if needed)."""
-    #     ...
-
     # Core display methods
     @abstractmethod
     async def display_text(self, text: str, style: str = "normal") -> None:
