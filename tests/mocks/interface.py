@@ -1,11 +1,13 @@
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, AsyncGenerator, Any
 
+from solveig.interface import TextualInterface
 from solveig.interface.base import SolveigInterface
 from solveig.utils.file import Metadata
 
 
-class MockInterface(SolveigInterface):
+class MockInterface(TextualInterface):
     """
     Mock interface for testing - captures all output without external dependencies.
     Implements the complete SolveigInterface contract for async testing.
@@ -18,6 +20,7 @@ class MockInterface(SolveigInterface):
         self.sections = []
         self.status_updates = []
         self.groups = []
+        self._stop_event = asyncio.Event()
 
     # Core async display methods
     async def display_text(self, text: str, style: str = "normal") -> None:
@@ -35,9 +38,9 @@ class MockInterface(SolveigInterface):
     async def display_comment(self, message: str) -> None:
         self.outputs.append(f"🗩  {message}")
 
-    async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
-        tree_title = title or str(metadata.path)
-        self.outputs.append(f"📁 Tree: {tree_title}")
+    # async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+    #     tree_title = title or str(metadata.path)
+    #     self.outputs.append(f"📁 Tree: {tree_title}")
 
     async def display_text_block(self, text: str, title: str = None) -> None:
         if title:
@@ -50,19 +53,19 @@ class MockInterface(SolveigInterface):
 
     # Input methods
     async def get_input(self) -> str:
-        if self.user_inputs:
-            user_input = self.user_inputs.pop(0)
-            self.outputs.append(f" {user_input}")
-            return user_input
-        return ""
+        return await self.ask_user("")
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
+        # Pass control of the loop just in case the task got cancelled
+        # await asyncio.sleep(0)
         self.questions.append(prompt)
-        if self.user_inputs:
-            response = self.user_inputs.pop(0)
-            self.outputs.append(f"{prompt}  {response}")
-            return response
-        return ""
+        if not self.user_inputs:
+            raise ValueError("No further user input configured")
+        response = self.user_inputs.pop(0)
+        if response == "/exit":
+            self._stop_event.set()
+        self.outputs.append(response)
+        return response
 
     async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         response = await self.ask_user(question)
@@ -104,6 +107,7 @@ class MockInterface(SolveigInterface):
 
     async def start(self) -> None:
         self.outputs.append("INTERFACE_STARTED")
+        await self._stop_event.wait()
 
     async def wait_until_ready(self):
         self.outputs.append("INTERFACE_READY")

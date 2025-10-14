@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 from pathlib import PurePath
 
@@ -19,39 +20,6 @@ SIZE_NOTATIONS = {
 }
 
 SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
-
-
-def format_output(
-    content: str, indent=0, max_lines: int = -1, max_chars: int = 500
-) -> str:
-    lines = content.splitlines()
-
-    if 0 < max_lines < len(lines):
-        keep_head = max_lines // 2
-        keep_tail = max_lines - keep_head
-        lines = lines[:keep_head] + [TRUNCATE_JOIN] + lines[-keep_tail:]
-
-    if indent > 0:
-        lines = [(" " * indent) + line for line in lines]
-    formatted = "\n".join(lines)
-    if 0 < max_chars < len(formatted):
-        keep_head = max_chars // 2
-        keep_tail = max_chars - keep_head
-        formatted = formatted[:keep_head] + TRUNCATE_JOIN + formatted[keep_tail:]
-    return formatted
-
-
-def prompt_user(prompt: str = INPUT_PROMPT) -> str:
-    return input(prompt).strip()
-
-
-def ask_yes(prompt: str) -> bool:
-    return prompt_user(prompt).lower() in YES
-
-
-def count_tokens(text: str) -> int:
-    encoding = tiktoken.encoding_for_model("gpt-4o").encode(text)
-    return len(encoding) if encoding else 0
 
 
 def default_json_serialize(o):
@@ -121,3 +89,51 @@ def parse_human_readable_size(size_notation: int | str) -> int:
                         f"'{size_notation}' is not a valid disk size"
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
+
+class TEXT_BOX:
+    H = "─"
+    V = "│"
+    TL = "┌"
+    TR = "┐"
+    BL = "└"
+    BR = "┘"
+    VL = "┤"
+    VR = "├"
+    HB = "┬"
+    HT = "┴"
+    X = "┼"
+
+def get_tree_display(metadata, display_metadata: bool = False, indent="  ") -> list[str]:
+    line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
+    if display_metadata:
+        if not metadata.is_directory:
+            size_str = convert_size_to_human_readable(
+                metadata.size
+            )
+            line = f"{line}  |  size: {size_str}"
+        modified_time = datetime.fromtimestamp(
+            float(metadata.modified_time)
+        ).isoformat()
+        line = f"{line}  |  modified: {modified_time}"
+    lines = [line]
+
+    if metadata.is_directory and metadata.listing:
+        for index, (_sub_path, sub_metadata) in enumerate(
+            sorted(metadata.listing.items())
+        ):
+            is_last = index == len(metadata.listing) - 1
+            entry_lines = get_tree_display(sub_metadata, display_metadata, indent)
+
+            # ├─🗁 d1
+            lines.append(
+                f"{indent}{TEXT_BOX.BL if is_last else TEXT_BOX.VR}{TEXT_BOX.H}{entry_lines[0]}"
+            )
+
+            # │  ├─🗁 sub-d1
+            # │  └─🗎 sub-f1
+            for sub_entry in entry_lines[1:]:
+                lines.append(
+                    f"{indent}{'' if is_last else TEXT_BOX.V}{sub_entry}"
+                )
+
+    return lines

@@ -35,14 +35,14 @@ ruff check . --fix
 mypy solveig/ scripts/ --ignore-missing-imports
 
 # Run tests with coverage
-pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -v
+pytest ./tests/ --cov=solveig --cov-report=term-missing -v
 ```
 
 ### Full CI Command
 
 ```bash
 # Run everything at once (what CI runs)
-black . && ruff check . && mypy solveig/ scripts/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov=scripts --cov-report=term-missing -vv
+black . && ruff check . && mypy solveig/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov-report=term-missing -vv
 ```
 
 ## Testing

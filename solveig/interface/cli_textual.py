@@ -12,10 +12,10 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
 from rich.spinner import Spinner
 
-from solveig.interface import SimpleInterface
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import Palette, DEFAULT_THEME
 from solveig.utils.file import Metadata
+from solveig.utils.misc import get_tree_display
 
 
 BANNER = """
@@ -315,7 +315,7 @@ class SolveigTextualApp(TextualApp):
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission."""
-        user_input = event.value
+        user_input = event.value.strip()
         event.input.value = ""  # Clear input
 
         # Check if we're in prompt mode (waiting for specific answer)
@@ -413,12 +413,17 @@ class TextualInterface(SolveigInterface):
 
     def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
+        # Check if it's a command
+        if user_input == "/exit":
+            self.app.exit()
+
         # Put input into internal queue for get_input() to consume
-        try:
-            self._input_queue.put_nowait(user_input)
-        except asyncio.QueueFull:
-            # Handle queue full scenario gracefully
-            pass
+        else:
+            try:
+                self._input_queue.put_nowait(user_input)
+            except asyncio.QueueFull:
+                # Handle queue full scenario gracefully
+                pass
 
     # SolveigInterface implementation
     async def display_text(self, text: str, style: str = "text") -> None:
@@ -447,7 +452,7 @@ class TextualInterface(SolveigInterface):
 
     async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
         """Display a tree structure of a directory"""
-        tree_lines = SimpleInterface._get_tree_element_str(metadata, display_metadata)
+        tree_lines = get_tree_display(metadata, display_metadata)
         await self.display_text_block(
             "\n".join(tree_lines),
             title=title or str(metadata.path),
@@ -497,10 +502,6 @@ class TextualInterface(SolveigInterface):
     async def start(self) -> None:
         """Start the interface."""
         await self.app.run_async()
-
-    async def stop(self) -> None:
-        """Stop the interface."""
-        self.app.exit()
 
     async def display_section(self, title: str) -> None:
         """Display a section header with line extending to the right."""

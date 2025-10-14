@@ -1,7 +1,7 @@
+import asyncio
 import json
 import os
 import platform
-import subprocess
 import tempfile
 
 from solveig.config import SolveigConfig
@@ -70,11 +70,17 @@ async def check_command(
             cmd.extend(["--exclude", ",".join(ignore_codes)])
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
+            proc = await asyncio.create_subprocess_shell(
+                " ".join(cmd),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            # result = await asyncio.create_subprocess_shell(
+            #     cmd,
+            #     capture_output=True,
+            #     text=True,
+            # )
         except FileNotFoundError:
             await interface.display_warning(
                 "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
@@ -86,7 +92,7 @@ async def check_command(
             # prevents you from running commands at all
             return
 
-        if result.returncode == 0:
+        if proc.returncode == 0:
             if config.verbose:
                 await interface.display_success(
                     f"Shellcheck: No issues with command `{requirement.command}`"
@@ -95,7 +101,7 @@ async def check_command(
 
         # Parse shellcheck warnings and raise validation error
         try:
-            output = json.loads(result.stdout)
+            output = json.loads(stdout.decode('utf-8').strip())
             errors = [f"[{item['level']}] {item['message']}" for item in output]
             if errors:
                 async with interface.with_group("Shellcheck Errors"):

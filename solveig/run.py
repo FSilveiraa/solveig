@@ -64,6 +64,9 @@ async def send_message_to_llm_with_retry(
     requirements_union = get_requirements_union_for_streaming(config)
 
     while True:
+        # This prevents general errors in testing, allowing for the task to get cancelled mid-loop
+        await asyncio.sleep(0)
+
         try:
             message_history_dumped = message_history.to_openai(update_sent_count=True)
             await interface.update_status(
@@ -81,6 +84,9 @@ async def send_message_to_llm_with_retry(
             async for requirement in requirement_stream:
                 requirements.append(requirement)
 
+            if not requirements:
+                # force re-try
+                raise ValueError("Assistant responded with empty message")
 
             # Create AssistantMessage with requirements
             llm_response = AssistantMessage(requirements=requirements)
@@ -94,7 +100,7 @@ async def send_message_to_llm_with_retry(
             # Propagate to top-level so the app can exit cleanly
             raise
         except Exception as e:
-            await interface.display_error(f"Error: {e}")
+            await interface.display_error(e)
             await interface.display_text_block(
                 title=f"{e.__class__.__name__}",
                 text=str(e) + traceback.format_exc()
@@ -199,26 +205,15 @@ async def main_loop(
         user_message = UserMessage(comment=user_prompt, results=results)
 
 
-async def run_async(llm_client: Instructor | None = None):
-    """Entry point for the async CLI."""
+async def run_async(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    llm_client: Instructor,
+    user_prompt: str = ""
+):
+    """Entry point for the async CLI with explicit dependencies."""
     loop_task = None
     try:
-        # Parse config and run main loop
-        config, user_prompt = await SolveigConfig.parse_config_and_prompt()
-
-        # Create LLM client if none was supplied
-        llm_client = llm_client or llm.get_instructor_client(
-            api_type=config.api_type,
-            api_key=config.api_key,
-            url=config.url
-        )
-
-        # Create interface based on config
-        if config.simple_interface:
-            interface = SimpleInterface(color_palette=config.theme)
-        else:
-            interface = TextualInterface(color_palette=config.theme)
-        
         # Run interface in foreground to properly capture exit, pass control to conversation loop
         loop_task = asyncio.create_task(main_loop(
             interface=interface,
@@ -227,11 +222,11 @@ async def run_async(llm_client: Instructor | None = None):
             user_prompt=user_prompt
         ))
         await interface.start()
-    
+
     except Exception as e:
         print(f"Error: {e}")
         traceback.print_exc()
-    
+
     finally:
         if loop_task:
             loop_task.cancel()
@@ -240,7 +235,30 @@ async def run_async(llm_client: Instructor | None = None):
 
 
 def main():
-    asyncio.run(run_async())
+    """CLI entry point - parse config and delegate to async runner."""
+    asyncio.run(_main_async())
+
+
+async def _main_async():
+    """Async main that handles config parsing and setup."""
+    # Parse config and run main loop
+    config, user_prompt = await SolveigConfig.parse_config_and_prompt()
+
+    # Create LLM client
+    llm_client = llm.get_instructor_client(
+        api_type=config.api_type,
+        api_key=config.api_key,
+        url=config.url
+    )
+
+    # Create interface based on config
+    if config.simple_interface:
+        interface = SimpleInterface(color_palette=config.theme)
+    else:
+        interface = TextualInterface(color_palette=config.theme)
+
+    # Run the async main loop
+    await run_async(config, interface, llm_client, user_prompt)
 
 if __name__ == "__main__":
     main()

@@ -5,7 +5,7 @@ from pathlib import Path, PurePath
 
 import pytest
 
-from scripts.old.sync_run import main_loop
+from solveig.run import run_async
 from solveig.plugins.schema.tree import TreeRequirement
 from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
@@ -15,7 +15,8 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 class TestTreePlugin:
     """Test TreeRequirement plugin with real filesystem operations."""
 
-    def test_tree_plugin_with_real_files(self):
+    @pytest.mark.anyio
+    async def test_tree_plugin_with_real_files(self):
         """Test tree plugin creates visual directory tree from real filesystem."""
 
         # TODO: use str result for visual value
@@ -47,18 +48,15 @@ class TestTreePlugin:
 
             mock_client = create_mock_client(llm_response)
             interface = MockInterface()
-            interface.set_user_inputs(["y", "exit"])  # Accept tree, then exit
+            interface.set_user_inputs(["y", "/exit"])  # Accept tree, then exit
 
             # Execute conversation
-            try:
-                main_loop(
-                    DEFAULT_CONFIG,
-                    interface,
-                    f"Show me what's in {temp_dir}",
-                    llm_client=mock_client,
-                )
-            except ValueError:
-                pass
+            await run_async(
+                config=DEFAULT_CONFIG,
+                interface=interface,
+                llm_client=mock_client,
+                user_prompt=f"Show me what's in {temp_dir}",
+            )
 
             # Verify tree output contains expected structure
             output = interface.get_all_output()
@@ -89,13 +87,14 @@ class TestTreePlugin:
         assert "tree(path)" in description
         assert "directory tree structure" in description
 
-    def test_tree_requirement_display_and_error_handling(self):
+    @pytest.mark.anyio
+    async def test_tree_requirement_display_and_error_handling(self):
         """Test TreeRequirement display functionality and error result creation."""
         req = TreeRequirement(path="/test/dir", comment="Generate tree listing")
         interface = MockInterface()
 
         # Test display header
-        req.display_header(interface)
+        await req.display_header(interface)
         output = interface.get_all_output()
         assert "Generate tree listing" in output
 
@@ -114,7 +113,8 @@ class TestTreePlugin:
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
     @pytest.mark.no_file_mocking
-    def test_tree_depth_limiting_and_user_interaction(self):
+    @pytest.mark.anyio
+    async def test_tree_depth_limiting_and_user_interaction(self):
         """Test tree with depth limits and user interaction through solve() method."""
         # Create temporary directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -139,7 +139,7 @@ class TestTreePlugin:
             interface = MockInterface()
             interface.set_user_inputs(["y"])
 
-            result = req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True
             # we have until subdir3
             assert result.metadata.listing[PurePath(temp_path / "subdir6/")]
@@ -157,6 +157,6 @@ class TestTreePlugin:
             error_req = TreeRequirement(
                 path=str(temp_path / "nonexistent"), comment="Test tree"
             )
-            result = error_req.solve(DEFAULT_CONFIG, interface)
+            result = await error_req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is False
             assert result.error

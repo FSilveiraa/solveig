@@ -50,7 +50,7 @@ class MockLLMClient:
             return response
 
         # No more responses - return simple default
-        return AssistantMessage(comment="No more responses configured")
+        raise ValueError("No further responses configured")
 
     async def _create_iterable(self, **kwargs):
         """Return an iterable that yields individual requirements."""
@@ -79,17 +79,14 @@ class MockLLMClient:
 
 
 def create_mock_client(
-    *messages: str | AssistantMessage | Exception,
+    *messages: AssistantMessage | Exception,
     sleep_seconds: float = 0.0,
     sleep_delta: float = 1.5,
 ) -> MockLLMClient:
     """Create mock client with responses. Strings become AssistantMessage objects."""
     responses = []
     for msg in messages:
-        if isinstance(msg, str):
-            responses.append(AssistantMessage(comment=msg))
-        else:
-            responses.append(msg)
+        responses.append(msg)
     return MockLLMClient(
         responses, sleep_seconds=sleep_seconds, sleep_delta=sleep_delta
     )

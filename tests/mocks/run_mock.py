@@ -2,6 +2,8 @@
 """Run async Solveig with TextualCLI and mock LLM client."""
 import asyncio
 
+from solveig import SolveigConfig
+from solveig.interface import TextualInterface
 from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
@@ -24,9 +26,16 @@ async def run_async_mock(mock_messages: list[AssistantMessage] | None = None, sl
             if isinstance(message, AssistantMessage)
         ]
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
+    config, user_prompt = await SolveigConfig.parse_config_and_prompt()
+    interface = TextualInterface(color_palette=config.theme)
 
     try:
-        await run_async(llm_client=mock_client)
+        await run_async(
+            config=config,
+            user_prompt=user_prompt,
+            interface=interface,
+            llm_client=mock_client,
+        )
     finally:
         try:
             await cleanup()
