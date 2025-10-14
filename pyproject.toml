@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solveig"
-version = "0.4.10"
-description = "An agentic runtime that enables secure, extensible and configurable AI automation from any LLM"
+version = "0.5.0"
+description = "An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [

@@ -1,6 +1,6 @@
 # Solveig
 
-**An agentic runtime that enables secure, extensible and configurable AI automation from any LLM**
+**An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
 [![Demo GIF](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo.svg)](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo)
 
