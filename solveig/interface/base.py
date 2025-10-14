@@ -69,7 +69,9 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def display_text_block(self, text: str, title: str | None = None) -> None:
+    async def display_text_block(
+        self, text: str, title: str | None = None, language: str | None = None
+    ) -> None:
         """Display a text block with optional title."""
         ...
 

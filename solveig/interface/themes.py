@@ -137,3 +137,8 @@ THEMES = {
         vice,
     ]
 }
+
+from pygments.styles import STYLE_MAP
+
+DEFAULT_CODE_THEME = "material"
+CODE_THEMES = set(STYLE_MAP.keys())

@@ -41,10 +41,12 @@ class MockInterface(TextualInterface):
     #     tree_title = title or str(metadata.path)
     #     self.outputs.append(f"📁 Tree: {tree_title}")
 
-    async def display_text_block(self, text: str, title: str = None) -> None:
+    async def display_text_block(
+        self, text: str, title: str | None = None, language: str | None = None
+    ) -> None:
         if title:
             self.outputs.append(f"📋 {title}")
-        self.outputs.append(text)
+        self.outputs.append(f"{language+": " if language else ""}{text}")
 
     async def display_section(self, title: str) -> None:
         self.sections.append(title)

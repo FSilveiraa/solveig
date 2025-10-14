@@ -45,6 +45,7 @@ class SolveigConfig:
     auto_send: bool = False
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
+    code_theme: str = themes.DEFAULT_CODE_THEME
     wait_before_user: float = 1.0
 
     def __post_init__(self):
@@ -240,10 +241,17 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--theme",
-            default=themes.DEFAULT_THEME,
+            default=None,
             type=str,
             choices=themes.THEMES.keys(),
-            help="Interface theme",
+            help=f"Interface theme, (default: {themes.DEFAULT_THEME})",
+        )
+        parser.add_argument(
+            "--code-theme",
+            default=None,
+            type=str,
+            choices=themes.CODE_THEMES,
+            help=f"Code theme for linting files (default: {themes.DEFAULT_CODE_THEME})",
         )
         parser.add_argument(
             "--version",
