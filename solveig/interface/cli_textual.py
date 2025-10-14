@@ -38,7 +38,7 @@ class TextBox(Static):
     """A text block widget with optional title and border."""
 
     def __init__(self, content: str, title: str | None = None, **kwargs):
-        super().__init__(content, **kwargs)
+        super().__init__(content, markup=False, **kwargs)
         self.border = "solid"
         if title:
             self.border_title = title
@@ -67,10 +67,10 @@ class ConversationArea(ScrollableContainer):
         super().__init__(**kwargs)
         self._group_stack = []  # Stack of current group containers
 
-    async def add_text(self, text: str, style: str = "text"):
+    async def add_text(self, text: str, style: str = "text", markup: bool = False):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "text" else style
-        text_widget = Static(text, classes=style_class)
+        text_widget = Static(text, classes=style_class, markup=markup)
 
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
@@ -388,9 +388,9 @@ class SolveigTextualApp(TextualApp):
         finally:
             self.prompt_future = None
 
-    async def add_text(self, text: str, style: str = "text") -> None:
+    async def add_text(self, text: str, style: str = "text", markup: bool = False) -> None:
         """Internal method to add text to the UI."""
-        await self._conversation_area.add_text(text, style)
+        await self._conversation_area.add_text(text, style, markup=markup)
 
 
 class TextualInterface(SolveigInterface):
@@ -447,14 +447,19 @@ class TextualInterface(SolveigInterface):
                 # Handle queue full scenario gracefully
                 pass
 
-    # SolveigInterface implementation
-    async def display_text(self, text: str, style: str = "text") -> None:
+    async def _display_text(self, text: str, style: str = "text", allow_markup: bool = False) -> None:
         """Display text with optional styling."""
         # Map hex colors to semantic style names using pre-calculated mapping
         if style.startswith("#"):
             style = self.app._color_to_style.get(style, "text")
 
-        await self.app.add_text(text, style)
+        await self.app.add_text(text, style, markup=allow_markup)
+
+
+    # SolveigInterface implementation
+    async def display_text(self, text: str, style: str = "text") -> None:
+        # Assume by default there is no reason to display markdown styles
+        await self._display_text(text, style, allow_markup=False)
 
     async def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
@@ -502,8 +507,8 @@ class TextualInterface(SolveigInterface):
     async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)
-        await self.display_text(
-            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}"
+        await self._display_text(
+            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}", allow_markup=True
         )
         return response
 

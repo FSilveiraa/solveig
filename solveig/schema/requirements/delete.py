@@ -52,7 +52,7 @@ class DeleteRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of delete capability."""
-        return "delete(path): permanently deletes a file or directory"
+        return "delete(comment, path): permanently deletes a file or directory"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

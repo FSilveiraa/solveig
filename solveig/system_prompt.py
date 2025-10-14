@@ -1,8 +1,6 @@
 import os
 import platform
 
-# from pathlib import PurePath
-# from anyio import Path
 from .plugins.schema.tree import TreeRequirement, TreeResult
 from .utils.file import Metadata
 
@@ -33,16 +31,14 @@ from .config import SolveigConfig
 from .schema.message import AssistantMessage, MessageHistory, UserMessage
 
 SYSTEM_PROMPT = """
-You are an AI assisting a user with whatever issues they may have.
-Your goal is to be as helpful to the user as possible, and leverage the resources their computer offers to solve their problems.
-Always try to answer the user's question, no matter how redundant it may seem.
-You may request any of the following operations that you think are necessary:
+You are an AI assisting a user with their problems.
+First, analyze the conversation and determine if you need to perform any extra operations.
+For direct answers, respond immediately with the required information in the task-list comment.
+You may also request any of the following operations:
 {CAPABILITIES_LIST}
-Put system safety first - explain all operations, prefer file operations over commands, avoid destructive actions unless absolutely necessary.
-Use task lists as the first requirement if necessary to plan ahead or communicate with the user.
-Use the task list comment field to answer the user's request or ask for more information, regardless of further required actions.
-The task list comment is your primary way to communicate with the user.
-Adapt your plan to failure or user denial.
+Use `tasks` to plan multi-step operations in a task list or to communicate with user. Adapt your plan to failure or user denial.
+Use the `tasks` comment field to provide answers or explanations alongside operational work.
+Put system safety first - explain operations, prefer file operations over commands, avoid destructive actions unless necessary.
 """
 
 SYSTEM_PROMPT_OS_INFO = """

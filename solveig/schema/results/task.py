@@ -20,5 +20,5 @@ class Task(BaseModel):
 
 class TaskListResult(RequirementResult):
     """Result of a task requirement - just echoes the task list back to LLM."""
-
-    tasks: list[Task] = []
+    title: Literal["tasks"] = "tasks"
+    tasks: list[Task] | None = None

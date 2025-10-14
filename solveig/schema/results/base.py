@@ -18,9 +18,10 @@ class RequirementResult(BaseModel):
     # then when JSON'ing we usually keep a couple of its fields in the result's body
     # We keep paths separately from the requirement, since we want to preserve both the path(s) the LLM provided
     # and their absolute value (~/Documents vs /home/jdoe/Documents)
+    title: str
     requirement: Requirement = Field(exclude=True)
     accepted: bool
     error: str | None = None
 
-    def to_openai(self):
-        return self.model_dump()
+    # def to_openai(self):
+    #     return self.model_dump()

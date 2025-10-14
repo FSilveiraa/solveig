@@ -58,7 +58,7 @@ class MoveRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of move capability."""
-        return "move(source_path, destination_path): moves a file or directory"
+        return "move(comment, source_path, destination_path): moves a file or directory"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

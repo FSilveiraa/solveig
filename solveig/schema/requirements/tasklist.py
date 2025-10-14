@@ -17,19 +17,19 @@ else:
 
 
 class TaskListRequirement(Requirement):
-    title: Literal["task list"] = "task list"
+    title: Literal["tasks"] = "tasks"
     comment: str = Field(
-        ..., description="Plan description and/or conversation with user"
+        ..., description="Conversation with user and plan description"
     )
-    tasks: list[Task] = Field(
-        default_factory=list, description="List of tasks to track and display"
+    tasks: list[Task] | None = Field(
+        None, description="List of tasks to track and display"
     )
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display task list header."""
         await super().display_header(interface)
         if not self.tasks:
-            await interface.display_text("🗒 Empty task list")
+            # await interface.display_text("🗒 Empty task list")
             return
 
         task_lines = []
@@ -59,7 +59,7 @@ class TaskListRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of task capability."""
-        return "task(tasks): use to break down your plan into sorted actions or communicate with user. Update status as you progress. Condense completed task lists when starting new ones. Use comment to communicate with the user"
+        return "tasks(comment, tasks=null): use to communicate with user and break down your plan into sorted actions. Use tasks only if plan requires multiple steps, update status as you progress and condense completed task lists when starting new ones."
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

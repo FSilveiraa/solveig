@@ -242,6 +242,81 @@ class TestCommandExecution:
         mock_subprocess.communicate.assert_not_called()
 
 
+class TestCommandSerialization:
+    """Test CommandRequirement and CommandResult serialization."""
+
+    @pytest.mark.anyio
+    async def test_command_requirement_and_result_serialization(self, mock_subprocess):
+        """Test that CommandRequirement and CommandResult serialize properly with actual output data."""
+        # Configure mock subprocess to return actual output
+        mock_subprocess.communicate.side_effect = None
+        mock_subprocess.communicate.return_value = (b"Hello World\nLine 2\n", b"warning message\n")
+
+        # Create requirement
+        req = CommandRequirement(command="echo 'Hello World'", comment="Test serialization")
+        interface = MockInterface()
+        interface.set_user_inputs(["y", "y"])  # Accept command and output
+
+        # Execute and get result
+        result = await req.solve(DEFAULT_CONFIG, interface)
+
+        # Test requirement serialization
+        req_json = req.model_dump()
+        assert req_json["title"] == "command"
+        assert req_json["command"] == "echo 'Hello World'"
+        assert req_json["comment"] == "Test serialization"
+
+        # Test result serialization
+        result_json = result.model_dump()
+        assert result_json["accepted"] is True
+        assert result_json["success"] is True
+        assert result_json["command"] == "echo 'Hello World'"
+        assert result_json["stdout"] == "Hello World\nLine 2"  # Actual output must be present
+        assert result_json["error"] == "warning message"  # Error output must be present
+
+        # Verify the result has a requirement field that is removed from the JSON
+        assert result.requirement.command == "echo 'Hello World'"
+        assert "requirement" not in result_json
+
+    @pytest.mark.anyio
+    async def test_command_result_error_serialization(self, mock_subprocess):
+        """Test CommandResult serialization when command fails."""
+        # Configure mock subprocess to simulate command failure
+        mock_subprocess.communicate.side_effect = None
+        mock_subprocess.communicate.return_value = (b"", b"command not found\n")
+
+        req = CommandRequirement(command="nonexistent_command", comment="Test error")
+        interface = MockInterface()
+        interface.set_user_inputs(["y", "y"])  # Accept command and output
+
+        result = await req.solve(DEFAULT_CONFIG, interface)
+
+        # Test error result serialization
+        assert result.model_dump() == {
+            "accepted": True,
+            "error": "command not found",
+            "command": "nonexistent_command",
+            "success": True,   # Shell executed (even if command failed)
+            "stdout": "",
+        }
+
+    def test_command_declined_result_serialization(self):
+        """Test CommandResult serialization when user declines."""
+        req = CommandRequirement(command="rm -rf /", comment="Dangerous command")
+
+        # Create declined result
+        declined_result = req.create_error_result("User declined", accepted=False)
+
+        # Test serialization of declined result
+        assert declined_result.model_dump() == {
+            "accepted": False,
+            "error": "User declined",
+            "command": "rm -rf /",
+            "success": False,
+            "stdout": None,
+        }
+
+
 class TestCommandErrorHandling:
     """Test CommandRequirement error handling."""
 

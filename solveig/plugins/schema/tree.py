@@ -20,6 +20,7 @@ from solveig.utils.file import Filesystem, Metadata
 
 
 class TreeResult(RequirementResult):
+    title: Literal["tree"] = "tree"
     path: str
     metadata: Metadata | None  # Complete tree metadata
 

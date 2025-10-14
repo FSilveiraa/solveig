@@ -60,7 +60,7 @@ class WriteRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of write capability."""
-        return "write(path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
+        return "write(comment, path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

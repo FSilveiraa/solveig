@@ -4,6 +4,7 @@ Modern async CLI entry point for Solveig using TextualCLI.
 
 import asyncio
 import contextlib
+import json
 import logging
 import traceback
 from collections.abc import AsyncGenerator
@@ -14,12 +15,14 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface, TextualInterface
 from solveig.plugins import initialize_plugins
+from solveig.schema import RequirementResult
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
     get_requirements_union_for_streaming,
 )
+from solveig.utils.misc import default_json_serialize
 
 
 async def get_message_history(
@@ -69,7 +72,16 @@ async def send_message_to_llm_with_retry(
         await asyncio.sleep(0)
 
         try:
+            # this has to be done here - the message_history dumping auto-adds the token counting upon
+            # the serialization that we would have to do anyway to avoid expensive re-counting on every update
+            message_history.add_messages(user_message)
             message_history_dumped = message_history.to_openai(update_sent_count=True)
+            if config.verbose:
+                await interface.display_text_block(
+                    title="Sending",
+                    text=json.dumps(message_history_dumped, default=default_json_serialize),
+                )
+
             await interface.update_status(
                 tokens=(
                     message_history.total_tokens_sent,
@@ -77,6 +89,7 @@ async def send_message_to_llm_with_retry(
                 )
             )
 
+            await interface.display_section("Assistant")
             requirements = []
             requirement_stream = client.chat.completions.create_iterable(
                 messages=message_history_dumped,
@@ -99,13 +112,14 @@ async def send_message_to_llm_with_retry(
 
             # Create AssistantMessage with requirements
             llm_response = AssistantMessage(requirements=requirements)
+            # Since we have to handle the stats updates above, we also handle the outgoing ones here
+            message_history.add_messages(llm_response)
             await interface.update_status(
                 tokens=(
                     message_history.total_tokens_sent,
                     message_history.total_tokens_received,
                 )
             )
-            message_history.add_messages(llm_response)
 
             return llm_response, user_message
 
@@ -129,6 +143,7 @@ async def send_message_to_llm_with_retry(
             new_comment = await interface.ask_user(
                 "Enter a new message (or press Enter to retry with the same message)"
             )
+            # not a bug, we're testing if the string is essentially empty or not
             if new_comment.strip():
                 user_message = UserMessage(comment=new_comment)
 
@@ -137,13 +152,12 @@ async def process_requirements(
     llm_response: AssistantMessage,
     config: SolveigConfig,
     interface: SolveigInterface,
-) -> list:
+) -> list[RequirementResult]:
     """Process requirements and return results."""
     results = []
 
     for requirement in llm_response.requirements or []:
         try:
-            # Requirements need to become async
             result = await requirement.solve(config, interface)
             if result:
                 results.append(result)
@@ -187,9 +201,6 @@ async def main_loop(
 
     while True:
         # Send message to LLM and handle any errors
-        message_history.add_messages(user_message)
-
-        await interface.display_section("Assistant")
         async with interface.with_animation("Waiting", "Processing"):
             llm_response, user_message = await send_message_to_llm_with_retry(
                 config, interface, llm_client, message_history, user_message
@@ -198,16 +209,16 @@ async def main_loop(
         if llm_response is None:
             continue
 
-        # Successfully got LLM response
-        message_history.add_messages(llm_response)
+        # Successfully got LLM response (it was already added to the
         await interface.update_status(
             tokens=(
                 message_history.total_tokens_sent,
                 message_history.total_tokens_received,
             )
         )
+
         if config.verbose:
-            await interface.display_text_block(str(llm_response), title="Response")
+            await interface.display_text_block(str(llm_response), title="Received")
 
         # Process requirements and get next user input
         if config.wait_before_user > 0:

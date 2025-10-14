@@ -104,7 +104,7 @@ class Requirement(BaseModel, ABC):
             except Exception as error:
                 await interface.display_error(error)
                 error_info = "Execution error"
-                if interface.ask_yes_no(
+                if await interface.ask_yes_no(
                     "Send error message back to assistant? [y/N]: "
                 ):
                     error_info = f": {error}"
@@ -145,14 +145,14 @@ class Requirement(BaseModel, ABC):
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> RequirementResult:
         """Solve yourself as a requirement following the config"""
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def create_error_result(
         self, error_message: str, accepted: bool
     ) -> RequirementResult:
         """Create appropriate error result for this requirement type."""
-        pass
+        raise NotImplementedError()
 
     @classmethod
     @abstractmethod
@@ -163,4 +163,4 @@ class Requirement(BaseModel, ABC):
         Should be a concise, actionable description like:
         'read(path, only_read_metadata): reads a file or directory...'
         """
-        pass
+        raise NotImplementedError()

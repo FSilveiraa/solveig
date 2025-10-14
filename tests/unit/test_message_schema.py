@@ -11,6 +11,7 @@ from solveig.schema.message import (
     get_filtered_assistant_message_class,
 )
 from solveig.schema.requirements.command import CommandRequirement
+from solveig.schema.results.command import CommandResult
 
 
 class TestAssistantMessageClassGeneration:
@@ -169,3 +170,40 @@ class TestMessageSerialization:
         assert openai_dict["role"] == "assistant"
         content = json.loads(openai_dict["content"])
         assert "requirements" in content
+
+    def test_user_message_with_results_serialization(self):
+        """Test UserMessage with RequirementResult objects serializes properly."""
+        # Create a command requirement and result
+        req = CommandRequirement(command="echo test", comment="Test command")
+        result = CommandResult(
+            requirement=req,
+            command="echo test",
+            accepted=True,
+            success=True,
+            stdout="Hello World\nLine 2",
+            error="warning message"
+        )
+
+        # Create UserMessage with results
+        user_msg = UserMessage(
+            comment="Here are the results",
+            results=[result]
+        )
+
+        # Test serialization
+        openai_dict = user_msg.to_openai()
+        assert openai_dict["role"] == "user"
+
+        # Parse the JSON content
+        content = json.loads(openai_dict["content"])
+        assert content["comment"] == "Here are the results"
+        assert "results" in content
+        assert len(content["results"]) == 1
+
+        # THE CRITICAL TEST: Verify result contains actual output data
+        result_json = content["results"][0]
+        assert result_json["accepted"] is True
+        assert result_json["success"] is True
+        assert result_json["command"] == "echo test"
+        assert result_json["stdout"] == "Hello World\nLine 2"  # Must have actual output
+        assert result_json["error"] == "warning message"       # Must have error output

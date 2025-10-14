@@ -2,16 +2,17 @@ import json
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
+from .base import BaseSolveigModel
 from .. import SolveigConfig, utils
 from ..llm import APIType
 from .requirements import Requirement
 from .results import RequirementResult
 
 
-class BaseMessage(BaseModel):
-    token_count: int = 0
+class BaseMessage(BaseSolveigModel):
+    token_count: int = Field(default_factory=lambda: 0, exclude=True)
     role: Literal["system", "user", "assistant"]
 
     def to_openai(self) -> dict:

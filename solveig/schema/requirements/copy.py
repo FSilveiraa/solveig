@@ -59,7 +59,7 @@ class CopyRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of copy capability."""
-        return "copy(source_path, destination_path): copies a file or directory"
+        return "copy(comment, source_path, destination_path): copies a file or directory"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
