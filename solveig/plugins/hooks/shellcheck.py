@@ -76,11 +76,6 @@ async def check_command(
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-            # result = await asyncio.create_subprocess_shell(
-            #     cmd,
-            #     capture_output=True,
-            #     text=True,
-            # )
         except FileNotFoundError:
             await interface.display_warning(
                 "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
@@ -111,7 +106,6 @@ async def check_command(
                     f"Shellcheck validation failed for command `{requirement.command}`"
                 )
         except json.JSONDecodeError as e:
-            # print(f"      Failed to parse shellcheck output: {e}")
             raise ValidationError(f"Shellcheck output parsing failed: {e}") from e
 
     finally:

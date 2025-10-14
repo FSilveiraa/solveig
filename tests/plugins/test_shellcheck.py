@@ -19,14 +19,14 @@ SHELLCHECK_CONFIG = replace(DEFAULT_CONFIG, plugins={"shellcheck": {}})
 class TestShellcheckPlugin:
     """Test the shellcheck plugin functionality in isolation."""
 
-    @pytest.mark.anyio
     @pytest.fixture(autouse=True)
     async def setup_shellcheck(self):
         """Load shellcheck plugin for each test."""
         self.interface = MockInterface()
         await initialize_plugins(config=SHELLCHECK_CONFIG, interface=self.interface)
 
-    def test_dangerous_patterns_detection(self):
+    @pytest.mark.anyio
+    async def test_dangerous_patterns_detection(self):
         """Test that dangerous patterns are correctly identified."""
         dangerous_commands = [
             "rm -rf /",
@@ -149,7 +149,6 @@ class TestShellcheckPluginIntegration:
     """Test shellcheck plugin integration with Solveig core."""
 
     @pytest.fixture(autouse=True)
-    @pytest.mark.anyio
     async def setup_shellcheck(self):
         """Load shellcheck plugin for each test."""
         self.interface = MockInterface()
