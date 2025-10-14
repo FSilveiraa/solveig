@@ -8,16 +8,12 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
-from typing import Annotated, Any, Literal
+from typing import Literal
 
 from anyio import Path
-from pydantic import Field, PlainValidator
-from pydantic_core import core_schema
+from pydantic import Field
 
 from solveig.utils.misc import parse_human_readable_size
-
-
-
 
 
 @dataclass

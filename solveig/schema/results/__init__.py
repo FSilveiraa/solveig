@@ -6,7 +6,7 @@ from .copy import CopyResult
 from .delete import DeleteResult
 from .move import MoveResult
 from .read import ReadResult
-from .task import TaskListResult, Task
+from .task import Task, TaskListResult
 from .write import WriteResult
 
 __all__ = [

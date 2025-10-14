@@ -7,11 +7,7 @@ This module defines the data structures used for:
 - Results and error handling
 """
 
-from dataclasses import fields, is_dataclass
-from os import PathLike
-
-import anyio
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel
 
 
 class BaseSolveigModel(BaseModel):

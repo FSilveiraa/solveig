@@ -145,9 +145,8 @@ class TestReadFileOperations:
             assert len(result.metadata.listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = {path for path in result.metadata.listing}
-            for expected in { "file1.txt", "file2.py", "subdir" }:
-                assert any(expected in filename for filename in filenames)
+            for expected in {"file1.txt", "file2.py", "subdir"}:
+                assert any(expected in filename for filename in result.metadata.listing)
 
     @pytest.mark.anyio
     async def test_read_nonexistent_file(self):

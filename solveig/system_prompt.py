@@ -1,11 +1,10 @@
 import os
 import platform
+
 # from pathlib import PurePath
 # from anyio import Path
-
 from .plugins.schema.tree import TreeRequirement, TreeResult
 from .utils.file import Metadata
-from anyio import Path
 
 try:
     import distro  # optional, only needed for Linux distros
@@ -15,18 +14,20 @@ except ImportError:
 # TODO: Make conversation examples dynamic rather than hardcoded
 from solveig.schema import REQUIREMENTS
 from solveig.schema.requirements import (
+    CommandRequirement,
     MoveRequirement,
+    ReadRequirement,
     TaskListRequirement,
-    WriteRequirement
+    WriteRequirement,
 )
 from solveig.schema.results import (
+    CommandResult,
     MoveResult,
-    TaskListResult,
+    ReadResult,
     Task,
+    TaskListResult,
     WriteResult,
 )
-from solveig.schema.requirements import CommandRequirement, ReadRequirement
-from solveig.schema.results import CommandResult, ReadResult
 
 from .config import SolveigConfig
 from .schema.message import AssistantMessage, MessageHistory, UserMessage

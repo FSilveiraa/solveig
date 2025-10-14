@@ -113,6 +113,7 @@ def get_filtered_assistant_message_class(
             requirements_union = requirements_union | req_type
 
     # Create completely fresh AssistantMessage class
+    # HACK: we tell mypy to ignore typing here
     class AssistantMessage(BaseMessage):
         requirements: (
             list[
@@ -178,7 +179,8 @@ def get_requirements_union_for_streaming(
         requirements_union = all_active_requirements[0]
     else:
         from typing import cast
-        # Cast to tell mypy this is a valid Union type
+
+        # HACK: Cast to tell mypy this is a valid Union type
         requirements_union = cast(type[Requirement], Union[*all_active_requirements])
 
     # Cache the result

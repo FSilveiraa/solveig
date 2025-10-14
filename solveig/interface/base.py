@@ -5,9 +5,8 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
-from typing import Any, Iterable, AsyncContextManager
 
 from solveig.utils.file import Metadata
 
@@ -91,7 +90,9 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_yes_no(self, question: str, yes_values: Iterable[str] | None = None) -> bool:
+    async def ask_yes_no(
+        self, question: str, yes_values: Iterable[str] | None = None
+    ) -> bool:
         """Ask a yes/no question."""
         ...
 

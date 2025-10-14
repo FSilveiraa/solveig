@@ -5,13 +5,12 @@ Modern Textual interface for Solveig using Textual with composition pattern.
 import asyncio
 import random
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
-from typing import Any, Iterable
 
 from rich.spinner import Spinner
 from textual.app import App as TextualApp
-from textual.app import ComposeResult, Timer
+from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
 
@@ -38,7 +37,7 @@ BANNER = """
 class TextBox(Static):
     """A text block widget with optional title and border."""
 
-    def __init__(self, content: str, title: str = None, **kwargs):
+    def __init__(self, content: str, title: str | None = None, **kwargs):
         super().__init__(content, **kwargs)
         self.border = "solid"
         if title:
@@ -78,7 +77,7 @@ class ConversationArea(ScrollableContainer):
         await target.mount(text_widget)
         self.scroll_end()
 
-    async def add_text_block(self, content: str, title: str = None):
+    async def add_text_block(self, content: str, title: str | None = None):
         """Add a text block with border and optional title."""
         text_block = TextBox(content, title=title)
 
@@ -134,24 +133,24 @@ class StatusBar(Static):
         self._model = ""
         self._url = ""
         self._spinner = None
-        self._timer: Timer | None = None
+        self._timer = None
 
     def update_status_info(
         self,
-        status: str = None,
-        tokens: tuple[int, int] | int = None,
-        model: str = None,
-        url: str = None,
+        status: str | None = None,
+        tokens: tuple[int, int] | int | str | None = None,
+        model: str | None = None,
+        url: str | None = None,
     ):
         """Update status bar with multiple pieces of information."""
         if status is not None:
             self._status = status
         if tokens is not None:
-            if isinstance(tokens, int):
-                self._tokens = str(tokens)
-            else:
+            if isinstance(tokens, tuple):
                 # tokens is (sent, received)
                 self._tokens = f"{tokens[0]}↑ / {tokens[1]}↓"
+            else:
+                self._tokens = tokens
         if model is not None:
             self._model = model
         if url is not None:
@@ -302,10 +301,7 @@ class SolveigTextualApp(TextualApp):
         # Readyness event
         self.is_ready = asyncio.Event()
 
-    @property
-    def CSS(self) -> str:
-        """Return the generated CSS."""
-        return self._css
+    # CSS = ""  # Will be set during __init__
 
     def compose(self) -> ComposeResult:
         """Create the main layout."""
@@ -358,7 +354,7 @@ class SolveigTextualApp(TextualApp):
             # self.interrupted = True
             self.exit()
 
-    async def ask_user(self, prompt: str, placeholder: str = None) -> str:
+    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
         """Ask for any kind of input with a prompt."""
         try:
             # Save current state
@@ -490,7 +486,7 @@ class TextualInterface(SolveigInterface):
             title=title or str(metadata.path),
         )
 
-    async def display_text_block(self, text: str, title: str = None) -> None:
+    async def display_text_block(self, text: str, title: str | None = None) -> None:
         """Display a text block with optional title."""
         await self.app._conversation_area.add_text_block(text, title=title)
 
@@ -512,7 +508,9 @@ class TextualInterface(SolveigInterface):
         )
         return response
 
-    async def ask_yes_no(self, question: str, yes_values: Iterable[str] | None = None) -> bool:
+    async def ask_yes_no(
+        self, question: str, yes_values: Iterable[str] | None = None
+    ) -> bool:
         """Ask a yes/no question."""
         yes_values = yes_values or self.YES
         question = question.strip()
@@ -567,7 +565,9 @@ class TextualInterface(SolveigInterface):
             await self.app._conversation_area.exit_group()
 
     @asynccontextmanager
-    async def with_animation(self, status: str = "Processing", final_status: str = "Ready"):
+    async def with_animation(
+        self, status: str = "Processing", final_status: str = "Ready"
+    ):
         """Context manager for displaying animation during async operations."""
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)
