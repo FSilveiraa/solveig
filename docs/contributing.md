@@ -32,7 +32,7 @@ black .
 ruff check . --fix
 
 # Type checking
-mypy solveig/ scripts/ --ignore-missing-imports
+mypy solveig/ --ignore-missing-imports
 
 # Run tests with coverage
 pytest ./tests/ --cov=solveig --cov-report=term-missing -v

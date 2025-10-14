@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from pathlib import PurePath
+from os import PathLike
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
@@ -22,10 +22,10 @@ SIZE_PATTERN = re.compile(r"^\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>\w+)\s*$")
 
 def default_json_serialize(o):
     """
-    I use Path a lot on this project and can't be hotfixing every instance to convert to str, this does it autiomatically
+    I use Path a lot on this project and can't be hot-fixing every instance to convert to str, this does it automatically
     json.dumps(model, default=default_json_serialize)
     """
-    if isinstance(o, PurePath) or isinstance(o, re.Pattern):
+    if isinstance(o, PathLike) or isinstance(o, re.Pattern):
         return str(o)
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 

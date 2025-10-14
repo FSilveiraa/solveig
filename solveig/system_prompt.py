@@ -1,11 +1,10 @@
 import os
 import platform
-from datetime import datetime
-from pathlib import PurePath
+# from pathlib import PurePath
+# from anyio import Path
 
 from .plugins.schema.tree import TreeRequirement, TreeResult
-from .schema.results.task import Task, TaskListResult
-from .utils.file import Metadata
+from .utils.file import Metadata, SolveigPath
 
 try:
     import distro  # optional, only needed for Linux distros
@@ -13,12 +12,16 @@ except ImportError:
     distro = None  # type: ignore
 
 # TODO: Make conversation examples dynamic rather than hardcoded
-from solveig.schema import (
-    REQUIREMENTS,
+from solveig.schema import REQUIREMENTS
+from solveig.schema.requirements import (
     MoveRequirement,
-    MoveResult,
     TaskListRequirement,
-    WriteRequirement,
+    WriteRequirement
+)
+from solveig.schema.results import (
+    MoveResult,
+    TaskListResult,
+    Task,
     WriteResult,
 )
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
@@ -49,193 +52,85 @@ SYSTEM_PROMPT_EXAMPLES = (
 )
 CONVERSATION_EXAMPLES = []
 
-joke_chat = MessageHistory(
-    system_prompt=""
-)  # we don't want system prompt for a chat history that itself will be used in our system prompt
+# joke_chat = MessageHistory(
+#     system_prompt=""
+# )  # we don't want system prompt for a chat history that itself will be used in our system prompt
 # CONVERSATION_EXAMPLES.append(joke_chat)
-joke_chat.add_messages(UserMessage(comment="Tell me a joke"))
-joke_chat.add_messages(
-    AssistantMessage(
-        comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.",
-        requirements=[],
-    )
-)
-
-script_chat = MessageHistory(system_prompt="")
-# CONVERSATION_EXAMPLES.append(script_chat)
-script_chat.add_messages(UserMessage(comment="What does the script on ~/run.sh do?"))
-file_req1 = ReadRequirement(
-    metadata_only=True,
-    path="~/run.sh",
-    comment="To check what this script does, I need to read the contents of run.sh.",
-)
-script_chat.add_messages(
-    AssistantMessage(comment="Of course, let's take a look", requirements=[file_req1])
-)
-script_chat.add_messages(
-    UserMessage(
-        comment="Ok here you go",
-        results=[
-            ReadResult(
-                requirement=file_req1,
-                path=file_req1.path,
-                metadata=Metadata(
-                    owner_name="user",
-                    group_name="user",
-                    path=PurePath("/home/user/run.sh"),
-                    size=101,
-                    modified_time=int(
-                        datetime.fromisoformat("2025-07-17T02:54:43").timestamp()
-                    ),
-                    is_directory=False,
-                    is_readable=True,
-                    is_writable=True,
-                ),
-                accepted=True,
-                content="""
-#!/usr/bin/env bash
-mkdir -p logs tmp
-touch logs/app.log
-echo "Project initialized." > tmp/init.flag
-""".strip(),
-            )
-        ],
-    )
-)
-script_chat.add_messages(
-    AssistantMessage(
-        comment="""
-This script initializes a project workspace.
-This script creates logs/ and tmp/, makes an empty logs/app.log, and writes “Project initialized.” to tmp/init.flag.
-It’s safe—no deletions or overwrites.
-""".strip(),
-        requirements=[],
-    )
-)
-
-multiple_issues_chat = MessageHistory(system_prompt="")
-# CONVERSATION_EXAMPLES.append(multiple_issues_chat)
-multiple_issues_chat.add_messages(
-    UserMessage(
-        comment="""
-My computer is slow, can you help me find which processes are using my CPU the most and what my disk usage is?
-Also summarize the contents of ~/my_app.log, count how many errors occurred and how serious they look
-I'm using Linux
-"""
-    )
-)
-cmd_req_cpu_usage = CommandRequirement(
-    comment="Run this command to list processes sorted by CPU usage",
-    command="ps aux --sort=-%cpu | head -n 10",
-)
-cmd_req_disk_usage = CommandRequirement(
-    comment="Run this to see overall disk usage per mounted filesystem", command="df -h"
-)
-file_req_large_dirs = ReadRequirement(
-    comment="If you also want to see which directories are largest in your home folder",
-    path="~",
-    metadata_only=True,
-)
-file_req_log = ReadRequirement(
-    comment="I need to access the log to analyze it",
-    path="~/Documents/my_app.log",
-    metadata_only=False,
-)
-multiple_issues_chat.add_messages(
-    AssistantMessage(
-        comment="Sure! Let’s check these step by step.",
-        requirements=[
-            cmd_req_cpu_usage,
-            cmd_req_disk_usage,
-            file_req_large_dirs,
-            file_req_log,
-        ],
-    )
-)
-multiple_issues_chat.add_messages(
-    UserMessage(
-        comment="Here you go. I don't think it's necessary to get the metadata for my home folder, but you can have the rest",
-        results=[
-            CommandResult(
-                requirement=cmd_req_cpu_usage,
-                command=cmd_req_cpu_usage.command,
-                accepted=True,
-                stdout="""
-USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
-jdoe        8421 95.7  4.2 905312 342816 ?       Rl   09:13  10:44 /opt/firefox/firefox
-jdoe        9154 28.9  1.8 732448 146232 ?       Sl   09:26   2:12 /usr/bin/python3 /home/jdoe/projects/scraper.py
-root        1203 18.4  0.9 255280  72012 ?       Ssl  07:45   7:03 /usr/lib/Xorg vt1 -displayfd 3
-(...)
-""",
-                success=True,
-            ),
-            CommandResult(
-                requirement=cmd_req_disk_usage,
-                command=cmd_req_disk_usage.command,
-                accepted=True,
-                stdout="""
-Filesystem      Size  Used Avail Use% Mounted on
-tmpfs           784M  2.0M  782M   1% /run
-/dev/sda2        60G   42G   16G  73% /
-tmpfs           3.8G  128M  3.7G   4% /dev/shm
-tmpfs           5.0M     0  5.0M   0% /run/lock
-/dev/sda1       512M  6.1M  506M   2% /boot/efi
-/dev/sdb1       200G  150G   50G  75% /mnt/data
-tmpfs           784M   48K  784M   1% /run/user/1000
-""",
-                success=True,
-            ),
-            ReadResult(
-                requirement=file_req_large_dirs,
-                path=file_req_large_dirs.path,
-                accepted=False,
-            ),
-            ReadResult(
-                requirement=file_req_log,
-                path=file_req_log.path,
-                accepted=True,
-                metadata=Metadata(
-                    owner_name="user",
-                    group_name="user",
-                    path=PurePath("/home/user/Documents/my_app.log"),
-                    size=11180,
-                    modified_time=int(
-                        datetime.fromisoformat("2025-07-16T12:59:44").timestamp()
-                    ),
-                    is_directory=False,
-                    is_readable=True,
-                    is_writable=True,
-                ),
-                content="""
-2025-07-16 09:12:03 INFO  [app] Starting web server on port 8080
-2025-07-16 09:12:04 INFO  [db] Connection established to postgres://localhost:5432/mydb
-2025-07-16 09:12:05 INFO  [app] GET / 200 12ms
-2025-07-16 09:12:07 INFO  [app] GET /api/users 200 24ms
-2025-07-16 09:12:08 WARN  [auth] Failed login attempt for user 'admin'
-2025-07-16 09:12:09 INFO  [app] POST /api/login 401 18ms
-2025-07-16 09:12:11 INFO  [app] GET /dashboard 302 3ms
-2025-07-16 09:12:15 ERROR [payment] Timeout while processing transaction #98432
-2025-07-16 09:12:16 INFO  [app] GET /api/orders 200 45ms
-""",
-            ),
-        ],
-    )
-)
-multiple_issues_chat.add_messages(
-    AssistantMessage(
-        comment="""
-I understand. Based on the information you've shared, Firefox is using a lot of your CPU and could be responsible for it being slow.
-The file ~/my_app.log shows that someone tried to login as 'admin' around 09:12, but failed. Around the same time there was also a failed payment transaction.
-"""
-    )
-)
+# joke_chat.add_messages(UserMessage(comment="Tell me a joke"))
+# joke_chat.add_messages(
+#     AssistantMessage(requirements=[
+#         TaskListRequirement(comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.",)
+#     ])
+# )
+#
+# script_chat = MessageHistory(system_prompt="")
+# # CONVERSATION_EXAMPLES.append(script_chat)
+# script_chat.add_messages(UserMessage(comment="What does the script on ~/run.sh do?"))
+# file_req1 = ReadRequirement(
+#     metadata_only=True,
+#     path="~/run.sh",
+#     comment="To check what this script does, I need to read the contents of run.sh.",
+# )
+# script_chat.add_messages(
+# AssistantMessage(requirements=[
+#         TaskListRequirement(
+#             comment="Of course, let's take a look",
+#             tasks=[
+#                 Task(description="Check scripts", status="in_progress"),
+#                 Task(description="Explain script contents to user", status="pending"),
+#
+#             ]
+#         ),
+#     ])
+# )
+# script_chat.add_messages(
+#     UserMessage(
+#         comment="Ok here you go",
+#         results=[
+#             ReadResult(
+#                 requirement=file_req1,
+#                 path=file_req1.path,
+#                 metadata=Metadata(
+#                     owner_name="user",
+#                     group_name="user",
+#                     path=PurePath("/home/user/run.sh"),
+#                     size=101,
+#                     modified_time=int(
+#                         datetime.fromisoformat("2025-07-17T02:54:43").timestamp()
+#                     ),
+#                     is_directory=False,
+#                     is_readable=True,
+#                     is_writable=True,
+#                 ),
+#                 accepted=True,
+#                 content="""
+# #!/usr/bin/env bash
+# mkdir -p logs tmp
+# touch logs/app.log
+# echo "Project initialized." > tmp/init.flag
+# """.strip(),
+#             )
+#         ],
+#     )
+# )
+# script_chat.add_messages(
+#     AssistantMessage(requirements=[
+#             TaskListRequirement(
+#                 comment="""
+# This script initializes a project workspace.
+# This script creates logs/ and tmp/, makes an empty logs/app.log, and writes “Project initialized.” to tmp/init.flag.
+# It’s safe—no deletions or overwrites.
+# """.strip()
+#             )
+#     ])
+# )
 
 
 large_example = MessageHistory(system_prompt="")
 CONVERSATION_EXAMPLES.append(large_example)
 
 task_list_1 = TaskListRequirement(
-    comment="I will first read the contents of ~/Sync, then individual files",
+    comment="Ok, I will first read the contents of ~/Sync, then individual files",
     tasks=[
         Task(description="Read the contents of ~/Sync", status="in_progress"),
         Task(description="Read suspicious files inside ~/Sync"),
@@ -251,7 +146,7 @@ tree_req = TreeRequirement(
 tree_metadata = Metadata(
     owner_name="user",
     group_name="user",
-    path=PurePath("/home/user/Sync"),
+    path=SolveigPath("/home/user/Sync"),
     size=4096,
     is_directory=True,
     is_readable=True,
@@ -259,10 +154,10 @@ tree_metadata = Metadata(
     modified_time=1758556702,
     encoding=None,
     listing={
-        PurePath("/home/user/Sync/config.json"): Metadata(
+        SolveigPath("/home/user/Sync/config.json"): Metadata(
             owner_name="user",
             group_name="user",
-            path=PurePath("/home/user/Sync/config.json"),
+            path=SolveigPath("/home/user/Sync/config.json"),
             size=132,
             is_directory=False,
             is_readable=True,
@@ -271,10 +166,10 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        PurePath("/home/user/Sync/d1"): Metadata(
+        SolveigPath("/home/user/Sync/d1"): Metadata(
             owner_name="user",
             group_name="user",
-            path=PurePath("/home/user/Sync/d1"),
+            path=SolveigPath("/home/user/Sync/d1"),
             size=4096,
             is_directory=True,
             is_readable=True,
@@ -282,10 +177,10 @@ tree_metadata = Metadata(
             modified_time=1758556735,
             encoding=None,
             listing={
-                PurePath("/home/user/Sync/d1/d2"): Metadata(
+                SolveigPath("/home/user/Sync/d1/d2"): Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=PurePath("/home/user/Sync/d1/d2"),
+                    path=SolveigPath("/home/user/Sync/d1/d2"),
                     size=4096,
                     is_directory=True,
                     is_readable=True,
@@ -293,10 +188,10 @@ tree_metadata = Metadata(
                     modified_time=1758556743,
                     encoding=None,
                     listing={
-                        PurePath("/home/user/Sync/d1/d2/f1"): Metadata(
+                        SolveigPath("/home/user/Sync/d1/d2/f1"): Metadata(
                             owner_name="user",
                             group_name="user",
-                            path=PurePath("/home/user/Sync/d1/d2/f1"),
+                            path=SolveigPath("/home/user/Sync/d1/d2/f1"),
                             size=446,
                             is_directory=False,
                             is_readable=True,
@@ -309,10 +204,10 @@ tree_metadata = Metadata(
                 )
             },
         ),
-        PurePath("/home/user/Sync/dev.sh"): Metadata(
+        SolveigPath("/home/user/Sync/dev.sh"): Metadata(
             owner_name="user",
             group_name="user",
-            path=PurePath("/home/user/Sync/dev.sh"),
+            path=SolveigPath("/home/user/Sync/dev.sh"),
             size=101,
             is_directory=False,
             is_readable=True,
@@ -321,10 +216,10 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        PurePath("/home/user/Sync/hello.py"): Metadata(
+        SolveigPath("/home/user/Sync/hello.py"): Metadata(
             owner_name="user",
             group_name="user",
-            path=PurePath("/home/user/Sync/hello.py"),
+            path=SolveigPath("/home/user/Sync/hello.py"),
             size=45,
             is_directory=False,
             is_readable=True,
@@ -342,7 +237,6 @@ large_example.add_messages(
         comment="Hey I don't recognize the contents of ~/Sync, can you take a look to see if it looks suspicious?",
     ),
     AssistantMessage(
-        comment="I'll help you understand what ~/Sync contains",
         requirements=[
             task_list_1,
             tree_req,
@@ -359,7 +253,7 @@ large_example.add_messages(
             TreeResult(
                 requirement=tree_req,
                 accepted=True,
-                path=PurePath("/home/user/Sync/"),
+                path=SolveigPath("/home/user/Sync/"),
                 metadata=tree_metadata,
             ),
         ],
@@ -368,16 +262,12 @@ large_example.add_messages(
 
 
 task_list_2 = TaskListRequirement(
-    comment="I've identified the most concerning files inside ~/Sync, I'll now read their contents",
+    comment="It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.",
     tasks=[
         Task(description="Read the contents of ~/Sync", status="completed"),
+        Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
         Task(
-            description="Read suspicious files inside ~/Sync",
-            status="completed",
-        ),
-        Task(
-            description="Provide a summary of contents, focused on safety and functionality",
-            status="in_progress",
+            description="Provide a summary of contents, focused on safety and functionality"
         ),
     ],
 )
@@ -387,11 +277,8 @@ read_hello_py_req = ReadRequirement(
 read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False)
 large_example.add_messages(
     AssistantMessage(
-        comment="""
-It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.
-        """,
         requirements=[
-            task_list_1,
+            task_list_2,
             read_hello_py_req,
             read_dev_sh_req,
         ],
@@ -403,12 +290,12 @@ It seems there are several files, the most relevant may be some .py and .sh scri
             ),
             ReadResult(
                 requirement=read_hello_py_req,
-                path=PurePath("/home/user/Sync/hello.py"),
+                path=SolveigPath("/home/user/Sync/hello.py"),
                 accepted=True,
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=PurePath("/home/user/Sync/hello.py"),
+                    path=SolveigPath("/home/user/Sync/hello.py"),
                     size=45,
                     is_directory=False,
                     is_readable=True,
@@ -424,12 +311,12 @@ It seems there are several files, the most relevant may be some .py and .sh scri
 #!/bin/python
 print("Hello, world!")
                 """.strip(),
-                path=PurePath("/home/user/Sync/dev.sh"),
+                path=SolveigPath("/home/user/Sync/dev.sh"),
                 accepted=True,
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=PurePath("/home/user/Sync/dev.sh"),
+                    path=SolveigPath("/home/user/Sync/dev.sh"),
                     size=101,
                     is_directory=False,
                     is_readable=True,
@@ -444,7 +331,7 @@ print("Hello, world!")
 )
 
 task_list_3 = TaskListRequirement(
-    comment="I've analyzed the contents of ~/Sync and everything seems safe",
+    comment="This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.",
     tasks=[
         Task(description="Read the contents of ~/Sync", status="completed"),
         Task(
@@ -459,9 +346,6 @@ task_list_3 = TaskListRequirement(
 )
 large_example.add_messages(
     AssistantMessage(
-        comment="""
-This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.
-        """,
         requirements=[
             task_list_3,
         ],
@@ -477,7 +361,7 @@ This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.s
 )
 
 task_list_4 = TaskListRequirement(
-    comment="Improve print utilities in project inside /home/user/Sync",
+    comment="Of course! I'll write and test an improved print script inside /home/user/Sync",
     tasks=[
         Task(
             description="Analyze and explain the contents of /home/user/Sync",
@@ -511,7 +395,6 @@ script_command_req = CommandRequirement(
 )
 large_example.add_messages(
     AssistantMessage(
-        comment="I'll write and test an improved print script.",
         requirements=[
             task_list_4,
             write_script_req,
@@ -528,7 +411,7 @@ large_example.add_messages(
             ),
             WriteResult(
                 requirement=write_script_req,
-                path=PurePath("/home/user/Sync/hello_new.py"),
+                path=SolveigPath("/home/user/Sync/hello_new.py"),
                 accepted=True,
             ),
             CommandResult(
@@ -544,8 +427,8 @@ Hello, Solveig!
     ),
 )
 
-task_list_4 = TaskListRequirement(
-    comment="Improve project in /home/user/Sync/ and delete old files",
+task_list_5 = TaskListRequirement(
+    comment="I'll delete the old script and re-name the new one",
     tasks=[
         Task(
             description="Analyze and explain the contents of /home/user/Sync/",
@@ -562,9 +445,8 @@ script_delete_move_req = CommandRequirement(
 )
 large_example.add_messages(
     AssistantMessage(
-        comment="Of course! I'll delete the old script and re-name the new one",
         requirements=[
-            task_list_4,
+            task_list_5,
             script_delete_move_req,
         ],
     ),
@@ -572,7 +454,7 @@ large_example.add_messages(
         comment="I'd rather use a simple move operation for this",
         results=[
             TaskListResult(
-                requirement=task_list_4,
+                requirement=task_list_5,
                 accepted=True,
                 tasks=task_list_4.tasks,
             ),
@@ -585,8 +467,8 @@ large_example.add_messages(
     ),
 )
 
-task_list_5 = TaskListRequirement(
-    comment="Improve project in /home/user/Sync/ and delete old files",
+task_list_6 = TaskListRequirement(
+    comment="I apologize, I'll use a move operation instead of a command",
     tasks=[
         Task(description="Write and test new print script", status="completed"),
         Task(description="Re-name new print script with command", status="failed"),
@@ -603,9 +485,8 @@ script_move_req = MoveRequirement(
 )
 large_example.add_messages(
     AssistantMessage(
-        comment="I apologize, I'll use a move requirement instead",
         requirements=[
-            task_list_5,
+            task_list_6,
             script_move_req,
         ],
     ),

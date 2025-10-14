@@ -16,13 +16,12 @@ from pydantic import Field, PlainValidator
 from solveig.utils.misc import parse_human_readable_size
 
 
-# Define PathType here to avoid circular imports
+# Define SolveigPath here to avoid circular imports
 def _validate_path(v) -> Path:
     """Convert string or PathLike to anyio.Path."""
     if isinstance(v, Path):
         return v
     return Path(v)
-
 
 SolveigPath = Annotated[str, PlainValidator(_validate_path)]
 
