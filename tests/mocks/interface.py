@@ -1,10 +1,9 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Optional, AsyncGenerator, Any
+from typing import Any
 
 from solveig.interface import TextualInterface
-from solveig.interface.base import SolveigInterface
-from solveig.utils.file import Metadata
 
 
 class MockInterface(TextualInterface):
@@ -85,7 +84,9 @@ class MockInterface(TextualInterface):
             self.outputs.append("┗━━")
 
     @asynccontextmanager
-    async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
+    async def with_animation(
+        self, status: str = "Processing", final_status: str = "Ready"
+    ) -> AsyncGenerator[None, Any]:
         await self.update_status(status)
         try:
             yield
@@ -93,16 +94,22 @@ class MockInterface(TextualInterface):
             await self.update_status(final_status)
 
     # Status and lifecycle
-    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
+    async def update_status(
+        self,
+        status: str = None,
+        tokens: tuple[int, int] | int = None,
+        model: str = None,
+        url: str = None,
+    ) -> None:
         status_info = {}
         if status is not None:
-            status_info['status'] = status
+            status_info["status"] = status
         if tokens is not None:
-            status_info['tokens'] = tokens
+            status_info["tokens"] = tokens
         if model is not None:
-            status_info['model'] = model
+            status_info["model"] = model
         if url is not None:
-            status_info['url'] = url
+            status_info["url"] = url
         self.status_updates.append(status_info)
 
     async def start(self) -> None:

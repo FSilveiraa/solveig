@@ -46,9 +46,7 @@ class TreeRequirement(Requirement):
         await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         is_dir = await Filesystem.is_dir(abs_path)
-        path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=is_dir
-        )
+        path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
         await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
@@ -72,7 +70,9 @@ class TreeRequirement(Requirement):
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # Get complete tree metadata using new approach
-        metadata = await Filesystem.read_metadata(abs_path, descend_level=self.max_depth)
+        metadata = await Filesystem.read_metadata(
+            abs_path, descend_level=self.max_depth
+        )
 
         # Display the tree structure
         await interface.display_tree(

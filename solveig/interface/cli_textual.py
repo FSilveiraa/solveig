@@ -3,20 +3,22 @@ Modern Textual interface for Solveig using Textual with composition pattern.
 """
 
 import asyncio
-import time
 import random
-from typing import Optional, AsyncGenerator, Any
+import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from textual.app import App as TextualApp, ComposeResult, Timer
+from typing import Any
+
+from rich.spinner import Spinner
+from textual.app import App as TextualApp
+from textual.app import ComposeResult, Timer
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
-from rich.spinner import Spinner
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import Palette, DEFAULT_THEME
+from solveig.interface.themes import DEFAULT_THEME, Palette
 from solveig.utils.file import Metadata
 from solveig.utils.misc import get_tree_display
-
 
 BANNER = """
                               888                                  d8b
@@ -57,7 +59,6 @@ class SectionHeader(Static):
         section_line = f"{header_prefix} {dashes}"
         super().__init__(section_line)
         self.add_class("section_header")
-
 
 
 class ConversationArea(ScrollableContainer):
@@ -133,9 +134,15 @@ class StatusBar(Static):
         self._model = ""
         self._url = ""
         self._spinner = None
-        self._timer: Optional[Timer] = None
+        self._timer: Timer | None = None
 
-    def update_status_info(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None):
+    def update_status_info(
+        self,
+        status: str = None,
+        tokens: tuple[int, int] | int = None,
+        model: str = None,
+        url: str = None,
+    ):
         """Update status bar with multiple pieces of information."""
         if status is not None:
             self._status = status
@@ -159,7 +166,7 @@ class StatusBar(Static):
         if self._spinner:
             frame = self._spinner.render(time.time())
             # Convert Rich text to plain string
-            spinner_char = frame.plain if hasattr(frame, 'plain') else str(frame)
+            spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
             status_text = f"{spinner_char} {status_text}"
 
         # Build sections only for fields that have content
@@ -174,8 +181,8 @@ class StatusBar(Static):
 
         # Get terminal width
         try:
-            total_width = self.app.size.width if hasattr(self, 'app') else 80
-        except:
+            total_width = self.app.size.width if hasattr(self, "app") else 80
+        except AttributeError:
             total_width = 80
 
         # Calculate section width
@@ -185,7 +192,7 @@ class StatusBar(Static):
         formatted_sections = []
         for section in sections:
             if len(section) > section_width - 1:
-                formatted = section[:section_width - 4] + "..."
+                formatted = section[: section_width - 4] + "..."
             else:
                 formatted = section.center(section_width - 1)
             formatted_sections.append(formatted)
@@ -200,13 +207,20 @@ class SolveigTextualApp(TextualApp):
     Minimal TextualApp subclass with only essential Solveig customizations.
     """
 
-    def __init__(self, color_palette: Palette = DEFAULT_THEME, interface_controller=None, **kwargs):
+    def __init__(
+        self,
+        color_palette: Palette = DEFAULT_THEME,
+        interface_controller=None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.interface_controller = interface_controller
 
         # Get color mapping and create CSS
         self._style_to_color = color_palette.to_textual_css()
-        self._color_to_style = {color: name for name, color in self._style_to_color.items()}
+        self._color_to_style = {
+            color: name for name, color in self._style_to_color.items()
+        }
 
         # Generate CSS from the color dict
         css_rules = []
@@ -227,7 +241,7 @@ class SolveigTextualApp(TextualApp):
             border: solid {self._style_to_color['prompt']};
             margin: 0 0 1 0;
         }}
-        
+
         Input > .input--placeholder {{
             text-style: italic;
         }}
@@ -261,12 +275,12 @@ class SolveigTextualApp(TextualApp):
             height: auto;
             min-height: 0;
         }}
-        
+
         .group_bottom {{
             color: {self._style_to_color["group"]};
             margin: 0 0 1 1;
         }}
-        
+
         .group_top {{
             color: {self._style_to_color["group"]};
             margin: 1 0 0 1;
@@ -276,7 +290,7 @@ class SolveigTextualApp(TextualApp):
         """
 
         # Prompt handling state
-        self.prompt_future: Optional[asyncio.Future] = None
+        self.prompt_future: asyncio.Future | None = None
         self._saved_input_text: str = ""
         self._original_placeholder: str = ""
 
@@ -296,7 +310,10 @@ class SolveigTextualApp(TextualApp):
     def compose(self) -> ComposeResult:
         """Create the main layout."""
         yield ConversationArea(id="conversation")
-        yield Input(placeholder="Click to focus, type your message and press Enter to send", id="input")
+        yield Input(
+            placeholder="Click to focus, type your message and press Enter to send",
+            id="input",
+        )
         yield StatusBar(id="status")
 
     def on_mount(self) -> None:
@@ -326,7 +343,9 @@ class SolveigTextualApp(TextualApp):
             # Free-flow mode: delegate to interface controller
             if self.interface_controller:
                 if asyncio.iscoroutinefunction(self.interface_controller._handle_input):
-                    asyncio.create_task(self.interface_controller._handle_input(user_input))
+                    asyncio.create_task(
+                        self.interface_controller._handle_input(user_input)
+                    )
                 else:
                     self.interface_controller._handle_input(user_input)
 
@@ -339,7 +358,6 @@ class SolveigTextualApp(TextualApp):
             # self.interrupted = True
             self.exit()
 
-
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for any kind of input with a prompt."""
         try:
@@ -351,7 +369,10 @@ class SolveigTextualApp(TextualApp):
             self.prompt_future = asyncio.Future()
             self._input_widget.value = ""
             self._input_widget.placeholder = placeholder or prompt
-            self._input_widget.styles.border = ("solid", self._style_to_color["warning"])
+            self._input_widget.styles.border = (
+                "solid",
+                self._style_to_color["warning"],
+            )
 
             # Focus the input
             self._input_widget.focus()
@@ -372,7 +393,6 @@ class SolveigTextualApp(TextualApp):
         finally:
             self.prompt_future = None
 
-
     async def add_text(self, text: str, style: str = "text") -> None:
         """Internal method to add text to the UI."""
         await self._conversation_area.add_text(text, style)
@@ -383,10 +403,17 @@ class TextualInterface(SolveigInterface):
     Textual interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
 
-    YES = { "yes", "y", }
+    YES = {
+        "yes",
+        "y",
+    }
 
-    def __init__(self, color_palette: Palette = DEFAULT_THEME, base_indent: int = 2, **kwargs):
-        self.app = SolveigTextualApp(color_palette=color_palette, interface_controller=self, **kwargs)
+    def __init__(
+        self, color_palette: Palette = DEFAULT_THEME, base_indent: int = 2, **kwargs
+    ):
+        self.app = SolveigTextualApp(
+            color_palette=color_palette, interface_controller=self, **kwargs
+        )
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
 
@@ -450,7 +477,12 @@ class TextualInterface(SolveigInterface):
         """Display a comment message."""
         await self.display_text(f"🗩  {message}")
 
-    async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+    async def display_tree(
+        self,
+        metadata: Metadata,
+        title: str | None = None,
+        display_metadata: bool = False,
+    ) -> None:
         """Display a tree structure of a directory"""
         tree_lines = get_tree_display(metadata, display_metadata)
         await self.display_text_block(
@@ -475,26 +507,37 @@ class TextualInterface(SolveigInterface):
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)
-        await self.display_text(f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}")
+        await self.display_text(
+            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}"
+        )
         return response
 
     async def ask_yes_no(self, question: str, yes_values=None) -> bool:
         """Ask a yes/no question."""
         yes_values = yes_values or self.YES
         question = question.strip()
-        if not "[y/n]" in question.lower():
+        if "[y/n]" not in question.lower():
             question = f"{question} [y/N]:"
         response = await self.ask_user(question)
         return response.lower().strip() in yes_values
 
-    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
+    async def update_status(
+        self,
+        status: str = None,
+        tokens: tuple[int, int] | int = None,
+        model: str = None,
+        url: str = None,
+    ) -> None:
         """Update status bar with multiple pieces of information."""
-        self.app._status_bar.update_status_info(status=status, tokens=tokens, model=model, url=url)
+        self.app._status_bar.update_status_info(
+            status=status, tokens=tokens, model=model, url=url
+        )
 
     async def wait_until_ready(self):
         await self.app.is_ready.wait()
         # HACK - Set active_app context since the interface was started from a separate asyncio task
         from textual._context import active_app
+
         active_app.set(self.app)
         # Print banner
         await self.display_text(BANNER)
@@ -508,7 +551,7 @@ class TextualInterface(SolveigInterface):
         # Get terminal width (fallback to 80 if not available)
         try:
             width = self.app.size.width
-        except:
+        except AttributeError:
             width = 80
 
         # section_header = SectionHeader(title, prefix="", width=width)
@@ -524,7 +567,9 @@ class TextualInterface(SolveigInterface):
             await self.app._conversation_area.exit_group()
 
     @asynccontextmanager
-    async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
+    async def with_animation(
+        self, status: str = "Processing", final_status: str = "Ready"
+    ) -> AsyncGenerator[None, Any]:
         """Context manager for displaying animation during async operations."""
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)

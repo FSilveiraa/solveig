@@ -4,6 +4,7 @@ Tests core token counting and API type parsing.
 """
 
 import pytest
+
 from solveig.llm import APIType, parse_api_type
 from tests import LOREM_IPSUM
 
@@ -40,7 +41,9 @@ class TestTokenCounting:
     def test_known_token_count_o200k_models(self):
         """Test known token count for Lorem Ipsum with o200k_base models."""
         # Test with gpt-4.1 model name and with o200k_base encoder directly
-        count_model = APIType.OPENAI.count_tokens(LOREM_IPSUM, encoder_or_model="gpt-4.1")
+        count_model = APIType.OPENAI.count_tokens(
+            LOREM_IPSUM, encoder_or_model="gpt-4.1"
+        )
         count_encoder = APIType.OPENAI.count_tokens(LOREM_IPSUM, "o200k_base")
 
         # Both should produce 763 tokens for this text

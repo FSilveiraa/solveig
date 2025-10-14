@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-from unittest.mock import Mock, AsyncMock
 
 from solveig.config import SolveigConfig
 from solveig.schema.requirements import CommandRequirement

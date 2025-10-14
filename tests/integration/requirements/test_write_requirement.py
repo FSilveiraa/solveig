@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
@@ -91,7 +92,9 @@ class TestWriteFileOperations:
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify write succeeded
             assert result.accepted
@@ -115,7 +118,9 @@ class TestWriteFileOperations:
             )
             mock_interface.user_inputs.append("y")
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify directory creation
             assert result.accepted
@@ -139,7 +144,9 @@ class TestWriteFileOperations:
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Should warn about existing path
             warning_calls = [

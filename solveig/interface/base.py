@@ -5,8 +5,9 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 """
 
 from abc import ABC, abstractmethod
-from contextlib import contextmanager, asynccontextmanager
-from typing import AsyncGenerator, Any
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any
 
 from solveig.utils.file import Metadata
 
@@ -36,7 +37,7 @@ class SolveigInterface(ABC):
     # async def stop(self) -> None:
     #     """Stop the interface (if needed)."""
     #     ...
-    
+
     # Core display methods
     @abstractmethod
     async def display_text(self, text: str, style: str = "normal") -> None:
@@ -64,7 +65,12 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
+    async def display_tree(
+        self,
+        metadata: Metadata,
+        title: str | None = None,
+        display_metadata: bool = False,
+    ) -> None:
         """Display a tree structure of a directory"""
         ...
 
@@ -103,11 +109,19 @@ class SolveigInterface(ABC):
 
     @abstractmethod
     @asynccontextmanager
-    async def with_animation(self, status: str = "Processing", final_status: str = "Ready") -> AsyncGenerator[None, Any]:
+    async def with_animation(
+        self, status: str = "Processing", final_status: str = "Ready"
+    ) -> AsyncGenerator[None, Any]:
         """Context manager for displaying animation during async operations."""
         ...
 
     @abstractmethod
-    async def update_status(self, status: str = None, tokens: tuple[int, int]|int = None, model: str = None, url: str = None) -> None:
+    async def update_status(
+        self,
+        status: str = None,
+        tokens: tuple[int, int] | int = None,
+        model: str = None,
+        url: str = None,
+    ) -> None:
         """Update status bar with multiple pieces of information."""
         ...

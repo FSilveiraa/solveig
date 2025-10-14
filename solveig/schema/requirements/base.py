@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from os import PathLike
-from anyio import Path
 from typing import TYPE_CHECKING
 
+from anyio import Path
 from pydantic import Field
 
 from solveig.config import SolveigConfig

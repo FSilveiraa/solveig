@@ -3,7 +3,7 @@ pytest configuration and fixtures for Solveig tests.
 Provides automatic mocking of all file I/O operations.
 """
 
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -98,7 +98,7 @@ def clean_plugin_state():
 @pytest.fixture
 def anyio_backend():
     """Configure anyio to only use asyncio backend, not trio."""
-    return 'asyncio'
+    return "asyncio"
 
 
 def pytest_configure(config):

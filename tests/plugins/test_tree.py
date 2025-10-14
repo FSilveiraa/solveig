@@ -5,8 +5,8 @@ from pathlib import Path, PurePath
 
 import pytest
 
-from solveig.run import run_async
 from solveig.plugins.schema.tree import TreeRequirement
+from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 

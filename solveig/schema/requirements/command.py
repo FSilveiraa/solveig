@@ -34,9 +34,7 @@ class CommandRequirement(Requirement):
             raise ValueError("Empty command") from e
         return command
 
-    async def display_header(
-        self, interface: "SolveigInterface"
-    ) -> None:
+    async def display_header(self, interface: "SolveigInterface") -> None:
         """Display command requirement header."""
         await super().display_header(interface)
         await interface.display_text_block(self.command, title="Command")
@@ -68,8 +66,8 @@ class CommandRequirement(Requirement):
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
             # Decode bytes to strings
-            output = stdout.decode('utf-8').strip() if stdout else ""
-            error = stderr.decode('utf-8').strip() if stderr else ""
+            output = stdout.decode("utf-8").strip() if stdout else ""
+            error = stderr.decode("utf-8").strip() if stderr else ""
             return output, error
         raise ValueError("Empty command")
 
@@ -115,7 +113,9 @@ class CommandRequirement(Requirement):
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")
             if config.auto_send:
-                await interface.display_text("Sending output since config.auto_send=True")
+                await interface.display_text(
+                    "Sending output since config.auto_send=True"
+                )
             elif not await interface.ask_yes_no("Allow sending output? [y/N]: "):
                 output = "<hidden>"
                 error = ""

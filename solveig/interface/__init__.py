@@ -27,8 +27,8 @@ confirm = await cli.ask_yes_no("Continue?")
 ```
 """
 
-from solveig.interface.base import SolveigInterface
 from ignore.cli_simple import SimpleInterface
+from solveig.interface.base import SolveigInterface
 from solveig.interface.cli_textual import TextualInterface
 from solveig.interface.themes import Palette, terracotta
 

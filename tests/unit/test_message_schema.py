@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 from solveig.config import SolveigConfig
 from solveig.schema.message import (
-    get_filtered_assistant_message_class,
+    AssistantMessage,
     SystemMessage,
     UserMessage,
-    AssistantMessage,
+    get_filtered_assistant_message_class,
 )
 from solveig.schema.requirements.command import CommandRequirement
 
@@ -157,10 +157,7 @@ class TestMessageSerialization:
         message = SystemMessage(system_prompt="You are helpful")
         openai_dict = message.to_openai()
 
-        assert openai_dict == {
-            "role": "system",
-            "content": "You are helpful"
-        }
+        assert openai_dict == {"role": "system", "content": "You are helpful"}
         # SystemMessage should NOT use JSON serialization
         assert not openai_dict["content"].startswith("{")
 

@@ -36,7 +36,9 @@ class DeleteRequirement(Requirement):
             path=self.path, abs_path=abs_path, is_dir=await Filesystem.is_dir(abs_path)
         )
         await interface.display_text(path_info)
-        await interface.display_warning("This operation is permanent and cannot be undone!")
+        await interface.display_warning(
+            "This operation is permanent and cannot be undone!"
+        )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "DeleteResult":
         """Create DeleteResult with error."""

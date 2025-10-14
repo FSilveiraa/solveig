@@ -37,9 +37,7 @@ class ReadRequirement(Requirement):
         await super().display_header(interface)
         abs_path = Filesystem.get_absolute_path(self.path)
         is_dir = await Filesystem.is_dir(abs_path)
-        path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=is_dir
-        )
+        path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
         await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
@@ -104,7 +102,9 @@ class ReadRequirement(Requirement):
             content_output = (
                 "(Base64)" if metadata.encoding.lower() == "base64" else str(content)
             )
-            await interface.display_text_block(content_output, title=f"Content: {abs_path}")
+            await interface.display_text_block(
+                content_output, title=f"Content: {abs_path}"
+            )
 
         if config.auto_send:
             await interface.display_text(

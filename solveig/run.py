@@ -11,7 +11,7 @@ from instructor import Instructor
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface, TextualInterface, SimpleInterface
+from solveig.interface import SimpleInterface, SolveigInterface, TextualInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
     AssistantMessage,
@@ -70,7 +70,11 @@ async def send_message_to_llm_with_retry(
         try:
             message_history_dumped = message_history.to_openai(update_sent_count=True)
             await interface.update_status(
-                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+                tokens=(
+                    message_history.total_tokens_sent,
+                    message_history.total_tokens_received,
+                )
+            )
 
             requirements = []
             requirement_stream = client.chat.completions.create_iterable(
@@ -91,7 +95,11 @@ async def send_message_to_llm_with_retry(
             # Create AssistantMessage with requirements
             llm_response = AssistantMessage(requirements=requirements)
             await interface.update_status(
-                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+                tokens=(
+                    message_history.total_tokens_sent,
+                    message_history.total_tokens_received,
+                )
+            )
             message_history.add_messages(llm_response)
 
             return llm_response, user_message
@@ -102,8 +110,7 @@ async def send_message_to_llm_with_retry(
         except Exception as e:
             await interface.display_error(e)
             await interface.display_text_block(
-                title=f"{e.__class__.__name__}",
-                text=str(e) + traceback.format_exc()
+                title=f"{e.__class__.__name__}", text=str(e) + traceback.format_exc()
             )
 
             # Ask if user wants to retry
@@ -114,7 +121,9 @@ async def send_message_to_llm_with_retry(
                 return None, user_message
 
             # Ask for new comment if retrying
-            new_comment = await interface.ask_user("Enter a new message (or press Enter to retry with the same message)")
+            new_comment = await interface.ask_user(
+                "Enter a new message (or press Enter to retry with the same message)"
+            )
             if new_comment.strip():
                 user_message = UserMessage(comment=new_comment)
 
@@ -136,8 +145,7 @@ async def process_requirements(
         except Exception as e:
             await interface.display_error(f"Error processing requirement: {e}")
             await interface.display_text_block(
-                title=f"{e.__class__.__name__}",
-                text=str(e) + traceback.format_exc()
+                title=f"{e.__class__.__name__}", text=str(e) + traceback.format_exc()
             )
 
     return results
@@ -187,7 +195,12 @@ async def main_loop(
 
         # Successfully got LLM response
         message_history.add_messages(llm_response)
-        await interface.update_status(tokens=(message_history.total_tokens_sent, message_history.total_tokens_received))
+        await interface.update_status(
+            tokens=(
+                message_history.total_tokens_sent,
+                message_history.total_tokens_received,
+            )
+        )
         if config.verbose:
             await interface.display_text_block(str(llm_response), title="Response")
 
@@ -209,18 +222,20 @@ async def run_async(
     config: SolveigConfig,
     interface: SolveigInterface,
     llm_client: Instructor,
-    user_prompt: str = ""
+    user_prompt: str = "",
 ):
     """Entry point for the async CLI with explicit dependencies."""
     loop_task = None
     try:
         # Run interface in foreground to properly capture exit, pass control to conversation loop
-        loop_task = asyncio.create_task(main_loop(
-            interface=interface,
-            config=config,
-            llm_client=llm_client,
-            user_prompt=user_prompt
-        ))
+        loop_task = asyncio.create_task(
+            main_loop(
+                interface=interface,
+                config=config,
+                llm_client=llm_client,
+                user_prompt=user_prompt,
+            )
+        )
         await interface.start()
 
     except Exception as e:
@@ -246,9 +261,7 @@ async def _main_async():
 
     # Create LLM client
     llm_client = llm.get_instructor_client(
-        api_type=config.api_type,
-        api_key=config.api_key,
-        url=config.url
+        api_type=config.api_type, api_key=config.api_key, url=config.url
     )
 
     # Create interface based on config
@@ -259,6 +272,7 @@ async def _main_async():
 
     # Run the async main loop
     await run_async(config, interface, llm_client, user_prompt)
+
 
 if __name__ == "__main__":
     main()

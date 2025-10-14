@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from .base import RequirementResult
 from solveig.utils.file import SolveigPath
+
+from .base import RequirementResult
 
 
 class DeleteResult(RequirementResult):

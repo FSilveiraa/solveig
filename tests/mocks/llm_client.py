@@ -1,4 +1,5 @@
 """Simple mock LLM client for testing conversation loops."""
+
 import asyncio
 import random
 import time

@@ -15,7 +15,9 @@ class APIType:
         name = ""
 
         @classmethod
-        def count_tokens(cls, text: str|dict, encoder_or_model: str | None = None) -> int:
+        def count_tokens(
+            cls, text: str | dict, encoder_or_model: str | None = None
+        ) -> int:
             # account for openai-format message
             if isinstance(text, dict):
                 text = text.get("content", "") + text.get("role", "")
@@ -26,7 +28,7 @@ class APIType:
                 assert encoder_or_model is not None
                 try:
                     encoder = tiktoken.encoding_for_model(encoder_or_model)
-                except:
+                except (KeyError, ValueError):
                     try:
                         encoder = tiktoken.get_encoding(encoder_or_model)
                     except Exception as e:
@@ -87,7 +89,9 @@ class APIType:
             model: str | None = None,
         ) -> instructor.Instructor:
             try:
-                client = openai.AsyncOpenAI(api_key=api_key, base_url=url or cls.default_url)
+                client = openai.AsyncOpenAI(
+                    api_key=api_key, base_url=url or cls.default_url
+                )
                 return instructor.from_openai(client, mode=instructor_mode)
             except ImportError as e:
                 raise ValueError(

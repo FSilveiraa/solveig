@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from solveig.utils.file import SolveigPath
+
 from ...utils.file import Metadata
 from .base import RequirementResult
-from solveig.utils.file import SolveigPath
 
 
 class ReadResult(RequirementResult):

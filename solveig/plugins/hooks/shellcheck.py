@@ -101,7 +101,7 @@ async def check_command(
 
         # Parse shellcheck warnings and raise validation error
         try:
-            output = json.loads(stdout.decode('utf-8').strip())
+            output = json.loads(stdout.decode("utf-8").strip())
             errors = [f"[{item['level']}] {item['message']}" for item in output]
             if errors:
                 async with interface.with_group("Shellcheck Errors"):

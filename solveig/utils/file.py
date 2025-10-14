@@ -1,21 +1,17 @@
 import asyncio
-from dataclasses import dataclass
-from typing import Literal
-from pydantic import Field
-
-from os import PathLike
-
-from pathlib import Path as SyncPath
 import base64
 import grp
 import os
 import pwd
 import shutil
+from dataclasses import dataclass
+from os import PathLike
+from pathlib import Path as SyncPath
 from pathlib import PurePath
+from typing import Annotated, Literal
 
-from typing import Annotated
-from pydantic import PlainValidator
 from anyio import Path
+from pydantic import Field, PlainValidator
 
 from solveig.utils.misc import parse_human_readable_size
 
@@ -27,8 +23,8 @@ def _validate_path(v) -> Path:
         return v
     return Path(v)
 
-SolveigPath = Annotated[str, PlainValidator(_validate_path)]
 
+SolveigPath = Annotated[str, PlainValidator(_validate_path)]
 
 
 @dataclass
@@ -106,12 +102,16 @@ class Filesystem:
     @staticmethod
     async def _copy_file(abs_src_path: Path, abs_dest_path: Path) -> None:
         """Async file copying - use shutil.copy2 for metadata preservation."""
-        await asyncio.to_thread(shutil.copy2, PurePath(abs_src_path), PurePath(abs_dest_path))
+        await asyncio.to_thread(
+            shutil.copy2, PurePath(abs_src_path), PurePath(abs_dest_path)
+        )
 
     @staticmethod
     async def _copy_dir(src_path: Path, dest_path: Path) -> None:
         """Async directory copying - use shutil.copytree."""
-        await asyncio.to_thread(shutil.copytree, PurePath(src_path), PurePath(dest_path))
+        await asyncio.to_thread(
+            shutil.copytree, PurePath(src_path), PurePath(dest_path)
+        )
 
     @staticmethod
     async def _move(src_path: Path, dest_path: Path) -> None:
@@ -121,7 +121,9 @@ class Filesystem:
     @staticmethod
     async def _get_free_space(abs_path: Path) -> int:
         """Async disk space checking - use shutil.disk_usage."""
-        return await asyncio.to_thread(lambda: shutil.disk_usage(PurePath(abs_path)).free)
+        return await asyncio.to_thread(
+            lambda: shutil.disk_usage(PurePath(abs_path)).free
+        )
 
     @staticmethod
     async def _delete_file(abs_path: Path) -> None:
@@ -228,7 +230,7 @@ class Filesystem:
     # =============================================================================
 
     @staticmethod
-    def get_absolute_path(path: str|PathLike) -> Path:
+    def get_absolute_path(path: str | PathLike) -> Path:
         """Convert path to absolute path with user expansion (sync operation)."""
         return Path(SyncPath(path).expanduser().resolve())
 
@@ -291,10 +293,12 @@ class Filesystem:
                 pwd.getpwuid(stats.st_uid).pw_name,
                 grp.getgrgid(stats.st_gid).gr_name,
                 os.access(abs_path, os.R_OK),
-                os.access(abs_path, os.W_OK)
+                os.access(abs_path, os.W_OK),
             )
 
-        owner_name, group_name, is_readable, is_writable = await asyncio.to_thread(_get_user_info)
+        owner_name, group_name, is_readable, is_writable = await asyncio.to_thread(
+            _get_user_info
+        )
 
         return Metadata(
             path=abs_path,
@@ -365,9 +369,7 @@ class Filesystem:
             await cls._create_directory(abs_path)
 
     @classmethod
-    async def copy(
-        cls, src_path: Path, dest_path: Path, min_space_left: int
-    ) -> None:
+    async def copy(cls, src_path: Path, dest_path: Path, min_space_left: int) -> None:
         """Async copy file or directory with validation."""
         src_path = cls.get_absolute_path(src_path)
         dest_path = cls.get_absolute_path(dest_path)
@@ -408,8 +410,6 @@ class Filesystem:
             await cls._delete_file(abs_path)
 
     @classmethod
-    def path_matches_patterns(
-        cls, abs_path: Path, patterns: list[Path]
-    ) -> bool:
+    def path_matches_patterns(cls, abs_path: Path, patterns: list[Path]) -> bool:
         """Check if a file path matches any of the given glob patterns (sync operation)."""
         return any(abs_path.match(str(pattern)) for pattern in patterns)

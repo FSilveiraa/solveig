@@ -1,8 +1,6 @@
-from datetime import datetime
 import re
+from datetime import datetime
 from pathlib import PurePath
-
-import tiktoken
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
@@ -90,6 +88,7 @@ def parse_human_readable_size(size_notation: int | str) -> int:
                     ) from None
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
+
 class TEXT_BOX:
     H = "─"
     V = "│"
@@ -103,13 +102,14 @@ class TEXT_BOX:
     HT = "┴"
     X = "┼"
 
-def get_tree_display(metadata, display_metadata: bool = False, indent="  ") -> list[str]:
+
+def get_tree_display(
+    metadata, display_metadata: bool = False, indent="  "
+) -> list[str]:
     line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
     if display_metadata:
         if not metadata.is_directory:
-            size_str = convert_size_to_human_readable(
-                metadata.size
-            )
+            size_str = convert_size_to_human_readable(metadata.size)
             line = f"{line}  |  size: {size_str}"
         modified_time = datetime.fromtimestamp(
             float(metadata.modified_time)
@@ -132,8 +132,6 @@ def get_tree_display(metadata, display_metadata: bool = False, indent="  ") -> l
             # │  ├─🗁 sub-d1
             # │  └─🗎 sub-f1
             for sub_entry in entry_lines[1:]:
-                lines.append(
-                    f"{indent}{'' if is_last else TEXT_BOX.V}{sub_entry}"
-                )
+                lines.append(f"{indent}{'' if is_last else TEXT_BOX.V}{sub_entry}")
 
     return lines

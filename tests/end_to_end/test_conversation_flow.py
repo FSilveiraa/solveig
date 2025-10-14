@@ -30,13 +30,13 @@ class TestConversationFlow:
                 TaskListRequirement(
                     comment="I'll help diagnose your system. Let me check basic information.",
                     tasks=[
-                        Task(status="pending", description="Check current directory path"),
+                        Task(
+                            status="pending", description="Check current directory path"
+                        ),
                         Task(status="pending", description="List files"),
-                    ]
+                    ],
                 ),
-                CommandRequirement(
-                    command="pwd", comment="Check current directory"
-                ),
+                CommandRequirement(command="pwd", comment="Check current directory"),
                 CommandRequirement(command="ls -la", comment="List files with details"),
             ],
         )
@@ -158,10 +158,12 @@ class TestConversationFlow:
 
         mock_client = create_mock_client(llm_response)
         interface = MockInterface()
-        interface.set_user_inputs([
-            "n",  # Don't retry when it says "empty message"
-            "/exit"  # Exit the conversation
-        ])
+        interface.set_user_inputs(
+            [
+                "n",  # Don't retry when it says "empty message"
+                "/exit",  # Exit the conversation
+            ]
+        )
 
         await run_async(
             config=DEFAULT_CONFIG,

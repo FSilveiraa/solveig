@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, Union, Optional
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, field_validator
 
@@ -132,7 +132,9 @@ _last_requirements_config_hash = None
 _last_requirements_union = None
 
 
-def get_requirements_union_for_streaming(config: SolveigConfig | None = None) -> Union[type[Requirement]] | None:
+def get_requirements_union_for_streaming(
+    config: SolveigConfig | None = None,
+) -> type[Requirement] | None:
     """Get the requirements union type for streaming individual requirements with caching."""
     global _last_requirements_config_hash, _last_requirements_union
 
@@ -142,7 +144,10 @@ def get_requirements_union_for_streaming(config: SolveigConfig | None = None) ->
         config_hash = hash(config.to_json(indent=None, sort_keys=True))
 
     # Return cached union if config hasn't changed
-    if config_hash == _last_requirements_config_hash and _last_requirements_union is not None:
+    if (
+        config_hash == _last_requirements_config_hash
+        and _last_requirements_union is not None
+    ):
         return _last_requirements_union
 
     # Get ALL active requirements from the unified registry
@@ -172,7 +177,7 @@ def get_requirements_union_for_streaming(config: SolveigConfig | None = None) ->
     if len(all_active_requirements) == 1:
         requirements_union = all_active_requirements[0]
     else:
-        requirements_union = Union[tuple(all_active_requirements)]
+        requirements_union = Union[*all_active_requirements]
 
     # Cache the result
     _last_requirements_config_hash = config_hash
@@ -229,7 +234,9 @@ class MessageHistory:
         """Add a message and automatically prune if over context limit."""
         for message in messages:
             message_dumped = message.to_openai()
-            token_count = self.api_type.count_tokens(message_dumped["content"], self.encoder)
+            token_count = self.api_type.count_tokens(
+                message_dumped["content"], self.encoder
+            )
 
             # Update current cache size for pruning
             self.token_count += token_count

@@ -129,7 +129,9 @@ fi
     async def test_shellcheck_not_available(self, mock_subprocess):
         """Test graceful handling when shellcheck command is not found."""
         # Mock shellcheck command not found
-        mock_subprocess.communicate.side_effect = FileNotFoundError("shellcheck command not found")
+        mock_subprocess.communicate.side_effect = FileNotFoundError(
+            "shellcheck command not found"
+        )
 
         config = SHELLCHECK_CONFIG
         req = CommandRequirement(command="echo test", comment="Test")

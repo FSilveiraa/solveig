@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -78,7 +79,9 @@ class TestMoveFileOperations:
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify move succeeded
             assert result.accepted

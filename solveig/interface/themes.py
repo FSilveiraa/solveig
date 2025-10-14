@@ -25,7 +25,7 @@ class Palette:
         """Generate Textual CSS rules from palette colors."""
         palette_dict = asdict(self)
         palette_dict.pop("name")  # Remove name field
-        return { name:color for name, color in palette_dict.items() }
+        return dict(palette_dict.items())
         # for field_name, color in palette_dict.items():
         #     if color:  # Skip empty colors
         #         css_rules.append(f".{field_name}_message {{ color: {color}; }}")

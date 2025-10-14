@@ -6,7 +6,6 @@ This module defines the data structures used for:
 - Requirements (file operations, shell commands)
 - Results and error handling
 """
-import traceback
 
 from .requirements import (  # noqa: F401
     CommandRequirement,

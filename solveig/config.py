@@ -3,8 +3,9 @@ import json
 import re
 from dataclasses import dataclass, field
 from importlib.metadata import version
-from anyio import Path
 from typing import Any
+
+from anyio import Path
 
 from solveig.interface import SolveigInterface, themes
 from solveig.llm import APIType, parse_api_type

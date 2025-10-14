@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -97,7 +98,9 @@ class TestReadFileOperations:
                 comment="Test tilde expansion",
             )
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify result
             assert result.accepted
@@ -132,7 +135,9 @@ class TestReadFileOperations:
                 path=str(temp_path), metadata_only=True, comment="Read directory"
             )
 
-            result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+            result = await req.actually_solve(
+                config=DEFAULT_CONFIG, interface=mock_interface
+            )
 
             # Verify directory listing
             assert result.accepted
@@ -155,7 +160,9 @@ class TestReadFileOperations:
         )
         mock_interface = MockInterface()
 
-        result = await req.actually_solve(config=DEFAULT_CONFIG, interface=mock_interface)
+        result = await req.actually_solve(
+            config=DEFAULT_CONFIG, interface=mock_interface
+        )
 
         # Should fail gracefully
         assert not result.accepted

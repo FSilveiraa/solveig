@@ -115,7 +115,9 @@ async def load_and_filter_hooks(
             active_hooks += len(before_dict) + len(after_dict)
             await interface.display_text(f"'{plugin_name}': Loaded")
         else:
-            await interface.display_warning(f"'{plugin_name}': Skipped (missing from config)")
+            await interface.display_warning(
+                f"'{plugin_name}': Skipped (missing from config)"
+            )
 
     await interface.display_text(
         f"Hooks: {len(loaded_plugins)} plugins loaded, {active_hooks} active"

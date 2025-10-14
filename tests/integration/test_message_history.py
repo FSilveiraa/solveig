@@ -1,11 +1,17 @@
 """Tests for MessageHistory integration with token counting and context management."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from solveig.schema.message import MessageHistory, SystemMessage, UserMessage, AssistantMessage, get_requirements_union_for_streaming
+from solveig.schema.message import (
+    AssistantMessage,
+    MessageHistory,
+    UserMessage,
+    get_requirements_union_for_streaming,
+)
 from solveig.schema.requirements.command import CommandRequirement
 from tests import LOREM_IPSUM
 
@@ -16,7 +22,9 @@ class TestMessageHistoryIntegration:
 
     def test_message_history_initialization(self):
         """Test MessageHistory initializes with system message and token counting."""
-        history = MessageHistory(system_prompt="You are helpful", api_type=APIType.OPENAI)
+        history = MessageHistory(
+            system_prompt="You are helpful", api_type=APIType.OPENAI
+        )
 
         # Should have one system message
         assert len(history.messages) == 1
@@ -43,7 +51,9 @@ class TestMessageHistoryIntegration:
 
         # Assistant tokens should be tracked in received total
         assert history.total_tokens_received > 0
-        assert history.total_tokens_sent == 0  # Not updated until to_openai(update_sent_count=True)
+        assert (
+            history.total_tokens_sent == 0
+        )  # Not updated until to_openai(update_sent_count=True)
 
     def test_context_pruning_preserves_system_message(self):
         """Test context pruning removes old messages but preserves system message."""
@@ -51,12 +61,14 @@ class TestMessageHistoryIntegration:
         history = MessageHistory(
             system_prompt="System",
             api_type=APIType.OPENAI,
-            max_context=50  # Very small limit
+            max_context=50,  # Very small limit
         )
 
         # Add many messages to exceed limit
         for i in range(10):
-            user_msg = UserMessage(comment=f"Message {i} with lots of content to use tokens", results=[])
+            user_msg = UserMessage(
+                comment=f"Message {i} with lots of content to use tokens", results=[]
+            )
             history.add_messages(user_msg)
 
         # Should have pruned messages but kept system message
@@ -83,7 +95,9 @@ class TestMessageHistoryIntegration:
 
     def test_message_serialization_integration(self):
         """Test messages serialize properly through MessageHistory."""
-        history = MessageHistory(system_prompt="You are helpful", api_type=APIType.OPENAI)
+        history = MessageHistory(
+            system_prompt="You are helpful", api_type=APIType.OPENAI
+        )
 
         user_msg = UserMessage(comment="Test question", results=[])
         assistant_msg = AssistantMessage(role="assistant", requirements=None)
@@ -225,9 +239,7 @@ class TestTokenCountingAccuracy:
 
         # Test with o200k_base encoder
         history2 = MessageHistory(
-            system_prompt="System",
-            api_type=APIType.OPENAI,
-            encoder="o200k_base"
+            system_prompt="System", api_type=APIType.OPENAI, encoder="o200k_base"
         )
 
         # Add same substantial message to both using shared Lorem Ipsum
@@ -238,4 +250,6 @@ class TestTokenCountingAccuracy:
         # Different encoders should produce different counts for Lorem Ipsum
         # cl100k_base: 1003 tokens, o200k_base: 763 tokens (known values from test_llm.py)
         assert history1.token_count != history2.token_count
-        assert history1.token_count > history2.token_count  # cl100k_base typically higher
+        assert (
+            history1.token_count > history2.token_count
+        )  # cl100k_base typically higher
