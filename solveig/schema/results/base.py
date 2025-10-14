@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import Field
-
-from ..base import BaseSolveigModel
+from pydantic import BaseModel, Field
 
 # Circular import fix:
 # - This module (base.py) needs Requirement classes for type hints
@@ -15,7 +13,7 @@ if TYPE_CHECKING:
     from ..requirements import Requirement
 
 
-class RequirementResult(BaseSolveigModel):
+class RequirementResult(BaseModel):
     # we store the initial requirement for debugging/error printing,
     # then when JSON'ing we usually keep a couple of its fields in the result's body
     # We keep paths separately from the requirement, since we want to preserve both the path(s) the LLM provided

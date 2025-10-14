@@ -7,6 +7,7 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
 """
+TODO: Review this and the general schema dependencies mapping
 Note on local imports: this is required to fix a circular import error.
 
 Requirements and the Plugins system rely on each other. requirements/base.py has to import plugins so

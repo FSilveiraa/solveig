@@ -7,12 +7,11 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from anyio import Path
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException, ProcessingError, ValidationError
 from solveig.plugins.hooks import HOOKS
-from solveig.schema.base import BaseSolveigModel
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
@@ -56,7 +55,7 @@ def format_path_info(
     return path_print_str
 
 
-class Requirement(BaseSolveigModel, ABC):
+class Requirement(BaseModel, ABC):
     """
     Base class for all requirements that LLMs can make.
 

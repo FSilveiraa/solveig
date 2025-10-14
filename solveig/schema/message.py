@@ -2,16 +2,15 @@ import json
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from .. import SolveigConfig, utils
 from ..llm import APIType
-from .base import BaseSolveigModel
 from .requirements import Requirement
 from .results import RequirementResult
 
 
-class BaseMessage(BaseSolveigModel):
+class BaseMessage(BaseModel):
     token_count: int = 0
     role: Literal["system", "user", "assistant"]
 
