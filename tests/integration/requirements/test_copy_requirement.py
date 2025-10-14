@@ -52,7 +52,7 @@ class TestCopyDisplay:
 
         # Test get_description
         description = CopyRequirement.get_description()
-        assert "copy(source_path, destination_path)" in description
+        assert "copy(comment, source_path, destination_path)" in description
 
 
 class TestCopyFileOperations:

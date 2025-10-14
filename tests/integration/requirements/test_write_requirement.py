@@ -69,7 +69,7 @@ class TestWriteDisplay:
 
         # Test get_description
         description = WriteRequirement.get_description()
-        assert "write(path, is_directory" in description
+        assert "write(comment, path, is_directory, content=null)" in description
 
 
 class TestWriteFileOperations:

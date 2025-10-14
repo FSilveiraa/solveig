@@ -181,14 +181,11 @@ class TestMessageSerialization:
             accepted=True,
             success=True,
             stdout="Hello World\nLine 2",
-            error="warning message"
+            error="warning message",
         )
 
         # Create UserMessage with results
-        user_msg = UserMessage(
-            comment="Here are the results",
-            results=[result]
-        )
+        user_msg = UserMessage(comment="Here are the results", results=[result])
 
         # Test serialization
         openai_dict = user_msg.to_openai()
@@ -206,4 +203,4 @@ class TestMessageSerialization:
         assert result_json["success"] is True
         assert result_json["command"] == "echo test"
         assert result_json["stdout"] == "Hello World\nLine 2"  # Must have actual output
-        assert result_json["error"] == "warning message"       # Must have error output
+        assert result_json["error"] == "warning message"  # Must have error output

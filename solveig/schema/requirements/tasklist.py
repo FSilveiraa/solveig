@@ -18,9 +18,7 @@ else:
 
 class TaskListRequirement(Requirement):
     title: Literal["tasks"] = "tasks"
-    comment: str = Field(
-        ..., description="Conversation with user and plan description"
-    )
+    comment: str = Field(..., description="Conversation with user and plan description")
     tasks: list[Task] | None = Field(
         None, description="List of tasks to track and display"
     )

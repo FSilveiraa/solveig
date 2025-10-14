@@ -53,7 +53,7 @@ class TestDeleteDisplay:
 
         # Test get_description
         description = DeleteRequirement.get_description()
-        assert "delete(path)" in description
+        assert "delete(comment, path)" in description
 
 
 class TestDeleteFileOperations:

@@ -6,7 +6,8 @@ This module defines the data structures used for:
 - Requirements (file operations, shell commands)
 - Results and error handling
 """
-from dataclasses import is_dataclass, fields
+
+from dataclasses import fields, is_dataclass
 from os import PathLike
 
 import anyio

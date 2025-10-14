@@ -51,7 +51,7 @@ class TestMoveDisplay:
 
         # Test get_description
         description = MoveRequirement.get_description()
-        assert "move(source_path, destination_path)" in description
+        assert "move(comment, source_path, destination_path)" in description
 
 
 class TestMoveFileOperations:

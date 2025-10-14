@@ -79,7 +79,9 @@ async def send_message_to_llm_with_retry(
             if config.verbose:
                 await interface.display_text_block(
                     title="Sending",
-                    text=json.dumps(message_history_dumped, default=default_json_serialize),
+                    text=json.dumps(
+                        message_history_dumped, default=default_json_serialize
+                    ),
                 )
 
             await interface.update_status(

@@ -51,7 +51,7 @@ class TestCommandDisplay:
 
         # Test get_description
         description = CommandRequirement.get_description()
-        assert "command(command)" in description
+        assert "command(comment, command)" in description
         assert "execute shell commands" in description
 
 
@@ -250,10 +250,15 @@ class TestCommandSerialization:
         """Test that CommandRequirement and CommandResult serialize properly with actual output data."""
         # Configure mock subprocess to return actual output
         mock_subprocess.communicate.side_effect = None
-        mock_subprocess.communicate.return_value = (b"Hello World\nLine 2\n", b"warning message\n")
+        mock_subprocess.communicate.return_value = (
+            b"Hello World\nLine 2\n",
+            b"warning message\n",
+        )
 
         # Create requirement
-        req = CommandRequirement(command="echo 'Hello World'", comment="Test serialization")
+        req = CommandRequirement(
+            command="echo 'Hello World'", comment="Test serialization"
+        )
         interface = MockInterface()
         interface.set_user_inputs(["y", "y"])  # Accept command and output
 
@@ -268,10 +273,13 @@ class TestCommandSerialization:
 
         # Test result serialization
         result_json = result.model_dump()
+        assert result_json["title"] == "command"
         assert result_json["accepted"] is True
         assert result_json["success"] is True
         assert result_json["command"] == "echo 'Hello World'"
-        assert result_json["stdout"] == "Hello World\nLine 2"  # Actual output must be present
+        assert (
+            result_json["stdout"] == "Hello World\nLine 2"
+        )  # Actual output must be present
         assert result_json["error"] == "warning message"  # Error output must be present
 
         # Verify the result has a requirement field that is removed from the JSON
@@ -293,10 +301,11 @@ class TestCommandSerialization:
 
         # Test error result serialization
         assert result.model_dump() == {
+            "title": "command",
             "accepted": True,
             "error": "command not found",
             "command": "nonexistent_command",
-            "success": True,   # Shell executed (even if command failed)
+            "success": True,  # Shell executed (even if command failed)
             "stdout": "",
         }
 
@@ -309,6 +318,7 @@ class TestCommandSerialization:
 
         # Test serialization of declined result
         assert declined_result.model_dump() == {
+            "title": "command",
             "accepted": False,
             "error": "User declined",
             "command": "rm -rf /",

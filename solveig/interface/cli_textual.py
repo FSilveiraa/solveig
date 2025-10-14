@@ -388,7 +388,9 @@ class SolveigTextualApp(TextualApp):
         finally:
             self.prompt_future = None
 
-    async def add_text(self, text: str, style: str = "text", markup: bool = False) -> None:
+    async def add_text(
+        self, text: str, style: str = "text", markup: bool = False
+    ) -> None:
         """Internal method to add text to the UI."""
         await self._conversation_area.add_text(text, style, markup=markup)
 
@@ -447,14 +449,15 @@ class TextualInterface(SolveigInterface):
                 # Handle queue full scenario gracefully
                 pass
 
-    async def _display_text(self, text: str, style: str = "text", allow_markup: bool = False) -> None:
+    async def _display_text(
+        self, text: str, style: str = "text", allow_markup: bool = False
+    ) -> None:
         """Display text with optional styling."""
         # Map hex colors to semantic style names using pre-calculated mapping
         if style.startswith("#"):
             style = self.app._color_to_style.get(style, "text")
 
         await self.app.add_text(text, style, markup=allow_markup)
-
 
     # SolveigInterface implementation
     async def display_text(self, text: str, style: str = "text") -> None:
@@ -508,7 +511,8 @@ class TextualInterface(SolveigInterface):
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)
         await self._display_text(
-            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}", allow_markup=True
+            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}",
+            allow_markup=True,
         )
         return response
 

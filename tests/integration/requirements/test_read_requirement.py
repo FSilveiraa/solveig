@@ -63,7 +63,7 @@ class TestReadDisplay:
 
         # Test get_description
         description = ReadRequirement.get_description()
-        assert "read(path, metadata_only)" in description
+        assert "read(comment, path, metadata_only)" in description
 
 
 class TestReadFileOperations:

@@ -4,9 +4,9 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, field_validator
 
-from .base import BaseSolveigModel
 from .. import SolveigConfig, utils
 from ..llm import APIType
+from .base import BaseSolveigModel
 from .requirements import Requirement
 from .results import RequirementResult
 
