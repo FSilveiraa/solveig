@@ -52,7 +52,7 @@ class WriteRequirement(Requirement):
         """Create WriteResult with error."""
         return WriteResult(
             requirement=self,
-            path=Filesystem.get_absolute_path(self.path),
+            path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
         )
@@ -101,7 +101,7 @@ class WriteRequirement(Requirement):
                 f"{' and contents' if not self.is_directory else ''}? [y/N]: "
             )
             if not await interface.ask_yes_no(question):
-                return WriteResult(requirement=self, path=abs_path, accepted=False)
+                return WriteResult(requirement=self, path=str(abs_path), accepted=False)
 
         try:
             # Perform the write operation - use utils/file.py methods
@@ -113,7 +113,7 @@ class WriteRequirement(Requirement):
                 f"{'Updated' if already_exists else 'Created'}"
             )
 
-            return WriteResult(requirement=self, path=abs_path, accepted=True)
+            return WriteResult(requirement=self, path=str(abs_path), accepted=True)
 
         except Exception as e:
             await interface.display_error(f"Found error when writing file: {e}")

@@ -8,29 +8,23 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from anyio import Path
 from pydantic import Field, PlainValidator
+from pydantic_core import core_schema
 
 from solveig.utils.misc import parse_human_readable_size
 
 
-# Define SolveigPath here to avoid circular imports
-def _validate_path(v) -> Path:
-    """Convert string or PathLike to anyio.Path."""
-    if isinstance(v, Path):
-        return v
-    return Path(v)
 
-SolveigPath = Annotated[str, PlainValidator(_validate_path)]
 
 
 @dataclass
 class Metadata:
     owner_name: str
     group_name: str
-    path: SolveigPath
+    path: str
     size: int
     is_directory: bool
     is_readable: bool
@@ -40,7 +34,7 @@ class Metadata:
         description="Last modified time for file or dir as UNIX timestamp",
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
-    listing: dict[SolveigPath, "Metadata"] | None = None
+    listing: dict[str, "Metadata"] | None = None
 
 
 @dataclass
@@ -282,7 +276,7 @@ class Filesystem:
 
             # Wait for all metadata reads to complete
             for abs_sub_path, task in tasks:
-                listing[abs_sub_path] = await task
+                listing[str(abs_sub_path)] = await task
         else:
             listing = None
 
@@ -300,7 +294,7 @@ class Filesystem:
         )
 
         return Metadata(
-            path=abs_path,
+            path=str(abs_path),
             size=stats.st_size,
             modified_time=int(stats.st_mtime),
             is_directory=is_dir,

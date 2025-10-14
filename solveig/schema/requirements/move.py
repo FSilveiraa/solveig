@@ -51,8 +51,8 @@ class MoveRequirement(Requirement):
             requirement=self,
             accepted=accepted,
             error=error_message,
-            source_path=Filesystem.get_absolute_path(self.source_path),
-            destination_path=Filesystem.get_absolute_path(self.destination_path),
+            source_path=str(Filesystem.get_absolute_path(self.source_path)),
+            destination_path=str(Filesystem.get_absolute_path(self.destination_path)),
         )
 
     @classmethod
@@ -77,8 +77,8 @@ class MoveRequirement(Requirement):
                 requirement=self,
                 accepted=False,
                 error=str(e),
-                source_path=abs_source_path,
-                destination_path=abs_destination_path,
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
             )
 
         source_metadata = await Filesystem.read_metadata(abs_source_path)
@@ -102,8 +102,8 @@ class MoveRequirement(Requirement):
                 return MoveResult(
                     requirement=self,
                     accepted=True,
-                    source_path=abs_source_path,
-                    destination_path=abs_destination_path,
+                    source_path=str(abs_source_path),
+                    destination_path=str(abs_destination_path),
                 )
             except (PermissionError, OSError, FileExistsError) as e:
                 await interface.display_error(f"Found error when moving: {e}")
@@ -111,14 +111,14 @@ class MoveRequirement(Requirement):
                     requirement=self,
                     accepted=False,
                     error=str(e),
-                    source_path=abs_source_path,
-                    destination_path=abs_destination_path,
+                    source_path=str(abs_source_path),
+                    destination_path=str(abs_destination_path),
                 )
         else:
             return MoveResult(
                 requirement=self,
                 accepted=False,
-                source_path=abs_source_path,
-                destination_path=abs_destination_path,
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
                 error=str(error) if error else None,
             )

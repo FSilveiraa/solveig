@@ -10,11 +10,15 @@ This module defines the data structures used for:
 from dataclasses import fields, is_dataclass
 from os import PathLike
 
-from pydantic import BaseModel, field_serializer
+import anyio
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 
 class BaseSolveigModel(BaseModel):
     pass
+
+    # model_config = ConfigDict(arbitrary_types_allowed=True)
+
     # @classmethod
     # def _dump_pydantic_field(cls, obj):
     #     if is_dataclass(obj):
@@ -25,7 +29,7 @@ class BaseSolveigModel(BaseModel):
     #         return result
     #     elif isinstance(obj, BaseModel):
     #         return obj.model_dump()
-    #     elif isinstance(obj, PathLike):
+    #     elif isinstance(obj, PathLike) or isinstance(obj, anyio.Path):
     #         return str(obj)
     #     elif isinstance(obj, list):
     #         return [cls._dump_pydantic_field(v) for v in obj]

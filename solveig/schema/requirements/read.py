@@ -44,7 +44,7 @@ class ReadRequirement(Requirement):
         """Create ReadResult with error."""
         return ReadResult(
             requirement=self,
-            path=Filesystem.get_absolute_path(self.path),
+            path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
         )
@@ -65,7 +65,7 @@ class ReadRequirement(Requirement):
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot access {str(abs_path)}: {e}")
             return ReadResult(
-                requirement=self, path=abs_path, accepted=False, error=str(e)
+                requirement=self, path=str(abs_path), accepted=False, error=str(e)
             )
 
         auto_read = Filesystem.path_matches_patterns(
@@ -96,7 +96,7 @@ class ReadRequirement(Requirement):
             except (PermissionError, OSError, UnicodeDecodeError) as e:
                 await interface.display_error(f"Failed to read file contents: {e}")
                 return ReadResult(
-                    requirement=self, path=abs_path, accepted=False, error=str(e)
+                    requirement=self, path=str(abs_path), accepted=False, error=str(e)
                 )
 
             content_output = (
@@ -120,10 +120,10 @@ class ReadRequirement(Requirement):
         ):
             return ReadResult(
                 requirement=self,
-                path=abs_path,
+                path=str(abs_path),
                 accepted=True,
                 metadata=metadata,
                 content=str(content) if content is not None else None,
             )
         else:
-            return ReadResult(requirement=self, path=abs_path, accepted=False)
+            return ReadResult(requirement=self, path=str(abs_path), accepted=False)

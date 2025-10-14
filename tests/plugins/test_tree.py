@@ -142,10 +142,10 @@ class TestTreePlugin:
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True
             # we have until subdir3
-            assert result.metadata.listing[PurePath(temp_path / "subdir6/")]
+            assert result.metadata.listing[str(PurePath(temp_path / "subdir6/"))]
             final_level_metadata = result.metadata.listing[
-                PurePath(temp_path / "subdir2/")
-            ].listing[PurePath(temp_path / "subdir2/subdir3/")]
+                str(PurePath(temp_path / "subdir2/"))
+            ].listing[str(PurePath(temp_path / "subdir2/subdir3/"))]
             # however we don't get the metadata further down, even though it exists
             assert not final_level_metadata.listing
             assert final_subdir.exists()

@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from os import PathLike
+from pathlib import PurePath
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
@@ -106,7 +107,7 @@ class TEXT_BOX:
 def get_tree_display(
     metadata, display_metadata: bool = False, indent="  "
 ) -> list[str]:
-    line = f"{'🗁 ' if metadata.is_directory else '🗎'} {metadata.path.name}"
+    line = f"{'🗁 ' if metadata.is_directory else '🗎'} {PurePath(metadata.path).name}"
     if display_metadata:
         if not metadata.is_directory:
             size_str = convert_size_to_human_readable(metadata.size)

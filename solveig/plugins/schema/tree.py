@@ -16,11 +16,11 @@ from solveig.schema.requirements.base import (
     validate_non_empty_path,
 )
 from solveig.schema.results.base import RequirementResult
-from solveig.utils.file import Filesystem, Metadata, SolveigPath
+from solveig.utils.file import Filesystem, Metadata
 
 
 class TreeResult(RequirementResult):
-    path: SolveigPath
+    path: str
     metadata: Metadata | None  # Complete tree metadata
 
 

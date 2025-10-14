@@ -11,7 +11,7 @@ from instructor import Instructor
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
-from solveig.interface import SimpleInterface, SolveigInterface, TextualInterface
+from solveig.interface import SolveigInterface, TextualInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
     AssistantMessage,
@@ -259,16 +259,11 @@ async def _main_async():
     # Parse config and run main loop
     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
 
-    # Create LLM client
+    # Create LLM client and interface
     llm_client = llm.get_instructor_client(
         api_type=config.api_type, api_key=config.api_key, url=config.url
     )
-
-    # Create interface based on config
-    if config.simple_interface:
-        interface = SimpleInterface(color_palette=config.theme)
-    else:
-        interface = TextualInterface(color_palette=config.theme)
+    interface = TextualInterface(color_palette=config.theme)
 
     # Run the async main loop
     await run_async(config, interface, llm_client, user_prompt)

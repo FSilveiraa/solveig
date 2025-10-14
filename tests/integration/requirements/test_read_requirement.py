@@ -106,7 +106,7 @@ class TestReadFileOperations:
             assert result.accepted
             assert result.content == test_content
             assert result.metadata is not None
-            assert temp_file_path.name == result.metadata.path.name
+            assert str(temp_file_path) == result.metadata.path
 
             # Verify path expansion worked - should resolve to absolute path without ~
             assert "~" not in str(result.path)
@@ -145,10 +145,9 @@ class TestReadFileOperations:
             assert len(result.metadata.listing) == 3  # file1.txt, file2.py, subdir
 
             # Check specific files in listing
-            filenames = {item.name for item in result.metadata.listing}
-            assert "file1.txt" in filenames
-            assert "file2.py" in filenames
-            assert "subdir" in filenames
+            filenames = {path for path in result.metadata.listing}
+            for expected in { "file1.txt", "file2.py", "subdir" }:
+                assert any(expected in filename for filename in filenames)
 
     @pytest.mark.anyio
     async def test_read_nonexistent_file(self):

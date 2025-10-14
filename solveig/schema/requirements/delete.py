@@ -44,7 +44,7 @@ class DeleteRequirement(Requirement):
         """Create DeleteResult with error."""
         return DeleteResult(
             requirement=self,
-            path=Filesystem.get_absolute_path(self.path),
+            path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
         )
@@ -81,15 +81,15 @@ class DeleteRequirement(Requirement):
 
         # Get user consent (with extra warning)
         elif not await interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
-            return DeleteResult(requirement=self, accepted=False, path=abs_path)
+            return DeleteResult(requirement=self, accepted=False, path=str(abs_path))
 
         try:
             # Perform the delete operation - use utils/file.py method
             await Filesystem.delete(abs_path)
             await interface.display_success("Deleted")
-            return DeleteResult(requirement=self, path=abs_path, accepted=True)
+            return DeleteResult(requirement=self, path=str(abs_path), accepted=True)
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
             return DeleteResult(
-                requirement=self, accepted=False, error=str(e), path=abs_path
+                requirement=self, accepted=False, error=str(e), path=str(abs_path)
             )
