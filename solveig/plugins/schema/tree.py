@@ -53,7 +53,7 @@ class TreeRequirement(Requirement):
         """Create TreeResult with error."""
         return TreeResult(
             requirement=self,
-            path=Filesystem.get_absolute_path(self.path),
+            path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
             metadata=None,
@@ -91,14 +91,14 @@ class TreeRequirement(Requirement):
             return TreeResult(
                 requirement=self,
                 accepted=False,
-                path=abs_path,
+                path=str(abs_path),
                 metadata=None,
             )
 
         return TreeResult(
             requirement=self,
             accepted=True,
-            path=abs_path,
+            path=str(abs_path),
             metadata=metadata,
         )
 

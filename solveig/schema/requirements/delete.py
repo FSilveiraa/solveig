@@ -65,7 +65,7 @@ class DeleteRequirement(Requirement):
         except (FileNotFoundError, PermissionError) as e:
             await interface.display_error(f"Skipping: {e}")
             return DeleteResult(
-                requirement=self, accepted=False, error=str(e), path=abs_path
+                requirement=self, accepted=False, error=str(e), path=str(abs_path)
             )
 
         metadata = await Filesystem.read_metadata(abs_path)

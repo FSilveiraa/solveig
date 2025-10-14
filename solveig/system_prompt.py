@@ -147,7 +147,7 @@ tree_req = TreeRequirement(
 tree_metadata = Metadata(
     owner_name="user",
     group_name="user",
-    path=Path("/home/user/Sync"),
+    path="/home/user/Sync",
     size=4096,
     is_directory=True,
     is_readable=True,
@@ -155,10 +155,10 @@ tree_metadata = Metadata(
     modified_time=1758556702,
     encoding=None,
     listing={
-        Path("/home/user/Sync/config.json"): Metadata(
+        "/home/user/Sync/config.json": Metadata(
             owner_name="user",
             group_name="user",
-            path=Path("/home/user/Sync/config.json"),
+            path="/home/user/Sync/config.json",
             size=132,
             is_directory=False,
             is_readable=True,
@@ -167,10 +167,10 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        Path("/home/user/Sync/d1"): Metadata(
+        "/home/user/Sync/d1": Metadata(
             owner_name="user",
             group_name="user",
-            path=Path("/home/user/Sync/d1"),
+            path="/home/user/Sync/d1",
             size=4096,
             is_directory=True,
             is_readable=True,
@@ -178,10 +178,10 @@ tree_metadata = Metadata(
             modified_time=1758556735,
             encoding=None,
             listing={
-                Path("/home/user/Sync/d1/d2"): Metadata(
+                "/home/user/Sync/d1/d2": Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=Path("/home/user/Sync/d1/d2"),
+                    path="/home/user/Sync/d1/d2",
                     size=4096,
                     is_directory=True,
                     is_readable=True,
@@ -189,10 +189,10 @@ tree_metadata = Metadata(
                     modified_time=1758556743,
                     encoding=None,
                     listing={
-                        Path("/home/user/Sync/d1/d2/f1"): Metadata(
+                        "/home/user/Sync/d1/d2/f1": Metadata(
                             owner_name="user",
                             group_name="user",
-                            path=Path("/home/user/Sync/d1/d2/f1"),
+                            path="/home/user/Sync/d1/d2/f1",
                             size=446,
                             is_directory=False,
                             is_readable=True,
@@ -205,10 +205,10 @@ tree_metadata = Metadata(
                 )
             },
         ),
-        Path("/home/user/Sync/dev.sh"): Metadata(
+        "/home/user/Sync/dev.sh": Metadata(
             owner_name="user",
             group_name="user",
-            path=Path("/home/user/Sync/dev.sh"),
+            path="/home/user/Sync/dev.sh",
             size=101,
             is_directory=False,
             is_readable=True,
@@ -217,10 +217,10 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        Path("/home/user/Sync/hello.py"): Metadata(
+        "/home/user/Sync/hello.py": Metadata(
             owner_name="user",
             group_name="user",
-            path=Path("/home/user/Sync/hello.py"),
+            path="/home/user/Sync/hello.py",
             size=45,
             is_directory=False,
             is_readable=True,
@@ -254,7 +254,7 @@ large_example.add_messages(
             TreeResult(
                 requirement=tree_req,
                 accepted=True,
-                path=Path("/home/user/Sync/"),
+                path="/home/user/Sync/",
                 metadata=tree_metadata,
             ),
         ],
@@ -291,12 +291,12 @@ large_example.add_messages(
             ),
             ReadResult(
                 requirement=read_hello_py_req,
-                path=Path("/home/user/Sync/hello.py"),
+                path="/home/user/Sync/hello.py",
                 accepted=True,
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=Path("/home/user/Sync/hello.py"),
+                    path="/home/user/Sync/hello.py",
                     size=45,
                     is_directory=False,
                     is_readable=True,
@@ -312,12 +312,12 @@ large_example.add_messages(
 #!/bin/python
 print("Hello, world!")
                 """.strip(),
-                path=Path("/home/user/Sync/dev.sh"),
+                path="/home/user/Sync/dev.sh",
                 accepted=True,
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path=Path("/home/user/Sync/dev.sh"),
+                    path="/home/user/Sync/dev.sh",
                     size=101,
                     is_directory=False,
                     is_readable=True,
@@ -412,7 +412,7 @@ large_example.add_messages(
             ),
             WriteResult(
                 requirement=write_script_req,
-                path=Path("/home/user/Sync/hello_new.py"),
+                path="/home/user/Sync/hello_new.py",
                 accepted=True,
             ),
             CommandResult(
@@ -502,8 +502,8 @@ large_example.add_messages(
             MoveResult(
                 requirement=script_move_req,
                 accepted=True,
-                source_path=Path(script_move_req.source_path),
-                destination_path=Path(script_move_req.destination_path),
+                source_path=script_move_req.source_path,
+                destination_path=script_move_req.destination_path,
             ),
         ],
     ),

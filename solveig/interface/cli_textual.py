@@ -7,7 +7,7 @@ import random
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Iterable
 
 from rich.spinner import Spinner
 from textual.app import App as TextualApp
@@ -504,7 +504,7 @@ class TextualInterface(SolveigInterface):
             await self.display_text(" (empty)", style="warning")
         return user_input
 
-    async def ask_user(self, prompt: str, placeholder: str = None) -> str:
+    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)
         await self.display_text(
@@ -512,7 +512,7 @@ class TextualInterface(SolveigInterface):
         )
         return response
 
-    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
+    async def ask_yes_no(self, question: str, yes_values: Iterable[str] | None = None) -> bool:
         """Ask a yes/no question."""
         yes_values = yes_values or self.YES
         question = question.strip()
@@ -523,10 +523,10 @@ class TextualInterface(SolveigInterface):
 
     async def update_status(
         self,
-        status: str = None,
-        tokens: tuple[int, int] | int = None,
-        model: str = None,
-        url: str = None,
+        status: str | None = None,
+        tokens: tuple[int, int] | int | str | None = None,
+        model: str | None = None,
+        url: str | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         self.app._status_bar.update_status_info(
@@ -567,9 +567,7 @@ class TextualInterface(SolveigInterface):
             await self.app._conversation_area.exit_group()
 
     @asynccontextmanager
-    async def with_animation(
-        self, status: str = "Processing", final_status: str = "Ready"
-    ) -> AsyncGenerator[None, Any]:
+    async def with_animation(self, status: str = "Processing", final_status: str = "Ready"):
         """Context manager for displaying animation during async operations."""
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)

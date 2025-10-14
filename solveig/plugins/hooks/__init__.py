@@ -23,17 +23,17 @@ class HOOKS:
         raise TypeError("HOOKS is a static registry and cannot be instantiated")
 
 
-def announce_register(
-    verb, fun: Callable, requirements, plugin_name: str, interface: SolveigInterface
-):
-    req_types = (
-        ", ".join([req.__name__ for req in requirements])
-        if requirements
-        else "any requirements"
-    )
-    interface.display_text(
-        f"ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
-    )
+# async def announce_register(
+#     verb, fun: Callable, requirements, plugin_name: str, interface: SolveigInterface
+# ):
+#     req_types = (
+#         ", ".join([req.__name__ for req in requirements])
+#         if requirements
+#         else "any requirements"
+#     )
+#     await interface.display_text(
+#         f"ϟ Registering plugin `{plugin_name}.{fun.__name__}` to run {verb} {req_types}"
+#     )
 
 
 def _get_plugin_name_from_function(fun: Callable) -> str:

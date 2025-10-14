@@ -177,7 +177,9 @@ def get_requirements_union_for_streaming(
     if len(all_active_requirements) == 1:
         requirements_union = all_active_requirements[0]
     else:
-        requirements_union = Union[*all_active_requirements]
+        from typing import cast
+        # Cast to tell mypy this is a valid Union type
+        requirements_union = cast(type[Requirement], Union[*all_active_requirements])
 
     # Cache the result
     _last_requirements_config_hash = config_hash

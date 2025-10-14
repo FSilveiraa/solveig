@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-from os import PathLike
+from typing import TYPE_CHECKING
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from ..base import BaseSolveigModel
 
@@ -24,17 +23,6 @@ class RequirementResult(BaseSolveigModel):
     requirement: Requirement = Field(exclude=True)
     accepted: bool
     error: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def convert_paths_to_strings(cls, data: Any) -> Any:
-        """Convert any Path-like objects to strings before model validation."""
-        if isinstance(data, dict):
-            return {
-                key: str(value) if isinstance(value, PathLike) else value
-                for key, value in data.items()
-            }
-        return data
 
     def to_openai(self):
         return self.model_dump()

@@ -7,7 +7,7 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Iterable, AsyncContextManager
 
 from solveig.utils.file import Metadata
 
@@ -75,7 +75,7 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def display_text_block(self, text: str, title: str = None) -> None:
+    async def display_text_block(self, text: str, title: str | None = None) -> None:
         """Display a text block with optional title."""
         ...
 
@@ -86,12 +86,12 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_user(self, prompt: str, placeholder: str = None) -> str:
+    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
         """Ask for specific input, preserving any current typing."""
         ...
 
     @abstractmethod
-    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
+    async def ask_yes_no(self, question: str, yes_values: Iterable[str] | None = None) -> bool:
         """Ask a yes/no question."""
         ...
 
@@ -101,27 +101,27 @@ class SolveigInterface(ABC):
         """Display a section header."""
         ...
 
-    @abstractmethod
     @asynccontextmanager
     async def with_group(self, title: str):
         """Context manager for grouping related output."""
-        ...
+        raise NotImplementedError("Subclass must implement with_group")
+        yield  # This line will never execute but makes it a valid generator
 
-    @abstractmethod
     @asynccontextmanager
     async def with_animation(
         self, status: str = "Processing", final_status: str = "Ready"
-    ) -> AsyncGenerator[None, Any]:
+    ):
         """Context manager for displaying animation during async operations."""
-        ...
+        raise NotImplementedError("Subclass must implement with_animation")
+        yield  # This line will never execute but makes it a valid generator
 
     @abstractmethod
     async def update_status(
         self,
-        status: str = None,
-        tokens: tuple[int, int] | int = None,
-        model: str = None,
-        url: str = None,
+        status: str | None = None,
+        tokens: tuple[int, int] | int | str | None = None,
+        model: str | None = None,
+        url: str | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...

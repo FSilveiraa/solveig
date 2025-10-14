@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import traceback
+from collections.abc import AsyncGenerator
 
 from instructor import Instructor
 
@@ -85,8 +86,12 @@ async def send_message_to_llm_with_retry(
             )
 
             # TODO: implement solve-as-they-come
-            async for requirement in requirement_stream:
-                requirements.append(requirement)
+            if isinstance(requirement_stream, AsyncGenerator):
+                async for requirement in requirement_stream:
+                    requirements.append(requirement)
+            else:
+                for requirement in requirement_stream:
+                    requirements.append(requirement)
 
             if not requirements:
                 # force re-try
@@ -136,7 +141,7 @@ async def process_requirements(
     """Process requirements and return results."""
     results = []
 
-    for requirement in llm_response.requirements:
+    for requirement in llm_response.requirements or []:
         try:
             # Requirements need to become async
             result = await requirement.solve(config, interface)
@@ -153,9 +158,9 @@ async def process_requirements(
 
 async def main_loop(
     config: SolveigConfig,
-    interface: SolveigInterface | None = None,
+    interface: SolveigInterface,
+    llm_client: Instructor,
     user_prompt: str = "",
-    llm_client: Instructor = None,
 ):
     """Main async conversation loop."""
     # Configure logging for instructor debug output when verbose

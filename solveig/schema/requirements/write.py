@@ -119,7 +119,7 @@ class WriteRequirement(Requirement):
             await interface.display_error(f"Found error when writing file: {e}")
             return WriteResult(
                 requirement=self,
-                path=abs_path,
+                path=str(abs_path),
                 accepted=False,
                 error=f"Encoding error: {e}",
             )
