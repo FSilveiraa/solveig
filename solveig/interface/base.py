@@ -75,6 +75,17 @@ class SolveigInterface(ABC):
         """Display a text block with optional title."""
         ...
 
+    @abstractmethod
+    async def display_diff(
+        self,
+        old_content: str,
+        new_content: str,
+        title: str | None = None,
+        context_lines: int = 3,
+    ) -> None:
+        """Display a unified diff view with syntax highlighting."""
+        ...
+
     # Input methods
     @abstractmethod
     async def get_input(self) -> str:

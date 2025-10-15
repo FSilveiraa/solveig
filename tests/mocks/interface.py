@@ -37,6 +37,15 @@ class MockInterface(TextualInterface):
     async def display_comment(self, message: str) -> None:
         self.outputs.append(f"🗩  {message}")
 
+    async def display_diff(
+        self,
+        old_content: str,
+        new_content: str,
+        title: str | None = None,
+        context_lines: int = 3,
+    ) -> None:
+        self.outputs.append(old_content + "\n=====\n" + new_content)
+
     # async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
     #     tree_title = title or str(metadata.path)
     #     self.outputs.append(f"📁 Tree: {tree_title}")

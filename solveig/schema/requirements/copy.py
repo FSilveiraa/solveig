@@ -45,6 +45,13 @@ class CopyRequirement(Requirement):
             absolute_destination_path=abs_dest,
         )
         await interface.display_text(path_info)
+        if await Filesystem.exists(abs_dest) and await Filesystem.exists(abs_source):
+            await interface.display_warning("Overwriting existing file")
+            old = await Filesystem.read_file(abs_dest)
+            new = await Filesystem.read_file(abs_source)
+            await interface.display_diff(
+                old_content=str(old.content), new_content=str(new.content)
+            )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "CopyResult":
         """Create CopyResult with error."""

@@ -34,16 +34,23 @@ class MoveRequirement(Requirement):
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display move requirement header."""
         await super().display_header(interface)
-        source_abs = Filesystem.get_absolute_path(self.source_path)
-        dest_abs = Filesystem.get_absolute_path(self.destination_path)
+        abs_source = Filesystem.get_absolute_path(self.source_path)
+        abs_dest = Filesystem.get_absolute_path(self.destination_path)
         path_info = format_path_info(
             path=self.source_path,
-            abs_path=source_abs,
-            is_dir=await Filesystem.is_dir(source_abs),
+            abs_path=abs_source,
+            is_dir=await Filesystem.is_dir(abs_source),
             destination_path=self.destination_path,
-            absolute_destination_path=dest_abs,
+            absolute_destination_path=abs_dest,
         )
         await interface.display_text(path_info)
+        if await Filesystem.exists(abs_dest) and await Filesystem.exists(abs_source):
+            await interface.display_warning("Overwriting existing file")
+            old = await Filesystem.read_file(abs_dest)
+            new = await Filesystem.read_file(abs_source)
+            await interface.display_diff(
+                old_content=str(old.content), new_content=str(new.content)
+            )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "MoveResult":
         """Create MoveResult with error."""
