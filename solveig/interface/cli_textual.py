@@ -18,7 +18,6 @@ from textual.widgets import Input, Static
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-from solveig.subcommand import SubcommandRunner
 from solveig.utils.file import Metadata
 from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display
 
@@ -446,10 +445,6 @@ class TextualInterface(SolveigInterface):
             "growing": growing_spinner,
             "cool": cool_spinner,
         }
-        self.subcommand_executor: SubcommandRunner | None = None
-
-    def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
-        self.subcommand_executor = subcommand_executor
 
     async def start(self) -> None:
         """Start the interface."""
@@ -459,20 +454,19 @@ class TextualInterface(SolveigInterface):
         """Stop the interface explicitly."""
         self.app.exit()
 
-    # async def _handle_subcommand(self, subcommand: str) -> None:
-    #     try:
-    #         return
-    #     except Exception as e:
-
-
     async def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
         # # Check if it's a command
-        if self.subcommand_executor is not None and user_input in self.subcommand_executor.subcommands_map:
+        if (
+            self.subcommand_executor is not None
+            and user_input in self.subcommand_executor.subcommands_map
+        ):
             try:
                 await self.subcommand_executor(subcommand=user_input, interface=self)
             except Exception as e:
-                await self.display_error(f"Found error when executing '{user_input}' sub-command: {e}")
+                await self.display_error(
+                    f"Found error when executing '{user_input}' sub-command: {e}"
+                )
         else:
             try:
                 self._input_queue.put_nowait(user_input)

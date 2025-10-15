@@ -1,6 +1,6 @@
 import asyncio
-
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from solveig import SolveigConfig
     from solveig.interface import SolveigInterface
@@ -10,14 +10,16 @@ if TYPE_CHECKING:
 class SubcommandRunner:
     def __init__(self, config: "SolveigConfig", message_history: "MessageHistory"):
         self.config = config
-        self.message_history = message_history # for logging chats
+        self.message_history = message_history  # for logging chats
         self.subcommands_map = {
             "/help": (self.draw_help, "Print this message"),
             "/exit": (self.stop_interface, "Exit the application"),
             # "/log <path>": (log_conversation, "Log the conversation to <path>"),
         }
 
-    async def __call__(self, subcommand: str, interface: "SolveigInterface", *args, **kwargs):
+    async def __call__(
+        self, subcommand: str, interface: "SolveigInterface", *args, **kwargs
+    ):
         call = self.subcommands_map[subcommand][0]
         if asyncio.iscoroutinefunction(call):
             return await call(interface, *args, **kwargs)

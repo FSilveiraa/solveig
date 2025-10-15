@@ -197,7 +197,9 @@ async def main_loop(
 
     # Get message history
     message_history = await get_message_history(config, interface)
-    subcommand_executor = SubcommandRunner(config=config, message_history=message_history)
+    subcommand_executor = SubcommandRunner(
+        config=config, message_history=message_history
+    )
     interface.set_subcommand_executor(subcommand_executor)
 
     # Get initial user message

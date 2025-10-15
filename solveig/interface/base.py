@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 
+from solveig.subcommand import SubcommandRunner
 from solveig.utils.file import Metadata
 
 
@@ -22,11 +23,17 @@ class SolveigInterface(ABC):
     - Optional status display
     """
 
+    subcommand_executor: SubcommandRunner | None = None
+
+    def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
+        self.subcommand_executor = subcommand_executor
+
     @abstractmethod
     async def start(self) -> None:
         """Start the interface."""
         ...
 
+    @abstractmethod
     async def stop(self) -> None:
         """Stop the interface explicitly."""
         ...
