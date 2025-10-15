@@ -144,9 +144,7 @@ class TestWriteFileOperations:
             mock_interface = MockInterface()
             mock_interface.user_inputs.append("y")
 
-            result = await req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = await req.solve(config=DEFAULT_CONFIG, interface=mock_interface)
 
             # Should warn about existing path
             warning_calls = [

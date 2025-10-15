@@ -46,9 +46,17 @@ class WriteRequirement(Requirement):
         )
         await interface.display_text(path_info)
         if self.content:
-            await interface.display_text_block(
-                self.content, language=abs_path.suffix.lstrip("."), title="Content"
-            )
+            already_exists = await Filesystem.exists(abs_path)
+            if already_exists:
+                file_content = await Filesystem.read_file(abs_path)
+                await interface.display_diff(
+                    old_content=str(file_content.content), new_content=self.content
+                )
+                await interface.display_warning("Overwriting existing file")
+            else:
+                await interface.display_text_block(
+                    self.content, language=abs_path.suffix.lstrip("."), title="Content"
+                )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""
@@ -74,20 +82,8 @@ class WriteRequirement(Requirement):
             content=self.content,
             min_disk_size_left=config.min_disk_space_left,
         )
-        # metadata = await Filesystem.read_metadata(abs_path)
 
         already_exists = await Filesystem.exists(abs_path)
-        if already_exists:
-            await interface.display_warning("Overwriting existing file")
-            file_content = await Filesystem.read_file(abs_path)
-            await interface.display_text_block(
-                (
-                    str(file_content.content)
-                    if file_content.encoding == "text"
-                    else "( Binary Content )"
-                ),
-                title=str(abs_path),
-            )
 
         auto_write = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths

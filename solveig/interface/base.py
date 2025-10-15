@@ -81,7 +81,7 @@ class SolveigInterface(ABC):
         old_content: str,
         new_content: str,
         title: str | None = None,
-        context_lines: int = 3
+        context_lines: int = 3,
     ) -> None:
         """Display a unified diff view with syntax highlighting."""
         ...

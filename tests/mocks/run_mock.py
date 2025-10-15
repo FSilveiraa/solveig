@@ -16,7 +16,7 @@ async def cleanup():
 
 
 async def run_async_mock(
-    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 5
+    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 1
 ):
     """Entry point for the async textual CLI."""
 
