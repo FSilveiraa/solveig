@@ -5,7 +5,7 @@ import asyncio
 from solveig import SolveigConfig
 from solveig.interface import TextualInterface
 from solveig.run import run_async
-from solveig.schema import WriteRequirement, ReadRequirement
+from solveig.schema import ReadRequirement, WriteRequirement
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
