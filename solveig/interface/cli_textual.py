@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 
+import difflib
 from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.app import App as TextualApp
@@ -509,6 +510,39 @@ class TextualInterface(SolveigInterface):
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
         await self.app._conversation_area.add_text_block(to_display, title=title)
+
+    async def display_diff(
+        self,
+        old_content: str,
+        new_content: str,
+        title: str | None = None,
+        context_lines: int = 3
+    ) -> None:
+        """Display a unified diff view with syntax highlighting."""
+        old_lines = old_content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+
+        diff_lines = list(difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile="original",
+            tofile="modified",
+            n=context_lines
+        ))
+
+        # Convert to string and apply diff syntax highlighting
+        diff_text = "".join(diff_lines)
+
+        # Rich has built-in diff highlighting
+        to_display: str | Syntax = diff_text
+        if diff_text.strip():  # Only if there are actual changes
+            # Use 'diff' lexer for syntax highlighting
+            to_display = Syntax(diff_text, lexer="diff", theme=self.code_theme)
+
+        await self.app._conversation_area.add_text_block(
+            to_display,
+            title=title or "Diff"
+        )
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""
