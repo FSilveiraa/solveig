@@ -132,6 +132,7 @@ see [Configuration Precedence](#configuration-precedence) for more.
 | `max_output_lines` | `-l, --max-output-lines`        | Max lines of output to display in a text box                           | `20`         |
 | `wait_before_user` | `-w, --wait-before-user`        | Time (seconds) between assistant and user response                     | `1.0`        |
 | `theme`            | `--theme`                       | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |
+| `code_theme`       | `--code-theme`                  | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |
 
 ### System Resources
 

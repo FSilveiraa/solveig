@@ -60,8 +60,8 @@ prioritized over shell commands.
 🔌 **Plugin Architecture** - Extend capabilities through drop-in Python plugins. Add SQL queries, web scraping,
 or custom workflows with 100 lines of Python.
 
-📋 **Visual Task Management** - Clear progress tracking with task breakdowns, file previews, and rich metadata
-display for informed user decisions.
+📋 **Visual Task Management** - Clear plan tracking with task breakdowns, file previews, code linting, and rich
+tree displays for informed user decisions.
 
 🌐 **Provider Independence** - Works with OpenAI, Claude, Gemini, local models, or any OpenAI-compatible API.
 

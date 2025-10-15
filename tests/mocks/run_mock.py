@@ -5,7 +5,7 @@ import asyncio
 from solveig import SolveigConfig
 from solveig.interface import TextualInterface
 from solveig.run import run_async
-from solveig.schema import WriteRequirement
+from solveig.schema import WriteRequirement, ReadRequirement
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -29,12 +29,12 @@ async def run_async_mock(
             if isinstance(message, AssistantMessage)
         ]
 
-        # TODO
+        # TODO - this example displays almost all types of interface colors and linting in a single screenshot
         mock_messages = [
             AssistantMessage(
                 requirements=[
                     WriteRequirement(
-                        comment="",
+                        comment="Sure, here's a python print script",
                         path="~/Sync/hello_new.py",
                         is_directory=False,
                         content="""
@@ -48,47 +48,10 @@ if __name__ == "__main__":
     main()
                     """.strip(),
                     ),
-                    WriteRequirement(
-                        comment="A C++ source file",
-                        path="~/Sync/something.cpp",
-                        is_directory=False,
-                        content="""
-// test.cpp
-#include <iostream>
-#include <vector>
-#include <numeric>
-
-int main() {
-    std::vector<int> nums = {1, 2, 3, 4, 5};
-    int sum = std::accumulate(nums.begin(), nums.end(), 0);
-    std::cout << "Sum: " << sum << std::endl
-
-    // Intentional minor issue: missing semicolon above
-    return 0;
-}
-                    """.strip(),
-                    ),
-                    WriteRequirement(
-                        comment="A Typescript file",
-                        path="~/Sync/something.cpp",
-                        is_directory=False,
-                        content="""
-// test.ts
-interface User {
-  id: number;
-  name: string;
-  email?: string;
-}
-
-function greet(user: User): string {
-  const msg = `Hello, ${user.name}!`
-  console.log(msg);
-  return msg;
-}
-
-// Intentional minor issue: missing semicolon
-greet({ id: 1, name: "Alice" })
-                    """.strip(),
+                    ReadRequirement(
+                        comment="Trying to read a file that doesn't exist to trigger an error display",
+                        path="/__non_existing__/file.txt",
+                        metadata_only=False,
                     ),
                 ]
             )
