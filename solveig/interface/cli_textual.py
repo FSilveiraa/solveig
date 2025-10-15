@@ -9,15 +9,16 @@ from collections.abc import Iterable
 from contextlib import asynccontextmanager
 
 from rich.spinner import Spinner
+from rich.syntax import Syntax
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Input, Static
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import DEFAULT_THEME, Palette
+from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import Metadata
-from solveig.utils.misc import get_tree_display
+from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display
 
 BANNER = """
                               888                                  d8b
@@ -37,7 +38,7 @@ BANNER = """
 class TextBox(Static):
     """A text block widget with optional title and border."""
 
-    def __init__(self, content: str, title: str | None = None, **kwargs):
+    def __init__(self, content: str | Syntax, title: str | None = None, **kwargs):
         super().__init__(content, markup=False, **kwargs)
         self.border = "solid"
         if title:
@@ -77,7 +78,7 @@ class ConversationArea(ScrollableContainer):
         await target.mount(text_widget)
         self.scroll_end()
 
-    async def add_text_block(self, content: str, title: str | None = None):
+    async def add_text_block(self, content: str | Syntax, title: str | None = None):
         """Add a text block with border and optional title."""
         text_block = TextBox(content, title=title)
 
@@ -406,13 +407,18 @@ class TextualInterface(SolveigInterface):
     }
 
     def __init__(
-        self, color_palette: Palette = DEFAULT_THEME, base_indent: int = 2, **kwargs
+        self,
+        theme: Palette = DEFAULT_THEME,
+        code_theme=DEFAULT_CODE_THEME,
+        base_indent: int = 2,
+        **kwargs,
     ):
         self.app = SolveigTextualApp(
-            color_palette=color_palette, interface_controller=self, **kwargs
+            color_palette=theme, interface_controller=self, **kwargs
         )
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
+        self.code_theme = code_theme
 
         # Rich's implementation forces us to create custom spinners by
         # starting from an existing spinner and altering it
@@ -493,9 +499,16 @@ class TextualInterface(SolveigInterface):
             title=title or str(metadata.path),
         )
 
-    async def display_text_block(self, text: str, title: str | None = None) -> None:
+    async def display_text_block(
+        self, text: str, title: str | None = None, language: str | None = None
+    ) -> None:
         """Display a text block with optional title."""
-        await self.app._conversation_area.add_text_block(text, title=title)
+        to_display: str | Syntax = text
+        if language:
+            language_name = FILE_EXTENSION_TO_LANGUAGE.get(language)
+            if language_name:
+                to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
+        await self.app._conversation_area.add_text_block(to_display, title=title)
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""

@@ -46,7 +46,9 @@ class WriteRequirement(Requirement):
         )
         await interface.display_text(path_info)
         if self.content:
-            await interface.display_text_block(self.content, title="Content")
+            await interface.display_text_block(
+                self.content, language=abs_path.suffix.lstrip("."), title="Content"
+            )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""
@@ -96,9 +98,8 @@ class WriteRequirement(Requirement):
             )
         else:
             question = (
-                f"Allow {'creating' if self.is_directory and not already_exists else 'updating'} "
-                f"{'directory' if self.is_directory else 'file'}"
-                f"{' and contents' if not self.is_directory else ''}? [y/N]: "
+                f"Allow {'creating' if not already_exists else 'updating'} "
+                f"{'directory' if self.is_directory else 'file'}? [y/N]: "
             )
             if not await interface.ask_yes_no(question):
                 return WriteResult(requirement=self, path=str(abs_path), accepted=False)

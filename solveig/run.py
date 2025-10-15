@@ -15,13 +15,13 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface, TextualInterface
 from solveig.plugins import initialize_plugins
-from solveig.schema import RequirementResult
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
     get_requirements_union_for_streaming,
 )
+from solveig.schema.results import RequirementResult
 from solveig.utils.misc import default_json_serialize
 
 
@@ -281,7 +281,7 @@ async def _main_async():
     llm_client = llm.get_instructor_client(
         api_type=config.api_type, api_key=config.api_key, url=config.url
     )
-    interface = TextualInterface(color_palette=config.theme)
+    interface = TextualInterface(theme=config.theme, code_theme=config.code_theme)
 
     # Run the async main loop
     await run_async(config, interface, llm_client, user_prompt)

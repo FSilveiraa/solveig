@@ -136,3 +136,37 @@ def get_tree_display(
                 lines.append(f"{indent}{'' if is_last else TEXT_BOX.V}{sub_entry}")
 
     return lines
+
+
+FILE_EXTENSION_TO_LANGUAGE = {
+    "py": "python",
+    "js": "javascript",
+    "ts": "typescript",
+    "jsx": "jsx",
+    "tsx": "tsx",
+    "java": "java",
+    "c": "c",
+    "cpp": "cpp",
+    "cc": "cpp",
+    "cxx": "cpp",
+    "h": "c",
+    "hpp": "cpp",
+    "rs": "rust",
+    "go": "go",
+    "rb": "ruby",
+    "php": "php",
+    "sh": "bash",
+    "bash": "bash",
+    "zsh": "zsh",
+    "fish": "fish",
+    "html": "html",
+    "css": "css",
+    "scss": "scss",
+    "json": "json",
+    "yaml": "yaml",
+    "yml": "yaml",
+    "xml": "xml",
+    "sql": "sql",
+    "md": "markdown",
+    "dockerfile": "dockerfile",
+}
