@@ -18,6 +18,7 @@ from textual.widgets import Input, Static
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
+from solveig.subcommand import SubcommandRunner
 from solveig.utils.file import Metadata
 from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display
 
@@ -34,6 +35,9 @@ BANNER = """
                                                                             Y8b d88P
                                                                              "Y88P"
 """
+
+
+DEFAULT_INPUT_PLACEHOLDER = "Click to focus, type and enter to send, '/help' for more"
 
 
 class TextBox(Static):
@@ -308,7 +312,8 @@ class SolveigTextualApp(TextualApp):
         """Create the main layout."""
         yield ConversationArea(id="conversation")
         yield Input(
-            placeholder="Click to focus, type your message and press Enter to send",
+            # placeholder="Click to focus, type your message and press Enter to send",
+            placeholder=DEFAULT_INPUT_PLACEHOLDER,
             id="input",
         )
         yield StatusBar(id="status")
@@ -441,19 +446,38 @@ class TextualInterface(SolveigInterface):
             "growing": growing_spinner,
             "cool": cool_spinner,
         }
+        self.subcommand_executor: SubcommandRunner | None = None
 
-    def _handle_input(self, user_input: str):
+    def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
+        self.subcommand_executor = subcommand_executor
+
+    async def start(self) -> None:
+        """Start the interface."""
+        await self.app.run_async()
+
+    async def stop(self) -> None:
+        """Stop the interface explicitly."""
+        self.app.exit()
+
+    # async def _handle_subcommand(self, subcommand: str) -> None:
+    #     try:
+    #         return
+    #     except Exception as e:
+
+
+    async def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
-        # Check if it's a command
-        if user_input == "/exit":
-            self.app.exit()
-
-        # Put input into internal queue for get_input() to consume
+        # # Check if it's a command
+        if self.subcommand_executor is not None and user_input in self.subcommand_executor.subcommands_map:
+            try:
+                await self.subcommand_executor(subcommand=user_input, interface=self)
+            except Exception as e:
+                await self.display_error(f"Found error when executing '{user_input}' sub-command: {e}")
         else:
             try:
                 self._input_queue.put_nowait(user_input)
             except asyncio.QueueFull:
-                # Handle queue full scenario gracefully
+                # TODO: Handle queue full scenario gracefully
                 pass
 
     async def _display_text(
@@ -595,10 +619,6 @@ class TextualInterface(SolveigInterface):
         active_app.set(self.app)
         # Print banner
         await self.display_text(BANNER)
-
-    async def start(self) -> None:
-        """Start the interface."""
-        await self.app.run_async()
 
     async def display_section(self, title: str) -> None:
         """Display a section header with line extending to the right."""

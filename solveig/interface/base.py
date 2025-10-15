@@ -24,7 +24,11 @@ class SolveigInterface(ABC):
 
     @abstractmethod
     async def start(self) -> None:
-        """Start the interface (if needed)."""
+        """Start the interface."""
+        ...
+
+    async def stop(self) -> None:
+        """Stop the interface explicitly."""
         ...
 
     @abstractmethod

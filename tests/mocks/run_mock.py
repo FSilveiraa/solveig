@@ -5,7 +5,7 @@ import asyncio
 from solveig import SolveigConfig
 from solveig.interface import TextualInterface
 from solveig.run import run_async
-from solveig.schema import ReadRequirement, WriteRequirement
+from solveig.schema import ReadRequirement, WriteRequirement, CopyRequirement, MoveRequirement
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -33,6 +33,18 @@ async def run_async_mock(
         mock_messages = [
             AssistantMessage(
                 requirements=[
+                    CopyRequirement(
+                        comment="Copy test",
+                        source_path="~/Sync/hello.py",
+                        destination_path="~/Sync/hello.py",
+                    ),
+
+                    MoveRequirement(
+                        comment="Copy test",
+                        source_path="~/Sync/hello.py",
+                        destination_path="~/Sync/hello.py",
+                    ),
+
                     WriteRequirement(
                         comment="Sure, here's a python print script",
                         path="~/Sync/hello_new.py",

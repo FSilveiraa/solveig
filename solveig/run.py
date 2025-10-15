@@ -22,6 +22,7 @@ from solveig.schema.message import (
     get_requirements_union_for_streaming,
 )
 from solveig.schema.results import RequirementResult
+from solveig.subcommand import SubcommandRunner
 from solveig.utils.misc import default_json_serialize
 
 
@@ -196,6 +197,8 @@ async def main_loop(
 
     # Get message history
     message_history = await get_message_history(config, interface)
+    subcommand_executor = SubcommandRunner(config=config, message_history=message_history)
+    interface.set_subcommand_executor(subcommand_executor)
 
     # Get initial user message
     user_prompt = user_prompt.strip() if user_prompt else ""
