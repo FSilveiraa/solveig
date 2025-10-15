@@ -146,7 +146,7 @@ class TestConversationFlow:
         # Verify error was handled gracefully
         output = interface.get_all_output()
         assert "This will fail" in output
-        assert "not found" in output # different shells output different errors
+        assert "not found" in output  # different shells output different errors
         assert "nonexistent_command" in output
 
     @pytest.mark.anyio
