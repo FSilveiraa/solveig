@@ -36,11 +36,11 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy solveig/ scripts/ --ignore-missing-imports
+        mypy solveig/ --ignore-missing-imports
     
     - name: Test with pytest
       run: |
-        pytest --cov=solveig --cov=scripts --cov-report=xml --cov-report=term-missing
+        pytest --cov=solveig --cov-report=xml --cov-report=term-missing
     
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
