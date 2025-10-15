@@ -46,8 +46,7 @@ class WriteRequirement(Requirement):
         )
         await interface.display_text(path_info)
         if self.content:
-            already_exists = await Filesystem.exists(abs_path)
-            if already_exists:
+            if await Filesystem.exists(abs_path):
                 file_content = await Filesystem.read_file(abs_path)
                 await interface.display_diff(
                     old_content=str(file_content.content), new_content=self.content
