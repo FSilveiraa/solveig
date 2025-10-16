@@ -747,7 +747,7 @@ class TextualInterface(SolveigInterface):
                 old = (
                     source_content or (await Filesystem.read_file(abs_dest)).content
                     if abs_dest
-                    else "" # MyPy quirk
+                    else ""  # MyPy quirk
                 )
                 new = (await Filesystem.read_file(abs_source)).content
                 await self.display_diff(old_content=str(old), new_content=str(new))

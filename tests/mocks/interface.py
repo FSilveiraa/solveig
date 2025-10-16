@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from os import PathLike
 from typing import Any
 
 from solveig.interface import TextualInterface
@@ -133,7 +132,6 @@ class MockInterface(TextualInterface):
         if url is not None:
             status_info["url"] = url
         self.status_updates.append(status_info)
-
 
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:
