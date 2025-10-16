@@ -59,7 +59,7 @@ class TestReadDisplay:
         await req.display_header(interface)
         output = interface.get_all_output()
         assert "Read test file" in output
-        assert "🗎  /test/file.txt" in output
+        assert "🗎 /test/file.txt" in output
 
         # Test get_description
         description = ReadRequirement.get_description()

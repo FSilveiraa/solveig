@@ -55,7 +55,7 @@ class TestWriteDisplay:
         await file_req.display_header(interface)
         output = interface.get_all_output()
         assert "Create file" in output
-        assert "🗎  /test/file.txt" in output
+        assert "🗎 /test/file.txt" in output
         interface.clear()
 
         # Test directory creation display (summary mode)
@@ -64,7 +64,7 @@ class TestWriteDisplay:
         )
         await dir_req.display_header(interface)
         output = interface.get_all_output()
-        assert "🗁  /test/dir" in output
+        assert "🗁 /test/dir" in output
         interface.clear()
 
         # Test get_description

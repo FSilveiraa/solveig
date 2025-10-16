@@ -134,16 +134,6 @@ class MockInterface(TextualInterface):
             status_info["url"] = url
         self.status_updates.append(status_info)
 
-    async def display_file_info(
-        self,
-        source_path: str | PathLike,
-        destination_path: str | PathLike | None = None,
-        is_directory: bool | None = None,
-        source_content: str | None = None,
-        show_overwrite_warning: bool = True,
-    ) -> None:
-        """Display move requirement header."""
-        self.outputs.append(f"{source_path} -> {destination_path}")
 
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:
