@@ -16,7 +16,10 @@ class SubcommandRunner:
         self.message_history = message_history  # for logging chats
         self.subcommands_map: dict[str, tuple[Callable, str]] = {
             "/help": (self.draw_help, "/help: Print this message"),
-            "/exit": (self.stop_interface, "/exit: Exit the application"),
+            "/exit": (
+                self.stop_interface,
+                "/exit: Exit the application (Ctrl+C also works)",
+            ),
             "/log": (
                 self.log_conversation,
                 "/log <path>: Log the conversation to <path>",

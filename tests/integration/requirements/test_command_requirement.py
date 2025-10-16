@@ -51,7 +51,7 @@ class TestCommandDisplay:
 
         # Test get_description
         description = CommandRequirement.get_description()
-        assert "command(comment, command)" in description
+        assert "command(comment, command, timeout=" in description
         assert "execute shell commands" in description
 
 

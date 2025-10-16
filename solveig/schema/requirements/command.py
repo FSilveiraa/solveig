@@ -21,6 +21,10 @@ class CommandRequirement(Requirement):
     command: str = Field(
         ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
     )
+    timeout: float = Field(
+        10.0,
+        description="Maximum timeout for command completion in seconds (default=10). Set timeout<=0 to launch a detached process (non-blocking, like '&' in a shell, does not capture stdout/stderr, useful for long-running or GUI processes).",
+    )
 
     @field_validator("command")
     @classmethod
@@ -54,23 +58,33 @@ class CommandRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of command capability."""
-        return (
-            "command(comment, command): execute shell commands and inspect their output"
-        )
+        return "command(comment, command, timeout=10): execute shell commands and inspect their output"
 
     async def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
-            proc = await asyncio.create_subprocess_shell(
-                self.command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-            # Decode bytes to strings
-            output = stdout.decode("utf-8").strip() if stdout else ""
-            error = stderr.decode("utf-8").strip() if stderr else ""
-            return output, error
+            if self.timeout > 0:
+                proc = await asyncio.create_subprocess_shell(
+                    self.command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=self.timeout
+                )
+                # Decode bytes to strings
+                output = stdout.decode("utf-8").strip() if stdout else ""
+                error = stderr.decode("utf-8").strip() if stderr else ""
+                return output, error
+            else:
+                proc = await asyncio.create_subprocess_shell(
+                    self.command,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                # await proc.communicate() # does not block
+                return "", ""
         raise ValueError("Empty command")
 
     async def actually_solve(
@@ -109,8 +123,10 @@ class CommandRequirement(Requirement):
             if output:
                 await interface.display_text_block(output, title="Output")
             else:
-                async with interface.with_group("No output"):
-                    pass
+                await interface.display_text(
+                    "No output" if self.timeout > 0 else "Detached process, no output",
+                    "prompt",
+                )
             if error:
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")
