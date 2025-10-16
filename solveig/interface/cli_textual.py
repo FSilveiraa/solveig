@@ -460,20 +460,21 @@ class TextualInterface(SolveigInterface):
         # # Check if it's a command
         if (
             self.subcommand_executor is not None
-            and user_input in self.subcommand_executor.subcommands_map
         ):
             try:
-                await self.subcommand_executor(subcommand=user_input, interface=self)
+                was_subcommand = await self.subcommand_executor(subcommand=user_input, interface=self)
             except Exception as e:
+                was_subcommand = True
                 await self.display_error(
                     f"Found error when executing '{user_input}' sub-command: {e}"
                 )
-        else:
-            try:
-                self._input_queue.put_nowait(user_input)
-            except asyncio.QueueFull:
-                # TODO: Handle queue full scenario gracefully
-                pass
+
+            if not was_subcommand:
+                try:
+                    self._input_queue.put_nowait(user_input)
+                except asyncio.QueueFull:
+                    # TODO: Handle queue full scenario gracefully
+                    pass
 
     async def _display_text(
         self, text: str, style: str = "text", allow_markup: bool = False

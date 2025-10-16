@@ -9,7 +9,7 @@ from solveig.schema import (
     CopyRequirement,
     MoveRequirement,
     ReadRequirement,
-    WriteRequirement, CommandRequirement,
+    WriteRequirement, CommandRequirement, TaskListRequirement,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
@@ -36,13 +36,14 @@ async def run_async_mock(
 
         # TODO - this example displays almost all types of interface colors and linting in a single screenshot
         mock_messages = [
+            AssistantMessage(requirements=[
+                TaskListRequirement(
+                    comment="Hey there",
+                ),
+            ]),
+
             AssistantMessage(
                 requirements=[
-                    CommandRequirement(
-                        comment="Change PWD to previous dir",
-                        command="echo \"$PWD \" && cd .. && echo $PWD",
-                    ),
-
                     CopyRequirement(
                         comment="Copy test",
                         source_path="~/Sync/hello.py",
