@@ -66,7 +66,9 @@ async def send_message_to_llm_with_retry(
     user_message: UserMessage,
 ) -> tuple[AssistantMessage | None, UserMessage]:
     """Send message to LLM with retry logic."""
+
     requirements_union = get_requirements_union_for_streaming(config)
+    message_history.add_messages(user_message)
 
     while True:
         # This prevents general errors in testing, allowing for the task to get cancelled mid-loop
@@ -75,7 +77,6 @@ async def send_message_to_llm_with_retry(
         try:
             # this has to be done here - the message_history dumping auto-adds the token counting upon
             # the serialization that we would have to do anyway to avoid expensive re-counting on every update
-            message_history.add_messages(user_message)
             message_history_dumped = message_history.to_openai(update_sent_count=True)
             if config.verbose:
                 await interface.display_text_block(
@@ -136,19 +137,28 @@ async def send_message_to_llm_with_retry(
             )
 
             # Ask if user wants to retry
-            retry = await interface.ask_yes_no(
-                "There was an error communicating with the LLM. Would you like to retry?",
+            retry_same = await interface.ask_yes_no(
+                "Retry with the same message [y] or send a new one [N]?",
             )
-            if not retry:
-                return None, user_message
 
-            # Ask for new comment if retrying
-            new_comment = await interface.ask_user(
-                "Enter a new message (or press Enter to retry with the same message)"
-            )
-            # not a bug, we're testing if the string is essentially empty or not
-            if new_comment.strip():
-                user_message = UserMessage(comment=new_comment)
+            if not retry_same:
+                new_comment = await interface.get_input()
+                # new_comment = await interface.ask_user(
+                #     "Enter a new message (or press Enter to retry with the same message)"
+                # )
+                message_history.add_messages(UserMessage(comment=new_comment))
+
+            # if retry:
+            #     continue
+            #     return None, user_message
+            #
+            # # Ask for new comment if retrying
+            # new_comment = await interface.ask_user(
+            #     "Enter a new message (or press Enter to retry with the same message)"
+            # )
+            # # not a bug, we're testing if the string is essentially empty or not
+            # if new_comment.strip():
+            #     user_message = UserMessage(comment=new_comment)
 
 
 async def process_requirements(
@@ -213,8 +223,8 @@ async def main_loop(
                 config, interface, llm_client, message_history, user_message
             )
 
-        if llm_response is None:
-            continue
+        # if llm_response is None:
+        #     continue
 
         # Successfully got LLM response (it was already added to the
         await interface.update_status(
