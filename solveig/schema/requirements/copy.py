@@ -96,9 +96,6 @@ class CopyRequirement(Requirement):
                 destination_path=str(abs_destination_path),
             )
 
-        source_metadata = await Filesystem.read_metadata(abs_source_path)
-        await interface.display_tree(metadata=source_metadata, title="Source Metadata")
-
         # Get user consent
         if (
             Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)

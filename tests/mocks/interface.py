@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from os import PathLike
 from typing import Any
 
 from solveig.interface import TextualInterface
@@ -22,6 +23,16 @@ class MockInterface(TextualInterface):
         self._stop_event = asyncio.Event()
 
     # Core async display methods
+    async def start(self) -> None:
+        self.outputs.append("INTERFACE_STARTED")
+        await self._stop_event.wait()
+
+    async def wait_until_ready(self):
+        self.outputs.append("INTERFACE_READY")
+
+    async def stop(self) -> None:
+        self.outputs.append("INTERFACE_STOPPED")
+
     async def display_text(self, text: str, style: str = "normal") -> None:
         self.outputs.append(f"[{style}] {text}")
 
@@ -123,15 +134,10 @@ class MockInterface(TextualInterface):
             status_info["url"] = url
         self.status_updates.append(status_info)
 
-    async def start(self) -> None:
-        self.outputs.append("INTERFACE_STARTED")
-        await self._stop_event.wait()
+    async def display_file_info(self, source_path: str | PathLike, destination_path: str | PathLike | None = None, is_directory: bool | None = None, source_content: str | None = None, show_overwrite_warning: bool = True) -> None:
+        """Display move requirement header."""
+        self.outputs.append(f"{source_path} -> {destination_path}")
 
-    async def wait_until_ready(self):
-        self.outputs.append("INTERFACE_READY")
-
-    async def stop(self) -> None:
-        self.outputs.append("INTERFACE_STOPPED")
 
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:

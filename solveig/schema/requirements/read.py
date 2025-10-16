@@ -78,9 +78,6 @@ class ReadRequirement(Requirement):
                 f"Reading {abs_path} since it matches config.allow_allowed_paths"
             )
         metadata = await Filesystem.read_metadata(abs_path)
-        await interface.display_tree(
-            metadata, title=f"Metadata: {abs_path}", display_metadata=True
-        )
         content = None
 
         if (

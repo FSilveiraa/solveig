@@ -24,7 +24,6 @@ class SubcommandRunner:
     ):
         # ok this looks pretty cool
         subcommand, *args = subcommand.split(" ")
-        await interface.display_warning("Subcommand: {}".format(subcommand))
         try:
             call = self.subcommands_map[subcommand][0]
         except KeyError:
@@ -54,7 +53,11 @@ You have the following sub-commands available:
     async def log_conversation(self, interface: "SolveigInterface", path, *args, **kwargs):
         async with interface.with_group("Log"):
             content = self.message_history.to_example()
-            await interface.display_file_info(source_path=path, source_content=content)
+            if not content:
+                await interface.display_warning("Cannot export conversation: no messages logged yet")
+                return
+
+            await interface.display_file_info(source_path=path, is_directory=False, source_content=content)
 
             abs_path = Filesystem.get_absolute_path(path)
             already_exists = await Filesystem.exists(abs_path)

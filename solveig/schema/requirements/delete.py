@@ -69,9 +69,6 @@ class DeleteRequirement(Requirement):
                 requirement=self, accepted=False, error=str(e), path=str(abs_path)
             )
 
-        metadata = await Filesystem.read_metadata(abs_path)
-        await interface.display_tree(metadata=metadata)
-
         auto_delete = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths
         )

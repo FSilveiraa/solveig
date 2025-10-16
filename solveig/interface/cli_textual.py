@@ -20,7 +20,7 @@ from textual.widgets import Input, Static
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import Metadata, Filesystem
-from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display
+from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display, convert_size_to_human_readable
 
 BANNER = """
                               888                                  d8b
@@ -37,7 +37,7 @@ BANNER = """
 """
 
 
-DEFAULT_INPUT_PLACEHOLDER = "Click to focus, type and enter to send, '/help' for more"
+DEFAULT_INPUT_PLACEHOLDER = "Click to focus, type and press Enter to send, '/help' for more"
 
 
 class TextBox(Static):
@@ -668,53 +668,60 @@ class TextualInterface(SolveigInterface):
             path: str,
             abs_path: PathLike,
             is_dir: bool,
-            destination_path: str | None = None,
-            absolute_destination_path: PathLike | None = None,
+            size: int | None = None,
+            prefix: str = "",
     ) -> str:
         """Format path information for display - shared by all requirements."""
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
         # add it to the printed info
-        path_print_str = f"{'🗁' if is_dir else '🗎'}  {path}"
+        path_info = f"{prefix}{'🗁' if is_dir else '🗎'} {path}"
         if str(abs_path) != path:
-            path_print_str += f"  ({abs_path})"
-
-        # if this is a two-path operation (copy, move), print the other path too
-        if destination_path:
-            path_print_str += f"  →  {destination_path}"
-            if (
-                    absolute_destination_path
-                    and str(absolute_destination_path) != destination_path
-            ):
-                path_print_str += f" ({absolute_destination_path})"
-
-        return path_print_str
+            path_info += f"  ({abs_path})"
+        if size is not None:
+            size_str = convert_size_to_human_readable(size)
+            path_info += f"  |  ⛁ {size_str}"
+        return path_info
 
     async def display_file_info(self, source_path: str | PathLike, destination_path: str | PathLike | None = None, is_directory: bool | None = None, source_content: str | None = None, show_overwrite_warning: bool = True) -> None:
         """Display move requirement header."""
         abs_source = Filesystem.get_absolute_path(source_path)
         abs_dest = Filesystem.get_absolute_path(destination_path) if destination_path else None
+
+        source_exists = await Filesystem.exists(abs_source)
+        dest_exists = await Filesystem.exists(abs_dest) if destination_path else None
+
         is_directory = is_directory if is_directory is not None else await Filesystem.is_dir(abs_source)
-        path_info = self._format_path_info(
+        source_size = (await Filesystem.read_metadata(abs_source)).size if source_exists else None
+        dest_size = (await Filesystem.read_metadata(abs_dest)).size if dest_exists else None
+
+        await self.display_text(self._format_path_info(
+            prefix="Source:       " if destination_path else "Path:  ", # padding to align, look it's late
             path=source_path,
             abs_path=abs_source,
+            size=source_size,
             is_dir=is_directory,
-            destination_path=destination_path,
-            absolute_destination_path=abs_dest,
-        )
-        await self.display_text(path_info)
+        ))
+        if destination_path:
+            await self.display_text(self._format_path_info(
+                prefix="Destination:  ",
+                path=destination_path,
+                abs_path=abs_dest,
+                size=dest_size,
+                is_dir=is_directory,
+            ))
 
-        if Filesystem.exists(abs_source):
+        if source_exists:
             # if this is a move (2 files) or an over-write (1 file + 1 content), then display the diff
-            if abs_dest and await Filesystem.exists(abs_dest):
-                old = source_content or await Filesystem.read_file(abs_dest)
-                new = await Filesystem.read_file(abs_source)
+            if (abs_dest and await Filesystem.exists(abs_dest)) or source_content:
+                old = source_content or (await Filesystem.read_file(abs_dest)).content
+                new = (await Filesystem.read_file(abs_source)).content
                 await self.display_diff(
-                    old_content=str(old.content), new_content=str(new.content)
+                    old_content=str(old), new_content=str(new)
                 )
                 if show_overwrite_warning:
                     await self.display_warning("Overwriting existing file")
-            # if it's just a write, just display the content
-            elif source_content:
-                await self.display_text_block(
-                    source_content, language=abs_source.suffix.lstrip("."), title="Content"
-                )
+        # if it's just a write, just display the content
+        elif source_content:
+            await self.display_text_block(
+                source_content, language=abs_source.suffix.lstrip("."), title="Content"
+            )
