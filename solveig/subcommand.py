@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from solveig.utils.file import Filesystem
@@ -13,15 +14,16 @@ class SubcommandRunner:
     def __init__(self, config: "SolveigConfig", message_history: "MessageHistory"):
         self.config = config
         self.message_history = message_history  # for logging chats
-        self.subcommands_map = {
+        self.subcommands_map: dict[str, tuple[Callable, str]] = {
             "/help": (self.draw_help, "/help: Print this message"),
             "/exit": (self.stop_interface, "/exit: Exit the application"),
-            "/log": (self.log_conversation, "/log <path>: Log the conversation to <path>"),
+            "/log": (
+                self.log_conversation,
+                "/log <path>: Log the conversation to <path>",
+            ),
         }
 
-    async def __call__(
-        self, subcommand: str, interface: "SolveigInterface"
-    ):
+    async def __call__(self, subcommand: str, interface: "SolveigInterface"):
         # ok this looks pretty cool
         subcommand, *args = subcommand.split(" ")
         try:
@@ -42,7 +44,7 @@ This message was printed because you used the '/help' sub-command.
 You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 You have the following sub-commands available:
 """.strip()
-        for subcommand, (_, description) in self.subcommands_map.items():
+        for _, (_, description) in self.subcommands_map.items():
             help_str += f"\n  • {description}"
         await interface.display_text_block(help_str, title="Help")
         return help_str
@@ -50,14 +52,20 @@ You have the following sub-commands available:
     async def stop_interface(self, interface: "SolveigInterface", *args, **kwargs):
         await interface.stop()
 
-    async def log_conversation(self, interface: "SolveigInterface", path, *args, **kwargs):
+    async def log_conversation(
+        self, interface: "SolveigInterface", path, *args, **kwargs
+    ):
         async with interface.with_group("Log"):
             content = self.message_history.to_example()
             if not content:
-                await interface.display_warning("Cannot export conversation: no messages logged yet")
+                await interface.display_warning(
+                    "Cannot export conversation: no messages logged yet"
+                )
                 return
 
-            await interface.display_file_info(source_path=path, is_directory=False, source_content=content)
+            await interface.display_file_info(
+                source_path=path, is_directory=False, source_content=content
+            )
 
             abs_path = Filesystem.get_absolute_path(path)
             already_exists = await Filesystem.exists(abs_path)

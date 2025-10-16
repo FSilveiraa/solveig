@@ -147,5 +147,13 @@ class SolveigInterface(ABC):
         """Update status bar with multiple pieces of information."""
         ...
 
-    async def display_file_info(self, source_path: str | PathLike, destination_path: str | PathLike | None = None, is_directory: bool | None = None, source_content: str | None = None, show_overwrite_warning: bool = True) -> None:
+    @abstractmethod
+    async def display_file_info(
+        self,
+        source_path: str | PathLike,
+        destination_path: str | PathLike | None = None,
+        is_directory: bool | None = None,
+        source_content: str | None = None,
+        show_overwrite_warning: bool = True,
+    ) -> None:
         """Display move requirement header."""

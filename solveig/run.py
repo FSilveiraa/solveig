@@ -64,7 +64,7 @@ async def send_message_to_llm_with_retry(
     client: Instructor,
     message_history: MessageHistory,
     user_message: UserMessage,
-) -> tuple[AssistantMessage | None, UserMessage]:
+) -> tuple[AssistantMessage, UserMessage]:
     """Send message to LLM with retry logic."""
 
     requirements_union = get_requirements_union_for_streaming(config)

@@ -6,7 +6,6 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from anyio import Path
 from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
