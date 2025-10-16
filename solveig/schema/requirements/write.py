@@ -6,7 +6,6 @@ from pydantic import Field, field_validator
 
 from solveig.schema.requirements.base import (
     Requirement,
-    format_path_info,
     validate_non_empty_path,
 )
 from solveig.utils.file import Filesystem
@@ -40,22 +39,28 @@ class WriteRequirement(Requirement):
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display write requirement header."""
         await super().display_header(interface)
-        abs_path = Filesystem.get_absolute_path(self.path)
-        path_info = format_path_info(
-            path=self.path, abs_path=abs_path, is_dir=self.is_directory
+        await interface.display_file_info(
+            source_path=self.path,
+            is_directory=self.is_directory,
+            source_content=self.content,
+            # show_overwrite_warning=False,
         )
-        await interface.display_text(path_info)
-        if self.content:
-            if await Filesystem.exists(abs_path):
-                file_content = await Filesystem.read_file(abs_path)
-                await interface.display_diff(
-                    old_content=str(file_content.content), new_content=self.content
-                )
-                await interface.display_warning("Overwriting existing file")
-            else:
-                await interface.display_text_block(
-                    self.content, language=abs_path.suffix.lstrip("."), title="Content"
-                )
+        # abs_path = Filesystem.get_absolute_path(self.path)
+        # path_info = format_path_info(
+        #     path=self.path, abs_path=abs_path, is_dir=self.is_directory
+        # )
+        # await interface.display_text(path_info)
+        # if self.content:
+        #     if await Filesystem.exists(abs_path):
+        #         file_content = await Filesystem.read_file(abs_path)
+        #         await interface.display_diff(
+        #             old_content=str(file_content.content), new_content=self.content
+        #         )
+        #         await interface.display_warning("Overwriting existing file")
+        #     else:
+        #         await interface.display_text_block(
+        #             self.content, language=abs_path.suffix.lstrip("."), title="Content"
+        #         )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""

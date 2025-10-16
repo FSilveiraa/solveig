@@ -9,7 +9,7 @@ from solveig.schema import (
     CopyRequirement,
     MoveRequirement,
     ReadRequirement,
-    WriteRequirement,
+    WriteRequirement, CommandRequirement,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
@@ -38,6 +38,11 @@ async def run_async_mock(
         mock_messages = [
             AssistantMessage(
                 requirements=[
+                    CommandRequirement(
+                        comment="Change PWD to previous dir",
+                        command="echo \"$PWD \" && cd .. && echo $PWD",
+                    ),
+
                     CopyRequirement(
                         comment="Copy test",
                         source_path="~/Sync/hello.py",

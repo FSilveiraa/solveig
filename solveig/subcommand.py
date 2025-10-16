@@ -1,6 +1,8 @@
 import asyncio
 from typing import TYPE_CHECKING
 
+from solveig.utils.file import Filesystem
+
 if TYPE_CHECKING:
     from solveig import SolveigConfig
     from solveig.interface import SolveigInterface
@@ -41,5 +43,7 @@ You have the following sub-commands available:
     async def stop_interface(self, interface: "SolveigInterface", *args, **kwargs):
         await interface.stop()
 
-    async def log_conversation(self, interface, *args, **kwargs):
-        pass
+    # async def log_conversation(self, interface, path, *args, **kwargs):
+    #     abs_path = Filesystem.get_absolute_path(path)
+    #     if await Filesystem.exists(abs_path):
+

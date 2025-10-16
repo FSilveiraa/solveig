@@ -29,30 +29,30 @@ def validate_non_empty_path(path: str) -> str:
     return path
 
 
-def format_path_info(
-    path: str,
-    abs_path: Path,
-    is_dir: bool,
-    destination_path: str | None = None,
-    absolute_destination_path: Path | None = None,
-) -> str:
-    """Format path information for display - shared by all requirements."""
-    # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
-    # add it to the printed info
-    path_print_str = f"{'🗁' if is_dir else '🗎'}  {path}"
-    if str(abs_path) != path:
-        path_print_str += f"  ({abs_path})"
-
-    # if this is a two-path operation (copy, move), print the other path too
-    if destination_path:
-        path_print_str += f"  →  {destination_path}"
-        if (
-            absolute_destination_path
-            and str(absolute_destination_path) != destination_path
-        ):
-            path_print_str += f" ({absolute_destination_path})"
-
-    return path_print_str
+# def format_path_info(
+#     path: str,
+#     abs_path: Path,
+#     is_dir: bool,
+#     destination_path: str | None = None,
+#     absolute_destination_path: Path | None = None,
+# ) -> str:
+#     """Format path information for display - shared by all requirements."""
+#     # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
+#     # add it to the printed info
+#     path_print_str = f"{'🗁' if is_dir else '🗎'}  {path}"
+#     if str(abs_path) != path:
+#         path_print_str += f"  ({abs_path})"
+#
+#     # if this is a two-path operation (copy, move), print the other path too
+#     if destination_path:
+#         path_print_str += f"  →  {destination_path}"
+#         if (
+#             absolute_destination_path
+#             and str(absolute_destination_path) != destination_path
+#         ):
+#             path_print_str += f" ({absolute_destination_path})"
+#
+#     return path_print_str
 
 
 class Requirement(BaseModel, ABC):

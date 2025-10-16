@@ -9,6 +9,7 @@ import time
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 
+from os import PathLike
 from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.app import App as TextualApp
@@ -18,7 +19,7 @@ from textual.widgets import Input, Static
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-from solveig.utils.file import Metadata
+from solveig.utils.file import Metadata, Filesystem
 from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE, get_tree_display
 
 BANNER = """
@@ -558,7 +559,9 @@ class TextualInterface(SolveigInterface):
         if diff_text.strip():  # Only if there are actual changes
             # Use 'diff' lexer for syntax highlighting
             to_display = Syntax(diff_text, lexer="diff", theme=self.code_theme)
-
+        else:
+            # TODO: add color hightlighting here
+            to_display = "(Same content)"
         await self.app._conversation_area.add_text_block(
             to_display, title=title or "Diff"
         )
@@ -658,3 +661,59 @@ class TextualInterface(SolveigInterface):
             status_bar._refresh_display()  # Refresh to remove spinner
 
             await self.update_status(final_status)
+
+    @staticmethod
+    def _format_path_info(
+            path: str,
+            abs_path: PathLike,
+            is_dir: bool,
+            destination_path: str | None = None,
+            absolute_destination_path: PathLike | None = None,
+    ) -> str:
+        """Format path information for display - shared by all requirements."""
+        # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
+        # add it to the printed info
+        path_print_str = f"{'🗁' if is_dir else '🗎'}  {path}"
+        if str(abs_path) != path:
+            path_print_str += f"  ({abs_path})"
+
+        # if this is a two-path operation (copy, move), print the other path too
+        if destination_path:
+            path_print_str += f"  →  {destination_path}"
+            if (
+                    absolute_destination_path
+                    and str(absolute_destination_path) != destination_path
+            ):
+                path_print_str += f" ({absolute_destination_path})"
+
+        return path_print_str
+
+    async def display_file_info(self, source_path: str | PathLike, destination_path: str | PathLike | None = None, is_directory: bool | None = None, source_content: str | None = None, show_overwrite_warning: bool = True) -> None:
+        """Display move requirement header."""
+        abs_source = Filesystem.get_absolute_path(source_path)
+        abs_dest = Filesystem.get_absolute_path(destination_path) if destination_path else None
+        is_directory = is_directory if is_directory is not None else await Filesystem.is_dir(abs_source)
+        path_info = self._format_path_info(
+            path=source_path,
+            abs_path=abs_source,
+            is_dir=is_directory,
+            destination_path=destination_path,
+            absolute_destination_path=abs_dest,
+        )
+        await self.display_text(path_info)
+
+        if Filesystem.exists(abs_source):
+            # if this is a move (2 files) or an over-write (1 file + 1 content), then display the diff
+            if abs_dest and await Filesystem.exists(abs_dest):
+                old = source_content or await Filesystem.read_file(abs_dest)
+                new = await Filesystem.read_file(abs_source)
+                await self.display_diff(
+                    old_content=str(old.content), new_content=str(new.content)
+                )
+                if show_overwrite_warning:
+                    await self.display_warning("Overwriting existing file")
+            # if it's just a write, just display the content
+            elif source_content:
+                await self.display_text_block(
+                    source_content, language=abs_source.suffix.lstrip("."), title="Content"
+                )

@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 
 from solveig.utils.file import Filesystem
 
-from .base import Requirement, format_path_info, validate_non_empty_path
+from .base import Requirement, validate_non_empty_path
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
@@ -35,10 +35,12 @@ class ReadRequirement(Requirement):
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display read requirement header."""
         await super().display_header(interface)
-        abs_path = Filesystem.get_absolute_path(self.path)
-        is_dir = await Filesystem.is_dir(abs_path)
-        path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
-        await interface.display_text(path_info)
+        await interface.display_file_info(source_path=self.path)
+
+        # abs_path = Filesystem.get_absolute_path(self.path)
+        # is_dir = await Filesystem.is_dir(abs_path)
+        # path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
+        # await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""

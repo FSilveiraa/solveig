@@ -7,6 +7,7 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
+from os import PathLike
 
 from solveig.subcommand import SubcommandRunner
 from solveig.utils.file import Metadata
@@ -145,3 +146,6 @@ class SolveigInterface(ABC):
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...
+
+    async def display_file_info(self, source_path: str | PathLike, destination_path: str | PathLike | None = None, is_directory: bool | None = None, source_content: str | None = None, show_overwrite_warning: bool = True) -> None:
+        """Display move requirement header."""
