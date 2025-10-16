@@ -272,7 +272,9 @@ task_list_2 = TaskListRequirement(
 read_hello_py_req = ReadRequirement(
     comment="", path="~/Sync/hello.py", metadata_only=False
 )
-read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/init.sh", metadata_only=False)
+read_dev_sh_req = ReadRequirement(
+    comment="", path="~/Sync/init.sh", metadata_only=False
+)
 large_example.add_messages(
     AssistantMessage(
         requirements=[
@@ -393,6 +395,7 @@ if __name__ == "__main__":
 script_command_req = CommandRequirement(
     comment="Now execute it to make sure it works correctly",
     command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
+    timeout=10,
 )
 large_example.add_messages(
     AssistantMessage(
@@ -443,6 +446,7 @@ task_list_5 = TaskListRequirement(
 script_delete_move_req = CommandRequirement(
     comment="Delete a script from /home/user/Sync/ and re-name the old one",
     command="rm /home/user/Sync/hello.py; mv /home/user/Sync/hello_new.py /home/user/Sync/hello.py",
+    timeout=10,
 )
 large_example.add_messages(
     AssistantMessage(

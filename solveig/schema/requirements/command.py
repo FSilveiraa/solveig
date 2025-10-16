@@ -22,7 +22,8 @@ class CommandRequirement(Requirement):
         ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
     )
     timeout: float = Field(
-        10.0, description="Maximum timeout for command completion in seconds (default=10). Set timeout<=0 to launch a detached process (non-blocking, like '&' in a shell, does not capture stdout/stderr, useful for long-running or GUI processes)."
+        10.0,
+        description="Maximum timeout for command completion in seconds (default=10). Set timeout<=0 to launch a detached process (non-blocking, like '&' in a shell, does not capture stdout/stderr, useful for long-running or GUI processes).",
     )
 
     @field_validator("command")
@@ -57,9 +58,7 @@ class CommandRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of command capability."""
-        return (
-            "command(comment, command, timeout=10): execute shell commands and inspect their output"
-        )
+        return "command(comment, command, timeout=10): execute shell commands and inspect their output"
 
     async def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
@@ -70,7 +69,9 @@ class CommandRequirement(Requirement):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.timeout)
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=self.timeout
+                )
                 # Decode bytes to strings
                 output = stdout.decode("utf-8").strip() if stdout else ""
                 error = stderr.decode("utf-8").strip() if stderr else ""
@@ -122,7 +123,10 @@ class CommandRequirement(Requirement):
             if output:
                 await interface.display_text_block(output, title="Output")
             else:
-                await interface.display_text("No output" if self.timeout > 0 else "Detached process, no output", "prompt")
+                await interface.display_text(
+                    "No output" if self.timeout > 0 else "Detached process, no output",
+                    "prompt",
+                )
             if error:
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")

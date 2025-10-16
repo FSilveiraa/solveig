@@ -10,7 +10,7 @@ from solveig.schema import (
     MoveRequirement,
     ReadRequirement,
     TaskListRequirement,
-    WriteRequirement, CommandRequirement,
+    WriteRequirement,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
