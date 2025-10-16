@@ -202,10 +202,10 @@ tree_metadata = Metadata(
                 )
             },
         ),
-        "/home/user/Sync/dev.sh": Metadata(
+        "/home/user/Sync/init.sh": Metadata(
             owner_name="user",
             group_name="user",
-            path="/home/user/Sync/dev.sh",
+            path="/home/user/Sync/init.sh",
             size=101,
             is_directory=False,
             is_readable=True,
@@ -272,7 +272,7 @@ task_list_2 = TaskListRequirement(
 read_hello_py_req = ReadRequirement(
     comment="", path="~/Sync/hello.py", metadata_only=False
 )
-read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/dev.sh", metadata_only=False)
+read_dev_sh_req = ReadRequirement(comment="", path="~/Sync/init.sh", metadata_only=False)
 large_example.add_messages(
     AssistantMessage(
         requirements=[
@@ -306,15 +306,17 @@ large_example.add_messages(
             ReadResult(
                 requirement=read_dev_sh_req,
                 content="""
-#!/bin/python
-print("Hello, world!")
+#!/usr/bin/env bash
+mkdir -p logs tmp
+touch logs/app.log
+echo "Project initialized." > tmp/init.flag
                 """.strip(),
-                path="/home/user/Sync/dev.sh",
+                path="/home/user/Sync/init.sh",
                 accepted=True,
                 metadata=Metadata(
                     owner_name="user",
                     group_name="user",
-                    path="/home/user/Sync/dev.sh",
+                    path="/home/user/Sync/init.sh",
                     size=101,
                     is_directory=False,
                     is_readable=True,
@@ -329,7 +331,7 @@ print("Hello, world!")
 )
 
 task_list_3 = TaskListRequirement(
-    comment="This directory seems safe - ~/Sync/hello.py is a basic print script, while dev.sh and run.sh.bak are both simple project initialization scripts with the same contents.",
+    comment="This directory seems safe - ~/Sync/hello.py is a basic print script, while init.sh initializes a sample project.",
     tasks=[
         Task(description="Read the contents of ~/Sync", status="completed"),
         Task(
@@ -373,6 +375,7 @@ write_script_req = WriteRequirement(
     comment="Write a better print script",
     path="~/Sync/hello_new.py",
     content="""
+#!/bin/python
 import sys
 
 def run():

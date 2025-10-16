@@ -10,7 +10,7 @@ from solveig.schema import (
     MoveRequirement,
     ReadRequirement,
     TaskListRequirement,
-    WriteRequirement,
+    WriteRequirement, CommandRequirement,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
@@ -61,6 +61,7 @@ async def run_async_mock(
                         path="~/Sync/hello_new.py",
                         is_directory=False,
                         content="""
+#!/bin/sh
 import sys
 
 def main():
