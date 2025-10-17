@@ -48,7 +48,9 @@ class TestTreePlugin:
 
             mock_client = create_mock_client(llm_response)
             interface = MockInterface()
-            interface.set_user_inputs(["y", "/exit"])  # Accept tree, then exit
+            interface.set_user_inputs(
+                ["y", "y", "/exit"]
+            )  # Accept tree, then send, then exit
 
             # Execute conversation
             await run_async(
@@ -137,7 +139,7 @@ class TestTreePlugin:
                 path=str(temp_path), max_depth=2, comment="Limited depth tree"
             )
             interface = MockInterface()
-            interface.set_user_inputs(["y"])
+            interface.set_user_inputs(["y", "y"])
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True
@@ -152,7 +154,9 @@ class TestTreePlugin:
 
             # Test user interaction with error case
             interface.clear()
-            interface.set_user_inputs(["n"])  # User declines if error prompt appears
+            interface.set_user_inputs(
+                ["y", "n"]
+            )  # User agrees to read tree, then declines if error prompt appears
 
             error_req = TreeRequirement(
                 path=str(temp_path / "nonexistent"), comment="Test tree"
