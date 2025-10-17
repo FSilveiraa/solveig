@@ -70,37 +70,40 @@ class TreeRequirement(Requirement):
     async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        # Get complete tree metadata using new approach
-        metadata = await Filesystem.read_metadata(
-            abs_path, descend_level=self.max_depth
-        )
-
-        # Display the tree structure
-        await interface.display_tree(
-            metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
-        )
-
-        if (
-            Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
-            or config.auto_send
-        ):
-            await interface.display_text(
-                f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}"
+        if await interface.ask_yes_no("Allow reading tree?"):
+            # Get complete tree metadata using new approach
+            metadata = await Filesystem.read_metadata(
+                abs_path, descend_level=self.max_depth
             )
 
-        elif not await interface.ask_yes_no("Allow sending tree?"):
-            return TreeResult(
-                requirement=self,
-                accepted=False,
-                path=str(abs_path),
-                metadata=None,
+            # Display the tree structure
+            await interface.display_tree(
+                metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
             )
+
+            if (
+                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+                or config.auto_send
+            ):
+                accepted = True
+                await interface.display_text(
+                    f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}"
+                )
+            else:
+                accepted = await interface.ask_yes_no("Allow sending tree?")
+            if accepted:
+                return TreeResult(
+                    requirement=self,
+                    accepted=True,
+                    path=str(abs_path),
+                    metadata=metadata,
+                )
 
         return TreeResult(
             requirement=self,
-            accepted=True,
+            accepted=False,
             path=str(abs_path),
-            metadata=metadata,
+            metadata=None,
         )
 
 

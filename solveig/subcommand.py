@@ -87,5 +87,6 @@ You have the following sub-commands available:
 
             try:
                 await Filesystem.write_file(abs_path, content)
+                await interface.display_success("Log exported")
             except Exception as e:
                 await interface.display_error(f"Found error when writing file: {e}")
