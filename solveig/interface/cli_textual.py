@@ -499,7 +499,7 @@ class TextualInterface(SolveigInterface):
 
     async def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
-        await self.display_text(f"❌ Error: {error}", "error")
+        await self.display_text(f"🗙 Error: {error}", "error")
 
     async def display_warning(self, warning: str) -> None:
         """Display a warning message with standard formatting."""
@@ -507,7 +507,7 @@ class TextualInterface(SolveigInterface):
 
     async def display_success(self, message: str) -> None:
         """Display a success message with standard formatting."""
-        await self.display_text(f"✅ {message}", "success")
+        await self.display_text(f"✓ {message}", "success")
 
     async def display_comment(self, message: str) -> None:
         """Display a comment message."""
@@ -545,8 +545,10 @@ class TextualInterface(SolveigInterface):
         context_lines: int = 3,
     ) -> None:
         """Display a unified diff view with syntax highlighting."""
-        old_lines = old_content.splitlines(keepends=True)
-        new_lines = new_content.splitlines(keepends=True)
+        # Hack! difflib expects each lines to end in \n, and the final one might now
+        # so we either rstrip() the entire text, OR we rstrip() every line after splitting
+        old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
+        new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
 
         diff_lines = list(
             difflib.unified_diff(
@@ -555,6 +557,7 @@ class TextualInterface(SolveigInterface):
                 fromfile="original",
                 tofile="modified",
                 n=context_lines,
+                # lineterm="", # Prevent doubled newlines - doesn't work
             )
         )
 
@@ -741,20 +744,31 @@ class TextualInterface(SolveigInterface):
                 )
             )
 
-        if source_exists:
-            # if this is a move (2 files) or an over-write (1 file + 1 content), then display the diff
-            if source_content or (abs_dest and await Filesystem.exists(abs_dest)):
+        # Only show diff/content for files, and only when both files exist OR we have source_content
+        if not is_directory:
+            if source_exists and dest_exists:
+                # Both exist - show diff
                 old = (
-                    source_content or (await Filesystem.read_file(abs_dest)).content
+                    (await Filesystem.read_file(abs_dest)).content.strip()
                     if abs_dest
-                    else ""  # MyPy quirk
-                )
-                new = (await Filesystem.read_file(abs_source)).content
+                    else ""
+                )  # MyPy quirk
+                new = (await Filesystem.read_file(abs_source)).content.strip()
                 await self.display_diff(old_content=str(old), new_content=str(new))
                 if show_overwrite_warning:
                     await self.display_warning("Overwriting existing file")
-        # if it's just a write, just display the content
-        elif source_content:
-            await self.display_text_block(
-                source_content, language=abs_source.suffix.lstrip("."), title="Content"
-            )
+            elif source_content and source_exists:
+                # Source exists, have new content - show diff
+                old = (await Filesystem.read_file(abs_source)).content.strip()
+                await self.display_diff(
+                    old_content=str(old), new_content=source_content
+                )
+                if show_overwrite_warning:
+                    await self.display_warning("Overwriting existing file")
+            elif source_content:
+                # New file with content - just show content
+                await self.display_text_block(
+                    source_content,
+                    language=abs_source.suffix.lstrip("."),
+                    title="Content",
+                )
