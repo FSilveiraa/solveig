@@ -2,7 +2,9 @@
 
 **An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
-[![Demo GIF](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo.svg)](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo)
+<!-- [![Demo GIF](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo.svg)](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo) -->
+
+<video src="./docs/demo.mp4" width="100%" controls autoplay loop muted></video>
 
 [![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
 [![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions)
@@ -79,5 +81,5 @@ code linting, waiting animations and rich tree displays for informed user decisi
 ---
 
 <a href="https://vshymanskyy.github.io/StandWithUkraine">
-	<img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
+	<img alt="Support Ukraine: https://stand-with-ukraine.pp.ua/" src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg">
 </a>
