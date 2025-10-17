@@ -2,9 +2,9 @@
 
 **An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
-<!-- [![Demo GIF](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo.svg)](https://asciinema.org/a/eAGrytKnT5Wh6NlzuFnRtTINo) -->
+[![Demo](https://asciinema.org/a/zrqqaHlHApXaw9DM5zXBEb0aB.svg)](https://asciinema.org/a/zrqqaHlHApXaw9DM5zXBEb0aB)
 
-<video src="./docs/demo.mp4" width="100%" controls autoplay loop muted></video>
+*You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
 
 [![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
 [![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions)
