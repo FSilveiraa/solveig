@@ -247,6 +247,7 @@ class SolveigTextualApp(TextualApp):
         }}
 
         Input {{
+            color: {self._style_to_color.get('text', '#000')};
             dock: bottom;
             height: 3;
             background: {self._style_to_color['background']};

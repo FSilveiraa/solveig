@@ -6,10 +6,7 @@ from solveig import SolveigConfig
 from solveig.interface import TextualInterface
 from solveig.run import run_async
 from solveig.schema import (
-    CopyRequirement,
-    MoveRequirement,
     ReadRequirement,
-    TaskListRequirement,
     WriteRequirement,
 )
 from solveig.schema.message import AssistantMessage
@@ -39,29 +36,11 @@ async def run_async_mock(
         mock_messages = [
             AssistantMessage(
                 requirements=[
-                    TaskListRequirement(
-                        comment="Hey there",
-                    ),
-                ]
-            ),
-            AssistantMessage(
-                requirements=[
-                    CopyRequirement(
-                        comment="Copy test",
-                        source_path="~/Sync/hello.py",
-                        destination_path="~/Sync/hello.py.bak",
-                    ),
-                    MoveRequirement(
-                        comment="Copy test",
-                        source_path="~/Sync/hello.py",
-                        destination_path="~/Sync/hello.py",
-                    ),
                     WriteRequirement(
                         comment="Sure, here's a python print script",
                         path="~/Sync/hello_new.py",
                         is_directory=False,
                         content="""
-#!/bin/sh
 import sys
 
 def main():

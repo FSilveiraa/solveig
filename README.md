@@ -2,7 +2,7 @@
 
 **An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
-[![Demo](https://asciinema.org/a/zrqqaHlHApXaw9DM5zXBEb0aB.svg)](https://asciinema.org/a/zrqqaHlHApXaw9DM5zXBEb0aB)
+[![Demo](https://asciinema.org/a/ZLTp8j6GsXCD7O3uc56olgMV7.svg)](https://asciinema.org/a/ZLTp8j6GsXCD7O3uc56olgMV7)
 
 *You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
 
@@ -72,7 +72,7 @@ code linting, waiting animations and rich tree displays for informed user decisi
 ## Documentation
 
 - **[About & Comparisons](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
-- **[Usage Guide](./docs/usage.md)** - Configuration options, examples, and advanced features
+- **[Usage Guide](./docs/usage.md)** - Config files, CLI flags, sub-commands, usage examples and more advanced features
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
 - **[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2)** - Upcoming features

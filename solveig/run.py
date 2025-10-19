@@ -218,7 +218,7 @@ async def main_loop(
 
     while True:
         # Send message to LLM and handle any errors
-        async with interface.with_animation("Waiting", "Processing"):
+        async with interface.with_animation("Thinking...", "Processing"):
             llm_response, user_message = await send_message_to_llm_with_retry(
                 config, interface, llm_client, message_history, user_message
             )

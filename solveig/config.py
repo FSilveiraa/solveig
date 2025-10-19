@@ -36,7 +36,6 @@ class SolveigConfig:
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
-    max_output_lines: int = 20
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -186,12 +185,6 @@ class SolveigConfig:
             help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)",
         )
         parser.add_argument(
-            "--max-output-lines",
-            "-l",
-            type=int,
-            help="The maximum number of lines of file content or command output to print (-1 to disable)",
-        )
-        parser.add_argument(
             "--min-disk-space-left",
             "-d",
             type=str,
@@ -202,7 +195,7 @@ class SolveigConfig:
             "--max-context",
             "-s",
             type=int,
-            help="Maximum context length in tokens (-1 for no limit, default: -1)",
+            help="Maximum context size in tokens (-1 for no limit, default: -1)",
         )
         parser.add_argument("--verbose", "-v", action="store_true", default=None)
         parser.add_argument(

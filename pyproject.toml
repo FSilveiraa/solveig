@@ -41,19 +41,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "setuptools>=61.0",
+    "anthropic>=0.68.0",
+    "google-generativeai>=0.8.5",
     "pytest>=8.3.0",
     "pytest-cov>=6.0.0",
     "black>=24.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
-    "anthropic>=0.68.0",
-    "google-generativeai>=0.8.5",
-    "rich>=14.0.0",
-    "prompt_toolkit>=3.0.52",
 ]
 anthropic = ["anthropic>=0.68.0"]
 google = ["google-generativeai>=0.8.5"]
-all = ["anthropic>=0.68.0", "google-generativeai>=0.8.5"]
 
 [project.urls]
 Homepage = "https://github.com/Fsilveiraa/solveig"
