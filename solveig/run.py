@@ -143,22 +143,7 @@ async def send_message_to_llm_with_retry(
 
             if not retry_same:
                 new_comment = await interface.get_input()
-                # new_comment = await interface.ask_user(
-                #     "Enter a new message (or press Enter to retry with the same message)"
-                # )
                 message_history.add_messages(UserMessage(comment=new_comment))
-
-            # if retry:
-            #     continue
-            #     return None, user_message
-            #
-            # # Ask for new comment if retrying
-            # new_comment = await interface.ask_user(
-            #     "Enter a new message (or press Enter to retry with the same message)"
-            # )
-            # # not a bug, we're testing if the string is essentially empty or not
-            # if new_comment.strip():
-            #     user_message = UserMessage(comment=new_comment)
 
 
 async def process_requirements(
@@ -169,11 +154,18 @@ async def process_requirements(
     """Process requirements and return results."""
     results = []
 
-    for requirement in llm_response.requirements or []:
+    requirements = llm_response.requirements or []
+    for i, requirement in enumerate(requirements):
         try:
             result = await requirement.solve(config, interface)
             if result:
                 results.append(result)
+
+                # HACK: interface quirk, the UI lags slightly if we sleep here between the final requirement
+                # and displaying the User section header (plus it genuinely looks confusing with the new interface
+                # if right after ending the requirement solving we don't immediately show the User section
+                if i <= len(requirements) - 2 and config.wait_between > 0:
+                    await asyncio.sleep(config.wait_between)
         except Exception as e:
             await interface.display_error(f"Error processing requirement: {e}")
             await interface.display_text_block(
@@ -223,9 +215,6 @@ async def main_loop(
                 config, interface, llm_client, message_history, user_message
             )
 
-        # if llm_response is None:
-        #     continue
-
         # Successfully got LLM response (it was already added to the
         await interface.update_status(
             tokens=(
@@ -236,10 +225,6 @@ async def main_loop(
 
         if config.verbose:
             await interface.display_text_block(str(llm_response), title="Received")
-
-        # Process requirements and get next user input
-        if config.wait_before_user > 0:
-            await asyncio.sleep(config.wait_before_user)
 
         # Prepare user response
         results = await process_requirements(

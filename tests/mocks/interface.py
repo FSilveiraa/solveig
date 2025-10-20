@@ -77,7 +77,6 @@ class MockInterface(TextualInterface):
 
     async def ask_user(self, prompt: str, placeholder: str = None) -> str:
         # Pass control of the loop just in case the task got cancelled
-        # await asyncio.sleep(0)
         self.questions.append(prompt)
         if not self.user_inputs:
             raise ValueError("No further user input configured")

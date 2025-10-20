@@ -2,7 +2,7 @@
 
 **An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
-[![Demo](https://asciinema.org/a/ZLTp8j6GsXCD7O3uc56olgMV7.svg)](https://asciinema.org/a/ZLTp8j6GsXCD7O3uc56olgMV7)
+[![Demo](https://asciinema.org/a/ljeIxYtpx59dVgAfBRECeOgzd.svg)](https://asciinema.org/a/ljeIxYtpx59dVgAfBRECeOgzd)
 
 *You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
 

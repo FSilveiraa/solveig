@@ -40,7 +40,7 @@ class Palette:
 
 terracotta = Palette(
     name="terracotta",
-    background="#221A0F",  # dark brown
+    background="#231D13",  # dark greyish brown
     text="#FFF1DB",  # beige
     prompt="#CB9D63",  # faded yellow
     box="#CB9D63",  # faded yellow
@@ -133,5 +133,5 @@ THEMES = {
 
 from pygments.styles import STYLE_MAP
 
-DEFAULT_CODE_THEME = "material"
+DEFAULT_CODE_THEME = "coffee"
 CODE_THEMES = set(STYLE_MAP.keys())

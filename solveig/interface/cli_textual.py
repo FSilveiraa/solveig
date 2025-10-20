@@ -130,7 +130,7 @@ class ConversationArea(ScrollableContainer):
             self.scroll_end()
 
             # Print end cap after exiting group
-            end_corner = Static("┗━━", classes="group_bottom")
+            end_corner = Static("┗━━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
 
@@ -533,7 +533,8 @@ class TextualInterface(SolveigInterface):
         """Display a text block with optional title."""
         to_display: str | Syntax = text
         if language:
-            language_name = FILE_EXTENSION_TO_LANGUAGE.get(language)
+            # .js -> js
+            language_name = FILE_EXTENSION_TO_LANGUAGE.get(language.lstrip("."))
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
         await self.app._conversation_area.add_text_block(to_display, title=title)

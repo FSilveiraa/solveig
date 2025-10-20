@@ -45,7 +45,7 @@ class SolveigConfig:
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     code_theme: str = themes.DEFAULT_CODE_THEME
-    wait_before_user: float = 1.0
+    wait_between: float = 0.5
 
     def __post_init__(self):
         # convert API type string to class
@@ -223,21 +223,21 @@ class SolveigConfig:
             action="store_true",
             dest="no_commands",
             default=False,
-            help="Disable command execution entirely (secure mode)",
+            help="Disable command execution (secure mode)",
         )
         parser.add_argument(
-            "--wait-before-user",
+            "--wait-between",
             "-w",
             type=float,
-            default=1.0,
-            help="Time to wait between displaying the assistant response and beginning the user's. Testing has shown users are able to follow conversation flow better with a small delay (set to 0 to disable)",
+            default=-1.0,
+            help="UX-friendly time to wait between displaying operations requested by the Assistant (<=0 to disable, default: 0.3)",
         )
         parser.add_argument(
             "--theme",
             default=None,
             type=str,
             choices=themes.THEMES.keys(),
-            help=f"Interface theme, (default: {themes.DEFAULT_THEME})",
+            help=f"Interface theme (default: {themes.DEFAULT_THEME})",
         )
         parser.add_argument(
             "--code-theme",
@@ -269,6 +269,9 @@ class SolveigConfig:
         merged_config: dict = {**file_config}
         for k, v in args_dict.items():
             if v is not None:
+                # flag-specific rules
+                if k == "wait_between" and v < 0:
+                    continue
                 merged_config[k] = v
 
         # Display a warning if ".*" is in allowed_commands or / is in allowed_paths

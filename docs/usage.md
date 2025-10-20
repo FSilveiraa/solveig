@@ -98,8 +98,8 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
   "auto_send": false,
   "no_commands": false,
   "theme": "terracotta",
-  "code_theme": "material",
-  "wait_before_user": 1.0,
+  "code_theme": "coffee",
+  "wait_between": 0.3,
   "plugins": {
     "shellcheck": {
       "shell": "bash"
@@ -132,12 +132,12 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 
 ### Interface
 
-| Option             | CLI Flag                        | Description                                                            | Default      |
-|--------------------|---------------------------------|------------------------------------------------------------------------|--------------|
-| `verbose`          | `-v, --verbose`                 | Enable verbose logging                                                 | `false`      |
-| `wait_before_user` | `-w, --wait-before-user`        | Time (seconds) between assistant and user response                     | `1.0`        |
-| `theme`            | `--theme`                       | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |
-| `code_theme`       | `--code-theme`                  | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |
+| Option         | CLI Flag             | Description                                                            | Default      |
+|----------------|----------------------|------------------------------------------------------------------------|--------------|
+| `verbose`      | `-v, --verbose`      | Enable verbose logging                                                 | `false`      |
+| `wait_between` | `-w, --wait-between` | Time (seconds) between displaying requirements                         | `0.3`        |
+| `theme`        | `--theme`            | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |
+| `code_theme`   | `--code-theme`       | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |
 
 ### System Prompt and Resources
 

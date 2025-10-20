@@ -102,7 +102,7 @@ class ReadRequirement(Requirement):
                 "(Base64)" if metadata.encoding.lower() == "base64" else str(content)
             )
             await interface.display_text_block(
-                content_output, title=f"Content: {abs_path}"
+                content_output, title=f"Content: {abs_path}", language=abs_path.suffix
             )
 
         if config.auto_send:
