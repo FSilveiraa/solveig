@@ -41,6 +41,9 @@ class CommandRequirement(Requirement):
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display command requirement header."""
         await super().display_header(interface)
+        await interface.display_text(
+            f"Timeout: {f"{self.timeout}s" if self.timeout > 0.0 else "None (detached process)"}"
+        )
         await interface.display_text_block(self.command, title="Command")
 
     def create_error_result(
@@ -103,22 +106,23 @@ class CommandRequirement(Requirement):
         if should_auto_execute or await interface.ask_yes_no(
             "Allow running command? [y/N]: "
         ):
-            try:
-                output: str | None
-                error: str | None
-                output, error = await self._execute_command(config)
-            except Exception as e:
-                error_str = str(e)
-                await interface.display_error(
-                    f"Found error when running command: {error_str}"
-                )
-                return CommandResult(
-                    requirement=self,
-                    command=self.command,
-                    accepted=True,
-                    success=False,
-                    error=error_str,
-                )
+            output: str | None
+            error: str | None
+            async with interface.with_animation("Executing..."):
+                try:
+                    output, error = await self._execute_command(config)
+                except Exception as e:
+                    error_str = str(e)
+                    await interface.display_error(
+                        f"Found error when running command: {error_str}"
+                    )
+                    return CommandResult(
+                        requirement=self,
+                        command=self.command,
+                        accepted=True,
+                        success=False,
+                        error=error_str,
+                    )
 
             if output:
                 await interface.display_text_block(output, title="Output")

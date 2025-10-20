@@ -130,7 +130,7 @@ class SolveigInterface(ABC):
 
     @asynccontextmanager
     async def with_animation(
-        self, status: str = "Processing", final_status: str = "Ready"
+        self, status: str = "Processing", final_status: str | None = None
     ):
         """Context manager for displaying animation during async operations."""
         raise NotImplementedError("Subclass must implement with_animation")

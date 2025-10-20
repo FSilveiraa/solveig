@@ -651,9 +651,12 @@ class TextualInterface(SolveigInterface):
 
     @asynccontextmanager
     async def with_animation(
-        self, status: str = "Processing", final_status: str = "Ready"
+        self, status: str = "Processing", final_status: str | None = None
     ):
         """Context manager for displaying animation during async operations."""
+        final_status = (
+            final_status if final_status is not None else self.app._status_bar._status
+        )
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)
 
