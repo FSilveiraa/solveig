@@ -36,6 +36,7 @@ dependencies = [
     "pydantic>=2.11.0",
     "tiktoken>=0.11.0",
     "textual>=6.1.0",
+    "rich>=14.0.0",
 ]
 
 [project.optional-dependencies]

@@ -1,7 +1,5 @@
 from dataclasses import asdict, dataclass
 
-from prompt_toolkit.styles import Style
-
 
 @dataclass
 class Palette:
@@ -14,12 +12,6 @@ class Palette:
     section: str
     warning: str
     error: str
-
-    def to_prompt_toolkit_style(self):
-        style_dict = {k: ("" if v == "reset" else v) for k, v in asdict(self).items()}
-        style_dict.pop("name")
-        style_dict[""] = "" if self.text == "reset" else self.text
-        return Style.from_dict(style_dict)
 
     def to_textual_css(self) -> dict:
         """Generate Textual CSS rules from palette colors."""
