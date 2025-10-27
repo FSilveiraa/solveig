@@ -90,3 +90,10 @@ Solveig supports two types of plugins:
 - **Requirement plugins**: Add new LLM capabilities (see the [tree plugin](/solveig/plugins/schema/tree.py))
 
 For detailed plugin development guide, see [Plugins](./plugins.md).
+
+
+## Notes
+
+- Solveig uses a Textual CLI that turns your terminal into a very rich display that usually doesn't work well
+with most IDE's runners and debuggers. In Pycharm, you have to enable `Run/Debug Configurations -> Modify
+Options -> Emulate terminal in output console` for all configurations (add it to the template).

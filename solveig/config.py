@@ -251,7 +251,13 @@ class SolveigConfig:
             action="version",
             version=f"%(prog)s {version('solveig')}",
         )
-        parser.add_argument("prompt", type=str, nargs="?", help="User prompt")
+        parser.add_argument(
+            "prompt",
+            type=str,
+            nargs="?",
+            default="",
+            help="User prompt"
+        )
 
         args = parser.parse_args(cli_args)
         args_dict = vars(args)
@@ -326,7 +332,7 @@ class SolveigConfig:
                 )
             merged_config["url"] = api_type_class.default_url
 
-        return (cls(**merged_config), user_prompt)
+        return (cls(**merged_config), user_prompt.strip())
 
     def to_dict(self) -> dict[str, Any]:
         """Export config to a dictionary suitable for JSON serialization."""

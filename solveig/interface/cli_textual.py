@@ -588,6 +588,10 @@ class TextualInterface(SolveigInterface):
             await self.display_text(" (empty)", style="warning")
         return user_input
 
+    # TODO: this is fundamentally how I need to re-organize the interface for both better organization of this
+    #  700+ line file and to implement the demo interface: the widgets need to go in their own files, the CSS
+    #  formatting needs to cleaned up and all the widget interaction needs to be abstracted so that the demo
+    #  interface can override only the very low-level methods
     async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)

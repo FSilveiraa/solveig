@@ -44,31 +44,23 @@ async def get_message_history(
     return message_history
 
 
-async def get_initial_user_message(
-    user_prompt: str | None, interface: SolveigInterface
-) -> UserMessage:
-    """Get the initial user prompt and create a UserMessage."""
-    await interface.display_section("User")
-
-    if user_prompt:
-        await interface.display_text(f" {user_prompt}")
-        return UserMessage(comment=user_prompt)
-    else:
-        user_input = await interface.get_input()
-        return UserMessage(comment=user_input)
-
-
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
     client: Instructor,
     message_history: MessageHistory,
-    user_message: UserMessage,
-) -> tuple[AssistantMessage, UserMessage]:
+) -> AssistantMessage:
     """Send message to LLM with retry logic."""
 
     requirements_union = get_requirements_union_for_streaming(config)
-    message_history.add_messages(user_message)
+
+    # def on_response_hook(response):
+    #     # response should be the raw OpenAI ChatCompletion object
+    #     usage = getattr(response, "usage", None)
+    #     if usage is not None:
+    #         print("Usage captured:", usage)
+    #
+    # client.on(HookName.COMPLETION_RESPONSE, on_response_hook)
 
     while True:
         # This prevents general errors in testing, allowing for the task to get cancelled mid-loop
@@ -100,6 +92,7 @@ async def send_message_to_llm_with_retry(
                 response_model=requirements_union,
                 model=config.model,
                 temperature=config.temperature,
+                stream_options={"include_usage": True},
             )
 
             # TODO: implement solve-as-they-come
@@ -125,7 +118,7 @@ async def send_message_to_llm_with_retry(
                 )
             )
 
-            return llm_response, user_message
+            return llm_response
 
         except KeyboardInterrupt:
             # Propagate to top-level so the app can exit cleanly
@@ -137,6 +130,8 @@ async def send_message_to_llm_with_retry(
             )
 
             # Ask if user wants to retry
+            # TODO: Clarify conversation flow overall - we're not sending "same vs new", we're adding a new message
+            # Plus the user can just type and send a new message anyway without waiting
             retry_same = await interface.ask_yes_no(
                 "Retry with the same message [y] or send a new one [N]?",
             )
@@ -204,24 +199,19 @@ async def main_loop(
     )
     interface.set_subcommand_executor(subcommand_executor)
 
-    # Get initial user message
-    user_prompt = user_prompt.strip() if user_prompt else ""
-    user_message = await get_initial_user_message(user_prompt, interface)
+    # Get initial user message and add it to the message history
+    await interface.display_section("User")
+    if user_prompt:
+        await interface.display_text(f" {user_prompt}")
+    else:
+        user_prompt = await interface.get_input()
+    message_history.add_messages(UserMessage(comment=user_prompt))
 
     while True:
-        # Send message to LLM and handle any errors
         async with interface.with_animation("Thinking...", "Processing"):
-            llm_response, user_message = await send_message_to_llm_with_retry(
-                config, interface, llm_client, message_history, user_message
+            llm_response = await send_message_to_llm_with_retry(
+                config, interface, llm_client, message_history
             )
-
-        # Successfully got LLM response (it was already added to the
-        await interface.update_status(
-            tokens=(
-                message_history.total_tokens_sent,
-                message_history.total_tokens_received,
-            )
-        )
 
         if config.verbose:
             await interface.display_text_block(str(llm_response), title="Received")
@@ -233,7 +223,7 @@ async def main_loop(
 
         await interface.display_section("User")
         user_prompt = await interface.get_input()
-        user_message = UserMessage(comment=user_prompt, results=results)
+        message_history.add_messages(UserMessage(comment=user_prompt, results=results))
 
 
 async def run_async(
