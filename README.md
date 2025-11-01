@@ -1,26 +1,29 @@
+[![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig) &nbsp;
+[![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions) &nbsp;
+[![codecov](https://codecov.io/gh/Fsilveiraa/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/Fsilveiraa/solveig) &nbsp;
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/) &nbsp;
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) &nbsp;
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) &nbsp;
+
+---
+
 # Solveig
 
 **An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
 
 [![Demo](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx.svg)](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx)
 
-*You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
+#### *You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
 
-[![PyPI](https://img.shields.io/pypi/v/solveig)](https://pypi.org/project/solveig)
-[![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions)
-[![codecov](https://codecov.io/gh/Fsilveiraa/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/Fsilveiraa/solveig)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+---
 
 <p align="center">
     <span style="font-size: 1.17em; font-weight: bold;">
-        <a href="./docs/about.md#features-and-principles">Features</a> &nbsp;|&nbsp;
-        <a href="./docs/about.md#faq">FAQ</a> &nbsp;|&nbsp;
-        <a href="./docs/usage.md">Usage</a> &nbsp;|&nbsp;
-        <a href="./docs/plugins.md">Plugins</a> &nbsp;|&nbsp;
-        <a href="./docs/themes/themes.md">Themes</a> &nbsp;|&nbsp;
-        <a href="https://github.com/FSilveiraa/solveig/discussions/2">Roadmap</a> &nbsp;|&nbsp;
+        <a href="./docs/about.md">About</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="./docs/usage.md">Usage</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="./docs/themes/themes.md">Themes</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="./docs/plugins.md">Plugins</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="https://github.com/FSilveiraa/solveig/discussions/2">Roadmap</a> &nbsp;&nbsp;|&nbsp;&nbsp;
         <a href="./docs/contributing.md">Contributing</a>
     </span>
 </p>
@@ -71,11 +74,11 @@ code linting, waiting animations and rich tree displays for informed user decisi
 
 ## Documentation
 
-- **[About & Comparisons](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
-- **[Usage Guide](./docs/usage.md)** - Config files, CLI flags, sub-commands, usage examples and more advanced features
+- **[About](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
+- **[Usage](./docs/usage.md)** - Config files, CLI flags, sub-commands, usage examples and more advanced features
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
-- **[Plugin Development](./docs/plugins.md)** - How to create and configure custom plugins
-- **[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2)** - Upcoming features
+- **[Plugins](./docs/plugins.md)** - How to use, configure and develop plugins
+- **[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2)** - Upcoming features and general progress tracking
 - **[Contributing](./docs/contributing.md)** - Development setup, testing, and contribution guidelines
 
 ---
