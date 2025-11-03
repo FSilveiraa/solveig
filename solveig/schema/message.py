@@ -70,7 +70,8 @@ _last_requirements_union = None
 
 def get_response_model(
     config: SolveigConfig | None = None,
-) -> type[Requirement] | None:
+# returns a union of Requirement subclasses
+) -> type[Union[Requirement, ...]]:
     """Get the requirements union type for streaming individual requirements with caching."""
     global _last_requirements_config_hash, _last_requirements_union
 
@@ -102,23 +103,14 @@ def get_response_model(
         all_active_requirements = [
             req for req in all_active_requirements
             if req != CommandRequirement
-            and req.title != "command"
         ]
 
     # Handle empty registry case
     if not all_active_requirements:
-        _last_requirements_config_hash = config_hash
-        _last_requirements_union = None
-        return None
+        raise ValueError("No response model available for LLM to use")
 
-    # Create union using typing.Union for Instructor compatibility
-    if len(all_active_requirements) == 1:
-        requirements_union = all_active_requirements[0]
-    else:
-        from typing import cast
-
-        # HACK: Cast to tell mypy this is a valid Union type
-        requirements_union = cast(type[Requirement], Union[*all_active_requirements])
+    # Always create a Union for consistency, even with single types
+    requirements_union = Union[tuple(all_active_requirements)]
 
     # Cache the result
     _last_requirements_config_hash = config_hash

@@ -134,10 +134,10 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 
 | Option         | CLI Flag             | Description                                                            | Default      |
 |----------------|----------------------|------------------------------------------------------------------------|--------------|
-| `verbose`      | `-v, --verbose`      | Enable verbose logging                                                 | `false`      |
+| `verbose`      | `-v, --verbose`      | Enable verbose logging (displays system prompt, messages, etc)         | `false`      |
 | `wait_between` | `-w, --wait-between` | Time (seconds) between displaying requirements                         | `0.3`        |
-| `theme`        | `--theme`            | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |
-| `code_theme`   | `--code-theme`       | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |
+| `theme`        | `--theme`            | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |              |
+| `code_theme`   | `--code-theme`       | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |              |
 
 ### System Prompt and Resources
 
@@ -147,6 +147,39 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 | `add_os_info`         | `--add-os-info, --os`           | Include OS info in system prompt  | `false`   |
 | `exclude_username`    | `--exclude-username, --no-user` | Exclude username from OS info     | `false`   |
 | `add_examples`        | `--add-examples, --ex`          | Include examples in system prompt | `false`   |
+
+## System Prompt
+
+You can configure the System Prompt using your own template, controlling what is sent to the assistant.
+Remember to include the following tags, otherwise their respective config flags will not work:
+- `{AVAILABLE_TOOLS}` - descriptive list of available operations
+- `{SYSTEM_INFO}` - details about the running operating system
+- `{EXAMPLES}` - conversation examples
+
+Keep in mind, `SYSTEM_INFO` and `EXAMPLES` are optional, so if you write your own system prompt don't
+for example use a header like `System info:\n{SYSTEM_INFO}` that would be followed by nothing if the
+flag isn't used.
+
+Below is the current System Prompt template:
+
+```
+You are an AI assistant helping users solve problems through tool use.
+
+Guidelines:
+- Use the comment field to explain each operation, use tasks().comment to communicate simple answers
+- For multi-step work, start with a task list showing your plan, then execute operations
+- Update task status as you progress through the plan
+- Prefer file operations over shell commands when possible
+- Ask before destructive actions (delete, overwrite)
+- If an operation fails, adapt your approach and continue
+
+Available tools:
+{AVAILABLE_TOOLS}
+
+{SYSTEM_INFO}
+
+{EXAMPLES}
+```
 
 ## Security Modes
 
