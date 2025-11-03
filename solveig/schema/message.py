@@ -1,8 +1,8 @@
 import json
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, Union
-
-from pydantic import Field, field_validator
+from typing import Literal, Union
+from collections.abc import Iterable
+from pydantic import Field, field_validator, TypeAdapter
 
 from .. import SolveigConfig, utils
 from ..llm import APIType
@@ -64,73 +64,11 @@ class AssistantMessage(BaseMessage):
     )
 
 
-def get_filtered_assistant_message_class(
-    config: SolveigConfig | None = None,
-) -> type[BaseMessage]:
-    """Get a dynamically created AssistantMessage class with only filtered requirements.
-
-    This is used by Instructor to get the correct schema without caching issues.
-    Gets all active requirements from the unified registry (core + plugins).
-
-    Args:
-        config: SolveigConfig instance for filtering requirements based on settings
-    """
-    # Get ALL active requirements from the unified registry
-    try:
-        from solveig.schema import REQUIREMENTS
-
-        all_active_requirements = list(REQUIREMENTS.registered.values())
-    except (ImportError, AttributeError):
-        # Fallback - should not happen in normal operation
-        all_active_requirements = []
-
-    # Filter out CommandRequirement if commands are disabled
-    if config and config.no_commands:
-        from solveig.schema.requirements.command import CommandRequirement
-
-        all_active_requirements = [
-            req for req in all_active_requirements if req != CommandRequirement
-        ]
-
-    # Handle empty registry case
-    if not all_active_requirements:
-        # Return a minimal class if no requirements are registered
-        class EmptyAssistantMessage(BaseMessage):
-            requirements: list[Requirement] | None = None
-
-        return EmptyAssistantMessage
-
-    # Create union dynamically from all registered requirements
-    if len(all_active_requirements) == 1:
-        requirements_union: Any = all_active_requirements[0]
-    else:
-        # Create union using | operator (modern Python syntax)
-        requirements_union = all_active_requirements[0]
-        for req_type in all_active_requirements[1:]:
-            requirements_union = requirements_union | req_type
-
-    # Create completely fresh AssistantMessage class
-    # HACK: we tell mypy to ignore typing here
-    class AssistantMessage(BaseMessage):
-        requirements: (
-            list[
-                Annotated[
-                    requirements_union,  # type: ignore[valid-type]
-                    Field(discriminator="title"),
-                ]
-            ]
-            | None
-        ) = None
-
-    return AssistantMessage
-
-
 # Cache for requirements union to avoid regenerating on every call
 _last_requirements_config_hash = None
 _last_requirements_union = None
 
-
-def get_requirements_union_for_streaming(
+def get_response_model(
     config: SolveigConfig | None = None,
 ) -> type[Requirement] | None:
     """Get the requirements union type for streaming individual requirements with caching."""
@@ -152,7 +90,7 @@ def get_requirements_union_for_streaming(
     try:
         from solveig.schema import REQUIREMENTS
 
-        all_active_requirements = list(REQUIREMENTS.registered.values())
+        all_active_requirements: list[type[Requirement]] = list(REQUIREMENTS.registered.values())
     except (ImportError, AttributeError):
         # Fallback - should not happen in normal operation
         all_active_requirements = []
@@ -162,7 +100,9 @@ def get_requirements_union_for_streaming(
         from solveig.schema.requirements.command import CommandRequirement
 
         all_active_requirements = [
-            req for req in all_active_requirements if req != CommandRequirement
+            req for req in all_active_requirements
+            if req != CommandRequirement
+            and req.title != "command"
         ]
 
     # Handle empty registry case
@@ -185,6 +125,12 @@ def get_requirements_union_for_streaming(
     _last_requirements_union = requirements_union
 
     return requirements_union
+
+
+def get_response_model_json(config):
+    response_model = get_response_model(config)
+    schema = TypeAdapter(Iterable[response_model]).json_schema()
+    return json.dumps(schema, indent=2, default=utils.misc.default_json_serialize)
 
 
 # Type alias for any message type

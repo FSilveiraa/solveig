@@ -19,7 +19,7 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
-    get_requirements_union_for_streaming,
+    get_response_model, get_response_model_json,
 )
 from solveig.schema.results import RequirementResult
 from solveig.subcommand import SubcommandRunner
@@ -32,8 +32,9 @@ async def get_message_history(
     """Initialize the conversation store."""
     sys_prompt = system_prompt.get_system_prompt(config)
     if config.verbose:
-        await interface.display_text("\n")
         await interface.display_text_block(sys_prompt, title="System Prompt")
+        # json_schema = get_response_model_json(config)
+        # await interface.display_text_block(json_schema, title="Response Model", language="json")
 
     message_history = MessageHistory(
         system_prompt=sys_prompt,
@@ -52,7 +53,7 @@ async def send_message_to_llm_with_retry(
 ) -> AssistantMessage:
     """Send message to LLM with retry logic."""
 
-    requirements_union = get_requirements_union_for_streaming(config)
+    response_model = get_response_model(config)
 
     # def on_response_hook(response):
     #     # response should be the raw OpenAI ChatCompletion object
@@ -89,7 +90,7 @@ async def send_message_to_llm_with_retry(
             requirements = []
             requirement_stream = client.chat.completions.create_iterable(
                 messages=message_history_dumped,
-                response_model=requirements_union,
+                response_model=response_model,
                 model=config.model,
                 temperature=config.temperature,
                 stream_options={"include_usage": True},

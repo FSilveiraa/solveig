@@ -10,7 +10,7 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
-    get_requirements_union_for_streaming,
+    get_response_model,
 )
 from solveig.schema.requirements.command import CommandRequirement
 from tests import LOREM_IPSUM
@@ -154,7 +154,7 @@ class TestStreamingRequirementsUnion:
 
         # Mock empty registry
         with patch("solveig.schema.REQUIREMENTS.registered", {}):
-            union = get_requirements_union_for_streaming(config)
+            union = get_response_model(config)
             assert union is None
 
     def test_single_requirement_returns_type(self):
@@ -163,7 +163,7 @@ class TestStreamingRequirementsUnion:
 
         mock_requirements = {"CommandRequirement": CommandRequirement}
         with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union = get_requirements_union_for_streaming(config)
+            union = get_response_model(config)
             assert union == CommandRequirement
 
     def test_no_commands_filters_command_requirement(self):
@@ -172,7 +172,7 @@ class TestStreamingRequirementsUnion:
 
         mock_requirements = {"CommandRequirement": CommandRequirement}
         with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union = get_requirements_union_for_streaming(config)
+            union = get_response_model(config)
             assert union is None  # Filtered out, leaving empty
 
     def test_caching_mechanism_works(self):
@@ -182,12 +182,12 @@ class TestStreamingRequirementsUnion:
         mock_requirements = {"CommandRequirement": CommandRequirement}
         with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
             # Clear cache by calling with different config first
-            get_requirements_union_for_streaming(SolveigConfig(no_commands=True))
+            get_response_model(SolveigConfig(no_commands=True))
 
             # First call
-            union1 = get_requirements_union_for_streaming(config)
+            union1 = get_response_model(config)
             # Second call with same config
-            union2 = get_requirements_union_for_streaming(config)
+            union2 = get_response_model(config)
 
             # Should return the same object (cached)
             assert union1 is union2
@@ -199,8 +199,8 @@ class TestStreamingRequirementsUnion:
 
         mock_requirements = {"CommandRequirement": CommandRequirement}
         with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union1 = get_requirements_union_for_streaming(config1)
-            union2 = get_requirements_union_for_streaming(config2)
+            union1 = get_response_model(config1)
+            union2 = get_response_model(config2)
 
             # Different configs should produce different results
             assert union1 != union2
