@@ -2,14 +2,14 @@
 [![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions) &nbsp;
 [![codecov](https://codecov.io/gh/Fsilveiraa/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/Fsilveiraa/solveig) &nbsp;
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/) &nbsp;
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)]()  &nbsp;
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://docs.astral.sh/ruff/)  &nbsp;
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) &nbsp;
 
 ---
 
 # Solveig
 
-**An AI assistant that enables secure and extensible agentic behavior from any LLM in your terminal**
+**An AI assistant that brings safe agentic behavior to any LLM, directly in your terminal**
 
 [![Demo](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx.svg)](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx)
 
