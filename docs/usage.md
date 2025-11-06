@@ -151,14 +151,15 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 ## System Prompt
 
 You can configure the System Prompt using your own template, controlling what is sent to the assistant.
-Remember to include the following tags, otherwise their respective config flags will not work:
+If you write your own System Prompt, remember to include the following tags, otherwise their respective
+config flags will not work:
 - `{AVAILABLE_TOOLS}` - descriptive list of available operations
 - `{SYSTEM_INFO}` - details about the running operating system
 - `{EXAMPLES}` - conversation examples
 
-Keep in mind, `SYSTEM_INFO` and `EXAMPLES` are optional, so if you write your own system prompt don't
-for example use a header like `System info:\n{SYSTEM_INFO}` that would be followed by nothing if the
-flag isn't used.
+Of course, you can also just hardcode the information on the System Prompt itself.
+Keep in mind, `SYSTEM_INFO` and `EXAMPLES` are optional, so don't for example use a header like
+`System info:\n{SYSTEM_INFO}` that would be followed by nothing if the  flag isn't used.
 
 Below is the current System Prompt template:
 

@@ -98,6 +98,7 @@ node_modules/
 # Claude files
 .claudeignore
 CLAUDE.md
+GEMINI.md
 .claude-conversations/
 .project-logs/
 
