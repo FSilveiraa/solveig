@@ -1,9 +1,7 @@
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from functools import reduce
-from operator import or_
-from typing import Literal
+from typing import Literal, Union, cast
 
 from pydantic import Field, TypeAdapter, field_validator
 
@@ -110,8 +108,7 @@ def get_response_model(
         raise ValueError("No response model available for LLM to use")
 
     # Create a Union of all requirement types for dynamic type checking
-    # Use functools.reduce to create Type1 | Type2 | Type3 dynamically
-    requirements_union = reduce(or_, all_active_requirements)
+    requirements_union = cast(type[Requirement], Union[*all_active_requirements])  # noqa: UP007
 
     # Cache the result
     _last_requirements_config_hash = config_hash
