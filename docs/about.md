@@ -1,9 +1,8 @@
 # About Solveig
 
-Solveig is an agentic runtime that can run as an assistant in your computer,
-built on the principle that AI assistants are unreliable by nature
-and implementing a consent model that puts users in complete control.
+**An AI assistant that brings safe agentic behavior from any LLM to your terminal**
 
+[Solveig](https://github.com/FSilveiraa/solveig) can plan tasks, read files, list directory trees, edit your code, run commands and more.
 
 ---
 
@@ -21,7 +20,7 @@ what's allowed rather than relying solely on assistant notes.
 
 **Advanced configurability** - Extensive customization through glob patterns, permission rules, and
 operation-specific controls. Besides typical LLM configurations like Temperature and Context Size, power
-users can disable commands, auto-approve trusted paths and commands - see [Usage](./usage.md) for more.
+users can disable commands, auto-approve trusted paths and commands using patterns - see [Usage](./usage.md) for more.
 
 **Plugin extensibility** - New capabilities are additive, not core modifications that require code PRs.
 Plugins are simple drop-in Python files that anyone can develop without requiring project PRs - see

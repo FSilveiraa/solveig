@@ -9,7 +9,7 @@
 
 # Solveig
 
-**An AI assistant that brings safe agentic behavior to any LLM, directly in your terminal**
+**An AI assistant that brings safe agentic behavior from any LLM to your terminal**
 
 [![Demo](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx.svg)](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx)
 
@@ -69,7 +69,7 @@ or custom workflows with 100 lines of Python.
 📋 **Modern CLI** - Clear interface with task planning, file and metadata previews, diff editing,
 usage stats, code linting, waiting animations and directory tree displays for informed user decisions.
 
-🌐 **Provider Independence** - Works with OpenAI, Claude, Gemini, local models, or any OpenAI-compatible API.
+🌐 **Provider Independence**  - Works with any OpenAI-compatible API, including local models.
 
 ---
 
