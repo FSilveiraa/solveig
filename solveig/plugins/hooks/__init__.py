@@ -3,7 +3,7 @@ import pkgutil
 import sys
 from collections.abc import Callable
 
-from solveig import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
 

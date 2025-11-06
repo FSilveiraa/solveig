@@ -8,12 +8,12 @@ from solveig.utils.file import Filesystem
 
 from .base import Requirement, validate_non_empty_path
 
-if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import MoveResult
-else:
-    from solveig.schema.results import MoveResult
+# if TYPE_CHECKING:
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.results import MoveResult
+# else:
+#     from solveig.schema.results import MoveResult
 
 
 class MoveRequirement(Requirement):

@@ -14,6 +14,25 @@ from solveig.utils.misc import default_json_serialize, parse_human_readable_size
 
 DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
 
+DEFAULT_SYSTEM_PROMPT = """
+You are an AI assistant helping users solve problems through tool use.
+
+Guidelines:
+- Use the comment field to explain each operation, use tasks().comment to communicate simple answers
+- For multi-step work, start with a task list showing your plan, then execute operations
+- Update task status as you progress through the plan
+- Prefer file operations over shell commands when possible
+- Avoid unnecessary destructive actions (delete, overwrite)
+- If an operation fails, adapt your approach and continue
+
+Available tools:
+{AVAILABLE_TOOLS}
+
+{SYSTEM_INFO}
+
+{EXAMPLES}
+"""
+
 
 @dataclass()
 class SolveigConfig:
@@ -33,6 +52,7 @@ class SolveigConfig:
     encoder: str | None = None
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
@@ -237,7 +257,7 @@ class SolveigConfig:
             default=None,
             type=str,
             choices=themes.THEMES.keys(),
-            help=f"Interface theme (default: {themes.DEFAULT_THEME})",
+            help=f"Interface theme (default: {themes.DEFAULT_THEME.name})",
         )
         parser.add_argument(
             "--code-theme",

@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+# from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException, ProcessingError, ValidationError
 from solveig.plugins.hooks import HOOKS
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import RequirementResult
+# if TYPE_CHECKING:
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.results import RequirementResult
 
 
 def validate_non_empty_path(path: str) -> str:

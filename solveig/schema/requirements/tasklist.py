@@ -6,14 +6,14 @@ from pydantic import Field
 
 from .base import Requirement
 
-if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import TaskListResult
-    from solveig.schema.results.task import Task
-else:
-    from solveig.schema.results import TaskListResult
-    from solveig.schema.results.task import Task
+# if TYPE_CHECKING:
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.results import TaskListResult
+from solveig.schema.results.task import Task
+# else:
+#     from solveig.schema.results import TaskListResult
+#     from solveig.schema.results.task import Task
 
 
 class TaskListRequirement(Requirement):

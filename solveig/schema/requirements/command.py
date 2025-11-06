@@ -8,12 +8,12 @@ from pydantic import Field, field_validator
 
 from .base import Requirement
 
-if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import CommandResult
-else:
-    from solveig.schema.results import CommandResult
+# if TYPE_CHECKING:
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.results import CommandResult
+# else:
+#     from solveig.schema.results import CommandResult
 
 
 class CommandRequirement(Requirement):

@@ -8,14 +8,14 @@ Currently supports:
 - @after hooks: Execute after requirement processing
 """
 
-from .. import SolveigConfig
-from ..exceptions import (
+from solveig.exceptions import (
     PluginException,
     ProcessingError,
     SecurityError,
     ValidationError,
 )
-from ..interface import SolveigInterface
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from . import hooks
 from . import schema as plugin_schema
 

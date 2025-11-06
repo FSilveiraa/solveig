@@ -10,12 +10,12 @@ from solveig.schema.requirements.base import (
 )
 from solveig.utils.file import Filesystem
 
-if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
-    from solveig.schema.results import WriteResult
-else:
-    from solveig.schema.results import WriteResult
+# if TYPE_CHECKING:
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.results import WriteResult
+# else:
+#     from solveig.schema.results import WriteResult
 
 
 class WriteRequirement(Requirement):
