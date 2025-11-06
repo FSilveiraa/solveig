@@ -36,7 +36,7 @@ future alternatives like web interfaces - see the [Roadmap](https://github.com/F
 
 **Industry standards** - Adopts proven patterns from leading agentic AI tools. Several features were inspired
 by or functionally copied from other tools, building on what works rather than reinventing solutions - see
-[Market Comparison](./about.md#market-comparison) for more.
+[Market Comparison](./comparison.md) for more.
 
 
 ---
@@ -96,80 +96,3 @@ You can extend Solveig in any of 2 ways:
 (e.g. clear sensitive info from any file content before sending it to the assistant).
 
 See the [Plugins](./plugins.md) page for more information
-
-
----
-
-
-## Market Comparison
-
-Solveig shares a space with several other tools, mature and with better user adoption that you should reasonably
-consider as alternatives. I believe Solveig fills in a relevant niche and I intend for the project to both offer
-unique feature sets that no other tool does (like plugins), while also striving to make it the best at core shared
-features, like a proper user interface and granular consent modules. I still think all of these tools are worth
-using and I have tried some of them myself.
-
-| Feature               | Solveig                  | Claude Code            | Cursor                 | Cline            | Open Interpreter      | Aider     |
-|-----------------------|--------------------------|------------------------|------------------------|------------------|-----------------------|-----------|
-| **Granular Consent**  | ✅ Patterns               | 🆗 CLAUDE.md           | ✅ Autonomy Slider      | ✅                | 🆗 Yes/No + Safe Mode | 🆗 Yes/No |
-| **Extensibility**     | ✅ Plugins                | ❌                      | ✅ VS Code plugins      | ✅ MCP            | ❌                     | ❌         |
-| **Provider Choice**   | ✅                        | ❌ Claude only          | ✅                      | ✅                | ✅                     | ✅         |
-| **Command Execution** | ✅                        | ✅                      | ✅                      | ✅                | ✅                     | ✅         |
-| **File API**          | ✅                        | ✅                      | ✅                      | ✅                | ❌                     | ✅         |
-| **Agentic Features**  | 🆗 Simple task lists     | ✅ Full task planning   | ✅ Full task planning   | ❌                | ❌                     | ❌         |
-| **Standalone Tool**   | ✅ CLI                    | ✅ CLI                  | ❌ GUI text editor      | ❌ VS Code plugin | ✅ CLI + GUI + library | ✅ CLI     |
-
-- **[Claude Code](https://claude.com/product/claude-code)** The current golden standard for a CLI AI assistant.
-It's a feature-superset of Solveig, offering all of its capabilities while being a much more mature project
-with a richer user interface. It supports state persistence through features like CLAUDE.md that I plan to add.
-It has full planning capabilities, with task lists, retry mechanisms and fallbacks.
-However, it only supports Claude as a model and has no extensibility through plugins. It's also missing some
-relevant configurations, like no-command mode or explicitly restricting file access to certain paths.
-As far as I can tell, there is no way to fully restrict Claude from even trying to access your root directory.
-I used Claude Code extensively in the development of Solveig, and it served as a comparison for usability
-and feature set. Several features and visual quirks were heavily inspired from Claude's user interface, like
-the "Waiting..." animations.
-
-- **[Cline](https://cline.bot/)** an open-source IDE extension available for VS Code and Jetbrains. It's focused
-on assisting developers and supports multiple providers. It has a simple consent model, supports rich browser
-interaction for web applications (it can even take screenshots of web pages!), and can have new functionality
-added on-the-fly through a [Model Context Protocol](https://github.com/cline/cline?tab=readme-ov-file#add-a-tool-that).
-Overall Cline seems like a very powerful and mature tool, but the fact that it relies on an IDE just sets it
-fundamentally apart from Solveig.
-
-- **[Cursor](https://cursor.com/)** - An AI-first code editor built as a fork of VS Code rather than a CLI assistant.
-It focuses on in-editor AI integration with features like Tab completion, inline code generation and an Agent mode
-that can autonomously complete coding tasks. Cursor supports multiple AI providers (OpenAI, Anthropic, Gemini, xAI)
-and has a Privacy Mode where code never leaves the user's machine.
-It has huge adoption and excels at providing an AI-native IDE experience with features like codebase indexing and
-multi-file editing.
-It's fundamentally a GUI application rather than a CLI tool, and this makes it more comparable to VS Code with AI
-extensions than to command-line assistants like Solveig.
-Cursor has a very interesting consent mechanism - users define how in control they want to be through an
-"autonomy slider" that changes what the assistant has to ask for permission for. This enables features like
-fully-integrated task planning, however it's more about pre-allowing file operations within the project
-directory that the editor is working on, and not so much a system-wide permission system.
-
-- **[Open Interpreter](https://github.com/openinterpreter/open-interpreter)** - OI is an interpreter for commands and
-code generated by an LLM. It supports Shell commands as well as multiple languages like JS and Python.
-It can be run in multiple ways - as a CLI tool, as a library integrated into another project and even as a desktop
-app, and is very configurable.
-Open Interpreter seems to take user safety seriously, with clear warnings and an experimental Safe Mode.
-However, it has no built-in File API meaning it relies on commands for every operation, which is a valid concern.
-Its permission model is also a basic Yes/No prompt and it currently has no plugin extensibility.
-I'm thinking of adopting some of their functional features, like offering a similar Semgrep shell analysis plugin
-[similar to their Safe Mode](https://github.com/OpenInterpreter/open-interpreter/blob/main/docs/SAFE_MODE.md) or
-use the same strategy for [token counting with reasonable fallbacks](https://docs.litellm.ai/docs/completion/token_usage#2-cost_per_token).
-
-- **[Aider](https://aider.chat/)** - Possibly the closest tool to what Solveig tries to offer in terms of sheer
-functionality. It supports all of its core features, including provider choice, a file API alongside command
-execution, and is intensely focused on development assistance. The flow and functionality is very similar to
-what Solveig already does, while being a much more mature and project with real testing from user adoption.
-I think the very simple interface is honestly the biggest drawback, and the consent model is a basic
-Yes/No compared to our granular permissions. Despite that the UI still has some very nice features, like a
-very good file diff view with linting that I'm thinking of adopting eventually. 
-It has no extensibility through plugins, but Aider itself can be integrated into an IDE through plugins.
-One of its most interesting features is having a shorthand command to [scrape a webpage using playwright with a
-command](https://aider.chat/docs/install/optional.html#enable-playwright) that the assistant can then interact with.
-It's also very configurable - honestly, give Aider a try, it's a very useful tool, people have built businesses with
-it.

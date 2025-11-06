@@ -21,6 +21,7 @@
     <span style="font-size: 1.17em; font-weight: bold;">
         <a href="./docs/about.md">About</a> &nbsp;&nbsp;|&nbsp;&nbsp;
         <a href="./docs/usage.md">Usage</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="./docs/comparison.md">Comparison</a> &nbsp;&nbsp;|&nbsp;&nbsp;
         <a href="./docs/themes/themes.md">Themes</a> &nbsp;&nbsp;|&nbsp;&nbsp;
         <a href="./docs/plugins.md">Plugins</a> &nbsp;&nbsp;|&nbsp;&nbsp;
         <a href="https://github.com/FSilveiraa/solveig/discussions/2">Roadmap</a> &nbsp;&nbsp;|&nbsp;&nbsp;
@@ -74,8 +75,9 @@ usage stats, code linting, waiting animations and directory tree displays for in
 
 ## Documentation
 
-- **[About](./docs/about.md)** - Detailed features, FAQ and how Solveig compares to alternatives
+- **[About](./docs/about.md)** - Detailed features and FAQ
 - **[Usage](./docs/usage.md)** - Config files, CLI flags, sub-commands, usage examples and more advanced features
+- **[Comparison](./docs/comparison.md)** - Detailed comparison to alternatives in the same market space
 - **[Themes](./docs/themes/themes.md)** - Themes explained, visual examples
 - **[Plugins](./docs/plugins.md)** - How to use, configure and develop plugins
 - **[Roadmap](https://github.com/FSilveiraa/solveig/discussions/2)** - Upcoming features and general progress tracking
