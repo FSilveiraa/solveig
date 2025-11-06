@@ -1,6 +1,6 @@
 """Read requirement - allows LLM to read files and directories."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -8,12 +8,9 @@ from solveig.utils.file import Filesystem
 
 from .base import Requirement, validate_non_empty_path
 
-# if TYPE_CHECKING:
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import ReadResult
-# else:
-#     from solveig.schema.results import ReadResult
 
 
 class ReadRequirement(Requirement):
@@ -36,11 +33,6 @@ class ReadRequirement(Requirement):
         """Display read requirement header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
-
-        # abs_path = Filesystem.get_absolute_path(self.path)
-        # is_dir = await Filesystem.is_dir(abs_path)
-        # path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
-        # await interface.display_text(path_info)
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""

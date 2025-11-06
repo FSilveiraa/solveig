@@ -1,19 +1,15 @@
 """Task requirement - allows LLM to create and track task lists."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field
 
 from .base import Requirement
 
-# if TYPE_CHECKING:
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import TaskListResult
 from solveig.schema.results.task import Task
-# else:
-#     from solveig.schema.results import TaskListResult
-#     from solveig.schema.results.task import Task
 
 
 class TaskListRequirement(Requirement):
@@ -57,7 +53,7 @@ class TaskListRequirement(Requirement):
     @classmethod
     def get_description(cls) -> str:
         """Return description of task capability."""
-        return "tasks(comment, tasks=null): use to communicate with user and break down your plan into sorted actions. Use tasks only if plan requires multiple steps, update status as you progress and condense completed task lists when starting new ones."
+        return "tasks(comment, tasks=null): use to communicate with user and break down your plan into sorted actions. Use tasks only if plan requires multiple steps, update status as you progress and condense completed task lists when starting new ones. When starting a new plan, aim to start the first task in progress"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"

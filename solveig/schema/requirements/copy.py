@@ -1,6 +1,6 @@
 """Copy requirement - allows LLM to copy files and directories."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -8,12 +8,9 @@ from solveig.utils.file import Filesystem
 
 from .base import Requirement, validate_non_empty_path
 
-# if TYPE_CHECKING:
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import CopyResult
-# else:
-#     from solveig.schema.results import CopyResult
 
 
 class CopyRequirement(Requirement):
@@ -38,25 +35,6 @@ class CopyRequirement(Requirement):
             source_path=self.source_path,
             destination_path=self.destination_path,
         )
-
-        # abs_source = Filesystem.get_absolute_path(self.source_path)
-        # abs_dest = Filesystem.get_absolute_path(self.destination_path)
-        # is_dir = await Filesystem.is_dir(abs_source)
-        # path_info = format_path_info(
-        #     path=self.source_path,
-        #     abs_path=abs_source,
-        #     is_dir=is_dir,
-        #     destination_path=self.destination_path,
-        #     absolute_destination_path=abs_dest,
-        # )
-        # await interface.display_text(path_info)
-        # if await Filesystem.exists(abs_dest) and await Filesystem.exists(abs_source):
-        #     old = await Filesystem.read_file(abs_dest)
-        #     new = await Filesystem.read_file(abs_source)
-        #     await interface.display_diff(
-        #         old_content=str(old.content), new_content=str(new.content)
-        #     )
-        #     await interface.display_warning("Overwriting existing file")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "CopyResult":
         """Create CopyResult with error."""

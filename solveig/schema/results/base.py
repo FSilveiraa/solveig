@@ -22,6 +22,3 @@ class RequirementResult(BaseModel):
     requirement: Requirement = Field(exclude=True)
     accepted: bool
     error: str | None = None
-
-    # def to_openai(self):
-    #     return self.model_dump()

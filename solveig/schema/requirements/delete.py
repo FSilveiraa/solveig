@@ -1,6 +1,6 @@
 """Delete requirement - allows LLM to delete files and directories."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -8,12 +8,9 @@ from solveig.utils.file import Filesystem
 
 from .base import Requirement, validate_non_empty_path
 
-# if TYPE_CHECKING:
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import DeleteResult
-# else:
-#     from solveig.schema.results import DeleteResult
 
 
 class DeleteRequirement(Requirement):

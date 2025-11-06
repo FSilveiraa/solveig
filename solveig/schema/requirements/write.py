@@ -1,6 +1,6 @@
 """Write requirement - allows LLM to create/update files and directories."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -10,12 +10,9 @@ from solveig.schema.requirements.base import (
 )
 from solveig.utils.file import Filesystem
 
-# if TYPE_CHECKING:
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import WriteResult
-# else:
-#     from solveig.schema.results import WriteResult
 
 
 class WriteRequirement(Requirement):
@@ -45,22 +42,6 @@ class WriteRequirement(Requirement):
             source_content=self.content,
             # show_overwrite_warning=False,
         )
-        # abs_path = Filesystem.get_absolute_path(self.path)
-        # path_info = format_path_info(
-        #     path=self.path, abs_path=abs_path, is_dir=self.is_directory
-        # )
-        # await interface.display_text(path_info)
-        # if self.content:
-        #     if await Filesystem.exists(abs_path):
-        #         file_content = await Filesystem.read_file(abs_path)
-        #         await interface.display_diff(
-        #             old_content=str(file_content.content), new_content=self.content
-        #         )
-        #         await interface.display_warning("Overwriting existing file")
-        #     else:
-        #         await interface.display_text_block(
-        #             self.content, language=abs_path.suffix.lstrip("."), title="Content"
-        #         )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""
