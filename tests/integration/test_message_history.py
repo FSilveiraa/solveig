@@ -1,7 +1,5 @@
 """Tests for MessageHistory integration with token counting and context management."""
 
-from unittest.mock import patch
-
 import pytest
 
 from solveig.config import SolveigConfig
@@ -12,7 +10,6 @@ from solveig.schema.message import (
     UserMessage,
     get_response_model,
 )
-from solveig.schema.requirements.command import CommandRequirement
 from tests import LOREM_IPSUM
 
 
@@ -145,67 +142,82 @@ class TestMessageHistoryIntegration:
         assert "assistant:" in example
 
 
-class TestStreamingRequirementsUnion:
-    """Test streaming requirements union caching mechanism."""
+class TestResponseModelGeneration:
+    """Test response model generation and filtering functionality."""
 
-    def test_empty_registry_returns_none(self):
-        """Test empty requirements registry returns None."""
+    def test_normal_config_includes_all_requirements(self):
+        """Test normal config includes CommandRequirement and others."""
+        config = SolveigConfig(no_commands=False)
+        result = get_response_model(config)
+
+        # Should be a union type with multiple requirements
+        assert hasattr(result, "__args__")
+        requirement_names = {req.__name__ for req in result.__args__}
+
+        # Should include CommandRequirement
+        assert "CommandRequirement" in requirement_names
+        # Should include core requirements
+        assert "ReadRequirement" in requirement_names
+        assert "WriteRequirement" in requirement_names
+
+    def test_no_commands_filters_out_command_requirement(self):
+        """Test --no-commands actually removes CommandRequirement."""
+        # Clear cache to avoid test interference
+        from solveig.schema import message
+
+        message._last_requirements_config_hash = None
+        message._last_requirements_union = None
+
+        config_normal = SolveigConfig(no_commands=False)
+        config_no_commands = SolveigConfig(no_commands=True)
+
+        normal_result = get_response_model(config_normal)
+
+        # Normal should have CommandRequirement
+        normal_names = {req.__name__ for req in normal_result.__args__}
+        assert "CommandRequirement" in normal_names
+
+        # Get count before filtering
+        normal_count = len(normal_result.__args__)
+
+        filtered_result = get_response_model(config_no_commands)
+
+        # Filtered should NOT have CommandRequirement
+        filtered_names = {req.__name__ for req in filtered_result.__args__}
+        assert "CommandRequirement" not in filtered_names
+
+        # Should have one fewer requirement than normal
+        assert len(filtered_result.__args__) == normal_count - 1
+
+        # But should still have other requirements
+        assert "ReadRequirement" in filtered_names
+        assert "WriteRequirement" in filtered_names
+
+    def test_caching_works_for_identical_configs(self):
+        """Test caching mechanism returns same object for identical configs."""
         config = SolveigConfig(no_commands=False)
 
-        # Mock empty registry
-        with patch("solveig.schema.REQUIREMENTS.registered", {}):
-            union = get_response_model(config)
-            assert union is None
+        result1 = get_response_model(config)
+        result2 = get_response_model(config)
 
-    def test_single_requirement_returns_type(self):
-        """Test single requirement returns the type directly."""
-        config = SolveigConfig(no_commands=False)
+        # Should return exact same object (cached)
+        assert result1 is result2
 
-        mock_requirements = {"CommandRequirement": CommandRequirement}
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union = get_response_model(config)
-            assert union == CommandRequirement
-
-    def test_no_commands_filters_command_requirement(self):
-        """Test no_commands config filters out CommandRequirement."""
-        config = SolveigConfig(no_commands=True)
-
-        mock_requirements = {"CommandRequirement": CommandRequirement}
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union = get_response_model(config)
-            assert union is None  # Filtered out, leaving empty
-
-    def test_caching_mechanism_works(self):
-        """Test union caching works for identical configs."""
-        config = SolveigConfig(no_commands=False)
-
-        mock_requirements = {"CommandRequirement": CommandRequirement}
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            # Clear cache by calling with different config first
-            get_response_model(SolveigConfig(no_commands=True))
-
-            # First call
-            union1 = get_response_model(config)
-            # Second call with same config
-            union2 = get_response_model(config)
-
-            # Should return the same object (cached)
-            assert union1 is union2
-
-    def test_cache_invalidation_on_config_change(self):
+    def test_cache_invalidates_on_config_changes(self):
         """Test cache invalidates when config changes."""
         config1 = SolveigConfig(no_commands=False)
         config2 = SolveigConfig(no_commands=True)
 
-        mock_requirements = {"CommandRequirement": CommandRequirement}
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            union1 = get_response_model(config1)
-            union2 = get_response_model(config2)
+        result1 = get_response_model(config1)
+        result2 = get_response_model(config2)
 
-            # Different configs should produce different results
-            assert union1 != union2
-            assert union1 == CommandRequirement
-            assert union2 is None
+        # Should be different objects
+        assert result1 is not result2
+
+        # Should have different content (CommandRequirement present vs absent)
+        names1 = {req.__name__ for req in result1.__args__}
+        names2 = {req.__name__ for req in result2.__args__}
+        assert names1 != names2
 
 
 @pytest.mark.no_file_mocking

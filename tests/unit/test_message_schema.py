@@ -1,137 +1,96 @@
 """Tests for message schema generation and filtering."""
 
 import json
-from unittest.mock import patch
 
 from solveig.config import SolveigConfig
 from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
     UserMessage,
-    get_filtered_assistant_message_class,
+    get_response_model,
 )
 from solveig.schema.requirements.command import CommandRequirement
 from solveig.schema.results.command import CommandResult
 
 
-class TestAssistantMessageClassGeneration:
-    """Test dynamic AssistantMessage class generation with filtering."""
+class TestResponseModelGeneration:
+    """Test requirement union generation with filtering."""
 
-    def test_get_filtered_class_with_commands_enabled(self):
-        """Test schema includes CommandRequirement when commands are enabled."""
+    def test_response_model_includes_command_requirement_by_default(self):
+        """Test union includes CommandRequirement when commands are enabled."""
+        config = SolveigConfig(no_commands=False)
+        union_type = get_response_model(config)
+
+        # Should be a union with multiple requirements
+        assert hasattr(union_type, "__args__")
+        requirement_names = {req.__name__ for req in union_type.__args__}
+
+        # Should include CommandRequirement and core requirements
+        assert "CommandRequirement" in requirement_names
+        assert "ReadRequirement" in requirement_names
+        assert "WriteRequirement" in requirement_names
+
+    def test_response_model_filters_out_commands_when_disabled(self):
+        """Test union excludes CommandRequirement when no_commands=True."""
+        config_with_commands = SolveigConfig(no_commands=False)
+        config_no_commands = SolveigConfig(no_commands=True)
+
+        union_with_commands = get_response_model(config_with_commands)
+        union_no_commands = get_response_model(config_no_commands)
+
+        # Get requirement names
+        names_with_commands = {req.__name__ for req in union_with_commands.__args__}
+        names_no_commands = {req.__name__ for req in union_no_commands.__args__}
+
+        # Commands version should have CommandRequirement
+        assert "CommandRequirement" in names_with_commands
+
+        # No-commands version should NOT have CommandRequirement
+        assert "CommandRequirement" not in names_no_commands
+
+        # But should still have file operations
+        assert "ReadRequirement" in names_no_commands
+        assert "WriteRequirement" in names_no_commands
+
+    def test_response_model_with_no_config_allows_commands(self):
+        """Test union includes CommandRequirement when no config is provided."""
+        union_type = get_response_model()
+
+        assert hasattr(union_type, "__args__")
+        requirement_names = {req.__name__ for req in union_type.__args__}
+
+        # Should include CommandRequirement by default
+        assert "CommandRequirement" in requirement_names
+
+
+class TestResponseModelCaching:
+    """Test caching behavior of response model generation."""
+
+    def test_same_config_returns_cached_result(self):
+        """Test that identical configs return the same cached union object."""
         config = SolveigConfig(no_commands=False)
 
-        # Mock the REQUIREMENTS registry to contain CommandRequirement
-        mock_requirements = {
-            "CommandRequirement": CommandRequirement,
-            # Add other mock requirements if needed
-        }
+        union1 = get_response_model(config)
+        union2 = get_response_model(config)
 
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            message_class = get_filtered_assistant_message_class(config)
+        # Should return the exact same object due to caching
+        assert union1 is union2
 
-            # Create an instance to verify the schema
-            instance = message_class(role="assistant")
-            assert instance is not None
-            assert hasattr(instance, "requirements")
-
-    def test_get_filtered_class_with_commands_disabled(self):
-        """Test schema excludes CommandRequirement when commands are disabled."""
-        config = SolveigConfig(no_commands=True)
-
-        # Mock the REQUIREMENTS registry to contain CommandRequirement
-        mock_requirements = {
-            "CommandRequirement": CommandRequirement,
-        }
-
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            message_class = get_filtered_assistant_message_class(config)
-
-            # Create an instance to verify the schema
-            instance = message_class(role="assistant")
-            assert instance is not None
-            assert hasattr(instance, "requirements")
-
-    def test_get_filtered_class_no_config_defaults_to_allow_commands(self):
-        """Test schema includes CommandRequirement when no config is provided."""
-        # Mock the REQUIREMENTS registry to contain CommandRequirement
-        mock_requirements = {
-            "CommandRequirement": CommandRequirement,
-        }
-
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            message_class = get_filtered_assistant_message_class()
-
-            # Create an instance to verify the schema
-            instance = message_class(role="assistant")
-            assert instance is not None
-            assert hasattr(instance, "requirements")
-
-    def test_get_filtered_class_empty_registry(self):
-        """Test empty registry returns EmptyAssistantMessage class."""
-        config = SolveigConfig(no_commands=False)
-
-        # Mock empty REQUIREMENTS registry
-        with patch("solveig.schema.REQUIREMENTS.registered", {}):
-            message_class = get_filtered_assistant_message_class(config)
-
-            # Create an instance to verify the schema
-            instance = message_class(role="assistant")
-            assert instance is not None
-            assert hasattr(instance, "requirements")
-            assert instance.requirements is None
-
-
-class TestSchemaConsistency:
-    """Test that schema generation is consistent across calls."""
-
-    def test_same_config_produces_different_class_instances(self):
-        """Test that calling with same config produces equivalent but different class instances."""
-        config = SolveigConfig(no_commands=False)
-
-        mock_requirements = {
-            "CommandRequirement": CommandRequirement,
-        }
-
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            class1 = get_filtered_assistant_message_class(config)
-            class2 = get_filtered_assistant_message_class(config)
-
-            # Classes should be different instances (no caching at schema level)
-            assert class1 is not class2
-
-            # But should have the same structure
-            instance1 = class1(role="assistant")
-            instance2 = class2(role="assistant")
-            assert type(instance1).__name__ == type(instance2).__name__
-
-    def test_different_configs_produce_different_schemas(self):
-        """Test that different configs produce different schemas."""
+    def test_different_configs_produce_different_unions(self):
+        """Test that different configs produce different union objects."""
         config_with_commands = SolveigConfig(no_commands=False)
         config_without_commands = SolveigConfig(no_commands=True)
 
-        mock_requirements = {
-            "CommandRequirement": CommandRequirement,
-        }
+        union_with_commands = get_response_model(config_with_commands)
+        union_without_commands = get_response_model(config_without_commands)
 
-        with patch("solveig.schema.REQUIREMENTS.registered", mock_requirements):
-            class_with_commands = get_filtered_assistant_message_class(
-                config_with_commands
-            )
-            class_without_commands = get_filtered_assistant_message_class(
-                config_without_commands
-            )
+        # Should be different objects
+        assert union_with_commands is not union_without_commands
 
-            # Classes should be different
-            assert class_with_commands is not class_without_commands
-
-            # Create instances
-            instance_with = class_with_commands(role="assistant")
-            instance_without = class_without_commands(role="assistant")
-
-            # Both should be valid AssistantMessage instances
-            assert hasattr(instance_with, "requirements")
-            assert hasattr(instance_without, "requirements")
+        # Should have different content
+        names_with = {req.__name__ for req in union_with_commands.__args__}
+        names_without = {req.__name__ for req in union_without_commands.__args__}
+        assert names_with != names_without
 
 
 class TestMessageSerialization:

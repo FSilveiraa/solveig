@@ -1,15 +1,18 @@
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Literal, Union
+from functools import reduce
+from operator import or_
+from typing import Literal
 
 from pydantic import Field, TypeAdapter, field_validator
 
-from .. import SolveigConfig, utils
-from ..llm import APIType
-from .base import BaseSolveigModel
-from .requirements import Requirement
-from .results import RequirementResult
+from solveig import SolveigConfig, utils
+from solveig.llm import APIType
+from solveig.schema import REQUIREMENTS
+from solveig.schema.base import BaseSolveigModel
+from solveig.schema.requirements import Requirement
+from solveig.schema.results import RequirementResult
 
 
 class BaseMessage(BaseSolveigModel):
@@ -53,11 +56,7 @@ class UserMessage(BaseMessage):
         return (comment or "").strip()
 
 
-# The LLM's response can be:
-# - either a list of Requirements asking for more info
-# - or a response with the final answer
-# Note: This static class is kept for backwards compatibility but is replaced
-# at runtime by get_filtered_assistant_message_class() which includes all active requirements
+# Pydantic wrapper class for the returned LLM operations
 class AssistantMessage(BaseMessage):
     role: Literal["assistant"] = "assistant"
     requirements: list[Requirement] | None = (
@@ -73,7 +72,7 @@ _last_requirements_union = None
 def get_response_model(
     config: SolveigConfig | None = None,
     # returns a union of Requirement subclasses
-) -> type[Union[Requirement, ...]]:  # noqa: UP007
+) -> type[Requirement]:
     """Get the requirements union type for streaming individual requirements with caching."""
     global _last_requirements_config_hash, _last_requirements_union
 
@@ -91,8 +90,6 @@ def get_response_model(
 
     # Get ALL active requirements from the unified registry
     try:
-        from solveig.schema import REQUIREMENTS
-
         all_active_requirements: list[type[Requirement]] = list(
             REQUIREMENTS.registered.values()
         )
@@ -113,8 +110,8 @@ def get_response_model(
         raise ValueError("No response model available for LLM to use")
 
     # Create a Union of all requirement types for dynamic type checking
-    # Union[*types] unpacks the list into Union[Type1, Type2, Type3, ...]
-    requirements_union = Union[*all_active_requirements]  # noqa: UP007
+    # Use functools.reduce to create Type1 | Type2 | Type3 dynamically
+    requirements_union = reduce(or_, all_active_requirements)
 
     # Cache the result
     _last_requirements_config_hash = config_hash

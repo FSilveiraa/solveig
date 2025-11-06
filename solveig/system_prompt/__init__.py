@@ -42,7 +42,8 @@ def get_available_tools(config: SolveigConfig) -> str:
     # Get ALL active requirements from the unified registry (core + plugins)
     active_requirements = get_response_model(config)
     return "\n".join(
-        f"- {req_class.get_description()}" for req_class in active_requirements.__args__
+        f"- {req_class.get_description()}"
+        for req_class in active_requirements.__args__  # type: ignore[attr-defined]
     )
 
 

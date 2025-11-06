@@ -11,6 +11,7 @@ EXAMPLE.add_messages(
         requirements=[
             TaskListRequirement(
                 comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.",
+                tasks=None,
             )
         ]
     )

@@ -88,10 +88,18 @@ def mock_user_interface(request):
 
 
 @pytest.fixture(autouse=True, scope="function")
-def clean_plugin_state():
-    """Clean plugin state after each test to prevent cross-test interference."""
-    yield  # Let the test run first
-    # Clean up plugin state after each test
+def setup_requirements():
+    """Setup core requirements for each test and clean up after."""
+    # Setup: Load core requirements
+    from solveig.schema import CORE_REQUIREMENTS, REQUIREMENTS
+
+    REQUIREMENTS.clear_requirements()
+    for requirement in CORE_REQUIREMENTS:
+        REQUIREMENTS.register_requirement(requirement)
+
+    yield  # Let the test run
+
+    # Teardown: Clean up plugin state after each test
     clear_plugins()
 
 
