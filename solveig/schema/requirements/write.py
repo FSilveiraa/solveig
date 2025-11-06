@@ -4,15 +4,14 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.requirements.base import (
     Requirement,
     validate_non_empty_path,
 )
-from solveig.utils.file import Filesystem
-
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.schema.results import WriteResult
+from solveig.utils.file import Filesystem
 
 
 class WriteRequirement(Requirement):
@@ -75,7 +74,7 @@ class WriteRequirement(Requirement):
         )
         if auto_write:
             await interface.display_text(
-                f"{"Updating" if already_exists else "Creating"} {abs_path} since it matches config.auto_allowed_paths"
+                f"{'Updating' if already_exists else 'Creating'} {abs_path} since it matches config.auto_allowed_paths"
             )
         else:
             question = (

@@ -87,7 +87,7 @@ class TreeRequirement(Requirement):
             ):
                 accepted = True
                 await interface.display_text(
-                    f"Sending tree since {"config.auto_send=True" if config.auto_send else f"{abs_path} matches config.allow_allowed_paths"}"
+                    f"Sending tree since {'config.auto_send=True' if config.auto_send else f'{abs_path} matches config.allow_allowed_paths'}"
                 )
             else:
                 accepted = await interface.ask_yes_no("Allow sending tree?")

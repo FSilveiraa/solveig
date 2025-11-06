@@ -4,12 +4,12 @@ from typing import Literal
 
 from pydantic import Field
 
-from .base import Requirement
-
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import TaskListResult
 from solveig.schema.results.task import Task
+
+from .base import Requirement
 
 
 class TaskListRequirement(Requirement):
@@ -35,7 +35,7 @@ class TaskListRequirement(Requirement):
                 "failed": "🔴",
             }[task.status]
             task_lines.append(
-                f"{"→" if task.status == "in_progress" else " "}  {status_emoji} {i}. {task.description}"
+                f"{'→' if task.status == 'in_progress' else ' '}  {status_emoji} {i}. {task.description}"
             )
 
         # interface.show("🗒 Task List")

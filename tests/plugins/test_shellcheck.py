@@ -46,9 +46,9 @@ class TestShellcheckPlugin:
             assert is_obviously_dangerous(cmd), f"Should detect '{cmd}' as dangerous"
 
         for cmd in safe_commands:
-            assert not is_obviously_dangerous(
-                cmd
-            ), f"Should not detect '{cmd}' as dangerous"
+            assert not is_obviously_dangerous(cmd), (
+                f"Should not detect '{cmd}' as dangerous"
+            )
 
     @pytest.mark.no_subprocess_mocking
     @pytest.mark.anyio

@@ -450,9 +450,9 @@ class TestPluginFiltering:
         third_load_count = count_hooks()
 
         # Registry should have same number of hooks after multiple loads
-        assert (
-            first_load_count == second_load_count == third_load_count
-        ), "Should have exactly the same number of hooks after multiple reloads"
+        assert first_load_count == second_load_count == third_load_count, (
+            "Should have exactly the same number of hooks after multiple reloads"
+        )
 
         # And active hooks should match registry (since plugin is enabled)
         assert len(hooks.HOOKS.before) == first_load_count

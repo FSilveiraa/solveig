@@ -15,7 +15,7 @@ pip install -e .[dev]
 
 The `[dev]` optional dependencies include:
 - `pytest` + `pytest-cov` for testing
-- `black`, `ruff`, `mypy` for code quality
+- `ruff`, `mypy` for code quality
 - `anthropic`, `google-generativeai` for API testing
 
 ## Code Quality
@@ -26,7 +26,7 @@ All code submitted to the `main` branch must pass these checks (same as CI):
 
 ```bash
 # Format code
-black .
+ruff format .
 
 # Lint code  
 ruff check . --fix
@@ -42,7 +42,7 @@ pytest ./tests/ --cov=solveig --cov-report=term-missing -v
 
 ```bash
 # Run everything at once (what CI runs)
-black . && ruff check . && mypy solveig/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov-report=term-missing -vv
+ruff format . && ruff check . && mypy solveig/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov-report=term-missing -vv
 ```
 
 ## Testing

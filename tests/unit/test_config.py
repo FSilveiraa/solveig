@@ -51,7 +51,8 @@ class TestConfigFileParsing:
     """Test configuration file parsing functionality."""
 
     @pytest.mark.parametrize(
-        "config_path", ["", "/nonexistent/path.json"]  # invalid path  # inexistent path
+        "config_path",
+        ["", "/nonexistent/path.json"],  # invalid path  # inexistent path
     )
     @pytest.mark.anyio
     async def test_parse_from_file_invalid_path(self, config_path):

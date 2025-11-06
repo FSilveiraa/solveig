@@ -241,17 +241,17 @@ class SolveigTextualApp(TextualApp):
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
         ConversationArea {{
-            background: {self._style_to_color.get('background', '#000')};
-            color: {self._style_to_color.get('text', '#000')};
+            background: {self._style_to_color.get("background", "#000")};
+            color: {self._style_to_color.get("text", "#000")};
             height: 1fr;
         }}
 
         Input {{
-            color: {self._style_to_color.get('text', '#000')};
+            color: {self._style_to_color.get("text", "#000")};
             dock: bottom;
             height: 3;
-            background: {self._style_to_color['background']};
-            border: solid {self._style_to_color['prompt']};
+            background: {self._style_to_color["background"]};
+            border: solid {self._style_to_color["prompt"]};
             margin: 0 0 1 0;
         }}
 
@@ -262,27 +262,27 @@ class SolveigTextualApp(TextualApp):
         StatusBar {{
             dock: bottom;
             height: 1;
-            background: {self._style_to_color.get('background', '#000')};
-            color: {self._style_to_color.get('text', '#fff')};
+            background: {self._style_to_color.get("background", "#000")};
+            color: {self._style_to_color.get("text", "#fff")};
             content-align: center middle;
         }}
 
         TextBox {{
-            border: solid {self._style_to_color.get('box', '#000')};
-            color: {self._style_to_color.get('text', '#fff')};
+            border: solid {self._style_to_color.get("box", "#000")};
+            color: {self._style_to_color.get("text", "#fff")};
             margin: 1;
             padding: 0 1;
         }}
 
         SectionHeader {{
-            color: {self._style_to_color.get('section', '#fff')};
+            color: {self._style_to_color.get("section", "#fff")};
             text-style: bold;
             margin: 1 0;
             padding: 0 0;
         }}
 
         .group_container {{
-            border-left: heavy {self._style_to_color.get('group', '#888')};
+            border-left: heavy {self._style_to_color.get("group", "#888")};
             padding-left: 1;
             margin: 0 0 0 1;
             height: auto;
@@ -596,7 +596,7 @@ class TextualInterface(SolveigInterface):
         """Ask for any kind of input with a prompt."""
         response = await self.app.ask_user(prompt, placeholder)
         await self._display_text(
-            f"[{self.app._style_to_color["prompt"]}]{prompt}[/]  {response}",
+            f"[{self.app._style_to_color['prompt']}]{prompt}[/]  {response}",
             allow_markup=True,
         )
         return response

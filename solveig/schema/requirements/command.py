@@ -6,11 +6,11 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from .base import Requirement
-
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import CommandResult
+
+from .base import Requirement
 
 
 class CommandRequirement(Requirement):
@@ -39,7 +39,7 @@ class CommandRequirement(Requirement):
         """Display command requirement header."""
         await super().display_header(interface)
         await interface.display_text(
-            f"Timeout: {f"{self.timeout}s" if self.timeout > 0.0 else "None (detached process)"}"
+            f"Timeout: {f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}"
         )
         await interface.display_text_block(self.command, title="Command")
 

@@ -19,7 +19,7 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
-    get_response_model, get_response_model_json,
+    get_response_model,
 )
 from solveig.schema.results import RequirementResult
 from solveig.subcommand import SubcommandRunner

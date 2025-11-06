@@ -4,13 +4,12 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from solveig.utils.file import Filesystem
-
-from .base import Requirement, validate_non_empty_path
-
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import ReadResult
+from solveig.utils.file import Filesystem
+
+from .base import Requirement, validate_non_empty_path
 
 
 class ReadRequirement(Requirement):
@@ -99,7 +98,7 @@ class ReadRequirement(Requirement):
 
         if config.auto_send:
             await interface.display_text(
-                f"Sending {"content" if content else "metadata"} since config.auto_send=True"
+                f"Sending {'content' if content else 'metadata'} since config.auto_send=True"
             )
         if (
             config.auto_send

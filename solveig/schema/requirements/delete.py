@@ -4,13 +4,12 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from solveig.utils.file import Filesystem
-
-from .base import Requirement, validate_non_empty_path
-
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import DeleteResult
+from solveig.utils.file import Filesystem
+
+from .base import Requirement, validate_non_empty_path
 
 
 class DeleteRequirement(Requirement):

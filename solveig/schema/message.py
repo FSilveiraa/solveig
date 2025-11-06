@@ -1,8 +1,9 @@
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal, Union
-from collections.abc import Iterable
-from pydantic import Field, field_validator, TypeAdapter
+
+from pydantic import Field, TypeAdapter, field_validator
 
 from .. import SolveigConfig, utils
 from ..llm import APIType
@@ -24,7 +25,7 @@ class BaseMessage(BaseSolveigModel):
         }
 
     def __str__(self) -> str:
-        return f"{self.role}: {self.to_openai()["content"]}"
+        return f"{self.role}: {self.to_openai()['content']}"
 
 
 class SystemMessage(BaseMessage):
@@ -68,10 +69,11 @@ class AssistantMessage(BaseMessage):
 _last_requirements_config_hash = None
 _last_requirements_union = None
 
+
 def get_response_model(
     config: SolveigConfig | None = None,
-# returns a union of Requirement subclasses
-) -> type[Union[Requirement, ...]]:
+    # returns a union of Requirement subclasses
+) -> type[Union[Requirement, ...]]:  # noqa: UP007
     """Get the requirements union type for streaming individual requirements with caching."""
     global _last_requirements_config_hash, _last_requirements_union
 
@@ -91,7 +93,9 @@ def get_response_model(
     try:
         from solveig.schema import REQUIREMENTS
 
-        all_active_requirements: list[type[Requirement]] = list(REQUIREMENTS.registered.values())
+        all_active_requirements: list[type[Requirement]] = list(
+            REQUIREMENTS.registered.values()
+        )
     except (ImportError, AttributeError):
         # Fallback - should not happen in normal operation
         all_active_requirements = []
@@ -101,16 +105,16 @@ def get_response_model(
         from solveig.schema.requirements.command import CommandRequirement
 
         all_active_requirements = [
-            req for req in all_active_requirements
-            if req != CommandRequirement
+            req for req in all_active_requirements if req != CommandRequirement
         ]
 
     # Handle empty registry case
     if not all_active_requirements:
         raise ValueError("No response model available for LLM to use")
 
-    # Always create a Union for consistency, even with single types
-    requirements_union = Union[tuple(all_active_requirements)]
+    # Create a Union of all requirement types for dynamic type checking
+    # Union[*types] unpacks the list into Union[Type1, Type2, Type3, ...]
+    requirements_union = Union[*all_active_requirements]  # noqa: UP007
 
     # Cache the result
     _last_requirements_config_hash = config_hash

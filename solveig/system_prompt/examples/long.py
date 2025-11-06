@@ -1,6 +1,5 @@
 from solveig.plugins.schema.tree import TreeRequirement, TreeResult
-from solveig.utils.file import Metadata
-
+from solveig.schema.message import AssistantMessage, MessageHistory, UserMessage
 from solveig.schema.requirements import (
     CommandRequirement,
     MoveRequirement,
@@ -16,9 +15,7 @@ from solveig.schema.results import (
     TaskListResult,
     WriteResult,
 )
-
-from solveig.schema.message import AssistantMessage, MessageHistory, UserMessage
-
+from solveig.utils.file import Metadata
 
 EXAMPLE = MessageHistory(system_prompt="")
 

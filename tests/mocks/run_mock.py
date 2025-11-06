@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run async Solveig with TextualCLI and mock LLM client."""
+
 import asyncio
 import random
 
@@ -16,7 +17,9 @@ async def cleanup():
 
 
 class DemoInterface(TextualInterface):
-    def __init__(self, *args, user_messages: list[tuple[float, str]] | None = None, **kwargs):
+    def __init__(
+        self, *args, user_messages: list[tuple[float, str]] | None = None, **kwargs
+    ):
         self._user_messages = user_messages or []
         super().__init__(*args, **kwargs)
 
@@ -30,7 +33,7 @@ class DemoInterface(TextualInterface):
     async def get_input(self) -> str:
         try:
             sleep_time, message = self._user_messages.pop(0)
-        except:
+        except Exception:
             return await super().get_input()
         else:
             await asyncio.sleep(sleep_time)
@@ -56,7 +59,6 @@ async def run_async_mock(
             for message in EXAMPLE.messages
             if isinstance(message, AssistantMessage)
         ]
-
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt = await SolveigConfig.parse_config_and_prompt()

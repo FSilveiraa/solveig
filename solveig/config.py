@@ -272,11 +272,7 @@ class SolveigConfig:
             version=f"%(prog)s {version('solveig')}",
         )
         parser.add_argument(
-            "prompt",
-            type=str,
-            nargs="?",
-            default="",
-            help="User prompt"
+            "prompt", type=str, nargs="?", default="", help="User prompt"
         )
 
         args = parser.parse_args(cli_args)

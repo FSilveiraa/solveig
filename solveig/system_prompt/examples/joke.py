@@ -1,7 +1,6 @@
 from solveig.schema.message import AssistantMessage, MessageHistory, UserMessage
 from solveig.schema.requirements import TaskListRequirement
 
-
 EXAMPLE = MessageHistory(
     system_prompt=""
 )  # we don't want system prompt for a chat history that itself will be used in our system prompt

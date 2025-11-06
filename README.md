@@ -2,8 +2,8 @@
 [![CI](https://github.com/Fsilveiraa/solveig/workflows/CI/badge.svg)](https://github.com/Fsilveiraa/solveig/actions) &nbsp;
 [![codecov](https://codecov.io/gh/Fsilveiraa/solveig/branch/main/graph/badge.svg)](https://codecov.io/gh/Fsilveiraa/solveig) &nbsp;
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/) &nbsp;
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)]()  &nbsp;
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) &nbsp;
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) &nbsp;
 
 ---
 

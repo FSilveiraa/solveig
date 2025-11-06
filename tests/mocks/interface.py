@@ -65,7 +65,7 @@ class MockInterface(TextualInterface):
     ) -> None:
         if title:
             self.outputs.append(f"📋 {title}")
-        self.outputs.append(f"{language+": " if language else ""}{text}")
+        self.outputs.append(f"{language + ': ' if language else ''}{text}")
 
     async def display_section(self, title: str) -> None:
         self.sections.append(title)
