@@ -240,16 +240,19 @@ class SolveigTextualApp(TextualApp):
 
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
+        Screen {{
+            background: {self._style_to_color["background"]};
+            color: {self._style_to_color["text"]};
+        }}
+        
         ConversationArea {{
-            background: {self._style_to_color.get("background", "#000")};
-            color: {self._style_to_color.get("text", "#000")};
             height: 1fr;
         }}
 
         Input {{
-            color: {self._style_to_color.get("text", "#000")};
             dock: bottom;
             height: 3;
+            color: {self._style_to_color["text"]};
             background: {self._style_to_color["background"]};
             border: solid {self._style_to_color["prompt"]};
             margin: 0 0 1 0;
@@ -262,14 +265,11 @@ class SolveigTextualApp(TextualApp):
         StatusBar {{
             dock: bottom;
             height: 1;
-            background: {self._style_to_color.get("background", "#000")};
-            color: {self._style_to_color.get("text", "#fff")};
             content-align: center middle;
         }}
 
         TextBox {{
             border: solid {self._style_to_color.get("box", "#000")};
-            color: {self._style_to_color.get("text", "#fff")};
             margin: 1;
             padding: 0 1;
         }}

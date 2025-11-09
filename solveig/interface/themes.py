@@ -94,9 +94,9 @@ forest = Palette(
 
 midnight = Palette(
     name="midnight",
-    background="#11111A",  # dark greyish blue
+    background="#121414",  # dark grey
     text="#e0e0e0",  # light grey
-    prompt="#4a9eff",  # bright blue
+    prompt="#9FC7F0",  # bright blue
     box="#A46A73",  # low-contrast pink
     group="#675DA6",  # brighter purple
     section="#3B679C",  # sky blue
