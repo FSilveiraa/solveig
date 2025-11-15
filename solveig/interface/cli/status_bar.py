@@ -6,6 +6,8 @@ from os import PathLike
 
 from textual.widgets import Static
 
+from solveig.interface.themes import Palette
+
 
 class StatusBar(Static):
     """Status bar showing current application state with Rich spinner support."""
@@ -89,3 +91,14 @@ class StatusBar(Static):
         # Join with separators
         display_text = "│".join(formatted_sections)
         self.update(display_text)
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        """Generate CSS for status bar."""
+        return """
+        StatusBar {
+            dock: bottom;
+            height: 1;
+            content-align: center middle;
+        }
+        """

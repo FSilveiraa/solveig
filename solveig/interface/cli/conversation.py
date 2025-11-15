@@ -4,6 +4,7 @@ from rich.syntax import Syntax
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Static
 
+from solveig.interface.themes import Palette
 from .widgets import SectionHeader, TextBox
 
 BANNER = """
@@ -82,3 +83,45 @@ class ConversationArea(ScrollableContainer):
             end_corner = Static("┗━━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        """Generate CSS for conversation area and related widgets."""
+        style_to_color = theme.to_textual_css()
+
+        return f"""
+        ConversationArea {{
+            height: 1fr;
+        }}
+
+        TextBox {{
+            border: solid {style_to_color.get("box", "#000")};
+            margin: 1;
+            padding: 0 1;
+        }}
+
+        SectionHeader {{
+            color: {style_to_color.get("section", "#fff")};
+            text-style: bold;
+            margin: 1 0;
+            padding: 0 0;
+        }}
+
+        .group_container {{
+            border-left: heavy {style_to_color.get("group", "#888")};
+            padding-left: 1;
+            margin: 0 0 0 1;
+            height: auto;
+            min-height: 0;
+        }}
+
+        .group_bottom {{
+            color: {style_to_color["group"]};
+            margin: 0 0 1 1;
+        }}
+
+        .group_top {{
+            color: {style_to_color["group"]};
+            margin: 1 0 0 1;
+        }}
+        """

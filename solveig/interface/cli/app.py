@@ -49,50 +49,10 @@ class SolveigTextualApp(TextualApp):
             color: {self._style_to_color["text"]};
         }}
 
-        ConversationArea {{
-            height: 1fr;
-        }}
-
-
-        StatusBar {{
-            dock: bottom;
-            height: 1;
-            content-align: center middle;
-        }}
-
-        TextBox {{
-            border: solid {self._style_to_color.get("box", "#000")};
-            margin: 1;
-            padding: 0 1;
-        }}
-
-        SectionHeader {{
-            color: {self._style_to_color.get("section", "#fff")};
-            text-style: bold;
-            margin: 1 0;
-            padding: 0 0;
-        }}
-
-        .group_container {{
-            border-left: heavy {self._style_to_color.get("group", "#888")};
-            padding-left: 1;
-            margin: 0 0 0 1;
-            height: auto;
-            min-height: 0;
-        }}
-
-        .group_bottom {{
-            color: {self._style_to_color["group"]};
-            margin: 0 0 1 1;
-        }}
-
-        .group_top {{
-            color: {self._style_to_color["group"]};
-            margin: 1 0 0 1;
-        }}
-
         {"\n".join(css_rules)}
 
+        {ConversationArea.get_css(color_palette)}
+        {StatusBar.get_css(color_palette)}
         {InputBar.get_css(color_palette)}
         """
 
