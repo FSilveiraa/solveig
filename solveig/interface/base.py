@@ -105,15 +105,13 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
+    async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""
         ...
 
     @abstractmethod
-    async def ask_yes_no(
-        self, question: str, yes_values: Iterable[str] | None = None
-    ) -> bool:
-        """Ask a yes/no question."""
+    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
+        """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         ...
 
     # Additional methods for compatibility

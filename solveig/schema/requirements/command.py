@@ -70,21 +70,27 @@ class CommandRequirement(Requirement):
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> "CommandResult":
+        user_choice = -1
+
         # Check if command matches auto-execute patterns
-        should_auto_execute = False
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
-                should_auto_execute = True
-                await interface.display_text(
-                    f"Auto-executing {self.command} since it matches config.allow_allowed_paths"
-                )
+                user_choice = 0 # run and send
+                await interface.display_text("Running command and sending output since it matches config.allow_allowed_paths", "prompt")
                 break
-
-        if should_auto_execute or await interface.ask_yes_no(
-            "Allow running command? [y/N]: "
-        ):
+        else:
+            user_choice = await interface.ask_choice(
+                "Allow running command?",
+                [
+                    "Run and send output",
+                    "Run and inspect output first",
+                    "No"
+                ]
+            )
+        if user_choice  <= 1:
             output: str | None
             error: str | None
+
             async with interface.with_animation("Executing..."):
                 try:
                     shell = await get_persistent_shell()
@@ -117,13 +123,17 @@ class CommandRequirement(Requirement):
             if error:
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")
-            if config.auto_send:
-                await interface.display_text(
-                    "Sending output since config.auto_send=True"
-                )
-            elif not await interface.ask_yes_no("Allow sending output? [y/N]: "):
+
+            # If we have an output or an error, and previously we decided to inspect before sending, ask again
+            # If the user decides to not send, obfuscate the output
+            if (
+                    (output or error)
+                    and user_choice == 1
+                    and (await interface.ask_choice("Allow sending output?", ["Yes", "No"])) == 1
+            ):
                 output = "<hidden>"
-                error = ""
+                error = "" if not error else "<hidden>"
+
             return CommandResult(
                 requirement=self,
                 command=self.command,

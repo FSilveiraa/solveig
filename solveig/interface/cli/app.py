@@ -4,11 +4,11 @@ import asyncio
 
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
-from textual.widgets import Input
 
 from solveig.interface.themes import DEFAULT_THEME, Palette
 
 from .conversation import ConversationArea
+from .input_widget import InputBar
 from .status_bar import StatusBar
 
 DEFAULT_INPUT_PLACEHOLDER = (
@@ -29,6 +29,7 @@ class SolveigTextualApp(TextualApp):
     ):
         super().__init__(**kwargs)
         self._input_callback = input_callback
+        self._theme = color_palette
 
         # Get color mapping and create CSS
         self._style_to_color = color_palette.to_textual_css()
@@ -52,18 +53,6 @@ class SolveigTextualApp(TextualApp):
             height: 1fr;
         }}
 
-        Input {{
-            dock: bottom;
-            height: 3;
-            color: {self._style_to_color["text"]};
-            background: {self._style_to_color["background"]};
-            border: solid {self._style_to_color["prompt"]};
-            margin: 0 0 1 0;
-        }}
-
-        Input > .input--placeholder {{
-            text-style: italic;
-        }}
 
         StatusBar {{
             dock: bottom;
@@ -103,16 +92,14 @@ class SolveigTextualApp(TextualApp):
         }}
 
         {"\n".join(css_rules)}
+
+        {InputBar.get_css(color_palette)}
         """
 
-        # Prompt handling state
-        self.prompt_future: asyncio.Future | None = None
-        self._saved_input_text: str = ""
-        self._original_placeholder: str = ""
 
         # Cached widget references (set in on_mount)
         self._conversation_area: ConversationArea
-        self._input_widget: Input
+        self._input_widget: SolveigInput
         self._status_bar: StatusBar
 
         # Readiness event
@@ -121,8 +108,10 @@ class SolveigTextualApp(TextualApp):
     def compose(self) -> ComposeResult:
         """Create the main layout."""
         yield ConversationArea(id="conversation")
-        yield Input(
+        yield InputBar(
             placeholder=DEFAULT_INPUT_PLACEHOLDER,
+            theme=self._theme,
+            free_form_callback=self._input_callback,
             id="input",
         )
         yield StatusBar(id="status")
@@ -131,7 +120,7 @@ class SolveigTextualApp(TextualApp):
         """Called when the app is mounted and widgets are available."""
         # Cache widget references
         self._conversation_area = self.query_one("#conversation", ConversationArea)
-        self._input_widget = self.query_one("#input", Input)
+        self._input_widget = self.query_one("#input", InputBar)
         self._status_bar = self.query_one("#status", StatusBar)
         # Focus the input widget so user can start typing immediately
         self._input_widget.focus()
@@ -140,65 +129,19 @@ class SolveigTextualApp(TextualApp):
         # Announce interface is ready
         self.is_ready.set()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle user input submission."""
-        user_input = event.value.strip()
-        event.input.value = ""  # Clear input
-
-        # Check if we're in prompt mode (waiting for specific answer)
-        if self.prompt_future and not self.prompt_future.done():
-            # Prompt mode: just fulfill the future
-            self.prompt_future.set_result(user_input)
-        else:
-            # Free-flow mode: use callback if provided
-            if self._input_callback:
-                if asyncio.iscoroutinefunction(self._input_callback):
-                    asyncio.create_task(self._input_callback(user_input))
-                else:
-                    self._input_callback(user_input)
-
-        # Keep focus on input after submission
-        event.input.focus()
 
     async def on_key(self, event) -> None:
         """Handle key events directly."""
         if event.key == "ctrl+c":
             self.exit()
 
-    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
+    async def ask_user(self, question: str) -> str:
         """Ask for any kind of input with a prompt."""
-        try:
-            # Save current state
-            self._saved_input_text = self._input_widget.value
-            self._original_placeholder = self._input_widget.placeholder
+        return await self._input_widget.ask_question(question)
 
-            # Set up prompt
-            self.prompt_future = asyncio.Future()
-            self._input_widget.value = ""
-            self._input_widget.placeholder = placeholder or prompt
-            self._input_widget.styles.border = (
-                "solid",
-                self._style_to_color["warning"],
-            )
-
-            # Focus the input
-            self._input_widget.focus()
-
-            # Wait for response
-            response = await self.prompt_future
-
-            # Restore state
-            self._input_widget.placeholder = self._original_placeholder
-            self._input_widget.value = self._saved_input_text
-            self._input_widget.styles.border = ("solid", self._style_to_color["prompt"])
-
-            # Restore focus
-            self._input_widget.focus()
-
-            return response
-
-        finally:
-            self.prompt_future = None
+    async def ask_choice(self, question: str, choices) -> int:
+        """Ask a multiple-choice question using Select widget."""
+        return await self._input_widget.ask_choice(question, choices)
 
     async def add_text(
         self, text: str, style: str = "text", markup: bool = False

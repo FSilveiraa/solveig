@@ -201,25 +201,18 @@ class TerminalInterface(SolveigInterface):
             await self.display_text(" (empty)", style="warning")
         return user_input
 
-    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
-        """Ask for any kind of input with a prompt."""
-        response = await self.app.ask_user(prompt, placeholder)
+    async def ask_question(self, question: str) -> str:
+        """Ask for specific input, preserving any current typing."""
+        return await self.app.ask_user(question)
+
+    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
+        """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
+        choice_index = await self.app.ask_choice(question, choices)
         await self._display_text(
-            f"[{self.app._style_to_color['prompt']}]{prompt}[/]  {response}",
+            f"[{self.app._style_to_color['prompt']}]{question}[/]  {choices[choice_index]}",
             allow_markup=True,
         )
-        return response
-
-    async def ask_yes_no(
-        self, question: str, yes_values: Iterable[str] | None = None
-    ) -> bool:
-        """Ask a yes/no question."""
-        yes_values = yes_values or self.YES
-        question = question.strip()
-        if "[y/n]" not in question.lower():
-            question = f"{question} [y/N]:"
-        response = await self.ask_user(question)
-        return response.lower().strip() in yes_values
+        return choice_index
 
     async def update_status(
         self,
