@@ -50,7 +50,7 @@ class InputBar(Container):
         # Child widgets
         self._text_input = Input(placeholder=placeholder, id="text_input")
         self._select_widget = None
-        self._prompt_label = Static("", id="prompt_label")
+        # self._prompt_label = Static("", id="prompt_label")
 
         # Saved state for question mode
         self._saved_text: str = ""
@@ -58,7 +58,8 @@ class InputBar(Container):
 
     def compose(self):
         """Create the layout with input widgets."""
-        yield self._prompt_label
+        # yield Rule(line_style="heavy", id="input_separator")
+        # yield self._prompt_label
         yield self._text_input
 
     def on_mount(self):
@@ -101,7 +102,7 @@ class InputBar(Container):
         """Apply question input styling."""
         self._text_input.styles.border = ("solid", self._style_to_color["warning"])
 
-    async def ask_question(self, prompt: str, placeholder: str | None = None) -> str:
+    async def ask_question(self, question: str) -> str:
         """Switch to question mode and wait for response."""
         self._saved_text = self._text_input.value
         self._saved_placeholder = self._text_input.placeholder
@@ -110,8 +111,8 @@ class InputBar(Container):
         self._question_future = asyncio.Future()
 
         self._text_input.value = ""
-        self._text_input.placeholder = placeholder or prompt
-        self._prompt_label.update(prompt)
+        self._text_input.placeholder = question
+        # self._prompt_label.update(question)
         self._apply_question_style()
         self._text_input.focus()
 
@@ -123,7 +124,7 @@ class InputBar(Container):
             self._question_future = None
             self._text_input.placeholder = self._saved_placeholder
             self._text_input.value = self._saved_text
-            self._prompt_label.update("")
+            # self._prompt_label.update("")
             self._apply_free_form_style()
             self._text_input.focus()
 
@@ -136,11 +137,12 @@ class InputBar(Container):
 
         # Hide text input and show question prompt
         self._text_input.styles.display = "none"
-        self._prompt_label.update(question)
+        # self._prompt_label.update(question)
 
         # Create option list widget with choices and mount in place of input
         options = [f"{i+1}. {choice}" for i, choice in enumerate(choices_list)]
         self._select_widget = OptionList(*options, id="choice_select")
+        self._select_widget.border_title = question
 
         # Mount inside this container
         await self.mount(self._select_widget)
@@ -158,7 +160,7 @@ class InputBar(Container):
             if self._select_widget:
                 await self._select_widget.remove()
                 self._select_widget = None
-            self._prompt_label.update("")
+            # self._prompt_label.update("")
             self._text_input.styles.display = "block"
             self._text_input.focus()
 
@@ -191,7 +193,7 @@ class InputBar(Container):
             margin: 0;
         }}
         
-        OptionList > *.option-list--option-highlighted {{
+        InputBar > OptionList > *.option-list--option-highlighted {{
             background: {style_to_color["prompt"]};
         }}
 
@@ -206,6 +208,14 @@ class InputBar(Container):
         }}
         
         #prompt_label {{
-            text-style: bold
+            text-style: bold;
+            height: auto;
+            min-height: 0;
+            margin: 0;
+        }}
+        
+        #input_separator {{
+            margin: 0;
+            color: {style_to_color["prompt"]};
         }}
         """

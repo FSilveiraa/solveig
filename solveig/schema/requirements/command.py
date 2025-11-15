@@ -76,7 +76,7 @@ class CommandRequirement(Requirement):
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
                 user_choice = 0 # run and send
-                await interface.display_text("Running command and sending output since it matches config.allow_allowed_paths", "prompt")
+                await interface.display_text("Running command and sending output since it matches config.auto_execute_commands", "prompt")
                 break
         else:
             user_choice = await interface.ask_choice(
@@ -84,7 +84,7 @@ class CommandRequirement(Requirement):
                 [
                     "Run and send output",
                     "Run and inspect output first",
-                    "No"
+                    "Don't run"
                 ]
             )
         if user_choice  <= 1:

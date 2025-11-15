@@ -7,7 +7,7 @@ import random
 from solveig import SolveigConfig
 from solveig.interface import TerminalInterface
 from solveig.run import run_async
-from solveig.schema import CommandRequirement
+from solveig.schema import CommandRequirement, ReadRequirement
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -54,6 +54,9 @@ async def run_async_mock(
 
     mock_messages = [
         AssistantMessage(requirements=[
+            ReadRequirement(comment="test read", path="~/Sync/", metadata_only=True),
+            ReadRequirement(comment="test read", path="~/Sync/app.log", metadata_only=False),
+
             CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
             CommandRequirement(comment="Print current dir", command="pwd", timeout=10),
         ]),
