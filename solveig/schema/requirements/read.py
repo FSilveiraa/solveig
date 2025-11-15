@@ -33,7 +33,7 @@ class ReadRequirement(Requirement):
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
         metadata_only = self.metadata_only or await Filesystem.is_dir(Filesystem.get_absolute_path(self.path))
-        await interface.display_text(f"Reading {"" if metadata_only else "content and "}metadata", "prompt")
+        await interface.display_text(f"{"" if metadata_only else "content and "}metadata", prefix="Requesting:")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
@@ -70,7 +70,7 @@ class ReadRequirement(Requirement):
         if metadata.is_directory or self.metadata_only:
             if path_matches:
                 send_metadata = True
-                await interface.display_text("Sending metadata since it matches config.allow_allowed_paths", "prompt")
+                await interface.display_info("Sending metadata since it matches config.allow_allowed_paths")
             else:
                 send_metadata = await interface.ask_choice(
                     "Allow sending metadata?",
@@ -85,7 +85,7 @@ class ReadRequirement(Requirement):
 
             if path_matches:
                 choice_read_file = 0
-                await interface.display_text("Reading file and sending content since it matches config.allow_allowed_paths", "prompt")
+                await interface.display_text("Reading file and sending content since it matches config.allow_allowed_paths")
             else:
                 choice_read_file = await interface.ask_choice(
                     "Allow reading file?",
@@ -135,6 +135,9 @@ class ReadRequirement(Requirement):
                     elif choice_send_file == 2:
                         file_content = "<hidden>"
                         metadata = None
+
+            # "Don't read and only send metadata" - don't do anything
+            # "Don't read or send anything" - clear metadata
             elif choice_read_file == 3:
                 metadata = None
 

@@ -76,7 +76,7 @@ class CommandRequirement(Requirement):
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
                 user_choice = 0 # run and send
-                await interface.display_text("Running command and sending output since it matches config.auto_execute_commands", "prompt")
+                await interface.display_info("Running command and sending output since it matches config.auto_execute_commands")
                 break
         else:
             user_choice = await interface.ask_choice(
@@ -116,10 +116,7 @@ class CommandRequirement(Requirement):
             if output:
                 await interface.display_text_block(output, title="Output")
             else:
-                await interface.display_text(
-                    "No output" if self.timeout > 0 else "Detached process, no output",
-                    "prompt",
-                )
+                await interface.display_info("No output" if self.timeout > 0 else "Detached process, no output")
             if error:
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")

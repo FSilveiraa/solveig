@@ -70,8 +70,8 @@ class DeleteRequirement(Requirement):
             abs_path, config.auto_allowed_paths
         )
         if auto_delete:
-            await interface.display_text(
-                f"Deleting {"directory" if is_directory else "file"} since it matches config.auto_allowed_paths", "prompt"
+            await interface.display_info(
+                f"Deleting {"directory" if is_directory else "file"} since it matches config.auto_allowed_paths"
             )
         elif not await interface.ask_choice(
                 f"Delete {"directory" if is_directory else "file"}?",

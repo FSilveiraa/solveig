@@ -31,31 +31,22 @@ class SolveigTextualApp(TextualApp):
         self._input_callback = input_callback
         self._theme = color_palette
 
-        # Get color mapping and create CSS
-        self._style_to_color = color_palette.to_textual_css()
-        self._color_to_style = {
-            color: name for name, color in self._style_to_color.items()
-        }
-
-        # Generate CSS from the color dict
-        css_rules = []
-        for name, color in self._style_to_color.items():
-            css_rules.append(f".{name}_message {{ color: {color}; }}")
-
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
         Screen {{
-            background: {self._style_to_color["background"]};
-            color: {self._style_to_color["text"]};
+            background: {color_palette.background};
+            color: {color_palette.text};
         }}
 
-        {"\n".join(css_rules)}
+        .text_message {{ color: {color_palette.text}; }}
+        .info_message {{ color: {color_palette.info}; }}
+        .warning_message {{ color: {color_palette.warning}; }}
+        .error_message {{ color: {color_palette.error}; }}
 
         {ConversationArea.get_css(color_palette)}
         {StatusBar.get_css(color_palette)}
         {InputBar.get_css(color_palette)}
         """
-
 
         # Cached widget references (set in on_mount)
         self._conversation_area: ConversationArea

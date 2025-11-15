@@ -46,7 +46,7 @@ class SolveigInterface(ABC):
 
     # Core display methods
     @abstractmethod
-    async def display_text(self, text: str, style: str = "normal") -> None:
+    async def display_text(self, text: str, prefix: str | None = None) -> None:
         """Display text with optional styling."""
         ...
 
@@ -63,6 +63,10 @@ class SolveigInterface(ABC):
     @abstractmethod
     async def display_success(self, message: str) -> None:
         """Display a success message with standard formatting."""
+        ...
+
+    async def display_info(self, message: str) -> None:
+        """Display a system message."""
         ...
 
     @abstractmethod

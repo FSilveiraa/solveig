@@ -28,11 +28,6 @@ class TerminalInterface(SolveigInterface):
     CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
 
-    YES = {
-        "yes",
-        "y",
-    }
-
     def __init__(
         self,
         theme: Palette = DEFAULT_THEME,
@@ -40,6 +35,7 @@ class TerminalInterface(SolveigInterface):
         base_indent: int = 2,
         **kwargs,
     ):
+        self._theme = theme
         self.app = SolveigTextualApp(
             color_palette=theme, input_callback=self._handle_input, **kwargs
         )
@@ -99,30 +95,35 @@ class TerminalInterface(SolveigInterface):
                     pass
 
     async def _display_text(
-        self, text: str, style: str = "text", allow_markup: bool = False
+        self, text: str, style: str = "text", prefix=None
     ) -> None:
         """Display text with optional styling."""
         # Map hex colors to semantic style names using pre-calculated mapping
-        if style.startswith("#"):
-            style = self.app._color_to_style.get(style, "text")
+        # if style.startswith("#"):
+        #     style = self.app._color_to_style.get(style, "text")
+        to_display = text
+        if prefix:
+            to_display = f"[{self._theme.info}]{prefix}[/]  {to_display}"
+        await self.app.add_text(to_display, style, markup=prefix is not None)
 
-        await self.app.add_text(text, style, markup=allow_markup)
-
-    async def display_text(self, text: str, style: str = "text") -> None:
-        # Assume by default there is no reason to display markdown styles
-        await self._display_text(text, style, allow_markup=False)
+    async def display_text(self, text: str, prefix=None) -> None:
+        await self._display_text(text, style="text", prefix=prefix)
 
     async def display_error(self, error: str | Exception) -> None:
         """Display an error message with standard formatting."""
-        await self.display_text(f"🗙 Error: {error}", "error")
+        await self._display_text(f"🗙 Error: {error}", style="error")
 
     async def display_warning(self, warning: str) -> None:
         """Display a warning message with standard formatting."""
-        await self.display_text(f"⚠  Warning: {warning}", "warning")
+        await self._display_text(f"⚠  Warning: {warning}", style="warning")
 
     async def display_success(self, message: str) -> None:
         """Display a success message with standard formatting."""
-        await self.display_text(f"✓ {message}", "success")
+        await self.display_info(f"✓ {message}")
+
+    async def display_info(self, message: str) -> None:
+        """Display a system message."""
+        await self._display_text(message, style="info")
 
     async def display_comment(self, message: str) -> None:
         """Display a comment message."""
@@ -198,7 +199,7 @@ class TerminalInterface(SolveigInterface):
         if user_input:
             await self.display_text(" " + user_input)
         else:
-            await self.display_text(" (empty)", style="warning")
+            await self._display_text(" (empty)", style="warning")
         return user_input
 
     async def ask_question(self, question: str) -> str:
@@ -209,8 +210,8 @@ class TerminalInterface(SolveigInterface):
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         choice_index = await self.app.ask_choice(question, choices)
         await self._display_text(
-            f"[{self.app._style_to_color['prompt']}]{question}[/]  {choices[choice_index]}",
-            allow_markup=True,
+            choices[choice_index],
+            prefix=question,
         )
         return choice_index
 
@@ -289,12 +290,11 @@ class TerminalInterface(SolveigInterface):
         abs_path: PathLike,
         is_dir: bool,
         size: int | None = None,
-        prefix: str = "",
     ) -> str:
         """Format path information for display - shared by all requirements."""
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
         # add it to the printed info
-        path_info = f"{prefix}{'🗁' if is_dir else '🗎'} {path}"
+        path_info = f"{'🗁 ' if is_dir else '🗎'} {path}"
         if str(abs_path) != path:
             path_info += f"  ({abs_path})"
         if size is not None:
@@ -335,24 +335,24 @@ class TerminalInterface(SolveigInterface):
 
         await self.display_text(
             self._format_path_info(
-                prefix=(
-                    "Source:       " if destination_path else "Path:  "
-                ),  # padding to align, look it's late
                 path=source_path,
                 abs_path=abs_source,
                 size=source_size,
                 is_dir=is_directory,
-            )
+            ),
+            prefix=(
+                "Source:     " if destination_path else "Path:"
+            ),  # padding to align, look it's late
         )
         if destination_path and abs_dest:
             await self.display_text(
                 self._format_path_info(
-                    prefix="Destination:  ",
                     path=destination_path,
                     abs_path=abs_dest,
                     size=dest_size,
                     is_dir=is_directory,
-                )
+                ),
+                prefix="Destination:",
             )
 
         # Only show diff/content for files, and only when both files exist OR we have source_content

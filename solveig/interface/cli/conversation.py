@@ -87,28 +87,26 @@ class ConversationArea(ScrollableContainer):
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         """Generate CSS for conversation area and related widgets."""
-        style_to_color = theme.to_textual_css()
-
         return f"""
         ConversationArea {{
             height: 1fr;
         }}
 
         TextBox {{
-            border: solid {style_to_color.get("box", "#000")};
+            border: solid {theme.box};
             margin: 1;
             padding: 0 1;
         }}
 
         SectionHeader {{
-            color: {style_to_color.get("section", "#fff")};
+            color: {theme.section};
             text-style: bold;
             margin: 1 0;
             padding: 0 0;
         }}
 
         .group_container {{
-            border-left: heavy {style_to_color.get("group", "#888")};
+            border-left: heavy {theme.group};
             padding-left: 1;
             margin: 0 0 0 1;
             height: auto;
@@ -116,12 +114,12 @@ class ConversationArea(ScrollableContainer):
         }}
 
         .group_bottom {{
-            color: {style_to_color["group"]};
+            color: {theme.group};
             margin: 0 0 1 1;
         }}
 
         .group_top {{
-            color: {style_to_color["group"]};
+            color: {theme.group};
             margin: 1 0 0 1;
         }}
         """

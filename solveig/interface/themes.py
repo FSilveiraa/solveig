@@ -1,28 +1,23 @@
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 
 @dataclass
 class Palette:
+    # Info
     name: str
+
+    # UI
     background: str
-    text: str
-    prompt: str
-    box: str
     group: str
     section: str
+    box: str
+    input: str
+
+    # Messages
+    text: str
+    info: str
     warning: str
     error: str
-
-    def to_textual_css(self) -> dict:
-        """Generate Textual CSS rules from palette colors."""
-        palette_dict = asdict(self)
-        palette_dict.pop("name")  # Remove name field
-        return dict(palette_dict.items())
-        # for field_name, color in palette_dict.items():
-        #     if color:  # Skip empty colors
-        #         css_rules.append(f".{field_name}_message {{ color: {color}; }}")
-        #
-        # return "\n".join(css_rules)
 
 
 # no_theme = Palette(
@@ -42,8 +37,9 @@ terracotta = Palette(
     name="terracotta",
     background="#231D13",  # dark greyish brown
     text="#FFF1DB",  # beige
-    prompt="#CB9D63",  # faded yellow
+    input="#CB9D63",  # faded yellow
     box="#CB9D63",  # faded yellow
+    info="#CB9D63",
     group="#869F89",  # pale green
     section="#BE5856",  # clay red
     warning="#BC8F8F",  # rosy brown
@@ -55,7 +51,8 @@ solarized_dark = Palette(
     name="solarized-dark",
     background="#002b36",  # base3
     text="#839496",  # base0
-    prompt="#2aa198",  # cyan
+    input="#2aa198",  # cyan
+    info="#2aa198",  # cyan
     box="#268bd2",  # blue
     group="#859900",  # green
     section="#D33682",  # magenta
@@ -68,7 +65,8 @@ solarized_light = Palette(
     name="solarized-light",
     background="#fdf6e3",  # base3
     text="#657b83",  # base00
-    prompt="#268bd2",  # blue
+    input="#268bd2",  # blue
+    info="#268bd2",  # blue
     # box="#93a1a1",         # base1 (subtle grey)
     box="#D33682",  # violet
     group="#859900",  # green
@@ -83,7 +81,8 @@ forest = Palette(
     name="forest",
     background="#13261C",  # algae green
     text="#d4d4aa",  # sage
-    prompt="#87ceeb",  # sky blue
+    input="#87ceeb",  # sky blue
+    info="#87ceeb",  # sky blue
     box="#daa520",  # goldenrod
     group="#87AC87",  # light green
     section="#93AFBA",  # sky blue
@@ -96,7 +95,8 @@ midnight = Palette(
     name="midnight",
     background="#121414",  # dark grey
     text="#e0e0e0",  # light grey
-    prompt="#9FC7F0",  # bright blue
+    input="#9FC7F0",  # bright blue
+    info="#9FC7F0",  # bright blue
     box="#A46A73",  # low-contrast pink
     group="#675DA6",  # brighter purple
     section="#3B679C",  # sky blue
