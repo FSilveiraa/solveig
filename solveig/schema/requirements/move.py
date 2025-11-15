@@ -71,15 +71,17 @@ class MoveRequirement(Requirement):
                 destination_path=str(abs_destination_path),
             )
 
+        is_dir = await Filesystem.is_dir(abs_source_path)
         # Get user consent
         if (
             Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or await interface.ask_yes_no(
-            f"Allow moving {abs_source_path} to {abs_destination_path}? [y/N]: "
-        ):
+        ) or (await interface.ask_choice(
+            f"Allow moving {"directory" if is_dir else "file"}?",
+            [ "Yes", "No" ]
+        )) == 0:
             try:
                 # Perform the move operation - use utils/file.py method
                 await Filesystem.move(abs_source_path, abs_destination_path)

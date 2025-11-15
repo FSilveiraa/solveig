@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from solveig.interface.themes import DEFAULT_THEME, Palette
 
 from .conversation import ConversationArea
-from .input_widget import InputBar
+from .input_bar import InputBar
 from .status_bar import StatusBar
 
 DEFAULT_INPUT_PLACEHOLDER = (
@@ -99,7 +99,7 @@ class SolveigTextualApp(TextualApp):
 
         # Cached widget references (set in on_mount)
         self._conversation_area: ConversationArea
-        self._input_widget: SolveigInput
+        self._input_widget: InputBar
         self._status_bar: StatusBar
 
         # Readiness event

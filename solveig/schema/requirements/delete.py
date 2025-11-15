@@ -56,6 +56,7 @@ class DeleteRequirement(Requirement):
     ) -> "DeleteResult":
         # Pre-flight validation - use utils/file.py validation
         abs_path = Filesystem.get_absolute_path(self.path)
+        is_directory = await Filesystem.is_dir(abs_path)
 
         try:
             await Filesystem.validate_delete_access(abs_path)
@@ -70,11 +71,12 @@ class DeleteRequirement(Requirement):
         )
         if auto_delete:
             await interface.display_text(
-                f"Deleting {abs_path} since it matches config.auto_allowed_paths"
+                f"Deleting {"directory" if is_directory else "file"} since it matches config.auto_allowed_paths", "prompt"
             )
-
-        # Get user consent (with extra warning)
-        elif not await interface.ask_yes_no(f"Permanently delete {abs_path}? [y/N]: "):
+        elif not await interface.ask_choice(
+                f"Delete {"directory" if is_directory else "file"}?",
+                [ "Yes", "No" ]
+        ) == 0:
             return DeleteResult(requirement=self, accepted=False, path=str(abs_path))
 
         try:
@@ -85,5 +87,5 @@ class DeleteRequirement(Requirement):
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
             return DeleteResult(
-                requirement=self, accepted=False, error=str(e), path=str(abs_path)
+                requirement=self, accepted=True, error=str(e), path=str(abs_path)
             )

@@ -92,8 +92,8 @@ class ReadRequirement(Requirement):
                     [
                         "Read and send content and metadata",
                         "Read and inspect content first",
-                        "Don't read and send metadata only"
-                        "Don't read or send anything"
+                        "Don't read and only send metadata",
+                        "Don't read or send anything",
                     ]
                 )
 
@@ -125,21 +125,16 @@ class ReadRequirement(Requirement):
                         [
                             "Send content and metadata",
                             "Send metadata only",
-                            "Don't send anything"
+                            "Don't send anything",
                         ]
                     )
                     if choice_send_file == 0:
                         accepted = True
                     elif choice_send_file == 1:
-                        file_content = None
+                        file_content = "<hidden>"
                     elif choice_send_file == 2:
-                        file_content = None
+                        file_content = "<hidden>"
                         metadata = None
-
-                # if the user previously chose to read+send, it doesn't matter if there's contents or not
-                # edge case: if the file exists and has no content, and it's not in the auto-allowed-path, we don't ask the user whether to send or not
-                # frankly idk what we're actually even asking at that point, the only distinction is the accepted bool
-                # "I'm going to send empty contents anyway, do you want to tell it those are the actual contents, or signal that you're having a privacy tantrum?"
             elif choice_read_file == 3:
                 metadata = None
 
