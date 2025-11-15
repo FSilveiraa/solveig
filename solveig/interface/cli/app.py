@@ -24,11 +24,11 @@ class SolveigTextualApp(TextualApp):
     def __init__(
         self,
         color_palette: Palette = DEFAULT_THEME,
-        interface_controller=None,
+        input_callback=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.interface_controller = interface_controller
+        self._input_callback = input_callback
 
         # Get color mapping and create CSS
         self._style_to_color = color_palette.to_textual_css()
@@ -115,7 +115,7 @@ class SolveigTextualApp(TextualApp):
         self._input_widget: Input
         self._status_bar: StatusBar
 
-        # Readyness event
+        # Readiness event
         self.is_ready = asyncio.Event()
 
     def compose(self) -> ComposeResult:
@@ -150,14 +150,12 @@ class SolveigTextualApp(TextualApp):
             # Prompt mode: just fulfill the future
             self.prompt_future.set_result(user_input)
         else:
-            # Free-flow mode: delegate to interface controller
-            if self.interface_controller:
-                if asyncio.iscoroutinefunction(self.interface_controller._handle_input):
-                    asyncio.create_task(
-                        self.interface_controller._handle_input(user_input)
-                    )
+            # Free-flow mode: use callback if provided
+            if self._input_callback:
+                if asyncio.iscoroutinefunction(self._input_callback):
+                    asyncio.create_task(self._input_callback(user_input))
                 else:
-                    self.interface_controller._handle_input(user_input)
+                    self._input_callback(user_input)
 
         # Keep focus on input after submission
         event.input.focus()

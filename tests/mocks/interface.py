@@ -3,10 +3,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from solveig.interface import TextualInterface
+from solveig.interface import TerminalInterface
 
 
-class MockInterface(TextualInterface):
+class MockInterface(TerminalInterface):
     """
     Mock interface for testing - captures all output without external dependencies.
     Implements the complete SolveigInterface contract for async testing.

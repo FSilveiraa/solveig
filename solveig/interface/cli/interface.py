@@ -1,4 +1,4 @@
-"""Main TextualInterface implementation."""
+"""Main TerminalInterface implementation."""
 
 import asyncio
 import difflib
@@ -23,9 +23,9 @@ from .app import SolveigTextualApp
 from .conversation import BANNER
 
 
-class TextualInterface(SolveigInterface):
+class TerminalInterface(SolveigInterface):
     """
-    Textual interface that implements SolveigInterface and contains a SolveigTextualApp.
+    CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
 
     YES = {
@@ -41,7 +41,7 @@ class TextualInterface(SolveigInterface):
         **kwargs,
     ):
         self.app = SolveigTextualApp(
-            color_palette=theme, interface_controller=self, **kwargs
+            color_palette=theme, input_callback=self._handle_input, **kwargs
         )
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
@@ -68,6 +68,7 @@ class TextualInterface(SolveigInterface):
             "cool": cool_spinner,
         }
 
+    # SolveigInterface implementation
     async def start(self) -> None:
         """Start the interface."""
         await self.app.run_async()
@@ -107,7 +108,6 @@ class TextualInterface(SolveigInterface):
 
         await self.app.add_text(text, style, markup=allow_markup)
 
-    # SolveigInterface implementation
     async def display_text(self, text: str, style: str = "text") -> None:
         # Assume by default there is no reason to display markdown styles
         await self._display_text(text, style, allow_markup=False)

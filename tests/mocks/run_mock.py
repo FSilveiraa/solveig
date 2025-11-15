@@ -5,7 +5,7 @@ import asyncio
 import random
 
 from solveig import SolveigConfig
-from solveig.interface import TextualInterface
+from solveig.interface import TerminalInterface
 from solveig.run import run_async
 from solveig.schema import CommandRequirement
 from solveig.schema.message import AssistantMessage
@@ -17,7 +17,7 @@ async def cleanup():
     await Filesystem.delete("~/Sync/hello_new.py")
 
 
-class DemoInterface(TextualInterface):
+class DemoInterface(TerminalInterface):
     def __init__(
         self, *args, user_messages: list[tuple[float, str]] | None = None, **kwargs
     ):
@@ -70,7 +70,7 @@ async def run_async_mock(
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
-    interface = TextualInterface(theme=config.theme, code_theme=config.code_theme)
+    interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
     # interface = DemoInterface(theme=config.theme, code_theme=config.code_theme, user_messages=user_messages)
 
     try:
