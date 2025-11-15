@@ -15,17 +15,16 @@ class PersistentShell:
         self.proc = None
         self._lock = asyncio.Lock()
         self.current_cwd = os.getcwd()
-        self.current_rc = 0
 
     async def start(self):
         """Start the persistent shell process if not already running."""
         if self.proc is not None:
             return
         self.proc = await asyncio.create_subprocess_exec(
-            self.shell,  # Remove -i to avoid escape sequences
+            self.shell,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,  # Keep stderr separate
+            stderr=asyncio.subprocess.PIPE,
         )
 
     async def _read_stream(self, stream, until_marker=None, timeout=None):
@@ -53,14 +52,25 @@ class PersistentShell:
         """
         Run a command and return (stdout_text, stderr_text).
         Updates internal state tracking (cwd, return code).
+        If timeout <= 0, runs as detached process.
         """
+        if timeout is not None and timeout <= 0:
+            # Detached process - use separate subprocess
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return "", ""
+
         async with self._lock:
             if self.proc is None:
                 await self.start()
 
             # Append marker command to capture state after execution
             # Using a composed command instead of chaining two commands *probably* ensure more atomicity
-            full = f"{cmd}\nprintf '\\n{MARKER} rc='$?' cwd='$(pwd)'\\n'\n"
+            full = f"{cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
             self.proc.stdin.write(full.encode())
             await self.proc.stdin.drain()
 
@@ -76,16 +86,14 @@ class PersistentShell:
 
     def _parse_marker(self, marker_line: str):
         """Parse marker line to update internal state."""
-        parts = marker_line.split()
-        for part in parts:
-            try:
-                key, value = part.split("=", 1)
-                if key == "cwd":
-                    self.current_cwd = value.strip()
-                elif key == "rc":
-                    self.current_rc = int(value)
-            except:
-                pass
+        try:
+            if ":" in marker_line:
+                marker, cwd = marker_line.split(":", 1)
+                if marker.strip() == MARKER:
+                    self.current_cwd = cwd.strip()
+        except (ValueError, AttributeError) as e:
+            # Log parsing failure but don't crash
+            pass
 
     async def stop(self):
         """Stop the persistent shell process."""
@@ -103,14 +111,8 @@ class PersistentShell:
         """Get current working directory of the shell."""
         return self.current_cwd
 
-    @property
-    def return_code(self) -> int:
-        """Get return code of the last executed command."""
-        return self.current_rc
-
-
 # Global singleton instance
-_shell_instance = None
+_shell_instance: PersistentShell | None = None
 
 async def get_persistent_shell() -> PersistentShell:
     """Get the global persistent shell singleton."""

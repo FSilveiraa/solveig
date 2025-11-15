@@ -64,20 +64,7 @@ class CommandRequirement(Requirement):
     async def _execute_command(self, config: "SolveigConfig", shell: PersistentShell) -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
-            if self.timeout > 0:
-                # Use persistent shell for session state continuity
-                output, error = await shell.run(self.command, timeout=self.timeout)
-                return output, error
-            else:
-                # Detached process - use original implementation
-                proc = await asyncio.create_subprocess_shell(
-                    self.command,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    start_new_session=True,
-                )
-                # await proc.communicate() # does not block
-                return "", ""
+            return await shell.run(self.command, timeout=self.timeout)
         raise ValueError("Empty command")
 
     async def actually_solve(
