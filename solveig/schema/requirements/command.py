@@ -11,6 +11,7 @@ from solveig.interface import SolveigInterface
 from solveig.schema.results import CommandResult
 
 from .base import Requirement
+from solveig.utils.shell import PersistentShell, get_persistent_shell
 
 
 class CommandRequirement(Requirement):
@@ -60,23 +61,15 @@ class CommandRequirement(Requirement):
         """Return description of command capability."""
         return "command(comment, command, timeout=10): execute shell commands and inspect their output"
 
-    async def _execute_command(self, config: "SolveigConfig") -> tuple[str, str]:
+    async def _execute_command(self, config: "SolveigConfig", shell: PersistentShell) -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
             if self.timeout > 0:
-                proc = await asyncio.create_subprocess_shell(
-                    self.command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=self.timeout
-                )
-                # Decode bytes to strings
-                output = stdout.decode("utf-8").strip() if stdout else ""
-                error = stderr.decode("utf-8").strip() if stderr else ""
+                # Use persistent shell for session state continuity
+                output, error = await shell.run(self.command, timeout=self.timeout)
                 return output, error
             else:
+                # Detached process - use original implementation
                 proc = await asyncio.create_subprocess_shell(
                     self.command,
                     stdout=asyncio.subprocess.DEVNULL,
@@ -107,7 +100,13 @@ class CommandRequirement(Requirement):
             error: str | None
             async with interface.with_animation("Executing..."):
                 try:
-                    output, error = await self._execute_command(config)
+                    shell = await get_persistent_shell()
+                    output, error = await self._execute_command(config, shell)
+
+                    # Update interface stats with current working directory
+                    if self.timeout > 0:  # Only for non-detached commands
+                        await interface.update_status(path=shell.cwd)
+
                 except Exception as e:
                     error_str = str(e)
                     await interface.display_error(

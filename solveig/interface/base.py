@@ -143,6 +143,7 @@ class SolveigInterface(ABC):
         tokens: tuple[int, int] | int | str | None = None,
         model: str | None = None,
         url: str | None = None,
+        path: str | PathLike | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...

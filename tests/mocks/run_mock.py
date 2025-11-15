@@ -7,6 +7,7 @@ import random
 from solveig import SolveigConfig
 from solveig.interface import TextualInterface
 from solveig.run import run_async
+from solveig.schema import CommandRequirement
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -50,6 +51,13 @@ async def run_async_mock(
     mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 1
 ):
     """Entry point for the async textual CLI."""
+
+    mock_messages = [
+        AssistantMessage(requirements=[
+            CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
+            CommandRequirement(comment="Print current dir", command="pwd", timeout=10),
+        ]),
+    ]
 
     if mock_messages is None:
         from solveig.system_prompt.examples.long import EXAMPLE

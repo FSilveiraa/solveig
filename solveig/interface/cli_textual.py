@@ -4,6 +4,7 @@ Modern Textual interface for Solveig using Textual with composition pattern.
 
 import asyncio
 import difflib
+import os.path
 import random
 import time
 from collections.abc import Iterable
@@ -146,6 +147,7 @@ class StatusBar(Static):
         self._url = ""
         self._spinner = None
         self._timer = None
+        self._path = os.getcwd()
 
     def update_status_info(
         self,
@@ -153,6 +155,7 @@ class StatusBar(Static):
         tokens: tuple[int, int] | int | str | None = None,
         model: str | None = None,
         url: str | None = None,
+        path: str | PathLike | None = None,
     ):
         """Update status bar with multiple pieces of information."""
         if status is not None:
@@ -167,6 +170,8 @@ class StatusBar(Static):
             self._model = model
         if url is not None:
             self._url = url
+        if path is not None:
+            self._path = path
 
         self._refresh_display()
 
@@ -184,11 +189,13 @@ class StatusBar(Static):
         sections = [status_text]  # Status always shown
 
         if self._tokens:
-            sections.append(f"Tokens: {self._tokens}")
+            sections.append(f"{self._tokens}")
         if self._url:
-            sections.append(f"URL: {self._url}")
+            sections.append(f"{self._url}")
         if self._model:
-            sections.append(f"Model: {self._model}")
+            sections.append(f"{self._model}")
+        if self._path:
+            sections.append(self._path)
 
         # Get terminal width
         try:
@@ -618,10 +625,11 @@ class TextualInterface(SolveigInterface):
         tokens: tuple[int, int] | int | str | None = None,
         model: str | None = None,
         url: str | None = None,
+        path: str | PathLike | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         self.app._status_bar.update_status_info(
-            status=status, tokens=tokens, model=model, url=url
+            status=status, tokens=tokens, model=model, url=url, path=path
         )
 
     async def wait_until_ready(self):
