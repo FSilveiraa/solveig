@@ -5,6 +5,8 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Static
 
 from solveig.interface.themes import Palette
+from solveig.utils.file import Metadata
+from .tree_display import TreeDisplay
 from .widgets import SectionHeader, TextBox
 
 BANNER = """
@@ -55,6 +57,19 @@ class ConversationArea(ScrollableContainer):
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
         await target.mount(section_header)
+        self.scroll_end()
+
+    async def add_tree_display(
+        self, metadata: Metadata, title: str | None = None, display_metadata: bool = False
+    ):
+        """Add an interactive tree display widget."""
+        tree_widget = TreeDisplay(metadata, display_metadata)
+        if title:
+            tree_widget.border_title = title
+
+        # Add to current group or main area
+        target = self._group_stack[-1] if self._group_stack else self
+        await target.mount(tree_widget)
         self.scroll_end()
 
     async def enter_group(self, title: str):
@@ -122,4 +137,6 @@ class ConversationArea(ScrollableContainer):
             color: {theme.group};
             margin: 1 0 0 1;
         }}
+
+        {TreeDisplay.get_css(theme)}
         """

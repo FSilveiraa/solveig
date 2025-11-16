@@ -6,6 +6,7 @@ import random
 
 from solveig import SolveigConfig
 from solveig.interface import TerminalInterface
+from solveig.plugins.schema.tree import TreeRequirement
 from solveig.run import run_async
 from solveig.schema import CommandRequirement, ReadRequirement, WriteRequirement, DeleteRequirement, CopyRequirement, \
     MoveRequirement
@@ -56,6 +57,8 @@ async def run_async_mock(
 
     mock_messages = [
         AssistantMessage(requirements=[
+            TreeRequirement(comment="Test comment", path="~/Sync"),
+
             ReadRequirement(comment="test read", path="~/Sync/", metadata_only=True),
             ReadRequirement(comment="test read", path="~/Sync/app.log", metadata_only=False),
 

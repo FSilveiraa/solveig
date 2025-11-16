@@ -16,7 +16,6 @@ from solveig.utils.file import Filesystem, Metadata
 from solveig.utils.misc import (
     FILE_EXTENSION_TO_LANGUAGE,
     convert_size_to_human_readable,
-    get_tree_display,
 )
 
 from .app import SolveigTextualApp
@@ -135,11 +134,9 @@ class TerminalInterface(SolveigInterface):
         title: str | None = None,
         display_metadata: bool = False,
     ) -> None:
-        """Display a tree structure of a directory"""
-        tree_lines = get_tree_display(metadata, display_metadata)
-        await self.display_text_block(
-            "\n".join(tree_lines),
-            title=title or str(metadata.path),
+        """Display an interactive tree structure of a directory."""
+        await self.app._conversation_area.add_tree_display(
+            metadata, title=title or str(metadata.path), display_metadata=display_metadata
         )
 
     async def display_text_block(
@@ -204,10 +201,12 @@ class TerminalInterface(SolveigInterface):
 
     async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""
+        self.app._conversation_area.scroll_end()
         return await self.app.ask_user(question)
 
     async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
+        self.app._conversation_area.scroll_end()
         choice_index = await self.app.ask_choice(question, choices)
         await self._display_text(
             choices[choice_index],

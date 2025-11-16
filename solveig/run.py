@@ -131,13 +131,12 @@ async def send_message_to_llm_with_retry(
             )
 
             # Ask if user wants to retry
-            # TODO: Clarify conversation flow overall - we're not sending "same vs new", we're adding a new message
-            # Plus the user can just type and send a new message anyway without waiting
-            retry_same = await interface.ask_yes_no(
-                "Retry with the same message [y] or send a new one [N]?",
+            retry_choice = await interface.ask_choice(
+                "Retry this message?",
+                choices=[ "Retry the same message", "Add new message" ]
             )
 
-            if not retry_same:
+            if retry_choice == 1:
                 new_comment = await interface.get_input()
                 message_history.add_messages(UserMessage(comment=new_comment))
 
