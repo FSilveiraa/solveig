@@ -85,7 +85,6 @@ class WriteRequirement(Requirement):
                     question,
                     [ "Yes", "No" ]
             )) == 0:
-            # if not await interface.ask_yes_no(question):
                 return WriteResult(requirement=self, path=str(abs_path), accepted=False)
 
         try:

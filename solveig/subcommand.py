@@ -81,8 +81,10 @@ You have the following sub-commands available:
                     f"{'Updating' if already_exists else 'Creating'} {abs_path} since it matches config.auto_allowed_paths"
                 )
             else:
-                question = f"Allow {'updating' if already_exists else 'creating'} file?"
-                if not await interface.ask_yes_no(question):
+                if await interface.ask_choice(
+                        f"Allow {'updating' if already_exists else 'creating'} file?",
+                        choices=[ "Yes", "No" ],
+                ) == 1:
                     return
 
             try:

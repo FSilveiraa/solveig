@@ -74,10 +74,11 @@ class Requirement(BaseModel, ABC):
             except Exception as error:
                 await interface.display_error(error)
                 error_info = "Execution error"
-                if await interface.ask_yes_no(
-                    "Send error message back to assistant? [y/N]: "
-                ):
-                    error_info = f": {error}"
+                if (await interface.ask_choice(
+                    "Send error message back to assistant?",
+                    choices=[ "Yes", "No" ]
+                )) == 0:
+                    error_info += f": {error}"
                 result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions

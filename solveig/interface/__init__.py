@@ -23,7 +23,7 @@ cli.display_error("Something went wrong")
 
 # Get specific input
 name = await cli.ask_prompt("What's your name?")
-confirm = await cli.ask_yes_no("Continue?")
+confirm = (await cli.ask_choice("Continue?", choices=["Yes", "No"]) == 0
 ```
 """
 

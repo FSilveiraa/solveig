@@ -1,7 +1,8 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
+from os import PathLike
+from typing import Any, Iterable
 
 from solveig.interface import TerminalInterface
 
@@ -86,11 +87,9 @@ class MockInterface(TerminalInterface):
         self.outputs.append(response)
         return response
 
-    async def ask_yes_no(self, question: str, yes_values=None) -> bool:
+    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
         response = await self.ask_user(question)
-        if yes_values is None:
-            yes_values = ["y", "yes", "1", "true", "t"]
-        return response.lower().strip() in yes_values
+        return int(response)
 
     # Context managers
     @asynccontextmanager
@@ -120,6 +119,7 @@ class MockInterface(TerminalInterface):
         tokens: tuple[int, int] | int = None,
         model: str = None,
         url: str = None,
+        path: str | PathLike | None = None
     ) -> None:
         status_info = {}
         if status is not None:
