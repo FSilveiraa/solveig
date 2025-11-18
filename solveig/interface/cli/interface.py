@@ -222,8 +222,8 @@ class TerminalInterface(SolveigInterface):
         url: str | None = None,
         path: str | PathLike | None = None,
     ) -> None:
-        """Update status bar with multiple pieces of information."""
-        self.app._status_bar.update_status_info(
+        """Update stats dashboard with multiple pieces of information."""
+        self.app._stats_dashboard.update_status_info(
             status=status, tokens=tokens, model=model, url=url, path=path
         )
 
@@ -267,19 +267,18 @@ class TerminalInterface(SolveigInterface):
         await self.update_status(status)
 
         # Pick random spinner and set up animation
-        status_bar = self.app._status_bar
+        stats_dashboard = self.app._stats_dashboard
         spinner_name = random.choice(list(self.spinners.keys()))
-        status_bar._spinner = self.spinners[spinner_name]
-        status_bar._timer = self.app.set_interval(0.1, status_bar._refresh_display)
+        stats_dashboard.set_spinner(self.spinners[spinner_name])
+        stats_dashboard._timer = self.app.set_interval(0.1, stats_dashboard._update_all_displays)
         try:
             yield
         finally:
             # Stop animation - clean up timer and spinner
-            if status_bar._timer:
-                status_bar._timer.stop()
-                status_bar._timer = None
-            status_bar._spinner = None
-            status_bar._refresh_display()  # Refresh to remove spinner
+            if stats_dashboard._timer:
+                stats_dashboard._timer.stop()
+                stats_dashboard._timer = None
+            stats_dashboard.clear_spinner()
 
             await self.update_status(final_status)
 

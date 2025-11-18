@@ -163,9 +163,8 @@ class InputBar(Container):
         """Generate CSS for this widget container."""
         return f"""
         InputBar {{
-            dock: bottom;
             height: auto;
-            margin: 0 0 1 0;
+            margin: 0 0 0 0;
         }}
 
         InputBar > Input {{
