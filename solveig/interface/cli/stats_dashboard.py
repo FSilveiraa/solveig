@@ -1,12 +1,13 @@
 """Stats dashboard - simple text box."""
 
-from textual.widgets import Static, DataTable
-from textual.containers import Horizontal
+from textual.widgets import Static, DataTable, Collapsible
+from textual.containers import Horizontal, Vertical
+from textual.widget import Widget
 
 from solveig.interface.themes import Palette
 
 
-class StatsDashboard(Horizontal):
+class StatsDashboard(Widget):
     """Simple text stats dashboard."""
 
     def __init__(self, width: int, **kwargs):
@@ -24,38 +25,40 @@ class StatsDashboard(Horizontal):
         self._screen_width = width - 15
 
     def compose(self):
-        """Create placeholder tables - will be populated in on_mount."""
-        # Create empty tables first
-        self._table1 = DataTable(show_header=False, zebra_stripes=False)
-        yield self._table1
-        yield Static("│\n│", classes="separator")
+        """Create tables with content immediately."""
+        with Collapsible(title="Stats", collapsed=False):
+            # Create tables with content right away
+            self._table1 = DataTable(show_header=False, zebra_stripes=False)
+            self._col1 = self._table1.add_column("stats1")
+            self._row_keys = {}
+            self._row_keys["table1_row1"] = self._table1.add_row("Click to expand")
+            self._row_keys["table1_row2"] = self._table1.add_row("Model:")
 
-        self._table2 = DataTable(show_header=False, zebra_stripes=False)
-        yield self._table2
-        yield Static("│\n│", classes="separator")
+            self._table2 = DataTable(show_header=False, zebra_stripes=False)
+            self._col2 = self._table2.add_column("stats2")
+            self._row_keys["table2_row1"] = self._table2.add_row("Processing")
+            self._row_keys["table2_row2"] = self._table2.add_row("Endpoint:")
 
-        self._table3 = DataTable(show_header=False, zebra_stripes=False)
-        yield self._table3
+            self._table3 = DataTable(show_header=False, zebra_stripes=False)
+            self._col3 = self._table3.add_column("stats3")
+            self._row_keys["table3_row1"] = self._table3.add_row("Tokens:")
+            self._row_keys["table3_row2"] = self._table3.add_row("Path:")
+
+            yield Horizontal(
+                self._table1,
+                Static("│\n│", classes="separator"),
+                self._table2,
+                Static("│\n│", classes="separator"),
+                self._table3
+            )
 
     def on_mount(self):
-        """Set up tables with proper sizing after mount."""
-        # Now we have access to self.size
+        """Update column widths now that we have access to self.size."""
+        # Adjust column widths based on actual screen size
         col_width = self._screen_width // 3
-
-        # Table 1: Expand/Model
-        self._col1 = self._table1.add_column("stats1", width=col_width)
-        self._row_keys["table1_row1"] = self._table1.add_row("▶ Click to expand")
-        self._row_keys["table1_row2"] = self._table1.add_row("Model:")
-
-        # Table 2: Processing/Endpoint
-        self._col2 = self._table2.add_column("stats2", width=col_width)
-        self._row_keys["table2_row1"] = self._table2.add_row("Processing")
-        self._row_keys["table2_row2"] = self._table2.add_row("Endpoint:")
-
-        # Table 3: Tokens/Path
-        self._col3 = self._table3.add_column("stats3", width=col_width)
-        self._row_keys["table3_row1"] = self._table3.add_row("Tokens:")
-        self._row_keys["table3_row2"] = self._table3.add_row("Path:")
+        # Tables and content already created in compose()
+        # Just update the display with current values
+        self._update_all_displays()
 
 
     def update_status_info(self, status=None, tokens=None, model=None, url=None, path=None, **kwargs):
@@ -109,7 +112,7 @@ class StatsDashboard(Horizontal):
         import os.path
 
         # Table 1 updates: Expand/Model
-        self._table1.update_cell(self._row_keys["table1_row1"], self._col1, "▶ Click to expand")
+        self._table1.update_cell(self._row_keys["table1_row1"], self._col1, "Click to expand")
         self._table1.update_cell(self._row_keys["table1_row2"], self._col1, f"Model:  {self._model}")
 
         # Table 2 updates: Status/Endpoint
@@ -142,23 +145,18 @@ class StatsDashboard(Horizontal):
         return f"""
         StatsDashboard {{
             dock: bottom;
-            height: 4;
+            height: 8;
             width: 100%;
             border: solid {theme.box};
             background: {theme.background};
         }}
-
+        
         StatsDashboard Static {{
             width: 1;
             height: 100%;
         }}
 
-        StatsDashboard DataTable {{
-            height: 100%;
-            border: none;
-        }}
-        
-        StatsDashboard .separator {{
+        .separator {{
             width: 1;
             height: 100%;
             border: none;
