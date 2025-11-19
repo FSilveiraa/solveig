@@ -4,14 +4,13 @@ import asyncio
 
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
-from textual.widgets import Collapsible, DataTable
 
 from solveig.interface.themes import DEFAULT_THEME, Palette
 
 from .conversation import ConversationArea
 from .input_bar import InputBar
-from .stats_dashboard import StatsDashboard
-from .stats_bar import create_stats_content
+from ignore.stats_dashboard import StatsDashboard
+from .stats_bar import StatsBar
 
 DEFAULT_INPUT_PLACEHOLDER = (
     "Click to focus, type and press Enter to send, '/help' for more"
@@ -47,26 +46,13 @@ class SolveigTextualApp(TextualApp):
 
         {ConversationArea.get_css(color_palette)}
         {InputBar.get_css(color_palette)}
-
-        .separator {{
-            width: 1;
-            height: 100%;
-            border: none;
-            color: {color_palette.box};
-            text-align: center;
-        }}
-
-        #stats {{
-            dock: bottom;
-            height: auto;
-            max-height: 8;
-        }}
+        {StatsBar.get_css(color_palette)}
         """
 
         # Cached widget references (set in on_mount)
         self._conversation_area: ConversationArea
         self._input_widget: InputBar
-        self._stats_dashboard: StatsDashboard
+        self._stats_dashboard: StatsBar
 
         # Readiness event
         self.is_ready = asyncio.Event()
@@ -82,17 +68,14 @@ class SolveigTextualApp(TextualApp):
             id="input",
         )
 
-        with Collapsible(title="Stats", collapsed=True, id="stats"):
-            yield create_stats_content()
+        yield StatsBar(id="stats", width=self.size.width)
 
     def on_mount(self) -> None:
         """Called when the app is mounted and widgets are available."""
         # Cache widget references
         self._conversation_area = self.query_one("#conversation", ConversationArea)
         self._input_widget = self.query_one("#input", InputBar)
-        self._stats_dashboard = self.query_one("#stats", Collapsible)
-        # Add dummy method for compatibility
-        self._stats_dashboard.update_status_info = lambda **kwargs: None
+        self._stats_dashboard = self.query_one("#stats", StatsBar)
         # Focus the input widget so user can start typing immediately
         self._input_widget.focus()
 
