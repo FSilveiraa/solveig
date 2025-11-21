@@ -61,11 +61,18 @@ class WriteRequirement(Requirement):
     ) -> "WriteResult":
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        await Filesystem.validate_write_access(
-            path=abs_path,
-            content=self.content,
-            min_disk_size_left=config.min_disk_space_left,
-        )
+        # Write access validation
+        try:
+            await Filesystem.validate_write_access(
+                path=abs_path,
+                content=self.content,
+                min_disk_size_left=config.min_disk_space_left,
+            )
+        except (OSError, PermissionError, IsADirectoryError) as e:
+            await interface.display_error(f"Cannot write to {str(abs_path)}: {e}")
+            return WriteResult(
+                requirement=self, path=str(abs_path), accepted=False, error=str(e)
+            )
 
         already_exists = await Filesystem.exists(abs_path)
 
