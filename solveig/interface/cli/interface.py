@@ -270,7 +270,8 @@ class TerminalInterface(SolveigInterface):
         stats_dashboard = self.app._stats_dashboard
         spinner_name = random.choice(list(self.spinners.keys()))
         stats_dashboard.set_spinner(self.spinners[spinner_name])
-        stats_dashboard._timer = self.app.set_interval(0.1, stats_dashboard._update_all_displays)
+        # Create a timer that only calls the title refresh
+        stats_dashboard._timer = self.app.set_interval(0.1, stats_dashboard._refresh_title)
         try:
             yield
         finally:

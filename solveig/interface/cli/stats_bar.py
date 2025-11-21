@@ -141,55 +141,54 @@ class StatsBar(Widget):
             )
 
     def on_mount(self):
-        """Update displays after mounting."""
-        self._update_all_displays()
+        """Update both title and tables for initial setup."""
+        self._refresh_title()
+        self._refresh_stats()
 
     def update(self, status=None, tokens: tuple[str, str] | None = None, model=None, url=None, path=None):
         """Update the stats dashboard with new information."""
-        updated = False
+        updated_title = updated_stats = False
 
         if status is not None:
             self._status = status
-            updated = True
-
-        if tokens is not None:
-            self._tokens = tokens
-            updated = True
-
-        if model is not None:
-            self._model = model
-            updated = True
-
-        if url is not None:
-            self._url = url
-            updated = True
+            updated_title = True
 
         if path is not None:
             # path should be a canonical Path passed by command.py or any other cwd-altering operation, then formatted for ~
             # if everything is implemented correctly, then passing the path below should be the same as not passing
             abs_path = Filesystem.get_absolute_path(path)
             self._path = Filesystem.get_current_directory(abs_path, simplify=True)
-            updated = True
+            updated_title = True
 
-        if updated:
-            self._update_all_displays()
+        if tokens is not None:
+            self._tokens = tokens
+            updated_stats = True
+
+        if model is not None:
+            self._model = model
+            updated_stats = True
+
+        if url is not None:
+            self._url = url
+            updated_stats = True
+
+        if updated_title:
+            self._refresh_title()
+        if updated_stats:
+            self._refresh_stats()
 
     def set_spinner(self, spinner):
         """Set spinner for status animation."""
         self._spinner = spinner
-        self._update_all_displays()
+        self._refresh_title()
 
     def clear_spinner(self):
         """Clear spinner from status display."""
         self._spinner = None
-        self._update_all_displays()
+        self._refresh_title()
 
-    def _update_all_displays(self):
-        """Update collapsible title and detail table cells with current values."""
-        if not self._row_keys:
-            return
-
-        # Update custom collapsible title
+    def _refresh_title(self):
+        """Update only the collapsible title (lightweight, for frequent spinner updates)."""
         action_text = "Click for more stats"
         status_text = self._status
         if self._spinner:
@@ -200,10 +199,19 @@ class StatsBar(Widget):
         path_text = f"🗁  {self._path}"
         self._collapsible.update_title_content(action_text, status_text, path_text)
 
-        # Update detail table cells (shown when expanded)
-        self._table1.update_cell(self._row_keys["table1_row1"], self._col1, f"Tokens: {self.tokens}")
-        self._table2.update_cell(self._row_keys["table2_row1"], self._col2, f"Endpoint: {self._url}")
-        self._table3.update_cell(self._row_keys["table3_row1"], self._col3, f"Model: {self._model}")
+    def _refresh_stats(self):
+        """Update table content (heavy, only when stats actually change)."""
+        if not self._row_keys:
+            return
+
+        # Clear and re-add rows to force column width recalculation
+        self._table1.clear()
+        self._table2.clear()
+        self._table3.clear()
+
+        self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
+        self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
+        self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -258,14 +266,24 @@ class StatsBar(Widget):
         }}
 
         .stats-table {{
-            width: 1fr;
-            min-width: 0;
             overflow: hidden;
-            scrollbar-size: 0 0;
+            background: {theme.background};
+            color: {theme.text};
+        }}
+
+        .stats-table > .datatable--cursor {{
+            background: {theme.background};
+            color: {theme.text};
+        }}
+
+        .stats-table > .datatable--hover {{
+            background: {theme.background};
+            color: {theme.text};
         }}
 
         .separator {{
             width: 1;
+            margin: 0 1 0 1;
             height: 100%;
             border: none;
             color: {theme.box};
