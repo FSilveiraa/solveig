@@ -9,7 +9,6 @@ from solveig.interface.themes import DEFAULT_THEME, Palette
 
 from .conversation import ConversationArea
 from .input_bar import InputBar
-from ignore.stats_dashboard import StatsDashboard
 from .stats_bar import StatsBar
 
 DEFAULT_INPUT_PLACEHOLDER = (
@@ -68,7 +67,11 @@ class SolveigTextualApp(TextualApp):
             id="input",
         )
 
-        yield StatsBar(id="stats", width=self.size.width)
+        yield StatsBar(
+            id="stats",
+            width=self.size.width,
+            theme=self._theme,
+        )
 
     def on_mount(self) -> None:
         """Called when the app is mounted and widgets are available."""
