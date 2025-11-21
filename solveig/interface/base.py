@@ -139,7 +139,7 @@ class SolveigInterface(ABC):
         yield  # This line will never execute but makes it a valid generator
 
     @abstractmethod
-    async def update_status(
+    async def update_stats(
         self,
         status: str | None = None,
         tokens: tuple[int, int] | int | str | None = None,

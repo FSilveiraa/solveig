@@ -191,7 +191,7 @@ class TerminalInterface(SolveigInterface):
 
     async def get_input(self) -> str:
         """Get user input for conversation flow by consuming from internal queue."""
-        await self.update_status(status="Awaiting input")
+        await self.update_stats(status="Awaiting input")
         user_input = (await self._input_queue.get()).strip()
         if user_input:
             await self.display_text(" " + user_input)
@@ -214,7 +214,7 @@ class TerminalInterface(SolveigInterface):
         )
         return choice_index
 
-    async def update_status(
+    async def update_stats(
         self,
         status: str | None = None,
         tokens: tuple[int, int] | int | str | None = None,
@@ -223,7 +223,7 @@ class TerminalInterface(SolveigInterface):
         path: str | PathLike | None = None,
     ) -> None:
         """Update stats dashboard with multiple pieces of information."""
-        self.app._stats_dashboard.update_status_info(
+        self.app._stats_dashboard.update(
             status=status, tokens=tokens, model=model, url=url, path=path
         )
 
@@ -264,7 +264,7 @@ class TerminalInterface(SolveigInterface):
             final_status if final_status is not None else self.app._stats_dashboard._status
         )
         # Start animation using working pattern - set up timer directly in interface context
-        await self.update_status(status)
+        await self.update_stats(status)
 
         # Pick random spinner and set up animation
         stats_dashboard = self.app._stats_dashboard
@@ -280,7 +280,7 @@ class TerminalInterface(SolveigInterface):
                 stats_dashboard._timer = None
             stats_dashboard.clear_spinner()
 
-            await self.update_status(final_status)
+            await self.update_stats(final_status)
 
     @staticmethod
     def _format_path_info(

@@ -106,14 +106,14 @@ class MockInterface(TerminalInterface):
     async def with_animation(
         self, status: str = "Processing", final_status: str = "Ready"
     ) -> AsyncGenerator[None, Any]:
-        await self.update_status(status)
+        await self.update_stats(status)
         try:
             yield
         finally:
-            await self.update_status(final_status)
+            await self.update_stats(final_status)
 
     # Status and lifecycle
-    async def update_status(
+    async def update_stats(
         self,
         status: str = None,
         tokens: tuple[int, int] | int = None,

@@ -92,7 +92,7 @@ class CustomCollapsible(Collapsible):
 class StatsBar(Widget):
     """Stats bar with collapsible table content."""
 
-    def __init__(self, width: int, theme: Palette, **kwargs):
+    def __init__(self, theme: Palette, **kwargs):
         super().__init__(**kwargs)
         self._timer = None
         self._spinner = None
@@ -102,13 +102,14 @@ class StatsBar(Widget):
         self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
         self._row_keys = {}
-        self._screen_width = width - 6
         self._theme = theme
+
+    @property
+    def tokens(self):
+        return f"{self._tokens[0]}↑ / {self._tokens[1]}↓"
 
     def compose(self):
         """Create collapsible with stats tables."""
-        column_width = self._screen_width // 3
-
         # Create our custom collapsible with responsive title
         action_text = "Click for more stats"
         status_text = self._status
@@ -117,32 +118,33 @@ class StatsBar(Widget):
         self._collapsible = CustomCollapsible(action_text, status_text, path_text, self._theme, collapsed=True)
 
         with self._collapsible:
-            # Create detail tables - shown when expanded
-            self._table1 = DataTable(show_header=False, zebra_stripes=False)
-            self._col1 = self._table1.add_column("stats1", width=column_width)
-            self._row_keys["table1_row2"] = self._table1.add_row(f"Path: {self._path}")
+            # Create detail tables - shown when expanded with flexible sizing
+            self._table1 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._col1 = self._table1.add_column("stats1", width=None)  # Auto-sizing
+            self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
 
-            self._table2 = DataTable(show_header=False, zebra_stripes=False)
-            self._col2 = self._table2.add_column("stats2", width=column_width)
-            self._row_keys["table2_row2"] = self._table2.add_row(f"Endpoint: {self._url}")
+            self._table2 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._col2 = self._table2.add_column("stats2", width=None)  # Auto-sizing
+            self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
 
-            self._table3 = DataTable(show_header=False, zebra_stripes=False)
-            self._col3 = self._table3.add_column("stats3", width=column_width)
-            self._row_keys["table3_row2"] = self._table3.add_row(f"Model: {self._model}")
+            self._table3 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._col3 = self._table3.add_column("stats3", width=None)  # Auto-sizing
+            self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
 
             yield Horizontal(
                 self._table1,
                 Static("│", classes="separator"),
                 self._table2,
                 Static("│", classes="separator"),
-                self._table3
+                self._table3,
+                classes="stats-container"
             )
 
     def on_mount(self):
         """Update displays after mounting."""
         self._update_all_displays()
 
-    def update_status_info(self, status=None, tokens=None, model=None, url=None, path=None, **kwargs):
+    def update(self, status=None, tokens: tuple[str, str] | None = None, model=None, url=None, path=None):
         """Update the stats dashboard with new information."""
         updated = False
 
@@ -151,12 +153,7 @@ class StatsBar(Widget):
             updated = True
 
         if tokens is not None:
-            if isinstance(tokens, tuple):
-                self._tokens = tokens
-            elif isinstance(tokens, str):
-                self._tokens = tokens
-            else:
-                self._tokens = (tokens, 0)
+            self._tokens = tokens
             updated = True
 
         if model is not None:
@@ -204,9 +201,9 @@ class StatsBar(Widget):
         self._collapsible.update_title_content(action_text, status_text, path_text)
 
         # Update detail table cells (shown when expanded)
-        self._table1.update_cell(self._row_keys["table1_row2"], self._col1, f"Path: {self._path}")
-        self._table2.update_cell(self._row_keys["table2_row2"], self._col2, f"Endpoint: {self._url}")
-        self._table3.update_cell(self._row_keys["table3_row2"], self._col3, f"Model: {self._model}")
+        self._table1.update_cell(self._row_keys["table1_row1"], self._col1, f"Tokens: {self.tokens}")
+        self._table2.update_cell(self._row_keys["table2_row1"], self._col2, f"Endpoint: {self._url}")
+        self._table3.update_cell(self._row_keys["table3_row1"], self._col3, f"Model: {self._model}")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -252,6 +249,19 @@ class StatsBar(Widget):
         .title-right {{
             text-align: right;
             width: 1fr;
+        }}
+
+        /* Stats container responsive layout */
+        .stats-container {{
+            width: 100%;
+            height: auto;
+        }}
+
+        .stats-table {{
+            width: 1fr;
+            min-width: 0;
+            overflow: hidden;
+            scrollbar-size: 0 0;
         }}
 
         .separator {{

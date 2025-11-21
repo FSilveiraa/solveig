@@ -100,7 +100,7 @@ class CommandRequirement(Requirement):
                     # Update interface stats with current working directory
                     if self.timeout > 0:  # Only for non-detached commands
                         canonical_cwd = Filesystem.get_absolute_path(shell.cwd)
-                        await interface.update_status(path=canonical_cwd)
+                        await interface.update_stats(path=canonical_cwd)
 
                 except Exception as e:
                     error_str = str(e)

@@ -79,7 +79,7 @@ async def send_message_to_llm_with_retry(
                     ),
                 )
 
-            await interface.update_status(
+            await interface.update_stats(
                 tokens=(
                     message_history.total_tokens_sent,
                     message_history.total_tokens_received,
@@ -112,7 +112,7 @@ async def send_message_to_llm_with_retry(
             llm_response = AssistantMessage(requirements=requirements)
             # Since we have to handle the stats updates above, we also handle the outgoing ones here
             message_history.add_messages(llm_response)
-            await interface.update_status(
+            await interface.update_stats(
                 tokens=(
                     message_history.total_tokens_sent,
                     message_history.total_tokens_received,
@@ -184,7 +184,7 @@ async def main_loop(
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
     await interface.wait_until_ready()
-    await interface.update_status(
+    await interface.update_stats(
         url=config.url,
         model=config.model,
     )
@@ -257,12 +257,7 @@ async def run_async(
                 await loop_task
 
 
-def main():
-    """CLI entry point - parse config and delegate to async runner."""
-    asyncio.run(_main_async())
-
-
-async def _main_async():
+async def main():
     """Async main that handles config parsing and setup."""
     # Parse config and run main loop
     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
@@ -278,4 +273,4 @@ async def _main_async():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

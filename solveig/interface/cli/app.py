@@ -69,7 +69,6 @@ class SolveigTextualApp(TextualApp):
 
         yield StatsBar(
             id="stats",
-            width=self.size.width,
             theme=self._theme,
         )
 
