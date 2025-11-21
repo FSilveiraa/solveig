@@ -257,7 +257,7 @@ async def run_async(
                 await loop_task
 
 
-async def main():
+async def amain():
     """Async main that handles config parsing and setup."""
     # Parse config and run main loop
     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
@@ -272,5 +272,10 @@ async def main():
     await run_async(config, interface, llm_client, user_prompt)
 
 
+def main():
+    """Entry point for the main CLI."""
+    asyncio.run(amain())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
