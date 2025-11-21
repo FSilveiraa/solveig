@@ -14,17 +14,18 @@ from solveig.utils.file import Filesystem
 class CustomTitleBar(CollapsibleTitle):
     """Custom title bar with responsive left/center/right layout."""
 
-    def __init__(self, action_text: str, status_text: str, path_text: str, theme: Palette, collapsed: bool = True):
+    def __init__(self, collapsed_text: str, expanded_text: str, status: str, path: str, theme: Palette, start_collapsed: bool = True):
         # CollapsibleTitle requires these parameters
-        self._action_text = action_text
-        self._status_text = status_text
-        self._path_text = path_text
+        self._collapsed_text = collapsed_text
+        self._expanded_text = expanded_text
+        self._status = status
+        self._path = path
         self._theme = theme
         super().__init__(
             label="",
             collapsed_symbol="▶",
             expanded_symbol="▼",
-            collapsed=collapsed
+            collapsed=start_collapsed
         )
 
     def compose(self):
@@ -44,10 +45,13 @@ class CustomTitleBar(CollapsibleTitle):
 
     def _get_content(self):
         """Generate content for the three title sections."""
-        symbol = self.collapsed_symbol if self.collapsed else self.expanded_symbol
-        left_content = f"{symbol} {self._action_text}"
-        center_content = f"[{self._theme.info}]{self._status_text}[/]"
-        right_content = self._path_text
+        if self.collapsed:
+            left_content = f"{self.collapsed_symbol} {self._collapsed_text}"
+        else:
+            left_content = f"{self.expanded_symbol} {self._expanded_text}"
+
+        center_content = f"[{self._theme.info}]{self._status}[/]"
+        right_content = f"🗁  {self._path}"
         return left_content, center_content, right_content
 
     def _update_static_widgets(self):
@@ -64,14 +68,12 @@ class CustomTitleBar(CollapsibleTitle):
             # If not mounted yet, will update when it mounts
             pass
 
-    def update_content(self, action_text=None, status_text=None, path_text=None):
+    def update_content(self, status=None, path=None):
         """Update the content of the title sections."""
-        if action_text is not None:
-            self._action_text = action_text
-        if status_text is not None:
-            self._status_text = status_text
-        if path_text is not None:
-            self._path_text = path_text
+        if status is not None:
+            self._status = status
+        if path is not None:
+            self._path = path
 
         self._update_static_widgets()
 
@@ -79,14 +81,21 @@ class CustomTitleBar(CollapsibleTitle):
 class CustomCollapsible(Collapsible):
     """Collapsible with custom responsive title bar."""
 
-    def __init__(self, action_text: str, status_text: str, path_text: str, theme: Palette, collapsed: bool = True, **kwargs):
-        super().__init__(title="", collapsed=collapsed, **kwargs)
+    def __init__(self, collapsed_text: str, expanded_text: str, status: str, path: str, theme: Palette, start_collapsed: bool = True, **kwargs):
+        super().__init__(title="", collapsed=start_collapsed, **kwargs)
         # Replace the _title widget with our custom one
-        self._title = CustomTitleBar(action_text, status_text, path_text, theme, collapsed=collapsed)
+        self._title = CustomTitleBar(
+            collapsed_text=collapsed_text,
+            expanded_text=expanded_text,
+            status=status,
+            path=path,
+            theme=theme,
+            start_collapsed=True
+        )
 
-    def update_title_content(self, action_text=None, status_text=None, path_text=None):
+    def update_title_content(self, status_text=None, path_text=None):
         """Update the title bar content."""
-        self._title.update_content(action_text, status_text, path_text)
+        self._title.update_content(status_text, path_text)
 
 
 class StatsBar(Widget):
@@ -111,11 +120,17 @@ class StatsBar(Widget):
     def compose(self):
         """Create collapsible with stats tables."""
         # Create our custom collapsible with responsive title
-        action_text = "Click for more stats"
-        status_text = self._status
-        path_text = f"🗁  {self._path}"
+        collapsed_text = "Click for more stats"
+        expanded_text = "Click to collapse"
 
-        self._collapsible = CustomCollapsible(action_text, status_text, path_text, self._theme, collapsed=True)
+        self._collapsible = CustomCollapsible(
+            collapsed_text=collapsed_text,
+            expanded_text=expanded_text,
+            status=self._status,
+            path=self._path,
+            theme=self._theme,
+            start_collapsed=True
+        )
 
         with self._collapsible:
             # Create detail tables - shown when expanded with flexible sizing
@@ -189,15 +204,13 @@ class StatsBar(Widget):
 
     def _refresh_title(self):
         """Update only the collapsible title (lightweight, for frequent spinner updates)."""
-        action_text = "Click for more stats"
         status_text = self._status
         if self._spinner:
             frame = self._spinner.render(time.time())
             spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
             status_text = f"{spinner_char} {status_text}"
 
-        path_text = f"🗁  {self._path}"
-        self._collapsible.update_title_content(action_text, status_text, path_text)
+        self._collapsible.update_title_content(status_text, self._path)
 
     def _refresh_stats(self):
         """Update table content (heavy, only when stats actually change)."""
