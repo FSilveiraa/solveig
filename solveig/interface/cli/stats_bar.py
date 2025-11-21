@@ -13,7 +13,7 @@ from solveig.interface.themes import Palette
 class CustomTitleBar(CollapsibleTitle):
     """Custom title bar with responsive left/center/right layout."""
 
-    def __init__(self, action_text: str, status_text: str, path_text: str, theme: Palette, collapsed: bool = True, **kwargs):
+    def __init__(self, action_text: str, status_text: str, path_text: str, theme: Palette, collapsed: bool = True):
         # CollapsibleTitle requires these parameters
         self._action_text = action_text
         self._status_text = status_text
@@ -23,19 +23,45 @@ class CustomTitleBar(CollapsibleTitle):
             label="",
             collapsed_symbol="▶",
             expanded_symbol="▼",
-            collapsed=collapsed,
-            **kwargs
+            collapsed=collapsed
         )
 
-    def _update_label(self):
-        """Override to provide our custom layout instead of the default label display."""
-        left_content = f"{self.collapsed_symbol} {self._action_text}"
+    def compose(self):
+        """Override to yield three Static widgets instead of string content."""
+        left_content, center_content, right_content = self._get_content()
+
+        yield Horizontal(
+            Static(left_content, classes="title-left"),
+            Static(center_content, classes="title-center"),
+            Static(right_content, classes="title-right"),
+            classes="custom-title-bar"
+        )
+
+    def _watch_collapsed(self, collapsed: bool) -> None:
+        """Override to update our Static widgets when collapsed state changes."""
+        self._update_static_widgets()
+
+    def _get_content(self):
+        """Generate content for the three title sections."""
+        symbol = self.collapsed_symbol if self.collapsed else self.expanded_symbol
+        left_content = f"{symbol} {self._action_text}"
         center_content = f"[{self._theme.info}]{self._status_text}[/]"
         right_content = self._path_text
+        return left_content, center_content, right_content
 
-        # Simple spacing for now - CSS will handle responsive layout
-        full_content = f"{left_content}     {center_content}     {right_content}"
-        self.update(full_content)
+    def _update_static_widgets(self):
+        """Update the Static widgets with current content and symbol."""
+        try:
+            horizontal = self.query_one(Horizontal)
+            statics = horizontal.query(Static)
+            left_content, center_content, right_content = self._get_content()
+
+            statics[0].update(left_content)
+            statics[1].update(center_content)
+            statics[2].update(right_content)
+        except:
+            # If not mounted yet, will update when it mounts
+            pass
 
     def update_content(self, action_text=None, status_text=None, path_text=None):
         """Update the content of the title sections."""
@@ -45,7 +71,8 @@ class CustomTitleBar(CollapsibleTitle):
             self._status_text = status_text
         if path_text is not None:
             self._path_text = path_text
-        self._update_label()
+
+        self._update_static_widgets()
 
 
 class CustomCollapsible(Collapsible):
@@ -200,6 +227,27 @@ class StatsBar(Widget):
         StatsBar CollapsibleTitle {{
             color: {theme.text};
             background: {theme.background};
+        }}
+
+        /* Custom title bar responsive layout */
+        .custom-title-bar {{
+            width: 100%;
+            height: 1;
+        }}
+
+        .title-left {{
+            text-align: left;
+            width: 1fr;
+        }}
+
+        .title-center {{
+            text-align: center;
+            width: auto;
+        }}
+
+        .title-right {{
+            text-align: right;
+            width: 1fr;
         }}
 
         .separator {{
