@@ -3,9 +3,11 @@ Persistent shell utilities for maintaining session state across command executio
 """
 
 import asyncio
-import os
+
+from solveig.utils.file import Filesystem
 
 MARKER = "__SOLVEIG_CMD_END__"
+
 
 class PersistentShell:
     """A persistent shell session that maintains working directory and environment state."""
@@ -14,7 +16,7 @@ class PersistentShell:
         self.shell = shell
         self.proc = None
         self._lock = asyncio.Lock()
-        self.current_cwd = os.getcwd()
+        self.current_cwd = Filesystem.get_current_directory()
 
     async def start(self):
         """Start the persistent shell process if not already running."""

@@ -8,6 +8,7 @@ from textual.widget import Widget
 from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
+from solveig.utils.file import Filesystem
 
 
 class CustomTitleBar(CollapsibleTitle):
@@ -99,7 +100,7 @@ class StatsBar(Widget):
         self._tokens = (0, 0)
         self._model = ""
         self._url = ""
-        self._path = "/home/francisco/Documents/Fun/solveig"
+        self._path = Filesystem.get_current_directory(simplify=True)
         self._row_keys = {}
         self._screen_width = width - 6
         self._theme = theme
@@ -167,7 +168,10 @@ class StatsBar(Widget):
             updated = True
 
         if path is not None:
-            self._path = str(path)
+            # path should be a canonical Path passed by command.py or any other cwd-altering operation, then formatted for ~
+            # if everything is implemented correctly, then passing the path below should be the same as not passing
+            abs_path = Filesystem.get_absolute_path(path)
+            self._path = Filesystem.get_current_directory(abs_path, simplify=True)
             updated = True
 
         if updated:

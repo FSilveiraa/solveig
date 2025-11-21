@@ -80,10 +80,13 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
             CopyRequirement(comment="Test copy", source_path="~/Sync/test.py", destination_path="~/Sync/test.2.py"),
             MoveRequirement(comment="Test copy", source_path="~/Sync/test.2.py", destination_path="~/Sync/hello.py"),
             DeleteRequirement(comment="test delete", path="~/Sync/test.py"),
+        ]),
+    ]
 
+    mock_messages = [AssistantMessage(requirements=[
             CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
             CommandRequirement(comment="Print current dir", command="pwd", timeout=10),
-        ]),
+        ])
     ]
 
     if mock_messages is None:

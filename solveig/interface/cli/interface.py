@@ -261,7 +261,7 @@ class TerminalInterface(SolveigInterface):
     ):
         """Context manager for displaying animation during async operations."""
         final_status = (
-            final_status if final_status is not None else self.app._status_bar._status
+            final_status if final_status is not None else self.app._stats_dashboard._status
         )
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_status(status)

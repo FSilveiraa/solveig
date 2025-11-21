@@ -402,3 +402,27 @@ class Filesystem:
     def path_matches_patterns(cls, abs_path: Path, patterns: list[Path]) -> bool:
         """Check if a file path matches any of the given glob patterns (sync operation)."""
         return any(abs_path.match(str(pattern)) for pattern in patterns)
+
+    @staticmethod
+    def get_current_directory(path: Path | None = None, simplify: bool = False) -> str:
+        """Get directory path in user-friendly format (with ~ for home).
+
+        Args:
+            path: Optional canonical absolute path to format. If None, uses current working directory.
+        """
+        if path is None:
+            current_dir = SyncPath.cwd()
+        else:
+            # Path should already be absolute and canonical from upstream
+            current_dir = SyncPath(path)
+
+        if simplify:
+            # If current directory is within home, use ~ notation
+            try:
+                relative_to_home = current_dir.relative_to(SyncPath.home())
+                return f"~/{relative_to_home}" if str(relative_to_home) != "." else "~"
+            except ValueError:
+                # Not within home directory, return full path
+                return str(current_dir)
+        else:
+            return str(current_dir)

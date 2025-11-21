@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
+from solveig.utils.file import Filesystem
 from solveig.interface import SolveigInterface
 from solveig.schema.results import CommandResult
 
@@ -98,7 +99,8 @@ class CommandRequirement(Requirement):
 
                     # Update interface stats with current working directory
                     if self.timeout > 0:  # Only for non-detached commands
-                        await interface.update_status(path=shell.cwd)
+                        canonical_cwd = Filesystem.get_absolute_path(shell.cwd)
+                        await interface.update_status(path=canonical_cwd)
 
                 except Exception as e:
                     error_str = str(e)
