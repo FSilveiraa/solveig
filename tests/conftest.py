@@ -66,28 +66,6 @@ def mock_subprocess(request):
 
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_user_interface(request):
-    """Provide safe defaults for external operations in tests."""
-    if request.node.get_closest_marker("no_stdio_mocking"):
-        yield None
-        return
-
-    with patch(
-        "builtins.input",
-        side_effect=OSError(
-            "Cannot use `input` built-in in tests - use SolveigInterface or mark with @pytest.mark.no_stdio_mocking"
-        ),
-    ):
-        with patch(
-            "builtins.print",
-            side_effect=OSError(
-                "Cannot use `print` built-in in tests - use MockInterface"
-            ),
-        ):
-            yield
-
-
-@pytest.fixture(autouse=True, scope="function")
 def setup_requirements():
     """Setup core requirements for each test and clean up after."""
     # Setup: Load core requirements

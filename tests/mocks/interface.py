@@ -14,6 +14,7 @@ class MockInterface(TerminalInterface):
     """
 
     def __init__(self, **kwargs):
+        # Do not call super().__init__() since that would init() the Textual App
         self.outputs = []
         self.user_inputs = []
         self.questions = []
@@ -33,8 +34,11 @@ class MockInterface(TerminalInterface):
     async def stop(self) -> None:
         self.outputs.append("INTERFACE_STOPPED")
 
-    async def display_text(self, text: str, style: str = "normal") -> None:
-        self.outputs.append(f"[{style}] {text}")
+    async def display_text(self, text: str, prefix: str | None = None) -> None:
+        if prefix:
+            self.outputs.append(f"[PREFIX: {prefix}] {text}")
+        else:
+            self.outputs.append(f"[TEXT] {text}")
 
     async def display_error(self, error: str | Exception) -> None:
         self.outputs.append(f"❌ Error: {error}")
@@ -44,6 +48,9 @@ class MockInterface(TerminalInterface):
 
     async def display_success(self, message: str) -> None:
         self.outputs.append(f"✅ {message}")
+
+    async def display_info(self, message: str) -> None:
+        self.outputs.append(f"ℹ️  Info: {message}")
 
     async def display_comment(self, message: str) -> None:
         self.outputs.append(f"🗩  {message}")
@@ -55,11 +62,35 @@ class MockInterface(TerminalInterface):
         title: str | None = None,
         context_lines: int = 3,
     ) -> None:
-        self.outputs.append(old_content + "\n=====\n" + new_content)
+        title_str = f" ({title})" if title else ""
+        self.outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
 
-    # async def display_tree(self, metadata: Metadata, title: str | None = None, display_metadata: bool = False) -> None:
-    #     tree_title = title or str(metadata.path)
-    #     self.outputs.append(f"📁 Tree: {tree_title}")
+    async def display_tree(
+        self,
+        metadata,  # Metadata type
+        title: str | None = None,
+        display_metadata: bool = False,
+    ) -> None:
+        tree_title = title or str(metadata.path)
+        self.outputs.append(f"📁 Tree: {tree_title} (metadata: {display_metadata})")
+
+    async def display_file_info(
+        self,
+        source_path: str | PathLike,
+        destination_path: str | PathLike | None = None,
+        is_directory: bool | None = None,
+        source_content: str | None = None,
+        show_overwrite_warning: bool = True,
+    ) -> None:
+        file_type = "directory" if is_directory else "file"
+        if destination_path:
+            self.outputs.append(f"📄 File info: {source_path} → {destination_path} ({file_type})")
+        else:
+            self.outputs.append(f"📄 File info: {source_path} ({file_type})")
+        if source_content:
+            self.outputs.append(f"Content preview: {source_content[:50]}...")
+        if show_overwrite_warning and destination_path:
+            self.outputs.append("⚠️ Overwrite warning shown")
 
     async def display_text_block(
         self, text: str, title: str | None = None, language: str | None = None
@@ -74,22 +105,27 @@ class MockInterface(TerminalInterface):
 
     # Input methods
     async def get_input(self) -> str:
-        return await self.ask_user("")
+        return await self.ask_question("")
 
-    async def ask_user(self, prompt: str, placeholder: str = None) -> str:
-        # Pass control of the loop just in case the task got cancelled
-        self.questions.append(prompt)
+    async def ask_question(self, question: str) -> str:
+        """Ask for specific input, preserving any current typing."""
+        self.questions.append(question)
         if not self.user_inputs:
             raise ValueError("No further user input configured")
         response = self.user_inputs.pop(0)
         if response == "/exit":
             self._stop_event.set()
-        self.outputs.append(response)
+        self.outputs.append(f"Question: {question} → {response}")
         return response
 
     async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
-        response = await self.ask_user(question)
-        return int(response)
+        """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
+        self.questions.append(f"{question} {list(choices)}")
+        if not self.user_inputs:
+            raise ValueError("No further user input configured")
+        choice_index = self.user_inputs.pop(0)
+        self.outputs.append(f"Choice: {question} → {list(choices)[choice_index]} (index {choice_index})")
+        return choice_index
 
     # Context managers
     @asynccontextmanager

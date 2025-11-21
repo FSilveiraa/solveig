@@ -142,23 +142,27 @@ class ReadRequirement(Requirement):
                     language=abs_path.suffix,
                 )
 
-                # If the user previously chose to inspect the output first, confirm again
-                if file_content and choice_read_file == 1:
-                    choice_send_file = await interface.ask_choice(
-                        "Send file content?",
-                        [
-                            "Send content and metadata",
-                            "Send metadata only",
-                            "Don't send anything",
-                        ],
-                    )
-                    if choice_send_file == 0:
+
+                if file_content:
+                    if choice_read_file == 0:
                         accepted = True
-                    elif choice_send_file == 1:
-                        file_content = "<hidden>"
-                    elif choice_send_file == 2:
-                        file_content = "<hidden>"
-                        metadata = None
+                    # If the user previously chose to inspect the output first, confirm again
+                    else:
+                        choice_send_file = await interface.ask_choice(
+                            "Send file content?",
+                            [
+                                "Send content and metadata",
+                                "Send metadata only",
+                                "Don't send anything",
+                            ],
+                        )
+                        if choice_send_file == 0:
+                            accepted = True
+                        elif choice_send_file == 1:
+                            file_content = "<hidden>"
+                        elif choice_send_file == 2:
+                            file_content = "<hidden>"
+                            metadata = None
 
             # "Don't read and only send metadata" - don't do anything
             # "Don't read or send anything" - clear metadata

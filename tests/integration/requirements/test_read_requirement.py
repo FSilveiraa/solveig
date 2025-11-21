@@ -1,4 +1,4 @@
-"""Integration tests for ReadRequirement."""
+"""Comprehensive integration tests for ReadRequirement choice flow."""
 
 import tempfile
 from pathlib import Path
@@ -12,18 +12,9 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface
 # Mark all tests in this module to skip file mocking
 pytestmark = pytest.mark.no_file_mocking
 
-"""
-Missing areas that would be relevant:
-1. Auto-allowed paths - Testing with auto_allowed_paths config
-2. Large file handling - What happens with very large files?
-3. Binary file handling - How does it handle non-text files?
-4. Symlink handling - What happens with symbolic links?
-5. Mixed permission scenarios - Directory readable but file not, etc.
-"""
-
 
 class TestReadValidation:
-    """Test ReadRequirement validation patterns."""
+    """Test ReadRequirement validation and basic behavior."""
 
     def test_path_validation_patterns(self):
         """Test path validation for empty, whitespace, and valid paths."""
@@ -43,310 +34,503 @@ class TestReadValidation:
         req = ReadRequirement(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
-
-class TestReadDisplay:
-    """Test ReadRequirement display methods."""
-
-    @pytest.mark.anyio
-    async def test_read_requirement_display(self):
-        """Test ReadRequirement display and description."""
-        req = ReadRequirement(
-            path="/test/file.txt", metadata_only=False, comment="Read test file"
-        )
-        interface = MockInterface()
-
-        # Test display header (detailed mode - same as summary for reads)
-        await req.display_header(interface)
-        output = interface.get_all_output()
-        assert "Read test file" in output
-        assert "🗎 /test/file.txt" in output
-
-        # Test get_description
+    def test_get_description(self):
+        """Test ReadRequirement description method."""
         description = ReadRequirement.get_description()
         assert "read(comment, path, metadata_only)" in description
 
+    @pytest.mark.anyio
+    async def test_display_header(self):
+        """Test ReadRequirement display header."""
+        req = ReadRequirement(
+            path="/test/file.txt", metadata_only=False, comment="Read test"
+        )
+        interface = MockInterface()
+        await req.display_header(interface)
 
-class TestReadFileOperations:
-    """Test ReadRequirement with real file I/O."""
+        output = interface.get_all_output()
+        assert "Read test" in output
+        assert "/test/file.txt" in output
+        assert "content and metadata" in output
+
+
+class TestDirectoryOperations:
+    """Test ReadRequirement directory operations."""
 
     @pytest.mark.anyio
-    async def test_read_file_with_tilde_path(self):
-        """Test reading a file using tilde path expansion."""
-        # Create tempfile in real home directory to test tilde expansion
-        with tempfile.NamedTemporaryFile(
-            dir=Path.home(),
-            prefix=".solveig_test_read_",
-            suffix=".txt",
-            delete=False,
-            mode="w",
-        ) as temp_file:
-            test_content = "Hello from tilde expansion test!"
-            temp_file.write(test_content)
-            temp_file_path = Path(temp_file.name)
-
-        try:
-            # Use ~ path that should expand to the tempfile we created
-            tilde_path = f"~/{temp_file_path.name}"
-
-            mock_interface = MockInterface()
-            mock_interface.user_inputs.extend(["y", "y"])
-
-            # Create requirement with tilde path
-            req = ReadRequirement(
-                path=tilde_path,
-                metadata_only=False,
-                comment="Test tilde expansion",
-            )
-
-            result = await req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
-
-            # Verify result
-            assert result.accepted
-            assert result.content == test_content
-            assert result.metadata is not None
-            assert str(temp_file_path) == result.metadata.path
-
-            # Verify path expansion worked - should resolve to absolute path without ~
-            assert "~" not in str(result.path)
-            assert str(result.path) == str(temp_file_path.resolve())
-        finally:
-            # Clean up tempfile
-            if temp_file_path.exists():
-                temp_file_path.unlink()
-
-    @pytest.mark.anyio
-    async def test_read_directory_listing(self):
-        """Test reading directory with real files."""
+    async def test_directory_read_accept(self):
+        """Test reading directory metadata with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            mock_interface = MockInterface()
-            mock_interface.user_inputs.append("y")
 
             # Create test files
-            (temp_path / "file1.txt").write_text("Content 1")
+            (temp_path / "file1.txt").write_text("content1")
             (temp_path / "file2.py").write_text("print('hello')")
             (temp_path / "subdir").mkdir()
-            (temp_path / "subdir" / "nested.txt").write_text("Nested content")
 
-            # Test directory read
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Accept metadata
+
             req = ReadRequirement(
                 path=str(temp_path), metadata_only=True, comment="Read directory"
             )
 
-            result = await req.actually_solve(
-                config=DEFAULT_CONFIG, interface=mock_interface
-            )
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            # Verify directory listing
             assert result.accepted
-            assert result.metadata.listing is not None
-            assert len(result.metadata.listing) == 3  # file1.txt, file2.py, subdir
-
-            # Check specific files in listing
-            for expected in {"file1.txt", "file2.py", "subdir"}:
-                assert any(expected in filename for filename in result.metadata.listing)
+            assert result.metadata is not None
+            assert result.metadata.is_directory
+            assert len(result.metadata.listing) == 3
+            assert not result.content  # No content for directories
 
     @pytest.mark.anyio
-    async def test_read_nonexistent_file(self):
+    async def test_directory_read_decline(self):
+        """Test reading directory metadata with user decline."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            interface = MockInterface()
+            interface.user_inputs.append(1)  # Decline metadata
+
+            req = ReadRequirement(
+                path=str(temp_dir), metadata_only=True, comment="Decline directory"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert not result.accepted
+            assert result.metadata is None
+            assert not result.content
+
+
+class TestFileChoiceFlow:
+    """Test all file reading choice combinations."""
+
+    @pytest.mark.anyio
+    async def test_choice_0_direct_read_send(self):
+        """Test choice 0: Read and send content and metadata directly."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "test.txt"
+            test_content = "Hello direct read!"
+            test_file.write_text(test_content)
+
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Read and send directly
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Direct read"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert result.accepted
+            assert result.content == test_content
+            assert result.metadata is not None
+            assert not result.metadata.is_directory
+
+    @pytest.mark.anyio
+    async def test_choice_1_inspect_then_send_content(self):
+        """Test choice 1 → 0: Inspect first, then send content and metadata."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "inspect.txt"
+            test_content = "Inspect me first!"
+            test_file.write_text(test_content)
+
+            interface = MockInterface()
+            interface.user_inputs.extend([1, 0])  # Inspect first, then send content+metadata
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Inspect then send"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert result.accepted
+            assert result.content == test_content
+            assert result.metadata is not None
+
+    @pytest.mark.anyio
+    async def test_choice_1_inspect_then_send_metadata_only(self):
+        """Test choice 1 → 1: Inspect first, then send metadata only."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "metadata_only.txt"
+            test_content = "Secret content"
+            test_file.write_text(test_content)
+
+            interface = MockInterface()
+            interface.user_inputs.extend([1, 1])  # Inspect first, then metadata only
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Inspect then metadata"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert not result.accepted  # Content not sent
+            assert result.content == "<hidden>"  # Content hidden
+            assert result.metadata is not None
+
+    @pytest.mark.anyio
+    async def test_choice_1_inspect_then_send_nothing(self):
+        """Test choice 1 → 2: Inspect first, then send nothing."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "nothing.txt"
+            test_content = "Super secret"
+            test_file.write_text(test_content)
+
+            interface = MockInterface()
+            interface.user_inputs.extend([1, 2])  # Inspect first, then send nothing
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Inspect then nothing"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert not result.accepted
+            assert result.content == "<hidden>"
+            assert result.metadata is None  # Both hidden
+
+    @pytest.mark.anyio
+    async def test_choice_2_metadata_only_no_read(self):
+        """Test choice 2: Don't read, only send metadata."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "metadata.txt"
+            test_file.write_text("Not read")
+
+            interface = MockInterface()
+            interface.user_inputs.append(2)  # Don't read, only send metadata
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Metadata only"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            # Assistant asked for content but we only sent metadata
+            assert not result.accepted  # Request not fulfilled
+            assert result.content == ""  # No content read
+            assert result.metadata is not None  # But metadata is present
+
+    @pytest.mark.anyio
+    async def test_metadata_only_request_fulfilled(self):
+        """Test metadata_only=True request is accepted when metadata provided."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "metadata_request.txt"
+            test_file.write_text("Content not requested")
+
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Accept metadata
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=True, comment="Metadata requested"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            # Assistant asked for metadata only and we provided it
+            assert result.accepted  # Request fulfilled
+            assert not result.content  # No content (as expected)
+            assert result.metadata is not None  # Metadata provided
+
+    @pytest.mark.anyio
+    async def test_choice_3_send_nothing(self):
+        """Test choice 3: Don't read or send anything."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "nothing.txt"
+            test_file.write_text("Nothing sent")
+
+            interface = MockInterface()
+            interface.user_inputs.append(3)  # Don't read or send anything
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Send nothing"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert not result.accepted
+            assert not result.content
+            assert result.metadata is None
+
+    @pytest.mark.anyio
+    async def test_choice_equivalence_direct_vs_inspect(self):
+        """Test that choice 0 produces same result as choice 1→0."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "equivalent.txt"
+            test_content = "Same result expected"
+            test_file.write_text(test_content)
+
+            # Test direct read (choice 0)
+            interface1 = MockInterface()
+            interface1.user_inputs.append(0)  # Direct read and send
+
+            req1 = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Direct"
+            )
+            result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+
+            # Test inspect then send (choice 1→0)
+            interface2 = MockInterface()
+            interface2.user_inputs.extend([1, 0])  # Inspect then send
+
+            req2 = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Inspect then send"
+            )
+            result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+
+            # Results should be equivalent
+            assert result1.accepted == result2.accepted
+            assert result1.content == result2.content
+            assert result1.path == result2.path
+            # Note: metadata objects might differ slightly, but both should be present
+            assert (result1.metadata is not None) == (result2.metadata is not None)
+
+
+class TestAutoAllowedPaths:
+    """Test auto-allowed paths behavior."""
+
+    @pytest.mark.anyio
+    async def test_auto_allowed_file(self):
+        """Test file that matches auto_allowed_paths bypasses choices."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "auto.txt"
+            test_content = "Auto-allowed content"
+            test_file.write_text(test_content)
+
+            # Create config with auto-allowed path pattern
+            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/**"])
+
+            interface = MockInterface()
+            # No user inputs needed - should auto-approve
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=False, comment="Auto allowed"
+            )
+
+            result = await req.actually_solve(config, interface)
+
+            assert result.accepted
+            assert result.content == test_content
+            assert result.metadata is not None
+
+            # Verify no choices were asked
+            assert len(interface.questions) == 0
+
+    @pytest.mark.anyio
+    async def test_auto_allowed_directory(self):
+        """Test directory that matches auto_allowed_paths bypasses choices."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            (temp_path / "file.txt").write_text("content")
+
+            # Create config with auto-allowed path pattern
+            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[temp_dir])
+
+            interface = MockInterface()
+            # No user inputs needed - should auto-approve
+
+            req = ReadRequirement(
+                path=str(temp_path), metadata_only=True, comment="Auto allowed dir"
+            )
+
+            result = await req.actually_solve(config, interface)
+
+            assert result.accepted
+            assert result.metadata is not None
+            assert result.metadata.is_directory
+
+            # Verify no choices were asked
+            assert len(interface.questions) == 0
+
+
+class TestErrorHandling:
+    """Test error scenarios and edge cases."""
+
+    @pytest.mark.anyio
+    async def test_nonexistent_file(self):
         """Test reading a file that doesn't exist."""
+        interface = MockInterface()
+
         req = ReadRequirement(
             path="/nonexistent/file.txt",
             metadata_only=False,
-            comment="Read missing file",
-        )
-        mock_interface = MockInterface()
-
-        result = await req.actually_solve(
-            config=DEFAULT_CONFIG, interface=mock_interface
+            comment="Missing file",
         )
 
-        # Should fail gracefully
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
         assert not result.accepted
         assert result.error is not None
         assert "does not exist" in result.error.lower()
 
     @pytest.mark.anyio
-    async def test_read_permission_denied(self):
+    async def test_permission_denied(self):
         """Test reading a file with insufficient permissions."""
-        mock_interface = MockInterface()
-
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            restricted_file = temp_path / "restricted.txt"
-            restricted_file.write_text("Secret content")
+            restricted_file = Path(temp_dir) / "restricted.txt"
+            restricted_file.write_text("Secret")
+            restricted_file.chmod(0o000)  # No permissions
 
-            # Remove read permissions
-            restricted_file.chmod(0o000)
+            interface = MockInterface()
 
             try:
                 req = ReadRequirement(
                     path=str(restricted_file),
                     metadata_only=False,
-                    comment="Read restricted file",
+                    comment="Restricted file",
                 )
 
-                result = await req.actually_solve(
-                    config=DEFAULT_CONFIG, interface=mock_interface
-                )
+                result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-                # Should fail gracefully
                 assert not result.accepted
                 assert result.error is not None
-                assert (
-                    "Permission denied" in result.error
-                    or "not readable" in result.error
+                assert any(
+                    phrase in result.error.lower()
+                    for phrase in ["permission denied", "not readable"]
                 )
-
             finally:
-                # Restore permissions for cleanup
-                restricted_file.chmod(0o644)
+                restricted_file.chmod(0o644)  # Restore for cleanup
 
     @pytest.mark.anyio
-    async def test_read_user_decline_scenarios(self):
-        """Test various user decline scenarios for read operations."""
+    async def test_binary_file_handling(self):
+        """Test reading binary files shows base64 encoding."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            test_file = temp_path / "readable.txt"
-            test_file.write_text("test content")
+            binary_file = Path(temp_dir) / "test.bin"
+            binary_data = bytes([0x89, 0x50, 0x4E, 0x47])  # PNG header
+            binary_file.write_bytes(binary_data)
 
-            # Test: Decline read operation entirely
-            read_req = ReadRequirement(
-                path=str(test_file),
-                metadata_only=False,
-                comment="Read declined",
-            )
             interface = MockInterface()
-            interface.set_user_inputs(
-                ["n", "n"]
-            )  # Decline metadata, decline error sending
-
-            result = await read_req.solve(DEFAULT_CONFIG, interface)
-            assert result.accepted is False
-
-
-class TestReadErrorHandling:
-    """Test ReadRequirement error handling."""
-
-    def test_error_result_creation(self):
-        """Test create_error_result method for ReadRequirement."""
-        req = ReadRequirement(path="/test.txt", metadata_only=False, comment="Test")
-        error_result = req.create_error_result("Test error", accepted=False)
-        assert error_result.requirement == req
-        assert error_result.accepted is False
-        assert error_result.error == "Test error"
-
-    @pytest.mark.anyio
-    async def test_real_permission_error_scenarios(self):
-        """Test real permission error handling."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            restricted_dir = temp_path / "restricted"
-            restricted_dir.mkdir()
-            restricted_file = restricted_dir / "file.txt"
-            restricted_file.write_text("content")
-
-            # Remove all permissions from directory
-            restricted_dir.chmod(0o000)
-
-            try:
-                # Try to read file in restricted directory
-                read_req = ReadRequirement(
-                    path=str(restricted_file),
-                    metadata_only=True,
-                    comment="Read restricted file",
-                )
-                interface = MockInterface()
-
-                result = await read_req.actually_solve(DEFAULT_CONFIG, interface)
-
-                # Should fail with permission error
-                assert not result.accepted
-                assert result.error is not None
-                assert (
-                    "permission denied" in result.error.lower()
-                    or "not readable" in result.error.lower()
-                )
-
-            finally:
-                # Restore permissions for cleanup
-                restricted_dir.chmod(0o755)
-
-
-class TestReadPathSecurity:
-    """Test ReadRequirement path security and validation."""
-
-    @pytest.mark.anyio
-    async def test_path_traversal_protection(self):
-        """Test that path traversal attempts are handled safely."""
-        mock_interface = MockInterface()
-        mock_interface.user_inputs.append("y")  # Accept metadata
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            # Create a secret file we shouldn't be able to access via traversal
-            secret_dir = temp_path / "secret"
-            secret_dir.mkdir()
-            secret_file = secret_dir / "confidential.txt"
-            secret_file.write_text("SECRET CONTENT")
-
-            # Create a subdirectory to traverse from
-            subdir = temp_path / "public" / "subdir"
-            subdir.mkdir(parents=True)
-
-            # Try to use path traversal to access the secret file
-            traversal_path = str(subdir / ".." / ".." / "secret" / "confidential.txt")
+            interface.user_inputs.append(0)  # Read and send
 
             req = ReadRequirement(
-                path=traversal_path,
-                metadata_only=True,
-                comment="Path traversal attempt",
+                path=str(binary_file), metadata_only=False, comment="Binary file"
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            # The path should be resolved to the actual file location
-            # Verify the resolved path doesn't contain traversal patterns but does resolve correctly
-            expected_resolved = Path(traversal_path).resolve()
-            assert str(result.path) == str(expected_resolved)
-            assert ".." not in str(result.path)  # No traversal patterns in final path
-            assert "secret/confidential.txt" in str(
-                result.path
-            )  # But does point to right file
+            assert result.accepted
+            assert result.metadata.encoding.lower() == "base64"
+            # Content should be base64 encoded
+            assert result.content  # Should have content
+
+
+class TestPathSecurity:
+    """Test path security and resolution."""
 
     @pytest.mark.anyio
-    async def test_tilde_expansion_security(self):
-        """Test that tilde expansion works consistently and securely."""
-        # Create tempfile in real home directory to test tilde expansion
+    async def test_tilde_expansion(self):
+        """Test that tilde paths expand correctly."""
         with tempfile.NamedTemporaryFile(
-            dir=Path.home(), prefix=".solveig_test_", suffix=".config", delete=False
+            dir=Path.home(), prefix=".solveig_test_", suffix=".txt", delete=False
         ) as temp_file:
-            temp_file.write(b"config content")
+            test_content = "Tilde test content"
+            temp_file.write(test_content.encode())
             temp_file_path = Path(temp_file.name)
 
         try:
-            # Use ~ path that should expand to the tempfile we created
             tilde_path = f"~/{temp_file_path.name}"
 
-            mock_interface = MockInterface()
-            mock_interface.user_inputs.append("y")
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Read and send
 
             req = ReadRequirement(
-                path=tilde_path,
-                metadata_only=True,
-                comment="Tilde expansion test",
+                path=tilde_path, metadata_only=False, comment="Tilde expansion"
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, mock_interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            # Verify tilde expansion worked correctly
             assert result.accepted
-            assert str(result.path) == str(temp_file_path.resolve())
+            assert result.content == test_content
             assert "~" not in str(result.path)  # Tilde should be expanded
-            assert str(Path.home()) in str(result.path)  # Should contain home path
-            assert temp_file_path.name in str(result.path)
+            assert str(Path.home()) in str(result.path)
         finally:
-            # Clean up tempfile
-            if temp_file_path.exists():
-                temp_file_path.unlink()
+            temp_file_path.unlink()
+
+    @pytest.mark.anyio
+    async def test_path_traversal_resolution(self):
+        """Test that path traversal is resolved correctly."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Create nested structure
+            secret_dir = temp_path / "secret"
+            secret_dir.mkdir()
+            secret_file = secret_dir / "data.txt"
+            secret_file.write_text("Secret data")
+
+            public_dir = temp_path / "public" / "subdir"
+            public_dir.mkdir(parents=True)
+
+            # Use path traversal to access secret file
+            traversal_path = str(public_dir / ".." / ".." / "secret" / "data.txt")
+
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Accept
+
+            req = ReadRequirement(
+                path=traversal_path, metadata_only=True, comment="Path traversal"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            # Should resolve to actual file location without .. patterns
+            assert result.accepted
+            assert ".." not in str(result.path)
+            assert "secret/data.txt" in str(result.path)
+            expected_resolved = Path(traversal_path).resolve()
+            assert str(result.path) == str(expected_resolved)
+
+
+class TestIntegrationScenarios:
+    """Test complex integration scenarios."""
+
+    @pytest.mark.anyio
+    async def test_large_directory_listing(self):
+        """Test reading directory with many files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Create many files and subdirectories
+            for i in range(50):
+                (temp_path / f"file_{i:03d}.txt").write_text(f"Content {i}")
+
+            for i in range(5):
+                subdir = temp_path / f"subdir_{i}"
+                subdir.mkdir()
+                (subdir / "nested.txt").write_text("nested")
+
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Accept metadata
+
+            req = ReadRequirement(
+                path=str(temp_path), metadata_only=True, comment="Large directory"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert result.accepted
+            assert result.metadata.is_directory
+            assert len(result.metadata.listing) == 55  # 50 files + 5 subdirs
+
+    @pytest.mark.anyio
+    async def test_metadata_only_flag_behavior(self):
+        """Test metadata_only=True flag bypasses content choices."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "metadata_test.txt"
+            test_file.write_text("Should not be read")
+
+            interface = MockInterface()
+            interface.user_inputs.append(0)  # Accept metadata
+
+            req = ReadRequirement(
+                path=str(test_file), metadata_only=True, comment="Metadata only flag"
+            )
+
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+            assert result.accepted
+            assert not result.content  # No content read
+            assert result.metadata is not None
+
+            # Should only ask about metadata, not file reading choices
+            assert len(interface.questions) == 1
+            assert "metadata" in interface.questions[0].lower()

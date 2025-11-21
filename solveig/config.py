@@ -1,7 +1,7 @@
 import argparse
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib.metadata import version
 from typing import Any
 
@@ -111,6 +111,10 @@ class SolveigConfig:
                 allowed_paths.append(raw_path)
             self.allowed_paths = allowed_paths
         """
+
+    def with_(self, **kwargs):
+        """Create a copy of this config with modified fields."""
+        return replace(self, **kwargs)
 
     @classmethod
     async def parse_from_file(cls, config_path: str) -> dict:
