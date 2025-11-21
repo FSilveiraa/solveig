@@ -60,7 +60,10 @@ class ConversationArea(ScrollableContainer):
         self.scroll_end()
 
     async def add_tree_display(
-        self, metadata: Metadata, title: str | None = None, display_metadata: bool = False
+        self,
+        metadata: Metadata,
+        title: str | None = None,
+        display_metadata: bool = False,
     ):
         """Add an interactive tree display widget."""
         tree_widget = TreeDisplay(metadata, display_metadata)

@@ -133,7 +133,7 @@ async def send_message_to_llm_with_retry(
             # Ask if user wants to retry
             retry_choice = await interface.ask_choice(
                 "Retry this message?",
-                choices=[ "Retry the same message", "Add new message" ]
+                choices=["Retry the same message", "Add new message"],
             )
 
             if retry_choice == 1:

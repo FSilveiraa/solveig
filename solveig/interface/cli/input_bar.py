@@ -15,6 +15,7 @@ from solveig.interface.themes import Palette
 
 class InputMode(Enum):
     """Input widget modes."""
+
     FREE_FORM = "free_form"
     QUESTION = "question"
     MULTIPLE_CHOICE = "multiple_choice"
@@ -31,7 +32,7 @@ class InputBar(Container):
         placeholder: str = "",
         theme: Palette,
         free_form_callback=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -134,7 +135,7 @@ class InputBar(Container):
         self._text_input.styles.display = "none"
 
         # Create option list widget with choices and mount in place of input
-        options = [f"{i+1}. {choice}" for i, choice in enumerate(choices_list)]
+        options = [f"{i + 1}. {choice}" for i, choice in enumerate(choices_list)]
         self._select_widget = OptionList(*options, id="choice_select")
         self._select_widget.border_title = question
 
@@ -156,7 +157,6 @@ class InputBar(Container):
                 self._select_widget = None
             self._text_input.styles.display = "block"
             self._text_input.focus()
-
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:

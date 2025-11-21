@@ -32,8 +32,12 @@ class ReadRequirement(Requirement):
         """Display read requirement header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
-        metadata_only = self.metadata_only or await Filesystem.is_dir(Filesystem.get_absolute_path(self.path))
-        await interface.display_text(f"{"" if metadata_only else "content and "}metadata", prefix="Requesting:")
+        metadata_only = self.metadata_only or await Filesystem.is_dir(
+            Filesystem.get_absolute_path(self.path)
+        )
+        await interface.display_text(
+            f"{'' if metadata_only else 'content and '}metadata", prefix="Requesting:"
+        )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
@@ -63,20 +67,29 @@ class ReadRequirement(Requirement):
                 requirement=self, path=str(abs_path), accepted=False, error=str(e)
             )
 
-        path_matches = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+        path_matches = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
         metadata = await Filesystem.read_metadata(abs_path)
 
         # directory or file metadata only
         if metadata.is_directory or self.metadata_only:
             if path_matches:
                 send_metadata = True
-                await interface.display_info("Sending metadata since it matches config.allow_allowed_paths")
+                await interface.display_info(
+                    "Sending metadata since it matches config.allow_allowed_paths"
+                )
             else:
-                send_metadata = await interface.ask_choice(
-                    "Allow sending metadata?",
-                    [ "Yes", "No" ]
-                ) == 0
-            return ReadResult(requirement=self, metadata=metadata if send_metadata else None, path=str(abs_path), accepted=send_metadata)
+                send_metadata = (
+                    await interface.ask_choice("Allow sending metadata?", ["Yes", "No"])
+                    == 0
+                )
+            return ReadResult(
+                requirement=self,
+                metadata=metadata if send_metadata else None,
+                path=str(abs_path),
+                accepted=send_metadata,
+            )
 
         # file content
         else:
@@ -85,7 +98,9 @@ class ReadRequirement(Requirement):
 
             if path_matches:
                 choice_read_file = 0
-                await interface.display_text("Reading file and sending content since it matches config.allow_allowed_paths")
+                await interface.display_text(
+                    "Reading file and sending content since it matches config.allow_allowed_paths"
+                )
             else:
                 choice_read_file = await interface.ask_choice(
                     "Allow reading file?",
@@ -94,7 +109,7 @@ class ReadRequirement(Requirement):
                         "Read and inspect content first",
                         "Don't read and only send metadata",
                         "Don't read or send anything",
-                    ]
+                    ],
                 )
 
             # User chose to read the file
@@ -107,15 +122,24 @@ class ReadRequirement(Requirement):
                 except (PermissionError, OSError, UnicodeDecodeError) as e:
                     await interface.display_error(f"Failed to read file content: {e}")
                     return ReadResult(
-                        requirement=self, path=str(abs_path), accepted=False, error=str(e)
+                        requirement=self,
+                        path=str(abs_path),
+                        accepted=False,
+                        error=str(e),
                     )
 
                 # display content
                 content_output = (
-                    "(Base64)" if metadata.encoding.lower() == "base64" else str(file_content) if file_content else ""
+                    "(Base64)"
+                    if metadata.encoding.lower() == "base64"
+                    else str(file_content)
+                    if file_content
+                    else ""
                 )
                 await interface.display_text_block(
-                    content_output, title=f"Content: {abs_path}", language=abs_path.suffix
+                    content_output,
+                    title=f"Content: {abs_path}",
+                    language=abs_path.suffix,
                 )
 
                 # If the user previously chose to inspect the output first, confirm again
@@ -126,7 +150,7 @@ class ReadRequirement(Requirement):
                             "Send content and metadata",
                             "Send metadata only",
                             "Don't send anything",
-                        ]
+                        ],
                     )
                     if choice_send_file == 0:
                         accepted = True
@@ -141,4 +165,10 @@ class ReadRequirement(Requirement):
             elif choice_read_file == 3:
                 metadata = None
 
-            return ReadResult(requirement=self, metadata=metadata, content=file_content if file_content else "", path=str(abs_path), accepted=accepted)
+            return ReadResult(
+                requirement=self,
+                metadata=metadata,
+                content=file_content if file_content else "",
+                path=str(abs_path),
+                accepted=accepted,
+            )

@@ -8,8 +8,14 @@ from solveig import SolveigConfig
 from solveig.interface import TerminalInterface
 from solveig.plugins.schema.tree import TreeRequirement
 from solveig.run import run_async
-from solveig.schema import CommandRequirement, ReadRequirement, WriteRequirement, DeleteRequirement, CopyRequirement, \
-    MoveRequirement
+from solveig.schema import (
+    CommandRequirement,
+    ReadRequirement,
+    WriteRequirement,
+    DeleteRequirement,
+    CopyRequirement,
+    MoveRequirement,
+)
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
@@ -56,13 +62,19 @@ async def run_async_mock(
     """Entry point for the async textual CLI."""
 
     mock_messages = [
-        AssistantMessage(requirements=[
-            TreeRequirement(comment="Test comment", path="~/Sync"),
-
-            ReadRequirement(comment="test read", path="~/Sync/", metadata_only=True),
-            ReadRequirement(comment="test read", path="~/Sync/app.log", metadata_only=False),
-
-            WriteRequirement(comment="Test write", path="/home/francisco/Sync/test.py", content="""
+        AssistantMessage(
+            requirements=[
+                TreeRequirement(comment="Test comment", path="~/Sync"),
+                ReadRequirement(
+                    comment="test read", path="~/Sync/", metadata_only=True
+                ),
+                ReadRequirement(
+                    comment="test read", path="~/Sync/app.log", metadata_only=False
+                ),
+                WriteRequirement(
+                    comment="Test write",
+                    path="/home/francisco/Sync/test.py",
+                    content="""
 import math
 
 def fibonacci_binet(n):
@@ -75,18 +87,33 @@ result = fibonacci_binet(n)
 print(f"The Fibonacci Number of {n}th term is {result}" )
 
 # The Fibonacci Number of 10th term is 55
-""".strip(), is_directory=False),
-
-            CopyRequirement(comment="Test copy", source_path="~/Sync/test.py", destination_path="~/Sync/test.2.py"),
-            MoveRequirement(comment="Test copy", source_path="~/Sync/test.2.py", destination_path="~/Sync/hello.py"),
-            DeleteRequirement(comment="test delete", path="~/Sync/test.py"),
-        ]),
+""".strip(),
+                    is_directory=False,
+                ),
+                CopyRequirement(
+                    comment="Test copy",
+                    source_path="~/Sync/test.py",
+                    destination_path="~/Sync/test.2.py",
+                ),
+                MoveRequirement(
+                    comment="Test copy",
+                    source_path="~/Sync/test.2.py",
+                    destination_path="~/Sync/hello.py",
+                ),
+                DeleteRequirement(comment="test delete", path="~/Sync/test.py"),
+            ]
+        ),
     ]
 
-    mock_messages = [AssistantMessage(requirements=[
-            CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
-            CommandRequirement(comment="Print current dir", command="pwd", timeout=10),
-        ])
+    mock_messages = [
+        AssistantMessage(
+            requirements=[
+                CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
+                CommandRequirement(
+                    comment="Print current dir", command="pwd", timeout=10
+                ),
+            ]
+        )
     ]
 
     if mock_messages is None:

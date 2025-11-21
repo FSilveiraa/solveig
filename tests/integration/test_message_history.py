@@ -142,7 +142,6 @@ class TestMessageHistoryIntegration:
         assert "assistant:" in example
 
 
-
 @pytest.mark.no_file_mocking
 class TestTokenCountingAccuracy:
     """Test token counting accuracy in MessageHistory context."""

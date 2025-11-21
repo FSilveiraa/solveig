@@ -14,7 +14,15 @@ from solveig.utils.file import Filesystem
 class CustomTitleBar(CollapsibleTitle):
     """Custom title bar with responsive left/center/right layout."""
 
-    def __init__(self, collapsed_text: str, expanded_text: str, status: str, path: str, theme: Palette, start_collapsed: bool = True):
+    def __init__(
+        self,
+        collapsed_text: str,
+        expanded_text: str,
+        status: str,
+        path: str,
+        theme: Palette,
+        start_collapsed: bool = True,
+    ):
         # CollapsibleTitle requires these parameters
         self._collapsed_text = collapsed_text
         self._expanded_text = expanded_text
@@ -25,7 +33,7 @@ class CustomTitleBar(CollapsibleTitle):
             label="",
             collapsed_symbol="▶",
             expanded_symbol="▼",
-            collapsed=start_collapsed
+            collapsed=start_collapsed,
         )
 
     def compose(self):
@@ -36,7 +44,7 @@ class CustomTitleBar(CollapsibleTitle):
             Static(left_content, classes="title-left"),
             Static(center_content, classes="title-center"),
             Static(right_content, classes="title-right"),
-            classes="custom-title-bar"
+            classes="custom-title-bar",
         )
 
     def _watch_collapsed(self, collapsed: bool) -> None:
@@ -81,7 +89,16 @@ class CustomTitleBar(CollapsibleTitle):
 class CustomCollapsible(Collapsible):
     """Collapsible with custom responsive title bar."""
 
-    def __init__(self, collapsed_text: str, expanded_text: str, status: str, path: str, theme: Palette, start_collapsed: bool = True, **kwargs):
+    def __init__(
+        self,
+        collapsed_text: str,
+        expanded_text: str,
+        status: str,
+        path: str,
+        theme: Palette,
+        start_collapsed: bool = True,
+        **kwargs,
+    ):
         super().__init__(title="", collapsed=start_collapsed, **kwargs)
         # Replace the _title widget with our custom one
         self._title = CustomTitleBar(
@@ -90,7 +107,7 @@ class CustomCollapsible(Collapsible):
             status=status,
             path=path,
             theme=theme,
-            start_collapsed=True
+            start_collapsed=True,
         )
 
     def update_title_content(self, status_text=None, path_text=None):
@@ -129,22 +146,34 @@ class StatsBar(Widget):
             status=self._status,
             path=self._path,
             theme=self._theme,
-            start_collapsed=True
+            start_collapsed=True,
         )
 
         with self._collapsible:
             # Create detail tables - shown when expanded with flexible sizing
-            self._table1 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._table1 = DataTable(
+                show_header=False, zebra_stripes=False, classes="stats-table"
+            )
             self._col1 = self._table1.add_column("stats1", width=None)  # Auto-sizing
-            self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
+            self._row_keys["table1_row1"] = self._table1.add_row(
+                f"Tokens: {self.tokens}"
+            )
 
-            self._table2 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._table2 = DataTable(
+                show_header=False, zebra_stripes=False, classes="stats-table"
+            )
             self._col2 = self._table2.add_column("stats2", width=None)  # Auto-sizing
-            self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
+            self._row_keys["table2_row1"] = self._table2.add_row(
+                f"Endpoint: {self._url}"
+            )
 
-            self._table3 = DataTable(show_header=False, zebra_stripes=False, classes="stats-table")
+            self._table3 = DataTable(
+                show_header=False, zebra_stripes=False, classes="stats-table"
+            )
             self._col3 = self._table3.add_column("stats3", width=None)  # Auto-sizing
-            self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
+            self._row_keys["table3_row1"] = self._table3.add_row(
+                f"Model: {self._model}"
+            )
 
             yield Horizontal(
                 self._table1,
@@ -152,7 +181,7 @@ class StatsBar(Widget):
                 self._table2,
                 Static("│", classes="separator"),
                 self._table3,
-                classes="stats-container"
+                classes="stats-container",
             )
 
     def on_mount(self):
@@ -160,7 +189,14 @@ class StatsBar(Widget):
         self._refresh_title()
         self._refresh_stats()
 
-    def update(self, status=None, tokens: tuple[str, str] | None = None, model=None, url=None, path=None):
+    def update(
+        self,
+        status=None,
+        tokens: tuple[str, str] | None = None,
+        model=None,
+        url=None,
+        path=None,
+    ):
         """Update the stats dashboard with new information."""
         updated_title = updated_stats = False
 

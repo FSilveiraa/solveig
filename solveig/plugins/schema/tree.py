@@ -70,7 +70,9 @@ class TreeRequirement(Requirement):
     async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        if (await interface.ask_choice("Allow reading tree?", choices=[ "Yes", "No" ])) == 0:
+        if (
+            await interface.ask_choice("Allow reading tree?", choices=["Yes", "No"])
+        ) == 0:
             # Get complete tree metadata using new approach
             metadata = await Filesystem.read_metadata(
                 abs_path, descend_level=self.max_depth
@@ -90,7 +92,11 @@ class TreeRequirement(Requirement):
                     f"Sending tree since {'config.auto_send=True' if config.auto_send else f'{abs_path} matches config.allow_allowed_paths'}"
                 )
             else:
-                accepted = (await interface.ask_choice("Allow sending tree?", choices=[ "Yes", "No" ])) == 0
+                accepted = (
+                    await interface.ask_choice(
+                        "Allow sending tree?", choices=["Yes", "No"]
+                    )
+                ) == 0
             if accepted:
                 return TreeResult(
                     requirement=self,

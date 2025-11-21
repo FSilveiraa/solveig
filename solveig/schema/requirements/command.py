@@ -62,7 +62,9 @@ class CommandRequirement(Requirement):
         """Return description of command capability."""
         return "command(comment, command, timeout=10): execute shell commands and inspect their output"
 
-    async def _execute_command(self, config: "SolveigConfig", shell: PersistentShell) -> tuple[str, str]:
+    async def _execute_command(
+        self, config: "SolveigConfig", shell: PersistentShell
+    ) -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
             return await shell.run(self.command, timeout=self.timeout)
@@ -76,19 +78,17 @@ class CommandRequirement(Requirement):
         # Check if command matches auto-execute patterns
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
-                user_choice = 0 # run and send
-                await interface.display_info("Running command and sending output since it matches config.auto_execute_commands")
+                user_choice = 0  # run and send
+                await interface.display_info(
+                    "Running command and sending output since it matches config.auto_execute_commands"
+                )
                 break
         else:
             user_choice = await interface.ask_choice(
                 "Allow running command?",
-                [
-                    "Run and send output",
-                    "Run and inspect output first",
-                    "Don't run"
-                ]
+                ["Run and send output", "Run and inspect output first", "Don't run"],
             )
-        if user_choice  <= 1:
+        if user_choice <= 1:
             output: str | None
             error: str | None
 
@@ -118,7 +118,9 @@ class CommandRequirement(Requirement):
             if output:
                 await interface.display_text_block(output, title="Output")
             else:
-                await interface.display_info("No output" if self.timeout > 0 else "Detached process, no output")
+                await interface.display_info(
+                    "No output" if self.timeout > 0 else "Detached process, no output"
+                )
             if error:
                 async with interface.with_group("Error"):
                     await interface.display_text_block(error, title="Error")
@@ -126,9 +128,10 @@ class CommandRequirement(Requirement):
             # If we have an output or an error, and previously we decided to inspect before sending, ask again
             # If the user decides to not send, obfuscate the output
             if (
-                    (output or error)
-                    and user_choice == 1
-                    and (await interface.ask_choice("Allow sending output?", ["Yes", "No"])) == 1
+                (output or error)
+                and user_choice == 1
+                and (await interface.ask_choice("Allow sending output?", ["Yes", "No"]))
+                == 1
             ):
                 output = "<hidden>"
                 error = "" if not error else "<hidden>"

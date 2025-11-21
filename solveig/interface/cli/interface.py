@@ -93,9 +93,7 @@ class TerminalInterface(SolveigInterface):
                     # TODO: Handle queue full scenario gracefully
                     pass
 
-    async def _display_text(
-        self, text: str, style: str = "text", prefix=None
-    ) -> None:
+    async def _display_text(self, text: str, style: str = "text", prefix=None) -> None:
         """Display text with optional styling."""
         # Map hex colors to semantic style names using pre-calculated mapping
         # if style.startswith("#"):
@@ -136,7 +134,9 @@ class TerminalInterface(SolveigInterface):
     ) -> None:
         """Display an interactive tree structure of a directory."""
         await self.app._conversation_area.add_tree_display(
-            metadata, title=title or str(metadata.path), display_metadata=display_metadata
+            metadata,
+            title=title or str(metadata.path),
+            display_metadata=display_metadata,
         )
 
     async def display_text_block(
@@ -261,7 +261,9 @@ class TerminalInterface(SolveigInterface):
     ):
         """Context manager for displaying animation during async operations."""
         final_status = (
-            final_status if final_status is not None else self.app._stats_dashboard._status
+            final_status
+            if final_status is not None
+            else self.app._stats_dashboard._status
         )
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_stats(status)
@@ -271,7 +273,9 @@ class TerminalInterface(SolveigInterface):
         spinner_name = random.choice(list(self.spinners.keys()))
         stats_dashboard.set_spinner(self.spinners[spinner_name])
         # Create a timer that only calls the title refresh
-        stats_dashboard._timer = self.app.set_interval(0.1, stats_dashboard._refresh_title)
+        stats_dashboard._timer = self.app.set_interval(
+            0.1, stats_dashboard._refresh_title
+        )
         try:
             yield
         finally:

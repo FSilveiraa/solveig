@@ -85,7 +85,6 @@ class SolveigTextualApp(TextualApp):
         # Announce interface is ready
         self.is_ready.set()
 
-
     async def on_key(self, event) -> None:
         """Handle key events directly."""
         if event.key == "ctrl+c":

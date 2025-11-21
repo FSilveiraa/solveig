@@ -80,10 +80,11 @@ class CopyRequirement(Requirement):
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or (await interface.ask_choice(
-            f"Allow copying {"directory" if is_dir else "file"}?",
-            [ "Yes", "No" ]
-        )) == 0:
+        ) or (
+            await interface.ask_choice(
+                f"Allow copying {'directory' if is_dir else 'file'}?", ["Yes", "No"]
+            )
+        ) == 0:
             try:
                 # Perform the copy operation - use utils/file.py method
                 await Filesystem.copy(

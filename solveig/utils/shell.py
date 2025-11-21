@@ -77,7 +77,9 @@ class PersistentShell:
             await self.proc.stdin.drain()
 
             # Read stdout until command completes (marker found), then read available stderr
-            stdout_text, marker_line = await self._read_stream(self.proc.stdout, until_marker=MARKER, timeout=timeout)
+            stdout_text, marker_line = await self._read_stream(
+                self.proc.stdout, until_marker=MARKER, timeout=timeout
+            )
             stderr_text, _ = await self._read_stream(self.proc.stderr, timeout=0.1)
 
             # Parse marker to update state
@@ -113,8 +115,10 @@ class PersistentShell:
         """Get current working directory of the shell."""
         return self.current_cwd
 
+
 # Global singleton instance
 _shell_instance: PersistentShell | None = None
+
 
 async def get_persistent_shell() -> PersistentShell:
     """Get the global persistent shell singleton."""
@@ -123,6 +127,7 @@ async def get_persistent_shell() -> PersistentShell:
         _shell_instance = PersistentShell()
         await _shell_instance.start()
     return _shell_instance
+
 
 async def stop_persistent_shell():
     """Stop the global persistent shell."""

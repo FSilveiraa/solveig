@@ -74,17 +74,14 @@ class WriteRequirement(Requirement):
         )
         if auto_write:
             await interface.display_text(
-                f"{"Updating" if already_exists else "Creating"} {"directory" if self.is_directory else "file"} since it matches config.auto_allowed_paths"
+                f"{'Updating' if already_exists else 'Creating'} {'directory' if self.is_directory else 'file'} since it matches config.auto_allowed_paths"
             )
         else:
             question = (
                 f"Allow {'creating' if not already_exists else 'updating'} "
-                f"{"directory" if self.is_directory else "file"}?"
+                f"{'directory' if self.is_directory else 'file'}?"
             )
-            if not (await interface.ask_choice(
-                    question,
-                    [ "Yes", "No" ]
-            )) == 0:
+            if not (await interface.ask_choice(question, ["Yes", "No"])) == 0:
                 return WriteResult(requirement=self, path=str(abs_path), accepted=False)
 
         try:

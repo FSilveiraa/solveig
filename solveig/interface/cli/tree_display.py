@@ -30,7 +30,9 @@ class TreeDisplay(Tree):
         # Expand root by default to show content
         self.root.expand()
 
-    def _format_node_label(self, metadata: Metadata, display_metadata: bool = False) -> str:
+    def _format_node_label(
+        self, metadata: Metadata, display_metadata: bool = False
+    ) -> str:
         """Format a node label from metadata, matching current tree display format."""
         icon = "🗁" if metadata.is_directory else "🗎"
         name = PurePath(metadata.path).name

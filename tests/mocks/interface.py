@@ -119,7 +119,7 @@ class MockInterface(TerminalInterface):
         tokens: tuple[int, int] | int = None,
         model: str = None,
         url: str = None,
-        path: str | PathLike | None = None
+        path: str | PathLike | None = None,
     ) -> None:
         status_info = {}
         if status is not None:
