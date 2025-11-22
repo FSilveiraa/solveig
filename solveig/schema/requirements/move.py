@@ -56,13 +56,13 @@ class MoveRequirement(Requirement):
         # Pre-flight validation - use utils/file.py validation
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
-        error: Exception | None = None
 
         try:
             await Filesystem.validate_read_access(abs_source_path)
             await Filesystem.validate_write_access(abs_destination_path)
-        except Exception as e:
-            await interface.display_error(f"Skipping: {e}")
+            is_dir = await Filesystem.is_dir(abs_source_path)
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            await interface.display_error(f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}")
             return MoveResult(
                 requirement=self,
                 accepted=False,
@@ -71,44 +71,47 @@ class MoveRequirement(Requirement):
                 destination_path=str(abs_destination_path),
             )
 
-        is_dir = await Filesystem.is_dir(abs_source_path)
-        # Get user consent
-        if (
+        # Check for auto-allowed paths
+        auto_move = (
             Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or (
+        )
+
+        if auto_move:
+            await interface.display_info(
+                f"Moving {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
+            )
+        elif (
             await interface.ask_choice(
                 f"Allow moving {'directory' if is_dir else 'file'}?", ["Yes", "No"]
             )
-        ) == 0:
-            try:
-                # Perform the move operation - use utils/file.py method
-                await Filesystem.move(abs_source_path, abs_destination_path)
-
-                # with interface.with_indent():
-                await interface.display_success("Moved")
-                return MoveResult(
-                    requirement=self,
-                    accepted=True,
-                    source_path=str(abs_source_path),
-                    destination_path=str(abs_destination_path),
-                )
-            except (PermissionError, OSError, FileExistsError) as e:
-                await interface.display_error(f"Found error when moving: {e}")
-                return MoveResult(
-                    requirement=self,
-                    accepted=False,
-                    error=str(e),
-                    source_path=str(abs_source_path),
-                    destination_path=str(abs_destination_path),
-                )
-        else:
+            != 0
+        ):
             return MoveResult(
                 requirement=self,
                 accepted=False,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
-                error=str(error) if error else None,
+            )
+
+        try:
+            # Perform the move operation - use utils/file.py method
+            await Filesystem.move(abs_source_path, abs_destination_path)
+            await interface.display_success("Moved")
+            return MoveResult(
+                requirement=self,
+                accepted=True,
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
+            )
+        except (PermissionError, OSError, FileExistsError) as e:
+            await interface.display_error(f"Found error when moving: {e}")
+            return MoveResult(
+                requirement=self,
+                accepted=False,
+                error=str(e),
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
             )
