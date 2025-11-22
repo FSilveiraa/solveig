@@ -49,7 +49,7 @@ class TestTreePlugin:
             mock_client = create_mock_client(llm_response)
             interface = MockInterface()
             interface.set_user_inputs(
-                ["y", "y", "/exit"]
+                [0, "/exit"]
             )  # Accept tree, then send, then exit
 
             # Execute conversation
@@ -103,7 +103,8 @@ class TestTreePlugin:
         # Test error result creation
         error_result = req.create_error_result("Directory not found", accepted=False)
 
-        # Python reloads the plugin requirement class before each test and gives it a different class ID
+        # This import has to occur locally since Python reloads the plugin re.quirement class
+        # before each test and gives it a different class ID
         from solveig.plugins.schema.tree import TreeResult
 
         assert isinstance(error_result, TreeResult)
@@ -139,9 +140,9 @@ class TestTreePlugin:
                 path=str(temp_path), max_depth=2, comment="Limited depth tree"
             )
             interface = MockInterface()
-            interface.set_user_inputs(["y", "y"])
+            interface.set_user_inputs([0]) # read+send tree
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True
             # we have until subdir3
             assert result.metadata.listing[str(PurePath(temp_path / "subdir6/"))]
@@ -153,10 +154,8 @@ class TestTreePlugin:
             assert final_subdir.exists()
 
             # Test user interaction with error case
-            interface.clear()
-            interface.set_user_inputs(
-                ["y", "n"]
-            )  # User agrees to read tree, then declines if error prompt appears
+            # decline to send error for non-existent path
+            interface.set_user_inputs([1])
 
             error_req = TreeRequirement(
                 path=str(temp_path / "nonexistent"), comment="Test tree"

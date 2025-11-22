@@ -54,7 +54,7 @@ class TreeRequirement(Requirement):
         """Create TreeResult with error."""
         return TreeResult(
             requirement=self,
-            path=str(Filesystem.get_absolute_path(self.path)),
+            path=self.path,
             accepted=accepted,
             error=error_message,
             metadata=None,
@@ -69,11 +69,18 @@ class TreeRequirement(Requirement):
 
     async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
         abs_path = Filesystem.get_absolute_path(self.path)
+        await Filesystem.validate_read_access(abs_path)
 
-        if (
-            await interface.ask_choice("Allow reading tree?", choices=["Yes", "No"])
-        ) == 0:
-            # Get complete tree metadata using new approach
+        choice_read_tree = await interface.ask_choice(
+            "Allow reading tree?",
+            [
+                "Read and send tree",
+                "Read tree and inspect first",
+                "Don't read anything",
+            ]
+        )
+
+        if choice_read_tree <= 1:
             metadata = await Filesystem.read_metadata(
                 abs_path, descend_level=self.max_depth
             )
@@ -86,6 +93,7 @@ class TreeRequirement(Requirement):
             if (
                 Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
                 or config.auto_send
+                or choice_read_tree == 0
             ):
                 accepted = True
                 await interface.display_text(
@@ -97,6 +105,7 @@ class TreeRequirement(Requirement):
                         "Allow sending tree?", choices=["Yes", "No"]
                     )
                 ) == 0
+
             if accepted:
                 return TreeResult(
                     requirement=self,
