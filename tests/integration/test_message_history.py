@@ -13,11 +13,14 @@ from solveig.schema.message import (
 from tests import LOREM_IPSUM
 
 
+pytestmark = pytest.mark.anyio
+
+
 @pytest.mark.no_file_mocking
 class TestMessageHistoryIntegration:
     """Test MessageHistory coordination of serialization and token counting."""
 
-    def test_message_history_initialization(self):
+    async def test_message_history_initialization(self):
         """Test MessageHistory initializes with system message and token counting."""
         history = MessageHistory(
             system_prompt="You are helpful", api_type=APIType.OPENAI
@@ -29,7 +32,7 @@ class TestMessageHistoryIntegration:
         assert history.messages[0].role == "system"
         assert history.token_count > 0  # System message should count tokens
 
-    def test_add_messages_updates_token_counts(self):
+    async def test_add_messages_updates_token_counts(self):
         """Test adding messages properly counts tokens and updates totals."""
         history = MessageHistory(system_prompt="System", api_type=APIType.OPENAI)
         initial_token_count = history.token_count
@@ -52,7 +55,7 @@ class TestMessageHistoryIntegration:
             history.total_tokens_sent == 0
         )  # Not updated until to_openai(update_sent_count=True)
 
-    def test_context_pruning_preserves_system_message(self):
+    async def test_context_pruning_preserves_system_message(self):
         """Test context pruning removes old messages but preserves system message."""
         # Use very small context limit to force pruning
         history = MessageHistory(
@@ -73,7 +76,7 @@ class TestMessageHistoryIntegration:
         assert history.message_cache[0]["role"] == "system"  # First is always system
         assert history.token_count <= history.max_context  # Under limit
 
-    def test_to_openai_tracks_sent_tokens(self):
+    async def test_to_openai_tracks_sent_tokens(self):
         """Test to_openai updates sent token tracking when requested."""
         history = MessageHistory(system_prompt="System", api_type=APIType.OPENAI)
         history.add_messages(UserMessage(comment="Test", results=[]))
@@ -90,7 +93,7 @@ class TestMessageHistoryIntegration:
         history.to_openai(update_sent_count=True)
         assert history.total_tokens_sent == current_count
 
-    def test_message_serialization_integration(self):
+    async def test_message_serialization_integration(self):
         """Test messages serialize properly through MessageHistory."""
         history = MessageHistory(
             system_prompt="You are helpful", api_type=APIType.OPENAI
@@ -115,7 +118,7 @@ class TestMessageHistoryIntegration:
         assert openai_format[1]["content"].startswith("{")
         assert openai_format[2]["content"].startswith("{")
 
-    def test_iteration_support(self):
+    async def test_iteration_support(self):
         """Test MessageHistory supports iteration over messages."""
         history = MessageHistory(system_prompt="System", api_type=APIType.OPENAI)
         history.add_messages(UserMessage(comment="Test", results=[]))
@@ -125,7 +128,7 @@ class TestMessageHistoryIntegration:
         assert messages[0].role == "system"
         assert messages[1].role == "user"
 
-    def test_to_example_excludes_system_messages(self):
+    async def test_to_example_excludes_system_messages(self):
         """Test to_example method excludes system messages."""
         history = MessageHistory(system_prompt="System prompt", api_type=APIType.OPENAI)
 
@@ -146,7 +149,7 @@ class TestMessageHistoryIntegration:
 class TestTokenCountingAccuracy:
     """Test token counting accuracy in MessageHistory context."""
 
-    def test_token_counting_matches_direct_api_calls(self):
+    async def test_token_counting_matches_direct_api_calls(self):
         """Test MessageHistory token counting matches direct API calls."""
         history = MessageHistory(system_prompt="Test system", api_type=APIType.OPENAI)
 
@@ -166,7 +169,7 @@ class TestTokenCountingAccuracy:
         assert history.token_count > 0
         assert direct_count > 0
 
-    def test_different_encoders_produce_different_counts(self):
+    async def test_different_encoders_produce_different_counts(self):
         """Test different encoders produce different token counts using Lorem Ipsum."""
         # Test with default encoder (cl100k_base)
         history1 = MessageHistory(system_prompt="System", api_type=APIType.OPENAI)

@@ -11,13 +11,13 @@ from solveig.schema.requirements import WriteRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
 
 
 class TestWriteValidation:
     """Test WriteRequirement validation and basic behavior."""
 
-    def test_path_validation_patterns(self):
+    async def test_path_validation_patterns(self):
         """Test path validation for empty, whitespace, and valid paths."""
         extra_kwargs = {"is_directory": False, "comment": "test"}
 
@@ -35,12 +35,11 @@ class TestWriteValidation:
         req = WriteRequirement(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
-    def test_get_description(self):
+    async def test_get_description(self):
         """Test WriteRequirement description method."""
         description = WriteRequirement.get_description()
         assert "write(comment, path, is_directory, content=null)" in description
 
-    @pytest.mark.anyio
     async def test_display_header_file(self):
         """Test WriteRequirement display header for files."""
         req = WriteRequirement(
@@ -57,7 +56,6 @@ class TestWriteValidation:
         assert "/test/file.txt" in output
         assert "file" in output.lower()
 
-    @pytest.mark.anyio
     async def test_display_header_directory(self):
         """Test WriteRequirement display header for directories."""
         req = WriteRequirement(
@@ -77,7 +75,6 @@ class TestWriteValidation:
 class TestFileOperations:
     """Test WriteRequirement file creation and modification."""
 
-    @pytest.mark.anyio
     async def test_create_new_file_accept(self):
         """Test creating new file with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -100,7 +97,6 @@ class TestFileOperations:
             assert test_file.exists()
             assert test_file.read_text() == test_content
 
-    @pytest.mark.anyio
     async def test_create_new_file_decline(self):
         """Test creating new file with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -121,7 +117,6 @@ class TestFileOperations:
             assert not result.accepted
             assert not test_file.exists()
 
-    @pytest.mark.anyio
     async def test_create_empty_file(self):
         """Test creating file with no content."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -143,7 +138,6 @@ class TestFileOperations:
             assert test_file.exists()
             assert test_file.read_text() == ""  # Empty content
 
-    @pytest.mark.anyio
     async def test_update_existing_file_accept(self):
         """Test updating existing file with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -173,7 +167,6 @@ class TestFileOperations:
             output = interface.get_all_output()
             assert "updating" in output.lower()
 
-    @pytest.mark.anyio
     async def test_update_existing_file_decline(self):
         """Test updating existing file with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -202,7 +195,6 @@ class TestFileOperations:
 class TestDirectoryOperations:
     """Test WriteRequirement directory creation."""
 
-    @pytest.mark.anyio
     async def test_create_new_directory_accept(self):
         """Test creating new directory with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -223,7 +215,6 @@ class TestDirectoryOperations:
             assert test_dir.exists()
             assert test_dir.is_dir()
 
-    @pytest.mark.anyio
     async def test_create_nested_directory_structure(self):
         """Test creating nested directory structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -247,7 +238,6 @@ class TestDirectoryOperations:
             assert nested_dir.parent.exists()
             assert nested_dir.parent.parent.exists()
 
-    @pytest.mark.anyio
     async def test_create_directory_decline(self):
         """Test creating directory with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -267,7 +257,6 @@ class TestDirectoryOperations:
             assert not result.accepted
             assert not test_dir.exists()
 
-    @pytest.mark.anyio
     async def test_update_existing_directory(self):
         """Test 'updating' existing directory (should still succeed)."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -297,7 +286,6 @@ class TestDirectoryOperations:
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    @pytest.mark.anyio
     async def test_auto_allowed_file_creation(self):
         """Test file creation with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -329,7 +317,6 @@ class TestAutoAllowedPaths:
             output = interface.get_all_output()
             assert "auto_allowed_paths" in output
 
-    @pytest.mark.anyio
     async def test_auto_allowed_directory_creation(self):
         """Test directory creation with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -356,7 +343,6 @@ class TestAutoAllowedPaths:
             # Verify no choices were asked
             assert len(interface.questions) == 0
 
-    @pytest.mark.anyio
     async def test_auto_allowed_file_update(self):
         """Test file update with auto-allowed paths shows correct message."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -389,7 +375,7 @@ class TestAutoAllowedPaths:
 class TestErrorHandling:
     """Test WriteRequirement error scenarios."""
 
-    def test_error_result_creation(self):
+    async def test_error_result_creation(self):
         """Test create_error_result method."""
         req = WriteRequirement(path="/test.txt", is_directory=False, comment="Test")
         error_result = req.create_error_result("Test error", accepted=False)
@@ -399,7 +385,6 @@ class TestErrorHandling:
         assert error_result.error == "Test error"
         assert "/test.txt" in str(error_result.path)
 
-    @pytest.mark.anyio
     async def test_write_permission_error(self):
         """Test handling write permission errors."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -432,7 +417,6 @@ class TestErrorHandling:
                 # Restore permissions for cleanup
                 restricted_dir.chmod(0o755)
 
-    @pytest.mark.anyio
     async def test_write_encoding_error(self):
         """Test handling encoding errors during file write."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -460,7 +444,6 @@ class TestErrorHandling:
                 assert result.error is not None
                 assert "encoding error" in result.error.lower()
 
-    @pytest.mark.anyio
     async def test_disk_space_validation(self):
         """Test disk space validation during write."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -489,7 +472,6 @@ class TestErrorHandling:
 class TestPathSecurity:
     """Test WriteRequirement path security and resolution."""
 
-    @pytest.mark.anyio
     async def test_tilde_expansion(self):
         """Test tilde path expansion in write operations."""
         with tempfile.NamedTemporaryFile(
@@ -524,7 +506,6 @@ class TestPathSecurity:
         finally:
             temp_file_path.unlink()
 
-    @pytest.mark.anyio
     async def test_path_traversal_resolution(self):
         """Test path traversal resolution in write operations."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -559,7 +540,6 @@ class TestPathSecurity:
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    @pytest.mark.anyio
     async def test_file_with_complex_content(self):
         """Test writing file with complex content (unicode, special chars)."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -581,7 +561,6 @@ class TestIntegrationScenarios:
             assert result.accepted
             assert test_file.read_text() == complex_content
 
-    @pytest.mark.anyio
     async def test_create_vs_update_distinction(self):
         """Test that create vs update messages are correct."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -623,7 +602,6 @@ class TestIntegrationScenarios:
             assert "updating" in output2.lower()
             assert "Updated" in output2  # Success message
 
-    @pytest.mark.anyio
     async def test_directory_content_ignored(self):
         """Test that content field is ignored for directories."""
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -104,13 +104,13 @@ class TestConfigFileParsing:
 class TestConfigSerialization:
     """Test configuration serialization methods."""
 
-    def test_to_dict_enum_conversion(self):
+    async def test_to_dict_enum_conversion(self):
         """Test to_dict converts api_type to strings."""
         config = SolveigConfig(api_type=APIType.LOCAL)
         result = config.to_dict()
         assert result["api_type"] == "local"
 
-    def test_to_json_works(self):
+    async def test_to_json_works(self):
         """Test to_json produces valid JSON."""
         config = SolveigConfig(api_type=APIType.GEMINI, verbose=True)
         json_str = config.to_json()
@@ -118,7 +118,7 @@ class TestConfigSerialization:
         assert parsed["verbose"] is True
         assert parsed["api_type"] == "gemini"
 
-    def test_serialization_round_trip(self):
+    async def test_serialization_round_trip(self):
         """Test serialization preserves config data."""
         original = SolveigConfig(api_type=APIType.LOCAL, temperature=0.8)
         recreated = SolveigConfig(**original.to_dict())

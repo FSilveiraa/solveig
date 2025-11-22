@@ -1,6 +1,7 @@
 """Tests for message schema generation and filtering."""
 
 import json
+import pytest
 
 from solveig.config import SolveigConfig
 from solveig.schema.message import (
@@ -12,11 +13,13 @@ from solveig.schema.message import (
 from solveig.schema.requirements.command import CommandRequirement
 from solveig.schema.results.command import CommandResult
 
+pytestmark = pytest.mark.anyio
+
 
 class TestResponseModelGeneration:
     """Test requirement union generation with filtering."""
 
-    def test_response_model_includes_command_requirement_by_default(self):
+    async def test_response_model_includes_command_requirement_by_default(self):
         """Test union includes CommandRequirement when commands are enabled."""
         config = SolveigConfig(no_commands=False)
         union_type = get_response_model(config)
@@ -30,7 +33,7 @@ class TestResponseModelGeneration:
         assert "ReadRequirement" in requirement_names
         assert "WriteRequirement" in requirement_names
 
-    def test_response_model_filters_out_commands_when_disabled(self):
+    async def test_response_model_filters_out_commands_when_disabled(self):
         """Test union excludes CommandRequirement when no_commands=True."""
         config_with_commands = SolveigConfig(no_commands=False)
         config_no_commands = SolveigConfig(no_commands=True)
@@ -52,7 +55,7 @@ class TestResponseModelGeneration:
         assert "ReadRequirement" in names_no_commands
         assert "WriteRequirement" in names_no_commands
 
-    def test_response_model_with_no_config_allows_commands(self):
+    async def test_response_model_with_no_config_allows_commands(self):
         """Test union includes CommandRequirement when no config is provided."""
         union_type = get_response_model()
 
@@ -66,7 +69,7 @@ class TestResponseModelGeneration:
 class TestResponseModelCaching:
     """Test caching behavior of response model generation."""
 
-    def test_same_config_returns_cached_result(self):
+    async def test_same_config_returns_cached_result(self):
         """Test that identical configs return the same cached union object."""
         config = SolveigConfig(no_commands=False)
 
@@ -76,7 +79,7 @@ class TestResponseModelCaching:
         # Should return the exact same object due to caching
         assert union1 is union2
 
-    def test_different_configs_produce_different_unions(self):
+    async def test_different_configs_produce_different_unions(self):
         """Test that different configs produce different union objects."""
         config_with_commands = SolveigConfig(no_commands=False)
         config_without_commands = SolveigConfig(no_commands=True)
@@ -96,7 +99,7 @@ class TestResponseModelCaching:
 class TestMessageSerialization:
     """Test basic message serialization to OpenAI format."""
 
-    def test_user_message_serialization_and_validation(self):
+    async def test_user_message_serialization_and_validation(self):
         """Test UserMessage serialization with validation."""
         # Test comment stripping validation
         message = UserMessage(comment="  test comment  ", results=[])
@@ -112,7 +115,7 @@ class TestMessageSerialization:
         assert "comment" in content
         assert content["comment"] == "test comment"
 
-    def test_system_message_serialization(self):
+    async def test_system_message_serialization(self):
         """Test SystemMessage uses direct content, not JSON."""
         message = SystemMessage(system_prompt="You are helpful")
         openai_dict = message.to_openai()
@@ -121,7 +124,7 @@ class TestMessageSerialization:
         # SystemMessage should NOT use JSON serialization
         assert not openai_dict["content"].startswith("{")
 
-    def test_assistant_message_basic_serialization(self):
+    async def test_assistant_message_basic_serialization(self):
         """Test AssistantMessage basic serialization."""
         message = AssistantMessage(role="assistant", requirements=None)
         openai_dict = message.to_openai()
@@ -130,7 +133,7 @@ class TestMessageSerialization:
         content = json.loads(openai_dict["content"])
         assert "requirements" in content
 
-    def test_user_message_with_results_serialization(self):
+    async def test_user_message_with_results_serialization(self):
         """Test UserMessage with RequirementResult objects serializes properly."""
         # Create a command requirement and result
         req = CommandRequirement(command="echo test", comment="Test command")

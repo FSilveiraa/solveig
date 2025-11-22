@@ -10,13 +10,13 @@ from solveig.schema.requirements import DeleteRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
 
 
 class TestDeleteValidation:
     """Test DeleteRequirement validation and basic behavior."""
 
-    def test_path_validation_patterns(self):
+    async def test_path_validation_patterns(self):
         """Test path validation for empty, whitespace, and valid paths."""
         extra_kwargs = {"comment": "test"}
 
@@ -34,12 +34,11 @@ class TestDeleteValidation:
         req = DeleteRequirement(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
-    def test_get_description(self):
+    async def test_get_description(self):
         """Test DeleteRequirement description method."""
         description = DeleteRequirement.get_description()
         assert "delete(comment, path)" in description
 
-    @pytest.mark.anyio
     async def test_display_header_file(self):
         """Test DeleteRequirement display header for files."""
         req = DeleteRequirement(
@@ -55,7 +54,6 @@ class TestDeleteValidation:
         assert "permanent" in output.lower()
         assert "cannot be undone" in output.lower()
 
-    @pytest.mark.anyio
     async def test_display_header_directory(self):
         """Test DeleteRequirement display header for directories."""
         req = DeleteRequirement(
@@ -74,7 +72,6 @@ class TestDeleteValidation:
 class TestFileOperations:
     """Test DeleteRequirement file and directory deletion."""
 
-    @pytest.mark.anyio
     async def test_delete_file_accept(self):
         """Test deleting a file with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -94,7 +91,6 @@ class TestFileOperations:
             assert result.accepted
             assert not test_file.exists()  # File should be gone
 
-    @pytest.mark.anyio
     async def test_delete_file_decline(self):
         """Test deleting a file with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -115,7 +111,6 @@ class TestFileOperations:
             assert test_file.exists()  # File should still exist
             assert test_file.read_text() == "This file should be preserved"
 
-    @pytest.mark.anyio
     async def test_delete_directory_accept(self):
         """Test deleting a directory with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -142,7 +137,6 @@ class TestFileOperations:
             assert result.accepted
             assert not test_dir.exists()  # Entire tree should be gone
 
-    @pytest.mark.anyio
     async def test_delete_directory_decline(self):
         """Test deleting a directory with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -164,7 +158,6 @@ class TestFileOperations:
             assert test_dir.exists()  # Directory should still exist
             assert (test_dir / "important.txt").read_text() == "Important data"
 
-    @pytest.mark.anyio
     async def test_delete_empty_directory(self):
         """Test deleting an empty directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -188,7 +181,6 @@ class TestFileOperations:
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    @pytest.mark.anyio
     async def test_auto_allowed_file_deletion(self):
         """Test file deletion with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -218,7 +210,6 @@ class TestAutoAllowedPaths:
             output = interface.get_all_output()
             assert "auto_allowed_paths" in output
 
-    @pytest.mark.anyio
     async def test_auto_allowed_directory_deletion(self):
         """Test directory deletion with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -245,7 +236,6 @@ class TestAutoAllowedPaths:
             # Verify no choices were asked
             assert len(interface.questions) == 0
 
-    @pytest.mark.anyio
     async def test_auto_allowed_vs_manual_choice(self):
         """Test that auto-allowed paths truly bypass choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -283,7 +273,7 @@ class TestAutoAllowedPaths:
 class TestErrorHandling:
     """Test DeleteRequirement error scenarios."""
 
-    def test_error_result_creation(self):
+    async def test_error_result_creation(self):
         """Test create_error_result method."""
         req = DeleteRequirement(path="/test.txt", comment="Test")
         error_result = req.create_error_result("Test error", accepted=False)
@@ -293,7 +283,6 @@ class TestErrorHandling:
         assert error_result.error == "Test error"
         assert "/test.txt" in str(error_result.path)
 
-    @pytest.mark.anyio
     async def test_delete_nonexistent_file(self):
         """Test deleting a file that doesn't exist."""
         interface = MockInterface()
@@ -310,7 +299,6 @@ class TestErrorHandling:
         assert any(phrase in result.error.lower()
                   for phrase in ["not found", "does not exist", "no such file"])
 
-    @pytest.mark.anyio
     async def test_delete_permission_denied(self):
         """Test deleting a file with insufficient permissions."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -341,7 +329,6 @@ class TestErrorHandling:
                 # Restore permissions for cleanup
                 restricted_dir.chmod(0o755)
 
-    @pytest.mark.anyio
     async def test_delete_error_during_deletion(self):
         """Test error handling when deletion fails after validation passes."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -369,7 +356,6 @@ class TestErrorHandling:
 class TestPathSecurity:
     """Test DeleteRequirement path security and resolution."""
 
-    @pytest.mark.anyio
     async def test_tilde_expansion(self):
         """Test tilde path expansion in delete operations."""
         with tempfile.NamedTemporaryFile(
@@ -405,7 +391,6 @@ class TestPathSecurity:
             if temp_file_path.exists():
                 temp_file_path.unlink()
 
-    @pytest.mark.anyio
     async def test_path_traversal_resolution(self):
         """Test path traversal resolution in delete operations."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -437,7 +422,6 @@ class TestPathSecurity:
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    @pytest.mark.anyio
     async def test_delete_large_directory_tree(self):
         """Test deleting a large directory tree with many files."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -469,7 +453,6 @@ class TestIntegrationScenarios:
             assert result.accepted
             assert not large_dir.exists()  # Entire tree should be gone
 
-    @pytest.mark.anyio
     async def test_delete_special_files(self):
         """Test deleting files with special names/characters."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -502,7 +485,6 @@ class TestIntegrationScenarios:
                 assert result.accepted
                 assert not file_path.exists()
 
-    @pytest.mark.anyio
     async def test_file_vs_directory_messaging(self):
         """Test that file vs directory messaging is correct."""
         with tempfile.TemporaryDirectory() as temp_dir:

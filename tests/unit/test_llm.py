@@ -10,35 +10,37 @@ from tests import LOREM_IPSUM
 
 
 # NOTE: tiktoken requires filesystem access for some reason
-@pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+
+
 class TestTokenCounting:
     """Test core token counting functionality."""
 
-    def test_basic_token_counting(self):
+    async def test_basic_token_counting(self):
         """Test basic token counting works with strings."""
         count = APIType.OPENAI.count_tokens("hello world")
         assert isinstance(count, int)
         assert count > 0
 
-    def test_message_format_counting(self):
+    async def test_message_format_counting(self):
         """Test counting OpenAI message format."""
         message = {"role": "user", "content": "hello"}
         count = APIType.OPENAI.count_tokens(message)
         assert isinstance(count, int)
         assert count > 0
 
-    def test_empty_inputs(self):
+    async def test_empty_inputs(self):
         """Test empty inputs return zero."""
         assert APIType.OPENAI.count_tokens("") == 0
         assert APIType.OPENAI.count_tokens({"role": "", "content": ""}) == 0
 
-    def test_known_token_count_cl100k_base(self):
+    async def test_known_token_count_cl100k_base(self):
         """Test known token count for Lorem Ipsum with cl100k_base encoder."""
         count = APIType.OPENAI.count_tokens(LOREM_IPSUM)
         # Known value: cl100k_base produces 1003 tokens for this text
         assert count == 1003
 
-    def test_known_token_count_o200k_models(self):
+    async def test_known_token_count_o200k_models(self):
         """Test known token count for Lorem Ipsum with o200k_base models."""
         # Test with gpt-4.1 model name and with o200k_base encoder directly
         count_model = APIType.OPENAI.count_tokens(
@@ -50,7 +52,7 @@ class TestTokenCounting:
         assert count_model == 763
         assert count_encoder == 763
 
-    def test_all_api_types_use_same_token_counting(self):
+    async def test_all_api_types_use_same_token_counting(self):
         """Test that all API types use the same BaseAPI token counting."""
         text = "hello world"
 
@@ -66,7 +68,7 @@ class TestTokenCounting:
 class TestAPITypeParsing:
     """Test API type parsing."""
 
-    def test_valid_api_types(self):
+    async def test_valid_api_types(self):
         """Test parsing valid API types."""
         assert parse_api_type("openai") == APIType.OPENAI
         assert parse_api_type("OPENAI") == APIType.OPENAI  # Case insensitive
@@ -74,7 +76,7 @@ class TestAPITypeParsing:
         assert parse_api_type("anthropic") == APIType.ANTHROPIC
         assert parse_api_type("gemini") == APIType.GEMINI
 
-    def test_invalid_api_type(self):
+    async def test_invalid_api_type(self):
         """Test invalid API type raises error."""
         with pytest.raises(ValueError, match="Unknown API type"):
             parse_api_type("invalid")

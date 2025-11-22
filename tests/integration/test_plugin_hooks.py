@@ -16,24 +16,27 @@ from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
+pytestmark = pytest.mark.anyio
+
+
 class TestPluginExceptions:
     """Test plugin exception classes."""
 
-    def test_validation_error_inheritance(self):
+    async def test_validation_error_inheritance(self):
         """Test that ValidationError inherits properly."""
         error = ValidationError("test message")
         assert str(error) == "test message"
         assert isinstance(error, ValidationError)
         assert isinstance(error, Exception)
 
-    def test_security_error_inheritance(self):
+    async def test_security_error_inheritance(self):
         """Test that SecurityError inherits from ValidationError."""
         error = SecurityError("security issue")
         assert str(error) == "security issue"
         assert isinstance(error, SecurityError)
         assert isinstance(error, ValidationError)
 
-    def test_processing_error_inheritance(self):
+    async def test_processing_error_inheritance(self):
         """Test that ProcessingError inherits properly."""
         error = ProcessingError("processing failed")
         assert str(error) == "processing failed"
@@ -44,7 +47,6 @@ class TestPluginExceptions:
 class TestPluginHookSystem:
     """Test the exception-based plugin hook system."""
 
-    @pytest.mark.anyio
     async def test_before_hook_validation_error(self):
         """Test that before hooks can raise ValidationError to stop processing."""
         # Setup
@@ -75,7 +77,6 @@ class TestPluginHookSystem:
         assert result.error == "Pre-processing failed: Command validation failed"
         assert not result.success
 
-    @pytest.mark.anyio
     async def test_before_hook_security_error(self):
         """Test that before hooks can raise SecurityError for dangerous commands."""
         # Setup
@@ -105,7 +106,6 @@ class TestPluginHookSystem:
         assert result.error == "Pre-processing failed: Dangerous command detected"
         assert not result.success
 
-    @pytest.mark.anyio
     async def test_before_hook_success_continues(self):
         """Test that before hooks that don't raise exceptions allow processing to continue."""
         # Setup
@@ -137,7 +137,6 @@ class TestPluginHookSystem:
         assert result.error is None  # No plugin error
         assert "command 'echo hello' exists" in interface.get_all_output()
 
-    @pytest.mark.anyio
     async def test_after_hook_processing_error(self):
         """Test that after hooks can raise ProcessingError."""
         # Setup
@@ -168,7 +167,6 @@ class TestPluginHookSystem:
         assert result.accepted  # Command was accepted originally
         assert result.error == "Post-processing failed: Post-processing failed"
 
-    @pytest.mark.anyio
     async def test_multiple_before_hooks(self):
         """Test that multiple before hooks are executed in order."""
         # Setup
@@ -196,7 +194,6 @@ class TestPluginHookSystem:
         # Verify
         assert execution_order == ["first", "second"]
 
-    @pytest.mark.anyio
     async def test_hook_requirement_filtering(self, tmp_path):
         """Test that hooks only run for specified requirement types."""
         # Setup
@@ -239,7 +236,6 @@ class TestPluginHookSystem:
         assert called == ["command_hook", "read_hook"]
         assert len(called) == 2  # Each hook called once
 
-    @pytest.mark.anyio
     async def test_hook_without_requirement_filter(self, tmp_path):
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
@@ -280,7 +276,6 @@ class TestPluginFiltering:
     """Test plugin filtering based on configuration."""
 
     @pytest.mark.no_file_mocking
-    @pytest.mark.anyio
     async def test_plugin_enabled_when_in_config(self):
         """Test that plugins are enabled when present in config.plugins."""
         # Create a test plugin
@@ -326,7 +321,6 @@ class TestPluginFiltering:
             file_content = temp_file.read_text()
         assert file_content == "bananas pineapples"
 
-    @pytest.mark.anyio
     async def test_plugin_disabled_when_not_in_config(self):
         """Test that plugins are disabled when not present in config.plugins."""
         # Setup: Create a test plugin
@@ -359,7 +353,6 @@ class TestPluginFiltering:
         assert "test_plugin_executed" not in called
         assert len(called) == 0
 
-    @pytest.mark.anyio
     async def test_shellcheck_plugin_filtering(self):
         """
         Test specific shellcheck plugin filtering behavior.
@@ -389,7 +382,6 @@ class TestPluginFiltering:
         assert len(hooks.HOOKS.before) == 0
         assert len(hooks.HOOKS.after) == 0
 
-    @pytest.mark.anyio
     async def test_plugin_with_config_options(self):
         """Test that plugin configuration is passed correctly."""
         # Setup: Create a plugin that uses its config
@@ -429,7 +421,6 @@ class TestPluginFiltering:
         assert received_config[0]["option2"] == 42
         assert received_config[0]["enabled"]
 
-    @pytest.mark.anyio
     async def test_no_duplicate_plugin_registration(self):
         """Test that multiple plugin loads don't create duplicate registrations."""
 

@@ -10,13 +10,13 @@ from solveig.schema.requirements import ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
 
 
 class TestReadValidation:
     """Test ReadRequirement validation and basic behavior."""
 
-    def test_path_validation_patterns(self):
+    async def test_path_validation_patterns(self):
         """Test path validation for empty, whitespace, and valid paths."""
         extra_kwargs = {"metadata_only": False, "comment": "test"}
 
@@ -34,12 +34,11 @@ class TestReadValidation:
         req = ReadRequirement(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
-    def test_get_description(self):
+    async def test_get_description(self):
         """Test ReadRequirement description method."""
         description = ReadRequirement.get_description()
         assert "read(comment, path, metadata_only)" in description
 
-    @pytest.mark.anyio
     async def test_display_header(self, tmp_path):
         """Test ReadRequirement display header."""
         test_file = tmp_path / "test_file.txt"
@@ -60,7 +59,6 @@ class TestReadValidation:
 class TestDirectoryOperations:
     """Test ReadRequirement directory operations."""
 
-    @pytest.mark.anyio
     async def test_directory_read_accept(self):
         """Test reading directory metadata with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,7 +84,6 @@ class TestDirectoryOperations:
             assert len(result.metadata.listing) == 3
             assert not result.content  # No content for directories
 
-    @pytest.mark.anyio
     async def test_directory_read_decline(self):
         """Test reading directory metadata with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -107,7 +104,6 @@ class TestDirectoryOperations:
 class TestFileChoiceFlow:
     """Test all file reading choice combinations."""
 
-    @pytest.mark.anyio
     async def test_choice_0_direct_read_send(self):
         """Test choice 0: Read and send content and metadata directly."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -129,7 +125,6 @@ class TestFileChoiceFlow:
             assert result.metadata is not None
             assert not result.metadata.is_directory
 
-    @pytest.mark.anyio
     async def test_choice_1_inspect_then_send_content(self):
         """Test choice 1 → 0: Inspect first, then send content and metadata."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -150,7 +145,6 @@ class TestFileChoiceFlow:
             assert result.content == test_content
             assert result.metadata is not None
 
-    @pytest.mark.anyio
     async def test_choice_1_inspect_then_send_metadata_only(self):
         """Test choice 1 → 1: Inspect first, then send metadata only."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -171,7 +165,6 @@ class TestFileChoiceFlow:
             assert result.content == "<hidden>"  # Content hidden
             assert result.metadata is not None
 
-    @pytest.mark.anyio
     async def test_choice_1_inspect_then_send_nothing(self):
         """Test choice 1 → 2: Inspect first, then send nothing."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -192,7 +185,6 @@ class TestFileChoiceFlow:
             assert result.content == "<hidden>"
             assert result.metadata is None  # Both hidden
 
-    @pytest.mark.anyio
     async def test_choice_2_metadata_only_no_read(self):
         """Test choice 2: Don't read, only send metadata."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -213,7 +205,6 @@ class TestFileChoiceFlow:
             assert result.content == ""  # No content read
             assert result.metadata is not None  # But metadata is present
 
-    @pytest.mark.anyio
     async def test_metadata_only_request_fulfilled(self):
         """Test metadata_only=True request is accepted when metadata provided."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -234,7 +225,6 @@ class TestFileChoiceFlow:
             assert not result.content  # No content (as expected)
             assert result.metadata is not None  # Metadata provided
 
-    @pytest.mark.anyio
     async def test_choice_3_send_nothing(self):
         """Test choice 3: Don't read or send anything."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -254,7 +244,6 @@ class TestFileChoiceFlow:
             assert not result.content
             assert result.metadata is None
 
-    @pytest.mark.anyio
     async def test_choice_equivalence_direct_vs_inspect(self):
         """Test that choice 0 produces same result as choice 1→0."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -291,7 +280,6 @@ class TestFileChoiceFlow:
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    @pytest.mark.anyio
     async def test_auto_allowed_file(self):
         """Test file that matches auto_allowed_paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -318,7 +306,6 @@ class TestAutoAllowedPaths:
             # Verify no choices were asked
             assert len(interface.questions) == 0
 
-    @pytest.mark.anyio
     async def test_auto_allowed_directory(self):
         """Test directory that matches auto_allowed_paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -348,7 +335,6 @@ class TestAutoAllowedPaths:
 class TestErrorHandling:
     """Test error scenarios and edge cases."""
 
-    @pytest.mark.anyio
     async def test_nonexistent_file(self):
         """Test reading a file that doesn't exist."""
         interface = MockInterface()
@@ -365,7 +351,6 @@ class TestErrorHandling:
         assert result.error is not None
         assert "does not exist" in result.error.lower()
 
-    @pytest.mark.anyio
     async def test_permission_denied(self):
         """Test reading a file with insufficient permissions."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -393,7 +378,6 @@ class TestErrorHandling:
             finally:
                 restricted_file.chmod(0o644)  # Restore for cleanup
 
-    @pytest.mark.anyio
     async def test_binary_file_handling(self):
         """Test reading binary files shows base64 encoding."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -419,7 +403,6 @@ class TestErrorHandling:
 class TestPathSecurity:
     """Test path security and resolution."""
 
-    @pytest.mark.anyio
     async def test_tilde_expansion(self):
         """Test that tilde paths expand correctly."""
         with tempfile.NamedTemporaryFile(
@@ -448,7 +431,6 @@ class TestPathSecurity:
         finally:
             temp_file_path.unlink()
 
-    @pytest.mark.anyio
     async def test_path_traversal_resolution(self):
         """Test that path traversal is resolved correctly."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -486,7 +468,6 @@ class TestPathSecurity:
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    @pytest.mark.anyio
     async def test_large_directory_listing(self):
         """Test reading directory with many files."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -514,7 +495,6 @@ class TestIntegrationScenarios:
             assert result.metadata.is_directory
             assert len(result.metadata.listing) == 55  # 50 files + 5 subdirs
 
-    @pytest.mark.anyio
     async def test_metadata_only_flag_behavior(self):
         """Test metadata_only=True flag bypasses content choices."""
         with tempfile.TemporaryDirectory() as temp_dir:

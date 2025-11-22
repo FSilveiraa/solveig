@@ -14,7 +14,7 @@ pytestmark = pytest.mark.anyio
 class TestPersistentShellBasics:
     """Test PersistentShell basic properties and initialization."""
 
-    def test_init_default_shell(self):
+    async def test_init_default_shell(self):
         """Test PersistentShell initializes with correct defaults."""
         shell = PersistentShell()
         assert shell.shell == "/bin/bash"
@@ -22,12 +22,12 @@ class TestPersistentShellBasics:
         assert shell.current_cwd is not None
         assert isinstance(shell._lock, asyncio.Lock)
 
-    def test_init_custom_shell(self):
+    async def test_init_custom_shell(self):
         """Test PersistentShell accepts custom shell."""
         shell = PersistentShell(shell="/bin/zsh")
         assert shell.shell == "/bin/zsh"
 
-    def test_cwd_property(self):
+    async def test_cwd_property(self):
         """Test cwd property returns current working directory."""
         shell = PersistentShell()
         original_cwd = shell.current_cwd
@@ -40,7 +40,7 @@ class TestPersistentShellBasics:
 class TestMarkerParsing:
     """Test marker parsing logic without any mocking."""
 
-    def test_parse_marker_valid_format(self):
+    async def test_parse_marker_valid_format(self):
         """Test parsing valid marker updates current directory."""
         shell = PersistentShell()
         original_cwd = shell.current_cwd
@@ -51,7 +51,7 @@ class TestMarkerParsing:
         # Restore for cleanup
         shell.current_cwd = original_cwd
 
-    def test_parse_marker_with_whitespace(self):
+    async def test_parse_marker_with_whitespace(self):
         """Test parsing marker handles whitespace correctly."""
         shell = PersistentShell()
         original_cwd = shell.current_cwd
@@ -62,7 +62,7 @@ class TestMarkerParsing:
         # Restore for cleanup
         shell.current_cwd = original_cwd
 
-    def test_parse_marker_invalid_formats(self):
+    async def test_parse_marker_invalid_formats(self):
         """Test parsing invalid markers doesn't change directory."""
         shell = PersistentShell()
         original_cwd = shell.current_cwd
@@ -79,13 +79,13 @@ class TestMarkerParsing:
             shell._parse_marker(invalid_marker)
             assert shell.current_cwd == original_cwd, f"Failed for: {invalid_marker}"
 
-    def test_parse_marker_empty_path(self):
+    async def test_parse_marker_empty_path(self):
         """Test parsing marker with empty path sets cwd to empty string."""
         shell = PersistentShell()
         shell._parse_marker(f"{MARKER}:")
         assert shell.current_cwd == ""  # Empty string is valid behavior
 
-    def test_parse_marker_handles_none(self):
+    async def test_parse_marker_handles_none(self):
         """Test parsing None marker raises TypeError (not caught by exception handler)."""
         shell = PersistentShell()
 

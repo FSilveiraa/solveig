@@ -13,16 +13,18 @@ import pytest
 from solveig.utils.file import Metadata
 from solveig.utils.misc import parse_human_readable_size
 
+pytestmark = pytest.mark.anyio
+
 
 class TestSizeNotationParsing:
     """Test size notation parsing functionality."""
 
-    def test_parse_int_bytes(self):
+    async def test_parse_int_bytes(self):
         """Test parsing integer bytes."""
         assert parse_human_readable_size(1024) == 1024
         assert parse_human_readable_size("1024") == 1024
 
-    def test_parse_size_units(self):
+    async def test_parse_size_units(self):
         """Test parsing various size units."""
         assert parse_human_readable_size("1 KB") == 1000
         assert parse_human_readable_size("1 MB") == 1000000
@@ -31,24 +33,24 @@ class TestSizeNotationParsing:
         assert parse_human_readable_size("1 MiB") == 1024**2
         assert parse_human_readable_size("1 GiB") == 1024**3
 
-    def test_parse_decimal_sizes(self):
+    async def test_parse_decimal_sizes(self):
         """Test parsing decimal sizes."""
         assert parse_human_readable_size("1.5 KB") == 1500
         assert parse_human_readable_size("2.5 GiB") == int(2.5 * 1024**3)
 
-    def test_parse_invalid_unit(self):
+    async def test_parse_invalid_unit(self):
         """Test parsing invalid units raises ValueError."""
         with pytest.raises(ValueError, match="not a valid disk size"):
             parse_human_readable_size("1 XB")
 
-    def test_parse_invalid_format(self):
+    async def test_parse_invalid_format(self):
         """Test parsing invalid format raises ValueError."""
         with pytest.raises(ValueError, match="not a valid disk size"):
             parse_human_readable_size("invalid")
         with pytest.raises(ValueError, match="not a valid disk size"):
             parse_human_readable_size("1.2.3 GB")
 
-    def test_parse_none_returns_zero(self):
+    async def test_parse_none_returns_zero(self):
         """Test parsing None returns 0."""
         assert parse_human_readable_size(None) == 0
 
@@ -56,7 +58,7 @@ class TestSizeNotationParsing:
 class TestMetadata:
     """Test Metadata dataclass."""
 
-    def test_metadata_creation(self):
+    async def test_metadata_creation(self):
         """Test creating metadata object."""
         metadata = Metadata(
             owner_name="test_user",

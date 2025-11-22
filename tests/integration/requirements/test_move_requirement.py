@@ -10,13 +10,13 @@ from solveig.schema.requirements import MoveRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
 
 
 class TestMoveValidation:
     """Test MoveRequirement validation and basic behavior."""
 
-    def test_path_validation_patterns(self):
+    async def test_path_validation_patterns(self):
         """Test path validation for empty, whitespace, and valid paths."""
         extra_kwargs = {"comment": "test"}
 
@@ -48,12 +48,11 @@ class TestMoveValidation:
         assert req.source_path == "/valid/source"
         assert req.destination_path == "/valid/dest"
 
-    def test_get_description(self):
+    async def test_get_description(self):
         """Test MoveRequirement description method."""
         description = MoveRequirement.get_description()
         assert "move(comment, source_path, destination_path)" in description
 
-    @pytest.mark.anyio
     async def test_display_header_file(self):
         """Test MoveRequirement display header for files."""
         req = MoveRequirement(
@@ -69,7 +68,6 @@ class TestMoveValidation:
         assert "/source/test.txt" in output
         assert "/dest/test.txt" in output
 
-    @pytest.mark.anyio
     async def test_display_header_directory(self):
         """Test MoveRequirement display header for directories."""
         req = MoveRequirement(
@@ -89,7 +87,6 @@ class TestMoveValidation:
 class TestFileOperations:
     """Test MoveRequirement file and directory moving."""
 
-    @pytest.mark.anyio
     async def test_move_file_accept(self):
         """Test moving a file with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -113,7 +110,6 @@ class TestFileOperations:
             assert dest_file.exists()  # Destination should exist
             assert dest_file.read_text() == "This file will be moved"
 
-    @pytest.mark.anyio
     async def test_move_file_decline(self):
         """Test moving a file with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -136,7 +132,6 @@ class TestFileOperations:
             assert source_file.exists()  # Source should remain
             assert not dest_file.exists()  # Destination should not exist
 
-    @pytest.mark.anyio
     async def test_move_directory_accept(self):
         """Test moving a directory with user acceptance."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -171,7 +166,6 @@ class TestFileOperations:
             assert (dest_dir / "file2.txt").read_text() == "Content 2"
             assert (dest_dir / "subdir" / "nested.txt").read_text() == "Nested content"
 
-    @pytest.mark.anyio
     async def test_move_directory_decline(self):
         """Test moving a directory with user decline."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -199,7 +193,6 @@ class TestFileOperations:
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    @pytest.mark.anyio
     async def test_auto_allowed_file_move(self):
         """Test file move with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -233,7 +226,6 @@ class TestAutoAllowedPaths:
             output = interface.get_all_output()
             assert "auto_allowed_paths" in output
 
-    @pytest.mark.anyio
     async def test_auto_allowed_directory_move(self):
         """Test directory move with auto-allowed paths bypasses choices."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -264,7 +256,6 @@ class TestAutoAllowedPaths:
             # Verify no choices were asked
             assert len(interface.questions) == 0
 
-    @pytest.mark.anyio
     async def test_partial_auto_allowed_requires_choice(self):
         """Test that only source auto-allowed still requires choice."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -297,7 +288,7 @@ class TestAutoAllowedPaths:
 class TestErrorHandling:
     """Test MoveRequirement error scenarios."""
 
-    def test_error_result_creation(self):
+    async def test_error_result_creation(self):
         """Test create_error_result method."""
         req = MoveRequirement(
             source_path="/source.txt",
@@ -312,7 +303,6 @@ class TestErrorHandling:
         assert "/source.txt" in str(error_result.source_path)
         assert "/dest.txt" in str(error_result.destination_path)
 
-    @pytest.mark.anyio
     async def test_move_nonexistent_source(self):
         """Test moving from a file that doesn't exist."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -334,7 +324,6 @@ class TestErrorHandling:
             assert any(phrase in result.error.lower()
                       for phrase in ["not found", "does not exist", "no such file"])
 
-    @pytest.mark.anyio
     async def test_move_permission_denied_source(self):
         """Test moving from a file with insufficient read permissions."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -367,7 +356,6 @@ class TestErrorHandling:
                 # Restore permissions for cleanup
                 source_file.chmod(0o644)
 
-    @pytest.mark.anyio
     async def test_move_permission_denied_destination(self):
         """Test moving to a location with insufficient write permissions."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -404,7 +392,6 @@ class TestErrorHandling:
 class TestPathSecurity:
     """Test MoveRequirement path security and resolution."""
 
-    @pytest.mark.anyio
     async def test_tilde_expansion(self):
         """Test tilde path expansion in move operations."""
         with tempfile.NamedTemporaryFile(
@@ -457,7 +444,6 @@ class TestPathSecurity:
             if dest_file_path.exists():
                 dest_file_path.unlink()
 
-    @pytest.mark.anyio
     async def test_path_traversal_resolution(self):
         """Test path traversal resolution in move operations."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -492,7 +478,6 @@ class TestPathSecurity:
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    @pytest.mark.anyio
     async def test_move_large_directory_tree(self):
         """Test moving a large directory tree with many files."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -531,7 +516,6 @@ class TestIntegrationScenarios:
             assert (dest_dir / "file_005.txt").read_text() == "Content 5"
             assert (dest_dir / "subdir_1" / "nested_3.txt").read_text() == "Nested content 1-3"
 
-    @pytest.mark.anyio
     async def test_move_special_filenames(self):
         """Test moving files with special names/characters."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -573,7 +557,6 @@ class TestIntegrationScenarios:
                 assert moved_file.exists()
                 assert moved_file.read_text() == f"Content of {filename}"
 
-    @pytest.mark.anyio
     async def test_file_vs_directory_messaging(self):
         """Test that file vs directory messaging is correct."""
         with tempfile.TemporaryDirectory() as temp_dir:

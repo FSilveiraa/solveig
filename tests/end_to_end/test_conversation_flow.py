@@ -9,7 +9,7 @@ from solveig.schema import TaskListRequirement
 from solveig.schema.results.task import Task
 
 # Mark all tests in this module to skip file mocking and subprocess mocking (for real e2e testing)
-pytestmark = [pytest.mark.no_file_mocking, pytest.mark.no_subprocess_mocking]
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking, pytest.mark.no_subprocess_mocking ]
 
 from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
@@ -20,7 +20,6 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 class TestConversationFlow:
     """Test complete conversation flows using mock LLM client with async architecture."""
 
-    @pytest.mark.anyio
     async def test_command_execution_flow(self):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
 
@@ -69,7 +68,6 @@ class TestConversationFlow:
         # Verify subprocess communication was called for both commands
         # assert mock_subprocess.communicate.call_count == 2
 
-    @pytest.mark.anyio
     async def test_file_operations_flow(self):
         """Test file operations flow with mixed accept/decline responses."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -113,7 +111,6 @@ class TestConversationFlow:
             assert "Examine directory contents" in output
             assert "new_file.txt" in output
 
-    @pytest.mark.anyio
     async def test_command_error_handling(self):
         """Test error handling in command execution flow."""
         llm_response = AssistantMessage(
@@ -145,7 +142,6 @@ class TestConversationFlow:
         assert "not found" in output  # different shells output different errors
         assert "nonexistent_command" in output
 
-    @pytest.mark.anyio
     async def test_empty_requirements_flow(self):
         """Test conversation flow when LLM returns no requirements."""
         llm_response = AssistantMessage(

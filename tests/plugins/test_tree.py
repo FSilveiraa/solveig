@@ -11,11 +11,12 @@ from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
 
-@pytest.mark.no_file_mocking
+pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+
+
 class TestTreePlugin:
     """Test TreeRequirement plugin with real filesystem operations."""
 
-    @pytest.mark.anyio
     async def test_tree_plugin_with_real_files(self):
         """Test tree plugin creates visual directory tree from real filesystem."""
 
@@ -68,7 +69,7 @@ class TestTreePlugin:
             assert "subdir" in output
             assert "nested.md" in output
 
-    def test_tree_requirement_creation_and_validation(self):
+    async def test_tree_requirement_creation_and_validation(self):
         """Test TreeRequirement creation, validation, and configuration."""
         # Valid creation with default settings
         req = TreeRequirement(path="     /test/dir   ", comment="Generate tree listing")
@@ -89,7 +90,6 @@ class TestTreePlugin:
         assert "tree(path)" in description
         assert "directory tree structure" in description
 
-    @pytest.mark.anyio
     async def test_tree_requirement_display_and_error_handling(self):
         """Test TreeRequirement display functionality and error result creation."""
         req = TreeRequirement(path="/test/dir", comment="Generate tree listing")
@@ -116,7 +116,6 @@ class TestTreePlugin:
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
     @pytest.mark.no_file_mocking
-    @pytest.mark.anyio
     async def test_tree_depth_limiting_and_user_interaction(self):
         """Test tree with depth limits and user interaction through solve() method."""
         # Create temporary directory structure

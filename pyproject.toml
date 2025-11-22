@@ -69,6 +69,13 @@ include = ["solveig*"]
 testpaths = ["tests"]
 addopts = ["--cov=solveig", "--cov-report=term-missing"]
 
+[tool.coverage.run]
+omit = ["solveig/interface/cli/*"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+
 [tool.ruff]
 target-version = "py313"
 line-length = 88
