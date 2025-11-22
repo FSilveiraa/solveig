@@ -134,7 +134,7 @@ class CommandRequirement(Requirement):
                 == 1
             ):
                 output = "<hidden>"
-                error = "" if not error else "<hidden>"
+                error = "<hidden>"
 
             return CommandResult(
                 requirement=self,

@@ -19,7 +19,7 @@ class MockInterface(TerminalInterface):
         self.user_inputs = []
         self.questions = []
         self.sections = []
-        self.status_updates = []
+        self.stats_updates = []
         self.groups = []
         self._stop_event = asyncio.Event()
 
@@ -142,31 +142,15 @@ class MockInterface(TerminalInterface):
     async def with_animation(
         self, status: str = "Processing", final_status: str = "Ready"
     ) -> AsyncGenerator[None, Any]:
-        await self.update_stats(status)
+        await self.update_stats(status=status)
         try:
             yield
         finally:
-            await self.update_stats(final_status)
+            await self.update_stats(status=final_status)
 
     # Status and lifecycle
-    async def update_stats(
-        self,
-        status: str = None,
-        tokens: tuple[int, int] | int = None,
-        model: str = None,
-        url: str = None,
-        path: str | PathLike | None = None,
-    ) -> None:
-        status_info = {}
-        if status is not None:
-            status_info["status"] = status
-        if tokens is not None:
-            status_info["tokens"] = tokens
-        if model is not None:
-            status_info["model"] = model
-        if url is not None:
-            status_info["url"] = url
-        self.status_updates.append(status_info)
+    async def update_stats(self, **kwargs: Any) -> None:
+        self.stats_updates.append(kwargs)
 
     # Test helper methods
     def set_user_inputs(self, inputs: list[str]) -> None:
@@ -184,7 +168,7 @@ class MockInterface(TerminalInterface):
         return self.sections.copy()
 
     def get_status_updates(self) -> list[dict]:
-        return self.status_updates.copy()
+        return self.stats_updates.copy()
 
     def clear(self) -> None:
         """Clear all captured data"""
@@ -192,5 +176,5 @@ class MockInterface(TerminalInterface):
         self.user_inputs.clear()
         self.questions.clear()
         self.sections.clear()
-        self.status_updates.clear()
+        self.stats_updates.clear()
         self.groups.clear()

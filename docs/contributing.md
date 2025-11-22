@@ -71,17 +71,76 @@ pytest tests/integration/ -v
 pytest --cov=solveig --cov-report=term-missing
 ```
 
-### Test Safety
+### Testing Philosophy and Safety
 
-Solveig's test suite involved a lot of effort to achieve a high coverage with multiple scenarios, while
-mostly not touching the user's system unless absolutely necessary.
+Solveig's test suite is built on a **"mock by default"** principle to ensure tests are fast, deterministic, and safe. By default, all external side effects (filesystem operations, subprocess creation) are blocked.
 
-- **Blocked Side-effects** - tests are blocked from using files, running commands or doing any kind of I/O 
-unless the test explicitly allows it. This explicit marking ensures it's always easy to find potentially
-dangerous tests.
-- **Mock Interface** - allows easy setup of user inputs and retrieval of outputs.
-- **Temporary Directories** - when tests do actual filesystem usage, it is always done using temporary
-directories created through the `tempfile` module.
+#### Unit Tests (`tests/unit/`)
+- **Purpose**: Test a single component in complete isolation.
+- **Implementation**: These tests rely on the default mocks. They should be fast and should not have any special `pytest` markers to disable mocks.
+
+#### Integration Tests (`tests/integration/`)
+- **Purpose**: Test how multiple components work together (e.g., running a real command).
+- **Implementation**: To write an integration test, you must explicitly disable the default mocks using "escape hatch" markers.
+  - **`@pytest.mark.no_subprocess_mocking`**: Allows real `asyncio` subprocesses to be created.
+  - **`@pytest.mark.no_file_mocking`**: Allows real files to be opened.
+- **Sandboxing is Mandatory**: Any integration test that performs side effects **must** be sandboxed.
+  - For filesystem tests, use the `tmp_path` fixture to ensure all I/O is contained in a temporary directory.
+  - For shell command tests, use the `sandboxed_shell` fixture, which provides a shell instance already operating inside a temporary directory.
+
+#### The "No-Patch" Rule for Integration Tests
+A key principle is to **avoid `unittest.mock.patch` in integration tests**. Instead of patching code to simulate a state, use the application's own logic to achieve it. For example, to test commands in a specific directory, use the `sandboxed_shell` fixture, which runs a real `cd` command, rather than patching `os.chdir`.
+
+#### Key Fixtures for Testing
+- **`clean_shell_state` (`autouse`)**: Automatically runs after every test to destroy the persistent shell, guaranteeing test isolation.
+- **`sandboxed_shell`**: Provides a clean, ready-to-use shell that is already sandboxed in a temporary directory. This is the preferred way to write command integration tests.
+
+### Writing Tests
+
+#### Unit Tests
+Unit tests focus on a single class or function in isolation. They should be fast and test only the component's internal logic. They must not perform any real I/O.
+
+```python
+# In tests/unit/test_my_component.py
+
+# No markers needed. The default fixtures will mock subprocesses and files.
+def test_my_component_logic(mock_asyncio_subprocess):
+    # ... test logic that relies on the mocked subprocess ...
+    result = my_component.do_something()
+    assert result is True
+    mock_asyncio_subprocess.exec.assert_called_once()
+```
+
+#### Integration Tests
+Integration tests check the interaction between components (e.g., testing that a command correctly interacts with the real shell). To write an integration test, you must explicitly disable the default mocks using markers.
+
+- **Use Markers to Opt-Out**: Mark your test with `@pytest.mark.no_file_mocking` or `@pytest.mark.no_subprocess_mocking` to disable the corresponding mock and allow real side effects.
+- **Use Sandboxes**: When performing real I/O, always use `pytest`'s built-in `tmp_path` fixture to ensure all operations are contained within a safe, temporary directory that is automatically cleaned up.
+
+```python
+# In tests/integration/test_my_integration.py
+import pytest
+
+@pytest.mark.no_subprocess_mocking # Allow real subprocesses
+@pytest.mark.no_file_mocking     # Allow real file I/O
+def test_real_command_in_temp_dir(tmp_path):
+    # This test runs a real command inside a temporary directory.
+    # 'tmp_path' is a pathlib.Path object provided by pytest.
+    
+    # 1. Change directory to the safe, temporary path
+    os.chdir(tmp_path)
+
+    # 2. Run a real command
+    result = await persistent_shell.run("touch new_file.txt")
+
+    # 3. Assert on the real state of the filesystem
+    assert (tmp_path / "new_file.txt").exists()
+```
+
+### Key Pytest Markers
+- `@pytest.mark.anyio`: Required for any `async` test function. For convenience, you can apply this to a whole file by adding `pytestmark = pytest.mark.anyio` at the module level.
+- `@pytest.mark.no_file_mocking`: Disables the `open()` mock, allowing real file I/O. **Must be used with `tmp_path`**.
+- `@pytest.mark.no_subprocess_mocking`: Disables the `asyncio` subprocess mocks, allowing tests to create real processes.
 
 ## Plugin Development
 

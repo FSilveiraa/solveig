@@ -46,7 +46,7 @@ class MockLLMClient:
                     max(0.0, self.sleep_seconds - self.sleep_delta),
                     self.sleep_seconds + self.sleep_delta,
                 )
-                print(f"Sleeping for {sleep_time} seconds...")
+                # print(f"Sleeping for {sleep_time} seconds...")
                 time.sleep(sleep_time)
             return response
 
@@ -67,7 +67,7 @@ class MockLLMClient:
                     max(0.0, self.sleep_seconds - self.sleep_delta),
                     self.sleep_seconds + self.sleep_delta,
                 )
-                print(f"Sleeping for {sleep_time} seconds...")
+                # print(f"Sleeping for {sleep_time} seconds...")
                 await asyncio.sleep(sleep_time)
 
             # Yield individual requirements from the AssistantMessage

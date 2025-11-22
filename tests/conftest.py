@@ -3,15 +3,38 @@ pytest configuration and fixtures for Solveig tests.
 Provides automatic mocking of all file I/O operations.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from solveig.plugins import clear_plugins
+from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
+
+
+@pytest.fixture
+async def sandboxed_shell(tmp_path: Path):
+    """
+    Provides a PersistentShell instance that is already sandboxed
+    by having its working directory set to the test's tmp_path.
+    """
+    shell = await get_persistent_shell()
+    # Use the shell's own logic to move into the sandbox
+    await shell.run(f"cd {tmp_path}")
+    # The shell's CWD is now the temp path
+    return shell
+
+
+@pytest.fixture(autouse=True)
+async def clean_shell_state():
+    """Ensure a clean shell state for each test by stopping the singleton."""
+    yield
+    # This code runs *after* each test
+    await stop_persistent_shell()
 
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_filesystem(request):
+def mock_asyncio_subprocess(request):
     """
     Automatically patch all utils.file operations for every test.
 
@@ -36,33 +59,55 @@ def mock_filesystem(request):
 
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_subprocess(request):
-    # Skip mocking for tests marked with @pytest.mark.no_subprocess_mocking
+def mock_asyncio_subprocess(request):
+    """
+    Automatically mock all asyncio.create_subprocess_* calls for every test.
+    This prevents tests from accidentally creating real subprocesses.
+
+    To skip this fixture for integration tests, use:
+        @pytest.mark.no_subprocess_mocking
+
+    The fixture yields an object that provides access to the mocks:
+    - `mock_asyncio_subprocess.exec`: The mock for `create_subprocess_exec`.
+    - `mock_asyncio_subprocess.shell`: The mock for `create_subprocess_shell`.
+    - `mock_asyncio_subprocess.mock_process`: A default mock process returned by the above.
+    """
     if request.node.get_closest_marker("no_subprocess_mocking"):
         yield None
         return
 
-    with patch(
-        "subprocess.run",
-        side_effect=OSError(
-            'Cannot run processes in tests - use the mock fixture, @patch("subprocess.run") or mark with @pytest.mark.no_subprocess_mocking'
-        ),
-    ):
-        # Create a mock process object with communicate method
-        mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            side_effect=OSError(
-                'Cannot run processes in tests - use the mock fixture, @patch("asyncio.create_subprocess_shell") or mark with @pytest.mark.no_subprocess_mocking'
-            )
-        )
+    # This is the mock process object that the asyncio calls will return
+    mock_process = AsyncMock()
+    mock_process.communicate.side_effect = OSError(
+        "Cannot run processes in tests - use the mock fixture or mark with @pytest.mark.no_subprocess_mocking"
+    )
+    # Mock stdin/stdout/stderr streams
+    mock_process.stdin = AsyncMock()
+    mock_process.stdout = AsyncMock()
+    mock_process.stderr = AsyncMock()
 
-        with patch(
-            "asyncio.create_subprocess_shell",
-            new_callable=AsyncMock,
-        ) as mocked_subprocess:
-            # make create_subprocess_shell return the mock process
-            mocked_subprocess.return_value = mock_process
-            yield mock_process
+    with patch(
+        "asyncio.create_subprocess_exec", new_callable=AsyncMock
+    ) as mock_exec, patch(
+        "asyncio.create_subprocess_shell", new_callable=AsyncMock
+    ) as mock_shell:
+        # By default, have both return the same mock process
+        mock_exec.return_value = mock_process
+        mock_shell.return_value = mock_process
+
+        # Yield a convenient object to access the mocks
+        yield type(
+            "MockAsyncioSubprocess",
+            (),
+            {
+                "exec": mock_exec,
+                "shell": mock_shell,
+                "mock_process": mock_process,
+            },
+        )()
+
+
+
 
 
 @pytest.fixture(autouse=True, scope="function")
@@ -97,5 +142,5 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "no_subprocess_mocking: mark test to allow subprocess.run()",
+        "no_subprocess_mocking: disables the mock_asyncio_subprocess fixture to allow real async processes",
     )

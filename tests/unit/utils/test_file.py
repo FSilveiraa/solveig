@@ -61,7 +61,7 @@ class TestMetadata:
         metadata = Metadata(
             owner_name="test_user",
             group_name="test_group",
-            path=Path("/test/file.txt"),
+            path="/test/file.txt",
             size=1024,
             modified_time=int(
                 datetime.fromisoformat("2024-01-01T12:00:00").timestamp()
