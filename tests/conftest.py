@@ -34,13 +34,11 @@ async def clean_shell_state():
 
 
 @pytest.fixture(autouse=True, scope="function")
-def mock_asyncio_subprocess(request):
+def mock_filesystem(request):
     """
-    Automatically patch all utils.file operations for every test.
-
     To skip this fixture for integration tests, use:
         @pytest.mark.no_file_mocking
-        def test_real_file_operations():
+        def test_rAlreal_file_operations():
             # This test will use real file operations
     """
     # Skip mocking for tests marked with @pytest.mark.no_file_mocking

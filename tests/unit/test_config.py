@@ -12,10 +12,13 @@ from solveig.llm import APIType
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
+pytestmark = pytest.mark.anyio
+
+
 class TestSolveigConfigCore:
     """Test SolveigConfig core functionality and initialization."""
 
-    def test_default_values(self):
+    async def test_default_values(self):
         """Test default configuration values."""
         config = SolveigConfig()
         assert config.api_type == APIType.LOCAL
@@ -26,22 +29,23 @@ class TestSolveigConfigCore:
         assert config.auto_send is False
         assert config.no_commands is False
 
-    def test_api_type_conversion_success(self):
+    async def test_api_type_conversion_success(self):
         """Test API type string to enum conversion."""
         config = SolveigConfig(api_type="OPENAI")
         assert config.api_type == APIType.OPENAI
 
-    def test_api_type_conversion_failure(self):
+    async def test_api_type_conversion_failure(self):
         """Test invalid API type string raises ValueError."""
         with pytest.raises(ValueError):
             SolveigConfig(api_type="INVALID_API_TYPE")
 
-    def test_disk_space_parsing_success(self):
+
+    async def test_disk_space_parsing_success(self):
         """Test disk space parsing works."""
         config = SolveigConfig(min_disk_space_left="1.34GiB")
         assert config.min_disk_space_left == int(1.34 * 1024**3)
 
-    def test_disk_space_parsing_failure(self):
+    async def test_disk_space_parsing_failure(self):
         """Test invalid disk space format raises ValueError."""
         with pytest.raises(ValueError):
             SolveigConfig(min_disk_space_left="invalid")
@@ -54,13 +58,11 @@ class TestConfigFileParsing:
         "config_path",
         ["", "/nonexistent/path.json"],  # invalid path  # inexistent path
     )
-    @pytest.mark.anyio
     async def test_parse_from_file_invalid_path(self, config_path):
         """Test parsing from invalid path returns empty dict."""
         with pytest.raises(FileNotFoundError):
             await SolveigConfig.parse_from_file(config_path)
 
-    @pytest.mark.anyio
     async def test_parse_from_file_default_path_missing(self):
         """Test parsing from missing default config path returns empty dict."""
         from unittest.mock import patch
@@ -75,7 +77,6 @@ class TestConfigFileParsing:
             assert result == {}
 
     @pytest.mark.no_file_mocking
-    @pytest.mark.anyio
     async def test_parse_from_file_success(self):
         """Test successful config file parsing."""
 
@@ -88,7 +89,6 @@ class TestConfigFileParsing:
             assert result == DEFAULT_CONFIG
 
     @pytest.mark.no_file_mocking
-    @pytest.mark.anyio
     async def test_parse_from_file_malformed_json(self):
         """Test malformed JSON raises JSONDecodeError."""
 
@@ -129,7 +129,6 @@ class TestConfigSerialization:
 class TestCLIIntegration:
     """Test CLI argument parsing and integration."""
 
-    @pytest.mark.anyio
     async def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "local", "test prompt"]
@@ -140,7 +139,6 @@ class TestCLIIntegration:
         assert config.api_type == APIType.LOCAL
         assert prompt == "test prompt"
 
-    @pytest.mark.anyio
     async def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
@@ -153,7 +151,6 @@ class TestCLIIntegration:
         assert prompt == "test prompt"
 
     @pytest.mark.no_file_mocking
-    @pytest.mark.anyio
     async def test_file_and_cli_merge(self):
         """Test file config merges with CLI overrides."""
 
@@ -170,7 +167,6 @@ class TestCLIIntegration:
             assert config.api_type == APIType.GEMINI
             assert config.temperature == 0.5  # CLI override
 
-    @pytest.mark.anyio
     async def test_default_config_missing_shows_warning(self):
         """Test warning shown when default config file doesn't exist."""
         from unittest.mock import patch
@@ -191,7 +187,6 @@ class TestCLIIntegration:
                 "Failed to parse config file" in output for output in interface.outputs
             )
 
-    @pytest.mark.anyio
     async def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
         args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
@@ -201,7 +196,6 @@ class TestCLIIntegration:
         assert config.no_commands is True
         assert prompt == "test prompt"
 
-    @pytest.mark.anyio
     async def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
         args = ["-a", "local", "test prompt"]
