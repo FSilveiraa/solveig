@@ -56,12 +56,12 @@ class DeleteRequirement(Requirement):
     ) -> "DeleteResult":
         # Pre-flight validation - use utils/file.py validation
         abs_path = Filesystem.get_absolute_path(self.path)
-        is_directory = await Filesystem.is_dir(abs_path)
 
         try:
+            is_directory = await Filesystem.is_dir(abs_path)
             await Filesystem.validate_delete_access(abs_path)
-        except (FileNotFoundError, PermissionError) as e:
-            await interface.display_error(f"Skipping: {e}")
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            await interface.display_error(f"Cannot delete {str(abs_path)}: {e}")
             return DeleteResult(
                 requirement=self, accepted=False, error=str(e), path=str(abs_path)
             )
