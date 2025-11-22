@@ -45,10 +45,9 @@ class TestConversationFlow:
         interface = MockInterface()
         interface.set_user_inputs(
             [
-                "y",  # Accept pwd command
-                "y",  # Send pwd output
-                "y",  # Accept ls command
-                "y",  # Send ls output
+                0,  # Accept pwd command (Run and send)
+                1,  # Accept ls command (Run and inspect)
+                0,  # Send ls output (after inspection)
                 "/exit",  # End conversation
             ]
         )
@@ -96,9 +95,8 @@ class TestConversationFlow:
             interface = MockInterface()
             interface.set_user_inputs(
                 [
-                    "y",  # Accept read operation
-                    "y",  # Send read result
-                    "n",  # Decline find command
+                    0,  # Accept read operation and send result
+                    2,  # Decline find command
                     "/exit",
                 ]
             )
@@ -128,14 +126,12 @@ class TestConversationFlow:
 
         mock_client = create_mock_client(llm_response)
         interface = MockInterface()
-        interface.set_user_inputs(
-            [
-                "y",  # Accept command (even though it will error)
-                "y",  # Send error output
-                "/exit",
-            ]
-        )
-
+                    interface.set_user_inputs(
+                        [
+                            0,  # Accept command and send error output
+                            "/exit",
+                        ]
+                    )
         await run_async(
             config=DEFAULT_CONFIG,
             interface=interface,

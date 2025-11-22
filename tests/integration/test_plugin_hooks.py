@@ -65,7 +65,7 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="fail this command", comment="Test")
-        interface.set_user_inputs(["n"])  # Decline if it gets to user
+        interface.set_user_inputs([2])  # Decline if it gets to user
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -95,7 +95,7 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="rm -rf /important/data", comment="Test")
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([2])
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -126,7 +126,7 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="echo hello", comment="Test")
-        interface.set_user_inputs(["n"])  # Decline the command
+        interface.set_user_inputs([2])  # Decline the command
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -159,7 +159,7 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="echo hello", comment="Test")
-        interface.set_user_inputs(["y", "y"])  # Accept the command
+        interface.set_user_inputs([0, 0])  # Accept the command
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -188,7 +188,7 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([2])
 
         # Execute
         await req.solve(DEFAULT_CONFIG, interface)
@@ -220,7 +220,7 @@ class TestPluginHookSystem:
         # Execute
         # Test with CommandRequirement
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([1])
         await cmd_req.solve(DEFAULT_CONFIG, interface=interface)
         # Verify
         assert called == ["command_hook"]
@@ -230,7 +230,7 @@ class TestPluginHookSystem:
             path="/test/file.txt", metadata_only=True, comment="Test"
         )
 
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([1])
         await read_req.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify
@@ -261,11 +261,10 @@ class TestPluginHookSystem:
             path="/test/file.txt", metadata_only=True, comment="Test"
         )
 
-        # Execute
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([2])
         await cmd_req.solve(DEFAULT_CONFIG, interface)
 
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([1])
         await read_req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
@@ -311,7 +310,7 @@ class TestPluginFiltering:
                 is_directory=False,
                 content="bananas pineapples",
             )
-            interface.set_user_inputs(["y", "y"])  # write file, send back
+            interface.set_user_inputs([0, 0])  # write file, send back
             result = await req.solve(config_with_plugin, interface)
             assert temp_file.exists()
 
@@ -349,7 +348,7 @@ class TestPluginFiltering:
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([2])
         await req.solve(config_without_plugin, interface)
 
         # Verify plugin did NOT execute
@@ -417,7 +416,7 @@ class TestPluginFiltering:
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs(["n"])
+        interface.set_user_inputs([2])
         await req.solve(config_with_options, interface)
 
         # Verify plugin received its configuration
