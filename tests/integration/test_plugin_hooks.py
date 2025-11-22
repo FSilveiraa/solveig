@@ -197,7 +197,7 @@ class TestPluginHookSystem:
         assert execution_order == ["first", "second"]
 
     @pytest.mark.anyio
-    async def test_hook_requirement_filtering(self):
+    async def test_hook_requirement_filtering(self, tmp_path):
         """Test that hooks only run for specified requirement types."""
         # Setup
         called = []
@@ -226,8 +226,10 @@ class TestPluginHookSystem:
         assert called == ["command_hook"]
 
         # Test with ReadRequirement
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
         read_req = ReadRequirement(
-            path="/test/file.txt", metadata_only=True, comment="Test"
+            path=str(test_file), metadata_only=True, comment="Test"
         )
 
         interface.set_user_inputs([1])
@@ -238,7 +240,7 @@ class TestPluginHookSystem:
         assert len(called) == 2  # Each hook called once
 
     @pytest.mark.anyio
-    async def test_hook_without_requirement_filter(self):
+    async def test_hook_without_requirement_filter(self, tmp_path):
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
         called = []
@@ -257,8 +259,10 @@ class TestPluginHookSystem:
 
         # Test with different requirement types
         cmd_req = CommandRequirement(command="echo test", comment="Test")
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("content")
         read_req = ReadRequirement(
-            path="/test/file.txt", metadata_only=True, comment="Test"
+            path=str(test_file), metadata_only=True, comment="Test"
         )
 
         interface.set_user_inputs([2])

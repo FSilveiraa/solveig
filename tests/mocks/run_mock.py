@@ -116,6 +116,14 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
         )
     ]
 
+    mock_messages = [AssistantMessage(requirements=[
+        ReadRequirement(
+            comment="Test read",
+            path="~/Sync/",
+            metadata_only=True,
+        )
+    ])]
+
     if mock_messages is None:
         from solveig.system_prompt.examples.long import EXAMPLE
 

@@ -40,17 +40,20 @@ class TestReadValidation:
         assert "read(comment, path, metadata_only)" in description
 
     @pytest.mark.anyio
-    async def test_display_header(self):
+    async def test_display_header(self, tmp_path):
         """Test ReadRequirement display header."""
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("dummy content")
+
         req = ReadRequirement(
-            path="/test/file.txt", metadata_only=False, comment="Read test"
+            path=str(test_file), metadata_only=False, comment="Read test"
         )
         interface = MockInterface()
         await req.display_header(interface)
 
         output = interface.get_all_output()
         assert "Read test" in output
-        assert "/test/file.txt" in output
+        assert str(test_file) in output
         assert "content and metadata" in output
 
 

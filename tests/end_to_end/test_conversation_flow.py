@@ -95,7 +95,7 @@ class TestConversationFlow:
             interface = MockInterface()
             interface.set_user_inputs(
                 [
-                    0,  # Accept read operation and send result
+                    0,  # Accept read operation
                     2,  # Decline find command
                     "/exit",
                 ]
@@ -126,12 +126,12 @@ class TestConversationFlow:
 
         mock_client = create_mock_client(llm_response)
         interface = MockInterface()
-                    interface.set_user_inputs(
-                        [
-                            0,  # Accept command and send error output
-                            "/exit",
-                        ]
-                    )
+        interface.set_user_inputs(
+            [
+                0,  # Accept command and send error output
+                "/exit",
+            ]
+        )
         await run_async(
             config=DEFAULT_CONFIG,
             interface=interface,
@@ -156,7 +156,7 @@ class TestConversationFlow:
         interface = MockInterface()
         interface.set_user_inputs(
             [
-                "n",  # Don't retry when it says "empty message"
+                1,  # Don't retry when it says "empty message"
                 "/exit",  # Exit the conversation
             ]
         )

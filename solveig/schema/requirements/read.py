@@ -32,12 +32,17 @@ class ReadRequirement(Requirement):
         """Display read requirement header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
-        metadata_only = self.metadata_only or await Filesystem.is_dir(
-            Filesystem.get_absolute_path(self.path)
-        )
-        await interface.display_text(
-            f"{'' if metadata_only else 'content and '}metadata", prefix="Requesting:"
-        )
+
+        metadata = await Filesystem.read_metadata(Filesystem.get_absolute_path(self.path))
+
+        # Display the dir listing for directories (1-depth tree)
+        if metadata.is_directory:
+            await interface.display_tree(metadata=metadata)
+        # The metadata vs content distinction only makes sense for files
+        else:
+            await interface.display_text(
+                f"{'' if self.metadata_only else 'content and '}metadata", prefix="Requesting:"
+            )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""

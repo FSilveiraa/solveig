@@ -1,10 +1,13 @@
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import Any, Iterable
 
+from solveig import utils
 from solveig.interface import TerminalInterface
+from solveig.schema.base import BaseSolveigModel
 
 
 class MockInterface(TerminalInterface):
@@ -72,7 +75,13 @@ class MockInterface(TerminalInterface):
         display_metadata: bool = False,
     ) -> None:
         tree_title = title or str(metadata.path)
-        self.outputs.append(f"📁 Tree: {tree_title} (metadata: {display_metadata})")
+        self.outputs.append(f"Tree: {tree_title}")
+
+        # Correctly serialize using the project's two-step standard:
+        # 1. Convert complex objects to a JSON-serializable dict.
+        serializable_dict = BaseSolveigModel._dump_pydantic_field(metadata)
+        # 2. Dump the dict to a JSON string.
+        self.outputs.append(json.dumps(serializable_dict, default=utils.misc.default_json_serialize))
 
     async def display_file_info(
         self,
