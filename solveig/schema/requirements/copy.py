@@ -58,13 +58,13 @@ class CopyRequirement(Requirement):
         # Pre-flight validation - use utils/file.py validation
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
-        error: Exception | None = None
 
         try:
             await Filesystem.validate_read_access(abs_source_path)
             await Filesystem.validate_write_access(abs_destination_path)
-        except Exception as e:
-            await interface.display_error(f"Skipping: {e}")
+            is_dir = await Filesystem.is_dir(abs_source_path)
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            await interface.display_error(f"Cannot copy from {str(abs_source_path)} to {str(abs_destination_path)}: {e}")
             return CopyResult(
                 requirement=self,
                 accepted=False,
@@ -72,49 +72,49 @@ class CopyRequirement(Requirement):
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
             )
-
-        is_dir = await Filesystem.is_dir(abs_source_path)
-        # Get user consent
-        if (
+        # Check for auto-allowed paths
+        auto_copy = (
             Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
             and Filesystem.path_matches_patterns(
                 abs_destination_path, config.auto_allowed_paths
             )
-        ) or (
-            await interface.ask_choice(
-                f"Allow copying {'directory' if is_dir else 'file'}?", ["Yes", "No"]
+        )
+
+        if auto_copy:
+            await interface.display_info(
+                f"Copying {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
             )
-        ) == 0:
-            try:
-                # Perform the copy operation - use utils/file.py method
-                await Filesystem.copy(
-                    abs_source_path,
-                    abs_destination_path,
-                    min_space_left=config.min_disk_space_left,
-                )
-                await interface.display_success("Copied")
-                return CopyResult(
-                    requirement=self,
-                    accepted=True,
-                    source_path=str(abs_source_path),
-                    destination_path=str(abs_destination_path),
-                )
-            except (PermissionError, OSError, FileExistsError) as e:
-                await interface.display_error(f"Found error when copying: {e}")
-                return CopyResult(
-                    requirement=self,
-                    accepted=False,
-                    error=str(e),
-                    source_path=str(abs_source_path),
-                    destination_path=str(abs_destination_path),
-                )
-        else:
+        elif await interface.ask_choice(
+                f"Allow copying {'directory' if is_dir else 'file'}?",
+                ["Yes", "No"]
+            ) != 0:
             return CopyResult(
                 requirement=self,
                 accepted=False,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
-                error=str(
-                    error
-                ),  # allows us to return a "No" with the reason being that the file existed
+            )
+
+        try:
+            # Perform the copy operation - use utils/file.py method
+            await Filesystem.copy(
+                abs_source_path,
+                abs_destination_path,
+                min_space_left=config.min_disk_space_left,
+            )
+            await interface.display_success("Copied")
+            return CopyResult(
+                requirement=self,
+                accepted=True,
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
+            )
+        except (PermissionError, OSError, FileExistsError) as e:
+            await interface.display_error(f"Found error when copying: {e}")
+            return CopyResult(
+                requirement=self,
+                accepted=False,
+                error=str(e),
+                source_path=str(abs_source_path),
+                destination_path=str(abs_destination_path),
             )
