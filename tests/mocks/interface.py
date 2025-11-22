@@ -162,7 +162,7 @@ class MockInterface(TerminalInterface):
         self.stats_updates.append(kwargs)
 
     # Test helper methods
-    def set_user_inputs(self, inputs: list[str]) -> None:
+    def set_user_inputs(self, inputs: list[str|int]) -> None:
         """Pre-configure user inputs for testing"""
         self.user_inputs = inputs.copy()
 

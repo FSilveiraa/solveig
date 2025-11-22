@@ -105,17 +105,6 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
         ),
     ]
 
-    mock_messages = [
-        AssistantMessage(
-            requirements=[
-                CommandRequirement(comment="Just cd", command="cd ~", timeout=10),
-                CommandRequirement(
-                    comment="Print current dir", command="pwd", timeout=10
-                ),
-            ]
-        )
-    ]
-
     mock_messages = [AssistantMessage(requirements=[
         ReadRequirement(
             comment="Test read",

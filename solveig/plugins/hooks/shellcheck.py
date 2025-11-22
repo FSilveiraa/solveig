@@ -77,14 +77,22 @@ async def check_command(
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
         except FileNotFoundError:
+            # This case handles when the shell itself isn't found, which is a deeper system issue.
+            # The more common case is the shell reporting 'command not found', handled below.
             await interface.display_warning(
-                "Shellcheck was activated as a plugin, but the `shellcheck` command is not available."
+                "Shellcheck plugin is enabled, but the shell command failed to execute. "
+                "This may indicate a problem with your system's shell."
+            )
+            return
+
+        # Handle 'command not found' specifically
+        if proc.returncode == 127 and b"command not found" in stderr.lower():
+            await interface.display_warning(
+                "Shellcheck plugin is enabled, but the `shellcheck` command is not available."
             )
             await interface.display_warning(
-                "Please install Shellcheck following the instructions: https://github.com/koalaman/shellcheck#user-content-installing"
+                "Please install Shellcheck or disable the plugin to remove this warning."
             )
-            # if this throws an exception, then not having Shellcheck installed
-            # prevents you from running commands at all
             return
 
         if proc.returncode == 0:
@@ -96,6 +104,13 @@ async def check_command(
 
         # Parse shellcheck warnings and raise validation error
         try:
+            # If stdout is empty, there's nothing to parse.
+            if not stdout:
+                raise ValidationError(
+                    f"Shellcheck validation failed. Exit code: {proc.returncode}. "
+                    f"Stderr: {stderr.decode(errors='ignore').strip()}"
+                )
+
             output = json.loads(stdout.decode("utf-8").strip())
             errors = [f"[{item['level']}] {item['message']}" for item in output]
             if errors:
@@ -106,7 +121,9 @@ async def check_command(
                     f"Shellcheck validation failed for command `{requirement.command}`"
                 )
         except json.JSONDecodeError as e:
-            raise ValidationError(f"Shellcheck output parsing failed: {e}") from e
+            raise ValidationError(
+                f"Shellcheck output parsing failed. Stderr: {stderr.decode(errors='ignore').strip()}"
+            ) from e
 
     finally:
         os.remove(script_path)
