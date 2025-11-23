@@ -34,28 +34,37 @@ class Palette:
 
 
 terracotta = Palette(
+    # Info
     name="terracotta",
+
+    # UI
     background="#231D13",  # dark greyish brown
-    text="#FFF1DB",  # beige
-    input="#CB9D63",  # faded yellow
-    box="#CB9D63",  # faded yellow
-    info="#CB9D63",
     group="#869F89",  # pale green
     section="#BE5856",  # clay red
+    box="#CB9D63",  # faded yellow
+    input="#CB9D63",  # faded yellow
+
+    # Messages
+    text="#FFF1DB",  # beige
+    info="#CB9D63",  # faded yellow
     warning="#BC8F8F",  # rosy brown
     error="#BE5856",  # clay red
 )
 
 
 solarized_dark = Palette(
+    # Info
     name="solarized-dark",
+
+    # UI
     background="#002b36",  # base3
-    text="#839496",  # base0
-    input="#2aa198",  # cyan
-    info="#2aa198",  # cyan
-    box="#268bd2",  # blue
     group="#859900",  # green
     section="#D33682",  # magenta
+    box="#268bd2",  # blue
+    input="#2aa198",  # cyan
+
+    text="#839496",  # base0
+    info="#2aa198",  # cyan
     warning="#B58900",  # yellow
     error="#CB4B16",  # orange
 )
@@ -92,14 +101,19 @@ forest = Palette(
 
 
 midnight = Palette(
+    # Info
     name="midnight",
+
+    # UI
     background="#121414",  # dark grey
-    text="#e0e0e0",  # light grey
-    input="#9FC7F0",  # bright blue
-    info="#9FC7F0",  # bright blue
-    box="#A46A73",  # low-contrast pink
     group="#675DA6",  # brighter purple
     section="#3B679C",  # sky blue
+    box="#A46A73",  # low-contrast pink
+    input="#3B679C",  # bright blue
+
+    # Messages
+    text="#e0e0e0",  # light grey
+    info="#9FC7F0",  # bright blue
     warning="#f39800",  # amber
     error="#e94560",  # bright pink
 )
