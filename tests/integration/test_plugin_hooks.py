@@ -1,11 +1,9 @@
-
 """
 Tests for the refactored exception-based plugin system.
 """
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -13,10 +11,13 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.interface import SolveigInterface
 from solveig.plugins import hooks, initialize_plugins
-from solveig.schema import CommandResult, WriteRequirement, ReadResult, TaskListRequirement
+from solveig.schema import (
+    ReadResult,
+    TaskListRequirement,
+    WriteRequirement,
+)
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
-
 
 pytestmark = pytest.mark.anyio
 
@@ -220,7 +221,7 @@ class TestPluginHookSystem:
         # Execute
         # Test with CommandRequirement
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([2]) # Don't run
+        interface.set_user_inputs([2])  # Don't run
         await cmd_req.solve(DEFAULT_CONFIG, interface=interface)
         # Verify
         assert called == ["command_hook"]
@@ -232,7 +233,7 @@ class TestPluginHookSystem:
             path=str(test_file), metadata_only=True, comment="Test"
         )
 
-        interface.set_user_inputs([1]) # don't send metadata
+        interface.set_user_inputs([1])  # don't send metadata
         await read_req.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify

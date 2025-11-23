@@ -1,6 +1,7 @@
 """Tests for message schema generation and filtering."""
 
 import json
+
 import pytest
 
 from solveig.config import SolveigConfig

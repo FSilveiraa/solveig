@@ -77,7 +77,7 @@ class TreeRequirement(Requirement):
                 "Read and send tree",
                 "Read tree and inspect first",
                 "Don't read anything",
-            ]
+            ],
         )
 
         if choice_read_tree <= 1:

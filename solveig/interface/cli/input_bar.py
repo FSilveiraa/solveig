@@ -3,12 +3,11 @@ Unified input widget handling both free-form input and questions.
 """
 
 import asyncio
+from collections.abc import Iterable
 from enum import Enum
 
-from collections.abc import Iterable
-
-from textual.containers import Container, Vertical
-from textual.widgets import Input, OptionList, Static
+from textual.containers import Container
+from textual.widgets import Input, OptionList
 
 from solveig.interface.themes import Palette
 

@@ -86,11 +86,10 @@ def mock_asyncio_subprocess(request):
     mock_process.stdout = AsyncMock()
     mock_process.stderr = AsyncMock()
 
-    with patch(
-        "asyncio.create_subprocess_exec", new_callable=AsyncMock
-    ) as mock_exec, patch(
-        "asyncio.create_subprocess_shell", new_callable=AsyncMock
-    ) as mock_shell:
+    with (
+        patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
+        patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_shell,
+    ):
         # By default, have both return the same mock process
         mock_exec.return_value = mock_process
         mock_shell.return_value = mock_process
@@ -105,9 +104,6 @@ def mock_asyncio_subprocess(request):
                 "mock_process": mock_process,
             },
         )()
-
-
-
 
 
 @pytest.fixture(autouse=True, scope="function")

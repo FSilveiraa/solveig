@@ -46,7 +46,7 @@ class PersistentShell:
                     marker_line = line.strip()
                     break
                 lines.append(line)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break  # No more data available
         return "".join(lines), marker_line
 
@@ -58,7 +58,7 @@ class PersistentShell:
         """
         if timeout is not None and timeout <= 0:
             # Detached process - use separate subprocess
-            proc = await asyncio.create_subprocess_shell(
+            _ = await asyncio.create_subprocess_shell(
                 cmd,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
@@ -95,7 +95,7 @@ class PersistentShell:
                 marker, cwd = marker_line.split(":", 1)
                 if marker.strip() == MARKER:
                     self.current_cwd = cwd.strip()
-        except (ValueError, AttributeError) as e:
+        except (ValueError, AttributeError):
             # Log parsing failure but don't crash
             pass
 

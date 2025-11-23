@@ -9,7 +9,11 @@ from solveig.schema import TaskListRequirement
 from solveig.schema.results.task import Task
 
 # Mark all tests in this module to skip file mocking and subprocess mocking (for real e2e testing)
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking, pytest.mark.no_subprocess_mocking ]
+pytestmark = [
+    pytest.mark.anyio,
+    pytest.mark.no_file_mocking,
+    pytest.mark.no_subprocess_mocking,
+]
 
 from solveig.run import run_async
 from solveig.schema.message import AssistantMessage

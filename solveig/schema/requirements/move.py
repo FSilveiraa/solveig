@@ -62,7 +62,9 @@ class MoveRequirement(Requirement):
             await Filesystem.validate_write_access(abs_destination_path)
             is_dir = await Filesystem.is_dir(abs_source_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
-            await interface.display_error(f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}")
+            await interface.display_error(
+                f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
+            )
             return MoveResult(
                 requirement=self,
                 accepted=False,
@@ -72,11 +74,10 @@ class MoveRequirement(Requirement):
             )
 
         # Check for auto-allowed paths
-        auto_move = (
-            Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
-            and Filesystem.path_matches_patterns(
-                abs_destination_path, config.auto_allowed_paths
-            )
+        auto_move = Filesystem.path_matches_patterns(
+            abs_source_path, config.auto_allowed_paths
+        ) and Filesystem.path_matches_patterns(
+            abs_destination_path, config.auto_allowed_paths
         )
 
         if auto_move:

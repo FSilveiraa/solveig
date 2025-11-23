@@ -9,12 +9,11 @@ from solveig.interface import TerminalInterface
 from solveig.plugins.schema.tree import TreeRequirement
 from solveig.run import run_async
 from solveig.schema import (
-    CommandRequirement,
+    CopyRequirement,
+    DeleteRequirement,
+    MoveRequirement,
     ReadRequirement,
     WriteRequirement,
-    DeleteRequirement,
-    CopyRequirement,
-    MoveRequirement,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.utils.file import Filesystem
@@ -105,13 +104,17 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
         ),
     ]
 
-    mock_messages = [AssistantMessage(requirements=[
-        ReadRequirement(
-            comment="Test read",
-            path="~/Sync/",
-            metadata_only=True,
+    mock_messages = [
+        AssistantMessage(
+            requirements=[
+                ReadRequirement(
+                    comment="Test read",
+                    path="~/Sync/",
+                    metadata_only=True,
+                )
+            ]
         )
-    ])]
+    ]
 
     if mock_messages is None:
         from solveig.system_prompt.examples.long import EXAMPLE

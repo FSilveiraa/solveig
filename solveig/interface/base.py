@@ -65,6 +65,7 @@ class SolveigInterface(ABC):
         """Display a success message with standard formatting."""
         ...
 
+    @abstractmethod
     async def display_info(self, message: str) -> None:
         """Display a system message."""
         ...

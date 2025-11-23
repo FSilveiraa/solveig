@@ -10,7 +10,7 @@ from solveig.schema.requirements import ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestReadValidation:
@@ -133,7 +133,9 @@ class TestFileChoiceFlow:
             test_file.write_text(test_content)
 
             interface = MockInterface()
-            interface.user_inputs.extend([1, 0])  # Inspect first, then send content+metadata
+            interface.user_inputs.extend(
+                [1, 0]
+            )  # Inspect first, then send content+metadata
 
             req = ReadRequirement(
                 path=str(test_file), metadata_only=False, comment="Inspect then send"
@@ -156,7 +158,9 @@ class TestFileChoiceFlow:
             interface.user_inputs.extend([1, 1])  # Inspect first, then metadata only
 
             req = ReadRequirement(
-                path=str(test_file), metadata_only=False, comment="Inspect then metadata"
+                path=str(test_file),
+                metadata_only=False,
+                comment="Inspect then metadata",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)

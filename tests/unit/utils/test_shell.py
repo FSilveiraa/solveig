@@ -5,10 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from solveig.utils.shell import MARKER, PersistentShell, get_persistent_shell, stop_persistent_shell
+from solveig.utils.shell import (
+    MARKER,
+    PersistentShell,
+    get_persistent_shell,
+    stop_persistent_shell,
+)
 
 pytestmark = pytest.mark.anyio
-
 
 
 class TestPersistentShellBasics:
@@ -70,7 +74,7 @@ class TestMarkerParsing:
         # Test formats that should NOT change directory
         invalid_markers = [
             f"{MARKER}",  # No colon
-            f"WRONG_MARKER:/path",  # Wrong marker
+            "WRONG_MARKER:/path",  # Wrong marker
             "no_marker_at_all:/path",  # No marker
             "",  # Empty string
         ]
@@ -97,7 +101,6 @@ class TestMarkerParsing:
 
 class TestStreamReading:
     """Test stream reading logic with real async streams."""
-
 
     async def test_read_stream_basic_lines(self):
         """Test reading lines from stream until EOF."""
@@ -139,7 +142,7 @@ class TestStreamReading:
         shell = PersistentShell()
 
         mock_stream = AsyncMock()
-        mock_stream.readline.side_effect = asyncio.TimeoutError()
+        mock_stream.readline.side_effect = TimeoutError()
 
         result, marker = await shell._read_stream(mock_stream, timeout=0.1)
 

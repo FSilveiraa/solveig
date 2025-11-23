@@ -33,7 +33,9 @@ class ReadRequirement(Requirement):
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
 
-        metadata = await Filesystem.read_metadata(Filesystem.get_absolute_path(self.path))
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(self.path)
+        )
 
         # Display the dir listing for directories (1-depth tree)
         if metadata.is_directory:
@@ -41,7 +43,8 @@ class ReadRequirement(Requirement):
         # The metadata vs content distinction only makes sense for files
         else:
             await interface.display_text(
-                f"{'' if self.metadata_only else 'content and '}metadata", prefix="Requesting:"
+                f"{'' if self.metadata_only else 'content and '}metadata",
+                prefix="Requesting:",
             )
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
@@ -146,7 +149,6 @@ class ReadRequirement(Requirement):
                     title=f"Content: {abs_path}",
                     language=abs_path.suffix,
                 )
-
 
                 if file_content:
                     if choice_read_file == 0:

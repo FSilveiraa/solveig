@@ -1,9 +1,9 @@
 import asyncio
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import Any, Iterable
+from typing import Any
 
 from solveig import utils
 from solveig.interface import TerminalInterface
@@ -81,7 +81,9 @@ class MockInterface(TerminalInterface):
         # 1. Convert complex objects to a JSON-serializable dict.
         serializable_dict = BaseSolveigModel._dump_pydantic_field(metadata)
         # 2. Dump the dict to a JSON string.
-        self.outputs.append(json.dumps(serializable_dict, default=utils.misc.default_json_serialize))
+        self.outputs.append(
+            json.dumps(serializable_dict, default=utils.misc.default_json_serialize)
+        )
 
     async def display_file_info(
         self,
@@ -93,7 +95,9 @@ class MockInterface(TerminalInterface):
     ) -> None:
         file_type = "directory" if is_directory else "file"
         if destination_path:
-            self.outputs.append(f"📄 File info: {source_path} → {destination_path} ({file_type})")
+            self.outputs.append(
+                f"📄 File info: {source_path} → {destination_path} ({file_type})"
+            )
         else:
             self.outputs.append(f"📄 File info: {source_path} ({file_type})")
         if source_content:
@@ -133,7 +137,9 @@ class MockInterface(TerminalInterface):
         if not self.user_inputs:
             raise ValueError("No further user input configured")
         choice_index = self.user_inputs.pop(0)
-        self.outputs.append(f"Choice: {question} → {list(choices)[choice_index]} (index {choice_index})")
+        self.outputs.append(
+            f"Choice: {question} → {list(choices)[choice_index]} (index {choice_index})"
+        )
         return choice_index
 
     # Context managers
@@ -162,7 +168,7 @@ class MockInterface(TerminalInterface):
         self.stats_updates.append(kwargs)
 
     # Test helper methods
-    def set_user_inputs(self, inputs: list[str|int]) -> None:
+    def set_user_inputs(self, inputs: list[str | int]) -> None:
         """Pre-configure user inputs for testing"""
         self.user_inputs = inputs.copy()
 

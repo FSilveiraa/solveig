@@ -10,8 +10,7 @@ from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
-
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestTreePlugin:
@@ -49,9 +48,7 @@ class TestTreePlugin:
 
             mock_client = create_mock_client(llm_response)
             interface = MockInterface()
-            interface.set_user_inputs(
-                [0, "/exit"]
-            )  # Accept tree, then send, then exit
+            interface.set_user_inputs([0, "/exit"])  # Accept tree, then send, then exit
 
             # Execute conversation
             await run_async(
@@ -139,7 +136,7 @@ class TestTreePlugin:
                 path=str(temp_path), max_depth=2, comment="Limited depth tree"
             )
             interface = MockInterface()
-            interface.set_user_inputs([0]) # read+send tree
+            interface.set_user_inputs([0])  # read+send tree
 
             result = await req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True

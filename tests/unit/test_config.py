@@ -11,7 +11,6 @@ from solveig.config import SolveigConfig
 from solveig.llm import APIType
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
-
 pytestmark = pytest.mark.anyio
 
 
@@ -38,7 +37,6 @@ class TestSolveigConfigCore:
         """Test invalid API type string raises ValueError."""
         with pytest.raises(ValueError):
             SolveigConfig(api_type="INVALID_API_TYPE")
-
 
     async def test_disk_space_parsing_success(self):
         """Test disk space parsing works."""

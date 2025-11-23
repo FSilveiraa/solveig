@@ -10,7 +10,7 @@ from solveig.schema.requirements import MoveRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestMoveValidation:
@@ -34,16 +34,20 @@ class TestMoveValidation:
 
         # Whitespace paths should fail
         with pytest.raises(ValidationError):
-            MoveRequirement(source_path="   \t\n   ", destination_path="/valid", **extra_kwargs)
+            MoveRequirement(
+                source_path="   \t\n   ", destination_path="/valid", **extra_kwargs
+            )
 
         with pytest.raises(ValidationError):
-            MoveRequirement(source_path="/valid", destination_path="   \t\n   ", **extra_kwargs)
+            MoveRequirement(
+                source_path="/valid", destination_path="   \t\n   ", **extra_kwargs
+            )
 
         # Valid paths should strip whitespace
         req = MoveRequirement(
             source_path="  /valid/source  ",
             destination_path="  /valid/dest  ",
-            **extra_kwargs
+            **extra_kwargs,
         )
         assert req.source_path == "/valid/source"
         assert req.destination_path == "/valid/dest"
@@ -58,7 +62,7 @@ class TestMoveValidation:
         req = MoveRequirement(
             source_path="/source/test.txt",
             destination_path="/dest/test.txt",
-            comment="Move test file"
+            comment="Move test file",
         )
         interface = MockInterface()
         await req.display_header(interface)
@@ -73,7 +77,7 @@ class TestMoveValidation:
         req = MoveRequirement(
             source_path="/source/dir",
             destination_path="/dest/dir",
-            comment="Move test directory"
+            comment="Move test directory",
         )
         interface = MockInterface()
         await req.display_header(interface)
@@ -100,7 +104,7 @@ class TestFileOperations:
             req = MoveRequirement(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
-                comment="Move test file"
+                comment="Move test file",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -123,7 +127,7 @@ class TestFileOperations:
             req = MoveRequirement(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
-                comment="Decline move"
+                comment="Decline move",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -152,7 +156,7 @@ class TestFileOperations:
             req = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
-                comment="Move directory tree"
+                comment="Move directory tree",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -180,7 +184,7 @@ class TestFileOperations:
             req = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
-                comment="Decline directory move"
+                comment="Decline directory move",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -209,7 +213,7 @@ class TestAutoAllowedPaths:
             req = MoveRequirement(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
-                comment="Auto-allowed file move"
+                comment="Auto-allowed file move",
             )
 
             result = await req.actually_solve(config, interface)
@@ -243,7 +247,7 @@ class TestAutoAllowedPaths:
             req = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
-                comment="Auto-allowed directory move"
+                comment="Auto-allowed directory move",
             )
 
             result = await req.actually_solve(config, interface)
@@ -274,7 +278,7 @@ class TestAutoAllowedPaths:
             req = MoveRequirement(
                 source_path=str(auto_file),
                 destination_path=str(manual_file),
-                comment="Partial auto-allowed move"
+                comment="Partial auto-allowed move",
             )
 
             result = await req.actually_solve(config, interface)
@@ -291,9 +295,7 @@ class TestErrorHandling:
     async def test_error_result_creation(self):
         """Test create_error_result method."""
         req = MoveRequirement(
-            source_path="/source.txt",
-            destination_path="/dest.txt",
-            comment="Test"
+            source_path="/source.txt", destination_path="/dest.txt", comment="Test"
         )
         error_result = req.create_error_result("Test error", accepted=False)
 
@@ -314,15 +316,17 @@ class TestErrorHandling:
             req = MoveRequirement(
                 source_path=str(nonexistent_file),
                 destination_path=str(dest_file),
-                comment="Move missing source"
+                comment="Move missing source",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
-            assert any(phrase in result.error.lower()
-                      for phrase in ["not found", "does not exist", "no such file"])
+            assert any(
+                phrase in result.error.lower()
+                for phrase in ["not found", "does not exist", "no such file"]
+            )
 
     async def test_move_permission_denied_source(self):
         """Test moving from a file with insufficient read permissions."""
@@ -343,14 +347,17 @@ class TestErrorHandling:
                 req = MoveRequirement(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
-                    comment="Move protected source"
+                    comment="Move protected source",
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
                 assert not result.accepted
                 assert result.error is not None
-                assert any(sig in result.error.lower() for sig in {"permission", "not readable", "error"})
+                assert any(
+                    sig in result.error.lower()
+                    for sig in {"permission", "not readable", "error"}
+                )
 
             finally:
                 # Restore permissions for cleanup
@@ -375,7 +382,7 @@ class TestErrorHandling:
                 req = MoveRequirement(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
-                    comment="Move to protected destination"
+                    comment="Move to protected destination",
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -398,7 +405,7 @@ class TestPathSecurity:
             dir=Path.home(),
             prefix=".solveig_test_move_source_",
             suffix=".txt",
-            delete=False
+            delete=False,
         ) as source_temp:
             source_temp.write(b"Tilde expansion test")
             source_file_path = Path(source_temp.name)
@@ -407,7 +414,7 @@ class TestPathSecurity:
             dir=Path.home(),
             prefix=".solveig_test_move_dest_",
             suffix=".txt",
-            delete=False
+            delete=False,
         ) as dest_temp:
             dest_file_path = Path(dest_temp.name)
             # Remove the destination file so we can move to it
@@ -424,7 +431,7 @@ class TestPathSecurity:
             req = MoveRequirement(
                 source_path=tilde_source,
                 destination_path=tilde_dest,
-                comment="Tilde expansion test"
+                comment="Tilde expansion test",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -464,7 +471,7 @@ class TestPathSecurity:
             req = MoveRequirement(
                 source_path=traversal_source,
                 destination_path=dest_file,
-                comment="Path traversal test"
+                comment="Path traversal test",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -503,7 +510,7 @@ class TestIntegrationScenarios:
             req = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
-                comment="Move large tree"
+                comment="Move large tree",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -514,7 +521,9 @@ class TestIntegrationScenarios:
 
             # Verify structure was moved
             assert (dest_dir / "file_005.txt").read_text() == "Content 5"
-            assert (dest_dir / "subdir_1" / "nested_3.txt").read_text() == "Nested content 1-3"
+            assert (
+                dest_dir / "subdir_1" / "nested_3.txt"
+            ).read_text() == "Nested content 1-3"
 
     async def test_move_special_filenames(self):
         """Test moving files with special names/characters."""
@@ -543,7 +552,7 @@ class TestIntegrationScenarios:
             req = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir / "moved"),
-                comment="Move special files"
+                comment="Move special files",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -576,7 +585,7 @@ class TestIntegrationScenarios:
             req1 = MoveRequirement(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
-                comment="Move file"
+                comment="Move file",
             )
 
             result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
@@ -594,7 +603,7 @@ class TestIntegrationScenarios:
             req2 = MoveRequirement(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
-                comment="Move directory"
+                comment="Move directory",
             )
 
             result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)

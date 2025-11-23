@@ -8,9 +8,8 @@ import pytest
 from solveig.llm import APIType, parse_api_type
 from tests import LOREM_IPSUM
 
-
 # NOTE: tiktoken requires filesystem access for some reason
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestTokenCounting:

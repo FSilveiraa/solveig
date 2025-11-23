@@ -6,6 +6,7 @@ from textual.widgets import Static
 
 from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
+
 from .tree_display import TreeDisplay
 from .widgets import SectionHeader, TextBox
 

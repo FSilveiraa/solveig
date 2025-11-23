@@ -11,7 +11,7 @@ from solveig.schema.requirements import WriteRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestWriteValidation:
@@ -46,7 +46,7 @@ class TestWriteValidation:
             path="/test/file.txt",
             is_directory=False,
             content="test content",
-            comment="Create test file"
+            comment="Create test file",
         )
         interface = MockInterface()
         await req.display_header(interface)
@@ -59,9 +59,7 @@ class TestWriteValidation:
     async def test_display_header_directory(self):
         """Test WriteRequirement display header for directories."""
         req = WriteRequirement(
-            path="/test/dir",
-            is_directory=True,
-            comment="Create test directory"
+            path="/test/dir", is_directory=True, comment="Create test directory"
         )
         interface = MockInterface()
         await req.display_header(interface)
@@ -88,7 +86,7 @@ class TestFileOperations:
                 path=str(test_file),
                 is_directory=False,
                 content=test_content,
-                comment="Create new file"
+                comment="Create new file",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -109,7 +107,7 @@ class TestFileOperations:
                 path=str(test_file),
                 is_directory=False,
                 content="Should not be created",
-                comment="Declined file"
+                comment="Declined file",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -129,7 +127,7 @@ class TestFileOperations:
                 path=str(test_file),
                 is_directory=False,
                 content=None,  # No content
-                comment="Create empty file"
+                comment="Create empty file",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -155,7 +153,7 @@ class TestFileOperations:
                 path=str(test_file),
                 is_directory=False,
                 content=new_content,
-                comment="Update existing file"
+                comment="Update existing file",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -183,7 +181,7 @@ class TestFileOperations:
                 path=str(test_file),
                 is_directory=False,
                 content="Should not overwrite",
-                comment="Declined update"
+                comment="Declined update",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -204,9 +202,7 @@ class TestDirectoryOperations:
             interface.user_inputs.append(0)  # Accept creation
 
             req = WriteRequirement(
-                path=str(test_dir),
-                is_directory=True,
-                comment="Create new directory"
+                path=str(test_dir), is_directory=True, comment="Create new directory"
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -226,7 +222,7 @@ class TestDirectoryOperations:
             req = WriteRequirement(
                 path=str(nested_dir),
                 is_directory=True,
-                comment="Create nested directories"
+                comment="Create nested directories",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -247,9 +243,7 @@ class TestDirectoryOperations:
             interface.user_inputs.append(1)  # Decline creation
 
             req = WriteRequirement(
-                path=str(test_dir),
-                is_directory=True,
-                comment="Declined directory"
+                path=str(test_dir), is_directory=True, comment="Declined directory"
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -269,7 +263,7 @@ class TestDirectoryOperations:
             req = WriteRequirement(
                 path=str(test_dir),
                 is_directory=True,
-                comment="Update existing directory"
+                comment="Update existing directory",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -280,7 +274,10 @@ class TestDirectoryOperations:
 
             # Verify update message appeared
             output = interface.get_all_output()
-            assert any(sig in output.lower() for sig in {"existing directory", "error", "cannot overwrite"})
+            assert any(
+                sig in output.lower()
+                for sig in {"existing directory", "error", "cannot overwrite"}
+            )
 
 
 class TestAutoAllowedPaths:
@@ -301,7 +298,7 @@ class TestAutoAllowedPaths:
                 path=str(test_file),
                 is_directory=False,
                 content="Auto-allowed content",
-                comment="Auto-allowed file"
+                comment="Auto-allowed file",
             )
 
             result = await req.actually_solve(config, interface)
@@ -329,9 +326,7 @@ class TestAutoAllowedPaths:
             # No user inputs needed - should auto-approve
 
             req = WriteRequirement(
-                path=str(test_dir),
-                is_directory=True,
-                comment="Auto-allowed directory"
+                path=str(test_dir), is_directory=True, comment="Auto-allowed directory"
             )
 
             result = await req.actually_solve(config, interface)
@@ -358,7 +353,7 @@ class TestAutoAllowedPaths:
                 path=str(test_file),
                 is_directory=False,
                 content="Updated auto content",
-                comment="Auto-allowed update"
+                comment="Auto-allowed update",
             )
 
             result = await req.actually_solve(config, interface)
@@ -404,14 +399,17 @@ class TestErrorHandling:
                     path=str(test_file),
                     is_directory=False,
                     content="Cannot write this",
-                    comment="Permission denied test"
+                    comment="Permission denied test",
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
                 assert not result.accepted
                 assert result.error is not None
-                assert any(sig in result.error.lower() for sig in {"error", "permission denied"})
+                assert any(
+                    sig in result.error.lower()
+                    for sig in {"error", "permission denied"}
+                )
 
             finally:
                 # Restore permissions for cleanup
@@ -435,7 +433,7 @@ class TestErrorHandling:
                     path=str(test_file),
                     is_directory=False,
                     content="Test content",
-                    comment="Encoding error test"
+                    comment="Encoding error test",
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -450,7 +448,9 @@ class TestErrorHandling:
             test_file = Path(temp_dir) / "disk_space_test.txt"
 
             # Create config with high disk space requirement
-            config = DEFAULT_CONFIG.with_(min_disk_space_left="999TB")  # Impossible requirement
+            config = DEFAULT_CONFIG.with_(
+                min_disk_space_left="999TB"
+            )  # Impossible requirement
 
             interface = MockInterface()
 
@@ -458,7 +458,7 @@ class TestErrorHandling:
                 path=str(test_file),
                 is_directory=False,
                 content="Test content",
-                comment="Disk space test"
+                comment="Disk space test",
             )
 
             # Should fail during validation, before asking user
@@ -475,10 +475,7 @@ class TestPathSecurity:
     async def test_tilde_expansion(self):
         """Test tilde path expansion in write operations."""
         with tempfile.NamedTemporaryFile(
-            dir=Path.home(),
-            prefix=".solveig_test_write_",
-            suffix=".txt",
-            delete=False
+            dir=Path.home(), prefix=".solveig_test_write_", suffix=".txt", delete=False
         ) as temp_file:
             temp_file_path = Path(temp_file.name)
 
@@ -493,7 +490,7 @@ class TestPathSecurity:
                 path=tilde_path,
                 is_directory=False,
                 content="Tilde expansion test",
-                comment="Tilde test"
+                comment="Tilde test",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -523,7 +520,7 @@ class TestPathSecurity:
                 path=traversal_path,
                 is_directory=False,
                 content="Path traversal test",
-                comment="Traversal test"
+                comment="Traversal test",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -544,7 +541,9 @@ class TestIntegrationScenarios:
         """Test writing file with complex content (unicode, special chars)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             test_file = Path(temp_dir) / "complex_content.txt"
-            complex_content = "Unicode: 🌟 Special chars: \n\t\"'\\/ JSON: {\"key\": \"value\"}"
+            complex_content = (
+                'Unicode: 🌟 Special chars: \n\t"\'\\/ JSON: {"key": "value"}'
+            )
 
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept
@@ -553,7 +552,7 @@ class TestIntegrationScenarios:
                 path=str(test_file),
                 is_directory=False,
                 content=complex_content,
-                comment="Complex content test"
+                comment="Complex content test",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -574,7 +573,7 @@ class TestIntegrationScenarios:
                 path=str(test_file),
                 is_directory=False,
                 content="Initial content",
-                comment="Create test"
+                comment="Create test",
             )
 
             result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
@@ -592,7 +591,7 @@ class TestIntegrationScenarios:
                 path=str(test_file),
                 is_directory=False,
                 content="Updated content",
-                comment="Update test"
+                comment="Update test",
             )
 
             result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
@@ -614,7 +613,7 @@ class TestIntegrationScenarios:
                 path=str(test_dir),
                 is_directory=True,
                 content="This content should be ignored",  # Should be ignored
-                comment="Directory with content"
+                comment="Directory with content",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)

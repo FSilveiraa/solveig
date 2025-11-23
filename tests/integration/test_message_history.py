@@ -2,16 +2,13 @@
 
 import pytest
 
-from solveig.config import SolveigConfig
 from solveig.llm import APIType
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserMessage,
-    get_response_model,
 )
 from tests import LOREM_IPSUM
-
 
 pytestmark = pytest.mark.anyio
 

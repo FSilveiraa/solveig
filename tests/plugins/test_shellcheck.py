@@ -5,19 +5,22 @@ This tests the shellcheck plugin in isolation from other plugins.
 
 # Config with shellcheck plugin enabled - manually create to avoid copy issues
 from dataclasses import replace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from solveig.plugins import hooks, initialize_plugins
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from solveig.schema.requirements import CommandRequirement, ReadRequirement, WriteRequirement
+from solveig.schema.requirements import (
+    CommandRequirement,
+    ReadRequirement,
+)
 from tests.mocks import DEFAULT_CONFIG, MockInterface
-from unittest.mock import AsyncMock, patch
 
 SHELLCHECK_CONFIG = replace(DEFAULT_CONFIG, plugins={"shellcheck": {}})
 
 
-pytestmark = [ pytest.mark.anyio ]
+pytestmark = [pytest.mark.anyio]
 
 
 class TestShellcheckPlugin:
@@ -128,7 +131,9 @@ fi
     @pytest.mark.no_subprocess_mocking
     async def test_shellcheck_not_available(self):
         """Test graceful handling when shellcheck command is not found."""
-        with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_create_subprocess_shell:
+        with patch(
+            "asyncio.create_subprocess_shell", new_callable=AsyncMock
+        ) as mock_create_subprocess_shell:
             mock_process = AsyncMock()
             mock_process.returncode = 127
             mock_process.communicate.return_value = (
@@ -146,7 +151,14 @@ fi
 
             # Verify the warning was displayed
             output = interface.get_all_output()
-            assert all(sig in output.lower() for sig in ["warning", "shellcheck plugin is enabled", "command is not available."])
+            assert all(
+                sig in output.lower()
+                for sig in [
+                    "warning",
+                    "shellcheck plugin is enabled",
+                    "command is not available.",
+                ]
+            )
 
             # Verify that the command was not stopped by the plugin, but by the user
             assert not result.accepted
@@ -180,7 +192,7 @@ if then
   echo "broken"
 fi
 """,
-            comment="Test shellcheck error"
+            comment="Test shellcheck error",
         )
         self.interface.set_user_inputs([1])  # Decline sending error back to assistant
         result = await cmd_req.solve(SHELLCHECK_CONFIG, self.interface)

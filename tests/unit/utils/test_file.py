@@ -6,7 +6,6 @@ operations, so this file focuses on testing the metadata class and size parsing.
 """
 
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 

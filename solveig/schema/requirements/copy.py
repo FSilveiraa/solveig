@@ -64,7 +64,9 @@ class CopyRequirement(Requirement):
             await Filesystem.validate_write_access(abs_destination_path)
             is_dir = await Filesystem.is_dir(abs_source_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
-            await interface.display_error(f"Cannot copy from {str(abs_source_path)} to {str(abs_destination_path)}: {e}")
+            await interface.display_error(
+                f"Cannot copy from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
+            )
             return CopyResult(
                 requirement=self,
                 accepted=False,
@@ -73,21 +75,22 @@ class CopyRequirement(Requirement):
                 destination_path=str(abs_destination_path),
             )
         # Check for auto-allowed paths
-        auto_copy = (
-            Filesystem.path_matches_patterns(abs_source_path, config.auto_allowed_paths)
-            and Filesystem.path_matches_patterns(
-                abs_destination_path, config.auto_allowed_paths
-            )
+        auto_copy = Filesystem.path_matches_patterns(
+            abs_source_path, config.auto_allowed_paths
+        ) and Filesystem.path_matches_patterns(
+            abs_destination_path, config.auto_allowed_paths
         )
 
         if auto_copy:
             await interface.display_info(
                 f"Copying {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
             )
-        elif await interface.ask_choice(
-                f"Allow copying {'directory' if is_dir else 'file'}?",
-                ["Yes", "No"]
-            ) != 0:
+        elif (
+            await interface.ask_choice(
+                f"Allow copying {'directory' if is_dir else 'file'}?", ["Yes", "No"]
+            )
+            != 0
+        ):
             return CopyResult(
                 requirement=self,
                 accepted=False,

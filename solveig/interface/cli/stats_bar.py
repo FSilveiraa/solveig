@@ -2,9 +2,9 @@
 
 import time
 
-from textual.widgets import DataTable, Static, Collapsible
 from textual.containers import Horizontal
 from textual.widget import Widget
+from textual.widgets import Collapsible, DataTable, Static
 from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
@@ -72,7 +72,7 @@ class CustomTitleBar(CollapsibleTitle):
             statics[0].update(left_content)
             statics[1].update(center_content)
             statics[2].update(right_content)
-        except:
+        except Exception:
             # If not mounted yet, will update when it mounts
             pass
 

@@ -10,7 +10,7 @@ from solveig.schema.requirements import DeleteRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
-pytestmark = [ pytest.mark.anyio, pytest.mark.no_file_mocking ]
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestDeleteValidation:
@@ -41,10 +41,7 @@ class TestDeleteValidation:
 
     async def test_display_header_file(self):
         """Test DeleteRequirement display header for files."""
-        req = DeleteRequirement(
-            path="/test/delete_me.txt",
-            comment="Delete test file"
-        )
+        req = DeleteRequirement(path="/test/delete_me.txt", comment="Delete test file")
         interface = MockInterface()
         await req.display_header(interface)
 
@@ -57,8 +54,7 @@ class TestDeleteValidation:
     async def test_display_header_directory(self):
         """Test DeleteRequirement display header for directories."""
         req = DeleteRequirement(
-            path="/test/delete_dir",
-            comment="Delete test directory"
+            path="/test/delete_dir", comment="Delete test directory"
         )
         interface = MockInterface()
         await req.display_header(interface)
@@ -81,10 +77,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=str(test_file),
-                comment="Delete test file"
-            )
+            req = DeleteRequirement(path=str(test_file), comment="Delete test file")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -100,10 +93,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.user_inputs.append(1)  # Decline deletion
 
-            req = DeleteRequirement(
-                path=str(test_file),
-                comment="Decline deletion"
-            )
+            req = DeleteRequirement(path=str(test_file), comment="Decline deletion")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -127,10 +117,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=str(test_dir),
-                comment="Delete directory tree"
-            )
+            req = DeleteRequirement(path=str(test_dir), comment="Delete directory tree")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -148,8 +135,7 @@ class TestFileOperations:
             interface.user_inputs.append(1)  # Decline deletion
 
             req = DeleteRequirement(
-                path=str(test_dir),
-                comment="Decline directory deletion"
+                path=str(test_dir), comment="Decline directory deletion"
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -168,8 +154,7 @@ class TestFileOperations:
             interface.user_inputs.append(0)  # Accept deletion
 
             req = DeleteRequirement(
-                path=str(empty_dir),
-                comment="Delete empty directory"
+                path=str(empty_dir), comment="Delete empty directory"
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -194,8 +179,7 @@ class TestAutoAllowedPaths:
             # No user inputs needed - should auto-approve
 
             req = DeleteRequirement(
-                path=str(test_file),
-                comment="Auto-allowed file deletion"
+                path=str(test_file), comment="Auto-allowed file deletion"
             )
 
             result = await req.actually_solve(config, interface)
@@ -224,8 +208,7 @@ class TestAutoAllowedPaths:
             # No user inputs needed - should auto-approve
 
             req = DeleteRequirement(
-                path=str(test_dir),
-                comment="Auto-allowed directory deletion"
+                path=str(test_dir), comment="Auto-allowed directory deletion"
             )
 
             result = await req.actually_solve(config, interface)
@@ -288,16 +271,17 @@ class TestErrorHandling:
         interface = MockInterface()
 
         req = DeleteRequirement(
-            path="/nonexistent/file.txt",
-            comment="Delete missing file"
+            path="/nonexistent/file.txt", comment="Delete missing file"
         )
 
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
-        assert any(phrase in result.error.lower()
-                  for phrase in ["not found", "does not exist", "no such file"])
+        assert any(
+            phrase in result.error.lower()
+            for phrase in ["not found", "does not exist", "no such file"]
+        )
 
     async def test_delete_permission_denied(self):
         """Test deleting a file with insufficient permissions."""
@@ -315,8 +299,7 @@ class TestErrorHandling:
 
             try:
                 req = DeleteRequirement(
-                    path=str(test_file),
-                    comment="Delete protected file"
+                    path=str(test_file), comment="Delete protected file"
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -339,11 +322,10 @@ class TestErrorHandling:
             interface.user_inputs.append(0)  # Accept deletion
 
             # Make file unreadable/undeletable after validation
-            import os
-            with open(test_file, 'r'):  # Hold file open to potentially prevent deletion
+
+            with open(test_file):  # Hold file open to potentially prevent deletion
                 req = DeleteRequirement(
-                    path=str(test_file),
-                    comment="Deletion that might fail"
+                    path=str(test_file), comment="Deletion that might fail"
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -359,10 +341,7 @@ class TestPathSecurity:
     async def test_tilde_expansion(self):
         """Test tilde path expansion in delete operations."""
         with tempfile.NamedTemporaryFile(
-            dir=Path.home(),
-            prefix=".solveig_test_delete_",
-            suffix=".txt",
-            delete=False
+            dir=Path.home(), prefix=".solveig_test_delete_", suffix=".txt", delete=False
         ) as temp_file:
             temp_file.write(b"Tilde expansion test")
             temp_file_path = Path(temp_file.name)
@@ -374,10 +353,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=tilde_path,
-                comment="Tilde expansion test"
-            )
+            req = DeleteRequirement(path=tilde_path, comment="Tilde expansion test")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -407,10 +383,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=traversal_path,
-                comment="Path traversal test"
-            )
+            req = DeleteRequirement(path=traversal_path, comment="Path traversal test")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -443,10 +416,7 @@ class TestIntegrationScenarios:
             interface = MockInterface()
             interface.user_inputs.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=str(large_dir),
-                comment="Delete large tree"
-            )
+            req = DeleteRequirement(path=str(large_dir), comment="Delete large tree")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -476,8 +446,7 @@ class TestIntegrationScenarios:
                 file_path = Path(temp_dir) / filename
 
                 req = DeleteRequirement(
-                    path=str(file_path),
-                    comment=f"Delete {filename}"
+                    path=str(file_path), comment=f"Delete {filename}"
                 )
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -498,10 +467,7 @@ class TestIntegrationScenarios:
             interface1 = MockInterface()
             interface1.user_inputs.append(1)  # Decline to see the choice message
 
-            req1 = DeleteRequirement(
-                path=str(test_file),
-                comment="Delete file"
-            )
+            req1 = DeleteRequirement(path=str(test_file), comment="Delete file")
 
             result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
 
@@ -515,10 +481,7 @@ class TestIntegrationScenarios:
             interface2 = MockInterface()
             interface2.user_inputs.append(1)  # Decline to see the choice message
 
-            req2 = DeleteRequirement(
-                path=str(test_dir),
-                comment="Delete directory"
-            )
+            req2 = DeleteRequirement(path=str(test_dir), comment="Delete directory")
 
             result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
 
