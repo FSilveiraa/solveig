@@ -7,7 +7,9 @@ from collections.abc import Iterable
 from enum import Enum
 
 from textual.containers import Container
-from textual.widgets import Input, OptionList
+from textual.widgets import OptionList, TextArea
+from textual.message import Message
+from textual.events import Key
 
 from solveig.interface.themes import Palette
 
@@ -18,6 +20,28 @@ class InputMode(Enum):
     FREE_FORM = "free_form"
     QUESTION = "question"
     MULTIPLE_CHOICE = "multiple_choice"
+
+
+class GrowingInput(TextArea):
+    """A TextArea that grows with content and submits on Enter."""
+
+    class Submitted(Message):
+        """Posted when the user presses Enter."""
+
+        def __init__(self, value: str) -> None:
+            self.value = value
+            super().__init__()
+
+    def _on_key(self, event: Key) -> None:
+        """
+        Override the private _on_key method to intercept Enter key presses.
+        """
+        if event.key == "enter":
+            event.prevent_default()
+            self.post_message(self.Submitted(self.text))
+        else:
+            # Let the parent class handle other keys
+            super()._on_key(event)
 
 
 class InputBar(Container):
@@ -47,7 +71,9 @@ class InputBar(Container):
         self._free_form_callback = free_form_callback
 
         # Child widgets
-        self._text_input = Input(placeholder=placeholder, id="text_input")
+        self._text_input = GrowingInput(id="text_input")
+        self._text_input.placeholder = placeholder
+        self._text_input.show_line_numbers = False
         self._select_widget: OptionList | None = None
 
         # Saved state for question mode
@@ -63,13 +89,13 @@ class InputBar(Container):
         self._apply_free_form_style()
         self._text_input.focus()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle text input submission."""
-        if event.input.id != "text_input":
+    async def on_growing_input_submitted(self, event: GrowingInput.Submitted) -> None:
+        """Handle the custom Submitted message from the GrowingInput widget."""
+        user_input = event.value.strip()
+        if not user_input:
             return
 
-        user_input = event.value.strip()
-        event.input.value = ""
+        self._text_input.text = ""
 
         if self._mode == InputMode.QUESTION and self._question_future:
             if not self._question_future.done():
@@ -80,7 +106,7 @@ class InputBar(Container):
             else:
                 self._free_form_callback(user_input)
 
-        event.input.focus()
+        self._text_input.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Handle option list selection for multiple choice."""
@@ -100,15 +126,14 @@ class InputBar(Container):
 
     async def ask_question(self, question: str) -> str:
         """Switch to question mode and wait for response."""
-        self._saved_text = self._text_input.value
+        self._saved_text = self._text_input.text
         self._saved_placeholder = self._text_input.placeholder
 
         self._mode = InputMode.QUESTION
         self._question_future = asyncio.Future()
 
-        self._text_input.value = ""
+        self._text_input.text = ""
         self._text_input.placeholder = question
-        # self._prompt_label.update(question)
         self._apply_question_style()
         self._text_input.focus()
 
@@ -119,7 +144,7 @@ class InputBar(Container):
             self._mode = InputMode.FREE_FORM
             self._question_future = None
             self._text_input.placeholder = self._saved_placeholder
-            self._text_input.value = self._saved_text
+            self._text_input.text = self._saved_text
             self._apply_free_form_style()
             self._text_input.focus()
 
@@ -143,8 +168,6 @@ class InputBar(Container):
             await self.mount(self._select_widget)
             self._select_widget.focus()
 
-        # OptionList doesn't need to be expanded
-
         try:
             selected_index = await self._choice_future
             return selected_index
@@ -167,8 +190,9 @@ class InputBar(Container):
             margin: 0 0 0 0;
         }}
 
-        InputBar > Input {{
-            height: 3;
+        InputBar > GrowingInput {{
+            height: auto;
+            min-height: 3;
             color: {theme.text};
             background: {theme.background};
             border: solid {theme.input};
@@ -191,9 +215,5 @@ class InputBar(Container):
             height: 1;
             color: {theme.input};
             margin: 0;
-        }}
-
-        InputBar > Input > .input--placeholder {{
-            text-style: italic;
         }}
         """
