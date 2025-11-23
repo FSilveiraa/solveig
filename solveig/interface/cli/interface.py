@@ -206,10 +206,11 @@ class TerminalInterface(SolveigInterface):
 
     async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
+        choices_list = list(choices)  # Convert to list for indexing
         self.app._conversation_area.scroll_end()
-        choice_index = await self.app.ask_choice(question, choices)
+        choice_index = await self.app.ask_choice(question, choices_list)
         await self._display_text(
-            choices[choice_index],
+            choices_list[choice_index],
             prefix=question,
         )
         return choice_index
@@ -217,7 +218,7 @@ class TerminalInterface(SolveigInterface):
     async def update_stats(
         self,
         status: str | None = None,
-        tokens: tuple[int, int] | int | str | None = None,
+        tokens: tuple[int, int] | None = None,
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,

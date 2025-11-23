@@ -35,7 +35,7 @@ class Metadata:
 
 @dataclass
 class FileContent:
-    content: str | bytes
+    content: str
     encoding: Literal["text", "base64"]
 
 

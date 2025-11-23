@@ -3,9 +3,11 @@
 import time
 
 from textual.containers import Horizontal
+from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Collapsible, DataTable, Static
 from textual.widgets._collapsible import CollapsibleTitle
+from textual.widgets._data_table import RowKey
 
 from solveig.interface.themes import Palette
 from solveig.utils.file import Filesystem
@@ -120,14 +122,14 @@ class StatsBar(Widget):
 
     def __init__(self, theme: Palette, **kwargs):
         super().__init__(**kwargs)
-        self._timer = None
+        self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
         self._tokens = (0, 0)
         self._model = ""
         self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
-        self._row_keys = {}
+        self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
 
     @property
@@ -192,7 +194,7 @@ class StatsBar(Widget):
     def update(
         self,
         status=None,
-        tokens: tuple[str, str] | None = None,
+        tokens: tuple[int, int] | None = None,
         model=None,
         url=None,
         path=None,

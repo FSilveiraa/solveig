@@ -48,7 +48,7 @@ class InputBar(Container):
 
         # Child widgets
         self._text_input = Input(placeholder=placeholder, id="text_input")
-        self._select_widget = None
+        self._select_widget: OptionList | None = None
 
         # Saved state for question mode
         self._saved_text: str = ""
@@ -136,11 +136,12 @@ class InputBar(Container):
         # Create option list widget with choices and mount in place of input
         options = [f"{i + 1}. {choice}" for i, choice in enumerate(choices_list)]
         self._select_widget = OptionList(*options, id="choice_select")
-        self._select_widget.border_title = question
+        if self._select_widget:
+            self._select_widget.border_title = question
 
-        # Mount inside this container
-        await self.mount(self._select_widget)
-        self._select_widget.focus()
+            # Mount inside this container
+            await self.mount(self._select_widget)
+            self._select_widget.focus()
 
         # OptionList doesn't need to be expanded
 

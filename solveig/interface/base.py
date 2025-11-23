@@ -143,7 +143,7 @@ class SolveigInterface(ABC):
     async def update_stats(
         self,
         status: str | None = None,
-        tokens: tuple[int, int] | int | str | None = None,
+        tokens: tuple[int, int] | None = None,
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
