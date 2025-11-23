@@ -109,6 +109,16 @@ class ConversationArea(ScrollableContainer):
         return f"""
         ConversationArea {{
             height: 1fr;
+            scrollbar-gutter: stable;
+            scrollbar-size: 1 1;
+            
+            scrollbar-color: {theme.box};
+            scrollbar-color-hover: {theme.section};
+            scrollbar-color-active: {theme.section};
+            
+            scrollbar-background: {theme.background};
+            scrollbar-background-hover: {theme.background};
+            scrollbar-background-active: {theme.background};
         }}
 
         TextBox {{

@@ -22,7 +22,7 @@ class SectionHeader(Static):
         # Calculate the line with dashes
         # Create the section line
         header_prefix = f"━━━━ {title}"
-        remaining_width = width - len(header_prefix) - 4
+        remaining_width = width - len(header_prefix) - 3
         dashes = "━" * max(0, remaining_width)
 
         section_line = f"{header_prefix} {dashes}"
