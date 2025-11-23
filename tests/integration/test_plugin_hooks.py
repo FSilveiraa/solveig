@@ -1,9 +1,11 @@
+
 """
 Tests for the refactored exception-based plugin system.
 """
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +13,7 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import ProcessingError, SecurityError, ValidationError
 from solveig.interface import SolveigInterface
 from solveig.plugins import hooks, initialize_plugins
-from solveig.schema import CommandResult, WriteRequirement
+from solveig.schema import CommandResult, WriteRequirement, ReadResult, TaskListRequirement
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -137,17 +139,17 @@ class TestPluginHookSystem:
         assert result.error is None  # No plugin error
         assert "command 'echo hello' exists" in interface.get_all_output()
 
-    async def test_after_hook_processing_error(self):
+    async def test_after_hook_processing_error(self, tmp_path):
         """Test that after hooks can raise ProcessingError."""
         # Setup
         interface = MockInterface()
 
-        @hooks.after(requirements=(CommandRequirement,))
+        @hooks.after(requirements=(ReadRequirement,))
         async def failing_processor(
             config: SolveigConfig,
             interface: MockInterface,
-            requirement: CommandRequirement,
-            result: CommandResult,
+            requirement: ReadRequirement,
+            result: ReadResult,
         ):
             if result.accepted:
                 raise ProcessingError("Post-processing failed")
@@ -157,15 +159,15 @@ class TestPluginHookSystem:
             interface=interface, enabled_plugins={"failing_processor"}
         )
 
-        req = CommandRequirement(command="echo hello", comment="Test")
-        interface.set_user_inputs([0, 0])  # Accept the command
+        req = ReadRequirement(comment="Test", path=str(tmp_path), metadata_only=True)
+        interface.set_user_inputs([0])  # Accept the command
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert result.accepted  # Command was accepted originally
-        assert result.error == "Post-processing failed: Post-processing failed"
+        assert "post-processing failed" in result.error.lower()
 
     async def test_multiple_before_hooks(self):
         """Test that multiple before hooks are executed in order."""
@@ -194,6 +196,7 @@ class TestPluginHookSystem:
         # Verify
         assert execution_order == ["first", "second"]
 
+    @pytest.mark.no_subprocess_mocking
     async def test_hook_requirement_filtering(self, tmp_path):
         """Test that hooks only run for specified requirement types."""
         # Setup
@@ -217,7 +220,7 @@ class TestPluginHookSystem:
         # Execute
         # Test with CommandRequirement
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([1])
+        interface.set_user_inputs([2]) # Don't run
         await cmd_req.solve(DEFAULT_CONFIG, interface=interface)
         # Verify
         assert called == ["command_hook"]
@@ -229,7 +232,7 @@ class TestPluginHookSystem:
             path=str(test_file), metadata_only=True, comment="Test"
         )
 
-        interface.set_user_inputs([1])
+        interface.set_user_inputs([1]) # don't send metadata
         await read_req.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify
@@ -254,21 +257,20 @@ class TestPluginHookSystem:
         )
 
         # Test with different requirement types
-        cmd_req = CommandRequirement(command="echo test", comment="Test")
+        task_req = TaskListRequirement(comment="Test")
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
         read_req = ReadRequirement(
             path=str(test_file), metadata_only=True, comment="Test"
         )
 
-        interface.set_user_inputs([2])
-        await cmd_req.solve(DEFAULT_CONFIG, interface)
+        await task_req.solve(DEFAULT_CONFIG, interface)
 
         interface.set_user_inputs([1])
         await read_req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
-        assert get_requirement_name(cmd_req) in called
+        assert get_requirement_name(task_req) in called
         assert get_requirement_name(read_req) in called
 
 

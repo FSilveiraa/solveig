@@ -4,7 +4,7 @@ Provides automatic mocking of all file I/O operations.
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -38,7 +38,7 @@ def mock_filesystem(request):
     """
     To skip this fixture for integration tests, use:
         @pytest.mark.no_file_mocking
-        def test_rAlreal_file_operations():
+        def test_real_file_operations():
             # This test will use real file operations
     """
     # Skip mocking for tests marked with @pytest.mark.no_file_mocking
@@ -80,7 +80,9 @@ def mock_asyncio_subprocess(request):
         "Cannot run processes in tests - use the mock fixture or mark with @pytest.mark.no_subprocess_mocking"
     )
     # Mock stdin/stdout/stderr streams
-    mock_process.stdin = AsyncMock()
+    mock_process.stdin = MagicMock()
+    # Accurately mock the StreamWriter interface: .write() is sync, .drain() is async
+    mock_process.stdin.drain = AsyncMock()
     mock_process.stdout = AsyncMock()
     mock_process.stderr = AsyncMock()
 
