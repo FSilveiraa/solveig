@@ -25,13 +25,13 @@ class SolveigInterface(ABC):
     """
 
     subcommand_executor: SubcommandRunner | None = None
-    response_queue: asyncio.Queue | None = None
+    input_handler: "Callable | None" = None
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
 
-    def set_response_queue(self, response_queue: asyncio.Queue):
-        self.response_queue = response_queue
+    def set_input_handler(self, handler: "Callable"):
+        self.input_handler = handler
 
     @abstractmethod
     async def start(self) -> None:

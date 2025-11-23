@@ -14,7 +14,6 @@ from .requirements import (  # noqa: F401
     MoveRequirement,
     ReadRequirement,
     Requirement,
-    TaskListRequirement,
     WriteRequirement,
 )
 from .results import (  # noqa: F401
@@ -24,7 +23,6 @@ from .results import (  # noqa: F401
     MoveResult,
     ReadResult,
     RequirementResult,
-    TaskListResult,
     WriteResult,
 )
 
@@ -34,7 +32,6 @@ CORE_REQUIREMENTS: list[type[Requirement]] = [
     DeleteRequirement,
     MoveRequirement,
     ReadRequirement,
-    TaskListRequirement,
     WriteRequirement,
 ]
 
@@ -45,7 +42,6 @@ CORE_RESULTS: list[type[RequirementResult]] = [
     MoveResult,
     CopyResult,
     DeleteResult,
-    TaskListResult,
     RequirementResult,
 ]
 

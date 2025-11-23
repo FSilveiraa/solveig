@@ -17,8 +17,6 @@ from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
-    UserComment,
-    UserMessage,
     get_assistant_response_model,
 )
 from solveig.subcommand import SubcommandRunner
@@ -80,13 +78,13 @@ async def send_message_to_llm_with_retry(
                 response_model=response_model,
                 model=config.model,
                 temperature=config.temperature,
-                stream_options={"include_usage": True},
             )
+
+            assert isinstance(llm_response, AssistantMessage)
 
             if not llm_response:
                 raise ValueError("Assistant responded with empty message")
 
-            message_history.add_messages(llm_response)
             await interface.update_stats(
                 tokens=(
                     message_history.total_tokens_sent,
@@ -108,11 +106,12 @@ async def send_message_to_llm_with_retry(
                 "Retry this message?",
                 choices=["Retry the same message", "Add new message"],
             )
+            # If user chooses to add a new message, we just wait for it to be added
+            # to the queue by the interface, then continue to retry the API call.
             if retry_choice == 1:
-                new_comment = await interface.get_input()
-                message_history.add_messages(
-                    UserMessage(responses=[UserComment(comment=new_comment)])
-                )
+                await message_history.wait_for_user_comment()
+                await message_history.consolidate_responses_into_message()
+                continue
 
 
 async def main_loop(
@@ -127,75 +126,73 @@ async def main_loop(
         logging.getLogger("instructor").setLevel(logging.DEBUG)
         logging.getLogger("openai").setLevel(logging.DEBUG)
 
-    # Create the shared response queue
-    response_queue = asyncio.Queue()
-    interface.set_response_queue(response_queue)
-
     await interface.wait_until_ready()
+    # Yield control to the event loop to ensure the UI is fully ready for animations
+    await asyncio.sleep(0)
     await interface.update_stats(url=config.url, model=config.model)
 
     await initialize_plugins(config=config, interface=interface)
     message_history = await get_message_history(config, interface)
+    
+    # Pass the message history's input method to the interface
+    interface.set_input_handler(message_history.add_user_comment)
+
     subcommand_executor = SubcommandRunner(
         config=config, message_history=message_history
     )
     interface.set_subcommand_executor(subcommand_executor)
 
-    await interface.display_section("User")
+    # Handle initial user prompt
     if not user_prompt:
-        user_prompt = await interface.get_input()
-    else:
-        await interface.display_text(f" {user_prompt}")
+        # For the very first message, we need to block and wait for input
+        user_prompt = await interface.ask_question("Enter your prompt: ")
 
-    # Put the initial user comment into the response_queue
-    await response_queue.put(UserComment(comment=user_prompt))
+    await message_history.add_user_comment(user_prompt)
+    if await message_history.consolidate_responses_into_message():
+        await message_history.messages[-1].display(interface)
 
     while True:
         # Autonomous inner loop
-        while True:
-            async with interface.with_animation("Thinking...", "Processing"):
-                llm_response = await send_message_to_llm_with_retry(
-                    config, interface, llm_client, message_history
-                )
+        async with interface.with_animation("Thinking...", "Processing"):
+            llm_response = await send_message_to_llm_with_retry(
+                config, interface, llm_client, message_history
+            )
 
-            if config.verbose:
-                await interface.display_text_block(
-                    str(llm_response), title="Received"
-                )
+        if config.verbose:
+            await interface.display_text_block(
+                str(llm_response), title="Received"
+            )
 
-            await llm_response.display(interface)
+        await llm_response.display(interface)
 
-            if not llm_response.requirements:
-                break
+        if not llm_response.requirements:
+            # If there are no requirements, efficiently wait for the next user comment.
+            await message_history.wait_for_user_comment()
+            if await message_history.consolidate_responses_into_message():
+                await message_history.messages[-1].display(interface)
+            continue
 
-            # Staging area for the next UserMessage
-            responses = []
-            for req in llm_response.requirements:
-                try:
-                    result = await req.solve(config, interface)
-                    if result:
-                        responses.append(result)
+        # # Dispatch all requirement solving tasks
+        # tasks = [
+        #     asyncio.create_task(req.solve(config, interface))
+        #     for req in llm_response.requirements
+        # ]
+        #
+        # for task in asyncio.as_completed(tasks):
+        #     result = await task
+        #     if result:
+        #         await message_history.add_result(result)
 
-                    # Check for user input between requirements
-                    user_input = await interface.get_input(block=False)
-                    if user_input is not None:
-                        responses.append(UserComment(comment=user_input))
+        for req in llm_response.requirements:
+            result = await req.solve(config=config, interface=interface)
+            if result:
+                await message_history.add_user_comment(result)
 
-                except Exception as e:
-                    await interface.display_error(f"Error processing requirement: {e}")
-                    await interface.display_text_block(
-                        title=f"{e.__class__.__name__}",
-                        text=str(e) + traceback.format_exc(),
-                    )
+        # Consolidate all results and any interleaved user comments
+        if await message_history.consolidate_responses_into_message():
+            # This handles displaying interleaved user comments
+            await message_history.messages[-1].display(interface)
 
-            if responses:
-                message_history.add_messages(UserMessage(responses=responses))
-
-        # Wait for new user input to continue the conversation
-        await interface.display_section("User")
-        user_prompt = await interface.get_input()
-        # Put the subsequent user comment into the response_queue
-        await response_queue.put(UserComment(comment=user_prompt))
 
 
 async def run_async(

@@ -1,5 +1,4 @@
 """Main TerminalInterface implementation."""
-
 import asyncio
 import difflib
 import random
@@ -12,7 +11,6 @@ from rich.syntax import Syntax
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-from solveig.schema.message import UserComment
 from solveig.utils.file import Filesystem, Metadata
 from solveig.utils.misc import (
     FILE_EXTENSION_TO_LANGUAGE,
@@ -73,7 +71,7 @@ class TerminalInterface(SolveigInterface):
         self.app.exit()
 
     async def _handle_input(self, user_input: str):
-        """Handle input from the textual app by putting it in the internal queue."""
+        """Handle input from the textual app by putting it in the message history event queue."""
         # Check if it's a command
         is_subcommand = False
         if self.subcommand_executor is not None:
@@ -87,12 +85,8 @@ class TerminalInterface(SolveigInterface):
                     f"Found error when executing '{user_input}' sub-command: {e}"
                 )
 
-        if not is_subcommand and self.response_queue:
-            try:
-                self.response_queue.put_nowait(UserComment(comment=user_input))
-            except asyncio.QueueFull:
-                # TODO: Handle queue full scenario gracefully
-                pass
+        if not is_subcommand and self.input_handler:
+            await self.input_handler(user_input)
 
     async def _display_text(self, text: str, style: str = "text", prefix=None) -> None:
         """Display text with optional styling."""
@@ -271,6 +265,8 @@ class TerminalInterface(SolveigInterface):
         )
         # Start animation using working pattern - set up timer directly in interface context
         await self.update_stats(status)
+        # Yield control to the event loop to ensure UI is ready for animation
+        await asyncio.sleep(0)
 
         # Pick random spinner and set up animation
         stats_dashboard = self.app._stats_dashboard

@@ -6,7 +6,6 @@ from .copy import CopyRequirement
 from .delete import DeleteRequirement
 from .move import MoveRequirement
 from .read import ReadRequirement
-from .tasklist import TaskListRequirement
 from .write import WriteRequirement
 
 __all__ = [
@@ -17,5 +16,4 @@ __all__ = [
     "MoveRequirement",
     "CopyRequirement",
     "DeleteRequirement",
-    "TaskListRequirement",
 ]

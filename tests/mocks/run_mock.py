@@ -56,12 +56,13 @@ class DemoInterface(TerminalInterface):
 
 
 async def run_async_mock(
-    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 1
+    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 10
 ):
     """Entry point for the async textual CLI."""
 
     mock_messages = [
         AssistantMessage(
+            comment="Test",
             requirements=[
                 TreeRequirement(comment="Test comment", path="~/Sync"),
                 ReadRequirement(
@@ -106,6 +107,7 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
 
     mock_messages = [
         AssistantMessage(
+            comment="",
             requirements=[
                 ReadRequirement(
                     comment="Test read",

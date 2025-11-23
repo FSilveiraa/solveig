@@ -32,7 +32,7 @@ class MockLLMClient:
         self.sleep_seconds = sleep_seconds
         self.sleep_delta = abs(sleep_delta)
 
-    def _create_completion(self, **kwargs) -> AssistantMessage:
+    async def _create_completion(self, **kwargs) -> AssistantMessage:
         """Return next response or raise next exception."""
         if self.call_count < len(self.responses):
             response = self.responses[self.call_count]
@@ -47,7 +47,7 @@ class MockLLMClient:
                     self.sleep_seconds + self.sleep_delta,
                 )
                 # print(f"Sleeping for {sleep_time} seconds...")
-                time.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
             return response
 
         # No more responses - return simple default

@@ -1,10 +1,9 @@
 import json
 import asyncio
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Union, cast
 
-from pydantic import BaseModel, Field, TypeAdapter, create_model, field_validator
+from pydantic import BaseModel, Field, create_model
 
 from solveig import SolveigConfig, utils
 from solveig.llm import APIType
@@ -18,7 +17,6 @@ if TYPE_CHECKING:
 
 
 class BaseMessage(BaseSolveigModel):
-    token_count: int = Field(default_factory=lambda: 0, exclude=True)
     role: Literal["system", "user", "assistant"]
 
     def to_openai(self) -> dict:
@@ -52,6 +50,22 @@ class UserComment(BaseModel):
 class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
     responses: list[Union[RequirementResult, UserComment]]
+
+    async def display(self, interface: "SolveigInterface"):
+        """Display the user's comments from the message."""
+        comments = [
+            response.comment
+            for response in self.responses
+            if isinstance(response, UserComment)
+        ]
+        if comments:
+            await interface.display_section("User")
+            for comment in comments:
+                await interface.display_text(f" {comment}")
+
+    @property
+    def comment(self) -> str:
+        return "\n".join(response.comment for response in self.responses if isinstance(response, UserComment))
 
 
 class Task(BaseModel):
@@ -198,7 +212,8 @@ class MessageHistory:
     token_count: int = field(default=0)  # Current cache size for pruning
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
-    _event_queue: asyncio.Queue = field(default_factory=asyncio.Queue, init=False, repr=False)
+    # contains both results to requirements and user comments
+    current_responses: asyncio.Queue[UserComment | RequirementResult] = field(default_factory=asyncio.Queue, init=False, repr=False)
 
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
@@ -215,13 +230,11 @@ class MessageHistory:
             return
 
         while self.token_count > self.max_context and len(self.message_cache) > 1:
-            # Always preserve the first message (system prompt) if possible
             if len(self.message_cache) > 1:
-                # Remove the second message (oldest non-system message)
                 message = self.message_cache.pop(1)
                 self.token_count -= self.api_type.count_tokens(message, self.encoder)
             else:
-                break  # Can't remove system message
+                break
 
     def add_messages(
         self,
@@ -233,17 +246,55 @@ class MessageHistory:
             token_count = self.api_type.count_tokens(
                 message_dumped["content"], self.encoder
             )
-
-            # Update current cache size for pruning
             self.token_count += token_count
-
-            # Track total received tokens for assistant messages
             if message.role == "assistant":
                 self.total_tokens_received += token_count
-
             self.messages.append(message)
             self.message_cache.append(message_dumped)
         self.prune_message_cache()
+
+    async def add_result(self, result: RequirementResult):
+        """Producer method to add a tool result to the event queue."""
+        await self.current_responses.put(result)
+
+    async def add_user_comment(self, comment: Union[UserComment, str]):
+        """Producer method to add a user comment to the event queue."""
+        if isinstance(comment, str):
+            comment = UserComment(comment=comment)
+        await self.current_responses.put(comment)
+
+    async def consolidate_responses_into_message(self) -> bool:
+        """
+        Consumer method to collect events and form a new UserMessage.
+        Waits for a specific number of RequirementResults before finalizing.
+        Returns True if a new message was created, False otherwise.
+        """
+        responses = []
+        # Collector loop: wait for all results
+        while not self.current_responses.empty():
+            event = self.current_responses.get_nowait()
+            responses.append(event)
+
+        if responses:
+            user_message = UserMessage(responses=responses)
+            self.add_messages(user_message)
+            return True
+        return False
+
+    async def wait_for_user_comment(self) -> UserComment:
+        """Waits for the next user comment, re-queuing any other results."""
+        while True:
+            event = await self.current_responses.get()
+            if isinstance(event, UserComment):
+                # Got what we wanted, put it back for the next consolidation and return
+                await self.current_responses.put(event)
+                return event
+            else:
+                # If we get a result while waiting for a user comment,
+                # put it back in the queue for the next consolidation.
+                await self.current_responses.put(event)
+                # Brief sleep to prevent a tight loop if the queue only contains non-comment events
+                await asyncio.sleep(0.01)
 
     def to_openai(self, update_sent_count=False):
         """Return cache for OpenAI API. If update_sent_count=True, add current cache size to total_tokens_sent."""
