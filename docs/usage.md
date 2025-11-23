@@ -95,7 +95,6 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
   "verbose": false,
   "auto_allowed_paths": [],
   "auto_execute_commands": [],
-  "auto_send": false,
   "no_commands": false,
   "theme": "terracotta",
   "code_theme": "coffee",
@@ -128,7 +127,6 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 | `no_commands`           | `--no-commands`           | Disable command execution entirely              | `false` |
 | `auto_allowed_paths`    | `--auto-allowed-paths`    | Glob patterns for auto-approved file operations | `[]`    |
 | `auto_execute_commands` | `--auto-execute-commands` | Regex patterns for auto-approved commands       | `[]`    |
-| `auto_send`             | `--auto-send`             | Auto-send results without asking                | `false` |
 
 ### Interface
 

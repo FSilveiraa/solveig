@@ -237,12 +237,6 @@ class SolveigConfig:
             help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !",
         )
         parser.add_argument(
-            "--auto-send",
-            action="store_true",
-            default=None,
-            help="Automatically send requirement results back to the LLM without asking",
-        )
-        parser.add_argument(
             "--no-commands",
             action="store_true",
             dest="no_commands",

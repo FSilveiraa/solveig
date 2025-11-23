@@ -25,7 +25,6 @@ class TestSolveigConfigCore:
         assert config.verbose is False
         assert config.plugins == {}
         assert config.auto_allowed_paths == []
-        assert config.auto_send is False
         assert config.no_commands is False
 
     async def test_api_type_conversion_success(self):

@@ -92,13 +92,13 @@ class TreeRequirement(Requirement):
 
             if (
                 Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
-                or config.auto_send
                 or choice_read_tree == 0
             ):
                 accepted = True
-                await interface.display_text(
-                    f"Sending tree since {'config.auto_send=True' if config.auto_send else f'{abs_path} matches config.allow_allowed_paths'}"
-                )
+                if choice_read_tree != 0:
+                    await interface.display_text(
+                        f"Sending tree since {abs_path} matches config.auto_allowed_paths"
+                    )
             else:
                 accepted = (
                     await interface.ask_choice(

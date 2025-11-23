@@ -45,6 +45,29 @@ pytest ./tests/ --cov=solveig --cov-report=term-missing -v
 ruff format . && ruff check . && mypy solveig/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov-report=term-missing -vv
 ```
 
+## User Interaction Philosophy
+
+Solveig's core design principle is to balance agent autonomy with explicit user control and transparency. This is achieved through a layered UX model for all operations:
+
+### 1. Auto-Approval for Full Autonomy
+
+For operations (file access or command execution) that match pre-configured `auto_allowed_paths` or `auto_execute_commands` patterns, Solveig operates with full autonomy. The operation is executed, and its results (metadata, file content, or command output) are displayed to the user and then sent to the LLM immediately, without any further prompts. This enables a "get it done" workflow for trusted actions.
+
+### 2. Manual Approval for Granular Control
+
+For any operation not covered by auto-approval, the user is always prompted for explicit consent. These prompts offer a spectrum of control:
+
+*   **Simple Yes/No:** For less complex decisions, like sending directory metadata, a straightforward "Yes/No" question is presented.
+*   **Multi-Option Choices:** For file reading, users are presented with an initial multi-option choice, allowing them to select their desired depth of interaction:
+    *   `Read and send content and metadata` (a "full-throttle" option)
+    *   `Read and inspect content first` (an "ever-deeper" option)
+    *   `Send metadata only`
+    *   `Don't send anything`
+*   **Transparency through Display:** Crucially, whenever file content or command output is generated, it is **always** displayed to the user in the interface. This ensures complete transparency, allowing the user to review the information before making any decisions about sending it to the LLM.
+*   **Secondary Confirmation:** For "ever-deeper" options like "Read and inspect content first," a secondary prompt is presented *after* the content has been displayed. This provides an additional layer of user review and control before the information is shared with the LLM.
+
+This layered approach ensures that Solveig remains a powerful, yet fully user-controlled, system assistant, always prioritizing user awareness and consent.
+
 ## Testing
 
 ### Test Structure

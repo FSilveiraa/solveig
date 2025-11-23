@@ -1,8 +1,5 @@
 """Comprehensive integration tests for ReadRequirement choice flow."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
@@ -324,7 +321,7 @@ class TestPathSecurity:
         """Test that tilde paths expand correctly."""
         # Mock HOME to point to tmp_path for isolation
         monkeypatch.setenv("HOME", str(tmp_path))
-        
+
         test_file = tmp_path / "tilde_test.txt"
         test_content = "Tilde test content"
         test_file.write_text(test_content)

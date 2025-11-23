@@ -89,7 +89,9 @@ class ReadRequirement(Requirement):
                 send_metadata = True
             else:
                 send_metadata = (
-                    await interface.ask_choice("Send metadata to assistant?", ["Yes", "No"])
+                    await interface.ask_choice(
+                        "Send metadata to assistant?", ["Yes", "No"]
+                    )
                     == 0
                 )
 
@@ -156,7 +158,9 @@ class ReadRequirement(Requirement):
                             metadata = None
 
                     except (PermissionError, OSError, UnicodeDecodeError) as e:
-                        await interface.display_error(f"Failed to read file content: {e}")
+                        await interface.display_error(
+                            f"Failed to read file content: {e}"
+                        )
                         return self.create_error_result(str(e), accepted=False)
             # 2: Send metadata only
             elif choice == 2:
