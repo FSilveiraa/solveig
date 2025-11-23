@@ -66,35 +66,33 @@ class ReadRequirement(Requirement):
     ) -> "ReadResult":
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        # Read access validation
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot access {str(abs_path)}: {e}")
-            return ReadResult(
-                requirement=self, path=str(abs_path), accepted=False, error=str(e)
-            )
+            return self.create_error_result(str(e), accepted=False)
 
         path_matches = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths
         )
 
-        # Mypy quirk
         metadata: Metadata | None = await Filesystem.read_metadata(abs_path)
         assert metadata is not None
 
-        # directory or file metadata only
+        # Case 1: Directories or metadata-only requests
         if metadata.is_directory or self.metadata_only:
+            send_metadata = False
             if path_matches:
-                send_metadata = True
                 await interface.display_info(
-                    "Sending metadata since it matches config.allow_allowed_paths"
+                    "Sending metadata since path is auto-allowed."
                 )
+                send_metadata = True
             else:
                 send_metadata = (
-                    await interface.ask_choice("Allow sending metadata?", ["Yes", "No"])
+                    await interface.ask_choice("Send metadata to assistant?", ["Yes", "No"])
                     == 0
                 )
+
             return ReadResult(
                 requirement=self,
                 metadata=metadata if send_metadata else None,
@@ -102,63 +100,44 @@ class ReadRequirement(Requirement):
                 accepted=send_metadata,
             )
 
-        # file content
+        # Case 2: File content requests
         else:
             accepted = False
-            file_content = None
+            content: str | bytes | None = None
 
             if path_matches:
-                choice_read_file = 0
-                await interface.display_text(
-                    "Reading file and sending content since it matches config.allow_allowed_paths"
+                await interface.display_info(
+                    "Reading and sending file since path is auto-allowed."
                 )
+                choice = 0  # Corresponds to "Read and send"
             else:
-                choice_read_file = await interface.ask_choice(
+                choice = await interface.ask_choice(
                     "Allow reading file?",
                     [
                         "Read and send content and metadata",
                         "Read and inspect content first",
-                        "Don't read and only send metadata",
-                        "Don't read or send anything",
+                        "Send metadata only",
+                        "Don't send anything",
                     ],
                 )
 
-            # User chose to read the file
-            if choice_read_file in {0, 1}:
-                # read file
-                try:
-                    read_result = await Filesystem.read_file(abs_path)
-                    file_content = read_result.content
-                    metadata.encoding = read_result.encoding
-                except (PermissionError, OSError, UnicodeDecodeError) as e:
-                    await interface.display_error(f"Failed to read file content: {e}")
-                    return ReadResult(
-                        requirement=self,
-                        path=str(abs_path),
-                        accepted=False,
-                        error=str(e),
-                    )
-
-                # display content
-                content_output = (
-                    "(Base64)"
-                    if metadata.encoding.lower() == "base64"
-                    else str(file_content)
-                    if file_content
-                    else ""
-                )
+            if choice in {0, 1}:
+                read_result = await Filesystem.read_file(abs_path)
+                content = read_result.content
+                metadata.encoding = read_result.encoding
                 await interface.display_text_block(
-                    content_output,
+                    content if read_result.encoding == "text" else "(binary content)",
                     title=f"Content: {abs_path}",
                     language=abs_path.suffix,
                 )
 
-                if file_content:
-                    if choice_read_file == 0:
-                        accepted = True
-                    # If the user previously chose to inspect the output first, confirm again
-                    else:
-                        choice_send_file = await interface.ask_choice(
+                # 0: Read and send
+                if choice == 0:
+                    accepted = True
+                # 1: Read and inspect
+                elif choice == 1:
+                    try:
+                        send_choice = await interface.ask_choice(
                             "Send file content?",
                             [
                                 "Send content and metadata",
@@ -166,23 +145,33 @@ class ReadRequirement(Requirement):
                                 "Don't send anything",
                             ],
                         )
-                        if choice_send_file == 0:
+                        if send_choice == 0:
                             accepted = True
-                        elif choice_send_file == 1:
-                            file_content = "<hidden>"
-                        elif choice_send_file == 2:
-                            file_content = "<hidden>"
+                        elif send_choice == 1:
+                            accepted = False  # Didn't get content
+                            content = None
+                        else:  # Don't send anything
+                            accepted = False
+                            content = None
                             metadata = None
 
-            # "Don't read and only send metadata" - don't do anything
-            # "Don't read or send anything" - clear metadata
-            elif choice_read_file == 3:
+                    except (PermissionError, OSError, UnicodeDecodeError) as e:
+                        await interface.display_error(f"Failed to read file content: {e}")
+                        return self.create_error_result(str(e), accepted=False)
+            # 2: Send metadata only
+            elif choice == 2:
+                accepted = False  # Didn't get content
+                content = None
+            # 3: Don't send anything
+            else:
+                accepted = False
+                content = None
                 metadata = None
 
             return ReadResult(
                 requirement=self,
                 metadata=metadata,
-                content=file_content if file_content else "",
+                content=content,
                 path=str(abs_path),
                 accepted=accepted,
             )

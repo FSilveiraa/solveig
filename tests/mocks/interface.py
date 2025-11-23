@@ -16,10 +16,10 @@ class MockInterface(TerminalInterface):
     Implements the complete SolveigInterface contract for async testing.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, user_inputs: list[str|int] | None = None, **kwargs) -> None:
         # Do not call super().__init__() since that would init() the Textual App
         self.outputs = []
-        self.user_inputs = []
+        self.user_inputs = user_inputs or []
         self.questions = []
         self.sections = []
         self.stats_updates = []

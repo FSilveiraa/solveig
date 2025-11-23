@@ -61,7 +61,7 @@ class SolveigConfig:
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     auto_allowed_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
-    auto_send: bool = False
+
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     code_theme: str = themes.DEFAULT_CODE_THEME
