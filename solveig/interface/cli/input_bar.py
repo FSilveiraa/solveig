@@ -7,9 +7,9 @@ from collections.abc import Iterable
 from enum import Enum
 
 from textual.containers import Container
-from textual.widgets import OptionList, TextArea
-from textual.message import Message
 from textual.events import Key
+from textual.message import Message
+from textual.widgets import OptionList, TextArea
 
 from solveig.interface.themes import Palette
 
@@ -32,7 +32,7 @@ class GrowingInput(TextArea):
             self.value = value
             super().__init__()
 
-    def _on_key(self, event: Key) -> None:
+    async def _on_key(self, event: Key) -> None:
         """
         Override the private _on_key method to intercept Enter key presses.
         """
@@ -41,7 +41,7 @@ class GrowingInput(TextArea):
             self.post_message(self.Submitted(self.text))
         else:
             # Let the parent class handle other keys
-            super()._on_key(event)
+            await super()._on_key(event)
 
 
 class InputBar(Container):
@@ -78,7 +78,7 @@ class InputBar(Container):
 
         # Saved state for question mode
         self._saved_text: str = ""
-        self._saved_placeholder: str = placeholder
+        self._initial_placeholder: str = placeholder
 
     def compose(self):
         """Create the layout with input widgets."""
@@ -127,7 +127,6 @@ class InputBar(Container):
     async def ask_question(self, question: str) -> str:
         """Switch to question mode and wait for response."""
         self._saved_text = self._text_input.text
-        self._saved_placeholder = self._text_input.placeholder
 
         self._mode = InputMode.QUESTION
         self._question_future = asyncio.Future()
@@ -143,7 +142,7 @@ class InputBar(Container):
         finally:
             self._mode = InputMode.FREE_FORM
             self._question_future = None
-            self._text_input.placeholder = self._saved_placeholder
+            self._text_input.placeholder = self._initial_placeholder
             self._text_input.text = self._saved_text
             self._apply_free_form_style()
             self._text_input.focus()
