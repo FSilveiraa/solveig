@@ -23,29 +23,29 @@ class SolveigTextualApp(TextualApp):
 
     def __init__(
         self,
-        color_palette: Palette = DEFAULT_THEME,
+        theme: Palette = DEFAULT_THEME,
         input_callback=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._input_callback = input_callback
-        self._theme = color_palette
+        self._theme = theme
 
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
         Screen {{
-            background: {color_palette.background};
-            color: {color_palette.text};
+            background: {theme.background};
+            color: {theme.text};
         }}
 
-        .text_message {{ color: {color_palette.text}; }}
-        .info_message {{ color: {color_palette.info}; }}
-        .warning_message {{ color: {color_palette.warning}; }}
-        .error_message {{ color: {color_palette.error}; }}
+        .text_message {{ color: {theme.text}; }}
+        .info_message {{ color: {theme.info}; }}
+        .warning_message {{ color: {theme.warning}; }}
+        .error_message {{ color: {theme.error}; }}
 
-        {ConversationArea.get_css(color_palette)}
-        {InputBar.get_css(color_palette)}
-        {StatsBar.get_css(color_palette)}
+        {ConversationArea.get_css(theme)}
+        {InputBar.get_css(theme)}
+        {StatsBar.get_css(theme)}
         """
 
         # Cached widget references (set in on_mount)

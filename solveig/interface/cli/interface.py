@@ -36,7 +36,7 @@ class TerminalInterface(SolveigInterface):
     ):
         self._theme = theme
         self.app = SolveigTextualApp(
-            color_palette=theme, input_callback=self._handle_input, **kwargs
+            theme=theme, input_callback=self._handle_input, **kwargs
         )
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
