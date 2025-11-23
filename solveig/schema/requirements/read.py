@@ -7,7 +7,7 @@ from pydantic import Field, field_validator
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.results import ReadResult
-from solveig.utils.file import Filesystem
+from solveig.utils.file import Filesystem, Metadata
 
 from .base import Requirement, validate_non_empty_path
 
@@ -78,7 +78,10 @@ class ReadRequirement(Requirement):
         path_matches = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths
         )
-        metadata = await Filesystem.read_metadata(abs_path)
+
+        # Mypy quirk
+        metadata: Metadata | None = await Filesystem.read_metadata(abs_path)
+        assert metadata is not None
 
         # directory or file metadata only
         if metadata.is_directory or self.metadata_only:
