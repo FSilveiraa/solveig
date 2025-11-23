@@ -12,6 +12,7 @@ from rich.syntax import Syntax
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
+from solveig.schema.message import UserComment
 from solveig.utils.file import Filesystem, Metadata
 from solveig.utils.misc import (
     FILE_EXTENSION_TO_LANGUAGE,
@@ -38,7 +39,6 @@ class TerminalInterface(SolveigInterface):
         self.app = SolveigTextualApp(
             theme=theme, input_callback=self._handle_input, **kwargs
         )
-        self._input_queue: asyncio.Queue[str] = asyncio.Queue()
         self.base_indent = base_indent
         self.code_theme = code_theme
 
@@ -75,23 +75,24 @@ class TerminalInterface(SolveigInterface):
     async def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the internal queue."""
         # Check if it's a command
+        is_subcommand = False
         if self.subcommand_executor is not None:
             try:
-                was_subcommand = await self.subcommand_executor(
+                is_subcommand = await self.subcommand_executor(
                     subcommand=user_input, interface=self
                 )
             except Exception as e:
-                was_subcommand = True
+                is_subcommand = True
                 await self.display_error(
                     f"Found error when executing '{user_input}' sub-command: {e}"
                 )
 
-            if not was_subcommand:
-                try:
-                    self._input_queue.put_nowait(user_input)
-                except asyncio.QueueFull:
-                    # TODO: Handle queue full scenario gracefully
-                    pass
+        if not is_subcommand and self.response_queue:
+            try:
+                self.response_queue.put_nowait(UserComment(comment=user_input))
+            except asyncio.QueueFull:
+                # TODO: Handle queue full scenario gracefully
+                pass
 
     async def _display_text(self, text: str, style: str = "text", prefix=None) -> None:
         """Display text with optional styling."""
@@ -189,15 +190,17 @@ class TerminalInterface(SolveigInterface):
             to_display, title=title or "Diff"
         )
 
-    async def get_input(self) -> str:
-        """Get user input for conversation flow by consuming from internal queue."""
-        await self.update_stats(status="Awaiting input")
-        user_input = (await self._input_queue.get()).strip()
-        if user_input:
-            await self.display_text(" " + user_input)
-        else:
-            await self._display_text(" (empty)", style="warning")
-        return user_input
+    # async def get_input(self) -> str:
+    #     """Get user input for conversation flow by consuming from internal queue."""
+    #     # This is now a blocking call that is only used for the initial prompt
+    #     # and when the autonomous loop is waiting for the user to start a new cycle.
+    #     await self.update_stats(status="Awaiting input")
+    #     user_input = (await self.app.get_input()).strip()
+    #     if user_input:
+    #         await self.display_text(" " + user_input)
+    #     else:
+    #         await self._display_text(" (empty)", style="warning")
+    #     return user_input
 
     async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""

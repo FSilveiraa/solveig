@@ -3,7 +3,7 @@ Base interface protocol for Solveig.
 
 Defines the minimal interface that any UI implementation (CLI, web, desktop) should provide.
 """
-
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
@@ -25,9 +25,13 @@ class SolveigInterface(ABC):
     """
 
     subcommand_executor: SubcommandRunner | None = None
+    response_queue: asyncio.Queue | None = None
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
+
+    def set_response_queue(self, response_queue: asyncio.Queue):
+        self.response_queue = response_queue
 
     @abstractmethod
     async def start(self) -> None:
@@ -104,11 +108,6 @@ class SolveigInterface(ABC):
         ...
 
     # Input methods
-    @abstractmethod
-    async def get_input(self) -> str:
-        """Get user input for conversation flow."""
-        ...
-
     @abstractmethod
     async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""

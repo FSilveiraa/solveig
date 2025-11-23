@@ -1,9 +1,10 @@
 import json
+import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Literal, Union, cast
+from typing import TYPE_CHECKING, Literal, Union, cast
 
-from pydantic import Field, TypeAdapter, field_validator
+from pydantic import BaseModel, Field, TypeAdapter, create_model, field_validator
 
 from solveig import SolveigConfig, utils
 from solveig.llm import APIType
@@ -11,6 +12,9 @@ from solveig.schema import REQUIREMENTS
 from solveig.schema.base import BaseSolveigModel
 from solveig.schema.requirements import Requirement
 from solveig.schema.results import RequirementResult
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
 
 class BaseMessage(BaseSolveigModel):
@@ -40,26 +44,57 @@ class SystemMessage(BaseMessage):
         }
 
 
-# The user's message will contain
-# - either the initial prompt or optionally more prompting
-# - optionally the responses to results asked by the LLM
+class UserComment(BaseModel):
+    """A user's comment in the event stream."""
+    comment: str
+
+
 class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
-    comment: str = ""
-    results: list[RequirementResult] | None = None
-
-    @field_validator("comment", mode="before")
-    @classmethod
-    def strip_comment(cls, comment):
-        return (comment or "").strip()
+    responses: list[Union[RequirementResult, UserComment]]
 
 
-# Pydantic wrapper class for the returned LLM operations
+class Task(BaseModel):
+    """Individual task item with minimal fields for LLM JSON generation."""
+    description: str = Field(
+        ..., description="Clear description of what needs to be done"
+    )
+    status: Literal["pending", "in_progress", "completed", "failed"] = Field(
+        default="pending", description="Current status of this task"
+    )
+
+
 class AssistantMessage(BaseMessage):
+    """Assistant message containing a comment and optionally a task plan and a list of required operations"""
     role: Literal["assistant"] = "assistant"
+    comment: str = Field(..., description="Conversation with user and plan description")
+    tasks: list[Task] | None = Field(
+        None, description="List of tasks to track and display"
+    )
     requirements: list[Requirement] | None = (
         None  # Simplified - actual schema generated dynamically
     )
+
+    async def display(self, interface: "SolveigInterface") -> None:
+        """Display the assistant's message, including comment and tasks."""
+        if self.comment:
+            await interface.display_text(self.comment)
+
+        if self.tasks:
+            task_lines = []
+            for i, task in enumerate(self.tasks, 1):
+                status_emoji = {
+                    "pending": "⚪",
+                    "in_progress": "🔵",
+                    "completed": "🟢",
+                    "failed": "🔴",
+                }[task.status]
+                task_lines.append(
+                    f"{'→' if task.status == 'in_progress' else ' '}  {status_emoji} {i}. {task.description}"
+                )
+
+            for line in task_lines:
+                await interface.display_text(line)
 
 
 # Cache for requirements union to avoid regenerating on every call
@@ -108,7 +143,9 @@ def get_response_model(
         raise ValueError("No response model available for LLM to use")
 
     # Create a Union of all requirement types for dynamic type checking
-    requirements_union = cast(type[Requirement], Union[*all_active_requirements])  # noqa: UP007
+    requirements_union = cast(
+        type[Requirement], Union[*all_active_requirements]
+    )  # noqa: UP007
 
     # Cache the result
     _last_requirements_config_hash = config_hash
@@ -117,9 +154,30 @@ def get_response_model(
     return requirements_union
 
 
+def get_assistant_response_model(
+    config: SolveigConfig | None = None,
+) -> type[BaseModel]:
+    """
+    Dynamically create an AssistantMessage model with a specific Union of requirements.
+    This is done by creating a new model that inherits from the base AssistantMessage
+    and only overrides the 'requirements' field with the correct dynamic type.
+    """
+    # Get the dynamic union of all concrete Requirement subclasses
+    requirements_union = get_response_model(config)
+
+    # Dynamically create the model, inheriting from AssistantMessage and overriding
+    # only the 'requirements' field.
+    dynamic_model = create_model(
+        "DynamicAssistantMessage",
+        requirements=(list[requirements_union] | None, Field(None)),
+        __base__=AssistantMessage,
+    )
+    return dynamic_model
+
+
 def get_response_model_json(config):
-    response_model = get_response_model(config)
-    schema = TypeAdapter(Iterable[response_model]).json_schema()
+    response_model = get_assistant_response_model(config)
+    schema = response_model.model_json_schema()
     return json.dumps(schema, indent=2, default=utils.misc.default_json_serialize)
 
 
@@ -140,6 +198,7 @@ class MessageHistory:
     token_count: int = field(default=0)  # Current cache size for pruning
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
+    _event_queue: asyncio.Queue = field(default_factory=asyncio.Queue, init=False, repr=False)
 
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
