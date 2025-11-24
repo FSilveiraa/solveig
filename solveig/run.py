@@ -41,16 +41,12 @@ async def get_message_history(
     return message_history
 
 
-class LLMCallCancelledError(Exception):
-    pass
-
-
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
     client: Instructor,
     message_history: MessageHistory,
-) -> AssistantMessage:
+) -> AssistantMessage | None:
     """Send message to LLM with retry logic."""
     response_model = get_assistant_response_model(config)
 
@@ -116,9 +112,11 @@ async def send_message_to_llm_with_retry(
                     "Yes, send the same message",
                     "No, add a new message",
                 ],
+                add_cancel=False,  # "No" already stops everything
             )
             if retry_choice == 1:  # "No"
-                raise LLMCallCancelledError("User cancelled the LLM call.") from e
+                # raise LLMCallCancelledError("User cancelled the LLM call.") from e
+                return None
 
 
 async def main_loop(
@@ -179,20 +177,19 @@ async def main_loop(
         need_user_input = True
 
         # Autonomous inner loop
-        try:
-            async with interface.with_animation("Thinking...", "Processing"):
-                llm_response = await send_message_to_llm_with_retry(
-                    config, interface, llm_client, message_history
-                )
+        async with interface.with_animation("Thinking...", "Processing"):
+            llm_response = await send_message_to_llm_with_retry(
+                config, interface, llm_client, message_history
+            )
 
-        except LLMCallCancelledError:
-            # The user chose not to retry.
-            # We simply continue the loop, and the finalize_user_turn call
-            # at the top will correctly wait for the user's next command.
-            llm_response = None
-            pass
+        # except LLMCallCancelledError:
+        #     # The user chose not to retry.
+        #     # We simply continue the loop, and the finalize_user_turn call
+        #     # at the top will correctly wait for the user's next command.
+        #     llm_response = None
+        #     pass
 
-        else:
+        if llm_response:
             if config.verbose:
                 await interface.display_text_block(
                     str(llm_response), title="Received"

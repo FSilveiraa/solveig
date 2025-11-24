@@ -19,6 +19,7 @@ from solveig.utils.misc import (
 
 from .app import SolveigTextualApp
 from .conversation import BANNER
+from ...exceptions import UserCancel
 
 
 class TerminalInterface(SolveigInterface):
@@ -201,15 +202,20 @@ class TerminalInterface(SolveigInterface):
         self.app._conversation_area.scroll_end()
         return await self.app.ask_user(question)
 
-    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
+    async def ask_choice(self, question: str, choices: Iterable[str], add_cancel: bool = True) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         choices_list = list(choices)  # Convert to list for indexing
         self.app._conversation_area.scroll_end()
+        if add_cancel:
+            choices_list.append("Cancel processing")
+
         choice_index = await self.app.ask_choice(question, choices_list)
         await self._display_text(
             choices_list[choice_index],
             prefix=question,
         )
+        if add_cancel and choice_index == len(choices_list) - 1:
+            raise UserCancel()
         return choice_index
 
     async def update_stats(

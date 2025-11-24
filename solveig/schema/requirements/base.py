@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ProcessingError, ValidationError
+from solveig.exceptions import PluginException, ProcessingError, ValidationError, UserCancel
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import HOOKS
 from solveig.schema.results import RequirementResult
@@ -57,6 +57,8 @@ class Requirement(BaseModel, ABC):
                         hook_coroutine = before_hook(config, interface, self)
                         if asyncio.iscoroutine(hook_coroutine):
                             await hook_coroutine
+                    except UserCancel as e:
+                        raise e
                     except ValidationError as e:
                         # Plugin validation failed - return appropriate error result
                         return self.create_error_result(
@@ -71,6 +73,8 @@ class Requirement(BaseModel, ABC):
             # Run the actual requirement solving
             try:
                 result = await self.actually_solve(config, interface)
+            except UserCancel as e:
+                raise e
             except Exception as error:
                 await interface.display_error(error)
                 error_info = "Execution error"
@@ -92,6 +96,8 @@ class Requirement(BaseModel, ABC):
                         after_coroutine = after_hook(config, interface, self, result)
                         if asyncio.iscoroutine(after_coroutine):
                             await after_coroutine
+                    except UserCancel as e:
+                        raise e
                     except ProcessingError as e:
                         # Plugin processing failed - return error result
                         return self.create_error_result(

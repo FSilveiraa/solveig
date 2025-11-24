@@ -114,7 +114,7 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
+    async def ask_choice(self, question: str, choices: Iterable[str], add_cancel: bool = False) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         ...
 
