@@ -7,6 +7,12 @@ processing errors, and security issues.
 """
 
 
+class UserCancel(Exception):
+    """Event signaling the user decided to cancel processing"""
+
+    pass
+
+
 class PluginException(Exception):
     """Base exception for all plugin-related errors."""
 

@@ -12,6 +12,7 @@ from instructor import Instructor
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
+from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
@@ -111,7 +112,10 @@ async def send_message_to_llm_with_retry(
 
             retry_choice = await interface.ask_choice(
                 "The API call failed. Do you want to retry?",
-                choices=["Yes", "No"],
+                choices=[
+                    "Yes, send the same message",
+                    "No, add a new message",
+                ],
             )
             if retry_choice == 1:  # "No"
                 raise LLMCallCancelledError("User cancelled the LLM call.") from e
@@ -159,18 +163,20 @@ async def main_loop(
     #     pass
     #     # For the very first message, we need to block and wait for input
     #     # user_prompt = await interface.ask_question("Enter your prompt: ")
+
+    # Create user message from initial user prompt or expect a new one
     if user_prompt:
         await message_history.add_user_comment(user_prompt)
+    # await interface.display_section("User")
+    await message_history.finalize_user_turn(
+        interface=interface, wait_for_input=True
+    )
     # await message_history.finalize_user_turn(interface=interface, wait_for_input=True)
 
     # await message_history.finalize_user_turn(interface=interface)
 
     while True:
-        # Create user message from initial user prompt, or stored comments + results
-        await interface.display_section("User")
-        await message_history.finalize_user_turn(
-            interface=interface, wait_for_input=True
-        )
+        need_user_input = True
 
         # Autonomous inner loop
         try:
@@ -178,24 +184,40 @@ async def main_loop(
                 llm_response = await send_message_to_llm_with_retry(
                     config, interface, llm_client, message_history
                 )
+
         except LLMCallCancelledError:
             # The user chose not to retry.
             # We simply continue the loop, and the finalize_user_turn call
             # at the top will correctly wait for the user's next command.
-            continue
+            llm_response = None
+            pass
 
-        if config.verbose:
-            await interface.display_text_block(
-                str(llm_response), title="Received"
-            )
+        else:
+            if config.verbose:
+                await interface.display_text_block(
+                    str(llm_response), title="Received"
+                )
 
-        await llm_response.display(interface)
+            await llm_response.display(interface)
 
-        if llm_response.requirements:
-            for req in llm_response.requirements:
-                result = await req.solve(config=config, interface=interface)
-                if result:
-                    await message_history.add_result(result)
+            if llm_response.requirements:
+                # We have something to respond with, so user input is not mandatory
+                need_user_input = False # TODO: not config.autonomous_mode
+                try:
+                    for req in llm_response.requirements:
+                        result = await req.solve(config=config, interface=interface)
+                        if result:
+                            await message_history.add_result(result)
+                except UserCancel:
+                    # User cancelled processing
+                    need_user_input = True
+                    # TODO: force new input
+                    # continue
+
+        # await interface.display_section("User")
+        await message_history.finalize_user_turn(
+            interface=interface, wait_for_input=need_user_input
+        )
 
         # if not config.autonomous_mode:
         # TODO: add a way to define if we always wait for a new user input, or if the agent has response autonomy

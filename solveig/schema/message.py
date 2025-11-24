@@ -59,8 +59,9 @@ class UserMessage(BaseMessage):
             if isinstance(response, UserComment)
         ]
         if comments:
+            await interface.display_section("User")
             for comment in comments:
-                await interface.display_text(f" {comment}")
+                await interface.display_comment(f" {comment}")
 
     @property
     def comment(self) -> str:
