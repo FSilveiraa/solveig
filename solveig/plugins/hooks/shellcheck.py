@@ -111,15 +111,32 @@ async def check_command(
                     f"Stderr: {stderr.decode(errors='ignore').strip()}"
                 )
 
-            output = json.loads(stdout.decode("utf-8").strip())
-            errors = [f"[{item['level']}] {item['message']}" for item in output]
-            if errors:
-                async with interface.with_group("Shellcheck Errors"):
-                    for error in errors:
-                        await interface.display_error(error)
-                raise ValidationError(
-                    f"Shellcheck validation failed for command `{requirement.command}`"
-                )
+            output = json.loads(stdout.decode("utf-8"))
+            
+            if output:
+                async with interface.with_group("Shellcheck Issues"):
+                    for item in output:
+                        level = item.get("level", "warning")
+                        message = f"[{level}] {item.get('message', 'Unknown issue')}"
+                        if level == "error":
+                            await interface.display_error(message)
+                        else:
+                            await interface.display_warning(message)
+
+                # Ask the user if they want to proceed
+                if plugin_config.get("ask_to_execute", True):
+                    run_anyway_choice = await interface.ask_choice(
+                        "Shellcheck found issues with this command. Execute anyway?",
+                        choices=["Yes", "No"],
+                    )
+                else:
+                    run_anyway_choice = 1  # No
+                if run_anyway_choice == 1:  # User chose "No"
+                    raise ValidationError(
+                        f"Execution cancelled due to shellcheck warnings for command `{requirement.command}`"
+                    )
+                # If user chooses "Yes", we simply return and let the command execute.
+
         except json.JSONDecodeError as e:
             raise ValidationError(
                 f"Shellcheck output parsing failed. Stderr: {stderr.decode(errors='ignore').strip()}"

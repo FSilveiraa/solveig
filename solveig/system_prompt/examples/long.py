@@ -23,7 +23,7 @@ from solveig.utils.file import Metadata
 EXAMPLE = MessageHistory(system_prompt="")
 
 tasks_1 = [
-    Task(description="Read the contents of ~/Sync", status="in_progress"),
+    Task(description="Read the contents of ~/Sync", status="ongoing"),
     Task(description="Read suspicious files inside ~/Sync"),
     Task(
         description="Provide a summary of contents, focused on safety and functionality"
@@ -153,7 +153,7 @@ EXAMPLE.add_messages(
 
 tasks_2 = [
     Task(description="Read the contents of ~/Sync", status="completed"),
-    Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
+    Task(description="Read suspicious files inside ~/Sync", status="ongoing"),
     Task(
         description="Provide a summary of contents, focused on safety and functionality"
     ),
@@ -249,7 +249,7 @@ tasks_4 = [
         description="Analyze and explain the contents of /home/user/Sync",
         status="completed",
     ),
-    Task(description="Write new print script", status="in_progress"),
+    Task(description="Write new print script", status="ongoing"),
     Task(description="Test new print script", status="pending"),
 ]
 write_script_req = WriteRequirement(
@@ -312,8 +312,8 @@ tasks_5 = [
         status="completed",
     ),
     Task(description="Write and test new print script", status="completed"),
-    Task(description="Delete old print script", status="in_progress"),
-    Task(description="Re-name the new print script", status="in_progress"),
+    Task(description="Delete old print script", status="ongoing"),
+    Task(description="Re-name the new print script", status="ongoing"),
 ]
 script_delete_move_req = CommandRequirement(
     comment="Delete a script from /home/user/Sync/ and re-name the old one",
@@ -345,7 +345,7 @@ tasks_6 = [
     Task(description="Re-name new print script with command", status="failed"),
     Task(
         description="Over-write old print script with improved one",
-        status="in_progress",
+        status="ongoing",
     ),
 ]
 script_move_req = MoveRequirement(

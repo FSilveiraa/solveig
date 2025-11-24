@@ -120,7 +120,7 @@ class TerminalInterface(SolveigInterface):
 
     async def display_comment(self, message: str) -> None:
         """Display a comment message."""
-        await self.display_text(f"🗩  {message}")
+        await self.display_text(f" 🗩  {message}")
 
     async def display_tree(
         self,
@@ -184,18 +184,6 @@ class TerminalInterface(SolveigInterface):
         await self.app._conversation_area.add_text_block(
             to_display, title=title or "Diff"
         )
-
-    # async def get_input(self) -> str:
-    #     """Get user input for conversation flow by consuming from internal queue."""
-    #     # This is now a blocking call that is only used for the initial prompt
-    #     # and when the autonomous loop is waiting for the user to start a new cycle.
-    #     await self.update_stats(status="Awaiting input")
-    #     user_input = (await self.app.get_input()).strip()
-    #     if user_input:
-    #         await self.display_text(" " + user_input)
-    #     else:
-    #         await self._display_text(" (empty)", style="warning")
-    #     return user_input
 
     async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""

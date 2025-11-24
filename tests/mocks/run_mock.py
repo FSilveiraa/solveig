@@ -13,7 +13,7 @@ from solveig.schema import (
     DeleteRequirement,
     MoveRequirement,
     ReadRequirement,
-    WriteRequirement,
+    WriteRequirement, CommandRequirement,
 )
 from solveig.schema.message import AssistantMessage, Task
 from solveig.utils.file import Filesystem
@@ -110,7 +110,7 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
             comment="",
             tasks=[
                 Task(description="Read the contents of ~/Sync", status="completed"),
-                Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
+                Task(description="Read suspicious files inside ~/Sync", status="ongoing"),
                 Task(
                     description="Provide a summary of contents, focused on safety and functionality"
                 ),
@@ -121,6 +121,28 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
                     path="~/Sync/",
                     metadata_only=True,
                 )
+            ]
+        )
+    ]
+
+    mock_messages = [
+        AssistantMessage(
+            comment="Testing dangerous commands for shellcheck",
+            tasks=[
+                Task(description="Test INFO", status="ongoing"),
+                Task(description="Test ERROR", status="pending"),
+            ],
+            requirements=[
+                CommandRequirement(
+                    comment="Unquoted var, should raise info",
+                    timeout=10,
+                    command="""VAR="hello world"; echo $VAR""",
+                ),
+                CommandRequirement(
+                    comment="Missing `fi` in `if` statement",
+                    timeout=10,
+                    command="""if true; then echo "hello\"""",
+                ),
             ]
         )
     ]

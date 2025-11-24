@@ -71,7 +71,7 @@ class UserMessage(BaseMessage):
 # Define statuses and their corresponding emojis
 TASK_STATUS_MAP = {
     "pending": "⚪",
-    "in_progress": "🔵",
+    "ongoing": "🔵",
     "completed": "🟢",
     "failed": "🔴",
 }
@@ -83,7 +83,7 @@ class Task(BaseModel):
     description: str = Field(
         ..., description="Clear description of what needs to be done"
     )
-    status: TaskStatus = Field(
+    status: Literal["pending", "ongoing", "completed", "failed"] = Field(
         default="pending", description="Current status of this task"
     )
 
@@ -109,7 +109,7 @@ class AssistantMessage(BaseMessage):
             for i, task in enumerate(self.tasks, 1):
                 status_emoji = TASK_STATUS_MAP[task.status]
                 task_lines.append(
-                    f"{'→' if task.status == 'in_progress' else ' '}  {status_emoji} {i}. {task.description}"
+                    f"{'→' if task.status == 'ongoing' else ' '}  {status_emoji} {i}. {task.description}"
                 )
 
             async with interface.with_group("Tasks"):
@@ -269,7 +269,7 @@ class MessageHistory:
             comment = UserComment(comment=comment)
         await self.current_responses.put(comment)
 
-    async def finalize_user_turn(
+    async def condense_responses_into_user_message(
         self, interface: "SolveigInterface", wait_for_input: bool = True
     ):
         """

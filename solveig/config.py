@@ -61,6 +61,7 @@ class SolveigConfig:
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     auto_allowed_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
+    disable_autonomy: bool = False
 
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
@@ -89,28 +90,6 @@ class SolveigConfig:
                 raise ValueError(
                     f"Invalid regex pattern in auto_execute_commands: '{pattern}': {e}"
                 ) from e
-
-        # split allowed paths in (path, mode)
-        # TODO: allowed paths
-        """
-        allowed_paths = []
-        for raw_path in self.allowed_paths:
-            if isinstance(raw_path, str):
-                path_split = raw_path.split(":")
-                if len(path_split) >= 2:
-                    path = str.join(":", path_split[0:-1])
-                    permissions = path_split[-1].lower()
-                    assert permissions in ["m", "r", "w", "n"], f"{permissions} is not a valid path permission"
-                else:
-                    path = raw_path
-                    permissions = "m"
-                    print(f"{raw_path} does not contain permissions, assuming metadata-only mode")
-
-                allowed_paths.append(SolveigPath(path, mode=permissions).expanduser())
-            else:
-                allowed_paths.append(raw_path)
-            self.allowed_paths = allowed_paths
-        """
 
     def with_(self, **kwargs):
         """Create a copy of this config with modified fields."""
@@ -235,6 +214,13 @@ class SolveigConfig:
             nargs="*",
             dest="auto_execute_commands",
             help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !",
+        )
+        parser.add_argument(
+            "--disable-autonomy",
+            action = "store_true",
+            dest = "disable_autonomy",
+            default = False,
+            help = "Disable autonomous mode. By default, Solveig will work autonomously run a loop asking for operations and  returning theirs results, until no new operations are requested. With this option, Solveig will require approval before sending results, by always expecting some user message to be included. ! This only affects whether we return results immediately or not, it does not influence usual operation choices (ex: reading a file will still follow patterns and require user approval) !",
         )
         parser.add_argument(
             "--no-commands",

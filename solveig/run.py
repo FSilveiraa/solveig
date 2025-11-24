@@ -66,7 +66,7 @@ async def send_message_to_llm_with_retry(
                         indent=2,
                         default=default_json_serialize
                     ),
-                    # language="json",  # breaks line wrapping
+                    # language="json",  # TODO: breaks line wrapping
                 )
 
             await interface.update_stats(
@@ -115,7 +115,6 @@ async def send_message_to_llm_with_retry(
                 add_cancel=False,  # "No" already stops everything
             )
             if retry_choice == 1:  # "No"
-                # raise LLMCallCancelledError("User cancelled the LLM call.") from e
                 return None
 
 
@@ -153,25 +152,14 @@ async def main_loop(
         await interface.display_text_block(
             title="Response Model",
             text=serialized_response_model,
-            # language="json",  # breaks line wrapping
+            # language="json",  # TODO: breaks line wrapping
         )
-
-    # Handle initial user prompt
-    # if not user_prompt:
-    #     pass
-    #     # For the very first message, we need to block and wait for input
-    #     # user_prompt = await interface.ask_question("Enter your prompt: ")
 
     # Create user message from initial user prompt or expect a new one
     if user_prompt:
         await message_history.add_user_comment(user_prompt)
     # await interface.display_section("User")
-    await message_history.finalize_user_turn(
-        interface=interface, wait_for_input=True
-    )
-    # await message_history.finalize_user_turn(interface=interface, wait_for_input=True)
-
-    # await message_history.finalize_user_turn(interface=interface)
+    await message_history.condense_responses_into_user_message(interface=interface, wait_for_input=True)
 
     while True:
         need_user_input = True
@@ -181,13 +169,6 @@ async def main_loop(
             llm_response = await send_message_to_llm_with_retry(
                 config, interface, llm_client, message_history
             )
-
-        # except LLMCallCancelledError:
-        #     # The user chose not to retry.
-        #     # We simply continue the loop, and the finalize_user_turn call
-        #     # at the top will correctly wait for the user's next command.
-        #     llm_response = None
-        #     pass
 
         if llm_response:
             if config.verbose:
@@ -199,7 +180,7 @@ async def main_loop(
 
             if llm_response.requirements:
                 # We have something to respond with, so user input is not mandatory
-                need_user_input = False # TODO: not config.autonomous_mode
+                need_user_input = config.disable_autonomy
                 try:
                     for req in llm_response.requirements:
                         result = await req.solve(config=config, interface=interface)
@@ -212,14 +193,9 @@ async def main_loop(
                     # continue
 
         # await interface.display_section("User")
-        await message_history.finalize_user_turn(
+        await message_history.condense_responses_into_user_message(
             interface=interface, wait_for_input=need_user_input
         )
-
-        # if not config.autonomous_mode:
-        # TODO: add a way to define if we always wait for a new user input, or if the agent has response autonomy
-        # the user can always type messages while requirements are processed, this is just an optional explicit wait for it
-        # await message_history.wait_for_user_comment()
 
 
 async def run_async(
