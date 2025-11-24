@@ -40,6 +40,10 @@ async def get_message_history(
     return message_history
 
 
+class LLMCallCancelledError(Exception):
+    pass
+
+
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -106,15 +110,11 @@ async def send_message_to_llm_with_retry(
             )
 
             retry_choice = await interface.ask_choice(
-                "Retry this message?",
-                choices=["Retry the same message", "Add new message"],
+                "The API call failed. Do you want to retry?",
+                choices=["Yes", "No"],
             )
-            # If user chooses to add a new message, we just wait for it to be added
-            # to the queue by the interface, then continue to retry the API call.
-            if retry_choice == 1:
-                await message_history.wait_for_user_comment()
-                await message_history.consolidate_responses_into_message()
-                continue
+            if retry_choice == 1:  # "No"
+                raise LLMCallCancelledError("User cancelled the LLM call.") from e
 
 
 async def main_loop(
@@ -155,20 +155,34 @@ async def main_loop(
         )
 
     # Handle initial user prompt
-    if not user_prompt:
-        # For the very first message, we need to block and wait for input
-        user_prompt = await interface.ask_question("Enter your prompt: ")
+    # if not user_prompt:
+    #     pass
+    #     # For the very first message, we need to block and wait for input
+    #     # user_prompt = await interface.ask_question("Enter your prompt: ")
+    if user_prompt:
+        await message_history.add_user_comment(user_prompt)
+    # await message_history.finalize_user_turn(interface=interface, wait_for_input=True)
 
-    await message_history.add_user_comment(user_prompt)
-    if await message_history.consolidate_responses_into_message():
-        await message_history.messages[-1].display(interface)
+    # await message_history.finalize_user_turn(interface=interface)
 
     while True:
+        # Create user message from initial user prompt, or stored comments + results
+        await interface.display_section("User")
+        await message_history.finalize_user_turn(
+            interface=interface, wait_for_input=True
+        )
+
         # Autonomous inner loop
-        async with interface.with_animation("Thinking...", "Processing"):
-            llm_response = await send_message_to_llm_with_retry(
-                config, interface, llm_client, message_history
-            )
+        try:
+            async with interface.with_animation("Thinking...", "Processing"):
+                llm_response = await send_message_to_llm_with_retry(
+                    config, interface, llm_client, message_history
+                )
+        except LLMCallCancelledError:
+            # The user chose not to retry.
+            # We simply continue the loop, and the finalize_user_turn call
+            # at the top will correctly wait for the user's next command.
+            continue
 
         if config.verbose:
             await interface.display_text_block(
@@ -177,34 +191,16 @@ async def main_loop(
 
         await llm_response.display(interface)
 
-        if not llm_response.requirements:
-            # If there are no requirements, efficiently wait for the next user comment.
-            await message_history.wait_for_user_comment()
-            if await message_history.consolidate_responses_into_message():
-                await message_history.messages[-1].display(interface)
-            continue
+        if llm_response.requirements:
+            for req in llm_response.requirements:
+                result = await req.solve(config=config, interface=interface)
+                if result:
+                    await message_history.add_result(result)
 
-        # # Dispatch all requirement solving tasks
-        # tasks = [
-        #     asyncio.create_task(req.solve(config, interface))
-        #     for req in llm_response.requirements
-        # ]
-        #
-        # for task in asyncio.as_completed(tasks):
-        #     result = await task
-        #     if result:
-        #         await message_history.add_result(result)
-
-        for req in llm_response.requirements:
-            result = await req.solve(config=config, interface=interface)
-            if result:
-                await message_history.add_user_comment(result)
-
-        # Consolidate all results and any interleaved user comments
-        if await message_history.consolidate_responses_into_message():
-            # This handles displaying interleaved user comments
-            await message_history.messages[-1].display(interface)
-
+        # if not config.autonomous_mode:
+        # TODO: add a way to define if we always wait for a new user input, or if the agent has response autonomy
+        # the user can always type messages while requirements are processed, this is just an optional explicit wait for it
+        # await message_history.wait_for_user_comment()
 
 
 async def run_async(

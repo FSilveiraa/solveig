@@ -59,7 +59,6 @@ class UserMessage(BaseMessage):
             if isinstance(response, UserComment)
         ]
         if comments:
-            await interface.display_section("User")
             for comment in comments:
                 await interface.display_text(f" {comment}")
 
@@ -269,38 +268,38 @@ class MessageHistory:
             comment = UserComment(comment=comment)
         await self.current_responses.put(comment)
 
-    async def consolidate_responses_into_message(self) -> bool:
+    async def finalize_user_turn(
+        self, interface: "SolveigInterface", wait_for_input: bool = True
+    ):
         """
-        Consumer method to collect events and form a new UserMessage.
-        Waits for a specific number of RequirementResults before finalizing.
-        Returns True if a new message was created, False otherwise.
+        Consolidates events into a UserMessage, optionally waiting for user input.
+
+        This method consumes events from the queue. If `wait_for_input` is True
+        and no UserComment is found among the currently queued events, it will
+        block and wait for the user to provide one before creating the message.
         """
         responses = []
-        # Collector loop: wait for all results
+        has_user_comment = False
+
+        # 1. Consume all events that are *already* in the queue.
         while not self.current_responses.empty():
             event = self.current_responses.get_nowait()
+            if isinstance(event, UserComment):
+                has_user_comment = True
             responses.append(event)
 
+        # 2. If we must wait for input and haven't seen a user comment, block and wait.
+        if wait_for_input and not has_user_comment:
+            # Block until the user provides the next comment.
+            async with interface.with_animation("Awaiting input..."):
+                event = await self.current_responses.get()
+            responses.append(event)
+
+        # 3. If we have collected any events, create and display the message.
         if responses:
             user_message = UserMessage(responses=responses)
             self.add_messages(user_message)
-            return True
-        return False
-
-    async def wait_for_user_comment(self) -> UserComment:
-        """Waits for the next user comment, re-queuing any other results."""
-        while True:
-            event = await self.current_responses.get()
-            if isinstance(event, UserComment):
-                # Got what we wanted, put it back for the next consolidation and return
-                await self.current_responses.put(event)
-                return event
-            else:
-                # If we get a result while waiting for a user comment,
-                # put it back in the queue for the next consolidation.
-                await self.current_responses.put(event)
-                # Brief sleep to prevent a tight loop if the queue only contains non-comment events
-                await asyncio.sleep(0.01)
+            await user_message.display(interface)
 
     def to_openai(self, update_sent_count=False):
         """Return cache for OpenAI API. If update_sent_count=True, add current cache size to total_tokens_sent."""
