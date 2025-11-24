@@ -34,11 +34,18 @@ class GrowingInput(TextArea):
 
     async def _on_key(self, event: Key) -> None:
         """
-        Override the private _on_key method to intercept Enter key presses.
+        Override the private _on_key method to intercept Enter key presses
+        and handle Ctrl+C for clearing input.
         """
         if event.key == "enter":
             event.prevent_default()
             self.post_message(self.Submitted(self.text))
+        elif event.key == "ctrl+c":
+            if self.text:
+                # If there is text, clear it and stop the event
+                event.stop()
+                self.text = ""
+            # If there is no text, let the event bubble up to the app to exit
         else:
             # Let the parent class handle other keys
             await super()._on_key(event)
