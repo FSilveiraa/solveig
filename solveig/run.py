@@ -41,6 +41,26 @@ async def get_message_history(
     return message_history
 
 
+async def update_stats(llm_response, message_history, interface):
+    try:
+        raw_response = llm_response._raw_response
+    except AttributeError:
+        pass
+    else:
+        # Update token count
+        if raw_response.usage:
+            message_history.record_api_usage(raw_response.usage)
+            await interface.update_stats(
+                tokens=(
+                    message_history.total_tokens_sent,
+                    message_history.total_tokens_received,
+                )
+            )
+        # Update model name
+        if raw_response.model:
+            await interface.update_stats(model=raw_response.model)
+
+
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -57,7 +77,7 @@ async def send_message_to_llm_with_retry(
         try:
             # this has to be done here - the message_history dumping auto-adds the token counting upon
             # the serialization that we would have to do anyway to avoid expensive re-counting on every update
-            message_history_dumped = message_history.to_openai(update_sent_count=True)
+            message_history_dumped = message_history.to_openai()
             if config.verbose:
                 await interface.display_text_block(
                     title="Sending",
@@ -69,14 +89,7 @@ async def send_message_to_llm_with_retry(
                     # language="json",  # TODO: breaks line wrapping
                 )
 
-            await interface.update_stats(
-                tokens=(
-                    message_history.total_tokens_sent,
-                    message_history.total_tokens_received,
-                )
-            )
-
-            await interface.display_section("Assistant")
+            await interface.display_section(title="Assistant")
             llm_response = await client.chat.completions.create(
                 messages=message_history_dumped,
                 response_model=response_model,
@@ -85,17 +98,10 @@ async def send_message_to_llm_with_retry(
             )
 
             assert isinstance(llm_response, AssistantMessage)
-
             if not llm_response:
                 raise ValueError("Assistant responded with empty message")
 
-            await interface.update_stats(
-                tokens=(
-                    message_history.total_tokens_sent,
-                    message_history.total_tokens_received,
-                )
-            )
-
+            await update_stats(llm_response, message_history, interface)
             return llm_response
 
         except KeyboardInterrupt:
@@ -158,13 +164,12 @@ async def main_loop(
     # Create user message from initial user prompt or expect a new one
     if user_prompt:
         await message_history.add_user_comment(user_prompt)
-    # await interface.display_section("User")
     await message_history.condense_responses_into_user_message(interface=interface, wait_for_input=True)
 
     while True:
         need_user_input = True
 
-        # Autonomous inner loop
+        # Send message and await response
         async with interface.with_animation("Thinking...", "Processing"):
             llm_response = await send_message_to_llm_with_retry(
                 config, interface, llm_client, message_history
@@ -189,10 +194,8 @@ async def main_loop(
                 except UserCancel:
                     # User cancelled processing
                     need_user_input = True
-                    # TODO: force new input
-                    # continue
 
-        # await interface.display_section("User")
+        # If we need a new user message, await for it, then condense everything into a new message
         await message_history.condense_responses_into_user_message(
             interface=interface, wait_for_input=need_user_input
         )

@@ -3,6 +3,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Union, cast
 
+from openai.types import CompletionUsage
 from pydantic import BaseModel, Field, create_model
 
 from solveig import SolveigConfig, utils
@@ -253,8 +254,6 @@ class MessageHistory:
                 message_dumped["content"], self.encoder
             )
             self.token_count += token_count
-            if message.role == "assistant":
-                self.total_tokens_received += token_count
             self.messages.append(message)
             self.message_cache.append(message_dumped)
         self.prune_message_cache()
@@ -268,6 +267,12 @@ class MessageHistory:
         if isinstance(comment, str):
             comment = UserComment(comment=comment)
         await self.current_responses.put(comment)
+
+    def record_api_usage(self, usage: "CompletionUsage") -> None:
+        """Updates the total token counts from the API's response."""
+        if usage:
+            self.total_tokens_sent += usage.prompt_tokens
+            self.total_tokens_received += usage.completion_tokens
 
     async def condense_responses_into_user_message(
         self, interface: "SolveigInterface", wait_for_input: bool = True
@@ -302,10 +307,8 @@ class MessageHistory:
             self.add_messages(user_message)
             await user_message.display(interface)
 
-    def to_openai(self, update_sent_count=False):
-        """Return cache for OpenAI API. If update_sent_count=True, add current cache size to total_tokens_sent."""
-        if update_sent_count:
-            self.total_tokens_sent += self.token_count
+    def to_openai(self):
+        """Return cache for OpenAI API."""
         return self.message_cache
 
     def to_example(self):
