@@ -15,7 +15,7 @@ from solveig.schema import (
     ReadRequirement,
     WriteRequirement,
 )
-from solveig.schema.message import AssistantMessage
+from solveig.schema.message import AssistantMessage, Task
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
 
@@ -56,7 +56,7 @@ class DemoInterface(TerminalInterface):
 
 
 async def run_async_mock(
-    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 10
+    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 1
 ):
     """Entry point for the async textual CLI."""
 
@@ -108,6 +108,13 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
     mock_messages = [
         AssistantMessage(
             comment="",
+            tasks=[
+                Task(description="Read the contents of ~/Sync", status="completed"),
+                Task(description="Read suspicious files inside ~/Sync", status="in_progress"),
+                Task(
+                    description="Provide a summary of contents, focused on safety and functionality"
+                ),
+            ],
             requirements=[
                 ReadRequirement(
                     comment="Test read",

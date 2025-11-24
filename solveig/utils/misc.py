@@ -1,7 +1,11 @@
+import json
 import re
 from datetime import datetime
 from os import PathLike
 from pathlib import PurePath
+
+from instructor import Mode, handle_response_model
+from pydantic import BaseModel
 
 YES = {"y", "yes"}
 TRUNCATE_JOIN = " (...) "
@@ -90,6 +94,11 @@ def parse_human_readable_size(size_notation: int | str) -> int:
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
 
+def serialize_response_model(model: type[BaseModel], mode: Mode):
+    new_response_model, serialized_response_model = handle_response_model(model, mode=mode)
+    return json.dumps(serialized_response_model, indent=2, default=default_json_serialize)
+
+
 class TEXT_BOX:
     H = "─"
     V = "│"
@@ -103,7 +112,7 @@ class TEXT_BOX:
     HT = "┴"
     X = "┼"
 
-
+# Currently unused, was previously used to generate a tree directory, now textual handles it
 def get_tree_display(
     metadata, display_metadata: bool = False, indent="  "
 ) -> list[str]:

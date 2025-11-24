@@ -2,8 +2,8 @@
 
 import asyncio
 import random
-import time
 from unittest.mock import MagicMock
+from instructor import Mode
 
 from solveig.schema.message import AssistantMessage
 
@@ -31,6 +31,7 @@ class MockLLMClient:
         self.chat.completions.create_iterable = self._create_iterable
         self.sleep_seconds = sleep_seconds
         self.sleep_delta = abs(sleep_delta)
+        self.mode = Mode.TOOLS
 
     async def _create_completion(self, **kwargs) -> AssistantMessage:
         """Return next response or raise next exception."""

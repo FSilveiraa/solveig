@@ -20,7 +20,7 @@ from solveig.schema.message import (
     get_assistant_response_model,
 )
 from solveig.subcommand import SubcommandRunner
-from solveig.utils.misc import default_json_serialize
+from solveig.utils.misc import default_json_serialize, serialize_response_model
 
 
 async def get_message_history(
@@ -61,8 +61,11 @@ async def send_message_to_llm_with_retry(
                 await interface.display_text_block(
                     title="Sending",
                     text=json.dumps(
-                        message_history_dumped, default=default_json_serialize
+                        message_history_dumped,
+                        indent=2,
+                        default=default_json_serialize
                     ),
+                    # language="json",  # breaks line wrapping
                 )
 
             await interface.update_stats(
@@ -141,6 +144,15 @@ async def main_loop(
         config=config, message_history=message_history
     )
     interface.set_subcommand_executor(subcommand_executor)
+
+    if config.verbose:
+        response_model = get_assistant_response_model(config)
+        serialized_response_model = serialize_response_model(model=response_model, mode=llm_client.mode)
+        await interface.display_text_block(
+            title="Response Model",
+            text=serialized_response_model,
+            # language="json",  # breaks line wrapping
+        )
 
     # Handle initial user prompt
     if not user_prompt:

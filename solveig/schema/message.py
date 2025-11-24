@@ -68,12 +68,22 @@ class UserMessage(BaseMessage):
         return "\n".join(response.comment for response in self.responses if isinstance(response, UserComment))
 
 
+# Define statuses and their corresponding emojis
+TASK_STATUS_MAP = {
+    "pending": "⚪",
+    "in_progress": "🔵",
+    "completed": "🟢",
+    "failed": "🔴",
+}
+TaskStatus = Literal[tuple(TASK_STATUS_MAP.keys())]
+
+
 class Task(BaseModel):
     """Individual task item with minimal fields for LLM JSON generation."""
     description: str = Field(
         ..., description="Clear description of what needs to be done"
     )
-    status: Literal["pending", "in_progress", "completed", "failed"] = Field(
+    status: TaskStatus = Field(
         default="pending", description="Current status of this task"
     )
 
@@ -97,18 +107,14 @@ class AssistantMessage(BaseMessage):
         if self.tasks:
             task_lines = []
             for i, task in enumerate(self.tasks, 1):
-                status_emoji = {
-                    "pending": "⚪",
-                    "in_progress": "🔵",
-                    "completed": "🟢",
-                    "failed": "🔴",
-                }[task.status]
+                status_emoji = TASK_STATUS_MAP[task.status]
                 task_lines.append(
                     f"{'→' if task.status == 'in_progress' else ' '}  {status_emoji} {i}. {task.description}"
                 )
 
-            for line in task_lines:
-                await interface.display_text(line)
+            async with interface.with_group("Tasks"):
+                for line in task_lines:
+                    await interface.display_text(line)
 
 
 # Cache for requirements union to avoid regenerating on every call
