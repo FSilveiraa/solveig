@@ -64,7 +64,7 @@ class TestShellcheckPlugin:
             command=f"mkfs.ext4 {tmp_path}/__non-existent-path__/sdx1",
             comment="Test dangerous command error formatting",
         )
-        self.interface.set_user_inputs([1])  # Decline sending error back to assistant
+        self.interface.choices.extend([1])  # Decline sending error back to assistant
 
         result = await req.solve(SHELLCHECK_CONFIG, self.interface)
 
@@ -85,7 +85,7 @@ class TestShellcheckPlugin:
         cmd_req = CommandRequirement(
             command="echo 'hello world'", comment="Test normal command"
         )
-        self.interface.set_user_inputs([2])  # Decline to run
+        self.interface.choices.extend([2])  # Decline to run
 
         # Mock user declining to run the command (we just want to test plugin validation)
         result = await cmd_req.solve(SHELLCHECK_CONFIG, self.interface)
@@ -100,7 +100,7 @@ class TestShellcheckPlugin:
         cmd_req = CommandRequirement(
             command="echo 'properly quoted'", comment="Test successful validation"
         )
-        self.interface.set_user_inputs([2])  # Decline to run
+        self.interface.choices.extend([2])  # Decline to run
 
         result = await cmd_req.solve(SHELLCHECK_CONFIG, self.interface)
 
@@ -120,7 +120,7 @@ if then
 fi
 """,
         )
-        self.interface.set_user_inputs([1])  # Decline sending error back to assistant
+        self.interface.choices.extend([1])  # Decline sending error back to assistant
 
         result = await req.solve(SHELLCHECK_CONFIG, self.interface)
 
@@ -145,7 +145,7 @@ fi
             config = SHELLCHECK_CONFIG
             req = CommandRequirement(command="echo test", comment="Test")
             interface = MockInterface()
-            interface.set_user_inputs([2])  # Decline to run the command
+            interface.choices.extend([2])  # Decline to run the command
 
             result = await req.solve(config, interface)
 
@@ -194,7 +194,7 @@ fi
 """,
             comment="Test shellcheck error",
         )
-        self.interface.set_user_inputs([1])  # Decline sending error back to assistant
+        self.interface.choices.extend([1])  # Decline sending error back to assistant
         result = await cmd_req.solve(SHELLCHECK_CONFIG, self.interface)
 
         # Should be stopped by shellcheck plugin
@@ -205,7 +205,7 @@ fi
         read_req = ReadRequirement(
             path=str(tmp_path), metadata_only=True, comment="Test read"
         )
-        self.interface.set_user_inputs([1])  # Decline sending metadata
+        self.interface.choices.extend([1])  # Decline sending metadata
         result = await read_req.solve(SHELLCHECK_CONFIG, self.interface)
 
         # Should not be stopped by shellcheck, but declined by user

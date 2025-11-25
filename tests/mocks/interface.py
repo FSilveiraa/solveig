@@ -243,8 +243,8 @@ class MockInterface(TerminalInterface):
     def get_all_sections(self) -> list[str]:
         return self.sections.copy()
 
-    def get_status_updates(self) -> list[dict]:
-        return self.stats_updates.copy()
+    def get_all_status_updates(self) -> str:
+        return "\n".join(str(stats) for stats in self.stats_updates)
 
     def clear(self) -> None:
         """Clear all captured data"""
