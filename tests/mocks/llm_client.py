@@ -3,6 +3,7 @@
 import asyncio
 import random
 from unittest.mock import MagicMock
+
 from instructor import Mode
 
 from solveig.schema.message import AssistantMessage

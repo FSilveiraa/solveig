@@ -8,7 +8,12 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ProcessingError, ValidationError, UserCancel
+from solveig.exceptions import (
+    PluginException,
+    ProcessingError,
+    UserCancel,
+    ValidationError,
+)
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import HOOKS
 from solveig.schema.results import RequirementResult

@@ -95,8 +95,12 @@ def parse_human_readable_size(size_notation: int | str) -> int:
 
 
 def serialize_response_model(model: type[BaseModel], mode: Mode):
-    new_response_model, serialized_response_model = handle_response_model(model, mode=mode)
-    return json.dumps(serialized_response_model, indent=2, default=default_json_serialize)
+    new_response_model, serialized_response_model = handle_response_model(
+        model, mode=mode
+    )
+    return json.dumps(
+        serialized_response_model, indent=2, default=default_json_serialize
+    )
 
 
 class TEXT_BOX:
@@ -111,6 +115,7 @@ class TEXT_BOX:
     HB = "┬"
     HT = "┴"
     X = "┼"
+
 
 # Currently unused, was previously used to generate a tree directory, now textual handles it
 def get_tree_display(

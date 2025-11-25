@@ -82,9 +82,7 @@ async def send_message_to_llm_with_retry(
                 await interface.display_text_block(
                     title="Sending",
                     text=json.dumps(
-                        message_history_dumped,
-                        indent=2,
-                        default=default_json_serialize
+                        message_history_dumped, indent=2, default=default_json_serialize
                     ),
                     # language="json",  # TODO: breaks line wrapping
                 )
@@ -110,8 +108,11 @@ async def send_message_to_llm_with_retry(
             # the total tokens so update the stats display
             message_history.add_messages(assistant_response)
             await interface.update_stats(
-                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received),
-                model=model
+                tokens=(
+                    message_history.total_tokens_sent,
+                    message_history.total_tokens_received,
+                ),
+                model=model,
             )
             return assistant_response
 
@@ -154,7 +155,7 @@ async def main_loop(
 
     await initialize_plugins(config=config, interface=interface)
     message_history = await get_message_history(config, interface)
-    
+
     # Pass the message history's input method to the interface
     interface.set_input_handler(message_history.add_user_comment)
 
@@ -165,7 +166,9 @@ async def main_loop(
 
     if config.verbose:
         response_model = get_response_model(config)
-        serialized_response_model = serialize_response_model(model=response_model, mode=llm_client.mode)
+        serialized_response_model = serialize_response_model(
+            model=response_model, mode=llm_client.mode
+        )
         await interface.display_text_block(
             title="Response Model",
             text=serialized_response_model,
@@ -175,7 +178,9 @@ async def main_loop(
     # Create user message from initial user prompt or expect a new one
     if user_prompt:
         await message_history.add_user_comment(user_prompt)
-    await message_history.condense_responses_into_user_message(interface=interface, wait_for_input=True)
+    await message_history.condense_responses_into_user_message(
+        interface=interface, wait_for_input=True
+    )
 
     while True:
         need_user_input = True
@@ -188,9 +193,7 @@ async def main_loop(
 
         if llm_response:
             if config.verbose:
-                await interface.display_text_block(
-                    str(llm_response), title="Received"
-                )
+                await interface.display_text_block(str(llm_response), title="Received")
 
             await llm_response.display(interface)
 

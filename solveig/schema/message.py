@@ -1,5 +1,5 @@
-import json
 import asyncio
+import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Union, cast
 
@@ -47,12 +47,13 @@ class SystemMessage(BaseMessage):
 
 class UserComment(BaseModel):
     """A user's comment in the event stream."""
+
     comment: str
 
 
 class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
-    responses: list[Union[RequirementResult, UserComment]]
+    responses: list[RequirementResult | UserComment]
 
     async def display(self, interface: "SolveigInterface"):
         """Display the user's comments from the message."""
@@ -68,7 +69,11 @@ class UserMessage(BaseMessage):
 
     @property
     def comment(self) -> str:
-        return "\n".join(response.comment for response in self.responses if isinstance(response, UserComment))
+        return "\n".join(
+            response.comment
+            for response in self.responses
+            if isinstance(response, UserComment)
+        )
 
 
 # Define statuses and their corresponding emojis
@@ -83,6 +88,7 @@ TASK_STATUS_MAP = {
 
 class Task(BaseModel):
     """Individual task item with minimal fields for LLM JSON generation."""
+
     description: str = Field(
         ..., description="Clear description of what needs to be done"
     )
@@ -93,6 +99,7 @@ class Task(BaseModel):
 
 class AssistantMessage(BaseMessage):
     """Assistant message containing a comment and optionally a task plan and a list of required operations"""
+
     role: Literal["assistant"] = "assistant"
     comment: str = Field(..., description="Conversation with user and plan description")
     tasks: list[Task] | None = Field(
@@ -152,6 +159,7 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     # Filter out CommandRequirement if commands are disabled
     if config and config.no_commands:
         from solveig.schema.requirements.command import CommandRequirement
+
         all_active_requirements = [
             req for req in all_active_requirements if req != CommandRequirement
         ]
@@ -161,16 +169,17 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
         raise ValueError("No response model available for LLM to use")
 
     # Create a Union of all requirement types
-    requirements_union = cast(
-        type[Requirement], Union[*all_active_requirements]
-    )
+    requirements_union = cast(type[Requirement], Union[*all_active_requirements])
 
     # Cache the result and clear dependent cache
     CACHED_RESPONSE_MODEL.config_hash = config_hash
     CACHED_RESPONSE_MODEL.requirements_union = requirements_union
     CACHED_RESPONSE_MODEL.message_class = create_model(
         "DynamicAssistantMessage",
-        requirements=(list[CACHED_RESPONSE_MODEL.requirements_union] | None, Field(None)),
+        requirements=(
+            list[CACHED_RESPONSE_MODEL.requirements_union] | None,
+            Field(None),
+        ),
         __base__=AssistantMessage,
     )
 
@@ -213,7 +222,9 @@ class MessageHistory:
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
     # contains both results to requirements and user comments
-    current_responses: asyncio.Queue[UserComment | RequirementResult] = field(default_factory=asyncio.Queue, init=False, repr=False)
+    current_responses: asyncio.Queue[UserComment | RequirementResult] = field(
+        default_factory=asyncio.Queue, init=False, repr=False
+    )
 
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
@@ -275,7 +286,7 @@ class MessageHistory:
         """Producer method to add a tool result to the event queue."""
         await self.current_responses.put(result)
 
-    async def add_user_comment(self, comment: Union[UserComment, str]):
+    async def add_user_comment(self, comment: UserComment | str):
         """Producer method to add a user comment to the event queue."""
         if isinstance(comment, str):
             comment = UserComment(comment=comment)
@@ -322,9 +333,7 @@ class MessageHistory:
 
     def to_openai(self):
         """Return cache for OpenAI API."""
-        return [
-            message for message, _ in self.message_cache
-        ]
+        return [message for message, _ in self.message_cache]
 
     def to_example(self):
         return "\n".join(

@@ -9,11 +9,12 @@ from solveig.interface import TerminalInterface
 from solveig.plugins.schema.tree import TreeRequirement
 from solveig.run import run_async
 from solveig.schema import (
+    CommandRequirement,
     CopyRequirement,
     DeleteRequirement,
     MoveRequirement,
     ReadRequirement,
-    WriteRequirement, CommandRequirement,
+    WriteRequirement,
 )
 from solveig.schema.message import AssistantMessage, Task
 from solveig.utils.file import Filesystem
@@ -101,7 +102,7 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
                     destination_path="~/Sync/hello.py",
                 ),
                 DeleteRequirement(comment="test delete", path="~/Sync/test.py"),
-            ]
+            ],
         ),
     ]
 
@@ -110,7 +111,9 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
             comment="",
             tasks=[
                 Task(description="Read the contents of ~/Sync", status="completed"),
-                Task(description="Read suspicious files inside ~/Sync", status="ongoing"),
+                Task(
+                    description="Read suspicious files inside ~/Sync", status="ongoing"
+                ),
                 Task(
                     description="Provide a summary of contents, focused on safety and functionality"
                 ),
@@ -121,7 +124,7 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
                     path="~/Sync/",
                     metadata_only=True,
                 )
-            ]
+            ],
         )
     ]
 
@@ -143,7 +146,7 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
                     timeout=10,
                     command="""if true; then echo "hello\"""",
                 ),
-            ]
+            ],
         )
     ]
 

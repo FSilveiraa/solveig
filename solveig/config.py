@@ -217,10 +217,10 @@ class SolveigConfig:
         )
         parser.add_argument(
             "--disable-autonomy",
-            action = "store_true",
-            dest = "disable_autonomy",
-            default = False,
-            help = "Disable autonomous mode. By default, Solveig will work autonomously run a loop asking for operations and  returning theirs results, until no new operations are requested. With this option, Solveig will require approval before sending results, by always expecting some user message to be included. ! This only affects whether we return results immediately or not, it does not influence usual operation choices (ex: reading a file will still follow patterns and require user approval) !",
+            action="store_true",
+            dest="disable_autonomy",
+            default=False,
+            help="Disable autonomous mode. By default, Solveig will work autonomously run a loop asking for operations and  returning theirs results, until no new operations are requested. With this option, Solveig will require approval before sending results, by always expecting some user message to be included. ! This only affects whether we return results immediately or not, it does not influence usual operation choices (ex: reading a file will still follow patterns and require user approval) !",
         )
         parser.add_argument(
             "--no-commands",

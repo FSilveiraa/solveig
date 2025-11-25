@@ -2,9 +2,9 @@ from solveig.plugins.schema.tree import TreeRequirement, TreeResult
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
+    Task,
     UserComment,
     UserMessage,
-    Task,
 )
 from solveig.schema.requirements import (
     CommandRequirement,
@@ -287,7 +287,9 @@ EXAMPLE.add_messages(
     ),
     UserMessage(
         responses=[
-            UserComment(comment="Cool, it works! Thanks, can you clean up the old file now?"),
+            UserComment(
+                comment="Cool, it works! Thanks, can you clean up the old file now?"
+            ),
             WriteResult(
                 requirement=write_script_req,
                 path="/home/user/Sync/hello_new.py",

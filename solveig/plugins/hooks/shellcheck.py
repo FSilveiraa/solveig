@@ -112,7 +112,7 @@ async def check_command(
                 )
 
             output = json.loads(stdout.decode("utf-8"))
-            
+
             if output:
                 async with interface.with_group("Shellcheck Issues"):
                     for item in output:

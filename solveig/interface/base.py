@@ -3,9 +3,9 @@ Base interface protocol for Solveig.
 
 Defines the minimal interface that any UI implementation (CLI, web, desktop) should provide.
 """
-import asyncio
+
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
 
@@ -25,12 +25,12 @@ class SolveigInterface(ABC):
     """
 
     subcommand_executor: SubcommandRunner | None = None
-    input_handler: "Callable | None" = None
+    input_handler: Callable | None = None
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
 
-    def set_input_handler(self, handler: "Callable"):
+    def set_input_handler(self, handler: Callable):
         self.input_handler = handler
 
     @abstractmethod
@@ -114,7 +114,9 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def ask_choice(self, question: str, choices: Iterable[str], add_cancel: bool = False) -> int:
+    async def ask_choice(
+        self, question: str, choices: Iterable[str], add_cancel: bool = False
+    ) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         ...
 
