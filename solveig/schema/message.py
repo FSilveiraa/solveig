@@ -112,7 +112,7 @@ class AssistantMessage(BaseMessage):
     async def display(self, interface: "SolveigInterface") -> None:
         """Display the assistant's message, including comment and tasks."""
         if self.comment:
-            await interface.display_text(self.comment)
+            await interface.display_comment(self.comment)
 
         if self.tasks:
             task_lines = []

@@ -134,8 +134,8 @@ class ConversationArea(ScrollableContainer):
 
         .group_container {{
             border-left: heavy {theme.group};
-            padding-left: 1;
             margin: 0 0 0 1;
+            padding: 0 0 0 1;
             height: auto;
             min-height: 0;
         }}
