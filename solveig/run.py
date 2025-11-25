@@ -141,6 +141,7 @@ async def main_loop(
     interface: SolveigInterface,
     llm_client: Instructor,
     user_prompt: str = "",
+    message_history: MessageHistory | None = None,
 ):
     """Main async conversation loop."""
     if config.verbose:
@@ -154,7 +155,8 @@ async def main_loop(
     await interface.update_stats(url=config.url, model=config.model)
 
     await initialize_plugins(config=config, interface=interface)
-    message_history = await get_message_history(config, interface)
+    if message_history is None:
+        message_history = await get_message_history(config, interface)
 
     # Pass the message history's input method to the interface
     interface.set_input_handler(message_history.add_user_comment)
@@ -220,6 +222,7 @@ async def run_async(
     interface: SolveigInterface,
     llm_client: Instructor,
     user_prompt: str = "",
+    message_history: MessageHistory | None = None,
 ):
     """Entry point for the async CLI with explicit dependencies."""
     loop_task = None
@@ -230,6 +233,7 @@ async def run_async(
                 config=config,
                 llm_client=llm_client,
                 user_prompt=user_prompt,
+                message_history=message_history,
             )
         )
         await interface.start()

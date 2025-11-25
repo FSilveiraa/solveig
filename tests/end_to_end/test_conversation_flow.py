@@ -28,30 +28,27 @@ class TestConversationFlow:
 
         # LLM suggests safe diagnostic commands
         llm_response = AssistantMessage(
-            requirements=[
-                TaskListRequirement(
-                    comment="I'll help diagnose your system. Let me check basic information.",
-                    tasks=[
-                        Task(
-                            status="pending", description="Check current directory path"
-                        ),
-                        Task(status="pending", description="List files"),
-                    ],
+            tasks=[
+                Task(
+                    status="pending", description="Check current directory path"
                 ),
+                Task(status="pending", description="List files"),
+            ],
+            requirements=[
                 CommandRequirement(command="pwd", comment="Check current directory"),
                 CommandRequirement(command="ls -la", comment="List files with details"),
             ],
         )
 
         mock_client = create_mock_client(llm_response, sleep_seconds=0, sleep_delta=0)
-        interface = MockInterface()
-        interface.set_user_inputs(
-            [
+        interface = MockInterface(
+            user_inputs=[
                 0,  # Accept pwd command (Run and send)
                 1,  # Accept ls command (Run and inspect)
                 0,  # Send ls output (after inspection)
                 "/exit",  # End conversation
-            ]
+            ],
+            timeout_seconds=5.0  # Auto-exit if conversation runs longer
         )
 
         # Execute conversation
@@ -93,13 +90,13 @@ class TestConversationFlow:
             )
 
             mock_client = create_mock_client(llm_response)
-            interface = MockInterface()
-            interface.set_user_inputs(
-                [
+            interface = MockInterface(
+                user_inputs=[
                     0,  # Accept read operation
                     2,  # Decline find command
                     "/exit",
-                ]
+                ],
+                timeout_seconds=5.0
             )
 
             await run_async(
@@ -125,12 +122,12 @@ class TestConversationFlow:
         )
 
         mock_client = create_mock_client(llm_response)
-        interface = MockInterface()
-        interface.set_user_inputs(
-            [
+        interface = MockInterface(
+            user_inputs=[
                 0,  # Accept command and send error output
                 "/exit",
-            ]
+            ],
+            timeout_seconds=5.0
         )
         await run_async(
             config=DEFAULT_CONFIG,
@@ -152,12 +149,12 @@ class TestConversationFlow:
         )
 
         mock_client = create_mock_client(llm_response)
-        interface = MockInterface()
-        interface.set_user_inputs(
-            [
+        interface = MockInterface(
+            user_inputs=[
                 1,  # Don't retry when it says "empty message"
                 "/exit",  # Exit the conversation
-            ]
+            ],
+            timeout_seconds=5.0
         )
 
         await run_async(

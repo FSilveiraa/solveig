@@ -19,17 +19,6 @@ class TestTreePlugin:
     async def test_tree_plugin_with_real_files(self):
         """Test tree plugin creates visual directory tree from real filesystem."""
 
-        # TODO: use str result for visual value
-        # expected_tree = """
-        # ┌─── Tree: {tmp_path} ─────────────────────
-        # │ 🗁 {tmp_name}
-        # │ ├─🗎 file1.txt
-        # │ ├─🗎 file2.py
-        # │ └─🗁 subdir
-        # │   └─🗎 nested.md
-        # └───────────────────────────────────────────
-        # """.strip()
-
         # Create real directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -39,16 +28,20 @@ class TestTreePlugin:
             (temp_path / "subdir" / "nested.md").write_text("# Nested file")
 
             # LLM requests tree inspection
-            llm_response = AssistantMessage(
-                comment="I'll show you the directory structure.",
-                requirements=[
-                    TreeRequirement(comment="", path=str(temp_path), max_depth=2),
-                ],
-            )
+            assistant_responses = [
+                 AssistantMessage(
+                    comment="I'll show you the directory structure.",
+                    requirements=[
+                        TreeRequirement(comment="", path=str(temp_path), max_depth=2),
+                    ],
+                ),
+                AssistantMessage(
+                    comment="Everything looks nice!"
+                )
+            ]
 
-            mock_client = create_mock_client(llm_response, sleep_seconds=2)
-            interface = MockInterface()
-            interface.set_user_inputs([0, "/exit"])  # Accept tree, then send, then exit
+            mock_client = create_mock_client(*assistant_responses)
+            interface = MockInterface(choices=[0], timeout_seconds=10)
 
             # Execute conversation
             await run_async(
@@ -135,8 +128,7 @@ class TestTreePlugin:
             req = TreeRequirement(
                 path=str(temp_path), max_depth=2, comment="Limited depth tree"
             )
-            interface = MockInterface()
-            interface.set_user_inputs([0])  # read+send tree
+            interface = MockInterface(choices=[0])  # read+send tree
 
             result = await req.solve(DEFAULT_CONFIG, interface)
             assert result.accepted is True
@@ -151,7 +143,7 @@ class TestTreePlugin:
 
             # Test user interaction with error case
             # decline to send error for non-existent path
-            interface.set_user_inputs([1])
+            interface = MockInterface(choices=[1])
 
             error_req = TreeRequirement(
                 path=str(temp_path / "nonexistent"), comment="Test tree"
