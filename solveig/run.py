@@ -18,7 +18,7 @@ from solveig.plugins import initialize_plugins
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
-    get_assistant_response_model,
+    get_response_model,
 )
 from solveig.subcommand import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
@@ -41,24 +41,24 @@ async def get_message_history(
     return message_history
 
 
-async def update_stats(llm_response, message_history, interface):
-    try:
-        raw_response = llm_response._raw_response
-    except AttributeError:
-        pass
-    else:
-        # Update token count
-        if raw_response.usage:
-            message_history.record_api_usage(raw_response.usage)
-            await interface.update_stats(
-                tokens=(
-                    message_history.total_tokens_sent,
-                    message_history.total_tokens_received,
-                )
-            )
-        # Update model name
-        if raw_response.model:
-            await interface.update_stats(model=raw_response.model)
+# async def update_stats(llm_response, message_history, interface):
+#     try:
+#         raw_response = llm_response._raw_response
+#     except AttributeError:
+#         pass
+#     else:
+#         # Update token count
+#         if raw_response.usage:
+#             message_history.record_api_usage(raw_response.usage)
+#             await interface.update_stats(
+#                 tokens=(
+#                     message_history.total_tokens_sent,
+#                     message_history.total_tokens_received,
+#                 )
+#             )
+#         # Update model name
+#         if raw_response.model:
+#             await interface.update_stats(model=raw_response.model)
 
 
 async def send_message_to_llm_with_retry(
@@ -68,7 +68,7 @@ async def send_message_to_llm_with_retry(
     message_history: MessageHistory,
 ) -> AssistantMessage | None:
     """Send message to LLM with retry logic."""
-    response_model = get_assistant_response_model(config)
+    response_model = get_response_model(config)
 
     while True:
         # This prevents general errors in testing, allowing for the task to get cancelled mid-loop
@@ -90,19 +90,30 @@ async def send_message_to_llm_with_retry(
                 )
 
             await interface.display_section(title="Assistant")
-            llm_response = await client.chat.completions.create(
+            assistant_response = await client.chat.completions.create(
                 messages=message_history_dumped,
                 response_model=response_model,
                 model=config.model,
                 temperature=config.temperature,
             )
+            assert isinstance(assistant_response, AssistantMessage)
+            # if not assistant_response:
+            #     raise ValueError("Assistant responded with empty message")
 
-            assert isinstance(llm_response, AssistantMessage)
-            if not llm_response:
-                raise ValueError("Assistant responded with empty message")
+            # Add to the message history immediately, which updates (corrects) the token counts
+            try:
+                model = assistant_response._raw_response.model
+            except AttributeError:
+                model = None
 
-            await update_stats(llm_response, message_history, interface)
-            return llm_response
+            # Add the message to the history, this also updates
+            # the total tokens so update the stats display
+            message_history.add_messages(assistant_response)
+            await interface.update_stats(
+                tokens=(message_history.total_tokens_sent, message_history.total_tokens_received),
+                model=model
+            )
+            return assistant_response
 
         except KeyboardInterrupt:
             raise
@@ -153,7 +164,7 @@ async def main_loop(
     interface.set_subcommand_executor(subcommand_executor)
 
     if config.verbose:
-        response_model = get_assistant_response_model(config)
+        response_model = get_response_model(config)
         serialized_response_model = serialize_response_model(model=response_model, mode=llm_client.mode)
         await interface.display_text_block(
             title="Response Model",

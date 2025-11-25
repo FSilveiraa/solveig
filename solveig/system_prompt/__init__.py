@@ -2,7 +2,7 @@ import os
 import platform
 
 from solveig.config import SolveigConfig
-from solveig.schema.message import get_response_model
+from solveig.schema.message import get_requirements_union
 from solveig.system_prompt.examples import long
 
 try:
@@ -40,7 +40,7 @@ def get_examples_info():
 def get_available_tools(config: SolveigConfig) -> str:
     """Generate capabilities list from currently filtered requirements."""
     # Get ALL active requirements from the unified registry (core + plugins)
-    active_requirements = get_response_model(config)
+    active_requirements = get_requirements_union(config)
     return "\n".join(
         f"- {req_class.get_description()}"
         for req_class in active_requirements.__args__  # type: ignore[attr-defined]

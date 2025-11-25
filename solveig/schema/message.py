@@ -19,10 +19,12 @@ if TYPE_CHECKING:
 
 class BaseMessage(BaseSolveigModel):
     role: Literal["system", "user", "assistant"]
+    token_count: int = Field(default=-1, exclude=True)
 
     def to_openai(self) -> dict:
         data = self.model_dump()
         data.pop("role")
+        # data.pop("token_count")
         return {
             "role": self.role,
             "content": json.dumps(data, default=utils.misc.default_json_serialize),
@@ -76,7 +78,7 @@ TASK_STATUS_MAP = {
     "completed": "🟢",
     "failed": "🔴",
 }
-TaskStatus = Literal[tuple(TASK_STATUS_MAP.keys())]
+# TaskStatus = Literal[tuple(TASK_STATUS_MAP.keys())]
 
 
 class Task(BaseModel):
@@ -119,28 +121,25 @@ class AssistantMessage(BaseMessage):
 
 
 # Cache for requirements union to avoid regenerating on every call
-_last_requirements_config_hash = None
-_last_requirements_union = None
+class CACHED_RESPONSE_MODEL:
+    config_hash: str | None = None
+    requirements_union: type[Requirement] | None = None
+    message_class: type[AssistantMessage] | None = None
 
 
-def get_response_model(
-    config: SolveigConfig | None = None,
-    # returns a union of Requirement subclasses
-) -> type[Requirement]:
-    """Get the requirements union type for streaming individual requirements with caching."""
-    global _last_requirements_config_hash, _last_requirements_union
-
+def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
+    """Internal helper to ensure requirements union is cached."""
     # Generate config hash for caching
     config_hash = None
     if config:
         config_hash = hash(config.to_json(indent=None, sort_keys=True))
 
-    # Return cached union if config hasn't changed
+    # Return early if cache is still valid
     if (
-        config_hash == _last_requirements_config_hash
-        and _last_requirements_union is not None
+        config_hash == CACHED_RESPONSE_MODEL.config_hash
+        and CACHED_RESPONSE_MODEL.requirements_union is not None
     ):
-        return _last_requirements_union
+        return
 
     # Get ALL active requirements from the unified registry
     try:
@@ -148,13 +147,11 @@ def get_response_model(
             REQUIREMENTS.registered.values()
         )
     except (ImportError, AttributeError):
-        # Fallback - should not happen in normal operation
         all_active_requirements = []
 
     # Filter out CommandRequirement if commands are disabled
     if config and config.no_commands:
         from solveig.schema.requirements.command import CommandRequirement
-
         all_active_requirements = [
             req for req in all_active_requirements if req != CommandRequirement
         ]
@@ -163,41 +160,37 @@ def get_response_model(
     if not all_active_requirements:
         raise ValueError("No response model available for LLM to use")
 
-    # Create a Union of all requirement types for dynamic type checking
+    # Create a Union of all requirement types
     requirements_union = cast(
         type[Requirement], Union[*all_active_requirements]
-    )  # noqa: UP007
+    )
 
-    # Cache the result
-    _last_requirements_config_hash = config_hash
-    _last_requirements_union = requirements_union
-
-    return requirements_union
-
-
-def get_assistant_response_model(
-    config: SolveigConfig | None = None,
-) -> type[BaseModel]:
-    """
-    Dynamically create an AssistantMessage model with a specific Union of requirements.
-    This is done by creating a new model that inherits from the base AssistantMessage
-    and only overrides the 'requirements' field with the correct dynamic type.
-    """
-    # Get the dynamic union of all concrete Requirement subclasses
-    requirements_union = get_response_model(config)
-
-    # Dynamically create the model, inheriting from AssistantMessage and overriding
-    # only the 'requirements' field.
-    dynamic_model = create_model(
+    # Cache the result and clear dependent cache
+    CACHED_RESPONSE_MODEL.config_hash = config_hash
+    CACHED_RESPONSE_MODEL.requirements_union = requirements_union
+    CACHED_RESPONSE_MODEL.message_class = create_model(
         "DynamicAssistantMessage",
-        requirements=(list[requirements_union] | None, Field(None)),
+        requirements=(list[CACHED_RESPONSE_MODEL.requirements_union] | None, Field(None)),
         __base__=AssistantMessage,
     )
-    return dynamic_model
+
+
+def get_requirements_union(config: SolveigConfig | None = None) -> type[Requirement]:
+    """Get the requirements union type with caching."""
+    _ensure_requirements_union_cached(config)
+    return CACHED_RESPONSE_MODEL.requirements_union
+
+
+def get_response_model(
+    config: SolveigConfig | None = None,
+) -> type[AssistantMessage]:
+    """Get the AssistantMessage model with dynamic requirements field."""
+    _ensure_requirements_union_cached(config)
+    return CACHED_RESPONSE_MODEL.message_class
 
 
 def get_response_model_json(config):
-    response_model = get_assistant_response_model(config)
+    response_model = get_response_model(config)
     schema = response_model.model_json_schema()
     return json.dumps(schema, indent=2, default=utils.misc.default_json_serialize)
 
@@ -215,7 +208,7 @@ class MessageHistory:
     max_context: int = -1
     encoder: str | None = None
     messages: list[Message] = field(default_factory=list)
-    message_cache: list[dict] = field(default_factory=list)
+    message_cache: list[tuple[dict, int]] = field(default_factory=list)
     token_count: int = field(default=0)  # Current cache size for pruning
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
@@ -238,8 +231,9 @@ class MessageHistory:
 
         while self.token_count > self.max_context and len(self.message_cache) > 1:
             if len(self.message_cache) > 1:
-                message = self.message_cache.pop(1)
-                self.token_count -= self.api_type.count_tokens(message, self.encoder)
+                message, size = self.message_cache.pop(1)
+                # self.token_count -= self.api_type.count_tokens(message, self.encoder)
+                self.token_count -= size
             else:
                 break
 
@@ -249,13 +243,32 @@ class MessageHistory:
     ):
         """Add a message and automatically prune if over context limit."""
         for message in messages:
-            message_dumped = message.to_openai()
-            token_count = self.api_type.count_tokens(
-                message_dumped["content"], self.encoder
-            )
-            self.token_count += token_count
+            message_serialized = message.to_openai()
+
+            try:
+                raw_response = message._raw_response
+                _ = raw_response.usage
+
+            except AttributeError:
+                # Update token count using encoder approximation, necessary for pruning
+                message_size = self.api_type.count_tokens(
+                    message_serialized["content"], self.encoder
+                )
+                self.token_count += message_size
+
+            else:
+                # Update token count using API usage field
+                sent = raw_response.usage.prompt_tokens
+                message_size = received = raw_response.usage.completion_tokens
+                self.token_count = sent + received
+                self.total_tokens_sent += sent
+                self.total_tokens_received += received
+
+            # Regardless of how we found the token count, update it for that message
+            message.token_count = message_size
             self.messages.append(message)
-            self.message_cache.append(message_dumped)
+            self.message_cache.append((message_serialized, message.token_count))
+
         self.prune_message_cache()
 
     async def add_result(self, result: RequirementResult):
@@ -309,7 +322,9 @@ class MessageHistory:
 
     def to_openai(self):
         """Return cache for OpenAI API."""
-        return self.message_cache
+        return [
+            message for message, _ in self.message_cache
+        ]
 
     def to_example(self):
         return "\n".join(
