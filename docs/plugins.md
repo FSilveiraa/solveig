@@ -50,19 +50,21 @@ Hooks can interact with existing requirement for data validation, displaying, al
 Use `@before` and `@after` decorators, optionally filtered by a set of requirements to apply to:
 
 ```python
-from solveig.schema.requirements import Requirement, WriteRequirement, DeleteRequirement
+from solveig.schema.requirement import Requirement, WriteRequirement, DeleteRequirement
 from solveig.plugins.hooks import before
+
 
 # Runs for all requirements
 @before()
 def run_for_all(config, interface, requirement):
     interface(f"Running for requirement type={type(requirement)}")
 
+
 # Runs only for write/delete
 @before(requirements=(WriteRequirement, DeleteRequirement))
 def run_for_all(config, interface, requirement):
     req_type = type(requirement)
-    assert req_type in { WriteRequirement, DeleteRequirement }
+    assert req_type in {WriteRequirement, DeleteRequirement}
     interface(f"Running for requirement type={type(requirement)}")
 ```
 
@@ -83,8 +85,8 @@ from typing import Literal
 
 from solveig.interface import SolveigInterface
 from solveig.schema import register_requirement
-from solveig.schema.requirements.base import Requirement
-from solveig.schema.results.base import RequirementResult
+from solveig.schema.requirement.base import Requirement
+from solveig.schema.result.base import RequirementResult
 
 
 class DateTimeResult(RequirementResult):
@@ -116,7 +118,7 @@ class DateTimeRequirement(Requirement):
 
     def actually_solve(self, config, interface: SolveigInterface) -> DateTimeResult:
         """Get current timestamp."""
-        timezone = config.plugins.get("datetime", {}).get("timezone") # ex: "America/Los_Angeles"
+        timezone = config.plugins.get("datetime", {}).get("timezone")  # ex: "America/Los_Angeles"
         tz = zoneinfo.ZoneInfo(timezone) if timezone else None
         timestamp = datetime.now(tz=tz).isoformat()
         return DateTimeResult(
@@ -138,22 +140,23 @@ Create `solveig/plugins/hooks/rate_limit.py`:
 import time
 from solveig.plugins.hooks import before
 from solveig.exceptions import SecurityError
-from solveig.schema.requirements import Requirement
+from solveig.schema.requirement import Requirement
 
 # Track last request time per requirement type
 _last_request_times = {}
+
 
 @before(requirements=(Requirement,))  # Apply to all requirements
 def rate_limit_requests(config, interface, requirement):
     """Prevent rapid-fire requests."""
     req_type = type(requirement).__name__
     current_time = time.time()
-    
+
     if req_type in _last_request_times:
         time_since_last = current_time - _last_request_times[req_type]
         if time_since_last < 1.0:  # 1 second minimum between requests
             raise SecurityError(f"Rate limit: Wait {1.0 - time_since_last:.1f}s before next {req_type}")
-    
+
     _last_request_times[req_type] = current_time
 ```
 

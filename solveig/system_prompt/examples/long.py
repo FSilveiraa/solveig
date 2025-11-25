@@ -2,17 +2,17 @@ from solveig.plugins.schema.tree import TreeRequirement, TreeResult
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
-    Task,
     UserComment,
-    UserMessage,
 )
-from solveig.schema.requirements import (
+from solveig.schema.message.assistant import Task
+from solveig.schema.message.user import UserMessage
+from solveig.schema.requirement import (
     CommandRequirement,
     MoveRequirement,
     ReadRequirement,
     WriteRequirement,
 )
-from solveig.schema.results import (
+from solveig.schema.result import (
     CommandResult,
     MoveResult,
     ReadResult,

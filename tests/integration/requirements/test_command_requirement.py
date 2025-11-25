@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirements import CommandRequirement
+from solveig.schema.requirement import CommandRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking but allow subprocess mocking

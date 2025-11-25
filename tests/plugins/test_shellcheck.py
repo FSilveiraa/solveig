@@ -11,7 +11,7 @@ import pytest
 
 from solveig.plugins import hooks, initialize_plugins
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from solveig.schema.requirements import (
+from solveig.schema.requirement import (
     CommandRequirement,
     ReadRequirement,
 )

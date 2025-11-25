@@ -5,18 +5,16 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-from openai.types.chat import ChatCompletionMessage
-from openai.types.chat.chat_completion import Choice
 from openai.types.completion_usage import CompletionUsage
 
-from solveig.schema import WriteResult, ReadRequirement, CopyResult, CopyRequirement, WriteRequirement
+from solveig.schema import WriteResult, CopyResult, CopyRequirement, WriteRequirement
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserComment,
-    UserMessage, BaseMessage,
 )
-from solveig.schema.results import RequirementResult
+from solveig.schema.message.base import BaseMessage
+from solveig.schema.message.user import UserMessage
 from tests.mocks import MockInterface
 
 pytestmark = pytest.mark.anyio

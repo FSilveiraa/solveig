@@ -2,8 +2,8 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
     UserComment,
-    UserMessage,
 )
+from solveig.schema.message.user import UserMessage
 
 EXAMPLE = MessageHistory(
     system_prompt=""

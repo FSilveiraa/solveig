@@ -7,7 +7,7 @@ from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.results import CommandResult
+from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import PersistentShell, get_persistent_shell
 

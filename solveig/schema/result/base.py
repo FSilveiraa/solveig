@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 # - TYPE_CHECKING solves this: imports are only loaded during type checking,
 #   not at runtime, breaking the circular dependency
 if TYPE_CHECKING:
-    from ..requirements import Requirement
+    from ..requirement import Requirement
 
 
 class RequirementResult(BaseModel):

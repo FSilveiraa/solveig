@@ -16,7 +16,7 @@ from solveig.exceptions import (
 )
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import HOOKS
-from solveig.schema.results import RequirementResult
+from solveig.schema.result import RequirementResult
 
 
 def validate_non_empty_path(path: str) -> str:

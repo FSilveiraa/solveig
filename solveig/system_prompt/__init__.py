@@ -1,5 +1,6 @@
 import os
 import platform
+from typing import get_args
 
 from solveig.config import SolveigConfig
 from solveig.schema.message import get_requirements_union
@@ -43,7 +44,7 @@ def get_available_tools(config: SolveigConfig) -> str:
     active_requirements = get_requirements_union(config)
     return "\n".join(
         f"- {req_class.get_description()}"
-        for req_class in active_requirements.__args__  # type: ignore[attr-defined]
+        for req_class in get_args(active_requirements)
     )
 
 

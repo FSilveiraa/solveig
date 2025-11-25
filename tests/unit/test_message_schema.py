@@ -8,13 +8,13 @@ from solveig.config import SolveigConfig
 from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
-    UserMessage,
     get_requirements_union,
     get_response_model, UserComment,
 )
-from solveig.schema.requirements import ReadRequirement, WriteRequirement
-from solveig.schema.requirements.command import CommandRequirement
-from solveig.schema.results.command import CommandResult
+from solveig.schema.message.user import UserMessage
+from solveig.schema.requirement import ReadRequirement, WriteRequirement
+from solveig.schema.requirement.command import CommandRequirement
+from solveig.schema.result.command import CommandResult
 from typing import get_args, get_origin, Union
 
 pytestmark = pytest.mark.anyio

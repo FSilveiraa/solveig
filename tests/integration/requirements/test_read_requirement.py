@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirements import ReadRequirement
+from solveig.schema.requirement import ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking

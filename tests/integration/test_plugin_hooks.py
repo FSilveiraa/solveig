@@ -15,8 +15,7 @@ from solveig.schema import (
     ReadResult,
     WriteRequirement,
 )
-from solveig.schema.message import AssistantMessage, Task
-from solveig.schema.requirements import CommandRequirement, ReadRequirement
+from solveig.schema.requirement import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio

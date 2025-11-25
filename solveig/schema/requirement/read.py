@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.results import ReadResult
+from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 
 from .base import Requirement, validate_non_empty_path

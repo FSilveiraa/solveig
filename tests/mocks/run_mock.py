@@ -16,7 +16,8 @@ from solveig.schema import (
     ReadRequirement,
     WriteRequirement,
 )
-from solveig.schema.message import AssistantMessage, Task
+from solveig.schema.message import AssistantMessage
+from solveig.schema.message.assistant import Task
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
 

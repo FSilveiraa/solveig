@@ -1,4 +1,4 @@
-"""Copy requirement - allows LLM to copy files and directories."""
+"""Move requirement - allows LLM to move files and directories."""
 
 from typing import Literal
 
@@ -6,20 +6,20 @@ from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.results import CopyResult
+from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem
 
 from .base import Requirement, validate_non_empty_path
 
 
-class CopyRequirement(Requirement):
-    title: Literal["copy"] = "copy"
+class MoveRequirement(Requirement):
+    title: Literal["move"] = "move"
     source_path: str = Field(
         ...,
-        description="Path of file/directory to copy from (supports ~ for home directory)",
+        description="Current path of file/directory to move (supports ~ for home directory)",
     )
     destination_path: str = Field(
-        ..., description="Path where file/directory should be copied to"
+        ..., description="New path where file/directory should be moved to"
     )
 
     @field_validator("source_path", "destination_path", mode="before")
@@ -28,16 +28,16 @@ class CopyRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display copy requirement header."""
+        """Display move requirement header."""
         await super().display_header(interface)
         await interface.display_file_info(
             source_path=self.source_path,
             destination_path=self.destination_path,
         )
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "CopyResult":
-        """Create CopyResult with error."""
-        return CopyResult(
+    def create_error_result(self, error_message: str, accepted: bool) -> "MoveResult":
+        """Create MoveResult with error."""
+        return MoveResult(
             requirement=self,
             accepted=accepted,
             error=error_message,
@@ -47,14 +47,12 @@ class CopyRequirement(Requirement):
 
     @classmethod
     def get_description(cls) -> str:
-        """Return description of copy capability."""
-        return (
-            "copy(comment, source_path, destination_path): copies a file or directory"
-        )
+        """Return description of move capability."""
+        return "move(comment, source_path, destination_path): moves a file or directory"
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "CopyResult":
+    ) -> "MoveResult":
         # Pre-flight validation - use utils/file.py validation
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
@@ -65,33 +63,34 @@ class CopyRequirement(Requirement):
             is_dir = await Filesystem.is_dir(abs_source_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(
-                f"Cannot copy from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
+                f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
             )
-            return CopyResult(
+            return MoveResult(
                 requirement=self,
                 accepted=False,
                 error=str(e),
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
             )
+
         # Check for auto-allowed paths
-        auto_copy = Filesystem.path_matches_patterns(
+        auto_move = Filesystem.path_matches_patterns(
             abs_source_path, config.auto_allowed_paths
         ) and Filesystem.path_matches_patterns(
             abs_destination_path, config.auto_allowed_paths
         )
 
-        if auto_copy:
+        if auto_move:
             await interface.display_info(
-                f"Copying {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
+                f"Moving {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
             )
         elif (
             await interface.ask_choice(
-                f"Allow copying {'directory' if is_dir else 'file'}?", ["Yes", "No"]
+                f"Allow moving {'directory' if is_dir else 'file'}?", ["Yes", "No"]
             )
             != 0
         ):
-            return CopyResult(
+            return MoveResult(
                 requirement=self,
                 accepted=False,
                 source_path=str(abs_source_path),
@@ -99,22 +98,18 @@ class CopyRequirement(Requirement):
             )
 
         try:
-            # Perform the copy operation - use utils/file.py method
-            await Filesystem.copy(
-                abs_source_path,
-                abs_destination_path,
-                min_space_left=config.min_disk_space_left,
-            )
-            await interface.display_success("Copied")
-            return CopyResult(
+            # Perform the move operation - use utils/file.py method
+            await Filesystem.move(abs_source_path, abs_destination_path)
+            await interface.display_success("Moved")
+            return MoveResult(
                 requirement=self,
                 accepted=True,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
             )
         except (PermissionError, OSError, FileExistsError) as e:
-            await interface.display_error(f"Found error when copying: {e}")
-            return CopyResult(
+            await interface.display_error(f"Found error when moving: {e}")
+            return MoveResult(
                 requirement=self,
                 accepted=False,
                 error=str(e),

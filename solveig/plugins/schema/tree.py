@@ -10,11 +10,11 @@ from solveig.interface import SolveigInterface
 
 # Import the registration decorator directly
 from solveig.schema import register_requirement
-from solveig.schema.requirements.base import (
+from solveig.schema.requirement.base import (
     Requirement,
     validate_non_empty_path,
 )
-from solveig.schema.results.base import RequirementResult
+from solveig.schema.result.base import RequirementResult
 from solveig.utils.file import Filesystem, Metadata
 
 

@@ -7,7 +7,7 @@ This module defines the data structures used for:
 - Results and error handling
 """
 
-from .requirements import (  # noqa: F401
+from .requirement import (  # noqa: F401
     CommandRequirement,
     CopyRequirement,
     DeleteRequirement,
@@ -16,7 +16,7 @@ from .requirements import (  # noqa: F401
     Requirement,
     WriteRequirement,
 )
-from .results import (  # noqa: F401
+from .result import (  # noqa: F401
     CommandResult,
     CopyResult,
     DeleteResult,
