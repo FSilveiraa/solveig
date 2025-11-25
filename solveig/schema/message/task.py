@@ -2,7 +2,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # Define statuses and their corresponding emojis
 TASK_STATUS_MAP = {
     "pending": "⚪",

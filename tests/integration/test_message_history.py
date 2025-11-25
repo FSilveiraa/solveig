@@ -1,13 +1,14 @@
 """
 Tests for the refactored, async-native MessageHistory class.
 """
+
 import asyncio
 from unittest.mock import MagicMock
 
 import pytest
 from openai.types.completion_usage import CompletionUsage
 
-from solveig.schema import WriteResult, CopyResult, CopyRequirement, WriteRequirement
+from solveig.schema import CopyRequirement, CopyResult, WriteRequirement, WriteResult
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
@@ -91,11 +92,9 @@ class TestAsyncMessageHistory:
         result1 = WriteResult(
             path="__non_existent__",
             requirement=WriteRequirement(
-                comment="Write this file",
-                path="__non_existent__",
-                is_directory=False
+                comment="Write this file", path="__non_existent__", is_directory=False
             ),
-            accepted=False
+            accepted=False,
         )
         result2 = CopyResult(
             source_path="__non_existent__",
@@ -103,9 +102,9 @@ class TestAsyncMessageHistory:
             requirement=CopyRequirement(
                 comment="Copy this thing",
                 source_path="__non_existent__",
-                destination_path="__also_non_existent__"
+                destination_path="__also_non_existent__",
             ),
-            accepted=True
+            accepted=True,
         )
         await history.add_result(result1)
         await history.add_user_comment("A comment between results.")
@@ -170,7 +169,9 @@ class TestAsyncMessageHistory:
 
         # No new message should have been added
         assert len(history.messages) == 1
-        assert isinstance(history.messages[0], BaseMessage) # SystemMessage is a BaseMessage
+        assert isinstance(
+            history.messages[0], BaseMessage
+        )  # SystemMessage is a BaseMessage
 
     async def test_condense_does_not_block_if_comment_present_and_wait_true(self):
         """
@@ -194,6 +195,8 @@ class TestAsyncMessageHistory:
         last_message = history.messages[-1]
         assert isinstance(last_message, UserMessage)
         assert last_message.comment == "User typed ahead."
-        assert history.current_responses.empty() # It should have consumed the comment
+        assert history.current_responses.empty()  # It should have consumed the comment
         # Should not have displayed waiting status
-        assert "awaiting input..." not in mock_interface.get_all_status_updates().lower()
+        assert (
+            "awaiting input..." not in mock_interface.get_all_status_updates().lower()
+        )

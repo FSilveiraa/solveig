@@ -29,15 +29,13 @@ class TestTreePlugin:
 
             # LLM requests tree inspection
             assistant_responses = [
-                 AssistantMessage(
+                AssistantMessage(
                     comment="I'll show you the directory structure.",
                     requirements=[
                         TreeRequirement(comment="", path=str(temp_path), max_depth=2),
                     ],
                 ),
-                AssistantMessage(
-                    comment="Everything looks nice!"
-                )
+                AssistantMessage(comment="Everything looks nice!"),
             ]
 
             mock_client = create_mock_client(*assistant_responses)

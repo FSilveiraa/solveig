@@ -299,7 +299,7 @@ class StatsBar(Widget):
             text-align: left;
             width: 1fr;
         }}
-        
+
         .title-left:hover {{
             color: {theme.section};
         }}

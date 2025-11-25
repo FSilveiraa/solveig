@@ -1,6 +1,5 @@
 import asyncio
 import json
-from collections import Counter
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
@@ -64,14 +63,16 @@ class MockInterface(TerminalInterface):
 
         try:
             # Use a timeout to prevent tests from hanging
-            await asyncio.wait_for(self._stop_event.wait(), timeout=self._timeout_seconds)
-        except asyncio.TimeoutError:
+            await asyncio.wait_for(
+                self._stop_event.wait(), timeout=self._timeout_seconds
+            )
+        except TimeoutError as e:
             # Only raise if the timeout wasn't explicitly configured
             if self._timeout_seconds is None:
-                raise asyncio.TimeoutError(
+                raise TimeoutError(
                     "Interface timed out waiting for stop event. "
                     "If this is a test, you need to add a final AssistantMessage with no requirements"
-                )
+                ) from e
         finally:
             # Cancel timeout task if it's still running
             if self._timeout_task and not self._timeout_task.done():
@@ -180,7 +181,9 @@ class MockInterface(TerminalInterface):
         self.outputs.append(f"Question: {question} → {response}")
         return response
 
-    async def ask_choice(self, question: str, choices: Iterable[str], add_cancel: bool = True) -> int:
+    async def ask_choice(
+        self, question: str, choices: Iterable[str], add_cancel: bool = True
+    ) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         self.questions.append(f"{question} {list(choices)}")
         if not self.choices:
@@ -261,4 +264,4 @@ class MockInterface(TerminalInterface):
         await asyncio.sleep(self._timeout_seconds)
         self.outputs.append(f"AUTO_EXIT_AFTER_{self._timeout_seconds}s")
         if not self._stop_event.is_set():
-             await self.stop()
+            await self.stop()

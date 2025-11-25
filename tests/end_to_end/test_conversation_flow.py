@@ -1,9 +1,9 @@
 """Modern end-to-end tests for complete conversation loops with async architecture."""
 
 import tempfile
-from anyio import Path
 
 import pytest
+from anyio import Path
 
 from solveig.schema.message.assistant import Task
 
@@ -31,23 +31,27 @@ class TestConversationFlow:
             AssistantMessage(
                 comment="Of course! Let me show re-center you",
                 tasks=[
-                    Task(
-                        status="pending", description="Check current directory path"
-                    ),
+                    Task(status="pending", description="Check current directory path"),
                     Task(status="pending", description="List files"),
                 ],
                 requirements=[
-                    CommandRequirement(command="pwd", comment="Check current directory"),
-                    CommandRequirement(command="ls -la", comment="List files with details"),
+                    CommandRequirement(
+                        command="pwd", comment="Check current directory"
+                    ),
+                    CommandRequirement(
+                        command="ls -la", comment="List files with details"
+                    ),
                 ],
             ),
             AssistantMessage(
                 # don't use the actual pwd, to ensure it's only there if the command works
                 comment="You're in some directory with some files",
-            )
+            ),
         ]
 
-        mock_client = create_mock_client(*assistant_messages, sleep_seconds=0, sleep_delta=0)
+        mock_client = create_mock_client(
+            *assistant_messages, sleep_seconds=0, sleep_delta=0
+        )
         interface = MockInterface(
             choices=[
                 0,  # Accept pwd command (Run and send)
@@ -84,9 +88,17 @@ class TestConversationFlow:
                 AssistantMessage(
                     comment="I'll investigate your directory contents and help you organize them",
                     tasks=[
-                        Task(status="ongoing", description="Examine directory contents"),
-                        Task(status="pending", description="Find text files anywhere inside the current directory"),
-                        Task(status="pending", description="Update plan to organize files"),
+                        Task(
+                            status="ongoing", description="Examine directory contents"
+                        ),
+                        Task(
+                            status="pending",
+                            description="Find text files anywhere inside the current directory",
+                        ),
+                        Task(
+                            status="pending",
+                            description="Update plan to organize files",
+                        ),
                     ],
                     requirements=[
                         ReadRequirement(
@@ -103,14 +115,24 @@ class TestConversationFlow:
                 AssistantMessage(
                     comment="Your files are already organized, there's a single Lorem Ipsum text file",
                     tasks=[
-                        Task(status="completed", description="Examine directory contents"),
-                        Task(status="completed", description="Find text files anywhere inside the current directory"),
-                        Task(status="completed", description="Summarizing directory contents"),
-                    ]
+                        Task(
+                            status="completed", description="Examine directory contents"
+                        ),
+                        Task(
+                            status="completed",
+                            description="Find text files anywhere inside the current directory",
+                        ),
+                        Task(
+                            status="completed",
+                            description="Summarizing directory contents",
+                        ),
+                    ],
                 ),
             ]
 
-            mock_client = create_mock_client(*assistant_messages, sleep_seconds=0, sleep_delta=0)
+            mock_client = create_mock_client(
+                *assistant_messages, sleep_seconds=0, sleep_delta=0
+            )
             interface = MockInterface(
                 choices=[
                     0,  # Accept read operation
@@ -144,7 +166,7 @@ class TestConversationFlow:
             ),
             AssistantMessage(
                 comment="Damn, sorry",
-            )
+            ),
         ]
 
         mock_client = create_mock_client(*assistant_messages)

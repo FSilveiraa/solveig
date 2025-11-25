@@ -1,6 +1,7 @@
 """Tests for message schema generation and filtering."""
 
 import json
+from typing import Union, get_args, get_origin
 
 import pytest
 
@@ -8,14 +9,14 @@ from solveig.config import SolveigConfig
 from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
+    UserComment,
     get_requirements_union,
-    get_response_model, UserComment,
+    get_response_model,
 )
 from solveig.schema.message.user import UserMessage
 from solveig.schema.requirement import ReadRequirement, WriteRequirement
 from solveig.schema.requirement.command import CommandRequirement
 from solveig.schema.result.command import CommandResult
-from typing import get_args, get_origin, Union
 
 pytestmark = pytest.mark.anyio
 
@@ -119,7 +120,7 @@ class TestDynamicAssistantMessage:
         DynamicModel = get_response_model(config)
 
         requirements_field = DynamicModel.model_fields["requirements"]
-        
+
         # Dig into the annotation: Optional[list[Union[...]]]
         list_union = get_args(requirements_field.annotation)[0]
         requirements_union = get_args(list_union)[0]
@@ -155,8 +156,18 @@ class TestResponseModelCaching:
         assert model_with_commands is not model_without_commands
 
         # Check the actual type annotations to be sure
-        union_with_args = get_args(get_args(get_args(model_with_commands.model_fields["requirements"].annotation)[0])[0])
-        union_without_args = get_args(get_args(get_args(model_without_commands.model_fields["requirements"].annotation)[0])[0])
+        union_with_args = get_args(
+            get_args(
+                get_args(model_with_commands.model_fields["requirements"].annotation)[0]
+            )[0]
+        )
+        union_without_args = get_args(
+            get_args(
+                get_args(
+                    model_without_commands.model_fields["requirements"].annotation
+                )[0]
+            )[0]
+        )
 
         assert CommandRequirement in union_with_args
         assert CommandRequirement not in union_without_args

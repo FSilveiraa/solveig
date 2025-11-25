@@ -6,10 +6,9 @@ from openai.types import CompletionUsage
 from solveig import APIType
 from solveig.interface import SolveigInterface
 from solveig.schema import RequirementResult
-from solveig.schema.message.system import SystemMessage
-from solveig.schema.message.user import UserMessage, UserComment
 from solveig.schema.message.assistant import AssistantMessage
-
+from solveig.schema.message.system import SystemMessage
+from solveig.schema.message.user import UserComment, UserMessage
 
 Message = SystemMessage | UserMessage | AssistantMessage
 

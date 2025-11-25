@@ -1,15 +1,14 @@
 import json
-from typing import cast, Union
+from typing import Union, cast
 
-from pydantic import create_model, Field
+from pydantic import Field, create_model
 
 from solveig import SolveigConfig, utils
-from solveig.schema import Requirement, REQUIREMENTS
-from solveig.schema.message.system import SystemMessage
-from solveig.schema.message.user import UserMessage, UserComment
+from solveig.schema import REQUIREMENTS, Requirement
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.message_history import MessageHistory
-
+from solveig.schema.message.system import SystemMessage
+from solveig.schema.message.user import UserComment, UserMessage
 
 UserMessage.model_rebuild()
 AssistantMessage.model_rebuild()
@@ -91,4 +90,12 @@ def get_response_model_json(config):
     return json.dumps(schema, indent=2, default=utils.misc.default_json_serialize)
 
 
-__all__ = ["MessageHistory", "SystemMessage", "UserMessage", "UserComment", "AssistantMessage", "get_requirements_union", "get_response_model"]
+__all__ = [
+    "MessageHistory",
+    "SystemMessage",
+    "UserMessage",
+    "UserComment",
+    "AssistantMessage",
+    "get_requirements_union",
+    "get_response_model",
+]
