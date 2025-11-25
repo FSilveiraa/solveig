@@ -179,9 +179,9 @@ class StatsBar(Widget):
 
             yield Horizontal(
                 self._table1,
-                Static("│", classes="separator"),
+                Static("│", classes="stats-separator"),
                 self._table2,
-                Static("│", classes="separator"),
+                Static("│", classes="stats-separator"),
                 self._table3,
                 classes="stats-container",
             )
@@ -336,7 +336,7 @@ class StatsBar(Widget):
             color: {theme.text};
         }}
 
-        .separator {{
+        .stats-separator {{
             width: 1;
             margin: 0 1 0 1;
             height: 100%;

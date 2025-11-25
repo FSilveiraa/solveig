@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Iterable
 from enum import Enum
 
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.events import Key
 from textual.message import Message
 from textual.widgets import OptionList, TextArea
@@ -89,6 +89,7 @@ class InputBar(Container):
 
     def compose(self):
         """Create the layout with input widgets."""
+        # yield Horizontal(classes="separator")
         yield self._text_input
 
     def on_mount(self):
@@ -190,10 +191,17 @@ class InputBar(Container):
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         """Generate CSS for this widget container."""
+
+        # Divider bar above the input bar
+        # InputBar > .separator {{
+        #     height: 1;
+        #     border-top: solid {theme.box};
+        # }}
+
         return f"""
         InputBar {{
             height: auto;
-            margin: 0 0 0 0;
+            margin: 1 0 0 0;
         }}
 
         InputBar > GrowingInput {{
