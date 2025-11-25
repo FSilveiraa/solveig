@@ -13,5 +13,6 @@ EXAMPLE.add_messages(UserMessage(responses=[UserComment(comment="Tell me a joke"
 EXAMPLE.add_messages(
     AssistantMessage(
         comment="Sure! Here's a joke for you. Why do programmers prefer dark mode? Because light attracts bugs.",
+        tasks=None,
     )
 )

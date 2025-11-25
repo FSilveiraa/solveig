@@ -25,7 +25,7 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     # Generate config hash for caching
     config_hash = None
     if config:
-        config_hash = hash(config.to_json(indent=None, sort_keys=True))
+        config_hash = str(hash(config.to_json(indent=None, sort_keys=True)))
 
     # Return early if cache is still valid
     if (
@@ -60,10 +60,15 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     # Cache the result and clear dependent cache
     CACHED_RESPONSE_MODEL.config_hash = config_hash
     CACHED_RESPONSE_MODEL.requirements_union = requirements_union
+
+    assert CACHED_RESPONSE_MODEL.requirements_union is not None, (
+        "Union should not be None"
+    )
+
     CACHED_RESPONSE_MODEL.message_class = create_model(
         "DynamicAssistantMessage",
         requirements=(
-            list[CACHED_RESPONSE_MODEL.requirements_union] | None,
+            list[CACHED_RESPONSE_MODEL.requirements_union] | None,  # type: ignore[valid-type]
             Field(None),
         ),
         __base__=AssistantMessage,
@@ -73,6 +78,7 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
 def get_requirements_union(config: SolveigConfig | None = None) -> type[Requirement]:
     """Get the requirements union type with caching."""
     _ensure_requirements_union_cached(config)
+    assert CACHED_RESPONSE_MODEL.requirements_union is not None
     return CACHED_RESPONSE_MODEL.requirements_union
 
 
@@ -81,6 +87,7 @@ def get_response_model(
 ) -> type[AssistantMessage]:
     """Get the AssistantMessage model with dynamic requirements field."""
     _ensure_requirements_union_cached(config)
+    assert CACHED_RESPONSE_MODEL.message_class is not None
     return CACHED_RESPONSE_MODEL.message_class
 
 

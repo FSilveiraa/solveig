@@ -59,24 +59,23 @@ class MessageHistory:
         for message in messages:
             message_serialized = message.to_openai()
 
-            try:
+            # The _raw_response is only present on AssistantMessage, and only when it's from a real API call
+            if isinstance(message, AssistantMessage) and hasattr(
+                message, "_raw_response"
+            ):
+                # Update token count using API usage field from the raw response
                 raw_response = message._raw_response
-                _ = raw_response.usage
-
-            except AttributeError:
-                # Update token count using encoder approximation, necessary for pruning
-                message_size = self.api_type.count_tokens(
-                    message_serialized["content"], self.encoder
-                )
-                self.token_count += message_size
-
-            else:
-                # Update token count using API usage field
                 sent = raw_response.usage.prompt_tokens
                 message_size = received = raw_response.usage.completion_tokens
                 self.token_count = sent + received
                 self.total_tokens_sent += sent
                 self.total_tokens_received += received
+            else:
+                # Update token count using encoder approximation for all other messages
+                message_size = self.api_type.count_tokens(
+                    message_serialized["content"], self.encoder
+                )
+                self.token_count += message_size
 
             # Regardless of how we found the token count, update it for that message
             message.token_count = message_size

@@ -99,10 +99,9 @@ async def send_message_to_llm_with_retry(
             #     raise ValueError("Assistant responded with empty message")
 
             # Add to the message history immediately, which updates (corrects) the token counts
-            try:
+            model = None
+            if hasattr(assistant_response, "_raw_response"):
                 model = assistant_response._raw_response.model
-            except AttributeError:
-                model = None
 
             # Add the message to the history, this also updates
             # the total tokens so update the stats display
