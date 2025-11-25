@@ -25,7 +25,7 @@ pytestmark = pytest.mark.anyio
 class TestAsyncMessageHistory:
     """Test suite for the new asynchronous MessageHistory."""
 
-    def test_initialization(self):
+    async def test_initialization(self):
         """Test that MessageHistory initializes correctly with a system message."""
         history = MessageHistory(system_prompt="You are a test assistant.")
         assert len(history.messages) == 1
@@ -33,7 +33,7 @@ class TestAsyncMessageHistory:
         assert "You are a test assistant" in history.messages[0].system_prompt
         assert history.token_count > 0
 
-    def test_add_assistant_message_with_api_usage(self):
+    async def test_add_assistant_message_with_api_usage(self):
         """
         Test that adding an AssistantMessage with raw response usage data updates
         token counts correctly.

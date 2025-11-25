@@ -233,6 +233,8 @@ class TestPluginHookSystem:
         assert called == ["command_hook", "read_hook"]
         assert len(called) == 2  # Each hook called once
 
+    # Kinda unnecessary, but we need a no-op and an 'echo test' is pretty easy
+    @pytest.mark.no_subprocess_mocking
     async def test_hook_without_requirement_filter(self, tmp_path):
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
