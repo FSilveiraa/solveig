@@ -46,7 +46,7 @@ class TestTreePlugin:
                 ],
             )
 
-            mock_client = create_mock_client(llm_response)
+            mock_client = create_mock_client(llm_response, sleep_seconds=2)
             interface = MockInterface()
             interface.set_user_inputs([0, "/exit"])  # Accept tree, then send, then exit
 

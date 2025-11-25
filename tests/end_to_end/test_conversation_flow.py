@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from solveig.schema import TaskListRequirement
-from solveig.schema.results.task import Task
+from solveig.schema.message import AssistantMessage, Task
 
 # Mark all tests in this module to skip file mocking and subprocess mocking (for real e2e testing)
 pytestmark = [

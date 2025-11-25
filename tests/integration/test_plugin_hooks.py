@@ -13,9 +13,9 @@ from solveig.interface import SolveigInterface
 from solveig.plugins import hooks, initialize_plugins
 from solveig.schema import (
     ReadResult,
-    TaskListRequirement,
     WriteRequirement,
 )
+from solveig.schema.message import AssistantMessage, Task
 from solveig.schema.requirements import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

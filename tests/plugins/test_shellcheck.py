@@ -125,7 +125,7 @@ fi
         result = await req.solve(SHELLCHECK_CONFIG, self.interface)
 
         assert not result.accepted
-        assert "shellcheck validation failed" in result.error.lower()
+        assert "execution cancelled due to shellcheck" in result.error.lower()
         assert "Couldn't parse this if expression" in self.interface.get_all_output()
 
     @pytest.mark.no_subprocess_mocking
@@ -199,7 +199,7 @@ fi
 
         # Should be stopped by shellcheck plugin
         assert not result.accepted
-        assert "shellcheck validation failed" in result.error.lower()
+        assert "execution cancelled due to shellcheck" in result.error.lower()
 
         # Test that ReadRequirement doesn't trigger shellcheck
         read_req = ReadRequirement(
