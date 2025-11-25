@@ -98,8 +98,7 @@ class TestFileOperations:
             dest_file = Path(temp_dir) / "dest.txt"
             source_file.write_text("This file will be copied")
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=str(source_file),
@@ -122,8 +121,7 @@ class TestFileOperations:
             dest_file = Path(temp_dir) / "dest.txt"
             source_file.write_text("This file should not be copied")
 
-            interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline copy
+            interface = MockInterface(choices=[1])  # Decline copy
 
             req = CopyRequirement(
                 source_path=str(source_file),
@@ -151,8 +149,7 @@ class TestFileOperations:
             subdir.mkdir()
             (subdir / "nested.txt").write_text("Nested content")
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=str(source_dir),
@@ -179,8 +176,7 @@ class TestFileOperations:
             source_dir.mkdir()
             (source_dir / "important.txt").write_text("Important data")
 
-            interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline copy
+            interface = MockInterface(choices=[1])  # Decline copy
 
             req = CopyRequirement(
                 source_path=str(source_dir),
@@ -273,8 +269,7 @@ class TestAutoAllowedPaths:
             # Only source directory is auto-allowed
             config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/auto/**"])
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=str(auto_file),
@@ -426,8 +421,7 @@ class TestPathSecurity:
             tilde_source = f"~/{source_file_path.name}"
             tilde_dest = f"~/{dest_file_path.name}"
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=tilde_source,
@@ -465,8 +459,7 @@ class TestPathSecurity:
             traversal_source = str(subdir / ".." / ".." / "source.txt")
             dest_file = str(subdir / "dest.txt")
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=traversal_source,
@@ -503,8 +496,7 @@ class TestIntegrationScenarios:
                     nested_file = subdir / f"nested_{j}.txt"
                     nested_file.write_text(f"Nested content {i}-{j}")
 
-            interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept copy
+            interface = MockInterface(choices=[0])  # Accept copy
 
             req = CopyRequirement(
                 source_path=str(source_dir),
@@ -544,9 +536,8 @@ class TestIntegrationScenarios:
                 source_file = source_dir / filename
                 source_file.write_text(f"Content of {filename}")
 
-            interface = MockInterface()
             # Accept copy for directory
-            interface.user_inputs.append(0)
+            interface = MockInterface(choices=[0])
 
             req = CopyRequirement(
                 source_path=str(source_dir),
@@ -577,8 +568,8 @@ class TestIntegrationScenarios:
             dest_dir = Path(temp_dir) / "dest_directory"
 
             # Test file copy messaging
-            interface1 = MockInterface()
-            interface1.user_inputs.append(1)  # Decline to see the choice message
+            # Decline to see the choice message
+            interface1 = MockInterface(choices=[1])
 
             req1 = CopyRequirement(
                 source_path=str(source_file),
@@ -595,8 +586,8 @@ class TestIntegrationScenarios:
             assert "directory" not in questions1
 
             # Test directory copy messaging
-            interface2 = MockInterface()
-            interface2.user_inputs.append(1)  # Decline to see the choice message
+            # Decline to see the choice message
+            interface2 = MockInterface(choices=[1])
 
             req2 = CopyRequirement(
                 source_path=str(source_dir),

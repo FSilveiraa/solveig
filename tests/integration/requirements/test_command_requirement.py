@@ -88,8 +88,7 @@ class TestCommandChoices:
 
     async def test_run_and_send_choice(self, sandboxed_shell):
         """Test choice 0: Run and send output with a real, sandboxed shell."""
-        interface = MockInterface()
-        interface.user_inputs.append(0)  # Run and send
+        interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandRequirement(
             command="echo 'hello world'", comment="Test echo command"
@@ -103,8 +102,7 @@ class TestCommandChoices:
 
     async def test_run_and_inspect_then_send(self, sandboxed_shell):
         """Test choice 1: Run and inspect first, then send, with a real shell."""
-        interface = MockInterface()
-        interface.user_inputs.extend([1, 0])  # Inspect first, then send
+        interface = MockInterface(choices=[1, 0])  # Inspect first, then send
 
         req = CommandRequirement(
             command="echo 'hostname.local'",  # Use echo to avoid network/system variance
@@ -125,9 +123,8 @@ class TestCommandChoices:
         """Test choice 1: Run and inspect first, then hide output, with a real shell."""
         secret_file = tmp_path / "secret.txt"
         secret_file.write_text("secret data")
-        interface = MockInterface()
+        interface = MockInterface(choices=[1, 1])  # Inspect first, then hide
 
-        interface.user_inputs.extend([1, 1])  # Inspect first, then hide
         req = CommandRequirement(
             command=f"cat {secret_file.name}", comment="Read sensitive file"
         )
@@ -140,8 +137,7 @@ class TestCommandChoices:
 
     async def test_dont_run_choice(self):
         """Test choice 2: Don't run command."""
-        interface = MockInterface()
-        interface.user_inputs.append(2)  # Don't run
+        interface = MockInterface(choices=[2])  # Don't run
 
         req = CommandRequirement(
             command="rm important_file.txt", comment="Dangerous command"
@@ -154,8 +150,7 @@ class TestCommandChoices:
 
     async def test_command_with_error_output(self, sandboxed_shell):
         """Test command that produces stderr with a real shell."""
-        interface = MockInterface()
-        interface.user_inputs.append(0)  # Run and send
+        interface = MockInterface(choices=[0])  # Run and send
 
         # This command is guaranteed to produce an error on stderr
         req = CommandRequirement(
@@ -171,8 +166,7 @@ class TestCommandChoices:
     async def test_command_with_no_output(self, sandboxed_shell, tmp_path: Path):
         """Test command that produces no output with a real shell."""
         test_file = tmp_path / "newfile"
-        interface = MockInterface()
-        interface.user_inputs.append(0)  # Run and send
+        interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandRequirement(
             command=f"touch {test_file.name}", comment="Silent command"
@@ -217,9 +211,8 @@ class TestAutoExecuteCommands:
 
     async def test_auto_execute_non_matching_pattern(self, sandboxed_shell):
         """Test normal choice flow when pattern doesn't match with a real shell."""
-        interface = MockInterface()
+        interface = MockInterface(choices=[0])  # Manually approve the command
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
-        interface.user_inputs.append(0)  # Manually approve the command
 
         req = CommandRequirement(command="echo hello", comment="Echo command")
         result = await req.actually_solve(config, interface)
@@ -249,9 +242,9 @@ class TestAutoExecuteCommands:
 
         for command, should_auto_execute in test_cases:
             # Reset inputs for each loop
-            interface.user_inputs.clear()
+            interface.choices.clear()
             if not should_auto_execute:
-                interface.user_inputs.append(2)  # Don't run
+                interface.choices.append(2)  # Don't run
 
             req = CommandRequirement(command=command, comment=f"Test {command}")
             result = await req.actually_solve(config, interface)
@@ -270,8 +263,7 @@ class TestDetachedCommands:
 
     async def test_detached_command_execution(self, sandboxed_shell):
         """Test that timeout <= 0 is treated as a detached process by the real shell."""
-        interface = MockInterface()
-        interface.user_inputs.append(0)  # Run and send
+        interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandRequirement(
             command='echo "background" &',
@@ -292,10 +284,9 @@ class TestDetachedCommands:
 
     async def test_detached_vs_blocking_timeout_handling(self, sandboxed_shell):
         """Test timeout parameter affects execution mode with a real shell."""
-        interface = MockInterface()
+        interface = MockInterface(choices=[0])  # Run and send
 
-        # Test blocking command
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         req1 = CommandRequirement(
             command="echo blocking", comment="Blocking command", timeout=5.0
         )
@@ -305,7 +296,7 @@ class TestDetachedCommands:
         assert result1.stdout == "blocking"
 
         # Test detached command
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         req2 = CommandRequirement(
             command="echo detached &",
             comment="Detached command",
@@ -339,14 +330,13 @@ class TestWorkingDirectoryTracking:
         self, sandboxed_shell, tmp_path: Path
     ):
         """Test that successful command updates interface stats with working directory."""
-        interface = MockInterface()
+        interface = MockInterface(choices=[0])  # Auto-approve `cd`
 
         # 1. Create a subdirectory
         subdir = tmp_path / "new_dir"
         subdir.mkdir()
 
         # 2. CD into the subdirectory
-        interface.user_inputs.append(0)  # Auto-approve CD
         cd_req = CommandRequirement(
             command=f"cd {subdir.name}", comment="Change to new_dir"
         )
@@ -364,8 +354,7 @@ class TestWorkingDirectoryTracking:
 
     async def test_detached_command_no_stats_update(self, sandboxed_shell):
         """Test that detached commands don't update stats with CWD."""
-        interface = MockInterface()
-        interface.user_inputs.append(0)  # Run and send
+        interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandRequirement(
             command="echo background &",
@@ -393,7 +382,7 @@ class TestShellIntegration:
         subdir = tmp_path / "subdir"
 
         # 1. Create a subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         mkdir_req = CommandRequirement(
             command=f"mkdir {subdir.name}", comment="Create subdir"
         )
@@ -401,7 +390,7 @@ class TestShellIntegration:
         assert mkdir_result.success
 
         # 2. CD into the new subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         cd_req_2 = CommandRequirement(
             command=f"cd {subdir.name}", comment="Change to subdir"
         )
@@ -409,7 +398,7 @@ class TestShellIntegration:
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         pwd_req = CommandRequirement(command="pwd", comment="Print working directory")
         pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success
@@ -422,7 +411,7 @@ class TestShellIntegration:
         # The sandboxed_shell fixture already put us in tmp_path.
 
         # 1. Create a subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         mkdir_req = CommandRequirement(
             command="mkdir test_dir", comment="Create subdir"
         )
@@ -431,13 +420,13 @@ class TestShellIntegration:
         assert (tmp_path / "test_dir").is_dir()
 
         # 2. CD into the new subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         cd_req_2 = CommandRequirement(command="cd test_dir", comment="Change to subdir")
         cd_result_2 = await cd_req_2.actually_solve(DEFAULT_CONFIG, interface)
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
-        interface.user_inputs.append(0)
+        interface.choices.append(0)
         pwd_req = CommandRequirement(command="pwd", comment="Print working directory")
         pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success

@@ -75,7 +75,7 @@ class TestFileOperations:
             test_file.write_text("This file will be deleted")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(path=str(test_file), comment="Delete test file")
 
@@ -91,7 +91,7 @@ class TestFileOperations:
             test_file.write_text("This file should be preserved")
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline deletion
+            interface.choices.append(1)  # Decline deletion
 
             req = DeleteRequirement(path=str(test_file), comment="Decline deletion")
 
@@ -115,7 +115,7 @@ class TestFileOperations:
             (subdir / "nested.txt").write_text("Nested content")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(path=str(test_dir), comment="Delete directory tree")
 
@@ -132,7 +132,7 @@ class TestFileOperations:
             (test_dir / "important.txt").write_text("Important data")
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline deletion
+            interface.choices.append(1)  # Decline deletion
 
             req = DeleteRequirement(
                 path=str(test_dir), comment="Decline directory deletion"
@@ -151,7 +151,7 @@ class TestFileOperations:
             empty_dir.mkdir()
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(
                 path=str(empty_dir), comment="Delete empty directory"
@@ -244,7 +244,7 @@ class TestAutoAllowedPaths:
 
             # Test manual choice (requires input)
             interface2 = MockInterface()
-            interface2.user_inputs.append(0)  # Accept deletion
+            interface2.choices.append(0)  # Accept deletion
             req2 = DeleteRequirement(path=str(manual_file), comment="Manual deletion")
             result2 = await req2.actually_solve(config, interface2)
 
@@ -319,7 +319,7 @@ class TestErrorHandling:
             test_file.write_text("Content")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             # Make file unreadable/undeletable after validation
 
@@ -351,7 +351,7 @@ class TestPathSecurity:
             tilde_path = f"~/{temp_file_path.name}"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(path=tilde_path, comment="Tilde expansion test")
 
@@ -381,7 +381,7 @@ class TestPathSecurity:
             traversal_path = str(subdir / ".." / ".." / "target.txt")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(path=traversal_path, comment="Path traversal test")
 
@@ -414,7 +414,7 @@ class TestIntegrationScenarios:
                     nested_file.write_text(f"Nested content {i}-{j}")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept deletion
+            interface.choices.append(0)  # Accept deletion
 
             req = DeleteRequirement(path=str(large_dir), comment="Delete large tree")
 
@@ -440,7 +440,7 @@ class TestIntegrationScenarios:
 
             interface = MockInterface()
             # Accept deletion for each file
-            interface.user_inputs.extend([0] * len(special_files))
+            interface.choices.extend([0] * len(special_files))
 
             for filename in special_files:
                 file_path = Path(temp_dir) / filename
@@ -465,7 +465,7 @@ class TestIntegrationScenarios:
 
             # Test file deletion messaging
             interface1 = MockInterface()
-            interface1.user_inputs.append(1)  # Decline to see the choice message
+            interface1.choices.append(1)  # Decline to see the choice message
 
             req1 = DeleteRequirement(path=str(test_file), comment="Delete file")
 
@@ -479,7 +479,7 @@ class TestIntegrationScenarios:
 
             # Test directory deletion messaging
             interface2 = MockInterface()
-            interface2.user_inputs.append(1)  # Decline to see the choice message
+            interface2.choices.append(1)  # Decline to see the choice message
 
             req2 = DeleteRequirement(path=str(test_dir), comment="Delete directory")
 

@@ -99,7 +99,7 @@ class TestFileOperations:
             source_file.write_text("This file will be moved")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=str(source_file),
@@ -122,7 +122,7 @@ class TestFileOperations:
             source_file.write_text("This file should not be moved")
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline move
+            interface.choices.append(1)  # Decline move
 
             req = MoveRequirement(
                 source_path=str(source_file),
@@ -151,7 +151,7 @@ class TestFileOperations:
             (subdir / "nested.txt").write_text("Nested content")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=str(source_dir),
@@ -179,7 +179,7 @@ class TestFileOperations:
             (source_dir / "important.txt").write_text("Important data")
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline move
+            interface.choices.append(1)  # Decline move
 
             req = MoveRequirement(
                 source_path=str(source_dir),
@@ -273,7 +273,7 @@ class TestAutoAllowedPaths:
             config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/auto/**"])
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=str(auto_file),
@@ -426,7 +426,7 @@ class TestPathSecurity:
             tilde_dest = f"~/{dest_file_path.name}"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=tilde_source,
@@ -466,7 +466,7 @@ class TestPathSecurity:
             dest_file = str(subdir / "dest.txt")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=traversal_source,
@@ -505,7 +505,7 @@ class TestIntegrationScenarios:
                     nested_file.write_text(f"Nested content {i}-{j}")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept move
+            interface.choices.append(0)  # Accept move
 
             req = MoveRequirement(
                 source_path=str(source_dir),
@@ -547,7 +547,7 @@ class TestIntegrationScenarios:
 
             interface = MockInterface()
             # Accept move for directory
-            interface.user_inputs.append(0)
+            interface.choices.append(0)
 
             req = MoveRequirement(
                 source_path=str(source_dir),
@@ -580,7 +580,7 @@ class TestIntegrationScenarios:
 
             # Test file move messaging
             interface1 = MockInterface()
-            interface1.user_inputs.append(1)  # Decline to see the choice message
+            interface1.choices.append(1)  # Decline to see the choice message
 
             req1 = MoveRequirement(
                 source_path=str(source_file),
@@ -598,7 +598,7 @@ class TestIntegrationScenarios:
 
             # Test directory move messaging
             interface2 = MockInterface()
-            interface2.user_inputs.append(1)  # Decline to see the choice message
+            interface2.choices.append(1)  # Decline to see the choice message
 
             req2 = MoveRequirement(
                 source_path=str(source_dir),

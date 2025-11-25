@@ -80,7 +80,7 @@ class TestFileOperations:
             test_content = "Hello, new file!"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept creation
+            interface.choices.append(0)  # Accept creation
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -101,7 +101,7 @@ class TestFileOperations:
             test_file = Path(temp_dir) / "declined_file.txt"
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline creation
+            interface.choices.append(1)  # Decline creation
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -121,7 +121,7 @@ class TestFileOperations:
             test_file = Path(temp_dir) / "empty_file.txt"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept creation
+            interface.choices.append(0)  # Accept creation
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -147,7 +147,7 @@ class TestFileOperations:
             test_file.write_text(original_content)
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept update
+            interface.choices.append(0)  # Accept update
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -175,7 +175,7 @@ class TestFileOperations:
             test_file.write_text(original_content)
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline update
+            interface.choices.append(1)  # Decline update
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -199,7 +199,7 @@ class TestDirectoryOperations:
             test_dir = Path(temp_dir) / "new_directory"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept creation
+            interface.choices.append(0)  # Accept creation
 
             req = WriteRequirement(
                 path=str(test_dir), is_directory=True, comment="Create new directory"
@@ -217,7 +217,7 @@ class TestDirectoryOperations:
             nested_dir = Path(temp_dir) / "level1" / "level2" / "level3"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept creation
+            interface.choices.append(0)  # Accept creation
 
             req = WriteRequirement(
                 path=str(nested_dir),
@@ -240,7 +240,7 @@ class TestDirectoryOperations:
             test_dir = Path(temp_dir) / "declined_directory"
 
             interface = MockInterface()
-            interface.user_inputs.append(1)  # Decline creation
+            interface.choices.append(1)  # Decline creation
 
             req = WriteRequirement(
                 path=str(test_dir), is_directory=True, comment="Declined directory"
@@ -258,7 +258,7 @@ class TestDirectoryOperations:
             test_dir.mkdir()  # Create directory
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept update
+            interface.choices.append(0)  # Accept update
 
             req = WriteRequirement(
                 path=str(test_dir),
@@ -392,7 +392,7 @@ class TestErrorHandling:
             test_file = restricted_dir / "cannot_write.txt"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept (but will fail)
+            interface.choices.append(0)  # Accept (but will fail)
 
             try:
                 req = WriteRequirement(
@@ -421,7 +421,7 @@ class TestErrorHandling:
             test_file = Path(temp_dir) / "encoding_error.txt"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept
+            interface.choices.append(0)  # Accept
 
             # Mock Filesystem.write_file to simulate encoding error
             with patch("solveig.utils.file.Filesystem.write_file") as mock_write:
@@ -484,7 +484,7 @@ class TestPathSecurity:
             tilde_path = f"~/{temp_file_path.name}"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept
+            interface.choices.append(0)  # Accept
 
             req = WriteRequirement(
                 path=tilde_path,
@@ -514,7 +514,7 @@ class TestPathSecurity:
             traversal_path = str(subdir / ".." / ".." / "traversal_test.txt")
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept
+            interface.choices.append(0)  # Accept
 
             req = WriteRequirement(
                 path=traversal_path,
@@ -546,7 +546,7 @@ class TestIntegrationScenarios:
             )
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept
+            interface.choices.append(0)  # Accept
 
             req = WriteRequirement(
                 path=str(test_file),
@@ -567,7 +567,7 @@ class TestIntegrationScenarios:
 
             # Test creation
             interface1 = MockInterface()
-            interface1.user_inputs.append(0)  # Accept
+            interface1.choices.append(0)  # Accept
 
             req1 = WriteRequirement(
                 path=str(test_file),
@@ -585,7 +585,7 @@ class TestIntegrationScenarios:
 
             # Test update
             interface2 = MockInterface()
-            interface2.user_inputs.append(0)  # Accept
+            interface2.choices.append(0)  # Accept
 
             req2 = WriteRequirement(
                 path=str(test_file),
@@ -607,7 +607,7 @@ class TestIntegrationScenarios:
             test_dir = Path(temp_dir) / "content_ignored"
 
             interface = MockInterface()
-            interface.user_inputs.append(0)  # Accept
+            interface.choices.append(0)  # Accept
 
             req = WriteRequirement(
                 path=str(test_dir),

@@ -60,7 +60,7 @@ class TestDirectoryOperations:
         (tmp_path / "file2.py").write_text("print('hello')")
         (tmp_path / "subdir").mkdir()
 
-        interface = MockInterface(user_inputs=[0])  # Accept metadata
+        interface = MockInterface(choices=[0])  # Accept metadata
         req = ReadRequirement(
             path=str(tmp_path), metadata_only=True, comment="Read directory"
         )
@@ -74,7 +74,7 @@ class TestDirectoryOperations:
 
     async def test_directory_read_decline(self, tmp_path):
         """Test reading directory metadata with user decline."""
-        interface = MockInterface(user_inputs=[1])  # Decline metadata
+        interface = MockInterface(choices=[1])  # Decline metadata
         req = ReadRequirement(
             path=str(tmp_path), metadata_only=True, comment="Decline directory"
         )
@@ -94,7 +94,7 @@ class TestFileContentFlow:
         test_content = "Hello direct read!"
         test_file.write_text(test_content)
 
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Direct read"
         )
@@ -110,7 +110,7 @@ class TestFileContentFlow:
         test_content = "Inspect me first!"
         test_file.write_text(test_content)
 
-        interface = MockInterface(user_inputs=[1, 0])
+        interface = MockInterface(choices=[1, 0])
         req = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Inspect then send"
         )
@@ -125,7 +125,7 @@ class TestFileContentFlow:
         test_file = tmp_path / "metadata_only.txt"
         test_file.write_text("Secret content")
 
-        interface = MockInterface(user_inputs=[1, 1])
+        interface = MockInterface(choices=[1, 1])
         req = ReadRequirement(
             path=str(test_file),
             metadata_only=False,
@@ -142,7 +142,7 @@ class TestFileContentFlow:
         test_file = tmp_path / "nothing.txt"
         test_file.write_text("Super secret")
 
-        interface = MockInterface(user_inputs=[1, 2])
+        interface = MockInterface(choices=[1, 2])
         req = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Inspect then nothing"
         )
@@ -157,7 +157,7 @@ class TestFileContentFlow:
         test_file = tmp_path / "metadata.txt"
         test_file.write_text("Not read")
 
-        interface = MockInterface(user_inputs=[2])
+        interface = MockInterface(choices=[2])
         req = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Metadata only"
         )
@@ -172,7 +172,7 @@ class TestFileContentFlow:
         test_file = tmp_path / "nothing.txt"
         test_file.write_text("Nothing sent")
 
-        interface = MockInterface(user_inputs=[3])
+        interface = MockInterface(choices=[3])
         req = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Send nothing"
         )
@@ -187,7 +187,7 @@ class TestFileContentFlow:
         test_file = tmp_path / "metadata_request.txt"
         test_file.write_text("Content not requested")
 
-        interface = MockInterface(user_inputs=[0])  # Accept metadata
+        interface = MockInterface(choices=[0])  # Accept metadata
         req = ReadRequirement(
             path=str(test_file), metadata_only=True, comment="Metadata requested"
         )
@@ -204,14 +204,14 @@ class TestFileContentFlow:
         test_file.write_text(test_content)
 
         # Test direct read (choice 0)
-        interface1 = MockInterface(user_inputs=[0])
+        interface1 = MockInterface(choices=[0])
         req1 = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Direct"
         )
         result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
 
         # Test inspect then send (choice 1→0)
-        interface2 = MockInterface(user_inputs=[1, 0])
+        interface2 = MockInterface(choices=[1, 0])
         req2 = ReadRequirement(
             path=str(test_file), metadata_only=False, comment="Inspect then send"
         )
@@ -303,7 +303,7 @@ class TestErrorHandling:
         binary_data = bytes([0x89, 0x50, 0x4E, 0x47])  # PNG header
         binary_file.write_bytes(binary_data)
 
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=str(binary_file), metadata_only=False, comment="Binary file"
         )
@@ -327,7 +327,7 @@ class TestPathSecurity:
         test_file.write_text(test_content)
 
         tilde_path = "~/tilde_test.txt"
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=tilde_path, metadata_only=False, comment="Tilde expansion"
         )
@@ -349,7 +349,7 @@ class TestPathSecurity:
         public_dir.mkdir(parents=True)
 
         traversal_path = str(public_dir / ".." / ".." / "secret" / "data.txt")
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=traversal_path, metadata_only=True, comment="Path traversal"
         )
@@ -370,7 +370,7 @@ class TestIntegrationScenarios:
         for i in range(5):
             (tmp_path / f"subdir_{i}").mkdir()
 
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=str(tmp_path), metadata_only=True, comment="Large directory"
         )
@@ -385,7 +385,7 @@ class TestIntegrationScenarios:
         test_file = tmp_path / "metadata_test.txt"
         test_file.write_text("Should not be read")
 
-        interface = MockInterface(user_inputs=[0])
+        interface = MockInterface(choices=[0])
         req = ReadRequirement(
             path=str(test_file), metadata_only=True, comment="Metadata only flag"
         )
