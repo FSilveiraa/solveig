@@ -1,10 +1,11 @@
 """Modern end-to-end tests for complete conversation loops with async architecture."""
 
 import tempfile
-from pathlib import Path
+from anyio import Path
 
 import pytest
 
+from solveig.schema import requirement
 from solveig.schema.message import AssistantMessage, Task
 
 # Mark all tests in this module to skip file mocking and subprocess mocking (for real e2e testing)
@@ -27,28 +28,33 @@ class TestConversationFlow:
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
 
         # LLM suggests safe diagnostic commands
-        llm_response = AssistantMessage(
-            tasks=[
-                Task(
-                    status="pending", description="Check current directory path"
-                ),
-                Task(status="pending", description="List files"),
-            ],
-            requirements=[
-                CommandRequirement(command="pwd", comment="Check current directory"),
-                CommandRequirement(command="ls -la", comment="List files with details"),
-            ],
-        )
+        assistant_messages = [
+            AssistantMessage(
+                comment="Of course! Let me show re-center you",
+                tasks=[
+                    Task(
+                        status="pending", description="Check current directory path"
+                    ),
+                    Task(status="pending", description="List files"),
+                ],
+                requirements=[
+                    CommandRequirement(command="pwd", comment="Check current directory"),
+                    CommandRequirement(command="ls -la", comment="List files with details"),
+                ],
+            ),
+            AssistantMessage(
+                # don't use the actual pwd, to ensure it's only there if the command works
+                comment="You're in some directory with some files",
+            )
+        ]
 
-        mock_client = create_mock_client(llm_response, sleep_seconds=0, sleep_delta=0)
+        mock_client = create_mock_client(*assistant_messages, sleep_seconds=0, sleep_delta=0)
         interface = MockInterface(
-            user_inputs=[
+            choices=[
                 0,  # Accept pwd command (Run and send)
                 1,  # Accept ls command (Run and inspect)
                 0,  # Send ls output (after inspection)
-                "/exit",  # End conversation
             ],
-            timeout_seconds=5.0  # Auto-exit if conversation runs longer
         )
 
         # Execute conversation
@@ -56,13 +62,13 @@ class TestConversationFlow:
             config=DEFAULT_CONFIG,
             interface=interface,
             llm_client=mock_client,
-            user_prompt="My computer is running slow, can you help?",
+            user_prompt="Hey I'm lost in a shell",
         )
 
         # Verify LLM response was displayed and commands were processed
         output = interface.get_all_output()
-        assert "help diagnose your system" in output
-        assert str(Path(".").resolve()) in output
+        assert assistant_messages[0].comment in output
+        assert str(await Path(".").resolve()) in output
         assert "README.md" in output
 
         # Verify subprocess communication was called for both commands
@@ -73,30 +79,44 @@ class TestConversationFlow:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
             temp_file_path = temp_dir_path / "new_file.txt"
-            temp_file_path.write_text("Lorem ipsum dolor sit amet")
+            await temp_file_path.write_text("Lorem ipsum dolor sit amet")
 
-            llm_response = AssistantMessage(
-                requirements=[
-                    ReadRequirement(
-                        path=temp_dir,
-                        metadata_only=False,
-                        comment="Examine directory contents",
-                    ),
-                    CommandRequirement(
-                        command=f"find {temp_dir_path} -name '*.txt'",
-                        comment="Find text files",
-                    ),
-                ],
-            )
+            assistant_messages = [
+                AssistantMessage(
+                    comment="I'll investigate your directory contents and help you organize them",
+                    tasks=[
+                        Task(status="ongoing", description="Examine directory contents"),
+                        Task(status="pending", description="Find text files anywhere inside the current directory"),
+                        Task(status="pending", description="Update plan to organize files"),
+                    ],
+                    requirements=[
+                        ReadRequirement(
+                            path=temp_dir,
+                            metadata_only=False,
+                            comment="Examine directory contents",
+                        ),
+                        CommandRequirement(
+                            command=f"find {temp_dir_path} -name '*.txt'",
+                            comment="Find text files",
+                        ),
+                    ],
+                ),
+                AssistantMessage(
+                    comment="Your files are already organized, there's a single Lorem Ipsum text file",
+                    tasks=[
+                        Task(status="completed", description="Examine directory contents"),
+                        Task(status="completed", description="Find text files anywhere inside the current directory"),
+                        Task(status="completed", description="Summarizing directory contents"),
+                    ]
+                ),
+            ]
 
-            mock_client = create_mock_client(llm_response)
+            mock_client = create_mock_client(*assistant_messages, sleep_seconds=0, sleep_delta=0)
             interface = MockInterface(
-                user_inputs=[
+                choices=[
                     0,  # Accept read operation
                     2,  # Decline find command
-                    "/exit",
                 ],
-                timeout_seconds=5.0
             )
 
             await run_async(
@@ -110,24 +130,29 @@ class TestConversationFlow:
             output = interface.get_all_output()
             assert "Examine directory contents" in output
             assert "new_file.txt" in output
+            assert "Summarizing directory contents" in output
 
     async def test_command_error_handling(self):
         """Test error handling in command execution flow."""
-        llm_response = AssistantMessage(
-            requirements=[
-                CommandRequirement(
-                    command="nonexistent_command", comment="This will fail"
-                ),
-            ],
-        )
+        assistant_messages = [
+            AssistantMessage(
+                comment="Here's a failed command",
+                requirements=[
+                    CommandRequirement(
+                        command="nonexistent_command", comment="This will fail"
+                    ),
+                ],
+            ),
+            AssistantMessage(
+                comment="Damn, sorry",
+            )
+        ]
 
-        mock_client = create_mock_client(llm_response)
+        mock_client = create_mock_client(*assistant_messages)
         interface = MockInterface(
-            user_inputs=[
+            choices=[
                 0,  # Accept command and send error output
-                "/exit",
             ],
-            timeout_seconds=5.0
         )
         await run_async(
             config=DEFAULT_CONFIG,
@@ -141,29 +166,3 @@ class TestConversationFlow:
         assert "This will fail" in output
         assert "not found" in output  # different shells output different errors
         assert "nonexistent_command" in output
-
-    async def test_empty_requirements_flow(self):
-        """Test conversation flow when LLM returns no requirements."""
-        llm_response = AssistantMessage(
-            requirements=[],
-        )
-
-        mock_client = create_mock_client(llm_response)
-        interface = MockInterface(
-            user_inputs=[
-                1,  # Don't retry when it says "empty message"
-                "/exit",  # Exit the conversation
-            ],
-            timeout_seconds=5.0
-        )
-
-        await run_async(
-            config=DEFAULT_CONFIG,
-            interface=interface,
-            llm_client=mock_client,
-            user_prompt="Just say hello",
-        )
-
-        # Verify LLM response was displayed even with no requirements
-        output = interface.get_all_output()
-        assert "Error: Assistant responded with empty message" in output

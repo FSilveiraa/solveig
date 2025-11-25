@@ -43,7 +43,7 @@ class MockInterface(TerminalInterface):
         self,
         user_inputs: list[str | None] | None = None,
         choices: list[int] | None = None,
-        timeout_seconds: float | None = None,
+        timeout_seconds: float | None = 10,
         **kwargs,
     ) -> None:
         # Do not call super().__init__() since that would init() the Textual App
@@ -70,7 +70,7 @@ class MockInterface(TerminalInterface):
             if self._timeout_seconds is None:
                 raise asyncio.TimeoutError(
                     "Interface timed out waiting for stop event. "
-                    "If this is a test, did you forget to provide an '/exit' command in user_inputs?"
+                    "If this is a test, you need to add a final AssistantMessage with no requirements"
                 )
         finally:
             # Cancel timeout task if it's still running

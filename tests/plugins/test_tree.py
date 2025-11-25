@@ -41,7 +41,7 @@ class TestTreePlugin:
             ]
 
             mock_client = create_mock_client(*assistant_responses)
-            interface = MockInterface(choices=[0], timeout_seconds=10)
+            interface = MockInterface(choices=[0])
 
             # Execute conversation
             await run_async(
