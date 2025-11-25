@@ -53,7 +53,7 @@ class TestPluginHookSystem:
     async def test_before_hook_validation_error(self):
         """Test that before hooks can raise ValidationError to stop processing."""
         # Setup
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])  # Decline if it gets to user
 
         @hooks.before(requirements=(CommandRequirement,))
         async def failing_validator(
@@ -70,7 +70,6 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="fail this command", comment="Test")
-        interface.set_user_inputs([2])  # Decline if it gets to user
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -83,7 +82,7 @@ class TestPluginHookSystem:
     async def test_before_hook_security_error(self):
         """Test that before hooks can raise SecurityError for dangerous commands."""
         # Setup
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])
 
         @hooks.before(requirements=(CommandRequirement,))
         async def security_validator(
@@ -99,7 +98,6 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="rm -rf /important/data", comment="Test")
-        interface.set_user_inputs([2])
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -112,7 +110,7 @@ class TestPluginHookSystem:
     async def test_before_hook_success_continues(self):
         """Test that before hooks that don't raise exceptions allow processing to continue."""
         # Setup
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])  # Decline the command
 
         @hooks.before(requirements=(CommandRequirement,))
         async def passing_validator(
@@ -129,7 +127,6 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="echo hello", comment="Test")
-        interface.set_user_inputs([2])  # Decline the command
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -143,7 +140,7 @@ class TestPluginHookSystem:
     async def test_after_hook_processing_error(self, tmp_path):
         """Test that after hooks can raise ProcessingError."""
         # Setup
-        interface = MockInterface()
+        interface = MockInterface(choices=[0])  # Accept the command
 
         @hooks.after(requirements=(ReadRequirement,))
         async def failing_processor(
@@ -161,7 +158,6 @@ class TestPluginHookSystem:
         )
 
         req = ReadRequirement(comment="Test", path=str(tmp_path), metadata_only=True)
-        interface.set_user_inputs([0])  # Accept the command
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -174,7 +170,7 @@ class TestPluginHookSystem:
         """Test that multiple before hooks are executed in order."""
         # Setup
         execution_order = []
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])
 
         @hooks.before(requirements=(CommandRequirement,))
         async def first_validator(config, interface, requirement):
@@ -189,7 +185,6 @@ class TestPluginHookSystem:
         )
 
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([2])
 
         # Execute
         await req.solve(DEFAULT_CONFIG, interface)
@@ -202,7 +197,7 @@ class TestPluginHookSystem:
         """Test that hooks only run for specified requirement types."""
         # Setup
         called = []
-        interface = MockInterface()
+        interface = MockInterface(choices=[2, 1])  # Don't run, don't send metadata
 
         @hooks.before(requirements=(CommandRequirement,))
         async def command_only_hook(config, interface, requirement):
@@ -221,7 +216,6 @@ class TestPluginHookSystem:
         # Execute
         # Test with CommandRequirement
         cmd_req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([2])  # Don't run
         await cmd_req.solve(DEFAULT_CONFIG, interface=interface)
         # Verify
         assert called == ["command_hook"]
@@ -233,7 +227,6 @@ class TestPluginHookSystem:
             path=str(test_file), metadata_only=True, comment="Test"
         )
 
-        interface.set_user_inputs([1])  # don't send metadata
         await read_req.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify
@@ -244,7 +237,7 @@ class TestPluginHookSystem:
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
         called = []
-        interface = MockInterface()
+        interface = MockInterface(choices=[0, 0])  # Run command, read file
 
         def get_requirement_name(requirement) -> str:
             return f"universal_{type(requirement).__name__}"
@@ -258,20 +251,19 @@ class TestPluginHookSystem:
         )
 
         # Test with different requirement types
-        task_req = TaskListRequirement(comment="Test")
+        cmd_req = CommandRequirement(command="echo test", comment="Test")
+        # task_req = TaskListRequirement(comment="Test")
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
         read_req = ReadRequirement(
             path=str(test_file), metadata_only=True, comment="Test"
         )
 
-        await task_req.solve(DEFAULT_CONFIG, interface)
-
-        interface.set_user_inputs([1])
+        await cmd_req.solve(DEFAULT_CONFIG, interface)
         await read_req.solve(DEFAULT_CONFIG, interface)
 
         # Verify
-        assert get_requirement_name(task_req) in called
+        assert get_requirement_name(cmd_req) in called
         assert get_requirement_name(read_req) in called
 
 
@@ -295,7 +287,7 @@ class TestPluginFiltering:
             plugins={"test_plugin_hook": {}},  # Plugin enabled by function name
         )
 
-        interface = MockInterface()
+        interface = MockInterface(choices=[0])
         # Filter to enable only the test plugin
         await hooks.load_and_filter_hooks(
             interface=interface, enabled_plugins=config_with_plugin
@@ -312,7 +304,6 @@ class TestPluginFiltering:
                 is_directory=False,
                 content="bananas pineapples",
             )
-            interface.set_user_inputs([0, 0])  # write file, send back
             result = await req.solve(config_with_plugin, interface)
             assert temp_file.exists()
 
@@ -340,7 +331,7 @@ class TestPluginFiltering:
             plugins={},  # Plugin not listed, should be disabled
         )
 
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])
 
         # Apply filtering
         await hooks.load_and_filter_hooks(
@@ -349,7 +340,6 @@ class TestPluginFiltering:
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([2])
         await req.solve(config_without_plugin, interface)
 
         # Verify plugin did NOT execute
@@ -408,14 +398,13 @@ class TestPluginFiltering:
             },
         )
 
-        interface = MockInterface()
+        interface = MockInterface(choices=[2])
         await hooks.load_and_filter_hooks(
             enabled_plugins=config_with_options, interface=interface
         )
 
         # Execute requirement
         req = CommandRequirement(command="echo test", comment="Test")
-        interface.set_user_inputs([2])
         await req.solve(config_with_options, interface)
 
         # Verify plugin received its configuration
