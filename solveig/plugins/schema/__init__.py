@@ -49,17 +49,31 @@ async def load_and_filter_requirements(
     """
     import sys
 
-    from solveig.schema import REQUIREMENTS
+    from solveig.schema import REQUIREMENTS, CORE_REQUIREMENTS
+
+    REQUIREMENTS.registered.clear()
+    for name, requirement_class in REQUIREMENTS.all_requirements.items():
+        if requirement_class in CORE_REQUIREMENTS:
+            REQUIREMENTS.register_requirement(requirement_class)
+
+
+    # plugin_names_to_remove = [
+    #     name
+    #     for name, req_class in REQUIREMENTS.all_requirements.items()
+    #     if req_class not in CORE_REQUIREMENTS
+    #     # if "schema.requirement" not in req_class.__module__
+    # ]
 
     # Clear only plugin requirements, keep core requirements
-    plugin_names_to_remove = [
-        name
-        for name, req_class in REQUIREMENTS.all_requirements.items()
-        if "schema.requirements" not in req_class.__module__
-    ]
-    for name in plugin_names_to_remove:
-        REQUIREMENTS.all_requirements.pop(name, None)
-        REQUIREMENTS.registered.pop(name, None)
+    # plugin_names_to_remove = [
+    #     name
+    #     for name, req_class in REQUIREMENTS.all_requirements.items()
+    #     if req_class not in CORE_REQUIREMENTS
+    #     # if "schema.requirement" not in req_class.__module__
+    # ]
+    # for name in plugin_names_to_remove:
+    #     REQUIREMENTS.all_requirements.pop(name, None)
+    #     REQUIREMENTS.registered.pop(name, None)
 
     # Convert config to plugin set
     if isinstance(enabled_plugins, SolveigConfig):
@@ -98,6 +112,7 @@ async def load_and_filter_requirements(
                     ):
                         for req_name in new_requirement_names:
                             req_class = REQUIREMENTS.all_requirements[req_name]
+                            # TODO review this, right now this file edits fields of REQUIREMENTS directly
                             REQUIREMENTS.registered[req_name] = req_class
                         active_plugins += 1
                         await interface.display_text(f"'{plugin_name}': Loaded")

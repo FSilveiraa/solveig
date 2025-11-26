@@ -123,8 +123,9 @@ class TerminalInterface(SolveigInterface):
     async def display_comment(self, message: str) -> None:
         """Display a comment message."""
         # HACK: the string below contains a magic character that lets it render with proper spacing
-        # TODO: move this to a dedicated method in TextualAPp
+        # TODO: move this to a dedicated method in TextualApp
         await self.app._conversation_area._add_element(Markdown(f"🗩 ⠀{message}"))
+        # await self.app.add_text(f"🗩 ⠀{message}")
 
     async def display_tree(
         self,

@@ -15,9 +15,9 @@ pytestmark = [
 ]
 
 from solveig.run import run_async
-from solveig.schema.message import AssistantMessage
+from solveig.schema.message import AssistantMessage, MessageHistory
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
+from tests.mocks import APIType, DEFAULT_CONFIG, MockInterface, create_mock_client
 
 
 class TestConversationFlow:
@@ -25,7 +25,6 @@ class TestConversationFlow:
 
     async def test_command_execution_flow(self):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
-
         # LLM suggests safe diagnostic commands
         assistant_messages = [
             AssistantMessage(
@@ -60,8 +59,8 @@ class TestConversationFlow:
             ],
         )
 
-        # Execute conversation
-        await run_async(
+        # Execute conversation, and capture the returned message_history
+        message_history = await run_async(
             config=DEFAULT_CONFIG,
             interface=interface,
             llm_client=mock_client,
@@ -73,6 +72,16 @@ class TestConversationFlow:
         assert assistant_messages[0].comment in output
         assert str(await Path(".").resolve()) in output
         assert "README.md" in output
+
+        # CRITICAL ASSERTION: Verify the system prompt correctly contains tools
+        assert message_history is not None
+        system_prompt_content = message_history.messages[0].system_prompt
+        assert "command(" in system_prompt_content
+        assert "read(" in system_prompt_content
+        assert "write(" in system_prompt_content
+        assert "copy(" in system_prompt_content
+        assert "delete(" in system_prompt_content
+        assert "move(" in system_prompt_content
 
         # Verify subprocess communication was called for both commands
         # assert mock_subprocess.communicate.call_count == 2

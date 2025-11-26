@@ -106,7 +106,7 @@ def mock_asyncio_subprocess(request):
         )()
 
 
-@pytest.fixture(autouse=True, scope="function")
+@pytest.fixture(scope="function")
 def setup_requirements():
     """Setup core requirements for each test and clean up after."""
     # Setup: Load core requirements

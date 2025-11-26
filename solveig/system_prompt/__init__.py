@@ -3,7 +3,7 @@ import platform
 from typing import get_args
 
 from solveig.config import SolveigConfig
-from solveig.schema.message import get_requirements_union
+from solveig.schema.dynamic import get_requirements_union
 from solveig.system_prompt.examples import long
 
 try:

@@ -71,7 +71,8 @@ class REQUIREMENTS:
         Single unified registration method.
         """
         cls.all_requirements[requirement_class.__name__] = requirement_class
-        cls.registered[requirement_class.__name__] = requirement_class
+        if requirement_class in CORE_REQUIREMENTS:
+            cls.registered[requirement_class.__name__] = requirement_class
         return requirement_class
 
     @classmethod

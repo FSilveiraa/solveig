@@ -243,6 +243,7 @@ class TestMessageSerialization:
 
         # THE CRITICAL TEST: Verify result contains actual output data
         result_json = content["responses"][1]
+        assert "requirement" not in result_json # Ensure the Requirement object itself is excluded
         assert result_json["accepted"] is True
         assert result_json["success"] is True
         assert result_json["command"] == "echo test"
