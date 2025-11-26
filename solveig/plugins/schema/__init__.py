@@ -1,142 +1,81 @@
-"""Requirement plugins - new operation types that extend Solveig's capabilities."""
+"""
+Registry for dynamically discovered plugin requirements.
+"""
 
-import importlib
-import pkgutil
+from typing import TYPE_CHECKING, TypeVar
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
+from solveig.plugins.utils import _discover_and_filter_plugins
 
-"""
-TODO: Review this and the general schema dependencies mapping
-Note on local imports: this is required to fix a circular import error.
+# The `if TYPE_CHECKING:` block is a standard Python trick to solve a circular import problem.
+#
+# The Problem:
+# 1. This file needs to know what a `Requirement` is for type hinting (`def register(cls: type[Requirement])`).
+# 2. However, the file that defines `Requirement` (`solveig/schema/requirement/base.py`) needs
+#    to import from the `plugins` package to run hooks.
+# 3. This creates a circular dependency: `plugins` -> `schema` -> `plugins`, which would crash the application.
+#
+# The Solution:
+# - At RUNTIME, `TYPE_CHECKING` is `False`. Python skips this import, breaking the circle. The code
+#   still works due to Python's dynamic nature ("duck typing").
+# - During STATIC ANALYSIS (when you run `mypy`), `TYPE_CHECKING` is `True`. The import happens,
+#   allowing `mypy` to correctly validate the types.
+if TYPE_CHECKING:
+    from solveig.schema.requirement.base import Requirement
 
-Requirements and the Plugins system rely on each other. requirements/base.py has to import plugins so
-they can run hooks, and plugins/schema/__init__.py (this file) has to import
-requirements/__init__.py::REQUIREMENTS so it can register plugin requirements on it, creating an import loop.
-It's also important to stress that the ordering of all this matters: we need to first load core schema
-requirements, then plugin requirements, then finally hooks. Currently this is done by just importing
-solveig.schema (which auto-registers core requirements), then sync_run.py calls
-plugins/__init__.py::initialize_plugins() which in turn first loads the extra requirements (here), then
-loads the hooks, then filters both in the same order.
-Both the loading and filtering of extra requirements do a local import of the central REQUIREMENTS registry.
-Any alternative solution I can think of that attempts to break this involves either a convoluted 3rd layer
-that joins  requirements+hooks and runs the whole thing (aka requirements no longer run hooks themselves),
-or registering plugin requirements separately and having message.py join them, and the order above still
-has to be maintained.
-
-This doesn't mean core requirements or core solveig code relies on individual plugins.
-It means the CORE Requirements system relies on the CORE Plugins system, and vice-versa.
-"""
+# A TypeVar is used to tell the type checker that the decorator returns the exact same class
+# that it received as an argument. This preserves the specific type (e.g., `TreeRequirement`)
+# for better static analysis downstream.
+T = TypeVar("T", bound="Requirement")
 
 
-def _get_plugin_name_from_class(cls: type) -> str:
-    """Extract plugin name from class module path."""
-    module = cls.__module__
-    if ".requirements." in module:
-        # Extract plugin name from module path like 'solveig.plugins.requirements.tree'
-        return module.split(".requirements.")[-1]
-    return "unknown"
+class PLUGIN_REQUIREMENTS:
+    all: dict[str, type["Requirement"]] = {}
+    active: dict[str, type["Requirement"]] = {}
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError("PLUGIN_REQUIREMENTS is a static registry and cannot be instantiated")
+
+    @classmethod
+    def register(cls, requirement_class: T) -> T:
+        """
+        Registers a plugin requirement. Used as a decorator.
+        Adds the requirement to the all_plugins master list.
+        """
+        cls.all[requirement_class.__name__] = requirement_class
+        return requirement_class
+
+    @classmethod
+    def clear(cls):
+        """Clear all registered plugin requirements (used by tests)."""
+        cls.active.clear()
 
 
 async def load_and_filter_requirements(
-    interface: SolveigInterface,
-    enabled_plugins: set[str] | SolveigConfig | None,
-    allow_all: bool = False,
-) -> dict[str, int]:
+    config: SolveigConfig, interface: SolveigInterface
+):
     """
-    Discover, load, and filter requirement plugins in one step.
+    Discover, load, and filter requirement plugins, and update the UI.
     Returns statistics dictionary.
     """
-    import sys
+    PLUGIN_REQUIREMENTS.clear()
 
-    from solveig.schema import REQUIREMENTS, CORE_REQUIREMENTS
-
-    REQUIREMENTS.registered.clear()
-    for name, requirement_class in REQUIREMENTS.all_requirements.items():
-        if requirement_class in CORE_REQUIREMENTS:
-            REQUIREMENTS.register_requirement(requirement_class)
-
-
-    # plugin_names_to_remove = [
-    #     name
-    #     for name, req_class in REQUIREMENTS.all_requirements.items()
-    #     if req_class not in CORE_REQUIREMENTS
-    #     # if "schema.requirement" not in req_class.__module__
-    # ]
-
-    # Clear only plugin requirements, keep core requirements
-    # plugin_names_to_remove = [
-    #     name
-    #     for name, req_class in REQUIREMENTS.all_requirements.items()
-    #     if req_class not in CORE_REQUIREMENTS
-    #     # if "schema.requirement" not in req_class.__module__
-    # ]
-    # for name in plugin_names_to_remove:
-    #     REQUIREMENTS.all_requirements.pop(name, None)
-    #     REQUIREMENTS.registered.pop(name, None)
-
-    # Convert config to plugin set
-    if isinstance(enabled_plugins, SolveigConfig):
-        enabled_plugins = set(enabled_plugins.plugins.keys())
-
-    loaded_plugins = 0
-    active_plugins = 0
-
-    # Load all requirement plugins
-    for _, module_name, is_pkg in pkgutil.iter_modules(__path__, __name__ + "."):
-        if not is_pkg and not module_name.endswith(".__init__"):
-            plugin_name = module_name.split(".")[-1]
-
-            try:
-                before_keys = set(REQUIREMENTS.all_requirements.keys())
-
-                # Import/reload module
-                if module_name in sys.modules:
-                    importlib.reload(sys.modules[module_name])
-                else:
-                    importlib.import_module(module_name)
-
-                # Find newly added requirements
-                new_requirement_names = [
-                    name
-                    for name in REQUIREMENTS.all_requirements.keys()
-                    if name not in before_keys
-                ]
-
-                if new_requirement_names:
-                    loaded_plugins += 1
-
-                    # Filter - add to active if enabled
-                    if allow_all or (
-                        enabled_plugins and plugin_name in enabled_plugins
-                    ):
-                        for req_name in new_requirement_names:
-                            req_class = REQUIREMENTS.all_requirements[req_name]
-                            # TODO review this, right now this file edits fields of REQUIREMENTS directly
-                            REQUIREMENTS.registered[req_name] = req_class
-                        active_plugins += 1
-                        await interface.display_text(f"'{plugin_name}': Loaded")
-                    else:
-                        await interface.display_warning(
-                            f"'{plugin_name}': Skipped (missing from config)"
-                        )
-
-            except Exception as e:
-                await interface.display_error(
-                    f"Requirement plugin {module_name}.{plugin_name}: {e}"
-                )
-
-    from solveig.schema import CORE_REQUIREMENTS
-
-    total_active = len(REQUIREMENTS.registered)
-    await interface.display_text(
-        f"Requirements: {len(CORE_REQUIREMENTS)} core, {loaded_plugins} plugins ({active_plugins} active), {total_active} total"
+    await _discover_and_filter_plugins(
+        plugin_module_path="solveig.plugins.schema",
+        interface=interface,
     )
 
-    return {"loaded": loaded_plugins, "active": total_active}
+    for plugin_name, requirement_class in PLUGIN_REQUIREMENTS.all.items():
+        if config.plugins and plugin_name in config.plugins:
+            PLUGIN_REQUIREMENTS.active[plugin_name] = requirement_class
+            await interface.display_success(f"'{plugin_name}': Loaded")
+        else:
+            await interface.display_warning(
+                f"'{plugin_name}': Skipped (missing from config)"
+            )
 
 
-# Expose the essential interface
-__all__ = [
-    "load_and_filter_requirements",
-]
+register_requirement = PLUGIN_REQUIREMENTS.register
+
+__all__ = ["PLUGIN_REQUIREMENTS", "register_requirement", "load_and_filter_requirements"]

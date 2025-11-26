@@ -6,7 +6,7 @@ This module defines the data structures used for:
 - Requirements (file operations, shell commands)
 - Results and error handling
 """
-
+# from . import REQUIREMENTS
 from .requirement import (  # noqa: F401
     CommandRequirement,
     CopyRequirement,
@@ -54,39 +54,10 @@ for requirement in CORE_REQUIREMENTS:
 for result in CORE_RESULTS:
     result.model_rebuild()
 
-
-class REQUIREMENTS:
-    """Registry for dynamically discovered requirement plugins."""
-
-    registered: dict[str, type["Requirement"]] = {}
-    all_requirements: dict[str, type["Requirement"]] = {}
-
-    def __new__(cls, *args, **kwargs):
-        raise TypeError("REQUIREMENTS is a static registry and cannot be instantiated")
-
-    @classmethod
-    def register_requirement(cls, requirement_class: type["Requirement"]):
-        """
-        Register any requirement class (core or plugin).
-        Single unified registration method.
-        """
-        cls.all_requirements[requirement_class.__name__] = requirement_class
-        if requirement_class in CORE_REQUIREMENTS:
-            cls.registered[requirement_class.__name__] = requirement_class
-        return requirement_class
-
-    @classmethod
-    def clear_requirements(cls):
-        """Clear all registered requirements (used by tests)."""
-        cls.registered.clear()
-        cls.all_requirements.clear()
-
-
-# Initialize with core requirements using the list
-for requirement in CORE_REQUIREMENTS:
-    REQUIREMENTS.register_requirement(requirement)
+# Initialize master list with core requirements
+# for requirement in CORE_REQUIREMENTS:
+#     REQUIREMENTS.register(requirement)
 
 # Export the registration decorator for direct use
-register_requirement = REQUIREMENTS.register_requirement
 
-__all__ = ["REQUIREMENTS", "CORE_REQUIREMENTS", "Requirement", "register_requirement"]
+__all__ = ["CORE_REQUIREMENTS", "Requirement"]

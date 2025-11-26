@@ -1,7 +1,6 @@
 """
-Handles the dynamic generation of Pydantic models for the LLM's response format.
-This logic is separated to avoid circular import issues between the message schema
-and the system prompt generation.
+Handles the dynamic generation of Pydantic models and filtering of active requirements.
+This logic is centralized here to avoid circular import issues.
 """
 import json
 from typing import cast, Union
@@ -9,8 +8,35 @@ from typing import cast, Union
 from pydantic import Field, create_model
 
 from solveig import SolveigConfig, utils
-from solveig.schema import REQUIREMENTS, Requirement
+from solveig.plugins.schema import PLUGIN_REQUIREMENTS
+from solveig.schema.requirement import CORE_REQUIREMENTS, Requirement, CommandRequirement
 from solveig.schema.message.assistant import AssistantMessage
+
+
+def get_active_requirements(config: SolveigConfig) -> list[type[Requirement]]:
+    """
+    Builds the list of active requirements for this run based on config.
+    This is the single source of truth for the application's active toolset.
+    It does NOT perform any UI operations.
+    """
+    active_reqs: list[type[Requirement]] = []
+
+    # Add CORE requirements (always active by default)
+    active_reqs.extend(CORE_REQUIREMENTS)
+
+    # Add enabled PLUGIN requirements
+    if config.plugins:
+        for name, req_class in PLUGIN_REQUIREMENTS.all_plugins.items():
+            if name in config.plugins:
+                active_reqs.append(req_class)
+
+    # Filter out CommandRequirement if no_commands is set
+    if config.no_commands:
+        # Ensure we only remove it if it was present (e.g., in CORE_REQUIREMENTS)
+        if CommandRequirement in active_reqs:
+            active_reqs.remove(CommandRequirement)
+
+    return active_reqs
 
 
 class CACHED_RESPONSE_MODEL:
@@ -29,22 +55,11 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     ):
         return
 
-    try:
-        all_active_requirements: list[type[Requirement]] = list(
-            REQUIREMENTS.registered.values()
-        )
-    except (ImportError, AttributeError):
-        all_active_requirements = []
-
-    if config and config.no_commands:
-        from solveig.schema.requirement.command import CommandRequirement
-
-        all_active_requirements = [
-            req for req in all_active_requirements if req != CommandRequirement
-        ]
+    # Get the final, filtered list of active requirements
+    all_active_requirements = get_active_requirements(config)
 
     if not all_active_requirements:
-        raise ValueError("No response model available for LLM to use: The requirements registry is empty.")
+        raise ValueError("No response model available for LLM to use: The active requirements list is empty.")
 
     requirements_union = cast(type[Requirement], Union[*all_active_requirements])
 

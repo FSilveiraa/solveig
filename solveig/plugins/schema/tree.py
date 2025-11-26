@@ -8,8 +8,7 @@ from pydantic import Field, field_validator
 
 from solveig.interface import SolveigInterface
 
-# Import the registration decorator directly
-from solveig.schema import register_requirement
+from solveig.plugins.schema import register_requirement
 from solveig.schema.requirement.base import (
     Requirement,
     validate_non_empty_path,

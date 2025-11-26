@@ -110,11 +110,12 @@ def mock_asyncio_subprocess(request):
 def setup_requirements():
     """Setup core requirements for each test and clean up after."""
     # Setup: Load core requirements
-    from solveig.schema import CORE_REQUIREMENTS, REQUIREMENTS
+    from solveig.schema import CORE_REQUIREMENTS
+    from solveig.schema import REQUIREMENTS
 
     REQUIREMENTS.clear_requirements()
     for requirement in CORE_REQUIREMENTS:
-        REQUIREMENTS.register_requirement(requirement)
+        REQUIREMENTS.register(requirement)
 
     yield  # Let the test run
 

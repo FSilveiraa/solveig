@@ -14,8 +14,7 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
-from solveig.plugins import initialize_plugins
-from solveig.schema.dynamic import get_response_model
+from solveig.schema.dynamic import get_active_requirements, get_response_model
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
@@ -153,7 +152,6 @@ async def main_loop(
     await asyncio.sleep(0)
     await interface.update_stats(url=config.url, model=config.model)
 
-    await initialize_plugins(config=config, interface=interface)
     if message_history is None:
         message_history = await get_message_history(config, interface)
 
