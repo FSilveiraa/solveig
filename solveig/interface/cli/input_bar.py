@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Iterable
 from enum import Enum
 
-from textual.containers import Container, Horizontal
+from textual.containers import Container
 from textual.events import Key
 from textual.message import Message
 from textual.widgets import OptionList, TextArea

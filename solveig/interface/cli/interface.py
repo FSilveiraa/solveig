@@ -9,6 +9,7 @@ from os import PathLike
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
+from textual.widgets import Markdown
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
@@ -121,7 +122,9 @@ class TerminalInterface(SolveigInterface):
 
     async def display_comment(self, message: str) -> None:
         """Display a comment message."""
-        await self.display_text(f" 🗩  {message}")
+        # HACK: the string below contains a magic character that lets it render with proper spacing
+        # TODO: move this to a dedicated method in TextualAPp
+        await self.app._conversation_area._add_element(Markdown(f"🗩 ⠀{message}"))
 
     async def display_tree(
         self,

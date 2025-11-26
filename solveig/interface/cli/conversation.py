@@ -32,33 +32,25 @@ class ConversationArea(ScrollableContainer):
         super().__init__(**kwargs)
         self._group_stack = []  # Stack of current group containers
 
+    async def _add_element(self, element):
+        """Add element to the scrollable container."""
+        # Add to current group or main area
+        target = self._group_stack[-1] if self._group_stack else self
+        await target.mount(element)
+        self.scroll_end()
+
     async def add_text(self, text: str, style: str = "text", markup: bool = False):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "text" else style
-        text_widget = Static(text, classes=style_class, markup=markup)
-
-        # Add to current group or main area
-        target = self._group_stack[-1] if self._group_stack else self
-        await target.mount(text_widget)
-        self.scroll_end()
+        await self._add_element(Static(text, classes=style_class, markup=markup))
 
     async def add_text_block(self, content: str | Syntax, title: str | None = None):
         """Add a text block with border and optional title."""
-        text_block = TextBox(content, title=title)
-
-        # Add to current group or main area
-        target = self._group_stack[-1] if self._group_stack else self
-        await target.mount(text_block)
-        self.scroll_end()
+        await self._add_element(TextBox(content, title=title))
 
     async def add_section_header(self, title: str, width: int = 80):
         """Add a section header."""
-        section_header = SectionHeader(title, width)
-
-        # Add to current group or main area
-        target = self._group_stack[-1] if self._group_stack else self
-        await target.mount(section_header)
-        self.scroll_end()
+        await self._add_element(SectionHeader(title, width))
 
     async def add_tree_display(
         self,
@@ -70,11 +62,7 @@ class ConversationArea(ScrollableContainer):
         tree_widget = TreeDisplay(metadata, display_metadata)
         if title:
             tree_widget.border_title = title
-
-        # Add to current group or main area
-        target = self._group_stack[-1] if self._group_stack else self
-        await target.mount(tree_widget)
-        self.scroll_end()
+        await self._add_element(tree_widget)
 
     async def enter_group(self, title: str):
         """Enter a new group container."""
