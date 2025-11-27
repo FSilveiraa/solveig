@@ -54,10 +54,5 @@ for requirement in CORE_REQUIREMENTS:
 for result in CORE_RESULTS:
     result.model_rebuild()
 
-# Initialize master list with core requirements
-# for requirement in CORE_REQUIREMENTS:
-#     REQUIREMENTS.register(requirement)
-
-# Export the registration decorator for direct use
 
 __all__ = ["CORE_REQUIREMENTS", "Requirement"]

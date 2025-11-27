@@ -4,7 +4,7 @@ import pkgutil
 from solveig.interface import SolveigInterface
 
 
-async def _discover_and_filter_plugins(
+async def _discover_plugins(
     interface: SolveigInterface,
     plugin_module_path: str,
 ) -> tuple[int, int]:

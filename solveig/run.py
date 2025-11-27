@@ -14,7 +14,7 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
-from solveig.schema.dynamic import get_active_requirements, get_response_model
+from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,

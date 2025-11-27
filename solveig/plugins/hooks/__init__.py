@@ -3,7 +3,7 @@ from typing import Callable, TypeAlias
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.plugins.utils import _discover_and_filter_plugins
+from solveig.plugins.utils import _discover_plugins
 
 # [(callable, [CommandRequirement, ReadRequirement])]
 HookEntry: TypeAlias = list[tuple[Callable, tuple[type, ...] | None]]
@@ -36,9 +36,6 @@ def before(requirements: tuple[type, ...] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
         HOOKS.all[plugin_name][0].append((fun, requirements))
-        # if plugin_name not in HOOKS.BEFORE.all:
-        #     HOOKS.BEFORE.all[plugin_name] = []
-        # HOOKS.all_hooks[plugin_name][0][fun.__name__] = (fun, requirements)
         return fun
     return register
 
@@ -47,9 +44,6 @@ def after(requirements: tuple[type, ...] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
         HOOKS.all[plugin_name][1].append((fun, requirements))
-        # if plugin_name not in HOOKS.all_hooks:
-        #     HOOKS.all_hooks[plugin_name] = ({}, {})
-        # HOOKS.all_hooks[plugin_name][1][fun.__name__] = (fun, requirements)
         return fun
     return register
 
@@ -64,7 +58,7 @@ async def load_and_filter_hooks(
     HOOKS.before.clear()
     HOOKS.after.clear()
 
-    await _discover_and_filter_plugins(
+    await _discover_plugins(
         plugin_module_path="solveig.plugins.hooks",
         interface=interface,
     )

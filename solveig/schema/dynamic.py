@@ -13,32 +13,6 @@ from solveig.schema.requirement import CORE_REQUIREMENTS, Requirement, CommandRe
 from solveig.schema.message.assistant import AssistantMessage
 
 
-def get_active_requirements(config: SolveigConfig) -> list[type[Requirement]]:
-    """
-    Builds the list of active requirements for this run based on config.
-    This is the single source of truth for the application's active toolset.
-    It does NOT perform any UI operations.
-    """
-    active_reqs: list[type[Requirement]] = []
-
-    # Add CORE requirements (always active by default)
-    active_reqs.extend(CORE_REQUIREMENTS)
-
-    # Add enabled PLUGIN requirements
-    if config.plugins:
-        for name, req_class in PLUGIN_REQUIREMENTS.all_plugins.items():
-            if name in config.plugins:
-                active_reqs.append(req_class)
-
-    # Filter out CommandRequirement if no_commands is set
-    if config.no_commands:
-        # Ensure we only remove it if it was present (e.g., in CORE_REQUIREMENTS)
-        if CommandRequirement in active_reqs:
-            active_reqs.remove(CommandRequirement)
-
-    return active_reqs
-
-
 class CACHED_RESPONSE_MODEL:
     config_hash: str | None = None
     requirements_union: type[Requirement] | None = None
@@ -55,19 +29,26 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     ):
         return
 
-    # Get the final, filtered list of active requirements
-    all_active_requirements = get_active_requirements(config)
+    # Get the active requirements by combining the Core and (filtered) Plugin Requirements
+    active_requirements: list[type[Requirement]] = list(CORE_REQUIREMENTS)
+    active_requirements.extend(PLUGIN_REQUIREMENTS.active.values())
 
-    if not all_active_requirements:
+    # Apply config-based filters
+    if config.no_commands:
+        if CommandRequirement in active_requirements:
+            active_requirements.remove(CommandRequirement)
+
+    if not active_requirements:
         raise ValueError("No response model available for LLM to use: The active requirements list is empty.")
 
-    requirements_union = cast(type[Requirement], Union[*all_active_requirements])
+    requirements_union = cast(type[Requirement], Union[*active_requirements])
 
     CACHED_RESPONSE_MODEL.config_hash = config_hash
     CACHED_RESPONSE_MODEL.requirements_union = requirements_union
     CACHED_RESPONSE_MODEL.message_class = create_model(
         "DynamicAssistantMessage",
         requirements=(
+            # HACK: I can't find a way to signal to Mypy "this is a Union[Requirement]" through a cast
             list[requirements_union] | None,  # type: ignore[valid-type]
             Field(None),
         ),

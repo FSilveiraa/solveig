@@ -142,11 +142,13 @@ Integration tests check the interaction between components (e.g., testing that a
 
 ```python
 # In tests/integration/test_my_integration.py
+import os
 import pytest
+from solveig.utils.shell import get_persistent_shell
 
 @pytest.mark.no_subprocess_mocking # Allow real subprocesses
 @pytest.mark.no_file_mocking     # Allow real file I/O
-def test_real_command_in_temp_dir(tmp_path):
+async def test_real_command_in_temp_dir(tmp_path):
     # This test runs a real command inside a temporary directory.
     # 'tmp_path' is a pathlib.Path object provided by pytest.
     
@@ -154,7 +156,7 @@ def test_real_command_in_temp_dir(tmp_path):
     os.chdir(tmp_path)
 
     # 2. Run a real command
-    result = await persistent_shell.run("touch new_file.txt")
+    result = (await get_persistent_shell()).run("touch new_file.txt")
 
     # 3. Assert on the real state of the filesystem
     assert (tmp_path / "new_file.txt").exists()
@@ -179,3 +181,6 @@ For detailed plugin development guide, see [Plugins](./plugins.md).
 - Solveig uses a Textual CLI that turns your terminal into a very rich display that usually doesn't work well
 with most IDE's runners and debuggers. In Pycharm, you have to enable `Run/Debug Configurations -> Modify
 Options -> Emulate terminal in output console` for all configurations (add it to the template).
+
+- Use `HACK: Explanation of my hack` for anything that looks bad, but has a good reason to exist
+(ex: local imports, mypy type ignores, ).

@@ -29,7 +29,7 @@ class BaseSolveigModel(BaseModel):
             return result
         # NOTE: Not really a hack, but if you don't do this and call model_dump()
         # on a sub-class of an abstract BaseModel, it will only dump the fields on
-        # the abstract. If you call BaseMessage.model_dump() on a child object,
+        # the abstract. If you call BaseMessage.model_dump(o) on a child object,
         # it won't include fields from the child
         elif isinstance(obj, BaseModel):
             return obj.model_dump()

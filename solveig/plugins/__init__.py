@@ -16,7 +16,6 @@ async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface)
     """
     async with interface.with_group("Plugins"):
         async with interface.with_group("Schema"):
-            # TODO: missing
             req_stats = await load_and_filter_requirements(config, interface)
 
         async with interface.with_group("Hooks"):
