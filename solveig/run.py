@@ -14,6 +14,7 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
+from solveig.plugins import initialize_plugins
 from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import (
     AssistantMessage,
@@ -38,26 +39,6 @@ async def get_message_history(
         encoder=config.encoder,
     )
     return message_history
-
-
-# async def update_stats(llm_response, message_history, interface):
-#     try:
-#         raw_response = llm_response._raw_response
-#     except AttributeError:
-#         pass
-#     else:
-#         # Update token count
-#         if raw_response.usage:
-#             message_history.record_api_usage(raw_response.usage)
-#             await interface.update_stats(
-#                 tokens=(
-#                     message_history.total_tokens_sent,
-#                     message_history.total_tokens_received,
-#                 )
-#             )
-#         # Update model name
-#         if raw_response.model:
-#             await interface.update_stats(model=raw_response.model)
 
 
 async def send_message_to_llm_with_retry(
@@ -155,6 +136,7 @@ async def main_loop(
     if message_history is None:
         message_history = await get_message_history(config, interface)
 
+    await initialize_plugins(config=config, interface=interface)
     # Pass the message history's input method to the interface
     interface.set_input_handler(message_history.add_user_comment)
 

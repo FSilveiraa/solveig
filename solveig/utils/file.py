@@ -4,6 +4,7 @@ import grp
 import os
 import pwd
 import shutil
+from codecs import ignore_errors
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath

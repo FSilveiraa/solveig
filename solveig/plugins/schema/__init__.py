@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.plugins.utils import _discover_plugins
+from solveig.plugins.utils import rescan_and_load_plugins
 
 # The `if TYPE_CHECKING:` block is a standard Python trick to solve a circular import problem.
 #
@@ -62,7 +62,7 @@ async def load_and_filter_requirements(
     """
     PLUGIN_REQUIREMENTS.clear()
 
-    await _discover_plugins(
+    await rescan_and_load_plugins(
         plugin_module_path="solveig.plugins.schema",
         interface=interface,
     )

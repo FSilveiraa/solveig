@@ -3,7 +3,7 @@ from typing import Callable, TypeAlias
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.plugins.utils import _discover_plugins
+from solveig.plugins.utils import rescan_and_load_plugins
 
 # [(callable, [CommandRequirement, ReadRequirement])]
 HookEntry: TypeAlias = list[tuple[Callable, tuple[type, ...] | None]]
@@ -55,10 +55,9 @@ async def load_and_filter_hooks(
     Discover, load, and filter hook plugins, and update the UI.
     Returns statistics dictionary.
     """
-    HOOKS.before.clear()
-    HOOKS.after.clear()
+    clear_hooks()
 
-    await _discover_plugins(
+    await rescan_and_load_plugins(
         plugin_module_path="solveig.plugins.hooks",
         interface=interface,
     )

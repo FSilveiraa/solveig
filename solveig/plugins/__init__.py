@@ -16,15 +16,10 @@ async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface)
     """
     async with interface.with_group("Plugins"):
         async with interface.with_group("Schema"):
-            req_stats = await load_and_filter_requirements(config, interface)
+            await load_and_filter_requirements(config, interface)
 
         async with interface.with_group("Hooks"):
-            hook_stats = await hooks.load_and_filter_hooks(config, interface)
-
-        # Print the final summary.
-        await interface.display_text(
-            f"Plugin system ready: {req_stats['active']} requirements, {hook_stats['active']} hooks"
-        )
+            await load_and_filter_hooks(config, interface)
 
 
 def clear_plugins():

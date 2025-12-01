@@ -65,11 +65,17 @@ async def run_async_mock(
     mock_messages = [
         AssistantMessage(
             comment="Test",
+            tasks=[
+                Task(description="Read the contents of ~/Sync", status="completed"),
+                Task(
+                    description="Read suspicious files inside ~/Sync", status="ongoing"
+                ),
+                Task(
+                    description="Provide a summary of contents, focused on safety and functionality"
+                ),
+            ],
             requirements=[
                 TreeRequirement(comment="Test comment", path="~/Sync"),
-                ReadRequirement(
-                    comment="test read", path="~/Sync/", metadata_only=True
-                ),
                 ReadRequirement(
                     comment="test read", path="~/Sync/app.log", metadata_only=False
                 ),
@@ -107,49 +113,6 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
         ),
     ]
 
-    mock_messages = [
-        AssistantMessage(
-            comment="",
-            tasks=[
-                Task(description="Read the contents of ~/Sync", status="completed"),
-                Task(
-                    description="Read suspicious files inside ~/Sync", status="ongoing"
-                ),
-                Task(
-                    description="Provide a summary of contents, focused on safety and functionality"
-                ),
-            ],
-            requirements=[
-                ReadRequirement(
-                    comment="Test read",
-                    path="~/Sync/",
-                    metadata_only=True,
-                )
-            ],
-        )
-    ]
-
-    mock_messages = [
-        AssistantMessage(
-            comment="Testing dangerous commands for shellcheck",
-            tasks=[
-                Task(description="Test INFO", status="ongoing"),
-                Task(description="Test ERROR", status="pending"),
-            ],
-            requirements=[
-                CommandRequirement(
-                    comment="Unquoted var, should raise info",
-                    timeout=10,
-                    command="""VAR="hello world"; echo $VAR""",
-                ),
-                CommandRequirement(
-                    comment="Missing `fi` in `if` statement",
-                    timeout=10,
-                    command="""if true; then echo "hello\"""",
-                ),
-            ],
-        )
-    ]
 
     if mock_messages is None:
         from solveig.system_prompt.examples.long import EXAMPLE
