@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # A TypeVar is used to tell the type checker that the decorator returns the exact same class
 # that it received as an argument. This preserves the specific type (e.g., `TreeRequirement`)
 # for better static analysis downstream.
-T = TypeVar("T", bound="Requirement")
+T = TypeVar("T", bound=type["Requirement"])
 
 
 class PLUGIN_REQUIREMENTS:
@@ -43,7 +43,7 @@ class PLUGIN_REQUIREMENTS:
     def register(cls, requirement_class: T) -> T:
         """
         Registers a plugin requirement. Used as a decorator.
-        Adds the requirement to the all_plugins master list.
+        Adds the requirement to the `all` hook plugins list.
         """
         cls.all[requirement_class.__name__] = requirement_class
         return requirement_class
@@ -60,7 +60,6 @@ async def load_and_filter_requirements(
 ):
     """
     Discover, load, and filter requirement plugins, and update the UI.
-    Returns statistics dictionary.
     """
     PLUGIN_REQUIREMENTS.clear()
 

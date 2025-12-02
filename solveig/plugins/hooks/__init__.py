@@ -5,8 +5,9 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
 
-# [(callable, [CommandRequirement, ReadRequirement])]
-HookEntry: type = list[tuple[Callable, tuple[type, ...] | None]]
+
+# Don't ask me to explain what meta-level of Python we're on at this point, but MyPy needs this
+type HookEntry = list[tuple[Callable, tuple[type, ...] | None]]
 
 
 class HOOKS:
@@ -53,7 +54,6 @@ def after(requirements: tuple[type, ...] | None = None):
 async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
     """
     Discover, load, and filter hook plugins, and update the UI.
-    Returns statistics dictionary.
     """
     clear_hooks()
 
