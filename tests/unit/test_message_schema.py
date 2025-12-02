@@ -10,9 +10,8 @@ from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
     UserComment,
-    get_requirements_union,
-    get_response_model,
 )
+from solveig.schema.dynamic import get_response_model, get_requirements_union
 from solveig.schema.message.user import UserMessage
 from solveig.schema.requirement import ReadRequirement, WriteRequirement
 from solveig.schema.requirement.command import CommandRequirement

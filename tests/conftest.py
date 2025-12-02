@@ -8,8 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solveig.plugins import clear_plugins
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
+from solveig.config import SolveigConfig
+from solveig.plugins import clear_plugins, initialize_plugins
+from tests.mocks import MockInterface
+
 
 
 @pytest.fixture
@@ -106,18 +109,20 @@ def mock_asyncio_subprocess(request):
         )()
 
 
-@pytest.fixture(scope="function")
-def setup_requirements():
-    """Setup core requirements for each test and clean up after."""
-    # Setup: Load core requirements
-    from solveig.schema import CORE_REQUIREMENTS
-    from solveig.schema import REQUIREMENTS
+@pytest.fixture
+async def load_plugins():
+    """
+    Provides a factory function to load plugins for a specific test.
 
-    REQUIREMENTS.clear_requirements()
-    for requirement in CORE_REQUIREMENTS:
-        REQUIREMENTS.register(requirement)
+    This follows an explicit setup pattern, where plugins are off by
+    default and tests must opt-in to loading them.
+    """
+    # The factory function that will be yielded to the test
+    async def _loader(config: SolveigConfig):
+        interface = MockInterface()
+        await initialize_plugins(config, interface)
 
-    yield  # Let the test run
+    yield _loader
 
     # Teardown: Clean up plugin state after each test
     clear_plugins()

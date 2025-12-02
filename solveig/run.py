@@ -119,8 +119,8 @@ async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
     llm_client: Instructor,
-    user_prompt: str = "",
-    message_history: MessageHistory | None = None,
+    user_prompt: str,
+    message_history: MessageHistory,
 ):
     """Main async conversation loop."""
     if config.verbose:
@@ -132,9 +132,6 @@ async def main_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
     await interface.update_stats(url=config.url, model=config.model)
-
-    if message_history is None:
-        message_history = await get_message_history(config, interface)
 
     await initialize_plugins(config=config, interface=interface)
     # Pass the message history's input method to the interface
@@ -201,10 +198,11 @@ async def run_async(
     interface: SolveigInterface,
     llm_client: Instructor,
     user_prompt: str = "",
-    message_history: MessageHistory | None = None,
-):
+    # message_history: MessageHistory | None = None,
+) -> MessageHistory:
     """Entry point for the async CLI with explicit dependencies."""
     loop_task = None
+    message_history = await get_message_history(config, interface)
     try:
         loop_task = asyncio.create_task(
             main_loop(
@@ -226,6 +224,7 @@ async def run_async(
             loop_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
+        return message_history
 
 
 async def amain():
@@ -240,7 +239,7 @@ async def amain():
     interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
 
     # Run the async main loop
-    await run_async(config, interface, llm_client, user_prompt, message_history=None)
+    await run_async(config, interface, llm_client, user_prompt)
 
 
 def main():

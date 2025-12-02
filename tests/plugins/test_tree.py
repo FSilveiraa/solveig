@@ -16,8 +16,11 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 class TestTreePlugin:
     """Test TreeRequirement plugin with real filesystem operations."""
 
-    async def test_tree_plugin_with_real_files(self):
+    async def test_tree_plugin_with_real_files(self, load_plugins):
         """Test tree plugin creates visual directory tree from real filesystem."""
+        # Enable the tree plugin for this test
+        config = DEFAULT_CONFIG.with_(plugins=["tree"])
+        await load_plugins(config)
 
         # Create real directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -104,8 +107,11 @@ class TestTreePlugin:
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
     @pytest.mark.no_file_mocking
-    async def test_tree_depth_limiting_and_user_interaction(self):
+    async def test_tree_depth_limiting_and_user_interaction(self, load_plugins):
         """Test tree with depth limits and user interaction through solve() method."""
+        # Enable the tree plugin for this test
+        config = DEFAULT_CONFIG.with_(plugins=["tree"])
+        await load_plugins(config)
         # Create temporary directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

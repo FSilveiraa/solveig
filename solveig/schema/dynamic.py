@@ -34,7 +34,7 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     active_requirements.extend(PLUGIN_REQUIREMENTS.active.values())
 
     # Apply config-based filters
-    if config.no_commands:
+    if config and config.no_commands:
         if CommandRequirement in active_requirements:
             active_requirements.remove(CommandRequirement)
 
@@ -70,9 +70,3 @@ def get_response_model(
     _ensure_requirements_union_cached(config)
     assert CACHED_RESPONSE_MODEL.message_class is not None
     return CACHED_RESPONSE_MODEL.message_class
-
-
-def get_response_model_json(config):
-    response_model = get_response_model(config)
-    schema = response_model.model_json_schema()
-    return json.dumps(schema, indent=2, default=utils.misc.default_json_serialize)

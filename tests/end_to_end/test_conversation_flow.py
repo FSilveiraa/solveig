@@ -1,5 +1,5 @@
 """Modern end-to-end tests for complete conversation loops with async architecture."""
-
+import asyncio
 import tempfile
 
 import pytest
@@ -14,17 +14,21 @@ pytestmark = [
     pytest.mark.no_subprocess_mocking,
 ]
 
-from solveig.run import run_async
+from solveig.run import run_async, get_message_history
 from solveig.schema.message import AssistantMessage, MessageHistory
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
-from tests.mocks import APIType, DEFAULT_CONFIG, MockInterface, create_mock_client
+from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
 
 class TestConversationFlow:
     """Test complete conversation flows using mock LLM client with async architecture."""
 
-    async def test_command_execution_flow(self):
+    async def test_command_execution_flow(self, load_plugins):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
+        # E2E tests should have all plugins loaded
+        config = DEFAULT_CONFIG # .with_(plugins=["tree", "shellcheck"])
+        await load_plugins(config)
+
         # LLM suggests safe diagnostic commands
         assistant_messages = [
             AssistantMessage(
@@ -86,8 +90,12 @@ class TestConversationFlow:
         # Verify subprocess communication was called for both commands
         # assert mock_subprocess.communicate.call_count == 2
 
-    async def test_file_operations_flow(self):
+    async def test_file_operations_flow(self, load_plugins):
         """Test file operations flow with mixed accept/decline responses."""
+        # E2E tests should have all plugins loaded
+        config = DEFAULT_CONFIG # .with_(plugins=["tree", "shellcheck"])
+        await load_plugins(config)
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
             temp_file_path = temp_dir_path / "new_file.txt"
@@ -162,8 +170,12 @@ class TestConversationFlow:
             assert "new_file.txt" in output
             assert "Summarizing directory contents" in output
 
-    async def test_command_error_handling(self):
+    async def test_command_error_handling(self, load_plugins):
         """Test error handling in command execution flow."""
+        # E2E tests should have all plugins loaded
+        config = DEFAULT_CONFIG.with_(plugins=["tree", "shellcheck"])
+        await load_plugins(config)
+
         assistant_messages = [
             AssistantMessage(
                 comment="Here's a failed command",
