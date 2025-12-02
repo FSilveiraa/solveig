@@ -5,10 +5,10 @@ from openai.types import CompletionUsage
 
 from solveig import APIType
 from solveig.interface import SolveigInterface
-from solveig.schema import RequirementResult
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.system import SystemMessage
 from solveig.schema.message.user import UserComment, UserMessage
+from solveig.schema.result import RequirementResult
 
 Message = SystemMessage | UserMessage | AssistantMessage
 

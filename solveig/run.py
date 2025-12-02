@@ -132,6 +132,10 @@ async def main_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
     await interface.update_stats(url=config.url, model=config.model)
+    if config.verbose:
+        await interface.display_text_block(
+            message_history.system_prompt, title="System Prompt"
+        )
 
     await initialize_plugins(config=config, interface=interface)
     # Pass the message history's input method to the interface
@@ -202,7 +206,15 @@ async def run_async(
 ) -> MessageHistory:
     """Entry point for the async CLI with explicit dependencies."""
     loop_task = None
-    message_history = await get_message_history(config, interface)
+
+    sys_prompt = system_prompt.get_system_prompt(config)
+    message_history = MessageHistory(
+        system_prompt=sys_prompt,
+        max_context=config.max_context,
+        api_type=config.api_type,
+        encoder=config.encoder,
+    )
+
     try:
         loop_task = asyncio.create_task(
             main_loop(

@@ -5,7 +5,6 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
 
-
 # Don't ask me to explain what meta-level of Python we're on at this point, but MyPy needs this
 type HookEntry = list[tuple[Callable, tuple[type, ...] | None]]
 
