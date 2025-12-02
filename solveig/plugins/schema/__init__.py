@@ -35,7 +35,9 @@ class PLUGIN_REQUIREMENTS:
     active: dict[str, type["Requirement"]] = {}
 
     def __new__(cls, *args, **kwargs):
-        raise TypeError("PLUGIN_REQUIREMENTS is a static registry and cannot be instantiated")
+        raise TypeError(
+            "PLUGIN_REQUIREMENTS is a static registry and cannot be instantiated"
+        )
 
     @classmethod
     def register(cls, requirement_class: T) -> T:
@@ -79,4 +81,8 @@ async def load_and_filter_requirements(
 
 register_requirement = PLUGIN_REQUIREMENTS.register
 
-__all__ = ["PLUGIN_REQUIREMENTS", "register_requirement", "load_and_filter_requirements"]
+__all__ = [
+    "PLUGIN_REQUIREMENTS",
+    "register_requirement",
+    "load_and_filter_requirements",
+]

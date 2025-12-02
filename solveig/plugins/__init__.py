@@ -5,7 +5,7 @@ Plugin system for Solveig.
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
-from .hooks import load_and_filter_hooks, clear_hooks
+from .hooks import clear_hooks, load_and_filter_hooks
 from .schema import PLUGIN_REQUIREMENTS, load_and_filter_requirements
 
 

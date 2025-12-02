@@ -2,15 +2,19 @@
 Handles the dynamic generation of Pydantic models and filtering of active requirements.
 This logic is centralized here to avoid circular import issues.
 """
-import json
-from typing import cast, Union
+
+from typing import Union, cast
 
 from pydantic import Field, create_model
 
-from solveig import SolveigConfig, utils
+from solveig import SolveigConfig
 from solveig.plugins.schema import PLUGIN_REQUIREMENTS
-from solveig.schema.requirement import CORE_REQUIREMENTS, Requirement, CommandRequirement
 from solveig.schema.message.assistant import AssistantMessage
+from solveig.schema.requirement import (
+    CORE_REQUIREMENTS,
+    CommandRequirement,
+    Requirement,
+)
 
 
 class CACHED_RESPONSE_MODEL:
@@ -21,7 +25,9 @@ class CACHED_RESPONSE_MODEL:
 
 def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
     """Internal helper to ensure requirements union is cached."""
-    config_hash = str(hash(config.to_json(indent=None, sort_keys=True))) if config else ""
+    config_hash = (
+        str(hash(config.to_json(indent=None, sort_keys=True))) if config else ""
+    )
 
     if (
         config_hash == CACHED_RESPONSE_MODEL.config_hash
@@ -39,7 +45,9 @@ def _ensure_requirements_union_cached(config: SolveigConfig | None = None):
             active_requirements.remove(CommandRequirement)
 
     if not active_requirements:
-        raise ValueError("No response model available for LLM to use: The active requirements list is empty.")
+        raise ValueError(
+            "No response model available for LLM to use: The active requirements list is empty."
+        )
 
     requirements_union = cast(type[Requirement], Union[*active_requirements])
 

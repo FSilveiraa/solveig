@@ -1,12 +1,12 @@
 from collections import defaultdict
-from typing import Callable, TypeAlias
+from collections.abc import Callable
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
 
 # [(callable, [CommandRequirement, ReadRequirement])]
-HookEntry: TypeAlias = list[tuple[Callable, tuple[type, ...] | None]]
+HookEntry: type = list[tuple[Callable, tuple[type, ...] | None]]
 
 
 class HOOKS:
@@ -37,6 +37,7 @@ def before(requirements: tuple[type, ...] | None = None):
         plugin_name = _get_plugin_name_from_function(fun)
         HOOKS.all[plugin_name][0].append((fun, requirements))
         return fun
+
     return register
 
 
@@ -45,12 +46,11 @@ def after(requirements: tuple[type, ...] | None = None):
         plugin_name = _get_plugin_name_from_function(fun)
         HOOKS.all[plugin_name][1].append((fun, requirements))
         return fun
+
     return register
 
 
-async def load_and_filter_hooks(
-    config: SolveigConfig, interface: SolveigInterface
-):
+async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
     """
     Discover, load, and filter hook plugins, and update the UI.
     Returns statistics dictionary.

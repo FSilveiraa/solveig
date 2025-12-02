@@ -35,9 +35,7 @@ async def rescan_and_load_plugins(
 
     # 2. Get Current State: Find all relevant modules already in memory.
     in_memory_modules = {
-        name
-        for name in sys.modules
-        if name.startswith(f"{plugin_module_path}.")
+        name for name in sys.modules if name.startswith(f"{plugin_module_path}.")
     }
 
     # 3. Unload Deleted Plugins: Remove any modules from memory that are no longer on disk.

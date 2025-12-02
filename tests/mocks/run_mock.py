@@ -9,7 +9,6 @@ from solveig.interface import TerminalInterface
 from solveig.plugins.schema.tree import TreeRequirement
 from solveig.run import run_async
 from solveig.schema import (
-    CommandRequirement,
     CopyRequirement,
     DeleteRequirement,
     MoveRequirement,
@@ -112,7 +111,6 @@ print(f"The Fibonacci Number of {n}th term is {result}" )
             ],
         ),
     ]
-
 
     if mock_messages is None:
         from solveig.system_prompt.examples.long import EXAMPLE

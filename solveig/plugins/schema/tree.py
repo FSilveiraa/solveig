@@ -7,7 +7,6 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from solveig.interface import SolveigInterface
-
 from solveig.plugins.schema import register_requirement
 from solveig.schema.requirement.base import (
     Requirement,

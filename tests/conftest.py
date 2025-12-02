@@ -8,11 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 from solveig.config import SolveigConfig
 from solveig.plugins import clear_plugins, initialize_plugins
+from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 from tests.mocks import MockInterface
-
 
 
 @pytest.fixture
@@ -117,6 +116,7 @@ async def load_plugins():
     This follows an explicit setup pattern, where plugins are off by
     default and tests must opt-in to loading them.
     """
+
     # The factory function that will be yielded to the test
     async def _loader(config: SolveigConfig):
         interface = MockInterface()

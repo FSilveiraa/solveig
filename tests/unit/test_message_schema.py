@@ -6,12 +6,12 @@ from typing import Union, get_args, get_origin
 import pytest
 
 from solveig.config import SolveigConfig
+from solveig.schema.dynamic import get_requirements_union, get_response_model
 from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
     UserComment,
 )
-from solveig.schema.dynamic import get_response_model, get_requirements_union
 from solveig.schema.message.user import UserMessage
 from solveig.schema.requirement import ReadRequirement, WriteRequirement
 from solveig.schema.requirement.command import CommandRequirement
@@ -242,7 +242,9 @@ class TestMessageSerialization:
 
         # THE CRITICAL TEST: Verify result contains actual output data
         result_json = content["responses"][1]
-        assert "requirement" not in result_json # Ensure the Requirement object itself is excluded
+        assert (
+            "requirement" not in result_json
+        )  # Ensure the Requirement object itself is excluded
         assert result_json["accepted"] is True
         assert result_json["success"] is True
         assert result_json["command"] == "echo test"

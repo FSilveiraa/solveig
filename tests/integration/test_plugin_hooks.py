@@ -388,7 +388,6 @@ class TestPluginFiltering:
         relies on a plugin, and we do it because the entire plugin import mechanism needs
         testing with actual plugin files
         """
-        from solveig.plugins import initialize_plugins
 
         # Config without shellcheck (default state)
         config_no_shellcheck = SolveigConfig(

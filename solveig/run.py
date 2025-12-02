@@ -224,7 +224,7 @@ async def run_async(
             loop_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
-        return message_history
+    return message_history
 
 
 async def amain():

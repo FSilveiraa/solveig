@@ -1,5 +1,5 @@
 """Modern end-to-end tests for complete conversation loops with async architecture."""
-import asyncio
+
 import tempfile
 
 import pytest
@@ -14,8 +14,8 @@ pytestmark = [
     pytest.mark.no_subprocess_mocking,
 ]
 
-from solveig.run import run_async, get_message_history
-from solveig.schema.message import AssistantMessage, MessageHistory
+from solveig.run import run_async
+from solveig.schema.message import AssistantMessage
 from solveig.schema.requirement import CommandRequirement, ReadRequirement
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
@@ -26,7 +26,7 @@ class TestConversationFlow:
     async def test_command_execution_flow(self, load_plugins):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG # .with_(plugins=["tree", "shellcheck"])
+        config = DEFAULT_CONFIG  # .with_(plugins=["tree", "shellcheck"])
         await load_plugins(config)
 
         # LLM suggests safe diagnostic commands
@@ -93,7 +93,7 @@ class TestConversationFlow:
     async def test_file_operations_flow(self, load_plugins):
         """Test file operations flow with mixed accept/decline responses."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG # .with_(plugins=["tree", "shellcheck"])
+        config = DEFAULT_CONFIG  # .with_(plugins=["tree", "shellcheck"])
         await load_plugins(config)
 
         with tempfile.TemporaryDirectory() as temp_dir:
