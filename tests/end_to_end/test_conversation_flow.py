@@ -26,7 +26,7 @@ class TestConversationFlow:
     async def test_command_execution_flow(self, load_plugins):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG  # .with_(plugins=["tree", "shellcheck"])
+        config = DEFAULT_CONFIG
         await load_plugins(config)
 
         # LLM suggests safe diagnostic commands
@@ -65,7 +65,7 @@ class TestConversationFlow:
 
         # Execute conversation, and capture the returned message_history
         message_history = await run_async(
-            config=DEFAULT_CONFIG,
+            config=config,
             interface=interface,
             llm_client=mock_client,
             user_prompt="Hey I'm lost in a shell",
@@ -93,7 +93,7 @@ class TestConversationFlow:
     async def test_file_operations_flow(self, load_plugins):
         """Test file operations flow with mixed accept/decline responses."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG  # .with_(plugins=["tree", "shellcheck"])
+        config = DEFAULT_CONFIG
         await load_plugins(config)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -158,10 +158,10 @@ class TestConversationFlow:
             )
 
             await run_async(
-                config=DEFAULT_CONFIG,
+                config=config,
+                user_prompt=f"Help me organize files in {temp_dir_path}",
                 interface=interface,
                 llm_client=mock_client,
-                user_prompt=f"Help me organize files in {temp_dir_path}",
             )
 
             # Verify mixed responses were handled
@@ -173,7 +173,7 @@ class TestConversationFlow:
     async def test_command_error_handling(self, load_plugins):
         """Test error handling in command execution flow."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG.with_(plugins=["tree", "shellcheck"])
+        config = DEFAULT_CONFIG
         await load_plugins(config)
 
         assistant_messages = [
@@ -197,10 +197,10 @@ class TestConversationFlow:
             ],
         )
         await run_async(
-            config=DEFAULT_CONFIG,
+            config=config,
+            user_prompt="Run a diagnostic",
             interface=interface,
             llm_client=mock_client,
-            user_prompt="Run a diagnostic",
         )
 
         # Verify error was handled gracefully

@@ -198,15 +198,26 @@ async def main_loop(
 
 
 async def run_async(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    llm_client: Instructor,
+    config: SolveigConfig | None = None,
     user_prompt: str = "",
+    interface: SolveigInterface | None = None,
+    llm_client: Instructor | None = None,
     # message_history: MessageHistory | None = None,
 ) -> MessageHistory:
     """Entry point for the async CLI with explicit dependencies."""
-    loop_task = None
+    # Parse config and run main loop
+    if not config:
+        config, user_prompt = await SolveigConfig.parse_config_and_prompt()
 
+    # Create LLM client and interface
+    llm_client = llm_client or llm.get_instructor_client(
+        api_type=config.api_type, api_key=config.api_key, url=config.url
+    )
+    interface = interface or TerminalInterface(
+        theme=config.theme, code_theme=config.code_theme
+    )
+
+    # Create the system prompt and pass it to the message history
     sys_prompt = system_prompt.get_system_prompt(config)
     message_history = MessageHistory(
         system_prompt=sys_prompt,
@@ -215,6 +226,8 @@ async def run_async(
         encoder=config.encoder,
     )
 
+    # Create an asyncio Task for the main loop since the Textual interface has to run in the foreground
+    loop_task = None
     try:
         loop_task = asyncio.create_task(
             main_loop(
@@ -239,24 +252,24 @@ async def run_async(
     return message_history
 
 
-async def amain():
-    """Async main that handles config parsing and setup."""
-    # Parse config and run main loop
-    config, user_prompt = await SolveigConfig.parse_config_and_prompt()
-
-    # Create LLM client and interface
-    llm_client = llm.get_instructor_client(
-        api_type=config.api_type, api_key=config.api_key, url=config.url
-    )
-    interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
-
-    # Run the async main loop
-    await run_async(config, interface, llm_client, user_prompt)
+# async def amain():
+#     """Async main that handles config parsing and setup."""
+#     # Parse config and run main loop
+#     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
+#
+#     # Create LLM client and interface
+#     llm_client = llm.get_instructor_client(
+#         api_type=config.api_type, api_key=config.api_key, url=config.url
+#     )
+#     interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
+#
+#     # Run the async main loop
+#     await run_async(config, interface, llm_client, user_prompt)
 
 
 def main():
     """Entry point for the main CLI."""
-    asyncio.run(amain())
+    asyncio.run(run_async())
 
 
 if __name__ == "__main__":
