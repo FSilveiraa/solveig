@@ -241,13 +241,7 @@ class TerminalInterface(SolveigInterface):
 
     async def display_section(self, title: str) -> None:
         """Display a section header with line extending to the right."""
-        # Get terminal width (fallback to 80 if not available)
-        try:
-            width = self.app.size.width
-        except AttributeError:
-            width = 80
-
-        await self.app._conversation_area.add_section_header(title, width)
+        await self.app._conversation_area.add_section_header(title)
 
     @asynccontextmanager
     async def with_group(self, title: str):

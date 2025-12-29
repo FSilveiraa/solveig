@@ -62,15 +62,29 @@ class CollapsibleTextBox(Widget):
 
 
 class SectionHeader(Static):
-    """A section header widget with line extending to the right."""
+    """A section header with responsive line extending to the right."""
 
-    def __init__(self, title: str, width: int = 80):
-        # Calculate the line with dashes
-        # Create the section line
-        header_prefix = f"━━━━ {title}"
-        remaining_width = width - len(header_prefix) - 3
-        dashes = "━" * max(0, remaining_width)
+    def __init__(self, title: str):
+        self._title = title
+        super().__init__("")
 
-        section_line = f"{header_prefix} {dashes}"
-        super().__init__(section_line)
-        self.add_class("section_header")
+    def on_mount(self):
+        """Update content when first mounted."""
+        self._update_content()
+
+    def on_resize(self):
+        """Recalculate line when terminal resizes."""
+        self._update_content()
+
+    def _update_content(self):
+        """Generate section line based on current width."""
+        # Get parent width, fallback to 80
+        try:
+            width = self.parent.size.width if self.parent else 80
+        except AttributeError:
+            width = 80
+
+        header = f"━━━━ {self._title}"
+        remaining = max(0, width - len(header) - 2)
+        line = "━" * remaining
+        self.update(f"{header} {line}")

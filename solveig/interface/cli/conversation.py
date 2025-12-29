@@ -59,9 +59,9 @@ class ConversationArea(ScrollableContainer):
             CollapsibleTextBox(content, title=title, collapsed=collapsed)
         )
 
-    async def add_section_header(self, title: str, width: int = 80):
+    async def add_section_header(self, title: str):
         """Add a section header."""
-        await self._add_element(SectionHeader(title, width))
+        await self._add_element(SectionHeader(title))
 
     async def add_tree_display(
         self,
@@ -168,7 +168,7 @@ class ConversationArea(ScrollableContainer):
             color: {theme.section};
             text-style: bold;
             margin: 1 0;
-            padding: 0 0;
+            padding: 0;
         }}
 
         .group_container {{
