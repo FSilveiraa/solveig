@@ -71,7 +71,10 @@ async def send_message_to_llm_with_retry(
                     message = raw.choices[0].message
                     if hasattr(message, "reasoning") and message.reasoning:
                         assistant_response.reasoning = message.reasoning
-                    if hasattr(message, "reasoning_details") and message.reasoning_details:
+                    if (
+                        hasattr(message, "reasoning_details")
+                        and message.reasoning_details
+                    ):
                         assistant_response.reasoning_details = message.reasoning_details
 
             # Add the message to the history, this also updates

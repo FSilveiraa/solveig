@@ -3,6 +3,7 @@
 This module provides base collapsible widgets that can be used throughout the application
 for any content that needs to be expandable/collapsible (stats, reasoning, logs, etc.).
 """
+
 from rich.syntax import Syntax
 from textual.containers import Horizontal
 from textual.css.query import NoMatches

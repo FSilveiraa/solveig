@@ -1,4 +1,3 @@
-from sys import prefix
 from typing import Any, Literal
 
 from pydantic import Field
@@ -41,11 +40,7 @@ class AssistantMessage(BaseMessage):
         """Display the assistant's message, including reasoning, comment and tasks."""
         # Display reasoning before the comment (o1/o3 models)
         if self.reasoning:
-            # TODO: Use proper display_reasoning() method once implemented
-            await interface.display_text_block(
-                self.reasoning,
-                title="Reasoning"
-            )
+            await interface.display_text_block(self.reasoning, title="Reasoning")
 
         if self.comment:
             await interface.display_comment(self.comment)

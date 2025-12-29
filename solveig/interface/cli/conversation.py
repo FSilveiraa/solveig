@@ -7,9 +7,9 @@ from textual.widgets import Static
 from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
 
+from .collapsible_widgets import CollapsibleTextBox
 from .tree_display import TreeDisplay
 from .widgets import SectionHeader, TextBox
-from .collapsible_widgets import CollapsibleTextBox
 
 BANNER = """
                               888                                  d8b

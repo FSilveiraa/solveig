@@ -91,7 +91,9 @@ class TerminalInterface(SolveigInterface):
         if not is_subcommand and self.input_handler:
             await self.input_handler(user_input)
 
-    async def _display_text(self, text: str, style: str = "text", prefix: str | None = None) -> None:
+    async def _display_text(
+        self, text: str, style: str = "text", prefix: str | None = None
+    ) -> None:
         """Display text with optional styling."""
         to_display = text
         if prefix:

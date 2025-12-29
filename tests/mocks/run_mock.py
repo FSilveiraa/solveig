@@ -66,8 +66,6 @@ async def run_async_mock(
             comment="Test assistant message",
             reasoning="Testing this thought...",
         ),
-
-
         AssistantMessage(
             comment="Test",
             tasks=[
