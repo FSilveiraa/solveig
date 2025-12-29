@@ -8,7 +8,8 @@ from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
 
 from .tree_display import TreeDisplay
-from .widgets import CollapsibleTextBox, SectionHeader, TextBox
+from .widgets import SectionHeader, TextBox
+from .collapsible_widgets import CollapsibleTextBox
 
 BANNER = """
                               888                                  d8b
@@ -104,7 +105,7 @@ class ConversationArea(ScrollableContainer):
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
-        """Generate CSS for conversation area and related widgets."""
+        """Generate CSS for conversation area and group-related widgets."""
         return f"""
         ConversationArea {{
             height: 1fr;
@@ -116,59 +117,6 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background: {theme.background};
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
-        }}
-
-        TextBox {{
-            border: solid {theme.box};
-            margin: 1;
-            padding: 0 1;
-        }}
-
-        CollapsibleTextBox {{
-            margin: 0 0 0 1;
-            padding: 0;
-            height: auto;
-            border: solid {theme.box};
-            background: {theme.background};
-        }}
-
-        CollapsibleTextBox Collapsible {{
-            background: {theme.background};
-            border: none;
-            margin: 0;
-            padding: 0;
-        }}
-
-        CollapsibleTextBox CollapsibleTitle {{
-            background: {theme.background};
-            padding: 0;
-            height: auto;
-        }}
-
-        CollapsibleTextBox .simple-title {{
-            background: {theme.background};
-            color: {theme.text};
-            padding: 0 1;
-            height: 1;
-        }}
-
-        CollapsibleTextBox .simple-title:hover {{
-            color: {theme.section};
-        }}
-
-        .reasoning-content {{
-            text-style: italic;
-            color: {theme.text};
-            height: auto;
-            padding: 0 1;
-            background: {theme.background};
-        }}
-
-        SectionHeader {{
-            color: {theme.section};
-            text-style: bold;
-            margin: 1 0;
-            padding: 0;
         }}
 
         .group_container {{
@@ -189,5 +137,8 @@ class ConversationArea(ScrollableContainer):
             margin: 1 0 0 1;
         }}
 
+        {TextBox.get_css(theme)}
+        {CollapsibleTextBox.get_css(theme)}
+        {SectionHeader.get_css(theme)}
         {TreeDisplay.get_css(theme)}
         """

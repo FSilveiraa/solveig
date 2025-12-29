@@ -1,6 +1,7 @@
 """Stats bar - collapsible widget containing stats tables."""
 
 import time
+from os import PathLike
 
 from textual.containers import Horizontal
 from textual.timer import Timer
@@ -89,11 +90,11 @@ class StatsBar(Widget):
 
     def update(
         self,
-        status=None,
+        status: str | None = None,
         tokens: tuple[int, int] | None = None,
-        model=None,
-        url=None,
-        path=None,
+        model: str | None = None,
+        url: str | None = None,
+        path: str | PathLike | None = None,
     ):
         """Update the stats dashboard with new information."""
         updated_title = updated_stats = False
@@ -151,6 +152,9 @@ class StatsBar(Widget):
         if not self._row_keys:
             return
 
+        # TODO: Optimize to update only changed cells instead of clearing all tables
+        # Currently clears all tables even if only one value changed
+        # Consider using update_cell() if Textual supports it
         # Clear and re-add rows to force column width recalculation
         self._table1.clear()
         self._table2.clear()

@@ -32,7 +32,7 @@ class TerminalInterface(SolveigInterface):
     def __init__(
         self,
         theme: Palette = DEFAULT_THEME,
-        code_theme=DEFAULT_CODE_THEME,
+        code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
         **kwargs,
     ):
@@ -91,17 +91,14 @@ class TerminalInterface(SolveigInterface):
         if not is_subcommand and self.input_handler:
             await self.input_handler(user_input)
 
-    async def _display_text(self, text: str, style: str = "text", prefix=None) -> None:
+    async def _display_text(self, text: str, style: str = "text", prefix: str | None = None) -> None:
         """Display text with optional styling."""
-        # Map hex colors to semantic style names using pre-calculated mapping
-        # if style.startswith("#"):
-        #     style = self.app._color_to_style.get(style, "text")
         to_display = text
         if prefix:
             to_display = f"[{self._theme.info}]{prefix}[/]  {to_display}"
         await self.app.add_text(to_display, style, markup=prefix is not None)
 
-    async def display_text(self, text: str, prefix=None) -> None:
+    async def display_text(self, text: str, prefix: str | None = None) -> None:
         await self._display_text(text, style="text", prefix=prefix)
 
     async def display_error(self, error: str | Exception) -> None:
@@ -150,11 +147,9 @@ class TerminalInterface(SolveigInterface):
             language_name = FILE_EXTENSION_TO_LANGUAGE.get(language.lstrip("."))
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
-        # TODO: Testing collapsible version - uncomment below to revert
         await self.app._conversation_area.add_collapsible_text_block(
             to_display, title=title or "Text Block", collapsed=True
         )
-        # await self.app._conversation_area.add_text_block(to_display, title=title)
 
     async def display_diff(
         self,

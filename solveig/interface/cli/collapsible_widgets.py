@@ -3,8 +3,10 @@
 This module provides base collapsible widgets that can be used throughout the application
 for any content that needs to be expandable/collapsible (stats, reasoning, logs, etc.).
 """
-
+from rich.syntax import Syntax
 from textual.containers import Horizontal
+from textual.css.query import NoMatches
+from textual.widget import Widget
 from textual.widgets import Collapsible, Static
 from textual.widgets._collapsible import CollapsibleTitle
 
@@ -56,8 +58,8 @@ class CustomCollapsibleTitleBar(CollapsibleTitle):
         try:
             static = self.query_one(Static)
             static.update(self._get_content())
-        except Exception:
-            # If not mounted yet, will update when it mounts
+        except NoMatches:
+            # Widget not mounted yet - will update when compose() completes
             pass
 
 
@@ -123,8 +125,8 @@ class DividedCollapsibleTitleBar(CustomCollapsibleTitleBar):
             statics[0].update(left_content)
             statics[1].update(center_content)
             statics[2].update(right_content)
-        except Exception:
-            # If not mounted yet, will update when it mounts
+        except NoMatches:
+            # Widget not mounted yet - will update when compose() completes
             pass
 
     def update_content(self, status=None, path=None):
@@ -164,9 +166,97 @@ class CustomCollapsible(Collapsible):
             status=status,
             path=path,
             theme=theme,
-            start_collapsed=True,
+            start_collapsed=start_collapsed,
         )
 
     def update_title_content(self, status_text=None, path_text=None):
         """Update the title bar content."""
         self._title.update_content(status_text, path_text)
+
+
+class CollapsibleTextBox(Widget):
+    """A collapsible text block widget for reasoning, verbose output, etc.
+
+    Similar to StatsBar pattern - a Widget that contains a Collapsible.
+    Provides click-to-toggle functionality for long text content.
+    """
+
+    def __init__(
+        self,
+        content: str | Syntax,
+        title: str,
+        collapsed: bool = False,
+        content_classes: str = "reasoning-content",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._content = content
+        self._content_classes = content_classes
+        self._title = title
+        self._collapsed = collapsed
+
+    def compose(self):
+        """Yield a Collapsible containing the content - like StatsBar pattern."""
+        self._collapsible = Collapsible(
+            title="",  # Empty title, will be replaced with custom one
+            collapsed=self._collapsed,
+        )
+
+        # Replace default title with CustomCollapsibleTitleBar
+        self._collapsible._title = CustomCollapsibleTitleBar(
+            collapsed_text=f"{self._title} - Click to expand",
+            expanded_text=f"{self._title} - Click to collapse",
+            start_collapsed=self._collapsed,
+        )
+
+        with self._collapsible:
+            yield Static(
+                self._content,
+                markup=False,
+                classes=self._content_classes,
+            )
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        """Generate CSS for CollapsibleTextBox."""
+        return f"""
+        CollapsibleTextBox {{
+            margin: 0 0 0 1;
+            padding: 0;
+            height: auto;
+            border: solid {theme.box};
+            background: {theme.background};
+        }}
+
+        CollapsibleTextBox Collapsible {{
+            background: {theme.background};
+            border: none;
+            margin: 0;
+            padding: 0;
+        }}
+
+        CollapsibleTextBox CollapsibleTitle {{
+            background: {theme.background};
+            padding: 0;
+            height: auto;
+        }}
+
+        CollapsibleTextBox .simple-title {{
+            background: {theme.background};
+            color: {theme.text};
+            padding: 0 1;
+            height: 1;
+        }}
+
+        CollapsibleTextBox .simple-title:hover {{
+            color: {theme.section};
+        }}
+
+        .reasoning-content {{
+            text-style: italic;
+            color: {theme.text};
+            height: auto;
+            padding: 0 1;
+            background: {theme.background};
+        }}
+        """
