@@ -4,6 +4,8 @@ from rich.syntax import Syntax
 from textual.widget import Widget
 from textual.widgets import Collapsible, Static
 
+from solveig.interface.cli.collapsible_widgets import CustomCollapsibleTitleBar
+
 
 class TextBox(Static):
     """A text block widget with optional title and border."""
@@ -40,10 +42,15 @@ class CollapsibleTextBox(Widget):
     def compose(self):
         """Yield a Collapsible containing the content - like StatsBar pattern."""
         self._collapsible = Collapsible(
-            title=self._title,
+            title="",  # Empty title, will be replaced with custom one
             collapsed=self._collapsed,
-            collapsed_symbol="▶",
-            expanded_symbol="▼",
+        )
+
+        # Replace default title with CustomCollapsibleTitleBar
+        self._collapsible._title = CustomCollapsibleTitleBar(
+            collapsed_text=f"{self._title} - Click to expand",
+            expanded_text=f"{self._title} - Click to collapse",
+            start_collapsed=self._collapsed,
         )
 
         with self._collapsible:

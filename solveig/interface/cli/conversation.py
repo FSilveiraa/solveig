@@ -125,7 +125,7 @@ class ConversationArea(ScrollableContainer):
         }}
 
         CollapsibleTextBox {{
-            margin: 0;
+            margin: 0 0 0 1;
             padding: 0;
             height: auto;
             border: solid {theme.box};
@@ -141,25 +141,26 @@ class ConversationArea(ScrollableContainer):
 
         CollapsibleTextBox CollapsibleTitle {{
             background: {theme.background};
-            color: {theme.section};
-            text-style: bold;
-            padding: 0 1;
-        }}
-
-        CollapsibleTextBox CollapsibleTitle:hover {{
-            color: {theme.info};
-        }}
-
-        CollapsibleTextBox Static {{
+            padding: 0;
             height: auto;
-            min-height: 3;
-            padding: 0 0 0 1;
+        }}
+
+        CollapsibleTextBox .simple-title {{
+            background: {theme.background};
+            color: {theme.text};
+            padding: 0 1;
+            height: 1;
+        }}
+
+        CollapsibleTextBox .simple-title:hover {{
+            color: {theme.section};
         }}
 
         .reasoning-content {{
             text-style: italic;
             color: {theme.text};
             height: auto;
+            padding: 0 1;
             background: {theme.background};
         }}
 

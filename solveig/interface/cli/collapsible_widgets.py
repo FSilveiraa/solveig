@@ -11,12 +11,63 @@ from textual.widgets._collapsible import CollapsibleTitle
 from solveig.interface.themes import Palette
 
 
-class DividedCollapsibleTitleBar(CollapsibleTitle):
-    """Custom title bar with responsive left/center/right layout.
+class CustomCollapsibleTitleBar(CollapsibleTitle):
+    """Base class for custom collapsible title bars.
 
-    This title bar is designed for use with CustomCollapsible and supports
-    dynamic content in three sections (left, center, right) that update
-    when the collapsed state changes.
+    Provides automatic symbol (▶/▼) and text updates when collapsed state changes.
+    All custom collapsibles have "click to expand/collapse" text functionality.
+
+    This simple implementation shows symbol + text in a single section.
+    Subclasses can override to create more complex multi-section layouts.
+    """
+
+    def __init__(
+        self,
+        collapsed_text: str,
+        expanded_text: str,
+        start_collapsed: bool = True,
+    ):
+        self._collapsed_text = collapsed_text
+        self._expanded_text = expanded_text
+        super().__init__(
+            label="",
+            collapsed_symbol="▶",
+            expanded_symbol="▼",
+            collapsed=start_collapsed,
+        )
+
+    def compose(self):
+        """Yield single Static widget with symbol + text."""
+        yield Static(self._get_content(), classes="simple-title")
+
+    def _get_content(self):
+        """Generate symbol + text based on collapsed state."""
+        if self.collapsed:
+            return f"{self.collapsed_symbol} {self._collapsed_text}"
+        else:
+            return f"{self.expanded_symbol} {self._expanded_text}"
+
+    def _watch_collapsed(self, collapsed: bool) -> None:
+        """When collapsed state changes, update the display."""
+        self._update_content()
+
+    def _update_content(self):
+        """Update the Static widget with current content."""
+        try:
+            static = self.query_one(Static)
+            static.update(self._get_content())
+        except Exception:
+            # If not mounted yet, will update when it mounts
+            pass
+
+
+class DividedCollapsibleTitleBar(CustomCollapsibleTitleBar):
+    """3-section title bar extending CustomCollapsibleTitleBar.
+
+    Layout: left (symbol + text) | center (status) | right (path)
+
+    Used by StatsBar for displaying dynamic status and path alongside
+    the collapsible text.
     """
 
     def __init__(
@@ -28,21 +79,18 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
         theme: Palette,
         start_collapsed: bool = True,
     ):
-        # CollapsibleTitle requires these parameters
-        self._collapsed_text = collapsed_text
-        self._expanded_text = expanded_text
         self._status = status
         self._path = path
         self._theme = theme
+        # Call parent to set up collapsed/expanded text and symbols
         super().__init__(
-            label="",
-            collapsed_symbol="▶",
-            expanded_symbol="▼",
-            collapsed=start_collapsed,
+            collapsed_text=collapsed_text,
+            expanded_text=expanded_text,
+            start_collapsed=start_collapsed,
         )
 
     def compose(self):
-        """Override to yield three Static widgets instead of string content."""
+        """Override to yield 3-section layout instead of simple single section."""
         left_content, center_content, right_content = self._get_content()
 
         yield Horizontal(
@@ -52,23 +100,21 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
             classes="custom-title-bar",
         )
 
-    def _watch_collapsed(self, collapsed: bool) -> None:
-        """Override to update our Static widgets when collapsed state changes."""
-        self._update_static_widgets()
-
     def _get_content(self):
-        """Generate content for the three title sections."""
+        """Override to return 3 sections: (left_with_symbol, center_status, right_path)."""
+        # Get symbol + text from parent logic
         if self.collapsed:
             left_content = f"{self.collapsed_symbol} {self._collapsed_text}"
         else:
             left_content = f"{self.expanded_symbol} {self._expanded_text}"
 
+        # Add the extra sections specific to Divided
         center_content = f"[{self._theme.info}]{self._status}[/]"
         right_content = f"🗁  {self._path}"
         return left_content, center_content, right_content
 
-    def _update_static_widgets(self):
-        """Update the Static widgets with current content and symbol."""
+    def _update_content(self):
+        """Override to update 3 static widgets instead of 1."""
         try:
             horizontal = self.query_one(Horizontal)
             statics = horizontal.query(Static)
@@ -88,7 +134,7 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
         if path is not None:
             self._path = path
 
-        self._update_static_widgets()
+        self._update_content()
 
 
 class CustomCollapsible(Collapsible):
