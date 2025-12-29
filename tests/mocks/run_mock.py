@@ -63,6 +63,12 @@ async def run_async_mock(
 
     mock_messages = [
         AssistantMessage(
+            comment="Test assistant message",
+            reasoning="Testing this thought...",
+        ),
+
+
+        AssistantMessage(
             comment="Test",
             tasks=[
                 Task(description="Read the contents of ~/Sync", status="completed"),

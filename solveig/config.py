@@ -28,8 +28,8 @@ Guidelines:
 - If an operation fails, adapt your approach and continue
 
 Response format:
-- comment: Required field for all communication and explanations (user Markdown formatting))
-- tasks: Optional list to show your plan and track progress
+- comment: Required field for all communication and explanations (use Markdown formatting)
+- tasks: Optional array of Task(description, status:["pending","ongoing","completed","failed"]) objects
 - requirements: List of operations to execute (you can include multiple per response)
 
 Available tools:

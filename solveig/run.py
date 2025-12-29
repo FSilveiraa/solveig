@@ -24,23 +24,6 @@ from solveig.subcommand import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
 
 
-async def get_message_history(
-    config: SolveigConfig, interface: SolveigInterface
-) -> MessageHistory:
-    """Initialize the conversation store."""
-    sys_prompt = system_prompt.get_system_prompt(config)
-    if config.verbose:
-        await interface.display_text_block(sys_prompt, title="System Prompt")
-
-    message_history = MessageHistory(
-        system_prompt=sys_prompt,
-        max_context=config.max_context,
-        api_type=config.api_type,
-        encoder=config.encoder,
-    )
-    return message_history
-
-
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -81,7 +64,15 @@ async def send_message_to_llm_with_retry(
             # Add to the message history immediately, which updates (corrects) the token counts
             model = None
             if hasattr(assistant_response, "_raw_response"):
-                model = assistant_response._raw_response.model
+                raw = assistant_response._raw_response
+                model = raw.model
+                # Extract reasoning and reasoning_details from o1/o3/Gemini models
+                if hasattr(raw, "choices") and raw.choices:
+                    message = raw.choices[0].message
+                    if hasattr(message, "reasoning") and message.reasoning:
+                        assistant_response.reasoning = message.reasoning
+                    if hasattr(message, "reasoning_details") and message.reasoning_details:
+                        assistant_response.reasoning_details = message.reasoning_details
 
             # Add the message to the history, this also updates
             # the total tokens so update the stats display
@@ -204,7 +195,10 @@ async def run_async(
     llm_client: Instructor | None = None,
     # message_history: MessageHistory | None = None,
 ) -> MessageHistory:
-    """Entry point for the async CLI with explicit dependencies."""
+    """
+    Initializes the initial dependencies (or accepts mocks from tests),
+    starts the main loop in the background and the interface task in the foreground.
+    """
     # Parse config and run main loop
     if not config:
         config, user_prompt = await SolveigConfig.parse_config_and_prompt()
@@ -250,21 +244,6 @@ async def run_async(
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
     return message_history
-
-
-# async def amain():
-#     """Async main that handles config parsing and setup."""
-#     # Parse config and run main loop
-#     config, user_prompt = await SolveigConfig.parse_config_and_prompt()
-#
-#     # Create LLM client and interface
-#     llm_client = llm.get_instructor_client(
-#         api_type=config.api_type, api_key=config.api_key, url=config.url
-#     )
-#     interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
-#
-#     # Run the async main loop
-#     await run_async(config, interface, llm_client, user_prompt)
 
 
 def main():

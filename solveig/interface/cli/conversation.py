@@ -8,7 +8,7 @@ from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
 
 from .tree_display import TreeDisplay
-from .widgets import SectionHeader, TextBox
+from .widgets import CollapsibleTextBox, SectionHeader, TextBox
 
 BANNER = """
                               888                                  d8b
@@ -47,6 +47,17 @@ class ConversationArea(ScrollableContainer):
     async def add_text_block(self, content: str | Syntax, title: str | None = None):
         """Add a text block with border and optional title."""
         await self._add_element(TextBox(content, title=title))
+
+    async def add_collapsible_text_block(
+        self,
+        content: str | Syntax,
+        title: str,
+        collapsed: bool = False,
+    ):
+        """Add a collapsible text block (for reasoning, verbose output, etc.)."""
+        await self._add_element(
+            CollapsibleTextBox(content, title=title, collapsed=collapsed)
+        )
 
     async def add_section_header(self, title: str, width: int = 80):
         """Add a section header."""
@@ -111,6 +122,45 @@ class ConversationArea(ScrollableContainer):
             border: solid {theme.box};
             margin: 1;
             padding: 0 1;
+        }}
+
+        CollapsibleTextBox {{
+            margin: 0;
+            padding: 0;
+            height: auto;
+            border: solid {theme.box};
+            background: {theme.background};
+        }}
+
+        CollapsibleTextBox Collapsible {{
+            background: {theme.background};
+            border: none;
+            margin: 0;
+            padding: 0;
+        }}
+
+        CollapsibleTextBox CollapsibleTitle {{
+            background: {theme.background};
+            color: {theme.section};
+            text-style: bold;
+            padding: 0 1;
+        }}
+
+        CollapsibleTextBox CollapsibleTitle:hover {{
+            color: {theme.info};
+        }}
+
+        CollapsibleTextBox Static {{
+            height: auto;
+            min-height: 3;
+            padding: 0 0 0 1;
+        }}
+
+        .reasoning-content {{
+            text-style: italic;
+            color: {theme.text};
+            height: auto;
+            background: {theme.background};
         }}
 
         SectionHeader {{
