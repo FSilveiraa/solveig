@@ -29,9 +29,15 @@ class AssistantMessage(BaseMessage):
     )
 
     def to_openai(self) -> dict:
-        """Override to include reasoning_details for OpenRouter Gemini compatibility."""
+        """Override to include reasoning and reasoning_details at message level.
+
+        Required for o1/o3/Gemini models that use reasoning in their responses.
+        Both fields must be preserved to maintain conversation context correctly.
+        """
         result = super().to_openai()
-        # Add reasoning_details at message level (not in content) if present
+        # Add reasoning fields at message level (not in content) if present
+        if self.reasoning:
+            result["reasoning"] = self.reasoning
         if self.reasoning_details:
             result["reasoning_details"] = self.reasoning_details
         return result
