@@ -8,7 +8,7 @@ import json
 import logging
 import traceback
 
-from instructor import Instructor
+from instructor import AsyncInstructor
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
@@ -27,7 +27,7 @@ from solveig.utils.misc import default_json_serialize, serialize_response_model
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
-    client: Instructor,
+    client: AsyncInstructor,
     message_history: MessageHistory,
 ) -> AssistantMessage | None:
     """Send message to LLM with retry logic."""
@@ -112,7 +112,7 @@ async def send_message_to_llm_with_retry(
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    llm_client: Instructor,
+    llm_client: AsyncInstructor,
     user_prompt: str,
     message_history: MessageHistory,
 ):
@@ -195,7 +195,7 @@ async def run_async(
     config: SolveigConfig | None = None,
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
-    llm_client: Instructor | None = None,
+    llm_client: AsyncInstructor | None = None,
     # message_history: MessageHistory | None = None,
 ) -> MessageHistory:
     """

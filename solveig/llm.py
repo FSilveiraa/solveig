@@ -55,7 +55,7 @@ class APIType:
             url: str | None = default_url,
             api_key: str | None = None,
             model: str | None = None,
-        ) -> instructor.Instructor:
+        ) -> instructor.AsyncInstructor:
             raise NotImplementedError()
 
     class OPENAI(BaseAPI):
@@ -87,7 +87,7 @@ class APIType:
             url: str | None = default_url,
             api_key: str | None = None,
             model: str | None = None,
-        ) -> instructor.Instructor:
+        ) -> instructor.AsyncInstructor:
             try:
                 client = openai.AsyncOpenAI(
                     api_key=api_key, base_url=url or cls.default_url
@@ -127,11 +127,11 @@ class APIType:
             url: str | None = None,
             api_key: str | None = None,
             model: str | None = None,
-        ) -> instructor.Instructor:
+        ) -> instructor.AsyncInstructor:
             try:
                 import anthropic
 
-                client = anthropic.Anthropic(
+                client = anthropic.AsyncAnthropic(
                     api_key=api_key, base_url=url or cls.default_url
                 )
                 return instructor.from_anthropic(client, mode=instructor_mode)
@@ -150,7 +150,7 @@ class APIType:
             url: str | None = None,
             api_key: str | None = None,
             model: str | None = None,
-        ) -> instructor.Instructor:
+        ) -> instructor.AsyncInstructor:
             try:
                 import google.generativeai as google_ai
 
@@ -186,7 +186,7 @@ def get_instructor_client(
     url: str | None = None,
     model: str | None = None,
     instructor_mode: instructor.Mode = instructor.Mode.TOOLS,
-) -> instructor.Instructor:
+) -> instructor.AsyncInstructor:
     """Get instructor client - backwards compatible interface."""
     # Handle legacy string API type names
     if isinstance(api_type, str):
