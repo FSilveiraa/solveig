@@ -141,7 +141,12 @@ class TerminalInterface(SolveigInterface):
         )
 
     async def display_text_block(
-        self, text: str, title: str | None = None, language: str | None = None, collapsible: bool = False, collapsed: bool = True
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        collapsible: bool = False,
+        collapsed: bool = True,
     ) -> None:
         """Display a text block with optional title."""
         to_display: str | Syntax = text

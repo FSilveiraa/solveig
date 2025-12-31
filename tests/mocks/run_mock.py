@@ -12,7 +12,6 @@ from solveig.schema import (
     CopyRequirement,
     DeleteRequirement,
     MoveRequirement,
-    ReadRequirement,
     WriteRequirement,
 )
 from solveig.schema.message import AssistantMessage
@@ -76,7 +75,9 @@ async def run_async_mock(
                 ),
             ],
             requirements=[
-                TreeRequirement(comment="Read the tree structure for ~/Sync", path="~/Sync"),
+                TreeRequirement(
+                    comment="Read the tree structure for ~/Sync", path="~/Sync"
+                ),
                 # ReadRequirement(
                 #     comment="test read", path="~/Sync/app.log", metadata_only=False
                 # ),
