@@ -11,9 +11,7 @@
 
 **An AI assistant that brings safe agentic behavior from any LLM to your terminal**
 
-[![Demo](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx.svg)](https://asciinema.org/a/p5mzDGAoHTUHNEaVeROHpFibx)
-
-#### *You can also see the Demo in video format [here](https://fsilveiraa.github.io/solveig/demo.mp4)*
+![Demo](./docs/demo.png)
 
 ---
 
