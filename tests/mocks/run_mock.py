@@ -63,38 +63,38 @@ async def run_async_mock(
 
     mock_messages = [
         AssistantMessage(
-            comment="I'll help you investigate the contents of ~/Sync",
-            reasoning="The user wants me to review the contents of ~/Sync for safety. I should first get a tree structure, then investigate individual files that stand out",
+            comment="I'll help you investigate the contents of ~/Sync and write a Fibonacci sequence solver",
+            reasoning="The user wants me to review the contents of ~/Sync, then write an algorithm to solve the Fibonacci sequence. I should first get a tree structure, write a Pyhon script, then investigate individual files that stand out",
             tasks=[
-                Task(description="Read the contents of ~/Sync", status="completed"),
+                Task(description="Read the contents of ~/Sync", status="ongoing"),
+                Task(description="Write a Fibonacci solver", status="pending"),
                 Task(
-                    description="Read suspicious files inside ~/Sync", status="ongoing"
+                    description="Read suspicious files inside ~/Sync", status="pending"
                 ),
                 Task(
                     description="Provide a summary of contents, focused on safety and functionality"
                 ),
             ],
             requirements=[
-                TreeRequirement(comment="Test comment", path="~/Sync"),
-                ReadRequirement(
-                    comment="test read", path="~/Sync/app.log", metadata_only=False
-                ),
+                TreeRequirement(comment="Read the tree structure for ~/Sync", path="~/Sync"),
+                # ReadRequirement(
+                #     comment="test read", path="~/Sync/app.log", metadata_only=False
+                # ),
                 WriteRequirement(
                     comment="Test write",
-                    path="/home/francisco/Sync/test.py",
+                    path="/home/francisco/Sync/fibonacci.py",
                     content="""
 import math
+import sys
 
 def fibonacci_binet(n):
     phi = (1 + math.sqrt(5)) / 2
     return round((phi ** n - (1 - phi) ** n) / math.sqrt(5))
 
-# Find the 10th Fibonacci number
-n = 10
-result = fibonacci_binet(n)
-print(f"The Fibonacci Number of {n}th term is {result}" )
-
-# The Fibonacci Number of 10th term is 55
+if __name__ == "__main__":
+    n = sys.argv[1]
+    result = fibonacci_binet(int(n))
+    print(f"The Fibonacci Number of {n}th term is {result}")
 """.strip(),
                     is_directory=False,
                 ),

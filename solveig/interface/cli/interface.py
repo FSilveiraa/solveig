@@ -141,7 +141,7 @@ class TerminalInterface(SolveigInterface):
         )
 
     async def display_text_block(
-        self, text: str, title: str | None = None, language: str | None = None
+        self, text: str, title: str | None = None, language: str | None = None, collapsible: bool = False, collapsed: bool = True
     ) -> None:
         """Display a text block with optional title."""
         to_display: str | Syntax = text
@@ -150,9 +150,14 @@ class TerminalInterface(SolveigInterface):
             language_name = FILE_EXTENSION_TO_LANGUAGE.get(language.lstrip("."))
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
-        await self.app._conversation_area.add_collapsible_text_block(
-            to_display, title=title or "Text Block", collapsed=True
-        )
+        if collapsible:
+            await self.app._conversation_area.add_collapsible_text_block(
+                to_display, title=title or "Text Block", collapsed=collapsed
+            )
+        else:
+            await self.app._conversation_area.add_text_block(
+                to_display, title=title or "Text Block"
+            )
 
     async def display_diff(
         self,

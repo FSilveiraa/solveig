@@ -46,7 +46,7 @@ class AssistantMessage(BaseMessage):
         """Display the assistant's message, including reasoning, comment and tasks."""
         # Display reasoning before the comment (o1/o3 models)
         if self.reasoning:
-            await interface.display_text_block(self.reasoning, title="Reasoning")
+            await interface.display_text_block(self.reasoning, title="Reasoning", collapsible=True)
 
         if self.comment:
             await interface.display_comment(self.comment)
