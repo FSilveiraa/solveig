@@ -53,10 +53,9 @@ anthropic = ["anthropic>=0.68.0"]
 google = ["google-generativeai>=0.8.5"]
 
 [project.urls]
-Homepage = "https://github.com/Fsilveiraa/solveig"
-Repository = "https://github.com/Fsilveiraa/solveig"
-Issues = "https://github.com/Fsilveiraa/solveig/issues"
-Documentation = "https://github.com/Fsilveiraa/solveig#README.md"
+Homepage = "https://github.com/FSilveiraa/solveig"
+About = "https://github.com/FSilveiraa/solveig/blob/main/docs/about.md"
+Roadmap = "https://github.com/FSilveiraa/solveig/discussions/2"
 
 [project.scripts]
 solveig = "solveig.run:main"
