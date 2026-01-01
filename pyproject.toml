@@ -51,6 +51,11 @@ dev = [
 ]
 anthropic = ["anthropic>=0.68.0"]
 google = ["google-generativeai>=0.8.5"]
+scraping = [
+    "patchright>=1.57.0",
+    "markdownify>=1.2.0",
+    "lxml>=6.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/FSilveiraa/solveig"
