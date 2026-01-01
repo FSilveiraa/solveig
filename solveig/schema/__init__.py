@@ -3,57 +3,56 @@ Schema definitions for Solveig's structured communication with LLMs.
 
 This module defines the data structures used for:
 - Messages exchanged between user, LLM, and system
-- Requirements (file operations, shell commands)
+- Tools (file operations, shell commands)
 - Results and error handling
 """
 
-# from . import REQUIREMENTS
-from .requirement import (  # noqa: F401
-    CommandRequirement,
-    CopyRequirement,
-    DeleteRequirement,
-    MoveRequirement,
-    ReadRequirement,
-    Requirement,
-    WriteRequirement,
-)
 from .result import (  # noqa: F401
     CommandResult,
     CopyResult,
     DeleteResult,
     MoveResult,
     ReadResult,
-    RequirementResult,
+    ToolResult,
     WriteResult,
 )
+from .tool import (  # noqa: F401
+    BaseTool,
+    CommandTool,
+    CopyTool,
+    DeleteTool,
+    MoveTool,
+    ReadTool,
+    WriteTool,
+)
 
-CORE_REQUIREMENTS: list[type[Requirement]] = [
-    CommandRequirement,
-    CopyRequirement,
-    DeleteRequirement,
-    MoveRequirement,
-    ReadRequirement,
-    WriteRequirement,
+CORE_TOOLS: list[type[BaseTool]] = [
+    CommandTool,
+    CopyTool,
+    DeleteTool,
+    MoveTool,
+    ReadTool,
+    WriteTool,
 ]
 
-CORE_RESULTS: list[type[RequirementResult]] = [
+CORE_RESULTS: list[type[ToolResult]] = [
     ReadResult,
     WriteResult,
     CommandResult,
     MoveResult,
     CopyResult,
     DeleteResult,
-    RequirementResult,
+    ToolResult,
 ]
 
 
 # Rebuild Pydantic models to resolve forward references
-# Order matters: requirements first, then results that reference them
-for requirement in CORE_REQUIREMENTS:
-    requirement.model_rebuild()
+# Order matters: tools first, then results that reference them
+for tool in CORE_TOOLS:
+    tool.model_rebuild()
 
 for result in CORE_RESULTS:
     result.model_rebuild()
 
 
-__all__ = ["CORE_REQUIREMENTS", "Requirement"]
+__all__ = ["CORE_TOOLS", "BaseTool"]

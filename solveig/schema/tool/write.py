@@ -1,4 +1,4 @@
-"""Write requirement - allows LLM to create/update files and directories."""
+"""Write tool - allows LLM to create/update files and directories."""
 
 from typing import Literal
 
@@ -6,15 +6,15 @@ from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.requirement.base import (
-    Requirement,
+from solveig.schema.result import WriteResult
+from solveig.schema.tool.base import (
+    BaseTool,
     validate_non_empty_path,
 )
-from solveig.schema.result import WriteResult
 from solveig.utils.file import Filesystem
 
 
-class WriteRequirement(Requirement):
+class WriteTool(BaseTool):
     title: Literal["write"] = "write"
     path: str = Field(
         ...,
@@ -33,7 +33,7 @@ class WriteRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display write requirement header."""
+        """Display write tool header."""
         await super().display_header(interface)
         await interface.display_file_info(
             source_path=self.path,
@@ -45,7 +45,7 @@ class WriteRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
         """Create WriteResult with error."""
         return WriteResult(
-            requirement=self,
+            tool=self,
             path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
@@ -71,7 +71,7 @@ class WriteRequirement(Requirement):
         except (OSError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot write to {str(abs_path)}: {e}")
             return WriteResult(
-                requirement=self, path=str(abs_path), accepted=False, error=str(e)
+                tool=self, path=str(abs_path), accepted=False, error=str(e)
             )
 
         already_exists = await Filesystem.exists(abs_path)
@@ -89,7 +89,7 @@ class WriteRequirement(Requirement):
                 f"{'directory' if self.is_directory else 'file'}?"
             )
             if not (await interface.ask_choice(question, ["Yes", "No"])) == 0:
-                return WriteResult(requirement=self, path=str(abs_path), accepted=False)
+                return WriteResult(tool=self, path=str(abs_path), accepted=False)
 
         try:
             if self.is_directory:
@@ -100,12 +100,12 @@ class WriteRequirement(Requirement):
                 f"{'Updated' if already_exists else 'Created'}"
             )
 
-            return WriteResult(requirement=self, path=str(abs_path), accepted=True)
+            return WriteResult(tool=self, path=str(abs_path), accepted=True)
 
         except Exception as e:
             await interface.display_error(f"Found error when writing file: {e}")
             return WriteResult(
-                requirement=self,
+                tool=self,
                 path=str(abs_path),
                 accepted=False,
                 error=f"Encoding error: {e}",

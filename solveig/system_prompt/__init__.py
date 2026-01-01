@@ -3,7 +3,7 @@ import platform
 from typing import get_args
 
 from solveig.config import SolveigConfig
-from solveig.schema.dynamic import get_requirements_union
+from solveig.schema.dynamic import get_tools_union
 from solveig.system_prompt.examples import long
 
 try:
@@ -39,12 +39,11 @@ def get_examples_info():
 
 
 def get_available_tools(config: SolveigConfig) -> str:
-    """Generate capabilities list from currently filtered requirements."""
-    # Get ALL active requirements from the unified registry (core + plugins)
-    active_requirements = get_requirements_union(config)
+    """Generate capabilities list from currently filtered tools."""
+    # Get ALL active tools from the unified registry (core + plugins)
+    active_tools = get_tools_union(config)
     return "\n".join(
-        f"- {req_class.get_description()}"
-        for req_class in get_args(active_requirements)
+        f"- {req_class.get_description()}" for req_class in get_args(active_tools)
     )
 
 

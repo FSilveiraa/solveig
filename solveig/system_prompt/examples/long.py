@@ -1,4 +1,4 @@
-from solveig.plugins.schema.tree import TreeRequirement, TreeResult
+from solveig.plugins.tools.tree import TreeResult, TreeTool
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
@@ -6,17 +6,17 @@ from solveig.schema.message import (
 )
 from solveig.schema.message.assistant import Task
 from solveig.schema.message.user import UserMessage
-from solveig.schema.requirement import (
-    CommandRequirement,
-    MoveRequirement,
-    ReadRequirement,
-    WriteRequirement,
-)
 from solveig.schema.result import (
     CommandResult,
     MoveResult,
     ReadResult,
     WriteResult,
+)
+from solveig.schema.tool import (
+    CommandTool,
+    MoveTool,
+    ReadTool,
+    WriteTool,
 )
 from solveig.utils.file import Metadata
 
@@ -29,7 +29,7 @@ tasks_1 = [
         description="Provide a summary of contents, focused on safety and functionality"
     ),
 ]
-tree_req = TreeRequirement(
+tree_req = TreeTool(
     comment="I'll analyze the tree structure of ~/Sync",
     path="~/Sync",
 )
@@ -133,7 +133,7 @@ EXAMPLE.add_messages(
     AssistantMessage(
         comment="Ok, I will first read the contents of ~/Sync, then individual files",
         tasks=tasks_1,
-        requirements=[
+        tools=[
             tree_req,
         ],
     ),
@@ -141,7 +141,7 @@ EXAMPLE.add_messages(
         responses=[
             UserComment(comment="Here you go"),
             TreeResult(
-                requirement=tree_req,
+                tool=tree_req,
                 accepted=True,
                 path="/home/user/Sync/",
                 metadata=tree_metadata,
@@ -158,17 +158,13 @@ tasks_2 = [
         description="Provide a summary of contents, focused on safety and functionality"
     ),
 ]
-read_hello_py_req = ReadRequirement(
-    comment="", path="~/Sync/hello.py", metadata_only=False
-)
-read_dev_sh_req = ReadRequirement(
-    comment="", path="~/Sync/init.sh", metadata_only=False
-)
+read_hello_py_req = ReadTool(comment="", path="~/Sync/hello.py", metadata_only=False)
+read_dev_sh_req = ReadTool(comment="", path="~/Sync/init.sh", metadata_only=False)
 EXAMPLE.add_messages(
     AssistantMessage(
         comment="It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.",
         tasks=tasks_2,
-        requirements=[
+        tools=[
             read_hello_py_req,
             read_dev_sh_req,
         ],
@@ -176,7 +172,7 @@ EXAMPLE.add_messages(
     UserMessage(
         responses=[
             ReadResult(
-                requirement=read_hello_py_req,
+                tool=read_hello_py_req,
                 path="/home/user/Sync/hello.py",
                 accepted=True,
                 metadata=Metadata(
@@ -193,7 +189,7 @@ EXAMPLE.add_messages(
                 ),
             ),
             ReadResult(
-                requirement=read_dev_sh_req,
+                tool=read_dev_sh_req,
                 content="""
 #!/usr/bin/env bash
 mkdir -p logs tmp
@@ -252,7 +248,7 @@ tasks_4 = [
     Task(description="Write new print script", status="ongoing"),
     Task(description="Test new print script", status="pending"),
 ]
-write_script_req = WriteRequirement(
+write_script_req = WriteTool(
     comment="Write a better print script",
     path="~/Sync/hello_new.py",
     content="""
@@ -271,7 +267,7 @@ if __name__ == "__main__":
     """.strip(),
     is_directory=False,
 )
-script_command_req = CommandRequirement(
+script_command_req = CommandTool(
     comment="Now execute it to make sure it works correctly",
     command="python ~/Sync/hello_new.py;\npython ~/Sync/hello_new.py 'Solveig'",
     timeout=10,
@@ -280,7 +276,7 @@ EXAMPLE.add_messages(
     AssistantMessage(
         comment="Of course! I'll write and test an improved print script inside /home/user/Sync",
         tasks=tasks_4,
-        requirements=[
+        tools=[
             write_script_req,
             script_command_req,
         ],
@@ -291,12 +287,12 @@ EXAMPLE.add_messages(
                 comment="Cool, it works! Thanks, can you clean up the old file now?"
             ),
             WriteResult(
-                requirement=write_script_req,
+                tool=write_script_req,
                 path="/home/user/Sync/hello_new.py",
                 accepted=True,
             ),
             CommandResult(
-                requirement=script_command_req,
+                tool=script_command_req,
                 accepted=True,
                 command=script_command_req.command,
                 stdout="""
@@ -317,7 +313,7 @@ tasks_5 = [
     Task(description="Delete old print script", status="ongoing"),
     Task(description="Re-name the new print script", status="ongoing"),
 ]
-script_delete_move_req = CommandRequirement(
+script_delete_move_req = CommandTool(
     comment="Delete a script from /home/user/Sync/ and re-name the old one",
     command="rm /home/user/Sync/hello.py; mv /home/user/Sync/hello_new.py /home/user/Sync/hello.py",
     timeout=10,
@@ -326,7 +322,7 @@ EXAMPLE.add_messages(
     AssistantMessage(
         comment="I'll delete the old script and re-name the new one",
         tasks=tasks_5,
-        requirements=[
+        tools=[
             script_delete_move_req,
         ],
     ),
@@ -334,7 +330,7 @@ EXAMPLE.add_messages(
         responses=[
             UserComment(comment="I'd rather use a simple move operation for this"),
             CommandResult(
-                requirement=script_delete_move_req,
+                tool=script_delete_move_req,
                 accepted=False,
                 command=script_command_req.command,
             ),
@@ -350,7 +346,7 @@ tasks_6 = [
         status="ongoing",
     ),
 ]
-script_move_req = MoveRequirement(
+script_move_req = MoveTool(
     comment="Over-write old print script with improved one",
     source_path="~/Sync/hello_new.py",
     destination_path="~/Sync/hello.py",
@@ -359,7 +355,7 @@ EXAMPLE.add_messages(
     AssistantMessage(
         comment="I apologize, I'll use a move operation instead of a command",
         tasks=tasks_6,
-        requirements=[
+        tools=[
             script_move_req,
         ],
     ),
@@ -367,7 +363,7 @@ EXAMPLE.add_messages(
         responses=[
             UserComment(comment="Great, thanks!"),
             MoveResult(
-                requirement=script_move_req,
+                tool=script_move_req,
                 accepted=True,
                 source_path=script_move_req.source_path,
                 destination_path=script_move_req.destination_path,

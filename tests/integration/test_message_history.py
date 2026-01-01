@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from openai.types.completion_usage import CompletionUsage
 
-from solveig.schema import CopyRequirement, CopyResult, WriteRequirement, WriteResult
+from solveig.schema import CopyResult, CopyTool, WriteResult, WriteTool
 from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
@@ -91,7 +91,7 @@ class TestAsyncMessageHistory:
         # Simulate adding results and comments asynchronously
         result1 = WriteResult(
             path="__non_existent__",
-            requirement=WriteRequirement(
+            tool=WriteTool(
                 comment="Write this file", path="__non_existent__", is_directory=False
             ),
             accepted=False,
@@ -99,7 +99,7 @@ class TestAsyncMessageHistory:
         result2 = CopyResult(
             source_path="__non_existent__",
             destination_path="__also_non_existent__",
-            requirement=CopyRequirement(
+            tool=CopyTool(
                 comment="Copy this thing",
                 source_path="__non_existent__",
                 destination_path="__also_non_existent__",

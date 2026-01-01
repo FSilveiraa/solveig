@@ -71,7 +71,7 @@ class MockInterface(TerminalInterface):
             if self._timeout_seconds is None:
                 raise TimeoutError(
                     "Interface timed out waiting for stop event. "
-                    "If this is a test, you need to add a final AssistantMessage with no requirements"
+                    "If this is a test, you need to add a final AssistantMessage with no tools"
                 ) from e
         finally:
             # Cancel timeout task if it's still running

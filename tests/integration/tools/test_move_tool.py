@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirement import MoveRequirement
+from solveig.schema.tool import MoveTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
@@ -22,29 +22,29 @@ class TestMoveValidation:
 
         # Empty source path should fail
         with pytest.raises(ValidationError) as exc_info:
-            MoveRequirement(source_path="", destination_path="/valid", **extra_kwargs)
+            MoveTool(source_path="", destination_path="/valid", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Empty destination path should fail
         with pytest.raises(ValidationError) as exc_info:
-            MoveRequirement(source_path="/valid", destination_path="", **extra_kwargs)
+            MoveTool(source_path="/valid", destination_path="", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Whitespace paths should fail
         with pytest.raises(ValidationError):
-            MoveRequirement(
+            MoveTool(
                 source_path="   \t\n   ", destination_path="/valid", **extra_kwargs
             )
 
         with pytest.raises(ValidationError):
-            MoveRequirement(
+            MoveTool(
                 source_path="/valid", destination_path="   \t\n   ", **extra_kwargs
             )
 
         # Valid paths should strip whitespace
-        req = MoveRequirement(
+        req = MoveTool(
             source_path="  /valid/source  ",
             destination_path="  /valid/dest  ",
             **extra_kwargs,
@@ -54,12 +54,12 @@ class TestMoveValidation:
 
     async def test_get_description(self):
         """Test MoveRequirement description method."""
-        description = MoveRequirement.get_description()
+        description = MoveTool.get_description()
         assert "move(comment, source_path, destination_path)" in description
 
     async def test_display_header_file(self):
         """Test MoveRequirement display header for files."""
-        req = MoveRequirement(
+        req = MoveTool(
             source_path="/source/test.txt",
             destination_path="/dest/test.txt",
             comment="Move test file",
@@ -74,7 +74,7 @@ class TestMoveValidation:
 
     async def test_display_header_directory(self):
         """Test MoveRequirement display header for directories."""
-        req = MoveRequirement(
+        req = MoveTool(
             source_path="/source/dir",
             destination_path="/dest/dir",
             comment="Move test directory",
@@ -101,7 +101,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Move test file",
@@ -124,7 +124,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Decline move",
@@ -153,7 +153,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Move directory tree",
@@ -181,7 +181,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Decline directory move",
@@ -210,7 +210,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Auto-allowed file move",
@@ -244,7 +244,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Auto-allowed directory move",
@@ -275,7 +275,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(auto_file),
                 destination_path=str(manual_file),
                 comment="Partial auto-allowed move",
@@ -294,12 +294,12 @@ class TestErrorHandling:
 
     async def test_error_result_creation(self):
         """Test create_error_result method."""
-        req = MoveRequirement(
+        req = MoveTool(
             source_path="/source.txt", destination_path="/dest.txt", comment="Test"
         )
         error_result = req.create_error_result("Test error", accepted=False)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.error == "Test error"
         assert "/source.txt" in str(error_result.source_path)
@@ -313,7 +313,7 @@ class TestErrorHandling:
 
             interface = MockInterface()
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(nonexistent_file),
                 destination_path=str(dest_file),
                 comment="Move missing source",
@@ -344,7 +344,7 @@ class TestErrorHandling:
             interface = MockInterface()
 
             try:
-                req = MoveRequirement(
+                req = MoveTool(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
                     comment="Move protected source",
@@ -379,7 +379,7 @@ class TestErrorHandling:
             interface = MockInterface()
 
             try:
-                req = MoveRequirement(
+                req = MoveTool(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
                     comment="Move to protected destination",
@@ -428,7 +428,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=tilde_source,
                 destination_path=tilde_dest,
                 comment="Tilde expansion test",
@@ -468,7 +468,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=traversal_source,
                 destination_path=dest_file,
                 comment="Path traversal test",
@@ -507,7 +507,7 @@ class TestIntegrationScenarios:
             interface = MockInterface()
             interface.choices.append(0)  # Accept move
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Move large tree",
@@ -549,7 +549,7 @@ class TestIntegrationScenarios:
             # Accept move for directory
             interface.choices.append(0)
 
-            req = MoveRequirement(
+            req = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir / "moved"),
                 comment="Move special files",
@@ -582,7 +582,7 @@ class TestIntegrationScenarios:
             interface1 = MockInterface()
             interface1.choices.append(1)  # Decline to see the choice message
 
-            req1 = MoveRequirement(
+            req1 = MoveTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Move file",
@@ -600,7 +600,7 @@ class TestIntegrationScenarios:
             interface2 = MockInterface()
             interface2.choices.append(1)  # Decline to see the choice message
 
-            req2 = MoveRequirement(
+            req2 = MoveTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Move directory",

@@ -90,8 +90,8 @@ solve it. Solveig can create task lists, request files and commands, analyze res
 **Why are there 2 types of plugins?**
 
 You can extend Solveig in any of 2 ways:
-- By adding a new requirement, representing a new resource the LLM can request (e.g. fetch a webpage).
-- By adding a hook that captures the requirement before or after it's been processed for validation or altering
+- By adding a new tool, representing a new resource the LLM can request (e.g. fetch a webpage).
+- By adding a hook that captures the tool before or after it's been processed for validation or altering
 (e.g. clear sensitive info from any file content before sending it to the assistant).
 
 See the [Plugins](./plugins.md) page for more information

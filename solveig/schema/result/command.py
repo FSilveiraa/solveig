@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .base import RequirementResult
+from .base import ToolResult
 
 
-class CommandResult(RequirementResult):
+class CommandResult(ToolResult):
     title: Literal["command"] = "command"
     command: str
     success: bool | None = None

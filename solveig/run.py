@@ -173,11 +173,11 @@ async def main_loop(
 
             await llm_response.display(interface)
 
-            if llm_response.requirements:
+            if llm_response.tools:
                 # We have something to respond with, so user input is not mandatory
                 need_user_input = config.disable_autonomy
                 try:
-                    for req in llm_response.requirements:
+                    for req in llm_response.tools:
                         result = await req.solve(config=config, interface=interface)
                         if result:
                             await message_history.add_result(result)

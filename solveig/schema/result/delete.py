@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .base import RequirementResult
+from .base import ToolResult
 
 
-class DeleteResult(RequirementResult):
+class DeleteResult(ToolResult):
     title: Literal["delete"] = "delete"
     path: str

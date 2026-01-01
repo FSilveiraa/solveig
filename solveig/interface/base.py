@@ -166,4 +166,4 @@ class SolveigInterface(ABC):
         source_content: str | None = None,
         show_overwrite_warning: bool = True,
     ) -> None:
-        """Display move requirement header."""
+        """Display move tool header."""

@@ -3,7 +3,7 @@ Schema definitions for Solveig's structured communication with LLMs.
 
 This module defines the data structures used for:
 - Messages exchanged between user, LLM, and system
-- Requirements (file operations, shell commands)
+- Tools (file operations, shell commands)
 - Results and error handling
 """
 

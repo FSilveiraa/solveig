@@ -133,7 +133,7 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 | Option         | CLI Flag             | Description                                                            | Default      |
 |----------------|----------------------|------------------------------------------------------------------------|--------------|
 | `verbose`      | `-v, --verbose`      | Enable verbose logging (displays system prompt, messages, etc)         | `false`      |
-| `wait_between` | `-w, --wait-between` | Time (seconds) between displaying requirements                         | `0.3`        |
+| `wait_between` | `-w, --wait-between` | Time (seconds) between displaying tools                                | `0.3`        |
 | `theme`        | `--theme`            | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |              |
 | `code_theme`   | `--code-theme`       | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |              |
 

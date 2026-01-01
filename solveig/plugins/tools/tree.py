@@ -1,4 +1,4 @@
-"""TreeRequirement plugin - Generate directory tree listings."""
+"""TreeTool plugin - Generate directory tree listings."""
 
 from __future__ import annotations
 
@@ -7,23 +7,23 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from solveig.interface import SolveigInterface
-from solveig.plugins.schema import register_requirement
-from solveig.schema.requirement.base import (
-    Requirement,
+from solveig.plugins.tools import register_tool
+from solveig.schema.result.base import ToolResult
+from solveig.schema.tool.base import (
+    BaseTool,
     validate_non_empty_path,
 )
-from solveig.schema.result.base import RequirementResult
 from solveig.utils.file import Filesystem, Metadata
 
 
-class TreeResult(RequirementResult):
+class TreeResult(ToolResult):
     title: Literal["tree"] = "tree"
     path: str
     metadata: Metadata | None  # Complete tree metadata
 
 
-@register_requirement
-class TreeRequirement(Requirement):
+@register_tool
+class TreeTool(BaseTool):
     """Generate a directory tree listing showing file structure."""
 
     title: Literal["tree"] = "tree"
@@ -40,7 +40,7 @@ class TreeRequirement(Requirement):
     async def display_header(
         self, interface: SolveigInterface, detailed: bool = False
     ) -> None:
-        """Display tree requirement header."""
+        """Display tree tool header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
         # abs_path = Filesystem.get_absolute_path(self.path)
@@ -51,7 +51,7 @@ class TreeRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
         """Create TreeResult with error."""
         return TreeResult(
-            requirement=self,
+            tool=self,
             path=self.path,
             accepted=accepted,
             error=error_message,
@@ -106,14 +106,14 @@ class TreeRequirement(Requirement):
 
             if accepted:
                 return TreeResult(
-                    requirement=self,
+                    tool=self,
                     accepted=True,
                     path=str(abs_path),
                     metadata=metadata,
                 )
 
         return TreeResult(
-            requirement=self,
+            tool=self,
             accepted=False,
             path=str(abs_path),
             metadata=None,

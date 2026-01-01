@@ -29,7 +29,7 @@ class MockLLMClient:
         self.chat = MagicMock()
         self.chat.completions = MagicMock()
         self.chat.completions.create = self._create_completion
-        self.chat.completions.create_iterable = self._create_iterable
+        # self.chat.completions.create_iterable = self._create_iterable
         self.sleep_seconds = sleep_seconds
         self.sleep_delta = abs(sleep_delta)
         self.mode = Mode.TOOLS
@@ -55,26 +55,27 @@ class MockLLMClient:
         # No more responses - return simple default
         raise ValueError("No further responses configured")
 
-    async def _create_iterable(self, **kwargs):
-        """Return an iterable that yields individual requirements."""
-        if self.call_count < len(self.responses):
-            response = self.responses[self.call_count]
-            self.call_count += 1
-
-            if isinstance(response, Exception):
-                raise response
-
-            if self.sleep_seconds > 0:
-                sleep_time = random.uniform(
-                    max(0.0, self.sleep_seconds - self.sleep_delta),
-                    self.sleep_seconds + self.sleep_delta,
-                )
-                # print(f"Sleeping for {sleep_time} seconds...")
-                await asyncio.sleep(sleep_time)
-
-            # Yield individual requirements from the AssistantMessage
-            for requirement in response.requirements:
-                yield requirement
+    # NOTE: Not currently used
+    # async def _create_iterable(self, **kwargs):
+    #     """Return an iterable that yields individual tools."""
+    #     if self.call_count < len(self.responses):
+    #         response = self.responses[self.call_count]
+    #         self.call_count += 1
+    #
+    #         if isinstance(response, Exception):
+    #             raise response
+    #
+    #         if self.sleep_seconds > 0:
+    #             sleep_time = random.uniform(
+    #                 max(0.0, self.sleep_seconds - self.sleep_delta),
+    #                 self.sleep_seconds + self.sleep_delta,
+    #             )
+    #             # print(f"Sleeping for {sleep_time} seconds...")
+    #             await asyncio.sleep(sleep_time)
+    #
+    #         # Yield individual tools from the AssistantMessage
+    #         for tool in response.tools:
+    #             yield tool
 
     def get_call_count(self) -> int:
         """Get number of calls made."""

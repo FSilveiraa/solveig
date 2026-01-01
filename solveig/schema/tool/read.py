@@ -1,4 +1,4 @@
-"""Read requirement - allows LLM to read files and directories."""
+"""Read tool - allows LLM to read files and directories."""
 
 from typing import Literal
 
@@ -9,10 +9,10 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import Requirement, validate_non_empty_path
+from .base import BaseTool, validate_non_empty_path
 
 
-class ReadRequirement(Requirement):
+class ReadTool(BaseTool):
     title: Literal["read"] = "read"
     path: str = Field(
         ...,
@@ -29,7 +29,7 @@ class ReadRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display read requirement header."""
+        """Display read tool header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
 
@@ -50,7 +50,7 @@ class ReadRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
         return ReadResult(
-            requirement=self,
+            tool=self,
             path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
@@ -96,7 +96,7 @@ class ReadRequirement(Requirement):
                 )
 
             return ReadResult(
-                requirement=self,
+                tool=self,
                 metadata=metadata if send_metadata else None,
                 path=str(abs_path),
                 accepted=send_metadata,
@@ -173,7 +173,7 @@ class ReadRequirement(Requirement):
                 metadata = None
 
             return ReadResult(
-                requirement=self,
+                tool=self,
                 metadata=metadata,
                 content=content,
                 path=str(abs_path),

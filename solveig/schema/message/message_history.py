@@ -8,7 +8,7 @@ from solveig.interface import SolveigInterface
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.system import SystemMessage
 from solveig.schema.message.user import UserComment, UserMessage
-from solveig.schema.result import RequirementResult
+from solveig.schema.result import ToolResult
 
 Message = SystemMessage | UserMessage | AssistantMessage
 
@@ -24,8 +24,8 @@ class MessageHistory:
     token_count: int = field(default=0)  # Current cache size for pruning
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
-    # contains both results to requirements and user comments
-    current_responses: asyncio.Queue[UserComment | RequirementResult] = field(
+    # contains both results to tools and user comments
+    current_responses: asyncio.Queue[UserComment | ToolResult] = field(
         default_factory=asyncio.Queue, init=False, repr=False
     )
 
@@ -84,7 +84,7 @@ class MessageHistory:
 
         self.prune_message_cache()
 
-    async def add_result(self, result: RequirementResult):
+    async def add_result(self, result: ToolResult):
         """Producer method to add a tool result to the event queue."""
         await self.current_responses.put(result)
 

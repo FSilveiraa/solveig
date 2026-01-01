@@ -1,4 +1,4 @@
-"""Move requirement - allows LLM to move files and directories."""
+"""Move tool - allows LLM to move files and directories."""
 
 from typing import Literal
 
@@ -9,10 +9,10 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem
 
-from .base import Requirement, validate_non_empty_path
+from .base import BaseTool, validate_non_empty_path
 
 
-class MoveRequirement(Requirement):
+class MoveTool(BaseTool):
     title: Literal["move"] = "move"
     source_path: str = Field(
         ...,
@@ -28,7 +28,7 @@ class MoveRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display move requirement header."""
+        """Display move tool header."""
         await super().display_header(interface)
         await interface.display_file_info(
             source_path=self.source_path,
@@ -38,7 +38,7 @@ class MoveRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "MoveResult":
         """Create MoveResult with error."""
         return MoveResult(
-            requirement=self,
+            tool=self,
             accepted=accepted,
             error=error_message,
             source_path=str(Filesystem.get_absolute_path(self.source_path)),
@@ -66,7 +66,7 @@ class MoveRequirement(Requirement):
                 f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
             )
             return MoveResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 error=str(e),
                 source_path=str(abs_source_path),
@@ -91,7 +91,7 @@ class MoveRequirement(Requirement):
             != 0
         ):
             return MoveResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
@@ -102,7 +102,7 @@ class MoveRequirement(Requirement):
             await Filesystem.move(abs_source_path, abs_destination_path)
             await interface.display_success("Moved")
             return MoveResult(
-                requirement=self,
+                tool=self,
                 accepted=True,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
@@ -110,7 +110,7 @@ class MoveRequirement(Requirement):
         except (PermissionError, OSError, FileExistsError) as e:
             await interface.display_error(f"Found error when moving: {e}")
             return MoveResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 error=str(e),
                 source_path=str(abs_source_path),

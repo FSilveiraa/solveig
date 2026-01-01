@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirement import CopyRequirement
+from solveig.schema.tool import CopyTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
@@ -22,29 +22,29 @@ class TestCopyValidation:
 
         # Empty source path should fail
         with pytest.raises(ValidationError) as exc_info:
-            CopyRequirement(source_path="", destination_path="/valid", **extra_kwargs)
+            CopyTool(source_path="", destination_path="/valid", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Empty destination path should fail
         with pytest.raises(ValidationError) as exc_info:
-            CopyRequirement(source_path="/valid", destination_path="", **extra_kwargs)
+            CopyTool(source_path="/valid", destination_path="", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Whitespace paths should fail
         with pytest.raises(ValidationError):
-            CopyRequirement(
+            CopyTool(
                 source_path="   \t\n   ", destination_path="/valid", **extra_kwargs
             )
 
         with pytest.raises(ValidationError):
-            CopyRequirement(
+            CopyTool(
                 source_path="/valid", destination_path="   \t\n   ", **extra_kwargs
             )
 
         # Valid paths should strip whitespace
-        req = CopyRequirement(
+        req = CopyTool(
             source_path="  /valid/source  ",
             destination_path="  /valid/dest  ",
             **extra_kwargs,
@@ -54,12 +54,12 @@ class TestCopyValidation:
 
     async def test_get_description(self):
         """Test CopyRequirement description method."""
-        description = CopyRequirement.get_description()
+        description = CopyTool.get_description()
         assert "copy(comment, source_path, destination_path)" in description
 
     async def test_display_header_file(self):
         """Test CopyRequirement display header for files."""
-        req = CopyRequirement(
+        req = CopyTool(
             source_path="/source/test.txt",
             destination_path="/dest/test.txt",
             comment="Copy test file",
@@ -74,7 +74,7 @@ class TestCopyValidation:
 
     async def test_display_header_directory(self):
         """Test CopyRequirement display header for directories."""
-        req = CopyRequirement(
+        req = CopyTool(
             source_path="/source/dir",
             destination_path="/dest/dir",
             comment="Copy test directory",
@@ -100,7 +100,7 @@ class TestFileOperations:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Copy test file",
@@ -123,7 +123,7 @@ class TestFileOperations:
 
             interface = MockInterface(choices=[1])  # Decline copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Decline copy",
@@ -151,7 +151,7 @@ class TestFileOperations:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Copy directory tree",
@@ -178,7 +178,7 @@ class TestFileOperations:
 
             interface = MockInterface(choices=[1])  # Decline copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Decline directory copy",
@@ -207,7 +207,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Auto-allowed file copy",
@@ -241,7 +241,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Auto-allowed directory copy",
@@ -271,7 +271,7 @@ class TestAutoAllowedPaths:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(auto_file),
                 destination_path=str(manual_file),
                 comment="Partial auto-allowed copy",
@@ -290,12 +290,12 @@ class TestErrorHandling:
 
     async def test_error_result_creation(self):
         """Test create_error_result method."""
-        req = CopyRequirement(
+        req = CopyTool(
             source_path="/source.txt", destination_path="/dest.txt", comment="Test"
         )
         error_result = req.create_error_result("Test error", accepted=False)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.error == "Test error"
         assert "/source.txt" in str(error_result.source_path)
@@ -309,7 +309,7 @@ class TestErrorHandling:
 
             interface = MockInterface()
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(nonexistent_file),
                 destination_path=str(dest_file),
                 comment="Copy missing source",
@@ -340,7 +340,7 @@ class TestErrorHandling:
             interface = MockInterface()
 
             try:
-                req = CopyRequirement(
+                req = CopyTool(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
                     comment="Copy protected source",
@@ -375,7 +375,7 @@ class TestErrorHandling:
             interface = MockInterface()
 
             try:
-                req = CopyRequirement(
+                req = CopyTool(
                     source_path=str(source_file),
                     destination_path=str(dest_file),
                     comment="Copy to protected destination",
@@ -423,7 +423,7 @@ class TestPathSecurity:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=tilde_source,
                 destination_path=tilde_dest,
                 comment="Tilde expansion test",
@@ -461,7 +461,7 @@ class TestPathSecurity:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=traversal_source,
                 destination_path=dest_file,
                 comment="Path traversal test",
@@ -498,7 +498,7 @@ class TestIntegrationScenarios:
 
             interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Copy large tree",
@@ -539,7 +539,7 @@ class TestIntegrationScenarios:
             # Accept copy for directory
             interface = MockInterface(choices=[0])
 
-            req = CopyRequirement(
+            req = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir / "copied"),
                 comment="Copy special files",
@@ -571,7 +571,7 @@ class TestIntegrationScenarios:
             # Decline to see the choice message
             interface1 = MockInterface(choices=[1])
 
-            req1 = CopyRequirement(
+            req1 = CopyTool(
                 source_path=str(source_file),
                 destination_path=str(dest_file),
                 comment="Copy file",
@@ -589,7 +589,7 @@ class TestIntegrationScenarios:
             # Decline to see the choice message
             interface2 = MockInterface(choices=[1])
 
-            req2 = CopyRequirement(
+            req2 = CopyTool(
                 source_path=str(source_dir),
                 destination_path=str(dest_dir),
                 comment="Copy directory",

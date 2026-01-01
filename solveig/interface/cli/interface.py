@@ -301,7 +301,7 @@ class TerminalInterface(SolveigInterface):
         is_dir: bool,
         size: int | None = None,
     ) -> str:
-        """Format path information for display - shared by all requirements."""
+        """Format path information for display - shared by all tools."""
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
         # add it to the printed info
         path_info = f"{'🗁 ' if is_dir else '🗎'} {path}"
@@ -320,7 +320,7 @@ class TerminalInterface(SolveigInterface):
         source_content: str | None = None,
         show_overwrite_warning: bool = True,
     ) -> None:
-        """Display move requirement header."""
+        """Display move tool header."""
         abs_source = Filesystem.get_absolute_path(source_path)
         abs_dest = (
             Filesystem.get_absolute_path(destination_path) if destination_path else None

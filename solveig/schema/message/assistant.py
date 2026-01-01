@@ -3,7 +3,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from solveig.interface import SolveigInterface
-from solveig.schema import Requirement
+from solveig.schema import BaseTool
 from solveig.schema.message.base import BaseMessage
 from solveig.schema.message.task import TASK_STATUS_MAP, Task
 
@@ -16,7 +16,7 @@ class AssistantMessage(BaseMessage):
     tasks: list[Task] | None = Field(
         None, description="List of tasks to track and display"
     )
-    requirements: list[Requirement] | None = (
+    tools: list[BaseTool] | None = (
         None  # Simplified - actual schema generated dynamically
     )
     # Store reasoning content and details from o1/o3/Gemini models

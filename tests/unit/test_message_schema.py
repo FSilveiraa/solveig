@@ -6,67 +6,67 @@ from typing import Union, get_args, get_origin
 import pytest
 
 from solveig.config import SolveigConfig
-from solveig.schema.dynamic import get_requirements_union, get_response_model
+from solveig.schema.dynamic import get_response_model, get_tools_union
 from solveig.schema.message import (
     AssistantMessage,
     SystemMessage,
     UserComment,
 )
 from solveig.schema.message.user import UserMessage
-from solveig.schema.requirement import ReadRequirement, WriteRequirement
-from solveig.schema.requirement.command import CommandRequirement
 from solveig.schema.result.command import CommandResult
+from solveig.schema.tool import ReadTool, WriteTool
+from solveig.schema.tool.command import CommandTool
 
 pytestmark = pytest.mark.anyio
 
 
-class TestRequirementUnionGeneration:
-    """Test requirement union generation with filtering."""
+class TestToolsUnionGeneration:
+    """Test tools union generation with filtering."""
 
     async def test_union_includes_command_requirement_by_default(self):
-        """Test union includes CommandRequirement when commands are enabled."""
+        """Test union includes CommandTool when commands are enabled."""
         config = SolveigConfig(no_commands=False)
-        union_type = get_requirements_union(config)
+        union_type = get_tools_union(config)
 
-        # Should be a union with multiple requirements
+        # Should be a union with multiple tools
         assert get_origin(union_type) is Union
-        requirement_types = get_args(union_type)
+        tool_types = get_args(union_type)
 
-        assert CommandRequirement in requirement_types
-        assert ReadRequirement in requirement_types
-        assert WriteRequirement in requirement_types
+        assert CommandTool in tool_types
+        assert ReadTool in tool_types
+        assert WriteTool in tool_types
 
     async def test_union_filters_out_commands_when_disabled(self):
         """Test union excludes CommandRequirement when no_commands=True."""
         config_with_commands = SolveigConfig(no_commands=False)
         config_no_commands = SolveigConfig(no_commands=True)
 
-        union_with_commands = get_requirements_union(config_with_commands)
-        union_no_commands = get_requirements_union(config_no_commands)
+        union_with_commands = get_tools_union(config_with_commands)
+        union_no_commands = get_tools_union(config_no_commands)
 
         # Get requirement names
         types_with_commands = get_args(union_with_commands)
         types_no_commands = get_args(union_no_commands)
 
         # Commands version should have CommandRequirement
-        assert CommandRequirement in types_with_commands
+        assert CommandTool in types_with_commands
 
         # No-commands version should NOT have CommandRequirement
-        assert CommandRequirement not in types_no_commands
+        assert CommandTool not in types_no_commands
 
         # But should still have file operations
-        assert ReadRequirement in types_no_commands
-        assert WriteRequirement in types_no_commands
+        assert ReadTool in types_no_commands
+        assert WriteTool in types_no_commands
 
     async def test_union_with_no_config_allows_commands(self):
         """Test union includes CommandRequirement when no config is provided."""
-        union_type = get_requirements_union()
+        union_type = get_tools_union()
 
         assert get_origin(union_type) is Union
         requirement_types = get_args(union_type)
 
         # Should include CommandRequirement by default
-        assert CommandRequirement in requirement_types
+        assert CommandTool in requirement_types
 
 
 class TestDynamicAssistantMessage:
@@ -92,7 +92,7 @@ class TestDynamicAssistantMessage:
         DynamicModel = get_response_model(config)
 
         # Inspect the Pydantic model's fields
-        requirements_field = DynamicModel.model_fields.get("requirements")
+        requirements_field = DynamicModel.model_fields.get("tools")
         assert requirements_field is not None
 
         # The full annotation should be Optional[list[Union[...]]]
@@ -107,8 +107,8 @@ class TestDynamicAssistantMessage:
         # And the contents of the list should be the union of requirements
         assert get_origin(list_contents) is Union
         union_args = get_args(list_contents)
-        assert CommandRequirement in union_args
-        assert ReadRequirement in union_args
+        assert CommandTool in union_args
+        assert ReadTool in union_args
 
     async def test_no_command_config_propagates_to_dynamic_model(self):
         """
@@ -118,16 +118,16 @@ class TestDynamicAssistantMessage:
         config = SolveigConfig(no_commands=True)
         DynamicModel = get_response_model(config)
 
-        requirements_field = DynamicModel.model_fields["requirements"]
+        requirements_field = DynamicModel.model_fields["tools"]
 
         # Dig into the annotation: Optional[list[Union[...]]]
         list_union = get_args(requirements_field.annotation)[0]
         requirements_union = get_args(list_union)[0]
         final_requirement_types = get_args(requirements_union)
 
-        assert CommandRequirement not in final_requirement_types
-        assert ReadRequirement in final_requirement_types
-        assert WriteRequirement in final_requirement_types
+        assert CommandTool not in final_requirement_types
+        assert ReadTool in final_requirement_types
+        assert WriteTool in final_requirement_types
 
 
 class TestResponseModelCaching:
@@ -156,20 +156,18 @@ class TestResponseModelCaching:
 
         # Check the actual type annotations to be sure
         union_with_args = get_args(
-            get_args(
-                get_args(model_with_commands.model_fields["requirements"].annotation)[0]
-            )[0]
+            get_args(get_args(model_with_commands.model_fields["tools"].annotation)[0])[
+                0
+            ]
         )
         union_without_args = get_args(
             get_args(
-                get_args(
-                    model_without_commands.model_fields["requirements"].annotation
-                )[0]
+                get_args(model_without_commands.model_fields["tools"].annotation)[0]
             )[0]
         )
 
-        assert CommandRequirement in union_with_args
-        assert CommandRequirement not in union_without_args
+        assert CommandTool in union_with_args
+        assert CommandTool not in union_without_args
 
 
 class TestMessageSerialization:
@@ -202,20 +200,20 @@ class TestMessageSerialization:
 
     async def test_assistant_message_basic_serialization(self):
         """Test AssistantMessage basic serialization."""
-        message = AssistantMessage(comment="Thinking...", requirements=None)
+        message = AssistantMessage(comment="Thinking...", tools=None)
         openai_dict = message.to_openai()
 
         assert openai_dict["role"] == "assistant"
         content = json.loads(openai_dict["content"])
         assert "comment" in content
-        assert "requirements" in content
+        assert "tools" in content
 
     async def test_user_message_with_results_serialization(self):
         """Test UserMessage with RequirementResult objects serializes properly."""
         # Create a command requirement and result
-        req = CommandRequirement(command="echo test", comment="Test command")
+        tool = CommandTool(command="echo test", comment="Test command")
         result = CommandResult(
-            requirement=req,
+            tool=tool,
             command="echo test",
             accepted=True,
             success=True,
@@ -242,9 +240,7 @@ class TestMessageSerialization:
 
         # THE CRITICAL TEST: Verify result contains actual output data
         result_json = content["responses"][1]
-        assert (
-            "requirement" not in result_json
-        )  # Ensure the Requirement object itself is excluded
+        assert "tool" not in result_json  # Ensure the Tool object itself is excluded
         assert result_json["accepted"] is True
         assert result_json["success"] is True
         assert result_json["command"] == "echo test"

@@ -1,7 +1,7 @@
 """
 Tests for solveig.utils.filesystem module.
 
-The requirement tests were first implemented and they already test the actual file
+The tool tests were first implemented and they already test the actual file
 operations, so this file focuses on testing the metadata class and size parsing.
 """
 

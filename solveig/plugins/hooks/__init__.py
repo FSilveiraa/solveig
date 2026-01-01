@@ -32,19 +32,19 @@ def _get_plugin_name_from_function(fun: Callable) -> str:
     return fun.__name__
 
 
-def before(requirements: tuple[type, ...] | None = None):
+def before(tools: tuple[type, ...] | None = None):
     def register(fun: Callable):
         plugin_name = _get_plugin_name_from_function(fun)
-        HOOKS.all[plugin_name][0].append((fun, requirements))
+        HOOKS.all[plugin_name][0].append((fun, tools))
         return fun
 
     return register
 
 
-def after(requirements: tuple[type, ...] | None = None):
+def after(tools: tuple[type, ...] | None = None):
     def register(fun):
         plugin_name = _get_plugin_name_from_function(fun)
-        HOOKS.all[plugin_name][1].append((fun, requirements))
+        HOOKS.all[plugin_name][1].append((fun, tools))
         return fun
 
     return register

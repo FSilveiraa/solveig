@@ -1,4 +1,4 @@
-"""Copy requirement - allows LLM to copy files and directories."""
+"""Copy tool - allows LLM to copy files and directories."""
 
 from typing import Literal
 
@@ -9,10 +9,10 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import CopyResult
 from solveig.utils.file import Filesystem
 
-from .base import Requirement, validate_non_empty_path
+from .base import BaseTool, validate_non_empty_path
 
 
-class CopyRequirement(Requirement):
+class CopyTool(BaseTool):
     title: Literal["copy"] = "copy"
     source_path: str = Field(
         ...,
@@ -28,7 +28,7 @@ class CopyRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display copy requirement header."""
+        """Display copy tool header."""
         await super().display_header(interface)
         await interface.display_file_info(
             source_path=self.source_path,
@@ -38,7 +38,7 @@ class CopyRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "CopyResult":
         """Create CopyResult with error."""
         return CopyResult(
-            requirement=self,
+            tool=self,
             accepted=accepted,
             error=error_message,
             source_path=str(Filesystem.get_absolute_path(self.source_path)),
@@ -68,7 +68,7 @@ class CopyRequirement(Requirement):
                 f"Cannot copy from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
             )
             return CopyResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 error=str(e),
                 source_path=str(abs_source_path),
@@ -92,7 +92,7 @@ class CopyRequirement(Requirement):
             != 0
         ):
             return CopyResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
@@ -107,7 +107,7 @@ class CopyRequirement(Requirement):
             )
             await interface.display_success("Copied")
             return CopyResult(
-                requirement=self,
+                tool=self,
                 accepted=True,
                 source_path=str(abs_source_path),
                 destination_path=str(abs_destination_path),
@@ -115,7 +115,7 @@ class CopyRequirement(Requirement):
         except (PermissionError, OSError, FileExistsError) as e:
             await interface.display_error(f"Found error when copying: {e}")
             return CopyResult(
-                requirement=self,
+                tool=self,
                 accepted=False,
                 error=str(e),
                 source_path=str(abs_source_path),

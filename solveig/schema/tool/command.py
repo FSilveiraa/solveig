@@ -1,4 +1,4 @@
-"""Command requirement - allows LLM to execute shell commands."""
+"""Command tool - allows LLM to execute shell commands."""
 
 import re
 from typing import Literal
@@ -11,10 +11,10 @@ from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import PersistentShell, get_persistent_shell
 
-from .base import Requirement
+from .base import BaseTool
 
 
-class CommandRequirement(Requirement):
+class CommandTool(BaseTool):
     title: Literal["command"] = "command"
     command: str = Field(
         ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
@@ -37,7 +37,7 @@ class CommandRequirement(Requirement):
         return command
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display command requirement header."""
+        """Display command tool header."""
         await super().display_header(interface)
         await interface.display_text(
             f"Timeout: {f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}"
@@ -49,7 +49,7 @@ class CommandRequirement(Requirement):
     ) -> "CommandResult":
         """Create CommandResult with error."""
         return CommandResult(
-            requirement=self,
+            tool=self,
             command=self.command,
             accepted=accepted,
             success=False,
@@ -107,7 +107,7 @@ class CommandRequirement(Requirement):
                         f"Found error when running command: {error_str}"
                     )
                     return CommandResult(
-                        requirement=self,
+                        tool=self,
                         command=self.command,
                         accepted=True,
                         success=False,
@@ -136,11 +136,11 @@ class CommandRequirement(Requirement):
                 error = "<hidden>"
 
             return CommandResult(
-                requirement=self,
+                tool=self,
                 command=self.command,
                 accepted=True,
                 success=True,
                 stdout=output,
                 error=error,
             )
-        return CommandResult(requirement=self, command=self.command, accepted=False)
+        return CommandResult(tool=self, command=self.command, accepted=False)

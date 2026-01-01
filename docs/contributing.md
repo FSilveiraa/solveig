@@ -73,7 +73,7 @@ This layered approach ensures that Solveig remains a powerful, yet fully user-co
 ### Test Structure
 
 - `tests/unit/` - Unit tests for individual components
-- `tests/integration/` - Integration tests (requirements)
+- `tests/integration/` - Integration tests (tools)
 - `tests/system/` - Full end-to-end tests (mocks LLM client and CLI interface)
 - `tests/plugins/` - Tests specifically for plugins
 - `tests/mocks/` - Mock utilities and test helpers
@@ -170,8 +170,8 @@ async def test_real_command_in_temp_dir(tmp_path):
 ## Plugin Development
 
 Solveig supports two types of plugins:
-- **Hook plugins**: Validate or modify existing requirements (see the [shellcheck plugin](/solveig/plugins/hooks/shellcheck.py))
-- **Requirement plugins**: Add new LLM capabilities (see the [tree plugin](/solveig/plugins/schema/tree.py))
+- **Hook plugins**: Validate or modify existing tools (see the [shellcheck plugin](/solveig/plugins/hooks/shellcheck.py))
+- **Tool plugins**: Add new LLM capabilities (see the [tree plugin](/solveig/plugins/tools/tree.py))
 
 For detailed plugin development guide, see [Plugins](./plugins.md).
 

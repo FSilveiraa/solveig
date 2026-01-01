@@ -16,7 +16,7 @@ pytestmark = [
 
 from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
-from solveig.schema.requirement import CommandRequirement, ReadRequirement
+from solveig.schema.tool import CommandTool, ReadTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
 
 
@@ -37,13 +37,9 @@ class TestConversationFlow:
                     Task(status="pending", description="Check current directory path"),
                     Task(status="pending", description="List files"),
                 ],
-                requirements=[
-                    CommandRequirement(
-                        command="pwd", comment="Check current directory"
-                    ),
-                    CommandRequirement(
-                        command="ls -la", comment="List files with details"
-                    ),
+                tools=[
+                    CommandTool(command="pwd", comment="Check current directory"),
+                    CommandTool(command="ls -la", comment="List files with details"),
                 ],
             ),
             AssistantMessage(
@@ -117,13 +113,13 @@ class TestConversationFlow:
                             description="Update plan to organize files",
                         ),
                     ],
-                    requirements=[
-                        ReadRequirement(
+                    tools=[
+                        ReadTool(
                             path=temp_dir,
                             metadata_only=False,
                             comment="Examine directory contents",
                         ),
-                        CommandRequirement(
+                        CommandTool(
                             command=f"find {temp_dir_path} -name '*.txt'",
                             comment="Find text files",
                         ),
@@ -179,8 +175,8 @@ class TestConversationFlow:
         assistant_messages = [
             AssistantMessage(
                 comment="Here's a failed command",
-                requirements=[
-                    CommandRequirement(
+                tools=[
+                    CommandTool(
                         command="nonexistent_command", comment="This will fail"
                     ),
                 ],

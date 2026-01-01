@@ -11,9 +11,9 @@ import pytest
 
 from solveig.plugins import hooks
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from solveig.schema.requirement import (
-    CommandRequirement,
-    ReadRequirement,
+from solveig.schema.tool import (
+    CommandTool,
+    ReadTool,
 )
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -56,7 +56,7 @@ class TestShellcheckPlugin:
         """Test that dangerous commands produce properly formatted error messages."""
         interface = MockInterface()
         await load_plugins(SHELLCHECK_CONFIG)
-        req = CommandRequirement(
+        req = CommandTool(
             command=f"mkfs.ext4 {tmp_path}/__non-existent-path__/sdx1",
             comment="Test dangerous command error formatting",
         )
@@ -80,7 +80,7 @@ class TestShellcheckPlugin:
         """
         interface = MockInterface()
         await load_plugins(SHELLCHECK_CONFIG)
-        cmd_req = CommandRequirement(
+        cmd_req = CommandTool(
             command="echo 'hello world'", comment="Test normal command"
         )
         interface.choices.extend([2])  # Decline to run
@@ -97,7 +97,7 @@ class TestShellcheckPlugin:
         """Test successful shellcheck validation."""
         interface = MockInterface()
         await load_plugins(SHELLCHECK_CONFIG)
-        cmd_req = CommandRequirement(
+        cmd_req = CommandTool(
             command="echo 'properly quoted'", comment="Test successful validation"
         )
         interface.choices.extend([2])  # Decline to run
@@ -113,7 +113,7 @@ class TestShellcheckPlugin:
         """Test shellcheck finding validation issues."""
         interface = MockInterface()
         await load_plugins(SHELLCHECK_CONFIG)
-        req = CommandRequirement(
+        req = CommandTool(
             comment="Test",
             command="""
 if then
@@ -145,7 +145,7 @@ fi
             mock_create_subprocess_shell.return_value = mock_process
 
             config = SHELLCHECK_CONFIG
-            req = CommandRequirement(command="echo test", comment="Test")
+            req = CommandTool(command="echo test", comment="Test")
             interface = MockInterface()
             interface.choices.extend([2])  # Decline to run the command
 
@@ -185,7 +185,7 @@ class TestShellcheckPluginIntegration:
         await load_plugins(SHELLCHECK_CONFIG)
 
         # CommandRequirement with dangerous pattern should trigger shellcheck
-        cmd_req = CommandRequirement(
+        cmd_req = CommandTool(
             command="""
 if then
   echo "broken"
@@ -201,9 +201,7 @@ fi
         assert "execution cancelled due to shellcheck" in result.error.lower()
 
         # Test that ReadRequirement doesn't trigger shellcheck
-        read_req = ReadRequirement(
-            path=str(tmp_path), metadata_only=True, comment="Test read"
-        )
+        read_req = ReadTool(path=str(tmp_path), metadata_only=True, comment="Test read")
         interface.choices.extend([1])  # Decline sending metadata
         result = await read_req.solve(SHELLCHECK_CONFIG, interface)
 

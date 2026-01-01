@@ -2,7 +2,7 @@
 Domain exception classes for Solveig.
 
 These are core domain exceptions used throughout the system by both
-core requirements and plugins. They represent validation failures,
+core tools and plugins. They represent validation failures,
 processing errors, and security issues.
 """
 
@@ -22,7 +22,7 @@ class PluginException(Exception):
 class ValidationError(PluginException):
     """
     Raised when validation fails.
-    Used by before hooks to indicate a requirement should not proceed.
+    Used by before hooks to indicate a tools should not proceed.
     """
 
     pass

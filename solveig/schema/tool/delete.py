@@ -1,4 +1,4 @@
-"""Delete requirement - allows LLM to delete files and directories."""
+"""Delete tool - allows LLM to delete files and directories."""
 
 from typing import Literal
 
@@ -9,10 +9,10 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import DeleteResult
 from solveig.utils.file import Filesystem
 
-from .base import Requirement, validate_non_empty_path
+from .base import BaseTool, validate_non_empty_path
 
 
-class DeleteRequirement(Requirement):
+class DeleteTool(BaseTool):
     title: Literal["delete"] = "delete"
     path: str = Field(
         ...,
@@ -25,7 +25,7 @@ class DeleteRequirement(Requirement):
         return validate_non_empty_path(path)
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        """Display delete requirement header."""
+        """Display delete tool header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
         # abs_path = Filesystem.get_absolute_path(self.path)
@@ -40,7 +40,7 @@ class DeleteRequirement(Requirement):
     def create_error_result(self, error_message: str, accepted: bool) -> "DeleteResult":
         """Create DeleteResult with error."""
         return DeleteResult(
-            requirement=self,
+            tool=self,
             path=str(Filesystem.get_absolute_path(self.path)),
             accepted=accepted,
             error=error_message,
@@ -63,7 +63,7 @@ class DeleteRequirement(Requirement):
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(f"Cannot delete {str(abs_path)}: {e}")
             return DeleteResult(
-                requirement=self, accepted=False, error=str(e), path=str(abs_path)
+                tool=self, accepted=False, error=str(e), path=str(abs_path)
             )
 
         auto_delete = Filesystem.path_matches_patterns(
@@ -79,15 +79,15 @@ class DeleteRequirement(Requirement):
             )
             == 0
         ):
-            return DeleteResult(requirement=self, accepted=False, path=str(abs_path))
+            return DeleteResult(tool=self, accepted=False, path=str(abs_path))
 
         try:
             # Perform the delete operation - use utils/file.py method
             await Filesystem.delete(abs_path)
             await interface.display_success("Deleted")
-            return DeleteResult(requirement=self, path=str(abs_path), accepted=True)
+            return DeleteResult(tool=self, path=str(abs_path), accepted=True)
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
             return DeleteResult(
-                requirement=self, accepted=True, error=str(e), path=str(abs_path)
+                tool=self, accepted=True, error=str(e), path=str(abs_path)
             )

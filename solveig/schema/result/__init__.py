@@ -1,6 +1,6 @@
-"""Results module - response types for requirement operations."""
+"""Results module - response types for tool operations."""
 
-from .base import RequirementResult
+from .base import ToolResult
 from .command import CommandResult
 from .copy import CopyResult
 from .delete import DeleteResult
@@ -9,7 +9,7 @@ from .read import ReadResult
 from .write import WriteResult
 
 __all__ = [
-    "RequirementResult",
+    "ToolResult",
     "ReadResult",
     "WriteResult",
     "CommandResult",

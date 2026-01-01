@@ -1,5 +1,5 @@
 """
-Registry for dynamically discovered plugin requirements.
+Registry for dynamically discovered plugin tools.
 """
 
 from typing import TYPE_CHECKING, TypeVar
@@ -11,8 +11,8 @@ from solveig.plugins.utils import rescan_and_load_plugins
 # The `if TYPE_CHECKING:` block is a standard Python trick to solve a circular import problem.
 #
 # The Problem:
-# 1. This file needs to know what a `Requirement` is for type hinting (`def register(cls: type[Requirement])`).
-# 2. However, the file that defines `Requirement` (`solveig/schema/requirement/base.py`) needs
+# 1. This file needs to know what a `BaseTool` is for type hinting (`def register(cls: type[BaseTool])`).
+# 2. However, the file that defines `BaseTool` (`solveig/schema/tool/base.py`) needs
 #    to import from the `plugins` package to run hooks.
 # 3. This creates a circular dependency: `plugins` -> `schema` -> `plugins`, which would crash the application.
 #
@@ -22,55 +22,51 @@ from solveig.plugins.utils import rescan_and_load_plugins
 # - During STATIC ANALYSIS (when you run `mypy`), `TYPE_CHECKING` is `True`. The import happens,
 #   allowing `mypy` to correctly validate the types.
 if TYPE_CHECKING:
-    from solveig.schema.requirement.base import Requirement
+    from solveig.schema.tool.base import BaseTool
 
 # A TypeVar is used to tell the type checker that the decorator returns the exact same class
-# that it received as an argument. This preserves the specific type (e.g., `TreeRequirement`)
+# that it received as an argument. This preserves the specific type (e.g., `TreeTool`)
 # for better static analysis downstream.
-T = TypeVar("T", bound=type["Requirement"])
+T = TypeVar("T", bound=type["BaseTool"])
 
 
-class PLUGIN_REQUIREMENTS:
-    all: dict[str, type["Requirement"]] = {}
-    active: dict[str, type["Requirement"]] = {}
+class PLUGIN_TOOLS:
+    all: dict[str, type["BaseTool"]] = {}
+    active: dict[str, type["BaseTool"]] = {}
 
     def __new__(cls, *args, **kwargs):
-        raise TypeError(
-            "PLUGIN_REQUIREMENTS is a static registry and cannot be instantiated"
-        )
+        raise TypeError("PLUGIN_TOOLS is a static registry and cannot be instantiated")
 
     @classmethod
-    def register(cls, requirement_class: T) -> T:
+    def register(cls, tool_class: T) -> T:
         """
-        Registers a plugin requirement. Used as a decorator.
-        Adds the requirement to the `all` hook plugins list.
+        Registers a plugin tool. Used as a decorator.
+        Adds the tool to the `all` hook plugins list.
         """
-        cls.all[requirement_class.__name__] = requirement_class
-        return requirement_class
+        cls.all[tool_class.__name__] = tool_class
+        return tool_class
 
     @classmethod
     def clear(cls):
-        """Clear all registered plugin requirements (used by tests)."""
+        """Clear all registered plugin tools (used by tests)."""
         cls.active.clear()
         cls.all.clear()  # TODO: may be necessary for true plugin reloading, but then we have to ensure that the reloading really... reloads classes from memory. AFAIK decorators don't get re-called from re-importing the module
 
 
-async def load_and_filter_requirements(
-    config: SolveigConfig, interface: SolveigInterface
-):
+async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterface):
     """
-    Discover, load, and filter requirement plugins, and update the UI.
+    Discover, load, and filter tool plugins, and update the UI.
     """
-    PLUGIN_REQUIREMENTS.clear()
+    PLUGIN_TOOLS.clear()
 
     await rescan_and_load_plugins(
         plugin_module_path="solveig.plugins.schema",
         interface=interface,
     )
 
-    for plugin_name, requirement_class in PLUGIN_REQUIREMENTS.all.items():
+    for plugin_name, tool_class in PLUGIN_TOOLS.all.items():
         if config.plugins and plugin_name in config.plugins:
-            PLUGIN_REQUIREMENTS.active[plugin_name] = requirement_class
+            PLUGIN_TOOLS.active[plugin_name] = tool_class
             await interface.display_success(f"'{plugin_name}': Loaded")
         else:
             await interface.display_warning(
@@ -78,10 +74,10 @@ async def load_and_filter_requirements(
             )
 
 
-register_requirement = PLUGIN_REQUIREMENTS.register
+register_tool = PLUGIN_TOOLS.register
 
 __all__ = [
-    "PLUGIN_REQUIREMENTS",
-    "register_requirement",
-    "load_and_filter_requirements",
+    "PLUGIN_TOOLS",
+    "register_tool",
+    "load_and_filter_tools",
 ]

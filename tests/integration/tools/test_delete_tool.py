@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirement import DeleteRequirement
+from solveig.schema.tool import DeleteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
@@ -22,26 +22,26 @@ class TestDeleteValidation:
 
         # Empty path should fail
         with pytest.raises(ValidationError) as exc_info:
-            DeleteRequirement(path="", **extra_kwargs)
+            DeleteTool(path="", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Whitespace path should fail
         with pytest.raises(ValidationError):
-            DeleteRequirement(path="   \t\n   ", **extra_kwargs)
+            DeleteTool(path="   \t\n   ", **extra_kwargs)
 
         # Valid path should strip whitespace
-        req = DeleteRequirement(path="  /valid/path  ", **extra_kwargs)
+        req = DeleteTool(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
     async def test_get_description(self):
         """Test DeleteRequirement description method."""
-        description = DeleteRequirement.get_description()
+        description = DeleteTool.get_description()
         assert "delete(comment, path)" in description
 
     async def test_display_header_file(self):
         """Test DeleteRequirement display header for files."""
-        req = DeleteRequirement(path="/test/delete_me.txt", comment="Delete test file")
+        req = DeleteTool(path="/test/delete_me.txt", comment="Delete test file")
         interface = MockInterface()
         await req.display_header(interface)
 
@@ -53,9 +53,7 @@ class TestDeleteValidation:
 
     async def test_display_header_directory(self):
         """Test DeleteRequirement display header for directories."""
-        req = DeleteRequirement(
-            path="/test/delete_dir", comment="Delete test directory"
-        )
+        req = DeleteTool(path="/test/delete_dir", comment="Delete test directory")
         interface = MockInterface()
         await req.display_header(interface)
 
@@ -77,7 +75,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(path=str(test_file), comment="Delete test file")
+            req = DeleteTool(path=str(test_file), comment="Delete test file")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -93,7 +91,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline deletion
 
-            req = DeleteRequirement(path=str(test_file), comment="Decline deletion")
+            req = DeleteTool(path=str(test_file), comment="Decline deletion")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -117,7 +115,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(path=str(test_dir), comment="Delete directory tree")
+            req = DeleteTool(path=str(test_dir), comment="Delete directory tree")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -134,9 +132,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline deletion
 
-            req = DeleteRequirement(
-                path=str(test_dir), comment="Decline directory deletion"
-            )
+            req = DeleteTool(path=str(test_dir), comment="Decline directory deletion")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -153,9 +149,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(
-                path=str(empty_dir), comment="Delete empty directory"
-            )
+            req = DeleteTool(path=str(empty_dir), comment="Delete empty directory")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -178,9 +172,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = DeleteRequirement(
-                path=str(test_file), comment="Auto-allowed file deletion"
-            )
+            req = DeleteTool(path=str(test_file), comment="Auto-allowed file deletion")
 
             result = await req.actually_solve(config, interface)
 
@@ -207,7 +199,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = DeleteRequirement(
+            req = DeleteTool(
                 path=str(test_dir), comment="Auto-allowed directory deletion"
             )
 
@@ -235,7 +227,7 @@ class TestAutoAllowedPaths:
 
             # Test auto-allowed (no choice)
             interface1 = MockInterface()
-            req1 = DeleteRequirement(path=str(auto_file), comment="Auto deletion")
+            req1 = DeleteTool(path=str(auto_file), comment="Auto deletion")
             result1 = await req1.actually_solve(config, interface1)
 
             assert result1.accepted
@@ -245,7 +237,7 @@ class TestAutoAllowedPaths:
             # Test manual choice (requires input)
             interface2 = MockInterface()
             interface2.choices.append(0)  # Accept deletion
-            req2 = DeleteRequirement(path=str(manual_file), comment="Manual deletion")
+            req2 = DeleteTool(path=str(manual_file), comment="Manual deletion")
             result2 = await req2.actually_solve(config, interface2)
 
             assert result2.accepted
@@ -258,10 +250,10 @@ class TestErrorHandling:
 
     async def test_error_result_creation(self):
         """Test create_error_result method."""
-        req = DeleteRequirement(path="/test.txt", comment="Test")
+        req = DeleteTool(path="/test.txt", comment="Test")
         error_result = req.create_error_result("Test error", accepted=False)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.error == "Test error"
         assert "/test.txt" in str(error_result.path)
@@ -270,9 +262,7 @@ class TestErrorHandling:
         """Test deleting a file that doesn't exist."""
         interface = MockInterface()
 
-        req = DeleteRequirement(
-            path="/nonexistent/file.txt", comment="Delete missing file"
-        )
+        req = DeleteTool(path="/nonexistent/file.txt", comment="Delete missing file")
 
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -298,9 +288,7 @@ class TestErrorHandling:
             interface = MockInterface()
 
             try:
-                req = DeleteRequirement(
-                    path=str(test_file), comment="Delete protected file"
-                )
+                req = DeleteTool(path=str(test_file), comment="Delete protected file")
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -324,7 +312,7 @@ class TestErrorHandling:
             # Make file unreadable/undeletable after validation
 
             with open(test_file):  # Hold file open to potentially prevent deletion
-                req = DeleteRequirement(
+                req = DeleteTool(
                     path=str(test_file), comment="Deletion that might fail"
                 )
 
@@ -353,7 +341,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(path=tilde_path, comment="Tilde expansion test")
+            req = DeleteTool(path=tilde_path, comment="Tilde expansion test")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -383,7 +371,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(path=traversal_path, comment="Path traversal test")
+            req = DeleteTool(path=traversal_path, comment="Path traversal test")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -416,7 +404,7 @@ class TestIntegrationScenarios:
             interface = MockInterface()
             interface.choices.append(0)  # Accept deletion
 
-            req = DeleteRequirement(path=str(large_dir), comment="Delete large tree")
+            req = DeleteTool(path=str(large_dir), comment="Delete large tree")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -445,9 +433,7 @@ class TestIntegrationScenarios:
             for filename in special_files:
                 file_path = Path(temp_dir) / filename
 
-                req = DeleteRequirement(
-                    path=str(file_path), comment=f"Delete {filename}"
-                )
+                req = DeleteTool(path=str(file_path), comment=f"Delete {filename}")
 
                 result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -467,7 +453,7 @@ class TestIntegrationScenarios:
             interface1 = MockInterface()
             interface1.choices.append(1)  # Decline to see the choice message
 
-            req1 = DeleteRequirement(path=str(test_file), comment="Delete file")
+            req1 = DeleteTool(path=str(test_file), comment="Delete file")
 
             result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
 
@@ -481,7 +467,7 @@ class TestIntegrationScenarios:
             interface2 = MockInterface()
             interface2.choices.append(1)  # Decline to see the choice message
 
-            req2 = DeleteRequirement(path=str(test_dir), comment="Delete directory")
+            req2 = DeleteTool(path=str(test_dir), comment="Delete directory")
 
             result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
 

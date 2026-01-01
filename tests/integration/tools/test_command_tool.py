@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirement import CommandRequirement
+from solveig.schema.tool import CommandTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking but allow subprocess mocking
@@ -25,40 +25,40 @@ class TestCommandValidation:
 
         # Empty command should fail
         with pytest.raises(ValidationError) as exc_info:
-            CommandRequirement(command="", **extra_kwargs)
+            CommandTool(command="", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty command" in error_msg
 
         # Whitespace command should fail
         with pytest.raises(ValidationError):
-            CommandRequirement(command="   \t\n   ", **extra_kwargs)
+            CommandTool(command="   \t\n   ", **extra_kwargs)
 
         # Valid command should strip whitespace
-        req = CommandRequirement(command="  echo hello  ", **extra_kwargs)
+        req = CommandTool(command="  echo hello  ", **extra_kwargs)
         assert req.command == "echo hello"
 
     async def test_timeout_defaults(self):
         """Test timeout field defaults and validation."""
-        req = CommandRequirement(command="echo test", comment="test")
+        req = CommandTool(command="echo test", comment="test")
         assert req.timeout == 10.0
 
         # Custom timeout
-        req = CommandRequirement(command="echo test", comment="test", timeout=5.0)
+        req = CommandTool(command="echo test", comment="test", timeout=5.0)
         assert req.timeout == 5.0
 
         # Detached process timeout
-        req = CommandRequirement(command="echo test", comment="test", timeout=0)
+        req = CommandTool(command="echo test", comment="test", timeout=0)
         assert req.timeout == 0
 
     async def test_get_description(self):
-        """Test CommandRequirement description method."""
-        description = CommandRequirement.get_description()
+        """Test CommandTool description method."""
+        description = CommandTool.get_description()
         assert "command(comment, command, timeout=" in description
         assert "execute shell commands" in description
 
     async def test_display_header_blocking_command(self):
-        """Test CommandRequirement display header for blocking commands."""
-        req = CommandRequirement(
+        """Test CommandTool display header for blocking commands."""
+        req = CommandTool(
             command="echo 'Hello World'", comment="Test echo command", timeout=5.0
         )
         interface = MockInterface()
@@ -71,7 +71,7 @@ class TestCommandValidation:
 
     async def test_display_header_detached_command(self):
         """Test CommandRequirement display header for detached commands."""
-        req = CommandRequirement(
+        req = CommandTool(
             command="nohup long_process", comment="Test detached command", timeout=0
         )
         interface = MockInterface()
@@ -90,9 +90,7 @@ class TestCommandChoices:
         """Test choice 0: Run and send output with a real, sandboxed shell."""
         interface = MockInterface(choices=[0])  # Run and send
 
-        req = CommandRequirement(
-            command="echo 'hello world'", comment="Test echo command"
-        )
+        req = CommandTool(command="echo 'hello world'", comment="Test echo command")
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
@@ -104,7 +102,7 @@ class TestCommandChoices:
         """Test choice 1: Run and inspect first, then send, with a real shell."""
         interface = MockInterface(choices=[1, 0])  # Inspect first, then send
 
-        req = CommandRequirement(
+        req = CommandTool(
             command="echo 'hostname.local'",  # Use echo to avoid network/system variance
             comment="Get hostname",
         )
@@ -125,7 +123,7 @@ class TestCommandChoices:
         secret_file.write_text("secret data")
         interface = MockInterface(choices=[1, 1])  # Inspect first, then hide
 
-        req = CommandRequirement(
+        req = CommandTool(
             command=f"cat {secret_file.name}", comment="Read sensitive file"
         )
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -139,9 +137,7 @@ class TestCommandChoices:
         """Test choice 2: Don't run command."""
         interface = MockInterface(choices=[2])  # Don't run
 
-        req = CommandRequirement(
-            command="rm important_file.txt", comment="Dangerous command"
-        )
+        req = CommandTool(command="rm important_file.txt", comment="Dangerous command")
 
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
@@ -153,7 +149,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[0])  # Run and send
 
         # This command is guaranteed to produce an error on stderr
-        req = CommandRequirement(
+        req = CommandTool(
             command="ls /nonexistent_directory_for_test", comment="Command with error"
         )
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -168,9 +164,7 @@ class TestCommandChoices:
         test_file = tmp_path / "newfile"
         interface = MockInterface(choices=[0])  # Run and send
 
-        req = CommandRequirement(
-            command=f"touch {test_file.name}", comment="Silent command"
-        )
+        req = CommandTool(command=f"touch {test_file.name}", comment="Silent command")
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
@@ -196,7 +190,7 @@ class TestAutoExecuteCommands:
         interface = MockInterface()
 
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
-        req = CommandRequirement(command="ls", comment="List directory")
+        req = CommandTool(command="ls", comment="List directory")
         result = await req.actually_solve(config, interface)
 
         assert result.accepted
@@ -214,7 +208,7 @@ class TestAutoExecuteCommands:
         interface = MockInterface(choices=[0])  # Manually approve the command
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
-        req = CommandRequirement(command="echo hello", comment="Echo command")
+        req = CommandTool(command="echo hello", comment="Echo command")
         result = await req.actually_solve(config, interface)
 
         assert result.accepted
@@ -246,7 +240,7 @@ class TestAutoExecuteCommands:
             if not should_auto_execute:
                 interface.choices.append(2)  # Don't run
 
-            req = CommandRequirement(command=command, comment=f"Test {command}")
+            req = CommandTool(command=command, comment=f"Test {command}")
             result = await req.actually_solve(config, interface)
 
             if should_auto_execute:
@@ -265,7 +259,7 @@ class TestDetachedCommands:
         """Test that timeout <= 0 is treated as a detached process by the real shell."""
         interface = MockInterface(choices=[0])  # Run and send
 
-        req = CommandRequirement(
+        req = CommandTool(
             command='echo "background" &',
             comment="Detached echo",
             timeout=0,  # Detached
@@ -287,7 +281,7 @@ class TestDetachedCommands:
         interface = MockInterface(choices=[0])  # Run and send
 
         interface.choices.append(0)
-        req1 = CommandRequirement(
+        req1 = CommandTool(
             command="echo blocking", comment="Blocking command", timeout=5.0
         )
         result1 = await req1.actually_solve(DEFAULT_CONFIG, interface)
@@ -297,7 +291,7 @@ class TestDetachedCommands:
 
         # Test detached command
         interface.choices.append(0)
-        req2 = CommandRequirement(
+        req2 = CommandTool(
             command="echo detached &",
             comment="Detached command",
             timeout=-1,  # Negative also means detached
@@ -313,10 +307,10 @@ class TestErrorHandling:
 
     async def test_error_result_creation(self):
         """Test create_error_result method."""
-        req = CommandRequirement(command="test command", comment="Test")
+        req = CommandTool(command="test command", comment="Test")
         error_result = req.create_error_result("Test error", accepted=False)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.success is False
         assert error_result.error == "Test error"
@@ -337,9 +331,7 @@ class TestWorkingDirectoryTracking:
         subdir.mkdir()
 
         # 2. CD into the subdirectory
-        cd_req = CommandRequirement(
-            command=f"cd {subdir.name}", comment="Change to new_dir"
-        )
+        cd_req = CommandTool(command=f"cd {subdir.name}", comment="Change to new_dir")
         cd_result = await cd_req.actually_solve(DEFAULT_CONFIG, interface)
         assert cd_result.success
 
@@ -356,7 +348,7 @@ class TestWorkingDirectoryTracking:
         """Test that detached commands don't update stats with CWD."""
         interface = MockInterface(choices=[0])  # Run and send
 
-        req = CommandRequirement(
+        req = CommandTool(
             command="echo background &",
             comment="Detached process",
             timeout=0,  # Detached
@@ -383,23 +375,19 @@ class TestShellIntegration:
 
         # 1. Create a subdirectory
         interface.choices.append(0)
-        mkdir_req = CommandRequirement(
-            command=f"mkdir {subdir.name}", comment="Create subdir"
-        )
+        mkdir_req = CommandTool(command=f"mkdir {subdir.name}", comment="Create subdir")
         mkdir_result = await mkdir_req.actually_solve(DEFAULT_CONFIG, interface)
         assert mkdir_result.success
 
         # 2. CD into the new subdirectory
         interface.choices.append(0)
-        cd_req_2 = CommandRequirement(
-            command=f"cd {subdir.name}", comment="Change to subdir"
-        )
+        cd_req_2 = CommandTool(command=f"cd {subdir.name}", comment="Change to subdir")
         cd_result_2 = await cd_req_2.actually_solve(DEFAULT_CONFIG, interface)
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
-        pwd_req = CommandRequirement(command="pwd", comment="Print working directory")
+        pwd_req = CommandTool(command="pwd", comment="Print working directory")
         pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success
         assert pwd_result.stdout == str(subdir)
@@ -412,22 +400,20 @@ class TestShellIntegration:
 
         # 1. Create a subdirectory
         interface.choices.append(0)
-        mkdir_req = CommandRequirement(
-            command="mkdir test_dir", comment="Create subdir"
-        )
+        mkdir_req = CommandTool(command="mkdir test_dir", comment="Create subdir")
         mkdir_result = await mkdir_req.actually_solve(DEFAULT_CONFIG, interface)
         assert mkdir_result.success
         assert (tmp_path / "test_dir").is_dir()
 
         # 2. CD into the new subdirectory
         interface.choices.append(0)
-        cd_req_2 = CommandRequirement(command="cd test_dir", comment="Change to subdir")
+        cd_req_2 = CommandTool(command="cd test_dir", comment="Change to subdir")
         cd_result_2 = await cd_req_2.actually_solve(DEFAULT_CONFIG, interface)
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
-        pwd_req = CommandRequirement(command="pwd", comment="Print working directory")
+        pwd_req = CommandTool(command="pwd", comment="Print working directory")
         pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success
         assert pwd_result.stdout == str(tmp_path / "test_dir")

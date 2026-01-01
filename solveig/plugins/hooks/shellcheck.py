@@ -8,7 +8,7 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import before
-from solveig.schema.requirement import CommandRequirement
+from solveig.schema.tool import CommandTool
 
 DANGEROUS_PATTERNS = [
     "rm -rf",
@@ -38,17 +38,15 @@ def detect_shell(plugin_config) -> str:
 # writes the request command on a temporary file, then runs the `shellcheck`
 # linter to confirm whether it's correct BASH. I have no idea if this works on Windows
 # (tbh I have no idea if solveig itself works on anything besides Linux)
-@before(requirements=(CommandRequirement,))
+@before(tools=(CommandTool,))
 async def check_command(
-    config: SolveigConfig, interface: SolveigInterface, requirement: CommandRequirement
+    config: SolveigConfig, interface: SolveigInterface, tool: CommandTool
 ):
     plugin_config = config.plugins.get("shellcheck", {})
 
     # Check for obviously dangerous patterns first
-    if is_obviously_dangerous(requirement.command):
-        raise SecurityError(
-            f"Command contains dangerous pattern: {requirement.command}"
-        )
+    if is_obviously_dangerous(tool.command):
+        raise SecurityError(f"Command contains dangerous pattern: {tool.command}")
 
     shell_name = detect_shell(plugin_config)
 
@@ -57,7 +55,7 @@ async def check_command(
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".sh", delete=False
     ) as temporary_script:
-        temporary_script.write(requirement.command)
+        temporary_script.write(tool.command)
         script_path = temporary_script.name
 
     try:
@@ -98,7 +96,7 @@ async def check_command(
         if proc.returncode == 0:
             if config.verbose:
                 await interface.display_success(
-                    f"Shellcheck: No issues with command `{requirement.command}`"
+                    f"Shellcheck: No issues with command `{tool.command}`"
                 )
             return
 
@@ -133,7 +131,7 @@ async def check_command(
                     run_anyway_choice = 1  # No
                 if run_anyway_choice == 1:  # User chose "No"
                     raise ValidationError(
-                        f"Execution cancelled due to shellcheck warnings for command `{requirement.command}`"
+                        f"Execution cancelled due to shellcheck warnings for command `{tool.command}`"
                     )
                 # If user chooses "Yes", we simply return and let the command execute.
 

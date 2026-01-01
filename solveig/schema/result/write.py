@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .base import RequirementResult
+from .base import ToolResult
 
 
-class WriteResult(RequirementResult):
+class WriteResult(ToolResult):
     title: Literal["write"] = "write"
     path: str

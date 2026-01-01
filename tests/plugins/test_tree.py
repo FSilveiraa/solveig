@@ -1,11 +1,11 @@
-"""Integration test for TreeRequirement plugin with real filesystem operations."""
+"""Integration test for TreeTool plugin with real filesystem operations."""
 
 import tempfile
 from pathlib import Path, PurePath
 
 import pytest
 
-from solveig.plugins.schema.tree import TreeRequirement
+from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema.message import AssistantMessage
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestTreePlugin:
-    """Test TreeRequirement plugin with real filesystem operations."""
+    """Test TreeTool plugin with real filesystem operations."""
 
     async def test_tree_plugin_with_real_files(self, load_plugins):
         """Test tree plugin creates visual directory tree from real filesystem."""
@@ -34,8 +34,8 @@ class TestTreePlugin:
             assistant_responses = [
                 AssistantMessage(
                     comment="I'll show you the directory structure.",
-                    requirements=[
-                        TreeRequirement(comment="", path=str(temp_path), max_depth=2),
+                    tools=[
+                        TreeTool(comment="", path=str(temp_path), max_depth=2),
                     ],
                 ),
                 AssistantMessage(comment="Everything looks nice!"),
@@ -60,30 +60,30 @@ class TestTreePlugin:
             assert "subdir" in output
             assert "nested.md" in output
 
-    async def test_tree_requirement_creation_and_validation(self):
-        """Test TreeRequirement creation, validation, and configuration."""
+    async def test_tree_tool_creation_and_validation(self):
+        """Test TreeTool creation, validation, and configuration."""
         # Valid creation with default settings
-        req = TreeRequirement(path="     /test/dir   ", comment="Generate tree listing")
+        req = TreeTool(path="     /test/dir   ", comment="Generate tree listing")
         assert req.path == "/test/dir"  # test whitespace stripping
         assert req.comment == "Generate tree listing"
         assert req.max_depth == -1  # Default unlimited depth
 
         # Custom max_depth configuration
-        req_limited = TreeRequirement(path="/test", max_depth=3, comment="test")
+        req_limited = TreeTool(path="/test", max_depth=3, comment="test")
         assert req_limited.max_depth == 3
 
         # Validation: empty path should fail
         with pytest.raises(ValueError):
-            TreeRequirement(path="", comment="empty path")
+            TreeTool(path="", comment="empty path")
 
         # Class description
-        description = TreeRequirement.get_description()
+        description = TreeTool.get_description()
         assert "tree(path)" in description
         assert "directory tree structure" in description
 
-    async def test_tree_requirement_display_and_error_handling(self):
-        """Test TreeRequirement display functionality and error result creation."""
-        req = TreeRequirement(path="/test/dir", comment="Generate tree listing")
+    async def test_tree_tool_display_and_error_handling(self):
+        """Test TreeTool display functionality and error result creation."""
+        req = TreeTool(path="/test/dir", comment="Generate tree listing")
         interface = MockInterface()
 
         # Test display header
@@ -96,11 +96,11 @@ class TestTreePlugin:
 
         # This import has to occur locally since Python reloads the plugin re.quirement class
         # before each test and gives it a different class ID
-        from solveig.plugins.schema.tree import TreeResult
+        from solveig.plugins.tools.tree import TreeResult
 
         assert isinstance(error_result, TreeResult)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.error == "Directory not found"
         assert error_result.metadata is None
@@ -129,7 +129,7 @@ class TestTreePlugin:
             file4.touch()
             (temp_path / "subdir6").mkdir()
 
-            req = TreeRequirement(
+            req = TreeTool(
                 path=str(temp_path), max_depth=2, comment="Limited depth tree"
             )
             interface = MockInterface(choices=[0])  # read+send tree
@@ -149,7 +149,7 @@ class TestTreePlugin:
             # decline to send error for non-existent path
             interface = MockInterface(choices=[1])
 
-            error_req = TreeRequirement(
+            error_req = TreeTool(
                 path=str(temp_path / "nonexistent"), comment="Test tree"
             )
             result = await error_req.solve(DEFAULT_CONFIG, interface)

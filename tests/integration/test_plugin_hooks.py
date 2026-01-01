@@ -13,9 +13,9 @@ from solveig.interface import SolveigInterface
 from solveig.plugins import hooks, initialize_plugins
 from solveig.schema import (
     ReadResult,
-    WriteRequirement,
+    WriteTool,
 )
-from solveig.schema.requirement import CommandRequirement, ReadRequirement
+from solveig.schema.tool import CommandTool, ReadTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -61,14 +61,14 @@ class TestPluginHookSystem:
 
         hooks.clear_hooks()
 
-        @hooks.before(requirements=(CommandRequirement,))
+        @hooks.before(tools=(CommandTool,))
         async def failing_validator(
             config: SolveigConfig,
             interface: SolveigInterface,
-            requirement: CommandRequirement,
+            tool: CommandTool,
         ):
             await interface.display_comment("I'm a plugin that fails on request")
-            if "fail" in requirement.command:
+            if "fail" in tool.command:
                 raise ValidationError("Command validation failed")
 
         # Manually activate the locally-defined hook for this test
@@ -76,7 +76,7 @@ class TestPluginHookSystem:
         before_hooks, _ = hooks.HOOKS.all[plugin_name]
         hooks.HOOKS.before.extend(before_hooks)
 
-        req = CommandRequirement(command="fail this command", comment="Test")
+        req = CommandTool(command="fail this command", comment="Test")
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -93,13 +93,13 @@ class TestPluginHookSystem:
 
         hooks.clear_hooks()
 
-        @hooks.before(requirements=(CommandRequirement,))
+        @hooks.before(tools=(CommandTool,))
         async def security_validator(
             config: SolveigConfig,
             interface: MockInterface,
-            requirement: CommandRequirement,
+            tool: CommandTool,
         ):
-            if "rm -rf" in requirement.command:
+            if "rm -rf" in tool.command:
                 raise SecurityError("Dangerous command detected")
 
         # Manually activate the locally-defined hook for this test
@@ -107,7 +107,7 @@ class TestPluginHookSystem:
         before_hooks, _ = hooks.HOOKS.all[plugin_name]
         hooks.HOOKS.before.extend(before_hooks)
 
-        req = CommandRequirement(command="rm -rf /important/data", comment="Test")
+        req = CommandTool(command="rm -rf /important/data", comment="Test")
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -124,22 +124,22 @@ class TestPluginHookSystem:
 
         hooks.clear_hooks()
 
-        @hooks.before(requirements=(CommandRequirement,))
+        @hooks.before(tools=(CommandTool,))
         async def passing_validator(
             config: SolveigConfig,
             interface: MockInterface,
-            requirement: CommandRequirement,
+            tool: CommandTool,
         ):
             # Just validate, don't throw
-            assert requirement.command is not None
-            await interface.display_text(f"command '{requirement.command}' exists")
+            assert tool.command is not None
+            await interface.display_text(f"command '{tool.command}' exists")
 
         # Manually activate the locally-defined hook for this test
         plugin_name = hooks._get_plugin_name_from_function(passing_validator)
         before_hooks, _ = hooks.HOOKS.all[plugin_name]
         hooks.HOOKS.before.extend(before_hooks)
 
-        req = CommandRequirement(command="echo hello", comment="Test")
+        req = CommandTool(command="echo hello", comment="Test")
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -157,11 +157,11 @@ class TestPluginHookSystem:
 
         hooks.clear_hooks()
 
-        @hooks.after(requirements=(ReadRequirement,))
+        @hooks.after(tools=(ReadTool,))
         async def failing_processor(
             config: SolveigConfig,
             interface: MockInterface,
-            requirement: ReadRequirement,
+            tool: ReadTool,
             result: ReadResult,
         ):
             if result.accepted:
@@ -172,7 +172,7 @@ class TestPluginHookSystem:
         _, after_hooks = hooks.HOOKS.all[plugin_name]
         hooks.HOOKS.after.extend(after_hooks)
 
-        req = ReadRequirement(comment="Test", path=str(tmp_path), metadata_only=True)
+        req = ReadTool(comment="Test", path=str(tmp_path), metadata_only=True)
 
         # Execute
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -189,12 +189,12 @@ class TestPluginHookSystem:
 
         hooks.clear_hooks()
 
-        @hooks.before(requirements=(CommandRequirement,))
-        async def first_validator(config, interface, requirement):
+        @hooks.before(tools=(CommandTool,))
+        async def first_validator(config, interface, tool):
             execution_order.append("first")
 
-        @hooks.before(requirements=(CommandRequirement,))
-        async def second_validator(config, interface, requirement):
+        @hooks.before(tools=(CommandTool,))
+        async def second_validator(config, interface, tool):
             execution_order.append("second")
 
         # Manually activate the locally-defined hooks for this test
@@ -206,29 +206,29 @@ class TestPluginHookSystem:
         before_hooks_2, _ = hooks.HOOKS.all[plugin_name_2]
         hooks.HOOKS.before.extend(before_hooks_2)
 
-        req = CommandRequirement(command="echo test", comment="Test")
+        tool = CommandTool(command="echo test", comment="Test")
 
         # Execute
-        await req.solve(DEFAULT_CONFIG, interface)
+        await tool.solve(DEFAULT_CONFIG, interface)
 
         # Verify
         assert execution_order == ["first", "second"]
 
     @pytest.mark.no_subprocess_mocking
-    async def test_hook_requirement_filtering(self, tmp_path):
-        """Test that hooks only run for specified requirement types."""
+    async def test_hook_tool_filtering(self, tmp_path):
+        """Test that hooks only run for specified tool types."""
         # Setup
         called = []
         interface = MockInterface(choices=[2, 1])  # Don't run, don't send metadata
 
         hooks.clear_hooks()
 
-        @hooks.before(requirements=(CommandRequirement,))
-        async def command_only_hook(config, interface, requirement):
+        @hooks.before(tools=(CommandTool,))
+        async def command_only_hook(config, interface, tool):
             called.append("command_hook")
 
-        @hooks.before(requirements=(ReadRequirement,))
-        async def read_only_hook(config, interface, requirement):
+        @hooks.before(tools=(ReadTool,))
+        async def read_only_hook(config, interface, tool):
             called.append("read_hook")
 
         # Manually activate the locally-defined hooks for this test
@@ -241,20 +241,18 @@ class TestPluginHookSystem:
         hooks.HOOKS.before.extend(before_hooks_2)
 
         # Execute
-        # Test with CommandRequirement
-        cmd_req = CommandRequirement(command="echo test", comment="Test")
-        await cmd_req.solve(DEFAULT_CONFIG, interface=interface)
+        # Test with CommandTool
+        cmd_tool = CommandTool(command="echo test", comment="Test")
+        await cmd_tool.solve(DEFAULT_CONFIG, interface=interface)
         # Verify
         assert called == ["command_hook"]
 
-        # Test with ReadRequirement
+        # Test with ReadTool
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
-        read_req = ReadRequirement(
-            path=str(test_file), metadata_only=True, comment="Test"
-        )
+        read_tool = ReadTool(path=str(test_file), metadata_only=True, comment="Test")
 
-        await read_req.solve(DEFAULT_CONFIG, interface=interface)
+        await read_tool.solve(DEFAULT_CONFIG, interface=interface)
 
         # Verify
         assert called == ["command_hook", "read_hook"]
@@ -262,7 +260,7 @@ class TestPluginHookSystem:
 
     # Kinda unnecessary, but we need a no-op and an 'echo test' is pretty easy
     @pytest.mark.no_subprocess_mocking
-    async def test_hook_without_requirement_filter(self, tmp_path):
+    async def test_hook_without_tool_filter(self, tmp_path):
         """Test that hooks without requirement filters run for all requirement types."""
         # Setup
         called = []
@@ -283,13 +281,11 @@ class TestPluginHookSystem:
         hooks.HOOKS.before.extend(before_hooks)
 
         # Test with different requirement types
-        cmd_req = CommandRequirement(command="echo test", comment="Test")
+        cmd_req = CommandTool(command="echo test", comment="Test")
         # task_req = TaskListRequirement(comment="Test")
         test_file = tmp_path / "test_file.txt"
         test_file.write_text("content")
-        read_req = ReadRequirement(
-            path=str(test_file), metadata_only=True, comment="Test"
-        )
+        read_req = ReadTool(path=str(test_file), metadata_only=True, comment="Test")
 
         await cmd_req.solve(DEFAULT_CONFIG, interface)
         await read_req.solve(DEFAULT_CONFIG, interface)
@@ -313,7 +309,7 @@ class TestPluginFiltering:
         # Create a test plugin
         called = []
 
-        @hooks.before(requirements=(WriteRequirement,))
+        @hooks.before(tools=(WriteTool,))
         async def test_plugin_hook(config, interface, requirement):
             called.append("test_plugin_executed")
 
@@ -336,7 +332,7 @@ class TestPluginFiltering:
             assert not temp_file.exists()
 
             # Execute requirement
-            req = WriteRequirement(
+            req = WriteTool(
                 comment="Test write with a plugin",
                 path=str(temp_file),
                 is_directory=False,
@@ -358,7 +354,7 @@ class TestPluginFiltering:
         # Setup: Create a test plugin
         called = []
 
-        @hooks.before(requirements=(CommandRequirement,))
+        @hooks.before(tools=(CommandTool,))
         async def test_plugin_hook(config, interface, requirement):
             called.append("test_plugin_executed")
 
@@ -374,7 +370,7 @@ class TestPluginFiltering:
         # The hook is defined but never activated, so it should not run.
 
         # Execute requirement
-        req = CommandRequirement(command="echo test", comment="Test")
+        req = CommandTool(command="echo test", comment="Test")
         await req.solve(config_without_plugin, interface)
 
         # Verify plugin did NOT execute
@@ -414,7 +410,7 @@ class TestPluginFiltering:
         # Setup: Create a plugin that uses its config
         received_config = []
 
-        @hooks.before(requirements=(CommandRequirement,))
+        @hooks.before(tools=(CommandTool,))
         async def configurable_plugin_hook(config, interface, requirement):
             plugin_config = config.plugins.get("configurable_plugin_hook", {})
             received_config.append(plugin_config)
@@ -439,7 +435,7 @@ class TestPluginFiltering:
         hooks.HOOKS.before.extend(before_hooks)
 
         # Execute requirement
-        req = CommandRequirement(command="echo test", comment="Test")
+        req = CommandTool(command="echo test", comment="Test")
         await req.solve(config_with_options, interface)
 
         # Verify plugin received its configuration

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from solveig.schema.requirement import WriteRequirement
+from solveig.schema.tool import WriteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 # Mark all tests in this module to skip file mocking
@@ -23,26 +23,26 @@ class TestWriteValidation:
 
         # Empty path should fail
         with pytest.raises(ValidationError) as exc_info:
-            WriteRequirement(path="", **extra_kwargs)
+            WriteTool(path="", **extra_kwargs)
         error_msg = str(exc_info.value.errors()[0]["msg"])
         assert "Empty path" in error_msg or "Field required" in error_msg
 
         # Whitespace path should fail
         with pytest.raises(ValidationError):
-            WriteRequirement(path="   \t\n   ", **extra_kwargs)
+            WriteTool(path="   \t\n   ", **extra_kwargs)
 
         # Valid path should strip whitespace
-        req = WriteRequirement(path="  /valid/path  ", **extra_kwargs)
+        req = WriteTool(path="  /valid/path  ", **extra_kwargs)
         assert req.path == "/valid/path"
 
     async def test_get_description(self):
         """Test WriteRequirement description method."""
-        description = WriteRequirement.get_description()
+        description = WriteTool.get_description()
         assert "write(comment, path, is_directory, content=null)" in description
 
     async def test_display_header_file(self):
         """Test WriteRequirement display header for files."""
-        req = WriteRequirement(
+        req = WriteTool(
             path="/test/file.txt",
             is_directory=False,
             content="test content",
@@ -58,7 +58,7 @@ class TestWriteValidation:
 
     async def test_display_header_directory(self):
         """Test WriteRequirement display header for directories."""
-        req = WriteRequirement(
+        req = WriteTool(
             path="/test/dir", is_directory=True, comment="Create test directory"
         )
         interface = MockInterface()
@@ -82,7 +82,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content=test_content,
@@ -103,7 +103,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Should not be created",
@@ -123,7 +123,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content=None,  # No content
@@ -149,7 +149,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept update
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content=new_content,
@@ -177,7 +177,7 @@ class TestFileOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline update
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Should not overwrite",
@@ -201,7 +201,7 @@ class TestDirectoryOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_dir), is_directory=True, comment="Create new directory"
             )
 
@@ -219,7 +219,7 @@ class TestDirectoryOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(nested_dir),
                 is_directory=True,
                 comment="Create nested directories",
@@ -242,7 +242,7 @@ class TestDirectoryOperations:
             interface = MockInterface()
             interface.choices.append(1)  # Decline creation
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_dir), is_directory=True, comment="Declined directory"
             )
 
@@ -260,7 +260,7 @@ class TestDirectoryOperations:
             interface = MockInterface()
             interface.choices.append(0)  # Accept update
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_dir),
                 is_directory=True,
                 comment="Update existing directory",
@@ -294,7 +294,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Auto-allowed content",
@@ -325,7 +325,7 @@ class TestAutoAllowedPaths:
             interface = MockInterface()
             # No user inputs needed - should auto-approve
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_dir), is_directory=True, comment="Auto-allowed directory"
             )
 
@@ -349,7 +349,7 @@ class TestAutoAllowedPaths:
 
             interface = MockInterface()
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Updated auto content",
@@ -372,10 +372,10 @@ class TestErrorHandling:
 
     async def test_error_result_creation(self):
         """Test create_error_result method."""
-        req = WriteRequirement(path="/test.txt", is_directory=False, comment="Test")
+        req = WriteTool(path="/test.txt", is_directory=False, comment="Test")
         error_result = req.create_error_result("Test error", accepted=False)
 
-        assert error_result.requirement == req
+        assert error_result.tool == req
         assert error_result.accepted is False
         assert error_result.error == "Test error"
         assert "/test.txt" in str(error_result.path)
@@ -395,7 +395,7 @@ class TestErrorHandling:
             interface.choices.append(0)  # Accept (but will fail)
 
             try:
-                req = WriteRequirement(
+                req = WriteTool(
                     path=str(test_file),
                     is_directory=False,
                     content="Cannot write this",
@@ -429,7 +429,7 @@ class TestErrorHandling:
                     "utf-8", "", 0, 1, "encoding test error"
                 )
 
-                req = WriteRequirement(
+                req = WriteTool(
                     path=str(test_file),
                     is_directory=False,
                     content="Test content",
@@ -454,7 +454,7 @@ class TestErrorHandling:
 
             interface = MockInterface()
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Test content",
@@ -486,7 +486,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=tilde_path,
                 is_directory=False,
                 content="Tilde expansion test",
@@ -516,7 +516,7 @@ class TestPathSecurity:
             interface = MockInterface()
             interface.choices.append(0)  # Accept
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=traversal_path,
                 is_directory=False,
                 content="Path traversal test",
@@ -548,7 +548,7 @@ class TestIntegrationScenarios:
             interface = MockInterface()
             interface.choices.append(0)  # Accept
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content=complex_content,
@@ -569,7 +569,7 @@ class TestIntegrationScenarios:
             interface1 = MockInterface()
             interface1.choices.append(0)  # Accept
 
-            req1 = WriteRequirement(
+            req1 = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Initial content",
@@ -587,7 +587,7 @@ class TestIntegrationScenarios:
             interface2 = MockInterface()
             interface2.choices.append(0)  # Accept
 
-            req2 = WriteRequirement(
+            req2 = WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Updated content",
@@ -609,7 +609,7 @@ class TestIntegrationScenarios:
             interface = MockInterface()
             interface.choices.append(0)  # Accept
 
-            req = WriteRequirement(
+            req = WriteTool(
                 path=str(test_dir),
                 is_directory=True,
                 content="This content should be ignored",  # Should be ignored

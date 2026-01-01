@@ -6,13 +6,13 @@ import random
 
 from solveig import SolveigConfig
 from solveig.interface import TerminalInterface
-from solveig.plugins.schema.tree import TreeRequirement
+from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema import (
-    CopyRequirement,
-    DeleteRequirement,
-    MoveRequirement,
-    WriteRequirement,
+    CopyTool,
+    DeleteTool,
+    MoveTool,
+    WriteTool,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task
@@ -74,14 +74,12 @@ async def run_async_mock(
                     description="Provide a summary of contents, focused on safety and functionality"
                 ),
             ],
-            requirements=[
-                TreeRequirement(
-                    comment="Read the tree structure for ~/Sync", path="~/Sync"
-                ),
-                # ReadRequirement(
+            tools=[
+                TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
+                # ReadTool(
                 #     comment="test read", path="~/Sync/app.log", metadata_only=False
                 # ),
-                WriteRequirement(
+                WriteTool(
                     comment="Test write",
                     path="/home/francisco/Sync/fibonacci.py",
                     content="""
@@ -99,17 +97,17 @@ if __name__ == "__main__":
 """.strip(),
                     is_directory=False,
                 ),
-                CopyRequirement(
+                CopyTool(
                     comment="Test copy",
                     source_path="~/Sync/test.py",
                     destination_path="~/Sync/test.2.py",
                 ),
-                MoveRequirement(
+                MoveTool(
                     comment="Test copy",
                     source_path="~/Sync/test.2.py",
                     destination_path="~/Sync/hello.py",
                 ),
-                DeleteRequirement(comment="test delete", path="~/Sync/test.py"),
+                DeleteTool(comment="test delete", path="~/Sync/test.py"),
             ],
         ),
     ]
