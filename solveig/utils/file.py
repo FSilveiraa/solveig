@@ -426,3 +426,84 @@ class Filesystem:
                 return str(current_dir)
         else:
             return str(current_dir)
+
+    # =============================================================================
+    # LINE READING - Efficient line-based file operations
+    # =============================================================================
+
+    @staticmethod
+    async def _count_lines(abs_path: Path, encoding: str = "utf-8") -> int:
+        """Count total lines in a file efficiently using line-by-line iteration."""
+        line_count = 0
+        async with await abs_path.open(encoding=encoding) as f:
+            async for _ in f:
+                line_count += 1
+        return line_count
+
+    @classmethod
+    async def read_file_lines(
+        cls,
+        abs_path: Path,
+        ranges: list[tuple[int, int]] | None = None,
+        encoding: str = "utf-8",
+    ) -> list[tuple[int, int, str]]:
+        """Read specific line ranges from a file.
+
+        Args:
+            abs_path: Absolute path to the file.
+            ranges: List of (start, end) tuples (1-indexed, inclusive).
+                    If None, reads all lines.
+            encoding: File encoding (default: utf-8).
+
+        Returns:
+            List of (start, end, content) tuples.
+            If ranges is None, returns [(1, total_lines, full_content)].
+            If ranges provided, returns one tuple per range.
+
+        Raises:
+            FileNotFoundError: If file doesn't exist.
+            ValueError: If range bounds exceed file or start > end.
+        """
+        await cls.validate_read_access(abs_path)
+
+        if await cls.is_dir(abs_path):
+            raise IsADirectoryError(f"Cannot read lines from directory {abs_path}")
+
+        # Count total lines first
+        total_lines = await cls._count_lines(abs_path, encoding)
+
+        # If no ranges, return entire file
+        if ranges is None:
+            content = await cls._read_text(abs_path)
+            return [(1, total_lines, content)]
+
+        # Validate ranges
+        validated_ranges = []
+        for i, (start, end) in enumerate(ranges):
+            if start < 1:
+                raise ValueError(f"Range {i+1}: Start line must be >= 1 (got {start})")
+            if end < start:
+                raise ValueError(
+                    f"Range {i+1}: End line must be >= start line (got {start} > {end})"
+                )
+            if start > total_lines:
+                raise ValueError(
+                    f"Range {i+1}: Start line {start} exceeds file bounds ({total_lines} lines)"
+                )
+            # Clamp end to total_lines
+            actual_end = min(end, total_lines)
+            validated_ranges.append((start, actual_end))
+
+        # Read only the requested ranges
+        # Note: We read entire file and extract lines for simplicity
+        # For very large files, we could optimize to only read needed lines
+        all_lines = (await cls._read_text(abs_path)).split("\n")
+
+        result = []
+        for start, end in validated_ranges:
+            # Convert to 0-indexed and get lines
+            range_lines = all_lines[start - 1 : end]
+            content = "\n".join(range_lines)
+            result.append((start, end, content))
+
+        return result
