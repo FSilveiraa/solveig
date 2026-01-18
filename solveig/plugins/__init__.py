@@ -15,7 +15,7 @@ async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface)
     It tells the other plugin sub-modules to initialize themselves.
     """
     async with interface.with_group("Plugins"):
-        async with interface.with_group("Schema"):
+        async with interface.with_group("Tools"):
             await load_and_filter_tools(config, interface)
 
         async with interface.with_group("Hooks"):

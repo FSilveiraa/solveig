@@ -452,6 +452,7 @@ class Filesystem:
         Args:
             abs_path: Absolute path to the file.
             ranges: List of (start, end) tuples (1-indexed, inclusive).
+                    Use end=-1 to read to end of file, e.g., (10, -1).
                     If None, reads all lines.
             encoding: File encoding (default: utf-8).
 
@@ -482,16 +483,20 @@ class Filesystem:
         for i, (start, end) in enumerate(ranges):
             if start < 1:
                 raise ValueError(f"Range {i+1}: Start line must be >= 1 (got {start})")
-            if end < start:
-                raise ValueError(
-                    f"Range {i+1}: End line must be >= start line (got {start} > {end})"
-                )
+            # end == -1 means "end of file"
+            if end == -1:
+                actual_end = total_lines
+            else:
+                if end < start:
+                    raise ValueError(
+                        f"Range {i+1}: End line must be >= start line (got {start} > {end})"
+                    )
+                # Clamp end to total_lines
+                actual_end = min(end, total_lines)
             if start > total_lines:
                 raise ValueError(
                     f"Range {i+1}: Start line {start} exceeds file bounds ({total_lines} lines)"
                 )
-            # Clamp end to total_lines
-            actual_end = min(end, total_lines)
             validated_ranges.append((start, actual_end))
 
         # Read only the requested ranges

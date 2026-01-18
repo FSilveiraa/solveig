@@ -20,13 +20,41 @@ class ReadTool(BaseTool):
     )
     metadata_only: bool = Field(
         ...,
-        description="If true, read only file/directory metadata; if false, read full contents",
+        description="If true read only file/directory metadata, otherwise also read file content",
+    )
+    line_ranges: list[tuple[int, int]] | None = Field(
+        None,
+        description="Optional line ranges to read, e.g., [[10, 50], [100, -1]]. "
+        "If provided, only these ranges are read (up to 3 ranges, 1-indexed, inclusive). "
+        "Use end=-1 to read to end of file, e.g., [[10, -1]]."
+        "If not provided, reads the entire file. Ignored for directories and metadata_only.",
     )
 
     @field_validator("path")
     @classmethod
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
+
+    @field_validator("line_ranges")
+    @classmethod
+    def validate_line_ranges(
+        cls, ranges: list[tuple[int, int]] | None
+    ) -> list[tuple[int, int]] | None:
+        if ranges is None:
+            return None
+
+        if len(ranges) > 3:
+            raise ValueError("Maximum 3 line ranges allowed")
+
+        for i, (start, end) in enumerate(ranges):
+            if start < 1:
+                raise ValueError(f"Range {i+1}: Start line must be >= 1")
+            # end can be -1 (meaning "end of file") or >= start
+            if end != -1 and end < start:
+                raise ValueError(f"Range {i+1}: End line must be >= start line or -1")
+            # Note: File bounds are checked during execution
+
+        return ranges
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display read tool header."""
@@ -42,10 +70,16 @@ class ReadTool(BaseTool):
             await interface.display_tree(metadata=metadata)
         # The metadata vs content distinction only makes sense for files
         else:
-            await interface.display_text(
-                f"{'' if self.metadata_only else 'content and '}metadata",
-                prefix="Requesting:",
-            )
+            if self.metadata_only:
+                request_desc = "metadata"
+            elif self.line_ranges:
+                ranges_str = ", ".join(
+                    f"{start} to {end}" for start, end in self.line_ranges
+                )
+                request_desc = f"lines [{ranges_str}] and metadata"
+            else:
+                request_desc = "content and metadata"
+            await interface.display_text(request_desc, prefix="Requesting:")
 
     def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
         """Create ReadResult with error."""
@@ -59,7 +93,10 @@ class ReadTool(BaseTool):
     @classmethod
     def get_description(cls) -> str:
         """Return description of read capability."""
-        return "read(comment, path, metadata_only): reads a file or directory. If it's a file, you can choose to read the metadata only, or the contents+metadata."
+        return (
+            "read(comment, path, metadata_only, line_ranges=null): reads a file or directory. "
+            "Files can be read for metadata only, full contents or specific line ranges."
+        )
 
     async def actually_solve(
         self, config: "SolveigConfig", interface: "SolveigInterface"
@@ -105,7 +142,7 @@ class ReadTool(BaseTool):
         # Case 2: File content requests
         else:
             accepted = False
-            content: str | bytes | None = None
+            content: list[tuple[int, int, str]] | None = None
 
             if path_matches:
                 await interface.display_info(
@@ -124,12 +161,35 @@ class ReadTool(BaseTool):
                 )
 
             if choice in {0, 1}:
-                read_result = await Filesystem.read_file(abs_path)
-                content = read_result.content
-                metadata.encoding = read_result.encoding
+                try:
+                    content = await Filesystem.read_file_lines(
+                        abs_path, ranges=self.line_ranges
+                    )
+                except ValueError as e:
+                    # Line range validation errors (out of bounds, etc.)
+                    await interface.display_error(f"Invalid line range: {e}")
+                    return self.create_error_result(str(e), accepted=False)
+
+                metadata.encoding = "text"
+
+                # Format content for display
+                if len(content) == 1:
+                    start, end, text = content[0]
+                    display_title = f"Content: {abs_path}"
+                    if self.line_ranges:
+                        display_title += f" (lines {start} to {end})"
+                    display_content = text
+                else:
+                    # Multiple ranges - show with separators
+                    display_parts = []
+                    for start, end, text in content:
+                        display_parts.append(f"--- Lines {start}-{end} ---\n{text}")
+                    display_content = "\n\n".join(display_parts)
+                    display_title = f"Content: {abs_path} ({len(content)} ranges)"
+
                 await interface.display_text_block(
-                    content if read_result.encoding == "text" else "(binary content)",
-                    title=f"Content: {abs_path}",
+                    display_content,
+                    title=display_title,
                     language=abs_path.suffix,
                 )
 

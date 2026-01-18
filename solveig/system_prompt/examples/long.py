@@ -190,12 +190,12 @@ EXAMPLE.add_messages(
             ),
             ReadResult(
                 tool=read_dev_sh_req,
-                content="""
+                content=[(1, -1, """
 #!/usr/bin/env bash
 mkdir -p logs tmp
 touch logs/app.log
 echo "Project initialized." > tmp/init.flag
-                """.strip(),
+                """.strip())],
                 path="/home/user/Sync/init.sh",
                 accepted=True,
                 metadata=Metadata(

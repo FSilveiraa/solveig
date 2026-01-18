@@ -60,7 +60,7 @@ async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterfa
     PLUGIN_TOOLS.clear()
 
     await rescan_and_load_plugins(
-        plugin_module_path="solveig.plugins.schema",
+        plugin_module_path="solveig.plugins.tools",
         interface=interface,
     )
 
