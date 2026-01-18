@@ -92,7 +92,7 @@ podman-compose up --build -d
                     """
                 ),
                 ReadTool(
-                    comment="test read", path="~/Sync/README.md", metadata_only=False, line_ranges=[(1, 10), (13, 17), (20, -1)]
+                    comment="test read", path="~/Sync/README.md", metadata_only=False, line_ranges=[(1, 10), (13, 17), (225, -1)]
                 ),
                 TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
                 WriteTool(
