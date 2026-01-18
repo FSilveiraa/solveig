@@ -12,7 +12,7 @@ from solveig.schema import (
     CopyTool,
     DeleteTool,
     MoveTool,
-    WriteTool, ReadTool,
+    WriteTool, ReadTool, EditTool,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task
@@ -75,6 +75,22 @@ async def run_async_mock(
                 ),
             ],
             tools=[
+                EditTool(
+                    comment="Test edit", path="~/Sync/README.md", old_string="""
+### Docker Compose
+```bash
+# Run continuous monitoring with compose
+docker-compose up --build
+```
+                    """.strip(),
+                    new_string="""
+### Podman Compose
+```bash
+# Run continuous mode with podman-compose
+podman-compose up --build -d
+```
+                    """
+                ),
                 ReadTool(
                     comment="test read", path="~/Sync/README.md", metadata_only=False, line_ranges=[(1, 10), (13, 17), (20, -1)]
                 ),

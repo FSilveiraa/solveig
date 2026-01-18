@@ -4,6 +4,7 @@ from .base import BaseTool
 from .command import CommandTool
 from .copy import CopyTool
 from .delete import DeleteTool
+from .edit import EditTool
 from .move import MoveTool
 from .read import ReadTool
 from .write import WriteTool
@@ -12,6 +13,7 @@ CORE_TOOLS: list[type[BaseTool]] = [
     CommandTool,
     CopyTool,
     DeleteTool,
+    EditTool,
     MoveTool,
     ReadTool,
     WriteTool,
@@ -26,6 +28,7 @@ __all__ = [
     "BaseTool",
     "ReadTool",
     "WriteTool",
+    "EditTool",
     "CommandTool",
     "MoveTool",
     "CopyTool",
