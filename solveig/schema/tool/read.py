@@ -74,9 +74,9 @@ class ReadTool(BaseTool):
                 request_desc = "metadata"
             elif self.line_ranges:
                 ranges_str = ", ".join(
-                    f"{start} to {end}" for start, end in self.line_ranges
+                    f"[{start} to {end}]" for start, end in self.line_ranges
                 )
-                request_desc = f"lines [{ranges_str}] and metadata"
+                request_desc = f"lines {ranges_str} and metadata"
             else:
                 request_desc = "content and metadata"
             await interface.display_text(request_desc, prefix="Requesting:")
@@ -161,37 +161,46 @@ class ReadTool(BaseTool):
                 )
 
             if choice in {0, 1}:
-                try:
-                    content = await Filesystem.read_file_lines(
-                        abs_path, ranges=self.line_ranges
-                    )
-                except ValueError as e:
-                    # Line range validation errors (out of bounds, etc.)
-                    await interface.display_error(f"Invalid line range: {e}")
-                    return self.create_error_result(str(e), accepted=False)
+                # Branch based on whether line ranges are requested
+                if self.line_ranges:
+                    # Use read_file_lines for specific ranges
+                    try:
+                        content = await Filesystem.read_file_lines(
+                            abs_path, ranges=self.line_ranges
+                        )
+                    except ValueError as e:
+                        await interface.display_error(f"Invalid line range: {e}")
+                        return self.create_error_result(str(e), accepted=False)
 
-                metadata.encoding = "text"
+                    metadata.encoding = "text"
 
-                # Format content for display
-                if len(content) == 1:
-                    start, end, text = content[0]
-                    display_title = f"Content: {abs_path}"
-                    if self.line_ranges:
-                        display_title += f" (lines {start} to {end})"
-                    display_content = text
-                else:
-                    # Multiple ranges - show with separators
-                    display_parts = []
+                    # Display each range in its own block
                     for start, end, text in content:
-                        display_parts.append(f"--- Lines {start}-{end} ---\n{text}")
-                    display_content = "\n\n".join(display_parts)
-                    display_title = f"Content: {abs_path} ({len(content)} ranges)"
+                        await interface.display_text_block(
+                            text,
+                            title=f"Content: {abs_path} (lines {start} to {end})",
+                            language=abs_path.suffix,
+                        )
+                else:
+                    # Use read_file for full file (handles binary too)
+                    read_result = await Filesystem.read_file(abs_path)
+                    metadata.encoding = read_result.encoding
 
-                await interface.display_text_block(
-                    display_content,
-                    title=display_title,
-                    language=abs_path.suffix,
-                )
+                    # Convert to content format: [(start, end, content)]
+                    if read_result.encoding == "text":
+                        line_count = read_result.content.count("\n") + 1
+                        content = [(1, line_count, read_result.content)]
+                    else:
+                        # Binary file - use (0, 0) to indicate whole binary file
+                        content = [(0, 0, read_result.content)]
+
+                    await interface.display_text_block(
+                        read_result.content
+                        if read_result.encoding == "text"
+                        else "(binary content)",
+                        title=f"Content: {abs_path}",
+                        language=abs_path.suffix,
+                    )
 
                 # 0: Read and send
                 if choice == 0:

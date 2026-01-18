@@ -76,7 +76,7 @@ async def run_async_mock(
             ],
             tools=[
                 ReadTool(
-                    comment="test read", path="~/Sync/app.log", metadata_only=False, line_ranges=[(5, -1)]
+                    comment="test read", path="~/Sync/README.md", metadata_only=False, line_ranges=[(1, 10), (13, 17), (20, -1)]
                 ),
                 TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
                 WriteTool(
