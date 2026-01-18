@@ -158,8 +158,12 @@ tasks_2 = [
         description="Provide a summary of contents, focused on safety and functionality"
     ),
 ]
-read_hello_py_req = ReadTool(comment="", path="~/Sync/hello.py", metadata_only=False, line_ranges=None)
-read_dev_sh_req = ReadTool(comment="", path="~/Sync/init.sh", metadata_only=False, line_ranges=None)
+read_hello_py_req = ReadTool(
+    comment="", path="~/Sync/hello.py", metadata_only=False, line_ranges=None
+)
+read_dev_sh_req = ReadTool(
+    comment="", path="~/Sync/init.sh", metadata_only=False, line_ranges=None
+)
 EXAMPLE.add_messages(
     AssistantMessage(
         comment="It seems there are several files, the most relevant may be some .py and .sh scripts. Let me read these. There is also a .sh.bak file, it does not have execution permissions, but let me also read it.",

@@ -32,7 +32,7 @@ class TestReadValidation:
     async def test_get_description(self):
         """Test ReadRequirement description method."""
         description = ReadTool.get_description()
-        assert "read(comment, path, metadata_only)" in description
+        assert "read(comment, path, metadata_only, line_ranges=null)" in description
 
     async def test_display_header(self, tmp_path):
         """Test ReadRequirement display header."""
@@ -95,7 +95,12 @@ class TestFileContentFlow:
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
-        assert result.content == test_content
+        # Content is [(start_line, end_line, text)] for full file reads
+        assert result.content is not None
+        assert len(result.content) == 1
+        start, end, text = result.content[0]
+        assert start == 1
+        assert text == test_content
         assert result.metadata is not None
 
     async def test_choice_1_inspect_then_send_content(self, tmp_path):
@@ -111,7 +116,12 @@ class TestFileContentFlow:
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
-        assert result.content == test_content
+        # Content is [(start_line, end_line, text)] for full file reads
+        assert result.content is not None
+        assert len(result.content) == 1
+        start, end, text = result.content[0]
+        assert start == 1
+        assert text == test_content
         assert result.metadata is not None
 
     async def test_choice_1_inspect_then_send_metadata_only(self, tmp_path):
@@ -228,7 +238,11 @@ class TestAutoAllowedPaths:
         result = await req.actually_solve(config, interface)
 
         assert result.accepted
-        assert result.content == test_content
+        # Content is [(start_line, end_line, text)] for full file reads
+        assert result.content is not None
+        assert len(result.content) == 1
+        _, _, text = result.content[0]
+        assert text == test_content
         assert result.metadata is not None
         assert len(interface.questions) == 0
 
@@ -320,7 +334,11 @@ class TestPathSecurity:
         result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
-        assert result.content == test_content
+        # Content is [(start_line, end_line, text)] for full file reads
+        assert result.content is not None
+        assert len(result.content) == 1
+        _, _, text = result.content[0]
+        assert text == test_content
         assert "~" not in str(result.path)
         assert str(tmp_path) in str(result.path)
 

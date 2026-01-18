@@ -4,11 +4,11 @@ import grp
 import os
 import pwd
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
-from collections.abc import Sequence
 from typing import Literal
 
 from anyio import Path
