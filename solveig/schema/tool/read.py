@@ -22,7 +22,7 @@ class ReadTool(BaseTool):
         ...,
         description="If true read only file/directory metadata, otherwise also read file content",
     )
-    line_ranges: list[tuple[int, int]] | None = Field(
+    line_ranges: list[list[int]] | None = Field(
         None,
         description="Optional line ranges to read, e.g., [[10, 50], [100, -1]]. "
         "If provided, only these ranges are read (up to 3 ranges, 1-indexed, inclusive). "
@@ -38,7 +38,7 @@ class ReadTool(BaseTool):
     @field_validator("line_ranges")
     @classmethod
     def validate_line_ranges(
-        cls, ranges: list[tuple[int, int]] | None
+        cls, ranges: list[list[int]] | None
     ) -> list[tuple[int, int]] | None:
         if ranges is None:
             return None
@@ -46,15 +46,19 @@ class ReadTool(BaseTool):
         if len(ranges) > 3:
             raise ValueError("Maximum 3 line ranges allowed")
 
-        for i, (start, end) in enumerate(ranges):
+        result: list[tuple[int, int]] = []
+        for i, range_list in enumerate(ranges):
+            if len(range_list) != 2:
+                raise ValueError(f"Range {i+1}: Must have exactly 2 elements [start, end]")
+            start, end = range_list
             if start < 1:
                 raise ValueError(f"Range {i+1}: Start line must be >= 1")
             # end can be -1 (meaning "end of file") or >= start
             if end != -1 and end < start:
                 raise ValueError(f"Range {i+1}: End line must be >= start line or -1")
-            # Note: File bounds are checked during execution
+            result.append((start, end))
 
-        return ranges
+        return result
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display read tool header."""

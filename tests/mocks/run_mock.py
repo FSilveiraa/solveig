@@ -76,7 +76,7 @@ async def run_async_mock(
             ],
             tools=[
                 EditTool(
-                    comment="Test edit", path="~/Sync/README.md", old_string="""
+                    comment="Edit README to change `docker` to `podman`", path="~/Sync/README.md", old_string="""
 ### Docker Compose
 ```bash
 # Run continuous monitoring with compose
@@ -92,7 +92,7 @@ podman-compose up --build -d
                     """
                 ),
                 ReadTool(
-                    comment="test read", path="~/Sync/README.md", metadata_only=False, line_ranges=[(1, 10), (13, 17), (225, -1)]
+                    comment="Read 3 README segments", path="~/Sync/README.md", metadata_only=False, line_ranges=[[1, 10], [13, 17], [225, -1]]
                 ),
                 TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
                 WriteTool(

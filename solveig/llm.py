@@ -185,7 +185,7 @@ def get_instructor_client(
     api_key: str | None = None,
     url: str | None = None,
     model: str | None = None,
-    instructor_mode: instructor.Mode = instructor.Mode.TOOLS,
+    instructor_mode: instructor.Mode = instructor.Mode.JSON,
 ) -> instructor.AsyncInstructor:
     """Get instructor client - backwards compatible interface."""
     # Handle legacy string API type names
