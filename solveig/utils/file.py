@@ -482,20 +482,22 @@ class Filesystem:
         validated_ranges = []
         for i, (start, end) in enumerate(ranges):
             if start < 1:
-                raise ValueError(f"Range {i+1}: Start line must be >= 1 (got {start})")
+                raise ValueError(
+                    f"Range {i + 1}: Start line must be >= 1 (got {start})"
+                )
             # end == -1 means "end of file"
             if end == -1:
                 actual_end = total_lines
             else:
                 if end < start:
                     raise ValueError(
-                        f"Range {i+1}: End line must be >= start line (got {start} > {end})"
+                        f"Range {i + 1}: End line must be >= start line (got {start} > {end})"
                     )
                 # Clamp end to total_lines
                 actual_end = min(end, total_lines)
             if start > total_lines:
                 raise ValueError(
-                    f"Range {i+1}: Start line {start} exceeds file bounds ({total_lines} lines)"
+                    f"Range {i + 1}: Start line {start} exceeds file bounds ({total_lines} lines)"
                 )
             validated_ranges.append((start, actual_end))
 

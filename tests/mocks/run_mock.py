@@ -11,8 +11,10 @@ from solveig.run import run_async
 from solveig.schema import (
     CopyTool,
     DeleteTool,
+    EditTool,
     MoveTool,
-    WriteTool, ReadTool, EditTool,
+    ReadTool,
+    WriteTool,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task
@@ -76,7 +78,9 @@ async def run_async_mock(
             ],
             tools=[
                 EditTool(
-                    comment="Edit README to change `docker` to `podman`", path="~/Sync/README.md", old_string="""
+                    comment="Edit README to change `docker` to `podman`",
+                    path="~/Sync/README.md",
+                    old_string="""
 ### Docker Compose
 ```bash
 # Run continuous monitoring with compose
@@ -89,10 +93,13 @@ docker-compose up --build
 # Run continuous mode with podman-compose
 podman-compose up --build -d
 ```
-                    """
+                    """,
                 ),
                 ReadTool(
-                    comment="Read 3 README segments", path="~/Sync/README.md", metadata_only=False, line_ranges=[[1, 10], [13, 17], [225, -1]]
+                    comment="Read 3 README segments",
+                    path="~/Sync/README.md",
+                    metadata_only=False,
+                    line_ranges=[[1, 10], [13, 17], [225, -1]],
                 ),
                 TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
                 WriteTool(

@@ -42,7 +42,9 @@ class TestReadFileLinesBasic:
     async def test_read_multiple_ranges(self, tmp_path):
         """Test reading multiple line ranges."""
         test_file = tmp_path / "multi_range.txt"
-        content = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10"
+        content = (
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10"
+        )
         test_file.write_text(content)
         abs_path = Path(str(test_file))
 

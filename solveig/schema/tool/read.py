@@ -49,13 +49,15 @@ class ReadTool(BaseTool):
         result: list[tuple[int, int]] = []
         for i, range_list in enumerate(ranges):
             if len(range_list) != 2:
-                raise ValueError(f"Range {i+1}: Must have exactly 2 elements [start, end]")
+                raise ValueError(
+                    f"Range {i + 1}: Must have exactly 2 elements [start, end]"
+                )
             start, end = range_list
             if start < 1:
-                raise ValueError(f"Range {i+1}: Start line must be >= 1")
+                raise ValueError(f"Range {i + 1}: Start line must be >= 1")
             # end can be -1 (meaning "end of file") or >= start
             if end != -1 and end < start:
-                raise ValueError(f"Range {i+1}: End line must be >= start line or -1")
+                raise ValueError(f"Range {i + 1}: End line must be >= start line or -1")
             result.append((start, end))
 
         return result

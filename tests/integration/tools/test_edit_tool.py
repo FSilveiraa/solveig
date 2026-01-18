@@ -1,7 +1,6 @@
 """Integration tests for EditTool."""
 
 import pytest
-
 from pydantic import ValidationError
 
 from solveig.schema.tool import EditTool
@@ -35,7 +34,9 @@ class TestEditValidation:
     async def test_old_string_cannot_be_empty(self):
         """Test that old_string cannot be empty."""
         with pytest.raises(ValidationError):
-            EditTool(path="/tmp/file.txt", old_string="", new_string="y", comment="test")
+            EditTool(
+                path="/tmp/file.txt", old_string="", new_string="y", comment="test"
+            )
 
     async def test_new_string_can_be_empty(self, tmp_path):
         """Test that new_string can be empty (for deletion)."""

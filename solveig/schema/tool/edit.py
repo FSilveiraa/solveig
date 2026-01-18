@@ -52,11 +52,15 @@ class EditTool(BaseTool):
         await interface.display_file_info(source_path=self.path)
 
         # Show truncated preview of what we're replacing
-        old_preview = (
-            repr(self.old_string[:60] + "..." if len(self.old_string) > 60 else self.old_string)
+        old_preview = repr(
+            self.old_string[:60] + "..."
+            if len(self.old_string) > 60
+            else self.old_string
         )
-        new_preview = (
-            repr(self.new_string[:60] + "..." if len(self.new_string) > 60 else self.new_string)
+        new_preview = repr(
+            self.new_string[:60] + "..."
+            if len(self.new_string) > 60
+            else self.new_string
         )
 
         await interface.display_text(f"{old_preview}", prefix="Find:")
@@ -84,8 +88,9 @@ class EditTool(BaseTool):
             "Errors if multiple occurrences found and replace_all=false."
         )
 
-
-    async def _validate_edit(self, config: SolveigConfig, interface: SolveigInterface, abs_path: Path) -> EditResult | None:
+    async def _validate_edit(
+        self, config: SolveigConfig, interface: SolveigInterface, abs_path: Path
+    ) -> EditResult | None:
         try:
             await Filesystem.validate_read_access(abs_path)
         except FileNotFoundError as e:
@@ -107,20 +112,24 @@ class EditTool(BaseTool):
             await interface.display_error(f"Cannot write to {abs_path}: {e}")
             return self.create_error_result(str(e), accepted=False)
 
-
-    async def _read_original_content(self, interface: SolveigInterface, abs_path: Path) -> EditResult | str:
+    async def _read_original_content(
+        self, interface: SolveigInterface, abs_path: Path
+    ) -> EditResult | str:
         try:
             read_result = await Filesystem.read_file(abs_path)
             if read_result.encoding != "text":
                 await interface.display_error("Cannot edit binary files")
-                return self.create_error_result("Cannot edit binary files", accepted=False)
+                return self.create_error_result(
+                    "Cannot edit binary files", accepted=False
+                )
             return read_result.content
         except Exception as e:
             await interface.display_error(f"Failed to read file: {e}")
             return self.create_error_result(str(e), accepted=False)
 
-
-    async def _count_occurrences(self, interface: SolveigInterface, original_content: str) -> EditResult | int:
+    async def _count_occurrences(
+        self, interface: SolveigInterface, original_content: str
+    ) -> EditResult | int:
         occurrences = original_content.count(self.old_string)
         if occurrences == 0:
             await interface.display_error(
@@ -140,8 +149,9 @@ class EditTool(BaseTool):
             )
         return occurrences
 
-
-    async def _get_new_content(self, interface: SolveigInterface, abs_path: Path, original_content: str) -> str:
+    async def _get_new_content(
+        self, interface: SolveigInterface, abs_path: Path, original_content: str
+    ) -> str:
         if self.replace_all:
             new_content = original_content.replace(self.old_string, self.new_string)
         else:
@@ -154,9 +164,17 @@ class EditTool(BaseTool):
         )
         return new_content
 
-
-    async def _get_edit_permission(self, config: SolveigConfig, interface: SolveigInterface, abs_path: Path, occurrences_found: int, occurrences_replaced: int) -> EditResult | None:
-        auto_edit = Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+    async def _get_edit_permission(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        abs_path: Path,
+        occurrences_found: int,
+        occurrences_replaced: int,
+    ) -> EditResult | None:
+        auto_edit = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
         if auto_edit:
             await interface.display_info(
                 f"Auto-applying edit ({occurrences_replaced} replacement(s)) since path is auto-allowed."
@@ -178,8 +196,15 @@ class EditTool(BaseTool):
             )
         return None
 
-
-    async def _apply_edit(self, config: SolveigConfig, interface: SolveigInterface, abs_path: Path, new_content: str, occurrences_found: int, occurrences_replaced: int) -> EditResult:
+    async def _apply_edit(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        abs_path: Path,
+        new_content: str,
+        occurrences_found: int,
+        occurrences_replaced: int,
+    ) -> EditResult:
         try:
             await Filesystem.write_file(
                 abs_path, new_content, min_space_left=config.min_disk_space_left
@@ -199,8 +224,9 @@ class EditTool(BaseTool):
             occurrences_replaced=occurrences_replaced,
         )
 
-
-    async def actually_solve(self, config: SolveigConfig, interface: SolveigInterface) -> EditResult:
+    async def actually_solve(
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> EditResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # 1. Validate file exists and is readable/writable
@@ -223,11 +249,11 @@ class EditTool(BaseTool):
 
         # 6. Get approval
         if error_result := await self._get_edit_permission(
-                config=config,
-                interface=interface,
-                abs_path=abs_path,
-                occurrences_found=occurrence_count,
-                occurrences_replaced=replaced_count
+            config=config,
+            interface=interface,
+            abs_path=abs_path,
+            occurrences_found=occurrence_count,
+            occurrences_replaced=replaced_count,
         ):
             return error_result
 
@@ -238,5 +264,5 @@ class EditTool(BaseTool):
             abs_path=abs_path,
             new_content=new_content,
             occurrences_found=occurrence_count,
-            occurrences_replaced=replaced_count
+            occurrences_replaced=replaced_count,
         )
