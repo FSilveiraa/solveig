@@ -39,14 +39,13 @@ class ReadTool(BaseTool):
     @classmethod
     def validate_line_ranges(
         cls, ranges: list[list[int]] | None
-    ) -> list[tuple[int, int]] | None:
+    ) -> list[list[int]] | None:
         if ranges is None:
             return None
 
         if len(ranges) > 3:
             raise ValueError("Maximum 3 line ranges allowed")
 
-        result: list[tuple[int, int]] = []
         for i, range_list in enumerate(ranges):
             if len(range_list) != 2:
                 raise ValueError(
@@ -58,9 +57,8 @@ class ReadTool(BaseTool):
             # end can be -1 (meaning "end of file") or >= start
             if end != -1 and end < start:
                 raise ValueError(f"Range {i + 1}: End line must be >= start line or -1")
-            result.append((start, end))
 
-        return result
+        return ranges
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         """Display read tool header."""

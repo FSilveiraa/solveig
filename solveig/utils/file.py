@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
+from collections.abc import Sequence
 from typing import Literal
 
 from anyio import Path
@@ -444,15 +445,15 @@ class Filesystem:
     async def read_file_lines(
         cls,
         abs_path: Path,
-        ranges: list[tuple[int, int]] | None = None,
+        ranges: Sequence[Sequence[int]] | None = None,
         encoding: str = "utf-8",
     ) -> list[tuple[int, int, str]]:
         """Read specific line ranges from a file.
 
         Args:
             abs_path: Absolute path to the file.
-            ranges: List of (start, end) tuples (1-indexed, inclusive).
-                    Use end=-1 to read to end of file, e.g., (10, -1).
+            ranges: Sequence of (start, end) pairs (1-indexed, inclusive).
+                    Use end=-1 to read to end of file, e.g., [10, -1].
                     If None, reads all lines.
             encoding: File encoding (default: utf-8).
 

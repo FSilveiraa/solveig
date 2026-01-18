@@ -112,6 +112,8 @@ class EditTool(BaseTool):
             await interface.display_error(f"Cannot write to {abs_path}: {e}")
             return self.create_error_result(str(e), accepted=False)
 
+        return None
+
     async def _read_original_content(
         self, interface: SolveigInterface, abs_path: Path
     ) -> EditResult | str:
