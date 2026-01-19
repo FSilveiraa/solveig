@@ -28,6 +28,9 @@ class StatsBar(Widget):
         self._path = Filesystem.get_current_directory(simplify=True)
         self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
+        self.max_context = ""
+        self.input_price = 0
+        self.output_price = 0
 
     @property
     def tokens(self):
@@ -57,6 +60,9 @@ class StatsBar(Widget):
             self._row_keys["table1_row1"] = self._table1.add_row(
                 f"Tokens: {self.tokens}"
             )
+            self._row_keys["table1_row2"] = self._table1.add_row(
+                f"Context length: {self.max_context}"
+            )
 
             self._table2 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
@@ -65,20 +71,27 @@ class StatsBar(Widget):
             self._row_keys["table2_row1"] = self._table2.add_row(
                 f"Endpoint: {self._url}"
             )
+            self._row_keys["table2_row2"] = self._table2.add_row(
+                f"Input price: ${self.input_price}/M"
+            )
 
+            # The 3rd table gets a different CSS class to prevent the separator bar
             self._table3 = DataTable(
-                show_header=False, zebra_stripes=False, classes="stats-table"
+                show_header=False, zebra_stripes=False, classes="stats-table-final"
             )
             self._col3 = self._table3.add_column("stats3", width=None)  # Auto-sizing
             self._row_keys["table3_row1"] = self._table3.add_row(
                 f"Model: {self._model}"
             )
+            self._row_keys["table2_row2"] = self._table3.add_row(
+                f"Output price: ${self.output_price}/M"
+            )
 
             yield Horizontal(
                 self._table1,
-                Static("│", classes="stats-separator"),
+                # Static("│", classes="stats-separator"),
                 self._table2,
-                Static("│", classes="stats-separator"),
+                # Static("│", classes="stats-separator"),
                 self._table3,
                 classes="stats-container",
             )
@@ -95,6 +108,9 @@ class StatsBar(Widget):
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
+        max_context: int | str | None = None,
+        input_price: int | None = None,
+        output_price: int | None = None,
     ):
         """Update the stats dashboard with new information."""
         updated_title = updated_stats = False
@@ -120,6 +136,18 @@ class StatsBar(Widget):
 
         if url is not None:
             self._url = url
+            updated_stats = True
+
+        if max_context is not None:
+            self.max_context = max_context
+            updated_stats = True
+
+        if input_price is not None:
+            self.input_price = input_price
+            updated_stats = True
+
+        if output_price is not None:
+            self.output_price = output_price
             updated_stats = True
 
         if updated_title:
@@ -163,6 +191,9 @@ class StatsBar(Widget):
         self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
         self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
         self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
+        self._row_keys["table1_row2"] = self._table1.add_row(f"Context length: {self.max_context}")
+        self._row_keys["table2_row2"] = self._table2.add_row(f"Input price: ${self.input_price}/M")
+        self._row_keys["table3_row2"] = self._table3.add_row(f"Output price: ${self.output_price}/M")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -220,10 +251,14 @@ class StatsBar(Widget):
             height: auto;
         }}
 
-        .stats-table {{
+        .stats-table, .stats-table-final {{
             overflow: hidden;
             background: {theme.background};
             color: {theme.text};
+        }}
+        
+        .stats-table {{
+            border-right: solid {theme.box}
         }}
 
         .stats-table > .datatable--cursor {{
@@ -234,14 +269,5 @@ class StatsBar(Widget):
         .stats-table > .datatable--hover {{
             background: {theme.background};
             color: {theme.text};
-        }}
-
-        .stats-separator {{
-            width: 1;
-            margin: 0 1 0 1;
-            height: 100%;
-            border: none;
-            color: {theme.box};
-            text-align: center;
         }}
         """

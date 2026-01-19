@@ -3,6 +3,7 @@ from typing import Any
 import instructor
 import openai
 import tiktoken
+from instructor import AsyncInstructor
 
 
 class APIType:
@@ -59,6 +60,10 @@ class APIType:
         ) -> instructor.AsyncInstructor:
             raise NotImplementedError()
 
+        @staticmethod
+        async def get_model_details(client: AsyncInstructor, model: str | None) -> Any:
+            raise NotImplementedError()
+
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
         name = "openai"
@@ -98,6 +103,32 @@ class APIType:
                 raise ValueError(
                     "OpenAI client not available. Install with: pip install openai"
                 ) from e
+
+        @staticmethod
+        async def get_model_details(client: AsyncInstructor, model: str | None) -> Any:
+            # Use the underlying OpenAI client to get model info
+            models_list = await client.client.models.list()
+            if model:
+                model_info = next(model_details for model_details in models_list.data if model_details.id == model)
+            else:
+                model_info = models_list.data[0]
+                model = model_info.id
+            model_details = {
+                "model": model
+            }
+            # Get several optional model details
+            info_fields = {
+                "context_length": lambda _model_info: _model_info.model_extra["context_length"],
+                "input_price": lambda _model_info: _model_info.model_extra["pricing"]["prompt"],
+                "output_price": lambda _model_info: _model_info.model_extra["pricing"]["completion"],
+            }
+            for field_name, getter in info_fields.items():
+                try:
+                    model_details[field_name] = getter(model_info)
+                except:
+                    pass  # Optional field not found
+            return model_details
+
 
     class LOCAL(OPENAI):
         default_url = "https://localhost:5001/v1"

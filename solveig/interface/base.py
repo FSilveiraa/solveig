@@ -153,6 +153,9 @@ class SolveigInterface(ABC):
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
+        max_context: int | None = None,
+        input_price: int | None = None,
+        output_price: int | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...
