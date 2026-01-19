@@ -38,7 +38,9 @@ class ConversationArea(ScrollableContainer):
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
         await target.mount(element)
+        # Schedule scroll after next render cycle when layout is computed
         self.scroll_end()
+        self.call_after_refresh(self.scroll_end)
 
     async def add_text(self, text: str, style: str = "text", markup: bool = False):
         """Add text with specific styling using semantic style names."""
@@ -75,6 +77,8 @@ class ConversationArea(ScrollableContainer):
         if title:
             tree_widget.border_title = title
         await self._add_element(tree_widget)
+        # Tree widget needs explicit refresh to compute its size
+        tree_widget.refresh(layout=True)
 
     async def enter_group(self, title: str):
         """Enter a new group container."""
@@ -90,18 +94,20 @@ class ConversationArea(ScrollableContainer):
 
         # Push onto stack
         self._group_stack.append(group_container)
-        self.scroll_end()
+        # Schedule scroll after next render cycle when layout is computed
+        self.call_after_refresh(self.scroll_end)
 
     async def exit_group(self):
         """Exit the current group container."""
         if self._group_stack:
             self._group_stack.pop()
-            self.scroll_end()
 
             # Print end cap after exiting group
             end_corner = Static("┗━━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
+            # Schedule scroll after next render cycle when layout is computed
+            self.call_after_refresh(self.scroll_end)
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:

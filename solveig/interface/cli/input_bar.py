@@ -175,6 +175,10 @@ class InputBar(Container):
             await self.mount(self._select_widget)
             self._select_widget.focus()
 
+            # Scroll conversation area to keep context visible after layout
+            conversation = self.app.query_one("#conversation")
+            self.call_after_refresh(conversation.scroll_end)
+
         try:
             selected_index = await self._choice_future
             return selected_index
