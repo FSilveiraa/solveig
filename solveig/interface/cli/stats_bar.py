@@ -6,7 +6,7 @@ from os import PathLike
 from textual.containers import Horizontal
 from textual.timer import Timer
 from textual.widget import Widget
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
 from textual.widgets._data_table import RowKey
 
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
@@ -28,7 +28,7 @@ class StatsBar(Widget):
         self._path = Filesystem.get_current_directory(simplify=True)
         self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
-        self.max_context = ""
+        self.max_context: str | int = ""
         self.input_price = 0
         self.output_price = 0
 
@@ -191,9 +191,15 @@ class StatsBar(Widget):
         self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
         self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
         self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
-        self._row_keys["table1_row2"] = self._table1.add_row(f"Context length: {self.max_context}")
-        self._row_keys["table2_row2"] = self._table2.add_row(f"Input price: ${self.input_price}/M")
-        self._row_keys["table3_row2"] = self._table3.add_row(f"Output price: ${self.output_price}/M")
+        self._row_keys["table1_row2"] = self._table1.add_row(
+            f"Context length: {self.max_context}"
+        )
+        self._row_keys["table2_row2"] = self._table2.add_row(
+            f"Input price: ${self.input_price}/M"
+        )
+        self._row_keys["table3_row2"] = self._table3.add_row(
+            f"Output price: ${self.output_price}/M"
+        )
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -256,7 +262,7 @@ class StatsBar(Widget):
             background: {theme.background};
             color: {theme.text};
         }}
-        
+
         .stats-table {{
             border-right: solid {theme.box}
         }}

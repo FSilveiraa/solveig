@@ -127,7 +127,9 @@ async def main_loop(
     await asyncio.sleep(0)
 
     try:
-        model_info = await config.api_type.get_model_details(client=llm_client, model=config.model)
+        model_info = await config.api_type.get_model_details(
+            client=llm_client, model=config.model
+        )
     except Exception as error:
         await interface.display_error(f"Failed to find model details: {error}")
     else:
@@ -135,15 +137,15 @@ async def main_loop(
         config.model = model_info["model"]
         try:
             model_max_context = model_info["context_length"]
-        except KeyError as error:
+        except KeyError:
             pass
         else:
             if config.max_context < 0 or config.max_context > model_max_context:
                 config.max_context = model_max_context
         await interface.update_stats(
-            max_context = config.max_context,
-            input_price = model_info.get("input_price"),
-            output_price = model_info.get("output_price"),
+            max_context=config.max_context,
+            input_price=model_info.get("input_price"),
+            output_price=model_info.get("output_price"),
         )
 
     await interface.update_stats(url=config.url, model=config.model)

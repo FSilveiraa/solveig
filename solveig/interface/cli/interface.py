@@ -235,9 +235,18 @@ class TerminalInterface(SolveigInterface):
         output_price: int | None = None,
     ) -> None:
         """Update stats dashboard with multiple pieces of information."""
-        max_context = "Unlimited" if max_context is not None and max_context < 0 else max_context
+        _max_context = (
+            "Unlimited" if max_context is not None and max_context < 0 else max_context
+        )
         self.app._stats_dashboard.update(
-            status=status, tokens=tokens, model=model, url=url, path=path, max_context=max_context, input_price=input_price, output_price=output_price
+            status=status,
+            tokens=tokens,
+            model=model,
+            url=url,
+            path=path,
+            max_context=_max_context,
+            input_price=input_price,
+            output_price=output_price,
         )
 
     async def wait_until_ready(self):

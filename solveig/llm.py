@@ -43,14 +43,6 @@ class APIType:
                 cls._encoder_cache[encoder_or_model] = encoder
             return len(encoder.encode(text))
 
-        # @classmethod
-        # def _get_encoder(cls, encoder_name: str) -> Any:
-        #     raise NotImplementedError()
-        #
-        # @classmethod
-        # def _encoder_count(cls, encoder, text):
-        #     raise NotImplementedError()
-
         @staticmethod
         def get_client(
             instructor_mode: instructor.Mode,
@@ -67,24 +59,6 @@ class APIType:
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
         name = "openai"
-
-        # @classmethod
-        # def _get_encoder(cls, encoder_name: str) -> Any:
-        #     try:
-        #         return tiktoken.encoding_for_model(encoder_name)
-        #     except KeyError:
-        #         try:
-        #             return tiktoken.get_encoding(encoder_name)
-        #         except ValueError as e:
-        #             available = set(tiktoken.list_encoding_names())
-        #             available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
-        #             e.add_note(
-        #                 f"Could not find an encoding for '{encoder_name}', use one of {available}"
-        #             )
-        #             raise e
-
-        # def _encoder_count(self, encoder, text):
-        #     return encoder.count_tokens(text)
 
         @classmethod
         def get_client(
@@ -107,28 +81,36 @@ class APIType:
         @staticmethod
         async def get_model_details(client: AsyncInstructor, model: str | None) -> Any:
             # Use the underlying OpenAI client to get model info
+            assert client.client  # mypy
             models_list = await client.client.models.list()
             if model:
-                model_info = next(model_details for model_details in models_list.data if model_details.id == model)
+                model_info = next(
+                    model_details
+                    for model_details in models_list.data
+                    if model_details.id == model
+                )
             else:
                 model_info = models_list.data[0]
                 model = model_info.id
-            model_details = {
-                "model": model
-            }
+            model_details = {"model": model}
             # Get several optional model details
             info_fields = {
-                "context_length": lambda _model_info: _model_info.model_extra["context_length"],
-                "input_price": lambda _model_info: _model_info.model_extra["pricing"]["prompt"],
-                "output_price": lambda _model_info: _model_info.model_extra["pricing"]["completion"],
+                "context_length": lambda _model_info: _model_info.model_extra[
+                    "context_length"
+                ],
+                "input_price": lambda _model_info: _model_info.model_extra["pricing"][
+                    "prompt"
+                ],
+                "output_price": lambda _model_info: _model_info.model_extra["pricing"][
+                    "completion"
+                ],
             }
             for field_name, getter in info_fields.items():
                 try:
                     model_details[field_name] = getter(model_info)
-                except:
+                except Exception:
                     pass  # Optional field not found
             return model_details
-
 
     class LOCAL(OPENAI):
         default_url = "https://localhost:5001/v1"
