@@ -31,13 +31,14 @@ class APIType:
                 except (KeyError, ValueError):
                     try:
                         encoder = tiktoken.get_encoding(encoder_or_model)
-                    except Exception as e:
-                        available = set(tiktoken.list_encoding_names())
-                        available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
-                        e.add_note(
-                            f"Could not find an encoding for '{encoder_or_model}', use one of {available}"
-                        )
-                        raise e
+                    except Exception:
+                        # available = set(tiktoken.list_encoding_names())
+                        # available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
+                        # e.add_note(
+                        #     f"Could not find an encoding for '{encoder_or_model}', use one of {available}"
+                        # )
+                        # raise e
+                        encoder = cls._encoder_cache[None]
                 cls._encoder_cache[encoder_or_model] = encoder
             return len(encoder.encode(text))
 
@@ -62,20 +63,20 @@ class APIType:
         default_url = "https://api.openai.com/v1"
         name = "openai"
 
-        @classmethod
-        def _get_encoder(cls, encoder_name: str) -> Any:
-            try:
-                return tiktoken.encoding_for_model(encoder_name)
-            except KeyError:
-                try:
-                    return tiktoken.get_encoding(encoder_name)
-                except ValueError as e:
-                    available = set(tiktoken.list_encoding_names())
-                    available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
-                    e.add_note(
-                        f"Could not find an encoding for '{encoder_name}', use one of {available}"
-                    )
-                    raise e
+        # @classmethod
+        # def _get_encoder(cls, encoder_name: str) -> Any:
+        #     try:
+        #         return tiktoken.encoding_for_model(encoder_name)
+        #     except KeyError:
+        #         try:
+        #             return tiktoken.get_encoding(encoder_name)
+        #         except ValueError as e:
+        #             available = set(tiktoken.list_encoding_names())
+        #             available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
+        #             e.add_note(
+        #                 f"Could not find an encoding for '{encoder_name}', use one of {available}"
+        #             )
+        #             raise e
 
         # def _encoder_count(self, encoder, text):
         #     return encoder.count_tokens(text)

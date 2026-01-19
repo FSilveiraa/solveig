@@ -103,7 +103,7 @@ podman-compose up --build -d
                 ),
                 TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
                 WriteTool(
-                    comment="Test write",
+                    comment="Write a Fibonacci sequence solver",
                     path="/home/francisco/Sync/fibonacci.py",
                     content="""
 import math
