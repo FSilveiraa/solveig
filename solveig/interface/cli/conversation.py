@@ -38,7 +38,9 @@ class ConversationArea(ScrollableContainer):
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
         await target.mount(element)
-        # Schedule scroll after next render cycle when layout is computed
+        # Force layout computation for widgets with height: auto
+        element.refresh(layout=True)
+        # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
 
@@ -77,8 +79,6 @@ class ConversationArea(ScrollableContainer):
         if title:
             tree_widget.border_title = title
         await self._add_element(tree_widget)
-        # Tree widget needs explicit refresh to compute its size
-        tree_widget.refresh(layout=True)
 
     async def enter_group(self, title: str):
         """Enter a new group container."""
