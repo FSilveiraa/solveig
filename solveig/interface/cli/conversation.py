@@ -87,14 +87,17 @@ class ConversationArea(ScrollableContainer):
         # Print title before adding group
         title_corner = Static(f"┏━ [bold]{title}[/]", classes="group_top")
         await target.mount(title_corner)
+        title_corner.refresh(layout=True)
 
         # Create group container with border styling for content and mount it
         group_container = Vertical(classes="group_container")
         await target.mount(group_container)
+        group_container.refresh(layout=True)
 
         # Push onto stack
         self._group_stack.append(group_container)
-        # Schedule scroll after next render cycle when layout is computed
+        # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
+        self.scroll_end()
         self.call_after_refresh(self.scroll_end)
 
     async def exit_group(self):
@@ -106,7 +109,9 @@ class ConversationArea(ScrollableContainer):
             end_corner = Static("┗━━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
-            # Schedule scroll after next render cycle when layout is computed
+            end_corner.refresh(layout=True)
+            # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
+            self.scroll_end()
             self.call_after_refresh(self.scroll_end)
 
     @classmethod

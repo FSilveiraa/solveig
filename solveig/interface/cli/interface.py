@@ -204,7 +204,6 @@ class TerminalInterface(SolveigInterface):
 
     async def ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""
-        self.app._conversation_area.scroll_end()
         return await self.app.ask_user(question)
 
     async def ask_choice(
@@ -212,7 +211,6 @@ class TerminalInterface(SolveigInterface):
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
         choices_list = list(choices)  # Convert to list for indexing
-        self.app._conversation_area.scroll_end()
         if add_cancel:
             choices_list.append("Cancel processing")
 
