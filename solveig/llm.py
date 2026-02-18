@@ -228,7 +228,14 @@ class ModelNotFound(Exception):
         self.model_name = model_name
         self.available = sorted(available) if available else []
 
-    def get_available_models_str(self):
-        if not self.available:
-            return None
-        return "\n".join(self.available)
+    async def print(self, interface):
+        await interface.display_error(
+            f"Could not find model '{self.model_name}'. Try setting with '/model set <modelname>'"
+        )
+        if self.available:
+            await interface.display_text_block(
+                text="\n".join(self.available),
+                title="Available models",
+                collapsible=True,
+                collapsed=True,
+            )

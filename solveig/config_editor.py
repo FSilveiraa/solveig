@@ -189,13 +189,7 @@ async def fetch_and_apply_model_info(
             config.model_info = ModelInfo(model=config.model)
         return True
     except ModelNotFound as e:
-        await interface.display_error(f"Could not find model '{e.model_name}'")
-        await interface.display_text_block(
-            text=e.get_available_models_str(),
-            title="Available models",
-            collapsible=True,
-            collapsed=True,
-        )
+        await e.print(interface)
         return False
     except Exception as e:
         await interface.display_error(

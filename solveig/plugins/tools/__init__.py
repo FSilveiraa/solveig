@@ -43,7 +43,7 @@ class PLUGIN_TOOLS:
         Registers a plugin tool. Used as a decorator.
         Adds the tool to the `all` hook plugins list.
         """
-        cls.all[tool_class.__name__] = tool_class
+        cls.all[tool_class.model_fields["title"].default] = tool_class
         return tool_class
 
     @classmethod

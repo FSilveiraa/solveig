@@ -16,7 +16,7 @@ from solveig.config import SolveigConfig
 from solveig.config_editor import fetch_and_apply_model_info
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
-from solveig.llm import ClientRef
+from solveig.llm import ClientRef, ModelNotFound
 from solveig.plugins import initialize_plugins
 from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import (
@@ -108,9 +108,16 @@ async def send_message_to_llm_with_retry(
 
         except InstructorRetryException as e:
             error_body = e.failed_attempts[0][1].body
-            await interface.display_error(
-                f"Error {error_body['code']}: {error_body['message']}"
-            )
+            error_message, error_code = error_body["message"], error_body["code"]
+            await interface.display_error(f"Error {error_code}: {error_message}")
+            # If this is an invalid model error, use the existing method to find and list the available ones
+            if "is not a valid model ID" in error_message:
+                try:
+                    await config.api_type.get_model_details(
+                        client=client_ref.client, model=config.model
+                    )
+                except ModelNotFound as e:
+                    await e.print(interface)
 
         except Exception as e:
             await interface.display_error(e)
