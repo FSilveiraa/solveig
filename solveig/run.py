@@ -108,7 +108,9 @@ async def send_message_to_llm_with_retry(
 
         except InstructorRetryException as e:
             error_body = e.failed_attempts[0][1].body
-            await interface.display_error(f"Error {error_body["code"]}: {error_body["message"]}")
+            await interface.display_error(
+                f"Error {error_body['code']}: {error_body['message']}"
+            )
 
         except Exception as e:
             await interface.display_error(e)
@@ -150,9 +152,7 @@ async def main_loop(
             "No model configured. Use /model set <name> or /config set model <name>."
         )
     else:
-        await fetch_and_apply_model_info(
-            config, client_ref, interface, message_history
-        )
+        await fetch_and_apply_model_info(config, client_ref, interface, message_history)
 
     await interface.update_stats(url=config.url, model=config.model)
 

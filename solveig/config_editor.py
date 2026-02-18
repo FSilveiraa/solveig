@@ -198,7 +198,9 @@ async def fetch_and_apply_model_info(
         )
         return False
     except Exception as e:
-        await interface.display_error(f"Found error when trying to fetch model details: {e}")
+        await interface.display_error(
+            f"Found error when trying to fetch model details: {e}"
+        )
         return False
 
     if model_info is None:
@@ -262,7 +264,9 @@ async def _hook_max_context_changed(
 # Hook registry
 # ---------------------------------------------------------------------------
 
-_HookFn = Callable[[SolveigConfig, ClientRef, SolveigInterface, MessageHistory | None], Any]
+_HookFn = Callable[
+    [SolveigConfig, ClientRef, SolveigInterface, MessageHistory | None], Any
+]
 
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,

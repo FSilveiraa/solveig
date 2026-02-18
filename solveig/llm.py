@@ -222,6 +222,7 @@ def get_instructor_client(
         url=url, api_key=api_key, model=model, instructor_mode=instructor_mode
     )
 
+
 class ModelNotFound(Exception):
     def __init__(self, model_name: str, available: list[str] | None = None) -> None:
         self.model_name = model_name
