@@ -9,11 +9,14 @@ import logging
 import traceback
 
 from instructor import AsyncInstructor
+from instructor.core import InstructorRetryException
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
+from solveig.config_editor import fetch_and_apply_model_info
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
+from solveig.llm import ClientRef
 from solveig.plugins import initialize_plugins
 from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import (
@@ -27,7 +30,7 @@ from solveig.utils.misc import default_json_serialize, serialize_response_model
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
-    client: AsyncInstructor,
+    client_ref: ClientRef,
     message_history: MessageHistory,
 ) -> AssistantMessage | None:
     """Send message to LLM with retry logic."""
@@ -47,19 +50,19 @@ async def send_message_to_llm_with_retry(
                     text=json.dumps(
                         message_history_dumped, indent=2, default=default_json_serialize
                     ),
-                    # language="json",  # TODO: breaks line wrapping
+                    # TODO: breaks line wrapping
+                    ## language="json",
                 )
 
             await interface.display_section(title="Assistant")
-            assistant_response = await client.chat.completions.create(
+            assistant_response = await client_ref.client.chat.completions.create(
                 messages=message_history_dumped,
                 response_model=response_model,
                 model=config.model,
                 temperature=config.temperature,
+                max_retries=1,
             )
             assert isinstance(assistant_response, AssistantMessage)
-            # if not assistant_response:
-            #     raise ValueError("Assistant responded with empty message")
 
             # Add to the message history immediately, which updates (corrects) the token counts
             model = None
@@ -87,32 +90,48 @@ async def send_message_to_llm_with_retry(
                 ),
                 model=model,
             )
+
+            # Opportunistic model info refresh: if we know the API is reachable
+            # but still don't have model details, fetch them now
+            # TODO: review idea, not bad, but maybe integrate better
+            # if config.model_info is None:
+            #     asyncio.create_task(
+            #         fetch_and_apply_model_info(
+            #             config, client_ref, interface, message_history
+            #         )
+            #     )
+
             return assistant_response
 
         except KeyboardInterrupt:
             raise
+
+        except InstructorRetryException as e:
+            error_body = e.failed_attempts[0][1].body
+            await interface.display_error(f"Error {error_body["code"]}: {error_body["message"]}")
+
         except Exception as e:
             await interface.display_error(e)
             await interface.display_text_block(
                 title=f"{e.__class__.__name__}", text=str(e) + traceback.format_exc()
             )
 
-            retry_choice = await interface.ask_choice(
-                "The API call failed. Do you want to retry?",
-                choices=[
-                    "Yes, send the same message",
-                    "No, add a new message",
-                ],
-                add_cancel=False,  # "No" already stops everything
-            )
-            if retry_choice == 1:  # "No"
-                return None
+        retry_choice = await interface.ask_choice(
+            "The API call failed. Do you want to retry?",
+            choices=[
+                "Yes, send the same message",
+                "No, add a new message or run a sub-command",
+            ],
+            add_cancel=False,  # "No" already stops everything
+        )
+        if retry_choice == 1:  # "No"
+            return None
 
 
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    llm_client: AsyncInstructor,
+    client_ref: ClientRef,
     user_prompt: str,
     message_history: MessageHistory,
 ):
@@ -126,29 +145,17 @@ async def main_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
-    try:
-        model_info = await config.api_type.get_model_details(
-            client=llm_client, model=config.model
+    if config.model is None:
+        await interface.display_warning(
+            "No model configured. Use /model set <name> or /config set model <name>."
         )
-    except Exception as error:
-        await interface.display_error(f"Failed to find model details: {error}")
     else:
-        # Update config, then stats
-        config.model = model_info["model"]
-        try:
-            model_max_context = model_info["context_length"]
-        except KeyError:
-            pass
-        else:
-            if config.max_context < 0 or config.max_context > model_max_context:
-                config.max_context = model_max_context
-        await interface.update_stats(
-            max_context=config.max_context,
-            input_price=model_info.get("input_price"),
-            output_price=model_info.get("output_price"),
+        await fetch_and_apply_model_info(
+            config, client_ref, interface, message_history
         )
 
     await interface.update_stats(url=config.url, model=config.model)
+
     if config.verbose:
         await interface.display_text_block(
             message_history.system_prompt, title="System Prompt"
@@ -158,15 +165,17 @@ async def main_loop(
     # Pass the message history's input method to the interface
     interface.set_input_handler(message_history.add_user_comment)
 
+    # Pass the sub-command executor to the interface so it can check if
+    # user input is a sub-command or a message
     subcommand_executor = SubcommandRunner(
-        config=config, message_history=message_history
+        config=config, message_history=message_history, client_ref=client_ref
     )
     interface.set_subcommand_executor(subcommand_executor)
 
     if config.verbose:
         response_model = get_response_model(config)
         serialized_response_model = serialize_response_model(
-            model=response_model, mode=llm_client.mode
+            model=response_model, mode=client_ref.client.mode
         )
         await interface.display_text_block(
             title="Response Model",
@@ -184,10 +193,20 @@ async def main_loop(
     while True:
         need_user_input = True
 
+        # Pre-send guard: refuse to send if no model name is configured
+        if config.model is None:
+            await interface.display_error(
+                "No model set. Use /model set <name> or /config set model <name>."
+            )
+            await message_history.condense_responses_into_user_message(
+                interface=interface, wait_for_input=True
+            )
+            continue
+
         # Send message and await response
         async with interface.with_animation("Thinking...", "Processing"):
             llm_response = await send_message_to_llm_with_retry(
-                config, interface, llm_client, message_history
+                config, interface, client_ref, message_history
             )
 
         if llm_response:
@@ -230,9 +249,11 @@ async def run_async(
         config, user_prompt = await SolveigConfig.parse_config_and_prompt()
 
     # Create LLM client and interface
-    llm_client = llm_client or llm.get_instructor_client(
+    raw_client = llm_client or llm.get_instructor_client(
         api_type=config.api_type, api_key=config.api_key, url=config.url
     )
+    client_ref = ClientRef(client=raw_client)
+
     interface = interface or TerminalInterface(
         theme=config.theme, code_theme=config.code_theme
     )
@@ -253,7 +274,7 @@ async def run_async(
             main_loop(
                 interface=interface,
                 config=config,
-                llm_client=llm_client,
+                client_ref=client_ref,
                 user_prompt=user_prompt,
                 message_history=message_history,
             )

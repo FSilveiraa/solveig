@@ -1,9 +1,28 @@
+import contextlib
+from dataclasses import dataclass
 from typing import Any
 
 import instructor
 import openai
 import tiktoken
 from instructor import AsyncInstructor
+
+
+@dataclass
+class ModelInfo:
+    """Details about a model as returned by the API."""
+
+    model: str
+    context_length: int | None = None
+    input_price: float | None = None  # per million tokens
+    output_price: float | None = None  # per million tokens
+
+
+@dataclass
+class ClientRef:
+    """Mutable holder for AsyncInstructor, enabling runtime client replacement."""
+
+    client: AsyncInstructor
 
 
 class APIType:
@@ -53,7 +72,9 @@ class APIType:
             raise NotImplementedError()
 
         @staticmethod
-        async def get_model_details(client: AsyncInstructor, model: str | None) -> Any:
+        async def get_model_details(
+            client: AsyncInstructor, model: str | None
+        ) -> "ModelInfo | None":
             raise NotImplementedError()
 
     class OPENAI(BaseAPI):
@@ -79,38 +100,27 @@ class APIType:
                 ) from e
 
         @staticmethod
-        async def get_model_details(client: AsyncInstructor, model: str | None) -> Any:
-            # Use the underlying OpenAI client to get model info
+        async def get_model_details(
+            client: AsyncInstructor, model: str | None
+        ) -> "ModelInfo | None":
             assert client.client  # mypy
             models_list = await client.client.models.list()
             if model:
-                model_info = next(
-                    model_details
-                    for model_details in models_list.data
-                    if model_details.id == model
-                )
+                model_obj = next((m for m in models_list.data if m.id == model), None)
+                if model_obj is None:
+                    raise ModelNotFound(model, [m.id for m in models_list.data])
             else:
-                model_info = models_list.data[0]
-                model = model_info.id
-            model_details = {"model": model}
-            # Get several optional model details
-            info_fields = {
-                "context_length": lambda _model_info: _model_info.model_extra[
-                    "context_length"
-                ],
-                "input_price": lambda _model_info: _model_info.model_extra["pricing"][
-                    "prompt"
-                ],
-                "output_price": lambda _model_info: _model_info.model_extra["pricing"][
-                    "completion"
-                ],
-            }
-            for field_name, getter in info_fields.items():
-                try:
-                    model_details[field_name] = getter(model_info)
-                except Exception:
-                    pass  # Optional field not found
-            return model_details
+                if not models_list.data:
+                    return None
+                model_obj = models_list.data[0]
+                model = model_obj.id
+            info = ModelInfo(model=model)
+            with contextlib.suppress(Exception):
+                info.context_length = model_obj.model_extra["context_length"]
+            with contextlib.suppress(Exception):
+                info.input_price = model_obj.model_extra["pricing"]["prompt"]
+                info.output_price = model_obj.model_extra["pricing"]["completion"]
+            return info
 
     class LOCAL(OPENAI):
         default_url = "https://localhost:5001/v1"
@@ -211,3 +221,13 @@ def get_instructor_client(
     return api_class.get_client(
         url=url, api_key=api_key, model=model, instructor_mode=instructor_mode
     )
+
+class ModelNotFound(Exception):
+    def __init__(self, model_name: str, available: list[str] | None = None) -> None:
+        self.model_name = model_name
+        self.available = sorted(available) if available else []
+
+    def get_available_models_str(self):
+        if not self.available:
+            return None
+        return "\n".join(self.available)

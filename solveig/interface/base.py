@@ -8,9 +8,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
+from typing import TYPE_CHECKING
 
-from solveig.subcommand import SubcommandRunner
 from solveig.utils.file import Metadata
+
+if TYPE_CHECKING:
+    from solveig.subcommand import SubcommandRunner
 
 
 class SolveigInterface(ABC):
@@ -24,10 +27,10 @@ class SolveigInterface(ABC):
     - Optional status display
     """
 
-    subcommand_executor: SubcommandRunner | None = None
+    subcommand_executor: "SubcommandRunner | None" = None
     input_handler: Callable | None = None
 
-    def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
+    def set_subcommand_executor(self, subcommand_executor: "SubcommandRunner"):
         self.subcommand_executor = subcommand_executor
 
     def set_input_handler(self, handler: Callable):
@@ -154,8 +157,8 @@ class SolveigInterface(ABC):
         url: str | None = None,
         path: str | PathLike | None = None,
         max_context: int | None = None,
-        input_price: int | None = None,
-        output_price: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...

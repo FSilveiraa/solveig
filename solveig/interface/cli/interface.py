@@ -231,8 +231,8 @@ class TerminalInterface(SolveigInterface):
         url: str | None = None,
         path: str | PathLike | None = None,
         max_context: int | None = None,
-        input_price: int | None = None,
-        output_price: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
     ) -> None:
         """Update stats dashboard with multiple pieces of information."""
         _max_context = (

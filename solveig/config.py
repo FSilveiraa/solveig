@@ -8,7 +8,7 @@ from typing import Any
 from anyio import Path
 
 from solveig.interface import SolveigInterface, themes
-from solveig.llm import APIType, parse_api_type
+from solveig.llm import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
 
@@ -72,6 +72,8 @@ class SolveigConfig:
 
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
+    # Runtime state — not persisted or exposed as CLI arguments
+    model_info: ModelInfo | None = field(default=None)
     code_theme: str = themes.DEFAULT_CODE_THEME
     wait_between: float = 0.5
 
@@ -341,11 +343,16 @@ class SolveigConfig:
 
         return (cls(**merged_config), user_prompt.strip())
 
+    # Fields that are derived at runtime and should not be persisted
+    _RUNTIME_FIELDS = frozenset({"model_info"})
+
     def to_dict(self) -> dict[str, Any]:
         """Export config to a dictionary suitable for JSON serialization."""
         config_dict = {}
 
         for field_name, field_value in vars(self).items():
+            if field_name in self._RUNTIME_FIELDS:
+                continue
             if field_name == "api_type" and hasattr(field_value, "name"):
                 # Convert class to string name using static attribute
                 config_dict[field_name] = field_value.name

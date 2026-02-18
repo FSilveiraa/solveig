@@ -29,8 +29,8 @@ class StatsBar(Widget):
         self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
         self.max_context: str | int = ""
-        self.input_price = 0
-        self.output_price = 0
+        self.input_price: float = 0
+        self.output_price: float = 0
 
     @property
     def tokens(self):
@@ -109,8 +109,8 @@ class StatsBar(Widget):
         url: str | None = None,
         path: str | PathLike | None = None,
         max_context: int | str | None = None,
-        input_price: int | None = None,
-        output_price: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
     ):
         """Update the stats dashboard with new information."""
         updated_title = updated_stats = False

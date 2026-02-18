@@ -96,6 +96,7 @@ node_modules/
 *.egg-info/
 
 # Claude files
+.claude
 .claudeignore
 CLAUDE.md
 GEMINI.md
