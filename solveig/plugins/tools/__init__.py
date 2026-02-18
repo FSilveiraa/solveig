@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # A TypeVar is used to tell the type checker that the decorator returns the exact same class
 # that it received as an argument. This preserves the specific type (e.g., `TreeTool`)
 # for better static analysis downstream.
-T = TypeVar("T", bound=type["BaseTool"])
+T = TypeVar("T", bound="BaseTool")
 
 
 class PLUGIN_TOOLS:
@@ -38,7 +38,7 @@ class PLUGIN_TOOLS:
         raise TypeError("PLUGIN_TOOLS is a static registry and cannot be instantiated")
 
     @classmethod
-    def register(cls, tool_class: T) -> T:
+    def register(cls, tool_class: type[T]) -> type[T]:
         """
         Registers a plugin tool. Used as a decorator.
         Adds the tool to the `all` hook plugins list.

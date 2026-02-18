@@ -107,9 +107,15 @@ async def send_message_to_llm_with_retry(
             raise
 
         except InstructorRetryException as e:
-            error_body = e.failed_attempts[0][1].body
-            error_message, error_code = error_body["message"], error_body["code"]
-            await interface.display_error(f"Error {error_code}: {error_message}")
+            attempt_exc = e.failed_attempts[0][1] if e.failed_attempts else e
+            body = getattr(attempt_exc, "body", None)
+            if isinstance(body, dict):
+                error_message = body.get("message", str(attempt_exc))
+                error_code = body.get("code", "unknown")
+                await interface.display_error(f"Error {error_code}: {error_message}")
+            else:
+                error_message = str(attempt_exc)
+                await interface.display_error(error_message)
             # If this is an invalid model error, use the existing method to find and list the available ones
             if "is not a valid model ID" in error_message:
                 try:
