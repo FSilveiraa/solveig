@@ -5,6 +5,7 @@ Unified input widget handling both free-form input and questions.
 import asyncio
 from collections.abc import Iterable
 from enum import Enum
+from typing import Callable
 
 from textual.containers import Container
 from textual.events import Key
@@ -24,6 +25,12 @@ class InputMode(Enum):
 
 class GrowingInput(TextArea):
     """A TextArea that grows with content and submits on Enter."""
+    def __init__(self, *args, mode_getter: Callable[[], InputMode],  **kwargs):
+        super().__init__(*args, **kwargs)
+        self._mode_getter = mode_getter
+        self._history: list[str] = []  # Submitted messages, old -> new
+        self._history_index: int | None = None  # Index of message navigation, None = not navigating
+        self._history_draft: str = ""  # Caching text typed before entering history navigation
 
     class Submitted(Message):
         """Posted when the user presses Enter."""
@@ -40,12 +47,46 @@ class GrowingInput(TextArea):
         if event.key == "enter":
             event.prevent_default()
             self.post_message(self.Submitted(self.text))
+
         elif event.key == "ctrl+c":
             if self.text:
                 # If there is text, clear it and stop the event
                 event.stop()
                 self.text = ""
             # If there is no text, let the event bubble up to the app to exit
+
+        elif (
+                event.key == "up"
+                # and self.parent._mode == InputMode.FREE_FORM
+                and self._mode_getter() == InputMode.FREE_FORM
+                and self.cursor_location[0] == 0
+        ):
+            event.prevent_default()
+            if self._history_index is None and self._history:
+                self._history_draft = self.text
+                self._history_index = len(self._history) - 1
+            elif self._history_index is not None and self._history_index > 0:
+                self._history_index -= 1
+            if self._history_index is not None:
+                self.load_text(self._history[self._history_index])
+                self.move_cursor(self.get_cursor_line_end_location())
+
+        elif (
+                event.key == "down"
+                # and self.parent._mode == InputMode.FREE_FORM
+                and self._mode_getter() == InputMode.FREE_FORM
+                and self.cursor_location[0] == len(self.text.splitlines()) - 1
+        ):
+            if self._history_index is not None:
+                event.prevent_default()
+                if self._history_index < len(self._history) - 1:
+                    self._history_index += 1
+                    self.load_text(self._history[self._history_index])
+                else:
+                    self._history_index = None
+                    self.load_text(self._history_draft)
+                self.move_cursor(self.get_cursor_line_end_location())
+
         else:
             # Let the parent class handle other keys
             await super()._on_key(event)
@@ -78,7 +119,7 @@ class InputBar(Container):
         self._free_form_callback = free_form_callback
 
         # Child widgets
-        self._text_input = GrowingInput(id="text_input")
+        self._text_input = GrowingInput(id="text_input", mode_getter=lambda: self._mode)
         self._text_input.placeholder = placeholder
         self._text_input.show_line_numbers = False
         self._select_widget: OptionList | None = None
@@ -103,6 +144,9 @@ class InputBar(Container):
         if not user_input:
             return
 
+        self._text_input._history.append(user_input)
+        self._text_input._history_index = None
+        self._text_input._history_draft = ""
         self._text_input.text = ""
 
         if self._mode == InputMode.QUESTION and self._question_future:
