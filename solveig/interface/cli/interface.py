@@ -311,6 +311,7 @@ class TerminalInterface(SolveigInterface):
         abs_path: PathLike,
         is_dir: bool,
         size: int | None = None,
+        line_count: int | None = None,
     ) -> str:
         """Format path information for display - shared by all tools."""
         # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
@@ -321,6 +322,8 @@ class TerminalInterface(SolveigInterface):
         if size is not None:
             size_str = convert_size_to_human_readable(size)
             path_info += f"  |  ⛁ {size_str}"
+        if line_count is not None:
+            path_info += f"  |  ☰ {line_count} lines"
         return path_info
 
     async def display_file_info(
@@ -345,11 +348,9 @@ class TerminalInterface(SolveigInterface):
             if is_directory is not None
             else await Filesystem.is_dir(abs_source)
         )
-        source_size = (
-            (await Filesystem.read_metadata(abs_source)).size if source_exists else None
-        )
-        dest_size = (
-            (await Filesystem.read_metadata(abs_dest)).size
+        source_meta = await Filesystem.read_metadata(abs_source) if source_exists else None
+        dest_meta = (
+            await Filesystem.read_metadata(abs_dest)
             if abs_dest and dest_exists
             else None
         )
@@ -358,7 +359,8 @@ class TerminalInterface(SolveigInterface):
             self._format_path_info(
                 path=source_path,
                 abs_path=abs_source,
-                size=source_size,
+                size=source_meta.size if source_meta else None,
+                line_count=source_meta.line_count if source_meta else None,
                 is_dir=is_directory,
             ),
             prefix=(
@@ -370,7 +372,8 @@ class TerminalInterface(SolveigInterface):
                 self._format_path_info(
                     path=destination_path,
                     abs_path=abs_dest,
-                    size=dest_size,
+                    size=dest_meta.size if dest_meta else None,
+                    line_count=dest_meta.line_count if dest_meta else None,
                     is_dir=is_directory,
                 ),
                 prefix="Destination:",

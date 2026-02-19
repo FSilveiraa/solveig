@@ -32,6 +32,7 @@ class Metadata:
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[str, "Metadata"] | None = None
+    line_count: int | None = None
 
 
 @dataclass
@@ -290,6 +291,17 @@ class Filesystem:
             _get_user_info
         )
 
+        line_count: int | None = None
+        if not is_dir and is_readable:
+            try:
+                raw = await abs_path.read_bytes()
+                if b"\x00" not in raw[:512]:  # text file heuristic
+                    line_count = raw.count(b"\n") + (
+                        1 if raw and not raw.endswith(b"\n") else 0
+                    )
+            except Exception:
+                pass
+
         return Metadata(
             path=str(abs_path),
             size=stats.st_size,
@@ -300,6 +312,7 @@ class Filesystem:
             is_readable=is_readable,
             is_writable=is_writable,
             listing=listing,
+            line_count=line_count,
         )
 
     @classmethod
