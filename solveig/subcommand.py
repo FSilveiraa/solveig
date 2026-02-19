@@ -164,7 +164,9 @@ class SubcommandRunner:
         )
         old_display = self._format_field_value(field_name, old_value)
         new_display = self._format_field_value(field_name, new_value)
-        await interface.display_success(f"Changed config.{field_name}: {old_display} → {new_display}")
+        await interface.display_success(
+            f"Changed config.{field_name}: {old_display} → {new_display}"
+        )
 
     @staticmethod
     def _format_field_value(field_name: str, value: object) -> str:

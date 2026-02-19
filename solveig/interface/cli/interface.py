@@ -348,7 +348,9 @@ class TerminalInterface(SolveigInterface):
             if is_directory is not None
             else await Filesystem.is_dir(abs_source)
         )
-        source_meta = await Filesystem.read_metadata(abs_source) if source_exists else None
+        source_meta = (
+            await Filesystem.read_metadata(abs_source) if source_exists else None
+        )
         dest_meta = (
             await Filesystem.read_metadata(abs_dest)
             if abs_dest and dest_exists
