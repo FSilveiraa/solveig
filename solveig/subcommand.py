@@ -438,6 +438,6 @@ Session sub-commands:
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return
-        self.message_history.load_session(session_data["messages"])
-        await self.session_manager.display_loaded_session(session_data, interface)
+        self.message_history.load_messages(self.session_manager.reconstruct_messages(session_data))
+        await self.session_manager.display_loaded_session(session_data, self.message_history, interface)
         await interface.display_success("Session loaded. Continue your conversation.")
