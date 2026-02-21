@@ -2,10 +2,15 @@ import json
 from datetime import UTC, datetime
 
 from anyio import Path
+from pydantic import TypeAdapter
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
+from solveig.schema.dynamic import get_result_classes, get_tools_union
 from solveig.schema.message import MessageHistory
+from solveig.schema.message.assistant import AssistantMessage
+from solveig.schema.message.user import UserComment, UserMessage
+from solveig.schema.result import ToolResult
 from solveig.utils.file import Filesystem
 
 
@@ -144,7 +149,7 @@ class SessionManager:
     async def display_loaded_session(
         self, session_data: dict, interface: SolveigInterface
     ) -> None:
-        """Re-display all messages from a loaded session."""
+        """Re-display all messages from a loaded session using their Pydantic display methods."""
         meta = session_data.get("metadata", {})
         header = (
             f"**Session:** {session_data.get('id', '?')}  \n"
@@ -155,17 +160,55 @@ class SessionManager:
         )
         await interface.display_text_block(header, title="Resumed session")
 
+        tool_adapter: TypeAdapter = TypeAdapter(get_tools_union())
+        result_classes = get_result_classes()
+        pending_tools: list = []
+
         for msg in session_data.get("messages", []):
             role = msg.get("role", "unknown")
             content = msg.get("content") or ""
-            await interface.display_section(
-                title="User" if role == "user" else "Assistant"
-            )
+            try:
+                parsed = json.loads(content)
+            except (json.JSONDecodeError, AttributeError):
+                parsed = {}
+
             if role == "assistant":
-                try:
-                    comment = json.loads(content).get("comment", content)
-                except (json.JSONDecodeError, AttributeError):
-                    comment = content
-                await interface.display_comment(comment)
-            else:
-                await interface.display_text(content)
+                assistant_msg = AssistantMessage(
+                    comment=parsed.get("comment", content),
+                    tasks=parsed.get("tasks"),
+                )
+                await interface.display_section("Assistant")
+                await assistant_msg.display(interface)
+
+                pending_tools = []
+                for tool_dict in parsed.get("tools") or []:
+                    try:
+                        pending_tools.append(tool_adapter.validate_python(tool_dict))
+                    except Exception:
+                        pass
+
+            elif role == "user":
+                responses = parsed.get("responses", [])
+                result_idx = 0
+                for r in responses:
+                    if "title" not in r or "accepted" not in r:
+                        continue
+                    tool = pending_tools[result_idx] if result_idx < len(pending_tools) else None
+                    result_idx += 1
+                    if tool is None:
+                        continue
+                    result_cls = result_classes.get(r.get("title", ""), ToolResult)
+                    result = result_cls.model_construct(tool=tool, **r)
+                    try:
+                        await result.display(interface)
+                    except Exception:
+                        pass
+
+                comments: list[UserComment] = [
+                    UserComment(comment=r["comment"])
+                    for r in responses
+                    if "comment" in r
+                ]
+                if comments:
+                    user_msg = UserMessage(responses=comments)  # type: ignore[arg-type]
+                    await user_msg.display(interface)

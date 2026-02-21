@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from solveig.interface import SolveigInterface
+
 from ...utils.file import Metadata
 from .base import ToolResult
 
@@ -15,3 +17,9 @@ class ReadResult(ToolResult):
     # When reading full file: [(1, total_lines, full_content)]
     # When reading ranges: [(start1, end1, content1), (start2, end2, content2), ...]
     content: list[tuple[int, int, str]] | None = None
+
+    async def _display_content(self, interface: SolveigInterface) -> None:
+        if self.content:
+            for start, end, text in self.content:
+                label = f"Lines {start}–{end}" if start != end else f"Line {start}"
+                await interface.display_text_block(text, title=label, collapsible=True, collapsed=True)

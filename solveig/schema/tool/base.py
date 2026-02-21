@@ -129,6 +129,15 @@ class BaseTool(BaseModel, ABC):
         """Create appropriate error result for this tool type."""
         raise NotImplementedError()
 
+    def parse_session_result(self, data: dict) -> ToolResult:
+        """Reconstruct a typed result from a stored session dict, pairing it with this tool."""
+        return ToolResult(
+            title=self.title,
+            tool=self,
+            accepted=data.get("accepted", False),
+            error=data.get("error"),
+        )
+
     @classmethod
     @abstractmethod
     def get_description(cls) -> str:

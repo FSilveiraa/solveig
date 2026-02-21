@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from solveig.interface import SolveigInterface
+
 from .base import ToolResult
 
 
@@ -14,3 +16,7 @@ class EditResult(ToolResult):
     # Replacement statistics
     occurrences_found: int | None = None
     occurrences_replaced: int | None = None
+
+    async def _display_content(self, interface: SolveigInterface) -> None:
+        if self.occurrences_replaced is not None:
+            await interface.display_text(f"{self.occurrences_replaced} occurrence(s) replaced")

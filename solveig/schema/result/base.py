@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from solveig.interface import SolveigInterface
+
 # Circular import fix:
 # - This module (result/base.py) needs Tool classes for type hints
 # - tool/base.py imports Result classes for actual usage
@@ -22,3 +24,20 @@ class ToolResult(BaseModel):
     tool: BaseTool = Field(exclude=True)
     accepted: bool
     error: str | None = None
+
+    async def display(self, interface: SolveigInterface) -> None:
+        async with interface.with_group(self.title.title()):
+            await self.tool.display_header(interface)
+            await self._display_content(interface)
+            if self.error:
+                await interface.display_error(self.error)
+            else:
+                if self.accepted:
+                    await interface.display_success("Accepted")
+                else:
+                    await interface.display_warning("Rejected")
+                # await interface.display_text("✓ Accepted" if self.accepted else "✗ Rejected")
+
+    async def _display_content(self, interface: SolveigInterface) -> None:
+        """Override in subclasses to show type-specific result content."""
+        raise NotImplementedError()

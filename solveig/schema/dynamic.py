@@ -10,6 +10,7 @@ from pydantic import Field, create_model
 from solveig import SolveigConfig
 from solveig.plugins.tools import PLUGIN_TOOLS
 from solveig.schema.message.assistant import AssistantMessage
+from solveig.schema.result.base import ToolResult
 from solveig.schema.tool import (
     CORE_TOOLS,
     BaseTool,
@@ -17,10 +18,23 @@ from solveig.schema.tool import (
 )
 
 
+def _collect_result_subclasses(
+    cls: type[ToolResult],
+) -> list[type[ToolResult]]:
+    """Recursively collect all subclasses of ToolResult that have a concrete title."""
+    found = []
+    for sub in cls.__subclasses__():
+        if isinstance(sub.model_fields["title"].default, str):
+            found.append(sub)
+        found.extend(_collect_result_subclasses(sub))
+    return found
+
+
 class CACHED_RESPONSE_MODEL:
     config_hash: str | None = None
     tools_union: type[BaseTool] | None = None
     message_class: type[AssistantMessage] | None = None
+    result_classes: dict[str, type[ToolResult]] = {}
 
 
 def _ensure_tools_union_cached(config: SolveigConfig | None = None):
@@ -62,6 +76,12 @@ def _ensure_tools_union_cached(config: SolveigConfig | None = None):
         ),
         __base__=AssistantMessage,
     )
+    # Collect all known ToolResult subclasses that have been imported (includes plugin results
+    # since they're defined alongside their tool and thus imported when the plugin loads)
+    CACHED_RESPONSE_MODEL.result_classes = {
+        sub.model_fields["title"].default: sub
+        for sub in _collect_result_subclasses(ToolResult)
+    }
 
 
 def get_tools_union(config: SolveigConfig | None = None) -> type[BaseTool]:
@@ -69,6 +89,14 @@ def get_tools_union(config: SolveigConfig | None = None) -> type[BaseTool]:
     _ensure_tools_union_cached(config)
     assert CACHED_RESPONSE_MODEL.tools_union is not None
     return CACHED_RESPONSE_MODEL.tools_union
+
+
+def get_result_classes(
+    config: SolveigConfig | None = None,
+) -> dict[str, type[ToolResult]]:
+    """Get the title → result class map, rebuilt whenever the tools union is rebuilt."""
+    _ensure_tools_union_cached(config)
+    return CACHED_RESPONSE_MODEL.result_classes
 
 
 def get_response_model(
