@@ -133,6 +133,36 @@ class MessageHistory:
             self.add_messages(user_message)
             await user_message.display(interface)
 
+    def to_session(self) -> list[dict]:
+        """Return OpenAI-format messages excluding the system prompt."""
+        return [msg for msg, _ in self.message_cache[1:]]
+
+    def load_session(self, messages: list[dict]) -> None:
+        """Replace message history in-place from stored OpenAI-format messages.
+
+        The system message at index 0 is preserved (current config's prompt).
+        Token counts are re-estimated via the encoder.
+        Note: the Pydantic `messages` list is not reconstructed (v1 limitation).
+        """
+        sys_entry = self.message_cache[0]
+        self.message_cache = [sys_entry]
+        self.token_count = sys_entry[1]
+        self.total_tokens_sent = 0
+        self.total_tokens_received = 0
+
+        for msg in messages:
+            content = msg.get("content") or ""
+            if isinstance(content, list):
+                # multi-modal content parts — join text parts for token counting
+                content = " ".join(
+                    p.get("text", "") for p in content if isinstance(p, dict)
+                )
+            size = self.api_type.count_tokens(content, self.encoder)
+            self.message_cache.append((msg, size))
+            self.token_count += size
+
+        self.prune_message_cache()
+
     def update_system_prompt(self, new_prompt: str) -> None:
         """Replace the system message in-place and adjust the token count."""
         self.system_prompt = new_prompt

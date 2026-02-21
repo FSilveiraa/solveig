@@ -18,7 +18,7 @@ DEFAULT_SYSTEM_PROMPT = """
 You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
 
 Guidelines:
-- Use the comment field to communicate with the user and explain your reasoning (supports Markdown formatting)
+- The `comment` field is required for all communication with the user (supports Markdown formatting)
 - For multi-step work, include a tasks list in your response showing your plan
 - For simple requests, avoid plans and respond directly
 - Update task status (pending → ongoing → completed/failed) as you progress
@@ -63,6 +63,8 @@ class SolveigConfig:
     auto_allowed_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     disable_autonomy: bool = False
+    sessions_dir: str = ".solveig/sessions"
+    auto_save_session: bool = True
 
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
@@ -235,6 +237,29 @@ class SolveigConfig:
             help="Disable autonomous mode. By default, Solveig will work autonomously run a loop asking for operations and  returning theirs results, until no new operations are requested. With this option, Solveig will require approval before sending results, by always expecting some user message to be included. ! This only affects whether we return results immediately or not, it does not influence usual operation choices (ex: reading a file will still follow patterns and require user approval) !",
         )
         parser.add_argument(
+            "--sessions-dir",
+            type=str,
+            dest="sessions_dir",
+            help="Directory to store session files (default: .solveig/sessions)",
+        )
+        parser.add_argument(
+            "--no-auto-save",
+            action="store_false",
+            dest="auto_save_session",
+            default=None,
+            help="Disable automatic session saving after each assistant turn",
+        )
+        parser.add_argument(
+            "--resume",
+            "-r",
+            nargs="?",
+            const="__latest__",
+            default=None,
+            metavar="NAME",
+            dest="resume_session",
+            help="Resume latest session on startup, or a named session if NAME is given",
+        )
+        parser.add_argument(
             "--no-commands",
             action="store_true",
             dest="no_commands",
@@ -274,6 +299,7 @@ class SolveigConfig:
         args = parser.parse_args(cli_args)
         args_dict = vars(args)
         user_prompt = args_dict.pop("prompt")
+        resume_session = args_dict.pop("resume_session", None)
 
         file_config = await cls.parse_from_file(args_dict.pop("config"))
         if not file_config:
@@ -344,7 +370,7 @@ class SolveigConfig:
                 )
             merged_config["url"] = api_type_class.default_url
 
-        return (cls(**merged_config), user_prompt.strip())
+        return (cls(**merged_config), user_prompt.strip(), resume_session)
 
     # Fields that are derived at runtime and should not be persisted
     _RUNTIME_FIELDS = frozenset({"model_info"})

@@ -129,7 +129,7 @@ class TestCLIIntegration:
     async def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "local", "test prompt"]
-        config, prompt = await SolveigConfig.parse_config_and_prompt(
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert isinstance(config, SolveigConfig)
@@ -139,7 +139,7 @@ class TestCLIIntegration:
     async def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt = await SolveigConfig.parse_config_and_prompt(
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.temperature == 0.8
@@ -159,7 +159,7 @@ class TestCLIIntegration:
             config_path = temp_config.name
 
             args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
-            config, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
+            config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
             assert config.verbose is True  # From file
             assert config.api_type == APIType.GEMINI
             assert config.temperature == 0.5  # CLI override
@@ -175,7 +175,7 @@ class TestCLIIntegration:
             args = ["--api-type", "local", "test prompt"]  # Must provide required args
             interface = MockInterface()
 
-            config, _ = await SolveigConfig.parse_config_and_prompt(
+            config, _, __ = await SolveigConfig.parse_config_and_prompt(
                 cli_args=args, interface=interface
             )
 
@@ -187,7 +187,7 @@ class TestCLIIntegration:
     async def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
         args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
-        config, prompt = await SolveigConfig.parse_config_and_prompt(
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.no_commands is True
@@ -196,7 +196,7 @@ class TestCLIIntegration:
     async def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
         args = ["-a", "local", "test prompt"]
-        config, prompt = await SolveigConfig.parse_config_and_prompt(
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert config.no_commands is False

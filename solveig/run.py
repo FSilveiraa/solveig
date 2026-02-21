@@ -23,6 +23,7 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
 )
+from solveig.sessions.manager import SessionManager
 from solveig.subcommand import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
 
@@ -149,6 +150,8 @@ async def main_loop(
     client_ref: ClientRef,
     user_prompt: str,
     message_history: MessageHistory,
+    session_manager: SessionManager | None = None,
+    loaded_session: dict | None = None,
 ):
     """Main async conversation loop."""
     if config.verbose:
@@ -159,6 +162,14 @@ async def main_loop(
     await interface.wait_until_ready()
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
+
+    if loaded_session is not None:
+        if "_error" in loaded_session:
+            await interface.display_error(
+                f"Could not resume session: {loaded_session['_error']}"
+            )
+        elif session_manager is not None:
+            await session_manager.display_loaded_session(loaded_session, interface)
 
     if config.model is None:
         await interface.display_warning(
@@ -181,7 +192,10 @@ async def main_loop(
     # Pass the sub-command executor to the interface so it can check if
     # user input is a sub-command or a message
     subcommand_executor = SubcommandRunner(
-        config=config, message_history=message_history, client_ref=client_ref
+        config=config,
+        message_history=message_history,
+        client_ref=client_ref,
+        session_manager=session_manager,
     )
     interface.set_subcommand_executor(subcommand_executor)
 
@@ -226,6 +240,9 @@ async def main_loop(
 
             await llm_response.display(interface)
 
+            if session_manager:
+                await session_manager.auto_save(message_history)
+
             if llm_response.tools:
                 # We have something to respond with, so user input is not mandatory
                 need_user_input = config.disable_autonomy
@@ -249,6 +266,7 @@ async def run_async(
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
     llm_client: AsyncInstructor | None = None,
+    resume_session: str | None = None,
     # message_history: MessageHistory | None = None,
 ) -> MessageHistory:
     """
@@ -257,7 +275,11 @@ async def run_async(
     """
     # Parse config and run main loop
     if not config:
-        config, user_prompt = await SolveigConfig.parse_config_and_prompt()
+        (
+            config,
+            user_prompt,
+            resume_session,
+        ) = await SolveigConfig.parse_config_and_prompt()
 
     # Create LLM client and interface
     raw_client = llm_client or llm.get_instructor_client(
@@ -278,6 +300,22 @@ async def run_async(
         encoder=config.encoder,
     )
 
+    session_manager = (
+        SessionManager(config=config)
+        if config.auto_save_session or resume_session
+        else None
+    )
+
+    loaded_session: dict | None = None
+    if resume_session and session_manager:
+        name = None if resume_session == "__latest__" else resume_session
+        try:
+            loaded_session = await session_manager.load(name)
+            message_history.load_session(loaded_session["messages"])
+        except FileNotFoundError as e:
+            # Interface not started yet — display happens after wait_until_ready in main_loop
+            loaded_session = {"_error": str(e)}
+
     # Create an asyncio Task for the main loop since the Textual interface has to run in the foreground
     loop_task = None
     try:
@@ -288,6 +326,8 @@ async def run_async(
                 client_ref=client_ref,
                 user_prompt=user_prompt,
                 message_history=message_history,
+                session_manager=session_manager,
+                loaded_session=loaded_session,
             )
         )
         await interface.start()
@@ -306,7 +346,16 @@ async def run_async(
 
 def main():
     """Entry point for the main CLI."""
-    asyncio.run(run_async())
+
+    async def _run():
+        (
+            config,
+            user_prompt,
+            resume_session,
+        ) = await SolveigConfig.parse_config_and_prompt()
+        await run_async(config, user_prompt, resume_session=resume_session)
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

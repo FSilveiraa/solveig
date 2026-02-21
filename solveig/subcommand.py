@@ -14,8 +14,9 @@ from solveig.config_editor import (
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
 from solveig.schema.message import MessageHistory
+from solveig.sessions.manager import SessionManager
 from solveig.utils.file import Filesystem
-from solveig.utils.misc import convert_size_to_human_readable
+from solveig.utils.misc import convert_size_to_human_readable, format_age
 
 
 class SubcommandRunner:
@@ -24,10 +25,12 @@ class SubcommandRunner:
         config: SolveigConfig,
         message_history: MessageHistory,
         client_ref: ClientRef,
+        session_manager: SessionManager | None = None,
     ):
         self.config = config
         self.message_history = message_history
         self.client_ref = client_ref
+        self.session_manager = session_manager
         self.subcommands_map: dict[str, tuple[Callable, str]] = {
             "/help": (self.draw_help, "/help: Print this message"),
             "/exit": (
@@ -37,6 +40,14 @@ class SubcommandRunner:
             "/log": (
                 self.log_conversation,
                 "/log <path>: Log the conversation to <path>",
+            ),
+            "/store": (
+                self.session_store,
+                "/store [name]: Store current session (shorthand for /session store)",
+            ),
+            "/resume": (
+                self.session_resume,
+                "/resume [name]: Resume a session (shorthand for /session resume)",
             ),
         }
 
@@ -76,6 +87,32 @@ class SubcommandRunner:
                 )
                 return True
             await handler(interface, *sub_args)
+            return True
+
+        if cmd in ("/session", "/sessions"):
+            sub = args[0] if args else "list"
+            sub_args = args[1:]
+            dispatch = {
+                "list": self.session_list,
+                "store": self.session_store,
+                "delete": self.session_delete,
+                "resume": self.session_resume,
+            }
+            handler = dispatch.get(sub)
+            if handler is None:
+                await interface.display_error(
+                    f"Unknown /session sub-command: '{sub}'. Use: list, store, delete, resume"
+                )
+                return True
+            await handler(interface, *sub_args)
+            return True
+
+        if cmd == "/store":
+            await self.session_store(interface, *args)
+            return True
+
+        if cmd == "/resume":
+            await self.session_resume(interface, *args)
             return True
 
         return False
@@ -278,7 +315,15 @@ Model shortcuts (equivalent to /config set model …):
   • /model                         — show current model details
   • /model set [name]              — change model
   • /model refresh                 — re-fetch model info from API
-  • /model list                    — list models available from API"""
+  • /model list                    — list models available from API
+
+Session sub-commands:
+  • /session list                  — list stored sessions
+  • /session store [name]          — store current session
+  • /session delete <name>         — delete a session (fuzzy match)
+  • /session resume [name]         — resume a session (latest if no name)
+  • /store [name]                  — shorthand for /session store
+  • /resume [name]                 — shorthand for /session resume"""
         await interface.display_text_block(help_str, title="Help")
         return help_str
 
@@ -325,3 +370,74 @@ Model shortcuts (equivalent to /config set model …):
                 await interface.display_success("Log exported")
             except Exception as e:
                 await interface.display_error(f"Found error when writing file: {e}")
+
+    # ------------------------------------------------------------------
+    # /session commands
+    # ------------------------------------------------------------------
+
+    async def session_list(self, interface: SolveigInterface, *args, **kwargs):
+        if self.session_manager is None:
+            await interface.display_error(
+                "Session manager is disabled (auto_save_session=false and no --resume)"
+            )
+            return
+        sessions = await self.session_manager.list_sessions()
+        if not sessions:
+            await interface.display_text("No stored sessions.")
+            return
+        lines = []
+        for i, s in enumerate(sessions, 1):
+            age = format_age(s["_mtime"])
+            count = s.get("metadata", {}).get("message_count", "?")
+            lines.append(f"{i}. **{s['id']}** — {age}, {count} messages")
+        await interface.display_text_block("\n".join(lines), title="Sessions")
+
+    async def session_store(self, interface: SolveigInterface, *args, **kwargs):
+        if self.session_manager is None:
+            await interface.display_error(
+                "Session manager is disabled (auto_save_session=false and no --resume)"
+            )
+            return
+        name = args[0] if args else None
+        filename = await self.session_manager.store(self.message_history, name)
+        await interface.display_success(f"Session stored: {filename}")
+
+    async def session_delete(self, interface: SolveigInterface, *args, **kwargs):
+        if self.session_manager is None:
+            await interface.display_error(
+                "Session manager is disabled (auto_save_session=false and no --resume)"
+            )
+            return
+        if not args:
+            await interface.display_error("Usage: /session delete <name>")
+            return
+        name = args[0]
+        try:
+            path_str = await self.session_manager._fuzzy_find(name)
+        except FileNotFoundError as e:
+            await interface.display_error(str(e))
+            return
+        filename = path_str.rsplit("/", 1)[-1]
+        choice = await interface.ask_choice(
+            f"Delete session '{filename}'?", ["Yes", "No"], add_cancel=False
+        )
+        if choice == 0:
+            await self.session_manager.delete(name)
+            await interface.display_success(f"Deleted {filename}")
+
+    async def session_resume(self, interface: SolveigInterface, *args, **kwargs):
+        if self.session_manager is None:
+            await interface.display_error(
+                "Session manager is disabled (auto_save_session=false and no --resume). "
+                "Restart with --resume or enable auto_save_session."
+            )
+            return
+        name = args[0] if args else None
+        try:
+            session_data = await self.session_manager.load(name)
+        except FileNotFoundError as e:
+            await interface.display_error(str(e))
+            return
+        self.message_history.load_session(session_data["messages"])
+        await self.session_manager.display_loaded_session(session_data, interface)
+        await interface.display_success("Session loaded. Continue your conversation.")

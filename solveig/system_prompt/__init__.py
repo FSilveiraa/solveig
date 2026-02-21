@@ -77,15 +77,3 @@ async def get_system_prompt(config: SolveigConfig) -> str:
     if examples_info := get_examples_info():
         system_prompt += "\n\n" + examples_info
     return system_prompt.strip()
-    # tools_info = get_available_tools(config)
-    # os_info = (
-    #     get_basic_os_info(exclude_username=config.exclude_username)
-    #     if config.add_os_info
-    #     else ""
-    # )
-    # examples_info = get_examples_info() if config.add_examples else ""
-    # return system_prompt_template.format(
-    #     AVAILABLE_TOOLS=tools_info,
-    #     SYSTEM_INFO=os_info,
-    #     EXAMPLES=examples_info,
-    # ).strip()

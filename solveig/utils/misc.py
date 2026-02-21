@@ -1,12 +1,29 @@
 import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from os import PathLike
 from pathlib import PurePath
 
 from pydantic import BaseModel
 
 YES = {"y", "yes"}
+
+
+def format_age(mtime: int) -> str:
+    """Convert a unix timestamp to a human-readable age string (e.g. '2 hours ago')."""
+    delta = int(datetime.now(UTC).timestamp()) - mtime
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        m = delta // 60
+        return f"{m} minute{'s' if m != 1 else ''} ago"
+    if delta < 86400:
+        h = delta // 3600
+        return f"{h} hour{'s' if h != 1 else ''} ago"
+    d = delta // 86400
+    return f"{d} day{'s' if d != 1 else ''} ago"
+
+
 TRUNCATE_JOIN = " (...) "
 INPUT_PROMPT = "Reply:\n > "
 
