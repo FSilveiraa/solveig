@@ -133,6 +133,16 @@ class MessageHistory:
             self.add_messages(user_message)
             await user_message.display(interface)
 
+    def update_system_prompt(self, new_prompt: str) -> None:
+        """Replace the system message in-place and adjust the token count."""
+        self.system_prompt = new_prompt
+        new_sys_msg = SystemMessage(system_prompt=new_prompt)
+        serialized = new_sys_msg.to_openai()
+        new_size = self.api_type.count_tokens(serialized["content"], self.encoder)
+        old_size = self.message_cache[0][1]
+        self.token_count = self.token_count - old_size + new_size
+        self.message_cache[0] = (serialized, new_size)
+
     def to_openai(self):
         """Return cache for OpenAI API."""
         return [message for message, _ in self.message_cache]

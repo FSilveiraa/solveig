@@ -187,9 +187,7 @@ async def main_loop(
 
     if config.verbose:
         response_model = get_response_model(config)
-        serialized_response_model = serialize_response_model(
-            model=response_model, mode=client_ref.client.mode
-        )
+        serialized_response_model = serialize_response_model(model=response_model)
         await interface.display_text_block(
             title="Response Model",
             text=serialized_response_model,
@@ -272,7 +270,7 @@ async def run_async(
     )
 
     # Create the system prompt and pass it to the message history
-    sys_prompt = system_prompt.get_system_prompt(config)
+    sys_prompt = await system_prompt.get_system_prompt(config)
     message_history = MessageHistory(
         system_prompt=sys_prompt,
         max_context=config.max_context,

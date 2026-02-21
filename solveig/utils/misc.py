@@ -94,7 +94,9 @@ def parse_human_readable_size(size_notation: int | str) -> int:
 
 
 def serialize_response_model(model: type[BaseModel]) -> str:
-    return json.dumps(model.model_json_schema(), indent=2, default=default_json_serialize)
+    return json.dumps(
+        model.model_json_schema(), indent=2, default=default_json_serialize
+    )
 
 
 class TEXT_BOX:

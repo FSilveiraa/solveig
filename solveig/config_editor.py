@@ -34,6 +34,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     "add_os_info": "Include OS info in system prompt",
     "exclude_username": "Omit username from OS info (only if add_os_info is True)",
     "system_prompt": "Raw system prompt template",
+    "briefing": "Markdown files appended to the system prompt in order (comma-separated paths)",
     # Safety & permissions
     "min_disk_space_left": "Minimum free disk space before blocking writes",
     "auto_allowed_paths": "Glob patterns for auto-approved file paths (comma-separated)",
@@ -243,6 +244,19 @@ async def _hook_encoder_changed(
         message_history.encoder = config.encoder
 
 
+async def _hook_briefing_changed(
+    config: SolveigConfig,
+    client_ref: ClientRef,
+    interface: SolveigInterface,
+    message_history: MessageHistory | None,
+) -> None:
+    from solveig.system_prompt import get_system_prompt
+
+    new_prompt = await get_system_prompt(config)
+    if message_history is not None:
+        message_history.update_system_prompt(new_prompt)
+
+
 async def _hook_max_context_changed(
     config: SolveigConfig,
     client_ref: ClientRef,
@@ -266,6 +280,7 @@ CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "encoder": _hook_encoder_changed,
     "max_context": _hook_max_context_changed,
+    "briefing": _hook_briefing_changed,
     # Layer 2+: add_examples, add_os_info, exclude_username, system_prompt,
     #           auto_allowed_paths, auto_execute_commands, plugins,
     #           url, api_type, api_key, theme, code_theme

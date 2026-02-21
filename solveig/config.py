@@ -31,13 +31,6 @@ Response format:
 - comment: Required field for all communication and explanations (use Markdown formatting)
 - tasks: Optional array of Task(description, status) objects
 - tools: Optional list of tools to use
-
-Available tools:
-{AVAILABLE_TOOLS}
-
-{SYSTEM_INFO}
-
-{EXAMPLES}
 """
 
 
@@ -60,6 +53,7 @@ class SolveigConfig:
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    briefing: list[str] = field(default_factory=lambda: ["SOLVEIG.md"])
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
@@ -175,6 +169,15 @@ class SolveigConfig:
         # Don't add a shorthand flag for this one, it shouldn't be "easy" to do (plus unimplemented for now)
         # parser.add_argument("--allowed-commands", action="store", nargs="*", help="(dangerous) Commands that can automatically be ran and have their output shared")
         # parser.add_argument("--allowed-paths", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
+        parser.add_argument(
+            "--briefing",
+            "-b",
+            type=str,
+            nargs="*",
+            dest="briefing",
+            default=["SOLVEIG.md"],
+            help="Markdown file(s) to append to the system prompt in order (default: SOLVEIG.md). Pass with no args to disable.",
+        )
         parser.add_argument(
             "--add-examples",
             "--ex",
