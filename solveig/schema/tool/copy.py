@@ -1,6 +1,6 @@
 """Copy tool - allows LLM to copy files and directories."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -9,11 +9,16 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import CopyResult
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Subcommand, validate_non_empty_path
 
 
 class CopyTool(BaseTool):
     title: Literal["copy"] = "copy"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/copy", "/cp"],
+        positional=["source_path", "destination_path"],
+    )
+
     source_path: str = Field(
         ...,
         description="Path of file/directory to copy from (supports ~ for home directory)",

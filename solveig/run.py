@@ -24,7 +24,7 @@ from solveig.schema.message import (
     MessageHistory,
 )
 from solveig.sessions.manager import SessionManager
-from solveig.subcommand import SubcommandRunner
+from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
 
 

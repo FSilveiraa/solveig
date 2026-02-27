@@ -1,6 +1,6 @@
 """Edit tool - allows LLM to edit files using string replacement."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from anyio import Path
 from pydantic import Field, field_validator
@@ -10,13 +10,18 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import EditResult
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Subcommand, validate_non_empty_path
 
 
 class EditTool(BaseTool):
     """Edit files using exact string replacement."""
 
     title: Literal["edit"] = "edit"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/edit"],
+        positional=["path", "old_string", "new_string"],
+    )
+
     path: str = Field(
         ...,
         description="File path to edit (supports ~ for home directory)",

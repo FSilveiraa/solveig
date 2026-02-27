@@ -1,6 +1,6 @@
 """Move tool - allows LLM to move files and directories."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -9,11 +9,16 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Subcommand, validate_non_empty_path
 
 
 class MoveTool(BaseTool):
     title: Literal["move"] = "move"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/move", "/mv"],
+        positional=["source_path", "destination_path"],
+    )
+
     source_path: str = Field(
         ...,
         description="Current path of file/directory to move (supports ~ for home directory)",

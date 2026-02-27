@@ -1,6 +1,6 @@
 """Delete tool - allows LLM to delete files and directories."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -9,11 +9,16 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import DeleteResult
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Subcommand, validate_non_empty_path
 
 
 class DeleteTool(BaseTool):
     title: Literal["delete"] = "delete"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/delete", "/rm"],
+        positional=["path"],
+    )
+
     path: str = Field(
         ...,
         description="Path of file/directory to permanently delete (supports ~ for home directory)",

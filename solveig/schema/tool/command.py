@@ -1,7 +1,7 @@
 """Command tool - allows LLM to execute shell commands."""
 
 import re
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -11,11 +11,16 @@ from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import PersistentShell, get_persistent_shell
 
-from .base import BaseTool
+from .base import BaseTool, Subcommand
 
 
 class CommandTool(BaseTool):
     title: Literal["command"] = "command"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/command", "/cmd"],
+        positional=["command"],
+    )
+
     command: str = Field(
         ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
     )

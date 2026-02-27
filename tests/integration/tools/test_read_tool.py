@@ -32,7 +32,7 @@ class TestReadValidation:
     async def test_get_description(self):
         """Test ReadRequirement description method."""
         description = ReadTool.get_description()
-        assert "read(comment, path, metadata_only, line_ranges=null)" in description
+        assert "read(comment, path, metadata_only, line_ranges=[(start, end), ...])" in description
 
     async def test_display_header(self, tmp_path):
         """Test ReadRequirement display header."""

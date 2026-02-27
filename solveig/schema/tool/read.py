@@ -1,6 +1,6 @@
 """Read tool - allows LLM to read files and directories."""
 
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -9,11 +9,17 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Subcommand, validate_non_empty_path
 
 
 class ReadTool(BaseTool):
     title: Literal["read"] = "read"
+    subcommand: ClassVar[Subcommand] = Subcommand(
+        commands=["/read"],
+        positional=["path"],
+        usage="<path> [start-end]",
+    )
+
     path: str = Field(
         ...,
         description="File or directory path to read (supports ~ for home directory)",
@@ -34,6 +40,24 @@ class ReadTool(BaseTool):
     @classmethod
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
+
+    @classmethod
+    def from_cli_args(cls, *args: str, **kwargs: str) -> "ReadTool":
+        values: dict[str, Any] = {"comment": "", "metadata_only": False}
+        if args:
+            values["path"] = args[0]
+        if len(args) > 1:
+            # Parse "start-end" range syntax, e.g. "10-50" or "10-"
+            range_str = args[1]
+            parts = range_str.split("-", 1)
+            try:
+                start = int(parts[0])
+                end = int(parts[1]) if parts[1] else -1
+                values["line_ranges"] = [[start, end]]
+            except (ValueError, IndexError):
+                pass
+        values.update(kwargs)
+        return cls.model_validate(values)
 
     @field_validator("line_ranges")
     @classmethod
@@ -98,7 +122,7 @@ class ReadTool(BaseTool):
     def get_description(cls) -> str:
         """Return description of read capability."""
         return (
-            "read(comment, path, metadata_only, line_ranges=null): reads a file or directory. "
+            "read(comment, path, metadata_only, line_ranges=[(start, end), ...]): reads a file or directory. "
             "Files can be read for metadata only, full contents or specific line ranges."
         )
 

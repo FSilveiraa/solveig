@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from typing import Any, ClassVar, Self
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +18,7 @@ from solveig.exceptions import (
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import HOOKS
 from solveig.schema.result import ToolResult
+from solveig.subcommand.base import Subcommand
 
 
 def validate_non_empty_path(path: str) -> str:
@@ -45,6 +47,47 @@ class BaseTool(BaseModel, ABC):
     comment: str = Field(
         ..., description="Brief explanation of why this operation is needed"
     )
+
+    # Declare a Subcommand to opt this tool in to user-invokable CLI subcommands.
+    # handler, description, and usage are injected automatically by __init_subclass__.
+    subcommand: ClassVar[Subcommand | None] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        own: Subcommand | None = cls.__dict__.get("subcommand")
+        if not isinstance(own, Subcommand):
+            return
+        if not own.description:
+            own.description = cls.get_description()
+        if not own.usage:
+            own.usage = cls._generate_usage(own.positional)
+
+    @classmethod
+    def _generate_usage(cls, positional: list[str]) -> str:
+        """Auto-generate a usage string from *positional* fields + optional field defaults.
+
+        Example: ``<command> [timeout=10.0]``
+        """
+        positional_set = set(positional)
+        parts = [f"<{f}>" for f in positional]
+        for name, fi in cls.model_fields.items():
+            if name in ("title", "comment") or name in positional_set:
+                continue
+            if fi.is_required() or fi.default is None:
+                continue
+            parts.append(f"[{name}={fi.default}]")
+        return " ".join(parts)
+
+    @classmethod
+    def from_cli_args(cls, *args: str, **kwargs: str) -> Self:
+        """Build a tool instance from parsed CLI tokens. Override for custom parsing."""
+        positional = cls.subcommand.positional if cls.subcommand else []
+        values: dict[str, Any] = {"comment": ""}
+        for i, val in enumerate(args):
+            if i < len(positional):
+                values[positional[i]] = val
+        values.update(kwargs)
+        return cls.model_validate(values)
 
     async def solve(self, config: SolveigConfig, interface: SolveigInterface):
         """Solve this tool with plugin integration and error handling."""

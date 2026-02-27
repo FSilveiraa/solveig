@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
-    from solveig.subcommand import SubcommandRunner
+    from solveig.subcommand.runner import SubcommandRunner
 
 
 class SolveigInterface(ABC):
