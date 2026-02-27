@@ -42,12 +42,12 @@ class SubcommandRunner:
         self.session_manager = session_manager
 
         # Sectioned registries — used by draw_help for structured output
-        self._basic:   dict[str, Subcommand] = {}
-        self._config:  dict[str, Subcommand] = {}
-        self._model:   dict[str, Subcommand] = {}
+        self._basic: dict[str, Subcommand] = {}
+        self._config: dict[str, Subcommand] = {}
+        self._model: dict[str, Subcommand] = {}
         self._session: dict[str, Subcommand] = {}
-        self._tools:   dict[str, Subcommand] = {}   # core tool subcommands
-        self._plugins: dict[str, Subcommand] = {}   # plugin tool subcommands
+        self._tools: dict[str, Subcommand] = {}  # core tool subcommands
+        self._plugins: dict[str, Subcommand] = {}  # plugin tool subcommands
 
         # Flat registry for O(1) lookup in __call__
         self._registry: dict[str, Subcommand] = {}
@@ -99,31 +99,145 @@ class SubcommandRunner:
         r, s = self._reg, self._sub
 
         # Basic
-        r(self._basic, s("/help",   self.draw_help,        "Print this message"))
-        r(self._basic, s("/exit",   self.stop_interface,   "Exit the application (Ctrl+C also works)"))
-        r(self._basic, s("/log",    self.log_conversation, "Log the conversation to a file", usage="<path>"))
-        r(self._basic, s("/store",  self.session_store,    "Store current session",          usage="[name]"))
-        r(self._basic, s("/resume", self.session_resume,   "Resume a session",               usage="[name]"))
+        r(self._basic, s("/help", self.draw_help, "Print this message"))
+        r(
+            self._basic,
+            s("/exit", self.stop_interface, "Exit the application (Ctrl+C also works)"),
+        )
+        r(
+            self._basic,
+            s(
+                "/log",
+                self.log_conversation,
+                "Log the conversation to a file",
+                usage="<path>",
+            ),
+        )
+        r(
+            self._basic,
+            s("/store", self.session_store, "Store current session", usage="[name]"),
+        )
+        r(
+            self._basic,
+            s("/resume", self.session_resume, "Resume a session", usage="[name]"),
+        )
 
         # Config
-        r(self._config, s("/config",      self._config_list_cmd, "List editable config fields"))
-        r(self._config, s("/config list", self._config_list_cmd, "Show all fields with current values",        is_detail=True))
-        r(self._config, s("/config get",  self._config_get_cmd,  "Show current value for a field",            usage="<field>", is_detail=True))
-        r(self._config, s("/config set",  self._config_set_cmd,  "Set a field (prompts if omitted)",          usage="<field> [value]", is_detail=True))
+        r(
+            self._config,
+            s("/config", self._config_list_cmd, "List editable config fields"),
+        )
+        r(
+            self._config,
+            s(
+                "/config list",
+                self._config_list_cmd,
+                "Show all fields with current values",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._config,
+            s(
+                "/config get",
+                self._config_get_cmd,
+                "Show current value for a field",
+                usage="<field>",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._config,
+            s(
+                "/config set",
+                self._config_set_cmd,
+                "Set a field (prompts if omitted)",
+                usage="<field> [value]",
+                is_detail=True,
+            ),
+        )
 
         # Model
-        r(self._model, s("/model",         self._model_info,    "Show current model details"))
-        r(self._model, s("/model info",    self._model_info,    "Show current model details",      is_detail=True))
-        r(self._model, s("/model set",     self._model_set_cmd, "Change the model",                usage="[name]", is_detail=True))
-        r(self._model, s("/model refresh", self._model_refresh, "Re-fetch model info from API",    is_detail=True))
-        r(self._model, s("/model list",    self._model_list,    "List available models from API",  is_detail=True))
+        r(self._model, s("/model", self._model_info, "Show current model details"))
+        r(
+            self._model,
+            s(
+                "/model info",
+                self._model_info,
+                "Show current model details",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._model,
+            s(
+                "/model set",
+                self._model_set_cmd,
+                "Change the model",
+                usage="[name]",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._model,
+            s(
+                "/model refresh",
+                self._model_refresh,
+                "Re-fetch model info from API",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._model,
+            s(
+                "/model list",
+                self._model_list,
+                "List available models from API",
+                is_detail=True,
+            ),
+        )
 
         # Session — /sessions is a dispatch-only alias block
-        r(self._session, s("/session",        self.session_list,   "Manage stored sessions"))
-        r(self._session, s("/session list",   self.session_list,   "List stored sessions",                 is_detail=True))
-        r(self._session, s("/session store",  self.session_store,  "Store current session",  usage="[name]", is_detail=True))
-        r(self._session, s("/session delete", self.session_delete, "Delete a session (fuzzy match)", usage="<name>", is_detail=True))
-        r(self._session, s("/session resume", self.session_resume, "Resume a session (latest if omitted)",  usage="[name]", is_detail=True))
+        r(self._session, s("/session", self.session_list, "Manage stored sessions"))
+        r(
+            self._session,
+            s(
+                "/session list",
+                self.session_list,
+                "List stored sessions",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._session,
+            s(
+                "/session store",
+                self.session_store,
+                "Store current session",
+                usage="[name]",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._session,
+            s(
+                "/session delete",
+                self.session_delete,
+                "Delete a session (fuzzy match)",
+                usage="<name>",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._session,
+            s(
+                "/session resume",
+                self.session_resume,
+                "Resume a session (latest if omitted)",
+                usage="[name]",
+                is_detail=True,
+            ),
+        )
         for sub in ("", " list", " store", " delete", " resume"):
             self._reg_alias(f"/sessions{sub}", self._registry[f"/session{sub}"])
 
@@ -138,7 +252,9 @@ class SubcommandRunner:
             self._reg(section, registered)
 
     def _make_tool_handler(self, tool_cls: type[BaseTool]) -> Callable:
-        async def handler(interface: SolveigInterface, *args: str, **kwargs: str) -> None:
+        async def handler(
+            interface: SolveigInterface, *args: str, **kwargs: str
+        ) -> None:
             try:
                 tool = tool_cls.from_cli_args(*args, **kwargs)
             except Exception as e:
@@ -148,6 +264,7 @@ class SubcommandRunner:
             result = await tool.solve(config=self.config, interface=interface)
             if result:
                 await self.message_history.add_result(result)
+
         return handler
 
     # ------------------------------------------------------------------
@@ -339,15 +456,15 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 """.strip()
 
         sections = [
-            ("Basic sub-commands",   self._basic),
-            ("Config sub-commands",  self._config),
-            ("Model sub-commands",   self._model),
+            ("Basic sub-commands", self._basic),
+            ("Config sub-commands", self._config),
+            ("Model sub-commands", self._model),
             ("Session sub-commands", self._session),
-            ("Tool sub-commands",    self._tools),
-            ("Plugin tools",         self._plugins),
+            ("Tool sub-commands", self._tools),
+            ("Plugin tools", self._plugins),
         ]
         for section_title, registry in sections:
-            top     = [(cmd, e) for cmd, e in registry.items() if not e.is_detail]
+            top = [(cmd, e) for cmd, e in registry.items() if not e.is_detail]
             details = [(cmd, e) for cmd, e in registry.items() if e.is_detail]
             if not top and not details:
                 continue

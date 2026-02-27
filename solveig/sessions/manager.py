@@ -182,11 +182,19 @@ class SessionManager:
                 result_idx = 0
                 for r in parsed.get("responses", []):
                     if "title" in r and "accepted" in r:
-                        tool = pending_tools[result_idx] if result_idx < len(pending_tools) else None
+                        tool = (
+                            pending_tools[result_idx]
+                            if result_idx < len(pending_tools)
+                            else None
+                        )
                         result_idx += 1
                         if tool is not None:
-                            result_cls = result_classes.get(r.get("title", ""), ToolResult)
-                            responses.append(result_cls.model_validate({**r, "tool": tool}))
+                            result_cls = result_classes.get(
+                                r.get("title", ""), ToolResult
+                            )
+                            responses.append(
+                                result_cls.model_validate({**r, "tool": tool})
+                            )
                     elif "comment" in r:
                         responses.append(UserComment(comment=r["comment"]))
                 if responses:
@@ -195,7 +203,10 @@ class SessionManager:
         return messages
 
     async def display_loaded_session(
-        self, session_data: dict, message_history: MessageHistory, interface: SolveigInterface
+        self,
+        session_data: dict,
+        message_history: MessageHistory,
+        interface: SolveigInterface,
     ) -> None:
         """Re-display all messages from a loaded session."""
         meta = session_data.get("metadata", {})

@@ -169,7 +169,9 @@ async def main_loop(
                 f"Could not resume session: {loaded_session['_error']}"
             )
         elif session_manager is not None:
-            await session_manager.display_loaded_session(loaded_session, message_history, interface)
+            await session_manager.display_loaded_session(
+                loaded_session, message_history, interface
+            )
 
     if config.model is None:
         await interface.display_warning(
@@ -311,7 +313,9 @@ async def run_async(
         name = None if resume_session == "__latest__" else resume_session
         try:
             loaded_session = await session_manager.load(name)
-            message_history.load_messages(session_manager.reconstruct_messages(loaded_session))
+            message_history.load_messages(
+                session_manager.reconstruct_messages(loaded_session)
+            )
         except FileNotFoundError as e:
             # Interface not started yet — display happens after wait_until_ready in main_loop
             loaded_session = {"_error": str(e)}

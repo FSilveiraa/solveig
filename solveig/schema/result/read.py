@@ -22,4 +22,6 @@ class ReadResult(ToolResult):
         if self.content:
             for start, end, text in self.content:
                 label = f"Lines {start}–{end}" if start != end else f"Line {start}"
-                await interface.display_text_block(text, title=label, collapsible=True, collapsed=True)
+                await interface.display_text_block(
+                    text, title=label, collapsible=True, collapsed=True
+                )

@@ -19,4 +19,6 @@ class EditResult(ToolResult):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         if self.occurrences_replaced is not None:
-            await interface.display_text(f"{self.occurrences_replaced} occurrence(s) replaced")
+            await interface.display_text(
+                f"{self.occurrences_replaced} occurrence(s) replaced"
+            )
