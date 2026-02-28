@@ -139,6 +139,16 @@ class InputBar(Container):
         """Initialize styling when mounted."""
         self._apply_free_form_style()
         self._text_input.focus()
+        self.watch(self.screen, "focused", self._on_screen_focus_changed)
+
+    def _on_screen_focus_changed(self, focused) -> None:
+        """Redirect focus back to the active input when it moves elsewhere."""
+        if self._mode == InputMode.MULTIPLE_CHOICE:
+            if self._select_widget and focused is not self._select_widget:
+                self.call_after_refresh(self._select_widget.focus)
+        else:
+            if focused is not self._text_input:
+                self.call_after_refresh(self._text_input.focus)
 
     async def on_growing_input_submitted(self, event: GrowingInput.Submitted) -> None:
         """Handle the custom Submitted message from the GrowingInput widget."""
