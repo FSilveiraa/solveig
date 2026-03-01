@@ -13,7 +13,7 @@ from instructor.core import InstructorRetryException
 
 from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
-from solveig.config_editor import fetch_and_apply_model_info
+from solveig.config.editor import fetch_and_apply_model_info
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface, TerminalInterface
 from solveig.llm import ClientRef, ModelNotFound

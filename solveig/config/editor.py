@@ -9,11 +9,12 @@ import typing
 from collections.abc import Callable
 from typing import Any
 
-from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface, themes
 from solveig.llm import API_TYPES, ClientRef, ModelInfo, ModelNotFound
 from solveig.schema.message import MessageHistory
 from solveig.utils.misc import parse_human_readable_size
+
+from .config import SolveigConfig
 
 # ---------------------------------------------------------------------------
 # Field registry — every field the user may change at runtime

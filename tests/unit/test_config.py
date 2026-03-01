@@ -66,7 +66,7 @@ class TestConfigFileParsing:
 
         # Mock the DEFAULT_CONFIG_PATH to a non-existent path
         with patch(
-            "solveig.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_solveig_config.json"
+            "solveig.config.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_solveig_config.json"
         ):
             result = await SolveigConfig.parse_from_file(
                 "/tmp/nonexistent_solveig_config.json"
@@ -170,7 +170,7 @@ class TestCLIIntegration:
 
         # Mock default config to non-existent path
         with patch(
-            "solveig.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
+            "solveig.config.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
         ):
             args = ["--api-type", "local", "test prompt"]  # Must provide required args
             interface = MockInterface()

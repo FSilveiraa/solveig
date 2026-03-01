@@ -8,7 +8,7 @@ import typing
 from collections.abc import Callable
 
 from solveig.config import SolveigConfig
-from solveig.config_editor import (
+from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
     _parse_field_value,
     _unwrap_optional,
@@ -109,7 +109,12 @@ class SubcommandRunner:
         )
         r(
             self._basic,
-            s("/resume", self.session_resume, "Resume a session", usage="[name or path]"),
+            s(
+                "/resume",
+                self.session_resume,
+                "Resume a session",
+                usage="[name or path]",
+            ),
         )
 
         # Config
