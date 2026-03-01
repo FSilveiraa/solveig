@@ -213,7 +213,7 @@ class EditTool(BaseTool):
         occurrences_replaced: int,
     ) -> EditResult:
         try:
-            await Filesystem.write_file(
+            await Filesystem.write_file_text(
                 abs_path, new_content, min_space_left=config.min_disk_space_left
             )
             await interface.display_success(

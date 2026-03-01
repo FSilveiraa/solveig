@@ -91,6 +91,11 @@ class Filesystem:
             await abs_path.write_text(content, encoding=encoding)
 
     @staticmethod
+    async def _write_bytes(abs_path: Path, content: bytes) -> None:
+        """Async binary file writing using AnyIO."""
+        await abs_path.write_bytes(content)
+
+    @staticmethod
     async def _copy_file(abs_src_path: Path, abs_dest_path: Path) -> None:
         """Async file copying - use shutil.copy2 for metadata preservation."""
         await asyncio.to_thread(
@@ -335,7 +340,22 @@ class Filesystem:
             return FileContent(content=content, encoding="base64")
 
     @classmethod
-    async def write_file(
+    async def write_file_bytes(
+        cls,
+        file_path: Path,
+        content: bytes,
+        min_space_left: int = 0,
+    ) -> None:
+        """Async write binary content to file with validation and parent directory creation."""
+        abs_path = cls.get_absolute_path(file_path)
+        await cls.validate_write_access(
+            abs_path, content=content, min_disk_size_left=min_space_left
+        )
+        await cls.create_directory(abs_path.parent, exist_ok=True)
+        await cls._write_bytes(abs_path, content)
+
+    @classmethod
+    async def write_file_text(
         cls,
         file_path: Path,
         content: str = "",

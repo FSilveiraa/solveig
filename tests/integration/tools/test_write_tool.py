@@ -424,7 +424,7 @@ class TestErrorHandling:
             interface.choices.append(0)  # Accept
 
             # Mock Filesystem.write_file to simulate encoding error
-            with patch("solveig.utils.file.Filesystem.write_file") as mock_write:
+            with patch("solveig.utils.file.Filesystem.write_file_text") as mock_write:
                 mock_write.side_effect = UnicodeEncodeError(
                     "utf-8", "", 0, 1, "encoding test error"
                 )

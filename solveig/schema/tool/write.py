@@ -95,7 +95,7 @@ class WriteTool(BaseTool):
             if self.is_directory:
                 await Filesystem.create_directory(abs_path)
             else:
-                await Filesystem.write_file(abs_path, content=self.content or "")
+                await Filesystem.write_file_text(abs_path, content=self.content or "")
             await interface.display_success(
                 f"{'Updated' if already_exists else 'Created'}"
             )

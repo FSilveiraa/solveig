@@ -516,7 +516,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
                     return
 
             try:
-                await Filesystem.write_file(abs_path, content)
+                await Filesystem.write_file_text(abs_path, content)
                 await interface.display_success("Log exported")
             except Exception as e:
                 await interface.display_error(f"Found error when writing file: {e}")

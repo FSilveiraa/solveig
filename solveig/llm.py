@@ -117,9 +117,14 @@ class APIType:
             info = ModelInfo(model=model)
             with contextlib.suppress(Exception):
                 info.context_length = model_obj.model_extra["context_length"]
+            # Price per million tokens
             with contextlib.suppress(Exception):
-                info.input_price = model_obj.model_extra["pricing"]["prompt"]
-                info.output_price = model_obj.model_extra["pricing"]["completion"]
+                info.input_price = round(
+                    float(model_obj.model_extra["pricing"]["prompt"]) * 1000000, 2
+                )
+                info.output_price = round(
+                    float(model_obj.model_extra["pricing"]["completion"]) * 1000000, 2
+                )
             return info
 
     class LOCAL(OPENAI):

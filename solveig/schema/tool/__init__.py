@@ -5,6 +5,7 @@ from .command import CommandTool
 from .copy import CopyTool
 from .delete import DeleteTool
 from .edit import EditTool
+from .http import HttpTool
 from .move import MoveTool
 from .read import ReadTool
 from .write import WriteTool
@@ -14,6 +15,7 @@ CORE_TOOLS: list[type[BaseTool]] = [
     CopyTool,
     DeleteTool,
     EditTool,
+    HttpTool,
     MoveTool,
     ReadTool,
     WriteTool,
@@ -30,6 +32,7 @@ __all__ = [
     "WriteTool",
     "EditTool",
     "CommandTool",
+    "HttpTool",
     "MoveTool",
     "CopyTool",
     "DeleteTool",

@@ -66,6 +66,9 @@ class SolveigConfig:
     sessions_dir: str = ".solveig/sessions"
     auto_save_session: bool = True
 
+    http_timeout: float = 10.0
+    http_max_response_bytes: int = 50_000
+
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     # Runtime state — not persisted or exposed as CLI arguments

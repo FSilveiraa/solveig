@@ -62,50 +62,54 @@ async def run_async_mock(
 ):
     """Entry point for the async textual CLI."""
 
-    mock_messages = [
-        AssistantMessage(
-            comment="I'll help you investigate the contents of ~/Sync and write a Fibonacci sequence solver",
-            reasoning="The user wants me to review the contents of ~/Sync, then write an algorithm to solve the Fibonacci sequence. I should first get a tree structure, write a Pyhon script, then investigate individual files that stand out",
-            tasks=[
-                Task(description="Read the contents of ~/Sync", status="ongoing"),
-                Task(description="Write a Fibonacci solver", status="pending"),
-                Task(
-                    description="Read suspicious files inside ~/Sync", status="pending"
-                ),
-                Task(
-                    description="Provide a summary of contents, focused on safety and functionality"
-                ),
-            ],
-            tools=[
-                EditTool(
-                    comment="Edit README to change `docker` to `podman`",
-                    path="~/Sync/README.md",
-                    old_string="""
+    if mock_messages is None:
+        mock_messages = [
+            AssistantMessage(
+                comment="I'll help you investigate the contents of ~/Sync and write a Fibonacci sequence solver",
+                reasoning="The user wants me to review the contents of ~/Sync, then write an algorithm to solve the Fibonacci sequence. I should first get a tree structure, write a Pyhon script, then investigate individual files that stand out",
+                tasks=[
+                    Task(description="Read the contents of ~/Sync", status="ongoing"),
+                    Task(description="Write a Fibonacci solver", status="pending"),
+                    Task(
+                        description="Read suspicious files inside ~/Sync",
+                        status="pending",
+                    ),
+                    Task(
+                        description="Provide a summary of contents, focused on safety and functionality"
+                    ),
+                ],
+                tools=[
+                    EditTool(
+                        comment="Edit README to change `docker` to `podman`",
+                        path="~/Sync/README.md",
+                        old_string="""
 ### Docker Compose
 ```bash
 # Run continuous monitoring with compose
 docker-compose up --build
 ```
                     """.strip(),
-                    new_string="""
+                        new_string="""
 ### Podman Compose
 ```bash
 # Run continuous mode with podman-compose
 podman-compose up --build -d
 ```
                     """,
-                ),
-                ReadTool(
-                    comment="Read 3 README segments",
-                    path="~/Sync/README.md",
-                    metadata_only=False,
-                    line_ranges=[[1, 10], [13, 17], [225, -1]],
-                ),
-                TreeTool(comment="Read the tree structure for ~/Sync", path="~/Sync"),
-                WriteTool(
-                    comment="Write a Fibonacci sequence solver",
-                    path="/home/francisco/Sync/fibonacci.py",
-                    content="""
+                    ),
+                    ReadTool(
+                        comment="Read 3 README segments",
+                        path="~/Sync/README.md",
+                        metadata_only=False,
+                        line_ranges=[[1, 10], [13, 17], [225, -1]],
+                    ),
+                    TreeTool(
+                        comment="Read the tree structure for ~/Sync", path="~/Sync"
+                    ),
+                    WriteTool(
+                        comment="Write a Fibonacci sequence solver",
+                        path="/home/francisco/Sync/fibonacci.py",
+                        content="""
 import math
 import sys
 
@@ -118,34 +122,25 @@ if __name__ == "__main__":
     result = fibonacci_binet(int(n))
     print(f"The Fibonacci Number of {n}th term is {result}")
 """.strip(),
-                    is_directory=False,
-                ),
-                CopyTool(
-                    comment="Test copy",
-                    source_path="~/Sync/test.py",
-                    destination_path="~/Sync/test.2.py",
-                ),
-                MoveTool(
-                    comment="Test copy",
-                    source_path="~/Sync/test.2.py",
-                    destination_path="~/Sync/hello.py",
-                ),
-                DeleteTool(comment="test delete", path="~/Sync/test.py"),
-            ],
-        ),
-    ]
-
-    if mock_messages is None:
-        from solveig.system_prompt.examples.long import EXAMPLE
-
-        mock_messages = [
-            message
-            for message in EXAMPLE.messages
-            if isinstance(message, AssistantMessage)
+                        is_directory=False,
+                    ),
+                    CopyTool(
+                        comment="Test copy",
+                        source_path="~/Sync/test.py",
+                        destination_path="~/Sync/test.2.py",
+                    ),
+                    MoveTool(
+                        comment="Test copy",
+                        source_path="~/Sync/test.2.py",
+                        destination_path="~/Sync/hello.py",
+                    ),
+                    DeleteTool(comment="test delete", path="~/Sync/test.py"),
+                ],
+            ),
         ]
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
-    config, user_prompt = await SolveigConfig.parse_config_and_prompt()
+    config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
     interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
     # interface = DemoInterface(theme=config.theme, code_theme=config.code_theme, user_messages=user_messages)
 
@@ -155,6 +150,7 @@ if __name__ == "__main__":
             user_prompt=user_prompt,
             interface=interface,
             llm_client=mock_client,
+            resume_session=resume,
         )
     finally:
         try:

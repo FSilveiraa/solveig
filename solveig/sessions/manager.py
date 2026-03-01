@@ -93,7 +93,7 @@ class SessionManager:
         sessions_dir = await self._ensure_dir()
         path = Path(f"{sessions_dir}/{self.CURRENT}")
         content = self._build_session_data(message_history, "current")
-        await Filesystem.write_file(path, content)
+        await Filesystem.write_file_text(path, content)
 
     async def store(
         self, message_history: MessageHistory, name: str | None = None
@@ -104,7 +104,7 @@ class SessionManager:
         path = Path(f"{sessions_dir}/{filename}")
         session_id = name or filename.removesuffix(".json")
         content = self._build_session_data(message_history, session_id)
-        await Filesystem.write_file(path, content)
+        await Filesystem.write_file_text(path, content)
         return filename
 
     async def load(self, name: str | None = None) -> dict:
