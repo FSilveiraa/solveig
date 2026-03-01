@@ -9,6 +9,7 @@ from pydantic import Field, field_validator
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.result import HttpResult
+from solveig.schema.result.http import _format_body
 from solveig.subcommand.base import Subcommand
 from solveig.utils.file import Filesystem
 
@@ -173,12 +174,8 @@ class HttpTool(BaseTool):
                 return HttpResult(tool=self, accepted=False, status_code=status_code)
 
             if send_choice == 1:
-                try:
-                    body_display = json.dumps(json.loads(raw), indent=2)
-                    language = ".json"
-                except (json.JSONDecodeError, ValueError):
-                    body_display = raw
-                    language = ""
+                content_type = response_headers.get("content-type")
+                body_display, language = _format_body(raw, content_type)
                 await interface.display_text_block(
                     body_display, title="Response Body", language=language
                 )

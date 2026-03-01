@@ -9,6 +9,19 @@ if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
 
 
+def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
+    """Return (display_text, language) for a response body.
+
+    Pretty-prints JSON only when the Content-Type indicates it.
+    """
+    if content_type and "json" in content_type:
+        try:
+            return json.dumps(json.loads(body), indent=2), ".json"
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return body, ""
+
+
 class HttpResult(ToolResult):
     title: Literal["http"] = "http"
     status_code: int | None = None
@@ -30,13 +43,8 @@ class HttpResult(ToolResult):
         if self.output_file:
             await interface.display_success(f"Saved to {self.output_file}")
         elif self.body:
-            try:
-                parsed = json.loads(self.body)
-                body_display = json.dumps(parsed, indent=2)
-                language = ".json"
-            except (json.JSONDecodeError, ValueError):
-                body_display = self.body
-                language = ""
+            content_type = (self.response_headers or {}).get("content-type")
+            body_display, language = _format_body(self.body, content_type)
             await interface.display_text_block(
                 body_display, title="Response Body", language=language
             )
