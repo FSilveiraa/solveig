@@ -12,6 +12,7 @@ from typing import Any
 from solveig.interface import SolveigInterface, themes
 from solveig.llm import API_TYPES, ClientRef, ModelInfo, ModelNotFound
 from solveig.schema.message import MessageHistory
+from solveig.system_prompt import get_system_prompt
 from solveig.utils.misc import parse_human_readable_size
 
 from .config import SolveigConfig
@@ -251,8 +252,6 @@ async def _hook_briefing_changed(
     interface: SolveigInterface,
     message_history: MessageHistory | None,
 ) -> None:
-    from solveig.system_prompt import get_system_prompt
-
     new_prompt = await get_system_prompt(config)
     if message_history is not None:
         message_history.update_system_prompt(new_prompt)

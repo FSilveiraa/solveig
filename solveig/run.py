@@ -51,8 +51,6 @@ async def send_message_to_llm_with_retry(
                     text=json.dumps(
                         message_history_dumped, indent=2, default=default_json_serialize
                     ),
-                    # TODO: breaks line wrapping
-                    ## language="json",
                 )
 
             await interface.display_section(title="Assistant")
@@ -91,16 +89,6 @@ async def send_message_to_llm_with_retry(
                 ),
                 model=model,
             )
-
-            # Opportunistic model info refresh: if we know the API is reachable
-            # but still don't have model details, fetch them now
-            # TODO: review idea, not bad, but maybe integrate better
-            # if config.model_info is None:
-            #     asyncio.create_task(
-            #         fetch_and_apply_model_info(
-            #             config, client_ref, interface, message_history
-            #         )
-            #     )
 
             return assistant_response
 
@@ -207,7 +195,6 @@ async def main_loop(
         await interface.display_text_block(
             title="Response Model",
             text=serialized_response_model,
-            # language="json",  # TODO: breaks line wrapping
         )
 
     # Create user message from initial user prompt or expect a new one
