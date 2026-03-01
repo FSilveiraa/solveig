@@ -24,7 +24,6 @@ from solveig.schema.tool import CORE_TOOLS
 from solveig.schema.tool.base import BaseTool
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
-from solveig.utils.file import Filesystem
 from solveig.utils.misc import convert_size_to_human_readable, format_age
 
 
@@ -106,20 +105,11 @@ class SubcommandRunner:
         )
         r(
             self._basic,
-            s(
-                "/log",
-                self.log_conversation,
-                "Log the conversation to a file",
-                usage="<path>",
-            ),
-        )
-        r(
-            self._basic,
             s("/store", self.session_store, "Store current session", usage="[name]"),
         )
         r(
             self._basic,
-            s("/resume", self.session_resume, "Resume a session", usage="[name]"),
+            s("/resume", self.session_resume, "Resume a session", usage="[name or path]"),
         )
 
         # Config
@@ -223,8 +213,8 @@ class SubcommandRunner:
             s(
                 "/session delete",
                 self.session_delete,
-                "Delete a session (fuzzy match)",
-                usage="<name>",
+                "Delete a session",
+                usage="<name or path>",
                 is_detail=True,
             ),
         )
@@ -234,7 +224,7 @@ class SubcommandRunner:
                 "/session resume",
                 self.session_resume,
                 "Resume a session (latest if omitted)",
-                usage="[name]",
+                usage="[name or path]",
                 is_detail=True,
             ),
         )
@@ -321,13 +311,19 @@ class SubcommandRunner:
         description = CONFIG_EDITABLE_FIELDS[field_name]
         await interface.display_info(f"{field_name} = {display}  ({description})")
 
-    async def _config_set_cmd(self, interface: SolveigInterface, *args) -> None:
+    async def _config_set_cmd(
+        self, interface: SolveigInterface, *args, **kwargs
+    ) -> None:
         """
         Set a config field. Supports:
           /config set <key> <value>
           /config set <key>           (prompts for value)
           /config set <key>=<value>
         """
+        # _parse_cli_args turns "api_key=val" into kwargs; reconstruct as positional token
+        if not args and kwargs:
+            args = tuple(f"{k}={v}" for k, v in kwargs.items())
+
         if not args:
             await interface.display_error(
                 "Usage: /config set <field> [value]  or  /config set <field>=<value>"
@@ -479,47 +475,6 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 
     async def stop_interface(self, interface: SolveigInterface, *args, **kwargs):
         await interface.stop()
-
-    async def log_conversation(
-        self, interface: SolveigInterface, path, *args, **kwargs
-    ):
-        async with interface.with_group("Log"):
-            content = self.message_history.to_example()
-            if not content:
-                await interface.display_warning(
-                    "Cannot export conversation: no messages logged yet"
-                )
-                return
-
-            await interface.display_file_info(
-                source_path=path, is_directory=False, source_content=content
-            )
-
-            abs_path = Filesystem.get_absolute_path(path)
-            already_exists = await Filesystem.exists(abs_path)
-            auto_write = Filesystem.path_matches_patterns(
-                abs_path, self.config.auto_allowed_paths
-            )
-
-            if auto_write:
-                await interface.display_text(
-                    f"{'Updating' if already_exists else 'Creating'} {abs_path} since it matches config.auto_allowed_paths"
-                )
-            else:
-                if (
-                    await interface.ask_choice(
-                        f"Allow {'updating' if already_exists else 'creating'} file?",
-                        choices=["Yes", "No"],
-                    )
-                    == 1
-                ):
-                    return
-
-            try:
-                await Filesystem.write_file_text(abs_path, content)
-                await interface.display_success("Log exported")
-            except Exception as e:
-                await interface.display_error(f"Found error when writing file: {e}")
 
     # ------------------------------------------------------------------
     # /session commands

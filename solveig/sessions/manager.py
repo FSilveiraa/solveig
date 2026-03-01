@@ -53,7 +53,15 @@ class SessionManager:
         return sorted(items, key=lambda pm: pm[1], reverse=True)
 
     async def _fuzzy_find(self, name: str) -> str:
-        """Return abs path string of first session whose filename contains name."""
+        """Return abs path string of session.
+
+        Resolves *name* as an absolute path first; if the file exists, return
+        it directly.  Otherwise fall back to fuzzy matching against stored
+        session filenames.
+        """
+        resolved = Filesystem.get_absolute_path(name)
+        if await Filesystem.exists(resolved):
+            return str(resolved)
         sessions = await self._named_sessions()
         matches = [p for p, _ in sessions if name in p.rsplit("/", 1)[-1]]
         if not matches:
