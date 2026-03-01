@@ -22,9 +22,11 @@ def get_basic_os_info(exclude_username=False):
     # Add username and home path
     if not exclude_username:
         info["cwd"] = os.getcwd()
-        info["username"] = (
-            os.getlogin() if hasattr(os, "getlogin") else os.environ.get("USER")
-        )
+        try:
+            username = os.getlogin()
+        except OSError:
+            username = os.environ.get("USER") or os.environ.get("LOGNAME")
+        info["username"] = username
         info["home_dir"] = os.path.expanduser("~")
     # Add distro info if we're in Linux
     if info["os_name"] == "Linux" and distro:
