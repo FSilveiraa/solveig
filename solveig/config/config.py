@@ -53,7 +53,7 @@ class SolveigConfig:
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    briefing: list[str] = field(default_factory=lambda: ["SOLVEIG.md"])
+    briefing: list[str] = field(default_factory=lambda: ["BRIEFING.md"])
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
@@ -180,8 +180,8 @@ class SolveigConfig:
             type=str,
             nargs="*",
             dest="briefing",
-            default=["SOLVEIG.md"],
-            help="Markdown file(s) to append to the system prompt in order (default: SOLVEIG.md). Pass with no args to disable.",
+            default=["BRIEFING.md"],
+            help="Markdown file(s) to append to the system prompt in order (default: BRIEFING.md). Pass with no args to disable.",
         )
         parser.add_argument(
             "--add-examples",
