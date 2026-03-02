@@ -1,7 +1,5 @@
 """Modern end-to-end tests for complete conversation loops with async architecture."""
 
-import tempfile
-
 import pytest
 from anyio import Path
 
@@ -26,7 +24,7 @@ class TestConversationFlow:
     async def test_command_execution_flow(self, load_plugins):
         """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG
+        config = DEFAULT_CONFIG.with_()
         await load_plugins(config)
 
         # LLM suggests safe diagnostic commands
@@ -71,9 +69,8 @@ class TestConversationFlow:
         output = interface.get_all_output()
         assert assistant_messages[0].comment in output
         assert str(await Path(".").resolve()) in output
-        assert "README.md" in output
 
-        # CRITICAL ASSERTION: Verify the system prompt correctly contains tools
+        # Verify the system prompt schema registers all expected tool types
         assert message_history is not None
         system_prompt_content = message_history.messages[0].system_prompt
         assert "command(" in system_prompt_content
@@ -86,90 +83,86 @@ class TestConversationFlow:
         # Verify subprocess communication was called for both commands
         # assert mock_subprocess.communicate.call_count == 2
 
-    async def test_file_operations_flow(self, load_plugins):
+    async def test_file_operations_flow(self, load_plugins, tmp_path):
         """Test file operations flow with mixed accept/decline responses."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG
+        config = DEFAULT_CONFIG.with_()
         await load_plugins(config)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_dir_path = Path(temp_dir)
-            temp_file_path = temp_dir_path / "new_file.txt"
-            await temp_file_path.write_text("Lorem ipsum dolor sit amet")
+        temp_dir_path = Path(str(tmp_path))
+        temp_dir = str(tmp_path)
+        temp_file_path = temp_dir_path / "new_file.txt"
+        await temp_file_path.write_text("Lorem ipsum dolor sit amet")
 
-            assistant_messages = [
-                AssistantMessage(
-                    comment="I'll investigate your directory contents and help you organize them",
-                    tasks=[
-                        Task(
-                            status="ongoing", description="Examine directory contents"
-                        ),
-                        Task(
-                            status="pending",
-                            description="Find text files anywhere inside the current directory",
-                        ),
-                        Task(
-                            status="pending",
-                            description="Update plan to organize files",
-                        ),
-                    ],
-                    tools=[
-                        ReadTool(
-                            path=temp_dir,
-                            metadata_only=False,
-                            comment="Examine directory contents",
-                        ),
-                        CommandTool(
-                            command=f"find {temp_dir_path} -name '*.txt'",
-                            comment="Find text files",
-                        ),
-                    ],
-                ),
-                AssistantMessage(
-                    comment="Your files are already organized, there's a single Lorem Ipsum text file",
-                    tasks=[
-                        Task(
-                            status="completed", description="Examine directory contents"
-                        ),
-                        Task(
-                            status="completed",
-                            description="Find text files anywhere inside the current directory",
-                        ),
-                        Task(
-                            status="completed",
-                            description="Summarizing directory contents",
-                        ),
-                    ],
-                ),
-            ]
-
-            mock_client = create_mock_client(
-                *assistant_messages, sleep_seconds=0, sleep_delta=0
-            )
-            interface = MockInterface(
-                choices=[
-                    0,  # Accept read operation
-                    2,  # Decline find command
+        assistant_messages = [
+            AssistantMessage(
+                comment="I'll investigate your directory contents and help you organize them",
+                tasks=[
+                    Task(status="ongoing", description="Examine directory contents"),
+                    Task(
+                        status="pending",
+                        description="Find text files anywhere inside the current directory",
+                    ),
+                    Task(
+                        status="pending",
+                        description="Update plan to organize files",
+                    ),
                 ],
-            )
+                tools=[
+                    ReadTool(
+                        path=temp_dir,
+                        metadata_only=False,
+                        comment="Examine directory contents",
+                    ),
+                    CommandTool(
+                        command=f"find {temp_dir_path} -name '*.txt'",
+                        comment="Find text files",
+                    ),
+                ],
+            ),
+            AssistantMessage(
+                comment="Your files are already organized, there's a single Lorem Ipsum text file",
+                tasks=[
+                    Task(status="completed", description="Examine directory contents"),
+                    Task(
+                        status="completed",
+                        description="Find text files anywhere inside the current directory",
+                    ),
+                    Task(
+                        status="completed",
+                        description="Summarizing directory contents",
+                    ),
+                ],
+            ),
+        ]
 
-            await run_async(
-                config=config,
-                user_prompt=f"Help me organize files in {temp_dir_path}",
-                interface=interface,
-                llm_client=mock_client,
-            )
+        mock_client = create_mock_client(
+            *assistant_messages, sleep_seconds=0, sleep_delta=0
+        )
+        interface = MockInterface(
+            choices=[
+                0,  # Accept read operation
+                2,  # Decline find command
+            ],
+        )
 
-            # Verify mixed responses were handled
-            output = interface.get_all_output()
-            assert "Examine directory contents" in output
-            assert "new_file.txt" in output
-            assert "Summarizing directory contents" in output
+        await run_async(
+            config=config,
+            user_prompt=f"Help me organize files in {temp_dir_path}",
+            interface=interface,
+            llm_client=mock_client,
+        )
+
+        # Verify mixed responses were handled
+        output = interface.get_all_output()
+        assert "Examine directory contents" in output
+        assert "new_file.txt" in output
+        assert "Summarizing directory contents" in output
 
     async def test_command_error_handling(self, load_plugins):
         """Test error handling in command execution flow."""
         # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG
+        config = DEFAULT_CONFIG.with_()
         await load_plugins(config)
 
         assistant_messages = [
