@@ -237,9 +237,18 @@ async def main_loop(
                 need_user_input = config.disable_autonomy
                 try:
                     for req in llm_response.tools:
-                        result = await req.solve(config=config, interface=interface)
-                        if result:
-                            await message_history.add_result(result)
+                        try:
+                            result = await req.solve(config=config, interface=interface)
+                        except UserCancel:
+                            raise
+                        except Exception as e:
+                            await interface.display_error(
+                                f"Unexpected error executing {req.title}: {e}"
+                            )
+                            result = req.create_error_result(
+                                f"Unexpected error: {e}", accepted=False
+                            )
+                        await message_history.add_result(result)
                 except UserCancel:
                     # User cancelled processing
                     need_user_input = True

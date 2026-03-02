@@ -79,6 +79,7 @@ async def run_async_mock(
                     ),
                 ],
                 tools=[
+                    BrokenTool(comment="crash test — loop should survive this"),
                     EditTool(
                         comment="Edit README to change `docker` to `podman`",
                         path="~/Sync/README.md",
@@ -141,6 +142,7 @@ if __name__ == "__main__":
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
+    config = config.with_(plugins={**config.plugins, "tree": {}})
     interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme)
     # interface = DemoInterface(theme=config.theme, code_theme=config.code_theme, user_messages=user_messages)
 

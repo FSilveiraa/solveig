@@ -116,6 +116,8 @@ class BaseTool(BaseModel, ABC):
             # Run the actual tool solving
             try:
                 result = await self.actually_solve(config, interface)
+            except UserCancel as e:
+                raise e
             except Exception as error:
                 await interface.display_error(error)
                 error_info = "Execution error"
