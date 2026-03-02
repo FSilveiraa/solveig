@@ -75,7 +75,7 @@ class TestFileOperations:
 
         req = DeleteTool(path=str(test_file), comment="Delete test file")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not test_file.exists()  # File should be gone
@@ -90,7 +90,7 @@ class TestFileOperations:
 
         req = DeleteTool(path=str(test_file), comment="Decline deletion")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert test_file.exists()  # File should still exist
@@ -113,7 +113,7 @@ class TestFileOperations:
 
         req = DeleteTool(path=str(test_dir), comment="Delete directory tree")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not test_dir.exists()  # Entire tree should be gone
@@ -129,7 +129,7 @@ class TestFileOperations:
 
         req = DeleteTool(path=str(test_dir), comment="Decline directory deletion")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert test_dir.exists()  # Directory should still exist
@@ -145,7 +145,7 @@ class TestFileOperations:
 
         req = DeleteTool(path=str(empty_dir), comment="Delete empty directory")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not empty_dir.exists()
@@ -167,7 +167,7 @@ class TestAutoAllowedPaths:
 
         req = DeleteTool(path=str(test_file), comment="Auto-allowed file deletion")
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert not test_file.exists()  # File should be deleted
@@ -195,7 +195,7 @@ class TestAutoAllowedPaths:
             path=str(test_dir), comment="Auto-allowed directory deletion"
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert not test_dir.exists()  # Directory should be deleted
@@ -219,7 +219,7 @@ class TestAutoAllowedPaths:
         # Test auto-allowed (no choice)
         interface1 = MockInterface()
         req1 = DeleteTool(path=str(auto_file), comment="Auto deletion")
-        result1 = await req1.actually_solve(config, interface1)
+        result1 = await req1.solve(config, interface1)
 
         assert result1.accepted
         assert not auto_file.exists()
@@ -229,7 +229,7 @@ class TestAutoAllowedPaths:
         interface2 = MockInterface()
         interface2.choices.append(0)  # Accept deletion
         req2 = DeleteTool(path=str(manual_file), comment="Manual deletion")
-        result2 = await req2.actually_solve(config, interface2)
+        result2 = await req2.solve(config, interface2)
 
         assert result2.accepted
         assert not manual_file.exists()
@@ -255,7 +255,7 @@ class TestErrorHandling:
 
         req = DeleteTool(path="/nonexistent/file.txt", comment="Delete missing file")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -280,7 +280,7 @@ class TestErrorHandling:
         try:
             req = DeleteTool(path=str(test_file), comment="Delete protected file")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -305,7 +305,7 @@ class TestErrorHandling:
                 path=str(test_file), comment="Deletion that might fail"
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             # This test is platform-dependent, but we should handle errors gracefully
             if not result.accepted and result.error:
@@ -328,7 +328,7 @@ class TestPathSecurity:
 
             req = DeleteTool(path=tilde_path, comment="Tilde expansion test")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
             assert "~" not in str(result.path)  # Tilde expanded
@@ -357,7 +357,7 @@ class TestPathSecurity:
 
         req = DeleteTool(path=traversal_path, comment="Path traversal test")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert ".." not in str(result.path)  # Path resolved
@@ -389,7 +389,7 @@ class TestIntegrationScenarios:
 
         req = DeleteTool(path=str(large_dir), comment="Delete large tree")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not large_dir.exists()  # Entire tree should be gone
@@ -417,7 +417,7 @@ class TestIntegrationScenarios:
 
             req = DeleteTool(path=str(file_path), comment=f"Delete {filename}")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
             assert not file_path.exists()
@@ -436,7 +436,7 @@ class TestIntegrationScenarios:
 
         req1 = DeleteTool(path=str(test_file), comment="Delete file")
 
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
 
         assert not result1.accepted
         # Check that choice mentioned "file" not "directory"
@@ -450,7 +450,7 @@ class TestIntegrationScenarios:
 
         req2 = DeleteTool(path=str(test_dir), comment="Delete directory")
 
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
 
         assert not result2.accepted
         # Check that choice mentioned "directory" not "file"

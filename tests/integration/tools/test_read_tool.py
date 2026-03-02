@@ -63,7 +63,7 @@ class TestDirectoryOperations:
 
         interface = MockInterface(choices=[0])  # Accept metadata
         req = ReadTool(path=str(tmp_path), metadata_only=True, comment="Read directory")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.metadata is not None
@@ -77,7 +77,7 @@ class TestDirectoryOperations:
         req = ReadTool(
             path=str(tmp_path), metadata_only=True, comment="Decline directory"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.metadata is None
@@ -95,7 +95,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[0])
         req = ReadTool(path=str(test_file), metadata_only=False, comment="Direct read")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         # Content is [(start_line, end_line, text)] for full file reads
@@ -116,7 +116,7 @@ class TestFileContentFlow:
         req = ReadTool(
             path=str(test_file), metadata_only=False, comment="Inspect then send"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         # Content is [(start_line, end_line, text)] for full file reads
@@ -138,7 +138,7 @@ class TestFileContentFlow:
             metadata_only=False,
             comment="Inspect then metadata",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted  # Content was requested but not sent
         assert not result.content  # Content was read but withheld
@@ -153,7 +153,7 @@ class TestFileContentFlow:
         req = ReadTool(
             path=str(test_file), metadata_only=False, comment="Inspect then nothing"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert not result.content  # Content was read but withheld
@@ -168,7 +168,7 @@ class TestFileContentFlow:
         req = ReadTool(
             path=str(test_file), metadata_only=False, comment="Metadata only"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted  # Content was requested but not sent
         assert result.content is None  # Content was never read
@@ -181,7 +181,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[3])
         req = ReadTool(path=str(test_file), metadata_only=False, comment="Send nothing")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.content is None
@@ -196,7 +196,7 @@ class TestFileContentFlow:
         req = ReadTool(
             path=str(test_file), metadata_only=True, comment="Metadata requested"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not result.content
@@ -211,14 +211,14 @@ class TestFileContentFlow:
         # Test direct read (choice 0)
         interface1 = MockInterface(choices=[0])
         req1 = ReadTool(path=str(test_file), metadata_only=False, comment="Direct")
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
 
         # Test inspect then send (choice 1→0)
         interface2 = MockInterface(choices=[1, 0])
         req2 = ReadTool(
             path=str(test_file), metadata_only=False, comment="Inspect then send"
         )
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
 
         assert result1.accepted == result2.accepted
         assert result1.content == result2.content
@@ -238,7 +238,7 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
         req = ReadTool(path=str(test_file), metadata_only=False, comment="Auto allowed")
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         # Content is [(start_line, end_line, text)] for full file reads
@@ -258,7 +258,7 @@ class TestAutoAllowedPaths:
         req = ReadTool(
             path=str(tmp_path), metadata_only=True, comment="Auto allowed dir"
         )
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert result.metadata is not None
@@ -277,7 +277,7 @@ class TestErrorHandling:
             metadata_only=False,
             comment="Missing file",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -296,7 +296,7 @@ class TestErrorHandling:
                 metadata_only=False,
                 comment="Restricted file",
             )
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
             assert not result.accepted
             assert result.error is not None
         finally:
@@ -312,7 +312,7 @@ class TestErrorHandling:
         req = ReadTool(
             path=str(binary_file), metadata_only=False, comment="Binary file"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.metadata.encoding.lower() == "base64"
@@ -334,7 +334,7 @@ class TestPathSecurity:
         tilde_path = "~/tilde_test.txt"
         interface = MockInterface(choices=[0])
         req = ReadTool(path=tilde_path, metadata_only=False, comment="Tilde expansion")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         # Content is [(start_line, end_line, text)] for full file reads
@@ -360,7 +360,7 @@ class TestPathSecurity:
         req = ReadTool(
             path=traversal_path, metadata_only=True, comment="Path traversal"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert ".." not in str(result.path)
@@ -381,7 +381,7 @@ class TestIntegrationScenarios:
         req = ReadTool(
             path=str(tmp_path), metadata_only=True, comment="Large directory"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.metadata.is_directory
@@ -396,7 +396,7 @@ class TestIntegrationScenarios:
         req = ReadTool(
             path=str(test_file), metadata_only=True, comment="Metadata only flag"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not result.content

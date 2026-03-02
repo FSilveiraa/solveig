@@ -71,7 +71,7 @@ class TestEditStringReplace:
             new_string="new_func",
             comment="Rename function",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.occurrences_found == 1
@@ -91,7 +91,7 @@ class TestEditStringReplace:
             replace_all=False,
             comment="Replace x",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -110,7 +110,7 @@ class TestEditStringReplace:
             replace_all=True,
             comment="Replace all x",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.occurrences_found == 3
@@ -129,7 +129,7 @@ class TestEditStringReplace:
             new_string="replacement",
             comment="Find nonexistent",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -147,7 +147,7 @@ class TestEditStringReplace:
             new_string="",
             comment="Remove TODO",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_file.read_text() == "code here"
@@ -167,7 +167,7 @@ class TestEditStringReplace:
             new_string='"""New improved docstring."""',
             comment="Update docstring",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert '"""New improved docstring."""' in test_file.read_text()
@@ -189,7 +189,7 @@ class TestEditUserApproval:
             new_string="modified",
             comment="Cancel test",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert test_file.read_text() == original_content
@@ -207,7 +207,7 @@ class TestEditUserApproval:
             new_string="automatic",
             comment="Auto edit",
         )
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert len(interface.questions) == 0
@@ -226,7 +226,7 @@ class TestEditErrorHandling:
             new_string="y",
             comment="Missing file",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -240,7 +240,7 @@ class TestEditErrorHandling:
             new_string="y",
             comment="Edit directory",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert "directory" in result.error.lower()
@@ -257,7 +257,7 @@ class TestEditErrorHandling:
             new_string="y",
             comment="Edit binary",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert "binary" in result.error.lower()

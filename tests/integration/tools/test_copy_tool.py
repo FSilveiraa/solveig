@@ -104,7 +104,7 @@ class TestFileOperations:
             comment="Copy test file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert source_file.exists()  # Source should remain
@@ -126,7 +126,7 @@ class TestFileOperations:
             comment="Decline copy",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert source_file.exists()  # Source should remain
@@ -153,7 +153,7 @@ class TestFileOperations:
             comment="Copy directory tree",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert source_dir.exists()  # Source should remain
@@ -179,7 +179,7 @@ class TestFileOperations:
             comment="Decline directory copy",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert source_dir.exists()  # Source should remain
@@ -207,7 +207,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed file copy",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert source_file.exists()
@@ -240,7 +240,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed directory copy",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert source_dir.exists()
@@ -269,7 +269,7 @@ class TestAutoAllowedPaths:
             comment="Partial auto-allowed copy",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert auto_file.exists()
@@ -306,7 +306,7 @@ class TestErrorHandling:
             comment="Copy missing source",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -336,7 +336,7 @@ class TestErrorHandling:
                 comment="Copy protected source",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -370,7 +370,7 @@ class TestErrorHandling:
                 comment="Copy to protected destination",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -403,7 +403,7 @@ class TestPathSecurity:
                 comment="Tilde expansion test",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
             assert "~" not in str(result.source_path)  # Tilde expanded
@@ -440,7 +440,7 @@ class TestPathSecurity:
             comment="Path traversal test",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert ".." not in str(result.source_path)  # Path resolved
@@ -476,7 +476,7 @@ class TestIntegrationScenarios:
             comment="Copy large tree",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert source_dir.exists()  # Source should remain
@@ -516,7 +516,7 @@ class TestIntegrationScenarios:
             comment="Copy special files",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
 
@@ -547,7 +547,7 @@ class TestIntegrationScenarios:
             comment="Copy file",
         )
 
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
 
         assert not result1.accepted
         # Check that choice mentioned "file" not "directory"
@@ -565,7 +565,7 @@ class TestIntegrationScenarios:
             comment="Copy directory",
         )
 
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
 
         assert not result2.accepted
         # Check that choice mentioned "directory" not "file"

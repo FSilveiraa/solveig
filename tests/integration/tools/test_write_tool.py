@@ -87,7 +87,7 @@ class TestFileOperations:
             comment="Create new file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_file.exists()
@@ -107,7 +107,7 @@ class TestFileOperations:
             comment="Declined file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert not test_file.exists()
@@ -126,7 +126,7 @@ class TestFileOperations:
             comment="Create empty file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_file.exists()
@@ -151,7 +151,7 @@ class TestFileOperations:
             comment="Update existing file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_file.read_text() == new_content
@@ -178,7 +178,7 @@ class TestFileOperations:
             comment="Declined update",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert test_file.read_text() == original_content  # Unchanged
@@ -198,7 +198,7 @@ class TestDirectoryOperations:
             path=str(test_dir), is_directory=True, comment="Create new directory"
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_dir.exists()
@@ -217,7 +217,7 @@ class TestDirectoryOperations:
             comment="Create nested directories",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert nested_dir.exists()
@@ -237,7 +237,7 @@ class TestDirectoryOperations:
             path=str(test_dir), is_directory=True, comment="Declined directory"
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert not test_dir.exists()
@@ -256,7 +256,7 @@ class TestDirectoryOperations:
             comment="Update existing directory",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert test_dir.exists()
@@ -290,7 +290,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed file",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert test_file.exists()
@@ -317,7 +317,7 @@ class TestAutoAllowedPaths:
             path=str(test_dir), is_directory=True, comment="Auto-allowed directory"
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert test_dir.exists()
@@ -343,7 +343,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed update",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert test_file.read_text() == "Updated auto content"
@@ -388,7 +388,7 @@ class TestErrorHandling:
                 comment="Permission denied test",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -421,7 +421,7 @@ class TestErrorHandling:
                 comment="Encoding error test",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -446,7 +446,7 @@ class TestErrorHandling:
         )
 
         # Should fail during validation, before asking user
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -473,7 +473,7 @@ class TestPathSecurity:
                 comment="Tilde test",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
             assert "~" not in str(result.path)  # Tilde expanded
@@ -502,7 +502,7 @@ class TestPathSecurity:
             comment="Traversal test",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert ".." not in str(result.path)  # Path resolved
@@ -533,7 +533,7 @@ class TestIntegrationScenarios:
             comment="Complex content test",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_file.read_text() == complex_content
@@ -553,7 +553,7 @@ class TestIntegrationScenarios:
             comment="Create test",
         )
 
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
         assert result1.accepted
 
         output1 = interface1.get_all_output()
@@ -571,7 +571,7 @@ class TestIntegrationScenarios:
             comment="Update test",
         )
 
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
         assert result2.accepted
 
         output2 = interface2.get_all_output()
@@ -592,7 +592,7 @@ class TestIntegrationScenarios:
             comment="Directory with content",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert test_dir.exists()

@@ -89,9 +89,11 @@ class ReadTool(BaseTool):
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
 
-        metadata = await Filesystem.read_metadata(
-            Filesystem.get_absolute_path(self.path)
-        )
+        abs_path = Filesystem.get_absolute_path(self.path)
+        if not await Filesystem.exists(abs_path):
+            return
+
+        metadata = await Filesystem.read_metadata(abs_path)
 
         # Display the dir listing for directories (1-depth tree)
         if metadata.is_directory:

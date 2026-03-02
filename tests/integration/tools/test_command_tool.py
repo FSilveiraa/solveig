@@ -91,7 +91,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandTool(command="echo 'hello world'", comment="Test echo command")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -106,7 +106,7 @@ class TestCommandChoices:
             command="echo 'hostname.local'",  # Use echo to avoid network/system variance
             comment="Get hostname",
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -126,7 +126,7 @@ class TestCommandChoices:
         req = CommandTool(
             command=f"cat {secret_file.name}", comment="Read sensitive file"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -139,7 +139,7 @@ class TestCommandChoices:
 
         req = CommandTool(command="rm important_file.txt", comment="Dangerous command")
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.command == "rm important_file.txt"
@@ -152,7 +152,7 @@ class TestCommandChoices:
         req = CommandTool(
             command="ls /nonexistent_directory_for_test", comment="Command with error"
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -165,7 +165,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[0])  # Run and send
 
         req = CommandTool(command=f"touch {test_file.name}", comment="Silent command")
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -191,7 +191,7 @@ class TestAutoExecuteCommands:
 
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
         req = CommandTool(command="ls", comment="List directory")
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert result.success
@@ -209,7 +209,7 @@ class TestAutoExecuteCommands:
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
         req = CommandTool(command="echo hello", comment="Echo command")
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert result.success
@@ -241,7 +241,7 @@ class TestAutoExecuteCommands:
                 interface.choices.append(2)  # Don't run
 
             req = CommandTool(command=command, comment=f"Test {command}")
-            result = await req.actually_solve(config, interface)
+            result = await req.solve(config, interface)
 
             if should_auto_execute:
                 assert result.accepted, f"Command '{command}' should auto-execute"
@@ -264,7 +264,7 @@ class TestDetachedCommands:
             comment="Detached echo",
             timeout=0,  # Detached
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -284,7 +284,7 @@ class TestDetachedCommands:
         req1 = CommandTool(
             command="echo blocking", comment="Blocking command", timeout=5.0
         )
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface)
         assert result1.accepted
         assert result1.success
         assert result1.stdout == "blocking"
@@ -296,7 +296,7 @@ class TestDetachedCommands:
             comment="Detached command",
             timeout=-1,  # Negative also means detached
         )
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface)
         assert result2.accepted
         assert result2.success
         assert result2.stdout == ""
@@ -332,7 +332,7 @@ class TestWorkingDirectoryTracking:
 
         # 2. CD into the subdirectory
         cd_req = CommandTool(command=f"cd {subdir.name}", comment="Change to new_dir")
-        cd_result = await cd_req.actually_solve(DEFAULT_CONFIG, interface)
+        cd_result = await cd_req.solve(DEFAULT_CONFIG, interface)
         assert cd_result.success
 
         # Verify stats were updated with the new CWD
@@ -353,7 +353,7 @@ class TestWorkingDirectoryTracking:
             comment="Detached process",
             timeout=0,  # Detached
         )
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert result.success
@@ -376,19 +376,19 @@ class TestShellIntegration:
         # 1. Create a subdirectory
         interface.choices.append(0)
         mkdir_req = CommandTool(command=f"mkdir {subdir.name}", comment="Create subdir")
-        mkdir_result = await mkdir_req.actually_solve(DEFAULT_CONFIG, interface)
+        mkdir_result = await mkdir_req.solve(DEFAULT_CONFIG, interface)
         assert mkdir_result.success
 
         # 2. CD into the new subdirectory
         interface.choices.append(0)
         cd_req_2 = CommandTool(command=f"cd {subdir.name}", comment="Change to subdir")
-        cd_result_2 = await cd_req_2.actually_solve(DEFAULT_CONFIG, interface)
+        cd_result_2 = await cd_req_2.solve(DEFAULT_CONFIG, interface)
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
         pwd_req = CommandTool(command="pwd", comment="Print working directory")
-        pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
+        pwd_result = await pwd_req.solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success
         assert pwd_result.stdout == str(subdir)
 
@@ -401,19 +401,19 @@ class TestShellIntegration:
         # 1. Create a subdirectory
         interface.choices.append(0)
         mkdir_req = CommandTool(command="mkdir test_dir", comment="Create subdir")
-        mkdir_result = await mkdir_req.actually_solve(DEFAULT_CONFIG, interface)
+        mkdir_result = await mkdir_req.solve(DEFAULT_CONFIG, interface)
         assert mkdir_result.success
         assert (tmp_path / "test_dir").is_dir()
 
         # 2. CD into the new subdirectory
         interface.choices.append(0)
         cd_req_2 = CommandTool(command="cd test_dir", comment="Change to subdir")
-        cd_result_2 = await cd_req_2.actually_solve(DEFAULT_CONFIG, interface)
+        cd_result_2 = await cd_req_2.solve(DEFAULT_CONFIG, interface)
         assert cd_result_2.success
 
         # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
         pwd_req = CommandTool(command="pwd", comment="Print working directory")
-        pwd_result = await pwd_req.actually_solve(DEFAULT_CONFIG, interface)
+        pwd_result = await pwd_req.solve(DEFAULT_CONFIG, interface)
         assert pwd_result.success
         assert pwd_result.stdout == str(tmp_path / "test_dir")

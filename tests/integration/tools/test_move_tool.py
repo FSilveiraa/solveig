@@ -105,7 +105,7 @@ class TestFileOperations:
             comment="Move test file",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not source_file.exists()  # Source should be gone
@@ -127,7 +127,7 @@ class TestFileOperations:
             comment="Decline move",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert source_file.exists()  # Source should remain
@@ -155,7 +155,7 @@ class TestFileOperations:
             comment="Move directory tree",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not source_dir.exists()  # Source should be gone
@@ -182,7 +182,7 @@ class TestFileOperations:
             comment="Decline directory move",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert source_dir.exists()  # Source should remain
@@ -210,7 +210,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed file move",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert not source_file.exists()  # Source should be gone
@@ -243,7 +243,7 @@ class TestAutoAllowedPaths:
             comment="Auto-allowed directory move",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert not source_dir.exists()  # Source should be gone
@@ -273,7 +273,7 @@ class TestAutoAllowedPaths:
             comment="Partial auto-allowed move",
         )
 
-        result = await req.actually_solve(config, interface)
+        result = await req.solve(config, interface)
 
         assert result.accepted
         assert not auto_file.exists()  # Source should be gone
@@ -310,7 +310,7 @@ class TestErrorHandling:
             comment="Move missing source",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert not result.accepted
         assert result.error is not None
@@ -340,7 +340,7 @@ class TestErrorHandling:
                 comment="Move protected source",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -374,7 +374,7 @@ class TestErrorHandling:
                 comment="Move to protected destination",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert not result.accepted
             assert result.error is not None
@@ -408,7 +408,7 @@ class TestPathSecurity:
                 comment="Tilde expansion test",
             )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
             assert "~" not in str(result.source_path)  # Tilde expanded
@@ -447,7 +447,7 @@ class TestPathSecurity:
             comment="Path traversal test",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert ".." not in str(result.source_path)  # Path resolved
@@ -485,7 +485,7 @@ class TestIntegrationScenarios:
             comment="Move large tree",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not source_dir.exists()  # Source should be gone
@@ -526,7 +526,7 @@ class TestIntegrationScenarios:
             comment="Move special files",
         )
 
-        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.solve(DEFAULT_CONFIG, interface)
 
         assert result.accepted
         assert not source_dir.exists()  # Source should be gone
@@ -558,7 +558,7 @@ class TestIntegrationScenarios:
             comment="Move file",
         )
 
-        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
 
         assert not result1.accepted
         # Check that choice mentioned "file" not "directory"
@@ -576,7 +576,7 @@ class TestIntegrationScenarios:
             comment="Move directory",
         )
 
-        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
 
         assert not result2.accepted
         # Check that choice mentioned "directory" not "file"
