@@ -16,7 +16,7 @@ from solveig.exceptions import (
     ValidationError,
 )
 from solveig.interface import SolveigInterface
-from solveig.plugins.hooks import HOOKS
+from solveig.plugins.hooks import PLUGIN_HOOKS
 from solveig.schema.result import ToolResult
 from solveig.subcommand.base import Subcommand
 
@@ -95,7 +95,7 @@ class BaseTool(BaseModel, ABC):
             await self.display_header(interface)
 
             # Run before hooks - they validate and can throw exceptions
-            for before_hook, tools in HOOKS.before:
+            for before_hook, tools in PLUGIN_HOOKS.before:
                 if not tools or any(isinstance(self, tool_type) for tool_type in tools):
                     try:
                         # I'm actually kind of proud that this works
@@ -132,7 +132,7 @@ class BaseTool(BaseModel, ABC):
                 result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions
-            for after_hook, tools in HOOKS.after:
+            for after_hook, tools in PLUGIN_HOOKS.after_hooks:
                 if not tools or any(isinstance(self, tool_type) for tool_type in tools):
                     try:
                         after_coroutine = after_hook(config, interface, self, result)

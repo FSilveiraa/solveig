@@ -6,7 +6,7 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
 from .hooks import clear_hooks, load_and_filter_hooks
-from .tools import PLUGIN_TOOLS, load_and_filter_tools
+from .tools import clear_tools, load_and_filter_tools
 
 
 async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface):
@@ -24,7 +24,7 @@ async def initialize_plugins(config: SolveigConfig, interface: SolveigInterface)
 
 def clear_plugins():
     clear_hooks()
-    PLUGIN_TOOLS.clear()
+    clear_tools()
 
 
 __all__ = [

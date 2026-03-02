@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from solveig.plugins import hooks
+from solveig.plugins.hooks import PLUGIN_HOOKS
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
 from solveig.schema.tool import (
     CommandTool,
@@ -174,8 +174,8 @@ class TestShellcheckPluginIntegration:
         """Test that shellcheck plugin is properly registered."""
         await load_plugins(SHELLCHECK_CONFIG)
         # Should have the shellcheck before hook loaded
-        assert len(hooks.HOOKS.before) >= 1
-        hook_names = [hook[0].__name__ for hook in hooks.HOOKS.before]
+        assert len(PLUGIN_HOOKS.before) >= 1
+        hook_names = [hook[0].__name__ for hook in PLUGIN_HOOKS.before]
         assert "check_command" in hook_names
 
     @pytest.mark.no_subprocess_mocking

@@ -6,8 +6,8 @@ import pytest
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import ProcessingError, SecurityError, ValidationError
-from solveig.plugins import hooks, initialize_plugins
-from solveig.plugins.hooks import load_and_filter_hooks
+from solveig.plugins import initialize_plugins
+from solveig.plugins.hooks import PLUGIN_HOOKS, load_and_filter_hooks
 from solveig.schema.tool import CommandTool, ReadTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.anyio
 
 # ---------------------------------------------------------------------------
 # Hook system behaviour
-# Hooks are registered directly into HOOKS.before / HOOKS.after —
+# Hooks are registered directly into PLUGIN_HOOKS.before_hooks / after_hooks —
 # no file loading needed to test execution semantics.
 # ---------------------------------------------------------------------------
 
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.anyio
 class TestPluginHookSystem:
     @pytest.fixture(autouse=True)
     def clean_hooks(self):
-        hooks.clear_hooks()
+        PLUGIN_HOOKS.clear()
 
     async def test_before_hook_validation_error(self):
         """ValidationError from a before hook stops processing."""
@@ -33,7 +33,7 @@ class TestPluginHookSystem:
             if "fail" in tool.command:
                 raise ValidationError("Command validation failed")
 
-        hooks.HOOKS.before.append((failing_validator, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((failing_validator, (CommandTool,)))
 
         result = await CommandTool(command="fail this command", comment="Test").solve(
             DEFAULT_CONFIG, MockInterface()
@@ -50,7 +50,7 @@ class TestPluginHookSystem:
             if "rm -rf" in tool.command:
                 raise SecurityError("Dangerous command detected")
 
-        hooks.HOOKS.before.append((security_validator, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((security_validator, (CommandTool,)))
 
         result = await CommandTool(
             command="rm -rf /important/data", comment="Test"
@@ -66,7 +66,7 @@ class TestPluginHookSystem:
         async def passing_validator(config, interface, tool):
             side_effects.append(f"validated: {tool.command}")
 
-        hooks.HOOKS.before.append((passing_validator, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((passing_validator, (CommandTool,)))
 
         result = await CommandTool(command="echo hello", comment="Test").solve(
             DEFAULT_CONFIG,
@@ -85,7 +85,7 @@ class TestPluginHookSystem:
             if result.accepted:
                 raise ProcessingError("Post-processing failed")
 
-        hooks.HOOKS.after.append((failing_processor, (ReadTool,)))
+        PLUGIN_HOOKS.after_hooks.append((failing_processor, (ReadTool,)))
 
         result = await ReadTool(
             comment="Test", path=str(tmp_path), metadata_only=True
@@ -104,8 +104,8 @@ class TestPluginHookSystem:
         async def second_hook(config, interface, tool):
             execution_order.append("second")
 
-        hooks.HOOKS.before.append((first_hook, (CommandTool,)))
-        hooks.HOOKS.before.append((second_hook, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((first_hook, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((second_hook, (CommandTool,)))
 
         await CommandTool(command="echo test", comment="Test").solve(
             DEFAULT_CONFIG, MockInterface(choices=[2])
@@ -124,8 +124,8 @@ class TestPluginHookSystem:
         async def read_hook(config, interface, tool):
             called.append("read_hook")
 
-        hooks.HOOKS.before.append((command_hook, (CommandTool,)))
-        hooks.HOOKS.before.append((read_hook, (ReadTool,)))
+        PLUGIN_HOOKS.before.append((command_hook, (CommandTool,)))
+        PLUGIN_HOOKS.before.append((read_hook, (ReadTool,)))
 
         await CommandTool(command="echo test", comment="Test").solve(
             DEFAULT_CONFIG, MockInterface(choices=[2])
@@ -147,7 +147,7 @@ class TestPluginHookSystem:
         async def universal_hook(config, interface, tool):
             called.append(type(tool).__name__)
 
-        hooks.HOOKS.before.append((universal_hook, None))
+        PLUGIN_HOOKS.before.append((universal_hook, None))
 
         (tmp_path / "f.txt").write_text("content")
         await CommandTool(command="echo test", comment="Test").solve(
@@ -164,15 +164,15 @@ class TestPluginHookSystem:
 # ---------------------------------------------------------------------------
 # Plugin filtering
 # The load/filter pipeline is tested by mocking rescan_and_load_plugins so it
-# pre-populates HOOKS.all (as a real plugin import would), then letting the
-# filtering loop in load_and_filter_hooks run for real.
+# pre-populates PLUGIN_HOOKS.all (as a real plugin import would), then letting
+# the filtering loop in load_and_filter_hooks run for real.
 # ---------------------------------------------------------------------------
 
 
 class TestPluginFiltering:
     @pytest.fixture(autouse=True)
     def clean_hooks(self):
-        hooks.clear_hooks()
+        PLUGIN_HOOKS.clear()
 
     async def test_plugin_enabled_when_in_config(self):
         """Plugins in config.plugins are activated after loading."""
@@ -182,7 +182,7 @@ class TestPluginFiltering:
             called.append("executed")
 
         async def fake_rescan(**_):
-            hooks.HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
+            PLUGIN_HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
 
         config = DEFAULT_CONFIG.with_(plugins={"my_plugin": {}})
         with patch(
@@ -190,7 +190,7 @@ class TestPluginFiltering:
         ):
             await load_and_filter_hooks(config, MockInterface())
 
-        assert len(hooks.HOOKS.before) == 1
+        assert len(PLUGIN_HOOKS.before) == 1
 
         await CommandTool(command="echo test", comment="Test").solve(
             config, MockInterface(choices=[2])
@@ -205,7 +205,7 @@ class TestPluginFiltering:
             called.append("should_not_run")
 
         async def fake_rescan(**_):
-            hooks.HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
+            PLUGIN_HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
 
         config = DEFAULT_CONFIG.with_(plugins={})  # my_plugin not listed
         with patch(
@@ -213,7 +213,7 @@ class TestPluginFiltering:
         ):
             await load_and_filter_hooks(config, MockInterface())
 
-        assert len(hooks.HOOKS.before) == 0
+        assert len(PLUGIN_HOOKS.before) == 0
 
         await CommandTool(command="echo test", comment="Test").solve(
             config, MockInterface(choices=[2])
@@ -232,8 +232,8 @@ class TestPluginFiltering:
         await initialize_plugins(config=config, interface=interface)
 
         assert "'shellcheck': skipped" in " ".join(interface.outputs).lower()
-        assert len(hooks.HOOKS.before) == 0
-        assert len(hooks.HOOKS.after) == 0
+        assert len(PLUGIN_HOOKS.before) == 0
+        assert len(PLUGIN_HOOKS.after_hooks) == 0
 
     async def test_plugin_receives_its_config_options(self):
         """The hook receives config and can read its own config.plugins entry."""
@@ -243,7 +243,7 @@ class TestPluginFiltering:
             received.append(config.plugins.get("my_plugin", {}))
 
         async def fake_rescan(**_):
-            hooks.HOOKS.all["my_plugin"][0].append((configurable_hook, (CommandTool,)))
+            PLUGIN_HOOKS.all["my_plugin"][0].append((configurable_hook, (CommandTool,)))
 
         config = DEFAULT_CONFIG.with_(
             plugins={"my_plugin": {"option1": "value1", "option2": 42}}
@@ -266,7 +266,7 @@ class TestPluginFiltering:
         )
 
         def hook_count():
-            before, after = hooks.HOOKS.all["shellcheck"]
+            before, after = PLUGIN_HOOKS.all["shellcheck"]
             return len(before) + len(after)
 
         await load_plugins(config)
@@ -277,4 +277,4 @@ class TestPluginFiltering:
 
         assert count_after_first > 0
         assert hook_count() == count_after_first
-        assert len(hooks.HOOKS.before) == count_after_first
+        assert len(PLUGIN_HOOKS.before) == count_after_first
