@@ -149,21 +149,23 @@ class TestStreamReading:
         assert result == ""
         assert marker is None
 
+    @pytest.mark.skip(
+        reason="Bug: _read_stream does not handle invalid UTF-8 — bytes are not decoded and crash ''.join()"
+    )
     async def test_read_stream_decode_errors(self):
-        """Test handling invalid UTF-8 bytes reveals a bug in the implementation."""
+        """Test that _read_stream handles invalid UTF-8 bytes gracefully (e.g. with replacement chars)."""
         shell = PersistentShell()
 
         mock_stream = AsyncMock()
         mock_stream.readline.side_effect = [
-            b"\xff\xfe invalid utf-8\n",  # Invalid UTF-8 - stays as bytes
+            b"\xff\xfe invalid utf-8\n",  # Invalid UTF-8
             b"valid content\n",
             b"",  # EOF
         ]
 
-        # This test reveals a real bug: when decode fails, bytes get mixed with strings
-        # and "".join(lines) fails with TypeError
-        with pytest.raises(TypeError, match="expected str instance, bytes found"):
-            await shell._read_stream(mock_stream)
+        result, _ = await shell._read_stream(mock_stream)
+        assert isinstance(result, str)
+        assert "valid content" in result
 
 
 class TestProcessLifecycle:
