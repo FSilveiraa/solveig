@@ -1,6 +1,5 @@
 """Comprehensive integration tests for CopyRequirement."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -91,198 +90,191 @@ class TestCopyValidation:
 class TestFileOperations:
     """Test CopyRequirement file and directory copying."""
 
-    async def test_copy_file_accept(self):
+    async def test_copy_file_accept(self, tmp_path):
         """Test copying a file with user acceptance."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_file = Path(temp_dir) / "source.txt"
-            dest_file = Path(temp_dir) / "dest.txt"
-            source_file.write_text("This file will be copied")
+        source_file = tmp_path / "source.txt"
+        dest_file = tmp_path / "dest.txt"
+        source_file.write_text("This file will be copied")
 
-            interface = MockInterface(choices=[0])  # Accept copy
+        interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyTool(
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-                comment="Copy test file",
-            )
+        req = CopyTool(
+            source_path=str(source_file),
+            destination_path=str(dest_file),
+            comment="Copy test file",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert source_file.exists()  # Source should remain
-            assert dest_file.exists()  # Destination should exist
-            assert source_file.read_text() == "This file will be copied"
-            assert dest_file.read_text() == "This file will be copied"
+        assert result.accepted
+        assert source_file.exists()  # Source should remain
+        assert dest_file.exists()  # Destination should exist
+        assert source_file.read_text() == "This file will be copied"
+        assert dest_file.read_text() == "This file will be copied"
 
-    async def test_copy_file_decline(self):
+    async def test_copy_file_decline(self, tmp_path):
         """Test copying a file with user decline."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_file = Path(temp_dir) / "source.txt"
-            dest_file = Path(temp_dir) / "dest.txt"
-            source_file.write_text("This file should not be copied")
+        source_file = tmp_path / "source.txt"
+        dest_file = tmp_path / "dest.txt"
+        source_file.write_text("This file should not be copied")
 
-            interface = MockInterface(choices=[1])  # Decline copy
+        interface = MockInterface(choices=[1])  # Decline copy
 
-            req = CopyTool(
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-                comment="Decline copy",
-            )
+        req = CopyTool(
+            source_path=str(source_file),
+            destination_path=str(dest_file),
+            comment="Decline copy",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert not result.accepted
-            assert source_file.exists()  # Source should remain
-            assert not dest_file.exists()  # Destination should not exist
+        assert not result.accepted
+        assert source_file.exists()  # Source should remain
+        assert not dest_file.exists()  # Destination should not exist
 
-    async def test_copy_directory_accept(self):
+    async def test_copy_directory_accept(self, tmp_path):
         """Test copying a directory with user acceptance."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "source_dir"
-            dest_dir = Path(temp_dir) / "dest_dir"
-            source_dir.mkdir()
+        source_dir = tmp_path / "source_dir"
+        dest_dir = tmp_path / "dest_dir"
+        source_dir.mkdir()
 
-            # Add content to directory
-            (source_dir / "file1.txt").write_text("Content 1")
-            (source_dir / "file2.txt").write_text("Content 2")
-            subdir = source_dir / "subdir"
-            subdir.mkdir()
-            (subdir / "nested.txt").write_text("Nested content")
+        # Add content to directory
+        (source_dir / "file1.txt").write_text("Content 1")
+        (source_dir / "file2.txt").write_text("Content 2")
+        subdir = source_dir / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.txt").write_text("Nested content")
 
-            interface = MockInterface(choices=[0])  # Accept copy
+        interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir),
-                comment="Copy directory tree",
-            )
+        req = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir),
+            comment="Copy directory tree",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert source_dir.exists()  # Source should remain
-            assert dest_dir.exists()  # Destination should exist
+        assert result.accepted
+        assert source_dir.exists()  # Source should remain
+        assert dest_dir.exists()  # Destination should exist
 
-            # Verify content was copied
-            assert (dest_dir / "file1.txt").read_text() == "Content 1"
-            assert (dest_dir / "file2.txt").read_text() == "Content 2"
-            assert (dest_dir / "subdir" / "nested.txt").read_text() == "Nested content"
+        # Verify content was copied
+        assert (dest_dir / "file1.txt").read_text() == "Content 1"
+        assert (dest_dir / "file2.txt").read_text() == "Content 2"
+        assert (dest_dir / "subdir" / "nested.txt").read_text() == "Nested content"
 
-    async def test_copy_directory_decline(self):
+    async def test_copy_directory_decline(self, tmp_path):
         """Test copying a directory with user decline."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "source_dir"
-            dest_dir = Path(temp_dir) / "dest_dir"
-            source_dir.mkdir()
-            (source_dir / "important.txt").write_text("Important data")
+        source_dir = tmp_path / "source_dir"
+        dest_dir = tmp_path / "dest_dir"
+        source_dir.mkdir()
+        (source_dir / "important.txt").write_text("Important data")
 
-            interface = MockInterface(choices=[1])  # Decline copy
+        interface = MockInterface(choices=[1])  # Decline copy
 
-            req = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir),
-                comment="Decline directory copy",
-            )
+        req = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir),
+            comment="Decline directory copy",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert not result.accepted
-            assert source_dir.exists()  # Source should remain
-            assert not dest_dir.exists()  # Destination should not exist
+        assert not result.accepted
+        assert source_dir.exists()  # Source should remain
+        assert not dest_dir.exists()  # Destination should not exist
 
 
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    async def test_auto_allowed_file_copy(self):
+    async def test_auto_allowed_file_copy(self, tmp_path):
         """Test file copy with auto-allowed paths bypasses choices."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_file = Path(temp_dir) / "auto_source.txt"
-            dest_file = Path(temp_dir) / "auto_dest.txt"
-            source_file.write_text("Auto-copy content")
+        source_file = tmp_path / "auto_source.txt"
+        dest_file = tmp_path / "auto_dest.txt"
+        source_file.write_text("Auto-copy content")
 
-            # Create config with auto-allowed path pattern
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/**"])
+        # Create config with auto-allowed path pattern
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
 
-            interface = MockInterface()
-            # No user inputs needed - should auto-approve
+        interface = MockInterface()
+        # No user inputs needed - should auto-approve
 
-            req = CopyTool(
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-                comment="Auto-allowed file copy",
-            )
+        req = CopyTool(
+            source_path=str(source_file),
+            destination_path=str(dest_file),
+            comment="Auto-allowed file copy",
+        )
 
-            result = await req.actually_solve(config, interface)
+        result = await req.actually_solve(config, interface)
 
-            assert result.accepted
-            assert source_file.exists()
-            assert dest_file.exists()
-            assert dest_file.read_text() == "Auto-copy content"
+        assert result.accepted
+        assert source_file.exists()
+        assert dest_file.exists()
+        assert dest_file.read_text() == "Auto-copy content"
 
-            # Verify no choices were asked
-            assert len(interface.questions) == 0
+        # Verify no choices were asked
+        assert len(interface.questions) == 0
 
-            # Verify auto-allow message appeared
-            output = interface.get_all_output()
-            assert "auto_allowed_paths" in output
+        # Verify auto-allow message appeared
+        output = interface.get_all_output()
+        assert "auto_allowed_paths" in output
 
-    async def test_auto_allowed_directory_copy(self):
+    async def test_auto_allowed_directory_copy(self, tmp_path):
         """Test directory copy with auto-allowed paths bypasses choices."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "auto_source"
-            dest_dir = Path(temp_dir) / "auto_dest"
-            source_dir.mkdir()
-            (source_dir / "content.txt").write_text("Directory content")
+        source_dir = tmp_path / "auto_source"
+        dest_dir = tmp_path / "auto_dest"
+        source_dir.mkdir()
+        (source_dir / "content.txt").write_text("Directory content")
 
-            # Create config with auto-allowed path pattern
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/**"])
+        # Create config with auto-allowed path pattern
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
 
-            interface = MockInterface()
-            # No user inputs needed - should auto-approve
+        interface = MockInterface()
+        # No user inputs needed - should auto-approve
 
-            req = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir),
-                comment="Auto-allowed directory copy",
-            )
+        req = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir),
+            comment="Auto-allowed directory copy",
+        )
 
-            result = await req.actually_solve(config, interface)
+        result = await req.actually_solve(config, interface)
 
-            assert result.accepted
-            assert source_dir.exists()
-            assert dest_dir.exists()
-            assert (dest_dir / "content.txt").read_text() == "Directory content"
+        assert result.accepted
+        assert source_dir.exists()
+        assert dest_dir.exists()
+        assert (dest_dir / "content.txt").read_text() == "Directory content"
 
-            # Verify no choices were asked
-            assert len(interface.questions) == 0
+        # Verify no choices were asked
+        assert len(interface.questions) == 0
 
-    async def test_partial_auto_allowed_requires_choice(self):
+    async def test_partial_auto_allowed_requires_choice(self, tmp_path):
         """Test that only source auto-allowed still requires choice."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            auto_file = Path(temp_dir) / "auto" / "source.txt"
-            manual_file = Path(temp_dir) / "manual" / "dest.txt"
-            auto_file.parent.mkdir()
-            manual_file.parent.mkdir()
-            auto_file.write_text("Source content")
+        auto_file = tmp_path / "auto" / "source.txt"
+        manual_file = tmp_path / "manual" / "dest.txt"
+        auto_file.parent.mkdir()
+        manual_file.parent.mkdir()
+        auto_file.write_text("Source content")
 
-            # Only source directory is auto-allowed
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/auto/**"])
+        # Only source directory is auto-allowed
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
 
-            interface = MockInterface(choices=[0])  # Accept copy
+        interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyTool(
-                source_path=str(auto_file),
-                destination_path=str(manual_file),
-                comment="Partial auto-allowed copy",
-            )
+        req = CopyTool(
+            source_path=str(auto_file),
+            destination_path=str(manual_file),
+            comment="Partial auto-allowed copy",
+        )
 
-            result = await req.actually_solve(config, interface)
+        result = await req.actually_solve(config, interface)
 
-            assert result.accepted
-            assert auto_file.exists()
-            assert manual_file.exists()
-            assert len(interface.questions) == 1  # Choice was asked
+        assert result.accepted
+        assert auto_file.exists()
+        assert manual_file.exists()
+        assert len(interface.questions) == 1  # Choice was asked
 
 
 class TestErrorHandling:
@@ -301,18 +293,47 @@ class TestErrorHandling:
         assert "/source.txt" in str(error_result.source_path)
         assert "/dest.txt" in str(error_result.destination_path)
 
-    async def test_copy_nonexistent_source(self):
+    async def test_copy_nonexistent_source(self, tmp_path):
         """Test copying from a file that doesn't exist."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            nonexistent_file = Path(temp_dir) / "nonexistent.txt"
-            dest_file = Path(temp_dir) / "dest.txt"
+        nonexistent_file = tmp_path / "nonexistent.txt"
+        dest_file = tmp_path / "dest.txt"
 
-            interface = MockInterface()
+        interface = MockInterface()
 
+        req = CopyTool(
+            source_path=str(nonexistent_file),
+            destination_path=str(dest_file),
+            comment="Copy missing source",
+        )
+
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+        assert not result.accepted
+        assert result.error is not None
+        assert any(
+            phrase in result.error.lower()
+            for phrase in ["not found", "does not exist", "no such file"]
+        )
+
+    async def test_copy_permission_denied_source(self, tmp_path):
+        """Test copying from a file with insufficient read permissions."""
+        restricted_dir = tmp_path / "restricted"
+        restricted_dir.mkdir()
+
+        source_file = restricted_dir / "protected.txt"
+        source_file.write_text("Protected content")
+        dest_file = tmp_path / "dest.txt"
+
+        # Make source file unreadable
+        source_file.chmod(0o000)
+
+        interface = MockInterface()
+
+        try:
             req = CopyTool(
-                source_path=str(nonexistent_file),
+                source_path=str(source_file),
                 destination_path=str(dest_file),
-                comment="Copy missing source",
+                comment="Copy protected source",
             )
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
@@ -320,76 +341,44 @@ class TestErrorHandling:
             assert not result.accepted
             assert result.error is not None
             assert any(
-                phrase in result.error.lower()
-                for phrase in ["not found", "does not exist", "no such file"]
+                sig in result.error.lower()
+                for sig in {"permission", "not readable", "error"}
             )
 
-    async def test_copy_permission_denied_source(self):
-        """Test copying from a file with insufficient read permissions."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            restricted_dir = Path(temp_dir) / "restricted"
-            restricted_dir.mkdir()
+        finally:
+            # Restore permissions for cleanup
+            source_file.chmod(0o644)
 
-            source_file = restricted_dir / "protected.txt"
-            source_file.write_text("Protected content")
-            dest_file = Path(temp_dir) / "dest.txt"
-
-            # Make source file unreadable
-            source_file.chmod(0o000)
-
-            interface = MockInterface()
-
-            try:
-                req = CopyTool(
-                    source_path=str(source_file),
-                    destination_path=str(dest_file),
-                    comment="Copy protected source",
-                )
-
-                result = await req.actually_solve(DEFAULT_CONFIG, interface)
-
-                assert not result.accepted
-                assert result.error is not None
-                assert any(
-                    sig in result.error.lower()
-                    for sig in {"permission", "not readable", "error"}
-                )
-
-            finally:
-                # Restore permissions for cleanup
-                source_file.chmod(0o644)
-
-    async def test_copy_permission_denied_destination(self):
+    async def test_copy_permission_denied_destination(self, tmp_path):
         """Test copying to a location with insufficient write permissions."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_file = Path(temp_dir) / "source.txt"
-            source_file.write_text("Source content")
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("Source content")
 
-            restricted_dir = Path(temp_dir) / "restricted"
-            restricted_dir.mkdir()
-            dest_file = restricted_dir / "dest.txt"
+        restricted_dir = tmp_path / "restricted"
+        restricted_dir.mkdir()
+        dest_file = restricted_dir / "dest.txt"
 
-            # Make destination directory read-only
-            restricted_dir.chmod(0o444)
+        # Make destination directory read-only
+        restricted_dir.chmod(0o444)
 
-            interface = MockInterface()
+        interface = MockInterface()
 
-            try:
-                req = CopyTool(
-                    source_path=str(source_file),
-                    destination_path=str(dest_file),
-                    comment="Copy to protected destination",
-                )
+        try:
+            req = CopyTool(
+                source_path=str(source_file),
+                destination_path=str(dest_file),
+                comment="Copy to protected destination",
+            )
 
-                result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-                assert not result.accepted
-                assert result.error is not None
-                assert "permission" in result.error.lower()
+            assert not result.accepted
+            assert result.error is not None
+            assert "permission" in result.error.lower()
 
-            finally:
-                # Restore permissions for cleanup
-                restricted_dir.chmod(0o755)
+        finally:
+            # Restore permissions for cleanup
+            restricted_dir.chmod(0o755)
 
 
 class TestPathSecurity:
@@ -397,29 +386,14 @@ class TestPathSecurity:
 
     async def test_tilde_expansion(self):
         """Test tilde path expansion in copy operations."""
-        with tempfile.NamedTemporaryFile(
-            dir=Path.home(),
-            prefix=".solveig_test_copy_source_",
-            suffix=".txt",
-            delete=False,
-        ) as source_temp:
-            source_temp.write(b"Tilde expansion test")
-            source_file_path = Path(source_temp.name)
-
-        with tempfile.NamedTemporaryFile(
-            dir=Path.home(),
-            prefix=".solveig_test_copy_dest_",
-            suffix=".txt",
-            delete=False,
-        ) as dest_temp:
-            dest_file_path = Path(dest_temp.name)
-            # Remove the destination file so we can copy to it
-            dest_file_path.unlink()
-
+        source_file_path = Path.home() / ".solveig_test_copy_source.txt"
+        dest_file_path = Path.home() / ".solveig_test_copy_dest.txt"
+        source_file_path.write_bytes(b"Tilde expansion test")
+        dest_file_path.unlink(missing_ok=True)
         try:
             # Use tilde paths
-            tilde_source = f"~/{source_file_path.name}"
-            tilde_dest = f"~/{dest_file_path.name}"
+            tilde_source = f"~/.solveig_test_copy_source.txt"
+            tilde_dest = f"~/.solveig_test_copy_dest.txt"
 
             interface = MockInterface(choices=[0])  # Accept copy
 
@@ -445,160 +419,156 @@ class TestPathSecurity:
             if dest_file_path.exists():
                 dest_file_path.unlink()
 
-    async def test_path_traversal_resolution(self):
+    async def test_path_traversal_resolution(self, tmp_path):
         """Test path traversal resolution in copy operations."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create nested structure
-            subdir = Path(temp_dir) / "public" / "subdir"
-            subdir.mkdir(parents=True)
+        # Create nested structure
+        subdir = tmp_path / "public" / "subdir"
+        subdir.mkdir(parents=True)
 
-            source_file = Path(temp_dir) / "source.txt"
-            source_file.write_text("Source file")
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("Source file")
 
-            # Use path traversal to reference source file
-            traversal_source = str(subdir / ".." / ".." / "source.txt")
-            dest_file = str(subdir / "dest.txt")
+        # Use path traversal to reference source file
+        traversal_source = str(subdir / ".." / ".." / "source.txt")
+        dest_file = str(subdir / "dest.txt")
 
-            interface = MockInterface(choices=[0])  # Accept copy
+        interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyTool(
-                source_path=traversal_source,
-                destination_path=dest_file,
-                comment="Path traversal test",
-            )
+        req = CopyTool(
+            source_path=traversal_source,
+            destination_path=dest_file,
+            comment="Path traversal test",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert ".." not in str(result.source_path)  # Path resolved
-            assert Path(result.destination_path).read_text() == "Source file"
+        assert result.accepted
+        assert ".." not in str(result.source_path)  # Path resolved
+        assert Path(result.destination_path).read_text() == "Source file"
 
 
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    async def test_copy_large_directory_tree(self):
+    async def test_copy_large_directory_tree(self, tmp_path):
         """Test copying a large directory tree with many files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source_dir = Path(temp_dir) / "large_source"
-            dest_dir = Path(temp_dir) / "large_dest"
-            source_dir.mkdir()
+        source_dir = tmp_path / "large_source"
+        dest_dir = tmp_path / "large_dest"
+        source_dir.mkdir()
 
-            # Create many files and subdirectories
-            for i in range(10):
-                file_path = source_dir / f"file_{i:03d}.txt"
-                file_path.write_text(f"Content {i}")
+        # Create many files and subdirectories
+        for i in range(10):
+            file_path = source_dir / f"file_{i:03d}.txt"
+            file_path.write_text(f"Content {i}")
 
-            for i in range(3):
-                subdir = source_dir / f"subdir_{i}"
-                subdir.mkdir()
-                for j in range(5):
-                    nested_file = subdir / f"nested_{j}.txt"
-                    nested_file.write_text(f"Nested content {i}-{j}")
+        for i in range(3):
+            subdir = source_dir / f"subdir_{i}"
+            subdir.mkdir()
+            for j in range(5):
+                nested_file = subdir / f"nested_{j}.txt"
+                nested_file.write_text(f"Nested content {i}-{j}")
 
-            interface = MockInterface(choices=[0])  # Accept copy
+        interface = MockInterface(choices=[0])  # Accept copy
 
-            req = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir),
-                comment="Copy large tree",
-            )
+        req = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir),
+            comment="Copy large tree",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert source_dir.exists()  # Source should remain
-            assert dest_dir.exists()  # Destination should exist
+        assert result.accepted
+        assert source_dir.exists()  # Source should remain
+        assert dest_dir.exists()  # Destination should exist
 
-            # Verify structure was copied
-            assert (dest_dir / "file_005.txt").read_text() == "Content 5"
-            assert (
-                dest_dir / "subdir_1" / "nested_3.txt"
-            ).read_text() == "Nested content 1-3"
+        # Verify structure was copied
+        assert (dest_dir / "file_005.txt").read_text() == "Content 5"
+        assert (
+            dest_dir / "subdir_1" / "nested_3.txt"
+        ).read_text() == "Nested content 1-3"
 
-    async def test_copy_special_filenames(self):
+    async def test_copy_special_filenames(self, tmp_path):
         """Test copying files with special names/characters."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create files with special characters
-            special_files = [
-                "file with spaces.txt",
-                "file-with-dashes.txt",
-                "file.with.dots.txt",
-                "file_with_underscores.txt",
-            ]
+        # Create files with special characters
+        special_files = [
+            "file with spaces.txt",
+            "file-with-dashes.txt",
+            "file.with.dots.txt",
+            "file_with_underscores.txt",
+        ]
 
-            source_dir = Path(temp_dir) / "source"
-            dest_dir = Path(temp_dir) / "dest"
-            source_dir.mkdir()
-            dest_dir.mkdir()
+        source_dir = tmp_path / "source"
+        dest_dir = tmp_path / "dest"
+        source_dir.mkdir()
+        dest_dir.mkdir()
 
-            for filename in special_files:
-                source_file = source_dir / filename
-                source_file.write_text(f"Content of {filename}")
+        for filename in special_files:
+            source_file = source_dir / filename
+            source_file.write_text(f"Content of {filename}")
 
-            # Accept copy for directory
-            interface = MockInterface(choices=[0])
+        # Accept copy for directory
+        interface = MockInterface(choices=[0])
 
-            req = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir / "copied"),
-                comment="Copy special files",
-            )
+        req = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir / "copied"),
+            comment="Copy special files",
+        )
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
+        assert result.accepted
 
-            # Verify all special files were copied
-            for filename in special_files:
-                copied_file = dest_dir / "copied" / filename
-                assert copied_file.exists()
-                assert copied_file.read_text() == f"Content of {filename}"
+        # Verify all special files were copied
+        for filename in special_files:
+            copied_file = dest_dir / "copied" / filename
+            assert copied_file.exists()
+            assert copied_file.read_text() == f"Content of {filename}"
 
-    async def test_file_vs_directory_messaging(self):
+    async def test_file_vs_directory_messaging(self, tmp_path):
         """Test that file vs directory messaging is correct."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create source file and directory
-            source_file = Path(temp_dir) / "source_file.txt"
-            source_file.write_text("File content")
-            dest_file = Path(temp_dir) / "dest_file.txt"
+        # Create source file and directory
+        source_file = tmp_path / "source_file.txt"
+        source_file.write_text("File content")
+        dest_file = tmp_path / "dest_file.txt"
 
-            source_dir = Path(temp_dir) / "source_directory"
-            source_dir.mkdir()
-            dest_dir = Path(temp_dir) / "dest_directory"
+        source_dir = tmp_path / "source_directory"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest_directory"
 
-            # Test file copy messaging
-            # Decline to see the choice message
-            interface1 = MockInterface(choices=[1])
+        # Test file copy messaging
+        # Decline to see the choice message
+        interface1 = MockInterface(choices=[1])
 
-            req1 = CopyTool(
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-                comment="Copy file",
-            )
+        req1 = CopyTool(
+            source_path=str(source_file),
+            destination_path=str(dest_file),
+            comment="Copy file",
+        )
 
-            result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
 
-            assert not result1.accepted
-            # Check that choice mentioned "file" not "directory"
-            questions1 = " ".join(interface1.questions).lower()
-            assert "copying file" in questions1
-            assert "directory" not in questions1
+        assert not result1.accepted
+        # Check that choice mentioned "file" not "directory"
+        questions1 = " ".join(interface1.questions).lower()
+        assert "copying file" in questions1
+        assert "directory" not in questions1
 
-            # Test directory copy messaging
-            # Decline to see the choice message
-            interface2 = MockInterface(choices=[1])
+        # Test directory copy messaging
+        # Decline to see the choice message
+        interface2 = MockInterface(choices=[1])
 
-            req2 = CopyTool(
-                source_path=str(source_dir),
-                destination_path=str(dest_dir),
-                comment="Copy directory",
-            )
+        req2 = CopyTool(
+            source_path=str(source_dir),
+            destination_path=str(dest_dir),
+            comment="Copy directory",
+        )
 
-            result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
 
-            assert not result2.accepted
-            # Check that choice mentioned "directory" not "file"
-            questions2 = " ".join(interface2.questions).lower()
-            assert "copying directory" in questions2
-            assert "file" not in questions2.replace("copying", "")
+        assert not result2.accepted
+        # Check that choice mentioned "directory" not "file"
+        questions2 = " ".join(interface2.questions).lower()
+        assert "copying directory" in questions2
+        assert "file" not in questions2.replace("copying", "")

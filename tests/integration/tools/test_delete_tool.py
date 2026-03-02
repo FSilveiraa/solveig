@@ -1,6 +1,5 @@
 """Comprehensive integration tests for DeleteRequirement."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -66,183 +65,175 @@ class TestDeleteValidation:
 class TestFileOperations:
     """Test DeleteRequirement file and directory deletion."""
 
-    async def test_delete_file_accept(self):
+    async def test_delete_file_accept(self, tmp_path):
         """Test deleting a file with user acceptance."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "to_delete.txt"
-            test_file.write_text("This file will be deleted")
+        test_file = tmp_path / "to_delete.txt"
+        test_file.write_text("This file will be deleted")
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            req = DeleteTool(path=str(test_file), comment="Delete test file")
+        req = DeleteTool(path=str(test_file), comment="Delete test file")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert not test_file.exists()  # File should be gone
+        assert result.accepted
+        assert not test_file.exists()  # File should be gone
 
-    async def test_delete_file_decline(self):
+    async def test_delete_file_decline(self, tmp_path):
         """Test deleting a file with user decline."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "to_preserve.txt"
-            test_file.write_text("This file should be preserved")
+        test_file = tmp_path / "to_preserve.txt"
+        test_file.write_text("This file should be preserved")
 
-            interface = MockInterface()
-            interface.choices.append(1)  # Decline deletion
+        interface = MockInterface()
+        interface.choices.append(1)  # Decline deletion
 
-            req = DeleteTool(path=str(test_file), comment="Decline deletion")
+        req = DeleteTool(path=str(test_file), comment="Decline deletion")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert not result.accepted
-            assert test_file.exists()  # File should still exist
-            assert test_file.read_text() == "This file should be preserved"
+        assert not result.accepted
+        assert test_file.exists()  # File should still exist
+        assert test_file.read_text() == "This file should be preserved"
 
-    async def test_delete_directory_accept(self):
+    async def test_delete_directory_accept(self, tmp_path):
         """Test deleting a directory with user acceptance."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_dir = Path(temp_dir) / "to_delete_dir"
-            test_dir.mkdir()
+        test_dir = tmp_path / "to_delete_dir"
+        test_dir.mkdir()
 
-            # Add content to directory
-            (test_dir / "file1.txt").write_text("Content 1")
-            (test_dir / "file2.txt").write_text("Content 2")
-            subdir = test_dir / "subdir"
-            subdir.mkdir()
-            (subdir / "nested.txt").write_text("Nested content")
+        # Add content to directory
+        (test_dir / "file1.txt").write_text("Content 1")
+        (test_dir / "file2.txt").write_text("Content 2")
+        subdir = test_dir / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.txt").write_text("Nested content")
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            req = DeleteTool(path=str(test_dir), comment="Delete directory tree")
+        req = DeleteTool(path=str(test_dir), comment="Delete directory tree")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert not test_dir.exists()  # Entire tree should be gone
+        assert result.accepted
+        assert not test_dir.exists()  # Entire tree should be gone
 
-    async def test_delete_directory_decline(self):
+    async def test_delete_directory_decline(self, tmp_path):
         """Test deleting a directory with user decline."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_dir = Path(temp_dir) / "to_preserve_dir"
-            test_dir.mkdir()
-            (test_dir / "important.txt").write_text("Important data")
+        test_dir = tmp_path / "to_preserve_dir"
+        test_dir.mkdir()
+        (test_dir / "important.txt").write_text("Important data")
 
-            interface = MockInterface()
-            interface.choices.append(1)  # Decline deletion
+        interface = MockInterface()
+        interface.choices.append(1)  # Decline deletion
 
-            req = DeleteTool(path=str(test_dir), comment="Decline directory deletion")
+        req = DeleteTool(path=str(test_dir), comment="Decline directory deletion")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert not result.accepted
-            assert test_dir.exists()  # Directory should still exist
-            assert (test_dir / "important.txt").read_text() == "Important data"
+        assert not result.accepted
+        assert test_dir.exists()  # Directory should still exist
+        assert (test_dir / "important.txt").read_text() == "Important data"
 
-    async def test_delete_empty_directory(self):
+    async def test_delete_empty_directory(self, tmp_path):
         """Test deleting an empty directory."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            empty_dir = Path(temp_dir) / "empty_dir"
-            empty_dir.mkdir()
+        empty_dir = tmp_path / "empty_dir"
+        empty_dir.mkdir()
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            req = DeleteTool(path=str(empty_dir), comment="Delete empty directory")
+        req = DeleteTool(path=str(empty_dir), comment="Delete empty directory")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert not empty_dir.exists()
+        assert result.accepted
+        assert not empty_dir.exists()
 
 
 class TestAutoAllowedPaths:
     """Test auto-allowed paths behavior."""
 
-    async def test_auto_allowed_file_deletion(self):
+    async def test_auto_allowed_file_deletion(self, tmp_path):
         """Test file deletion with auto-allowed paths bypasses choices."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "auto_delete_file.txt"
-            test_file.write_text("Auto-delete content")
+        test_file = tmp_path / "auto_delete_file.txt"
+        test_file.write_text("Auto-delete content")
 
-            # Create config with auto-allowed path pattern
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/**"])
+        # Create config with auto-allowed path pattern
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
 
-            interface = MockInterface()
-            # No user inputs needed - should auto-approve
+        interface = MockInterface()
+        # No user inputs needed - should auto-approve
 
-            req = DeleteTool(path=str(test_file), comment="Auto-allowed file deletion")
+        req = DeleteTool(path=str(test_file), comment="Auto-allowed file deletion")
 
-            result = await req.actually_solve(config, interface)
+        result = await req.actually_solve(config, interface)
 
-            assert result.accepted
-            assert not test_file.exists()  # File should be deleted
+        assert result.accepted
+        assert not test_file.exists()  # File should be deleted
 
-            # Verify no choices were asked
-            assert len(interface.questions) == 0
+        # Verify no choices were asked
+        assert len(interface.questions) == 0
 
-            # Verify auto-allow message appeared
-            output = interface.get_all_output()
-            assert "auto_allowed_paths" in output
+        # Verify auto-allow message appeared
+        output = interface.get_all_output()
+        assert "auto_allowed_paths" in output
 
-    async def test_auto_allowed_directory_deletion(self):
+    async def test_auto_allowed_directory_deletion(self, tmp_path):
         """Test directory deletion with auto-allowed paths bypasses choices."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_dir = Path(temp_dir) / "auto_delete_dir"
-            test_dir.mkdir()
-            (test_dir / "content.txt").write_text("Directory content")
+        test_dir = tmp_path / "auto_delete_dir"
+        test_dir.mkdir()
+        (test_dir / "content.txt").write_text("Directory content")
 
-            # Create config with auto-allowed path pattern
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/**"])
+        # Create config with auto-allowed path pattern
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
 
-            interface = MockInterface()
-            # No user inputs needed - should auto-approve
+        interface = MockInterface()
+        # No user inputs needed - should auto-approve
 
-            req = DeleteTool(
-                path=str(test_dir), comment="Auto-allowed directory deletion"
-            )
+        req = DeleteTool(
+            path=str(test_dir), comment="Auto-allowed directory deletion"
+        )
 
-            result = await req.actually_solve(config, interface)
+        result = await req.actually_solve(config, interface)
 
-            assert result.accepted
-            assert not test_dir.exists()  # Directory should be deleted
+        assert result.accepted
+        assert not test_dir.exists()  # Directory should be deleted
 
-            # Verify no choices were asked
-            assert len(interface.questions) == 0
+        # Verify no choices were asked
+        assert len(interface.questions) == 0
 
-    async def test_auto_allowed_vs_manual_choice(self):
+    async def test_auto_allowed_vs_manual_choice(self, tmp_path):
         """Test that auto-allowed paths truly bypass choices."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            auto_file = Path(temp_dir) / "auto" / "delete_me.txt"
-            auto_file.parent.mkdir()
-            auto_file.write_text("Auto content")
+        auto_file = tmp_path / "auto" / "delete_me.txt"
+        auto_file.parent.mkdir()
+        auto_file.write_text("Auto content")
 
-            manual_file = Path(temp_dir) / "manual" / "delete_me.txt"
-            manual_file.parent.mkdir()
-            manual_file.write_text("Manual content")
+        manual_file = tmp_path / "manual" / "delete_me.txt"
+        manual_file.parent.mkdir()
+        manual_file.write_text("Manual content")
 
-            # Only auto directory is auto-allowed
-            config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{temp_dir}/auto/**"])
+        # Only auto directory is auto-allowed
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
 
-            # Test auto-allowed (no choice)
-            interface1 = MockInterface()
-            req1 = DeleteTool(path=str(auto_file), comment="Auto deletion")
-            result1 = await req1.actually_solve(config, interface1)
+        # Test auto-allowed (no choice)
+        interface1 = MockInterface()
+        req1 = DeleteTool(path=str(auto_file), comment="Auto deletion")
+        result1 = await req1.actually_solve(config, interface1)
 
-            assert result1.accepted
-            assert not auto_file.exists()
-            assert len(interface1.questions) == 0  # No choice asked
+        assert result1.accepted
+        assert not auto_file.exists()
+        assert len(interface1.questions) == 0  # No choice asked
 
-            # Test manual choice (requires input)
-            interface2 = MockInterface()
-            interface2.choices.append(0)  # Accept deletion
-            req2 = DeleteTool(path=str(manual_file), comment="Manual deletion")
-            result2 = await req2.actually_solve(config, interface2)
+        # Test manual choice (requires input)
+        interface2 = MockInterface()
+        interface2.choices.append(0)  # Accept deletion
+        req2 = DeleteTool(path=str(manual_file), comment="Manual deletion")
+        result2 = await req2.actually_solve(config, interface2)
 
-            assert result2.accepted
-            assert not manual_file.exists()
-            assert len(interface2.questions) == 1  # Choice was asked
+        assert result2.accepted
+        assert not manual_file.exists()
+        assert len(interface2.questions) == 1  # Choice was asked
 
 
 class TestErrorHandling:
@@ -273,54 +264,52 @@ class TestErrorHandling:
             for phrase in ["not found", "does not exist", "no such file"]
         )
 
-    async def test_delete_permission_denied(self):
+    async def test_delete_permission_denied(self, tmp_path):
         """Test deleting a file with insufficient permissions."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            restricted_dir = Path(temp_dir) / "restricted"
-            restricted_dir.mkdir()
+        restricted_dir = tmp_path / "restricted"
+        restricted_dir.mkdir()
 
-            test_file = restricted_dir / "protected.txt"
-            test_file.write_text("Protected content")
+        test_file = restricted_dir / "protected.txt"
+        test_file.write_text("Protected content")
 
-            # Make parent directory read-only (prevents deletion)
-            restricted_dir.chmod(0o444)
+        # Make parent directory read-only (prevents deletion)
+        restricted_dir.chmod(0o444)
 
-            interface = MockInterface()
+        interface = MockInterface()
 
-            try:
-                req = DeleteTool(path=str(test_file), comment="Delete protected file")
+        try:
+            req = DeleteTool(path=str(test_file), comment="Delete protected file")
 
-                result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-                assert not result.accepted
-                assert result.error is not None
-                assert "permission" in result.error.lower()
+            assert not result.accepted
+            assert result.error is not None
+            assert "permission" in result.error.lower()
 
-            finally:
-                # Restore permissions for cleanup
-                restricted_dir.chmod(0o755)
+        finally:
+            # Restore permissions for cleanup
+            restricted_dir.chmod(0o755)
 
-    async def test_delete_error_during_deletion(self):
+    async def test_delete_error_during_deletion(self, tmp_path):
         """Test error handling when deletion fails after validation passes."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "will_fail.txt"
-            test_file.write_text("Content")
+        test_file = tmp_path / "will_fail.txt"
+        test_file.write_text("Content")
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            # Make file unreadable/undeletable after validation
+        # Make file unreadable/undeletable after validation
 
-            with open(test_file):  # Hold file open to potentially prevent deletion
-                req = DeleteTool(
-                    path=str(test_file), comment="Deletion that might fail"
-                )
+        with open(test_file):  # Hold file open to potentially prevent deletion
+            req = DeleteTool(
+                path=str(test_file), comment="Deletion that might fail"
+            )
 
-                result = await req.actually_solve(DEFAULT_CONFIG, interface)
+            result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-                # This test is platform-dependent, but we should handle errors gracefully
-                if not result.accepted and result.error:
-                    assert "error" in result.error.lower()
+            # This test is platform-dependent, but we should handle errors gracefully
+            if not result.accepted and result.error:
+                assert "error" in result.error.lower()
 
 
 class TestPathSecurity:
@@ -328,12 +317,8 @@ class TestPathSecurity:
 
     async def test_tilde_expansion(self):
         """Test tilde path expansion in delete operations."""
-        with tempfile.NamedTemporaryFile(
-            dir=Path.home(), prefix=".solveig_test_delete_", suffix=".txt", delete=False
-        ) as temp_file:
-            temp_file.write(b"Tilde expansion test")
-            temp_file_path = Path(temp_file.name)
-
+        temp_file_path = Path.home() / ".solveig_test_delete.txt"
+        temp_file_path.write_bytes(b"Tilde expansion test")
         try:
             # Use tilde path
             tilde_path = f"~/{temp_file_path.name}"
@@ -355,123 +340,119 @@ class TestPathSecurity:
             if temp_file_path.exists():
                 temp_file_path.unlink()
 
-    async def test_path_traversal_resolution(self):
+    async def test_path_traversal_resolution(self, tmp_path):
         """Test path traversal resolution in delete operations."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create nested structure
-            subdir = Path(temp_dir) / "public" / "subdir"
-            subdir.mkdir(parents=True)
+        # Create nested structure
+        subdir = tmp_path / "public" / "subdir"
+        subdir.mkdir(parents=True)
 
-            target_file = Path(temp_dir) / "target.txt"
-            target_file.write_text("Target file")
+        target_file = tmp_path / "target.txt"
+        target_file.write_text("Target file")
 
-            # Use path traversal to delete target file
-            traversal_path = str(subdir / ".." / ".." / "target.txt")
+        # Use path traversal to delete target file
+        traversal_path = str(subdir / ".." / ".." / "target.txt")
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            req = DeleteTool(path=traversal_path, comment="Path traversal test")
+        req = DeleteTool(path=traversal_path, comment="Path traversal test")
 
-            result = await req.actually_solve(DEFAULT_CONFIG, interface)
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
-            assert result.accepted
-            assert ".." not in str(result.path)  # Path resolved
-            assert not target_file.exists()  # File should be deleted
+        assert result.accepted
+        assert ".." not in str(result.path)  # Path resolved
+        assert not target_file.exists()  # File should be deleted
 
 
 class TestIntegrationScenarios:
     """Test complex integration scenarios."""
 
-    async def test_delete_large_directory_tree(self):
+    async def test_delete_large_directory_tree(self, tmp_path):
         """Test deleting a large directory tree with many files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            large_dir = Path(temp_dir) / "large_tree"
-            large_dir.mkdir()
+        large_dir = tmp_path / "large_tree"
+        large_dir.mkdir()
 
-            # Create many files and subdirectories
-            for i in range(20):
-                file_path = large_dir / f"file_{i:03d}.txt"
-                file_path.write_text(f"Content {i}")
+        # Create many files and subdirectories
+        for i in range(20):
+            file_path = large_dir / f"file_{i:03d}.txt"
+            file_path.write_text(f"Content {i}")
 
-            for i in range(5):
-                subdir = large_dir / f"subdir_{i}"
-                subdir.mkdir()
-                for j in range(10):
-                    nested_file = subdir / f"nested_{j}.txt"
-                    nested_file.write_text(f"Nested content {i}-{j}")
+        for i in range(5):
+            subdir = large_dir / f"subdir_{i}"
+            subdir.mkdir()
+            for j in range(10):
+                nested_file = subdir / f"nested_{j}.txt"
+                nested_file.write_text(f"Nested content {i}-{j}")
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept deletion
+        interface = MockInterface()
+        interface.choices.append(0)  # Accept deletion
 
-            req = DeleteTool(path=str(large_dir), comment="Delete large tree")
+        req = DeleteTool(path=str(large_dir), comment="Delete large tree")
+
+        result = await req.actually_solve(DEFAULT_CONFIG, interface)
+
+        assert result.accepted
+        assert not large_dir.exists()  # Entire tree should be gone
+
+    async def test_delete_special_files(self, tmp_path):
+        """Test deleting files with special names/characters."""
+        # Create files with special characters
+        special_files = [
+            "file with spaces.txt",
+            "file-with-dashes.txt",
+            "file.with.dots.txt",
+            "file_with_underscores.txt",
+        ]
+
+        for filename in special_files:
+            file_path = tmp_path / filename
+            file_path.write_text(f"Content of {filename}")
+
+        interface = MockInterface()
+        # Accept deletion for each file
+        interface.choices.extend([0] * len(special_files))
+
+        for filename in special_files:
+            file_path = tmp_path / filename
+
+            req = DeleteTool(path=str(file_path), comment=f"Delete {filename}")
 
             result = await req.actually_solve(DEFAULT_CONFIG, interface)
 
             assert result.accepted
-            assert not large_dir.exists()  # Entire tree should be gone
+            assert not file_path.exists()
 
-    async def test_delete_special_files(self):
-        """Test deleting files with special names/characters."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create files with special characters
-            special_files = [
-                "file with spaces.txt",
-                "file-with-dashes.txt",
-                "file.with.dots.txt",
-                "file_with_underscores.txt",
-            ]
-
-            for filename in special_files:
-                file_path = Path(temp_dir) / filename
-                file_path.write_text(f"Content of {filename}")
-
-            interface = MockInterface()
-            # Accept deletion for each file
-            interface.choices.extend([0] * len(special_files))
-
-            for filename in special_files:
-                file_path = Path(temp_dir) / filename
-
-                req = DeleteTool(path=str(file_path), comment=f"Delete {filename}")
-
-                result = await req.actually_solve(DEFAULT_CONFIG, interface)
-
-                assert result.accepted
-                assert not file_path.exists()
-
-    async def test_file_vs_directory_messaging(self):
+    async def test_file_vs_directory_messaging(self, tmp_path):
         """Test that file vs directory messaging is correct."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "test_file.txt"
-            test_file.write_text("File content")
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("File content")
 
-            test_dir = Path(temp_dir) / "test_directory"
-            test_dir.mkdir()
+        test_dir = tmp_path / "test_directory"
+        test_dir.mkdir()
 
-            # Test file deletion messaging
-            interface1 = MockInterface()
-            interface1.choices.append(1)  # Decline to see the choice message
+        # Test file deletion messaging
+        interface1 = MockInterface()
+        interface1.choices.append(1)  # Decline to see the choice message
 
-            req1 = DeleteTool(path=str(test_file), comment="Delete file")
+        req1 = DeleteTool(path=str(test_file), comment="Delete file")
 
-            result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
+        result1 = await req1.actually_solve(DEFAULT_CONFIG, interface1)
 
-            assert not result1.accepted
-            # Check that choice mentioned "file" not "directory"
-            questions1 = " ".join(interface1.questions).lower()
-            assert "delete file" in questions1
-            assert "directory" not in questions1
+        assert not result1.accepted
+        # Check that choice mentioned "file" not "directory"
+        questions1 = " ".join(interface1.questions).lower()
+        assert "delete file" in questions1
+        assert "directory" not in questions1
 
-            # Test directory deletion messaging
-            interface2 = MockInterface()
-            interface2.choices.append(1)  # Decline to see the choice message
+        # Test directory deletion messaging
+        interface2 = MockInterface()
+        interface2.choices.append(1)  # Decline to see the choice message
 
-            req2 = DeleteTool(path=str(test_dir), comment="Delete directory")
+        req2 = DeleteTool(path=str(test_dir), comment="Delete directory")
 
-            result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
+        result2 = await req2.actually_solve(DEFAULT_CONFIG, interface2)
 
-            assert not result2.accepted
-            # Check that choice mentioned "directory" not "file"
-            questions2 = " ".join(interface2.questions).lower()
-            assert "delete directory" in questions2
+        assert not result2.accepted
+        # Check that choice mentioned "directory" not "file"
+        questions2 = " ".join(interface2.questions).lower()
+        assert "delete directory" in questions2

@@ -1,7 +1,6 @@
 """Integration test for TreeTool plugin with real filesystem operations."""
 
-import tempfile
-from pathlib import Path, PurePath
+from pathlib import PurePath
 
 import pytest
 
@@ -16,49 +15,47 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 class TestTreePlugin:
     """Test TreeTool plugin with real filesystem operations."""
 
-    async def test_tree_plugin_with_real_files(self, load_plugins):
+    async def test_tree_plugin_with_real_files(self, load_plugins, tmp_path):
         """Test tree plugin creates visual directory tree from real filesystem."""
         # Enable the tree plugin for this test
         config = DEFAULT_CONFIG.with_(plugins=["tree"])
         await load_plugins(config)
 
         # Create real directory structure
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            (temp_path / "file1.txt").write_text("content1")
-            (temp_path / "file2.py").write_text("print('hello')")
-            (temp_path / "subdir").mkdir()
-            (temp_path / "subdir" / "nested.md").write_text("# Nested file")
+        (tmp_path / "file1.txt").write_text("content1")
+        (tmp_path / "file2.py").write_text("print('hello')")
+        (tmp_path / "subdir").mkdir()
+        (tmp_path / "subdir" / "nested.md").write_text("# Nested file")
 
-            # LLM requests tree inspection
-            assistant_responses = [
-                AssistantMessage(
-                    comment="I'll show you the directory structure.",
-                    tools=[
-                        TreeTool(comment="", path=str(temp_path), max_depth=2),
-                    ],
-                ),
-                AssistantMessage(comment="Everything looks nice!"),
-            ]
+        # LLM requests tree inspection
+        assistant_responses = [
+            AssistantMessage(
+                comment="I'll show you the directory structure.",
+                tools=[
+                    TreeTool(comment="", path=str(tmp_path), max_depth=2),
+                ],
+            ),
+            AssistantMessage(comment="Everything looks nice!"),
+        ]
 
-            mock_client = create_mock_client(*assistant_responses)
-            interface = MockInterface(choices=[0])
+        mock_client = create_mock_client(*assistant_responses)
+        interface = MockInterface(choices=[0])
 
-            # Execute conversation
-            await run_async(
-                config=DEFAULT_CONFIG,
-                interface=interface,
-                llm_client=mock_client,
-                user_prompt=f"Show me what's in {temp_dir}",
-            )
+        # Execute conversation
+        await run_async(
+            config=DEFAULT_CONFIG,
+            interface=interface,
+            llm_client=mock_client,
+            user_prompt=f"Show me what's in {tmp_path}",
+        )
 
-            # Verify tree output contains expected structure
-            output = interface.get_all_output()
-            assert "Tree:" in output
-            assert "file1.txt" in output
-            assert "file2.py" in output
-            assert "subdir" in output
-            assert "nested.md" in output
+        # Verify tree output contains expected structure
+        output = interface.get_all_output()
+        assert "Tree:" in output
+        assert "file1.txt" in output
+        assert "file2.py" in output
+        assert "subdir" in output
+        assert "nested.md" in output
 
     async def test_tree_tool_creation_and_validation(self):
         """Test TreeTool creation, validation, and configuration."""
@@ -107,51 +104,45 @@ class TestTreePlugin:
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
     @pytest.mark.no_file_mocking
-    async def test_tree_depth_limiting_and_user_interaction(self, load_plugins):
+    async def test_tree_depth_limiting_and_user_interaction(self, load_plugins, tmp_path):
         """Test tree with depth limits and user interaction through solve() method."""
         # Enable the tree plugin for this test
         config = DEFAULT_CONFIG.with_(plugins=["tree"])
         await load_plugins(config)
+
         # Create temporary directory structure
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            file1 = temp_path / "file1.txt"
-            file1.write_text("content1")
-            file2 = temp_path / "file2.py"
-            file2.write_text("print('hello')")
-            subdir1 = temp_path / "subdir1"
-            subdir1.mkdir()
-            final_subdir = temp_path / "subdir2/subdir3/subdir4/subdir5"
-            final_subdir.mkdir(parents=True)
-            file3 = temp_path / "subdir2/subdir3/file3.txt"
-            file3.touch()
-            file4 = temp_path / "subdir2/subdir3/subdir4/file4.txt"
-            file4.touch()
-            (temp_path / "subdir6").mkdir()
+        (tmp_path / "file1.txt").write_text("content1")
+        (tmp_path / "file2.py").write_text("print('hello')")
+        (tmp_path / "subdir1").mkdir()
+        final_subdir = tmp_path / "subdir2/subdir3/subdir4/subdir5"
+        final_subdir.mkdir(parents=True)
+        (tmp_path / "subdir2/subdir3/file3.txt").touch()
+        (tmp_path / "subdir2/subdir3/subdir4/file4.txt").touch()
+        (tmp_path / "subdir6").mkdir()
 
-            req = TreeTool(
-                path=str(temp_path), max_depth=2, comment="Limited depth tree"
-            )
-            interface = MockInterface(choices=[0])  # read+send tree
+        req = TreeTool(
+            path=str(tmp_path), max_depth=2, comment="Limited depth tree"
+        )
+        interface = MockInterface(choices=[0])  # read+send tree
 
-            result = await req.solve(DEFAULT_CONFIG, interface)
-            assert result.accepted is True
-            # we have until subdir3
-            assert result.metadata.listing[str(PurePath(temp_path / "subdir6/"))]
-            final_level_metadata = result.metadata.listing[
-                str(PurePath(temp_path / "subdir2/"))
-            ].listing[str(PurePath(temp_path / "subdir2/subdir3/"))]
-            # however we don't get the metadata further down, even though it exists
-            assert not final_level_metadata.listing
-            assert final_subdir.exists()
+        result = await req.solve(DEFAULT_CONFIG, interface)
+        assert result.accepted is True
+        # we have until subdir3
+        assert result.metadata.listing[str(PurePath(tmp_path / "subdir6/"))]
+        final_level_metadata = result.metadata.listing[
+            str(PurePath(tmp_path / "subdir2/"))
+        ].listing[str(PurePath(tmp_path / "subdir2/subdir3/"))]
+        # however we don't get the metadata further down, even though it exists
+        assert not final_level_metadata.listing
+        assert final_subdir.exists()
 
-            # Test user interaction with error case
-            # decline to send error for non-existent path
-            interface = MockInterface(choices=[1])
+        # Test user interaction with error case
+        # decline to send error for non-existent path
+        interface = MockInterface(choices=[1])
 
-            error_req = TreeTool(
-                path=str(temp_path / "nonexistent"), comment="Test tree"
-            )
-            result = await error_req.solve(DEFAULT_CONFIG, interface)
-            assert result.accepted is False
-            assert result.error
+        error_req = TreeTool(
+            path=str(tmp_path / "nonexistent"), comment="Test tree"
+        )
+        result = await error_req.solve(DEFAULT_CONFIG, interface)
+        assert result.accepted is False
+        assert result.error

@@ -1,7 +1,6 @@
 """Tests for solveig.config module."""
 
 import json
-import tempfile
 from json import JSONDecodeError
 from pathlib import PurePath
 
@@ -75,28 +74,20 @@ class TestConfigFileParsing:
             assert result == {}
 
     @pytest.mark.no_file_mocking
-    async def test_parse_from_file_success(self):
+    async def test_parse_from_file_success(self, tmp_path):
         """Test successful config file parsing."""
-
-        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
-            temp_config.write(DEFAULT_CONFIG.to_json())
-            temp_config.flush()
-            config_path = PurePath(temp_config.name)
-
-            result = SolveigConfig(**(await SolveigConfig.parse_from_file(config_path)))
-            assert result == DEFAULT_CONFIG
+        config_file = tmp_path / "config.json"
+        config_file.write_text(DEFAULT_CONFIG.to_json())
+        result = SolveigConfig(**(await SolveigConfig.parse_from_file(PurePath(str(config_file)))))
+        assert result == DEFAULT_CONFIG
 
     @pytest.mark.no_file_mocking
-    async def test_parse_from_file_malformed_json(self):
+    async def test_parse_from_file_malformed_json(self, tmp_path):
         """Test malformed JSON raises JSONDecodeError."""
-
-        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
-            temp_config.write("{invalid json")  # Ensure data is written to disk
-            temp_config.flush()
-            config_path = temp_config.name
-
-            with pytest.raises(JSONDecodeError):
-                await SolveigConfig.parse_from_file(config_path)
+        config_file = tmp_path / "config.json"
+        config_file.write_text("{invalid json")
+        with pytest.raises(JSONDecodeError):
+            await SolveigConfig.parse_from_file(str(config_file))
 
 
 class TestConfigSerialization:
@@ -149,21 +140,17 @@ class TestCLIIntegration:
         assert prompt == "test prompt"
 
     @pytest.mark.no_file_mocking
-    async def test_file_and_cli_merge(self):
+    async def test_file_and_cli_merge(self, tmp_path):
         """Test file config merges with CLI overrides."""
-
         file_config = {"api_type": "gemini", "verbose": True, "temperature": 0.2}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(file_config))
 
-        with tempfile.NamedTemporaryFile(mode="r+", suffix=".json") as temp_config:
-            json.dump(file_config, temp_config)
-            temp_config.flush()  # Ensure data is written to disk
-            config_path = temp_config.name
-
-            args = ["--config", config_path, "--temperature", "0.5", "test prompt"]
-            config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-            assert config.verbose is True  # From file
-            assert config.api_type == APIType.GEMINI
-            assert config.temperature == 0.5  # CLI override
+        args = ["--config", str(config_file), "--temperature", "0.5", "test prompt"]
+        config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
+        assert config.verbose is True  # From file
+        assert config.api_type == APIType.GEMINI
+        assert config.temperature == 0.5  # CLI override
 
     async def test_default_config_missing_shows_warning(self):
         """Test warning shown when default config file doesn't exist."""

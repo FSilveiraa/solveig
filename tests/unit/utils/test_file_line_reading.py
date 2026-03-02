@@ -5,7 +5,7 @@ from anyio import Path
 
 from solveig.utils.file import Filesystem
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 class TestReadFileLinesBasic:
