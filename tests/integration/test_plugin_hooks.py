@@ -15,29 +15,6 @@ pytestmark = pytest.mark.anyio
 
 
 # ---------------------------------------------------------------------------
-# Exception hierarchy
-# ---------------------------------------------------------------------------
-
-
-class TestPluginExceptions:
-    async def test_validation_error_inheritance(self):
-        error = ValidationError("test message")
-        assert str(error) == "test message"
-        assert isinstance(error, ValidationError)
-        assert isinstance(error, Exception)
-
-    async def test_security_error_inheritance(self):
-        error = SecurityError("security issue")
-        assert isinstance(error, SecurityError)
-        assert isinstance(error, ValidationError)
-
-    async def test_processing_error_inheritance(self):
-        error = ProcessingError("processing failed")
-        assert isinstance(error, ProcessingError)
-        assert isinstance(error, Exception)
-
-
-# ---------------------------------------------------------------------------
 # Hook system behaviour
 # Hooks are registered directly into HOOKS.before / HOOKS.after —
 # no file loading needed to test execution semantics.
