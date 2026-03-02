@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from solveig.interface import SolveigInterface
-from solveig.plugins.tools import register_tool
+from solveig.plugins.tools import tool
 from solveig.schema.result.base import ToolResult
 from solveig.schema.tool.base import (
     BaseTool,
@@ -22,7 +22,7 @@ class TreeResult(ToolResult):
     metadata: Metadata | None  # Complete tree metadata
 
 
-@register_tool
+@tool
 class TreeTool(BaseTool):
     """Generate a directory tree listing showing file structure."""
 

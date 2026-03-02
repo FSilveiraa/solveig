@@ -84,7 +84,7 @@ from datetime import datetime
 from typing import Literal
 
 from solveig.interface import SolveigInterface
-from solveig.plugins.tools import register_tool
+from solveig.plugins.tools import tool
 from solveig.schema.tool.base import BaseTool
 from solveig.schema.result.base import ToolResult
 
@@ -94,7 +94,7 @@ class DateTimeResult(ToolResult):
     timestamp: str | None = None
 
 
-@register_tool
+@tool
 class DateTimeTool(BaseTool):
     """Get current date and time as ISO timestamp."""
     title: Literal["datetime"] = "datetime"

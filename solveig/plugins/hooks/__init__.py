@@ -19,7 +19,7 @@ class HookRegistry:
 
     def clear(self) -> None:
         self.before.clear()
-        self.after_hooks.clear()
+        self.after.clear()
         self.all.clear()
 
     @staticmethod
@@ -65,7 +65,7 @@ async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterfa
     for plugin_name, (before_hooks, after_hooks) in PLUGIN_HOOKS.all.items():
         if plugin_name in config.plugins:
             PLUGIN_HOOKS.before.extend(before_hooks)
-            PLUGIN_HOOKS.after_hooks.extend(after_hooks)
+            PLUGIN_HOOKS.after.extend(after_hooks)
             await interface.display_success(f"'{plugin_name}': Loaded")
         else:
             await interface.display_warning(

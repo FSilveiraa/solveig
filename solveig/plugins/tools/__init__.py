@@ -32,7 +32,7 @@ class ToolRegistry:
 PLUGIN_TOOLS = ToolRegistry()
 
 # Module-level aliases — callers can import these directly instead of going through PLUGIN_TOOLS
-register_tool = PLUGIN_TOOLS.register
+tool = PLUGIN_TOOLS.register
 clear_tools = PLUGIN_TOOLS.clear
 
 
@@ -58,7 +58,7 @@ async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterfa
 __all__ = [
     "PLUGIN_TOOLS",
     "ToolRegistry",
-    "register_tool",
+    "tool",
     "clear_tools",
     "load_and_filter_tools",
 ]

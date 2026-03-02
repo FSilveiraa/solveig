@@ -125,6 +125,14 @@ class TestStoreLoad:
         with pytest.raises(FileNotFoundError):
             await manager.load("nonexistent")
 
+    async def test_load_falls_back_to_current_json(self, tmp_path):
+        """When no named sessions exist, load() returns the auto-saved .current.json."""
+        manager, _ = make_manager(tmp_path)
+        history = make_history()
+        await manager.auto_save(history)  # creates .current.json, no named sessions
+        loaded = await manager.load()
+        assert loaded["id"] == "current"
+
 
 # ---------------------------------------------------------------------------
 # list_sessions / delete
@@ -165,6 +173,21 @@ class TestListDelete:
         manager, _ = make_manager(tmp_path)
         with pytest.raises(FileNotFoundError):
             await manager.delete("nonexistent")
+
+    async def test_list_sessions_skips_corrupted_file(self, tmp_path):
+        """list_sessions() silently skips files with invalid JSON content."""
+        manager, _ = make_manager(tmp_path)
+        history = make_history()
+        await manager.store(history, "good")
+
+        # Manually write a broken JSON file alongside the valid session
+        sessions_dir = tmp_path / "sessions"
+        (sessions_dir / "broken.json").write_text("not valid json {{{{")
+
+        sessions = await manager.list_sessions()
+        # broken.json is silently skipped; only the valid session is returned
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == "good"
 
 
 # ---------------------------------------------------------------------------

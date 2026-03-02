@@ -102,8 +102,6 @@ class BaseTool(BaseModel, ABC):
                         hook_coroutine = before_hook(config, interface, self)
                         if asyncio.iscoroutine(hook_coroutine):
                             await hook_coroutine
-                    except UserCancel as e:
-                        raise e
                     except ValidationError as e:
                         # Plugin validation failed - return appropriate error result
                         return self.create_error_result(
@@ -118,8 +116,6 @@ class BaseTool(BaseModel, ABC):
             # Run the actual tool solving
             try:
                 result = await self.actually_solve(config, interface)
-            except UserCancel as e:
-                raise e
             except Exception as error:
                 await interface.display_error(error)
                 error_info = "Execution error"
@@ -132,14 +128,12 @@ class BaseTool(BaseModel, ABC):
                 result = self.create_error_result(error_info, accepted=False)
 
             # Run after hooks - they can process/modify result or throw exceptions
-            for after_hook, tools in PLUGIN_HOOKS.after_hooks:
+            for after_hook, tools in PLUGIN_HOOKS.after:
                 if not tools or any(isinstance(self, tool_type) for tool_type in tools):
                     try:
                         after_coroutine = after_hook(config, interface, self, result)
                         if asyncio.iscoroutine(after_coroutine):
                             await after_coroutine
-                    except UserCancel as e:
-                        raise e
                     except ProcessingError as e:
                         # Plugin processing failed - return error result
                         return self.create_error_result(

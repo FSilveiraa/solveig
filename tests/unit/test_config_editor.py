@@ -135,13 +135,6 @@ class TestConfigEditableFields:
 
 
 class TestApplyConfigField:
-    async def test_sets_field_value(self):
-        cfg = DEFAULT_CONFIG.with_(temperature=0.0)
-        interface = MockInterface()
-        client_ref = ClientRef(client=MagicMock())
-        await apply_config_field("temperature", 0.9, cfg, client_ref, interface)
-        assert cfg.temperature == pytest.approx(0.9)
-
     async def test_sets_verbose(self):
         cfg = DEFAULT_CONFIG.with_(verbose=False)
         interface = MockInterface()

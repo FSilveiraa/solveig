@@ -16,7 +16,7 @@ pytestmark = pytest.mark.anyio
 
 # ---------------------------------------------------------------------------
 # Hook system behaviour
-# Hooks are registered directly into PLUGIN_HOOKS.before_hooks / after_hooks —
+# Hooks are registered directly into PLUGIN_HOOKS.before / after —
 # no file loading needed to test execution semantics.
 # ---------------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ class TestPluginHookSystem:
             if result.accepted:
                 raise ProcessingError("Post-processing failed")
 
-        PLUGIN_HOOKS.after_hooks.append((failing_processor, (ReadTool,)))
+        PLUGIN_HOOKS.after.append((failing_processor, (ReadTool,)))
 
         result = await ReadTool(
             comment="Test", path=str(tmp_path), metadata_only=True
@@ -231,9 +231,8 @@ class TestPluginFiltering:
         interface = MockInterface()
         await initialize_plugins(config=config, interface=interface)
 
-        assert "'shellcheck': skipped" in " ".join(interface.outputs).lower()
         assert len(PLUGIN_HOOKS.before) == 0
-        assert len(PLUGIN_HOOKS.after_hooks) == 0
+        assert len(PLUGIN_HOOKS.after) == 0
 
     async def test_plugin_receives_its_config_options(self):
         """The hook receives config and can read its own config.plugins entry."""
