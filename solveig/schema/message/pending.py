@@ -1,6 +1,7 @@
 """Queue with peeking capabilities for user comments."""
 
 import asyncio
+from collections import deque
 from collections.abc import Callable
 
 from solveig.schema.message.user import UserComment
@@ -16,6 +17,7 @@ class PendingMessageQueue(asyncio.Queue):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._queue: deque
         self._on_change: Callable[[], None] | None = None
 
     def set_on_change(self, callback: Callable[[], None]) -> None:
@@ -49,4 +51,4 @@ class PendingMessageQueue(asyncio.Queue):
 
     def count_user_comments(self) -> int:
         """Count user comments in the queue."""
-        return sum(1 for item in self._queue if isinstance(item, UserComment))
+        return len(self.get_user_comments())

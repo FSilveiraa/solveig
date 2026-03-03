@@ -128,6 +128,7 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background: {theme.background};
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
+            margin: 0 0 1 0;
         }}
 
         .group_container {{

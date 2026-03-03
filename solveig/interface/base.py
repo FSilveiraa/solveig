@@ -4,6 +4,8 @@ Base interface protocol for Solveig.
 Defines the minimal interface that any UI implementation (CLI, web, desktop) should provide.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
@@ -28,10 +30,10 @@ class SolveigInterface(ABC):
     - Optional status display
     """
 
-    subcommand_executor: "SubcommandRunner | None" = None
-    pending_queue: "PendingMessageQueue | None" = None
+    subcommand_executor: SubcommandRunner | None = None
+    pending_queue: PendingMessageQueue
 
-    def set_subcommand_executor(self, subcommand_executor: "SubcommandRunner"):
+    def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
 
     @abstractmethod

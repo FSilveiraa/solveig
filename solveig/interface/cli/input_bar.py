@@ -261,7 +261,7 @@ class InputBar(Container):
         return f"""
         InputBar {{
             height: auto;
-            margin: 1 0 0 0;
+            margin: 0;
         }}
 
         InputBar > GrowingInput {{
