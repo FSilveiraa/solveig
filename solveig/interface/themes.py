@@ -113,17 +113,44 @@ midnight = Palette(
 )
 
 
-# vice = Palette(
-#     name="vice",
-#     background="#2d1b69",
-#     text="#ffffff",  # pure white
-#     prompt="#ff10f0",  # electric magenta
-#     box="#01cdfe",  # electric blue
-#     group="#05ffa1",  # electric mint
-#     section="#ff10f0",  # electric magenta
-#     warning="#ffff00",  # electric yellow
-#     error="#ff073a",  # electric red
-# )
+nord = Palette(
+    name="nord",
+    background="#2E3440",  # polar night - dark blue-grey
+    group="#88C0D0",  # frost - light cyan
+    section="#5E81AC",  # frost - deep blue
+    box="#4C566A",  # polar night - lighter panel
+    input="#5E81AC",  # frost - deep blue
+    text="#ECEFF4",  # snow storm - near white
+    info="#88C0D0",  # frost - light cyan
+    warning="#EBCB8B",  # aurora - yellow
+    error="#BF616A",  # aurora - red
+)
+
+rose = Palette(
+    name="rose",
+    background="#FAF0F0",  # blush white
+    group="#A8547A",  # deep rose
+    section="#D4688E",  # medium pink
+    box="#E8C4D0",  # light dusty rose panel
+    input="#D4688E",  # medium pink
+    text="#3D2030",  # dark plum
+    info="#A8547A",  # deep rose
+    warning="#C87941",  # warm amber
+    error="#B02828",  # deep crimson
+)
+
+monochrome = Palette(
+    name="monochrome",
+    background="#111111",  # near black
+    group="#888888",  # mid grey
+    section="#CCCCCC",  # light grey
+    box="#2A2A2A",  # dark panel
+    input="#CCCCCC",  # light grey
+    text="#E8E8E8",  # off white
+    info="#AAAAAA",  # silver
+    warning="#DDDDDD",  # bright grey
+    error="#FFFFFF",  # pure white
+)
 
 
 DEFAULT_THEME = terracotta
@@ -135,7 +162,9 @@ THEMES = {
         solarized_light,
         forest,
         midnight,
-        # vice,
+        nord,
+        rose,
+        monochrome,
     ]
 }
 
