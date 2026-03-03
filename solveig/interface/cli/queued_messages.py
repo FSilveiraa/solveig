@@ -1,8 +1,11 @@
 """Queued messages display widget for Textual UI."""
 
 from textual.containers import Vertical
-from textual.widgets import Collapsible, Static
+from textual.widgets import Static
 
+from solveig.interface.cli.collapsible_widgets import (
+    CustomCollapsible,
+)
 from solveig.interface.themes import Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment
@@ -33,7 +36,7 @@ class QueuedMessagesDisplay(Vertical):
     def __init__(self, queue: PendingMessageQueue, theme: Palette, **kwargs):
         self._queue = queue
         self._theme = theme
-        self._collapsible: Collapsible | None = None
+        self._collapsible: CustomCollapsible | None = None
         self._content_container: Vertical | None = None
         super().__init__(**kwargs)
 
@@ -44,9 +47,13 @@ class QueuedMessagesDisplay(Vertical):
         self.styles.display = "none" if count == 0 else "block"
 
         # Create collapsible with custom title
-        self._collapsible = Collapsible(
-            title=self._get_title(),
-            collapsed=False,  # Start expanded to show messages
+        # Center section shows the message count, styled with theme color
+        center = f"[{self._theme.info}]{self._get_title()}[/]"
+        self._collapsible = CustomCollapsible(
+            left="Message queue - Click to expand",
+            center=center,
+            right="",
+            start_collapsed=True,
         )
 
         # Container for message items
@@ -93,7 +100,8 @@ class QueuedMessagesDisplay(Vertical):
 
         if count > 0 and self._collapsible is not None:
             # Update title
-            self._collapsible.title = self._get_title()
+            center = f"[{self._theme.info}]{self._get_title()}[/]"
+            self._collapsible.update_sections(center=center)
             # Refresh message list
             self._refresh_messages()
 

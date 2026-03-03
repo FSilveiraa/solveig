@@ -36,18 +36,27 @@ class StatsBar(Widget):
     def tokens(self):
         return f"{self._tokens[0]}↑ / {self._tokens[1]}↓"
 
+    @property
+    def path(self):
+        return f"🗁  {self._path}" if self._path else ""
+
+    @property
+    def status(self):
+        status_text = self._status
+        if self._spinner:
+            frame = self._spinner.render(time.time())
+            spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
+            status_text = f"{spinner_char} {status_text}"
+
+        # Format center with theme color, right with folder icon
+        return f"[{self._theme.info}]{status_text}[/]" if status_text else ""
+
     def compose(self):
         """Create collapsible with stats tables."""
-        # Create our custom collapsible with responsive title
-        collapsed_text = "Click for more stats"
-        expanded_text = "Click to collapse"
-
         self._collapsible = CustomCollapsible(
-            collapsed_text=collapsed_text,
-            expanded_text=expanded_text,
-            status=self._status,
-            path=self._path,
-            theme=self._theme,
+            left="Click for more stats",
+            center=self.status,
+            right=self.path,
             start_collapsed=True,
         )
 
@@ -167,13 +176,7 @@ class StatsBar(Widget):
 
     def _refresh_title(self):
         """Update only the collapsible title (lightweight, for frequent spinner updates)."""
-        status_text = self._status
-        if self._spinner:
-            frame = self._spinner.render(time.time())
-            spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
-            status_text = f"{spinner_char} {status_text}"
-
-        self._collapsible.update_title_content(status_text, self._path)
+        self._collapsible.update_sections(center=self.status, right=self.path)
 
     def _refresh_stats(self):
         """Update table content (heavy, only when stats actually change)."""
