@@ -36,7 +36,6 @@ async def test_bool_field_returns_false():
 
 async def test_theme_returns_theme_object():
     """prompt_for_field for 'theme' returns the corresponding Palette object."""
-    theme_keys = list(themes.THEMES.keys())
     config = DEFAULT_CONFIG.with_()
     result = await prompt_for_field("theme", config, MockInterface(choices=[0]))
     assert result is list(themes.THEMES.values())[0]

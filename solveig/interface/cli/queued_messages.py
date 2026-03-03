@@ -1,21 +1,17 @@
 """Queued messages display widget for Textual UI."""
 
-from typing import TYPE_CHECKING
-
 from textual.containers import Vertical
 from textual.widgets import Collapsible, Static
 
 from solveig.interface.themes import Palette
-
-if TYPE_CHECKING:
-    from solveig.schema.message.pending import PendingMessageQueue
-    from solveig.schema.message.user import UserComment
+from solveig.schema.message.pending import PendingMessageQueue
+from solveig.schema.message.user import UserComment
 
 
 class QueuedMessageItem(Static):
     """Single queued message item display."""
 
-    def __init__(self, comment: "UserComment", **kwargs):
+    def __init__(self, comment: UserComment, **kwargs):
         self._comment = comment
         super().__init__(**kwargs)
 
@@ -34,7 +30,7 @@ class QueuedMessagesDisplay(Vertical):
     Only visible when there are messages in the queue.
     """
 
-    def __init__(self, queue: "PendingMessageQueue", theme: Palette, **kwargs):
+    def __init__(self, queue: PendingMessageQueue, theme: Palette, **kwargs):
         self._queue = queue
         self._theme = theme
         self._collapsible: Collapsible | None = None

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal, TYPE_CHECKING
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem
 
@@ -36,7 +34,7 @@ class MoveTool(BaseTool):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    async def display_header(self, interface: "SolveigInterface") -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display move tool header."""
         await super().display_header(interface)
         await interface.display_file_info(
@@ -44,7 +42,7 @@ class MoveTool(BaseTool):
             destination_path=self.destination_path,
         )
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "MoveResult":
+    def create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
         """Create MoveResult with error."""
         return MoveResult(
             tool=self,
@@ -60,8 +58,8 @@ class MoveTool(BaseTool):
         return "move(comment, source_path, destination_path): moves a file or directory"
 
     async def actually_solve(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "MoveResult":
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> MoveResult:
         # Pre-flight validation - use utils/file.py validation
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)

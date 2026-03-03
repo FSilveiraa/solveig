@@ -5,7 +5,7 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING

@@ -24,7 +24,6 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
 )
-from solveig.schema.message.pending import PendingMessageQueue
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model

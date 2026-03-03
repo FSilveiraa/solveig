@@ -1,14 +1,9 @@
-import asyncio
 from dataclasses import dataclass, field
 
 from openai.types import CompletionUsage
 
-from typing import TYPE_CHECKING
-
 from solveig import APIType
-
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.system import SystemMessage
@@ -104,7 +99,7 @@ class MessageHistory:
             self.total_tokens_received += usage.completion_tokens
 
     async def condense_responses_into_user_message(
-        self, interface: "SolveigInterface", wait_for_input: bool = True
+        self, interface: SolveigInterface, wait_for_input: bool = True
     ):
         """
         Consolidates events into a UserMessage, optionally waiting for user input.

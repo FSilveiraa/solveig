@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
+
+from solveig.interface import SolveigInterface
 
 from .base import ToolResult
-
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
 
 
 def _format_body(body: str, content_type: str | None) -> tuple[str, str]:

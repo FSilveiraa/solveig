@@ -392,8 +392,8 @@ class TestPathSecurity:
         dest_file_path.unlink(missing_ok=True)
         try:
             # Use tilde paths
-            tilde_source = f"~/.solveig_test_copy_source.txt"
-            tilde_dest = f"~/.solveig_test_copy_dest.txt"
+            tilde_source = "~/.solveig_test_copy_source.txt"
+            tilde_dest = "~/.solveig_test_copy_dest.txt"
 
             interface = MockInterface(choices=[0])  # Accept copy
 

@@ -7,7 +7,8 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
 
-# See the comment in the original file for why TYPE_CHECKING is used here.
+# tool.base.BaseTool imports plugins to load hooks and run them before execution
+# which imports plugins.tools (this file), so this cannot import BaseTool
 if TYPE_CHECKING:
     from solveig.schema.tool.base import BaseTool
 

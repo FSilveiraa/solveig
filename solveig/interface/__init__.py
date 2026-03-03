@@ -28,7 +28,7 @@ confirm = (await cli.ask_choice("Continue?", choices=["Yes", "No"]) == 0
 """
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import Palette, DEFAULT_THEME, DEFAULT_CODE_THEME
+from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 
 __all__ = [
     "SolveigInterface",

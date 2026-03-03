@@ -1,21 +1,17 @@
 """Main Textual application class."""
 
 import asyncio
-from typing import TYPE_CHECKING
 
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
-from textual.containers import Vertical
 
 from solveig.interface.themes import DEFAULT_THEME, Palette
+from solveig.schema.message.pending import PendingMessageQueue
 
 from .conversation import ConversationArea
 from .input_bar import InputBar
 from .queued_messages import QueuedMessagesDisplay
 from .stats_bar import StatsBar
-
-if TYPE_CHECKING:
-    from solveig.schema.message.pending import PendingMessageQueue
 
 DEFAULT_INPUT_PLACEHOLDER = (
     "Click to focus, type and press Enter to send, '/help' for more"
@@ -31,7 +27,7 @@ class SolveigTextualApp(TextualApp):
         self,
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
-        pending_queue: "PendingMessageQueue | None" = None,
+        pending_queue: PendingMessageQueue | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)

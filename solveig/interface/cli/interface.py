@@ -11,19 +11,18 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Markdown
 
+from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
+from solveig.interface.cli.app import SolveigTextualApp
+from solveig.interface.cli.conversation import BANNER
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
+from solveig.schema.message.pending import PendingMessageQueue
+from solveig.schema.message.user import UserComment
 from solveig.utils.file import Filesystem, Metadata
 from solveig.utils.misc import (
     FILE_EXTENSION_TO_LANGUAGE,
     convert_size_to_human_readable,
 )
-
-from solveig.exceptions import UserCancel
-from solveig.interface.cli.app import SolveigTextualApp
-from solveig.interface.cli.conversation import BANNER
-from solveig.schema.message.pending import PendingMessageQueue
-from solveig.schema.message.user import UserComment
 
 
 class TerminalInterface(SolveigInterface):

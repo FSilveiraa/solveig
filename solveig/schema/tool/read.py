@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, TYPE_CHECKING
+from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 
@@ -46,7 +44,7 @@ class ReadTool(BaseTool):
         return validate_non_empty_path(path)
 
     @classmethod
-    def from_cli_args(cls, *args: str, **kwargs: str) -> "ReadTool":
+    def from_cli_args(cls, *args: str, **kwargs: str) -> ReadTool:
         values: dict[str, Any] = {"comment": "", "metadata_only": False}
         if args:
             values["path"] = args[0]
@@ -88,7 +86,7 @@ class ReadTool(BaseTool):
 
         return ranges
 
-    async def display_header(self, interface: "SolveigInterface") -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display read tool header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
@@ -115,7 +113,7 @@ class ReadTool(BaseTool):
                 request_desc = "content and metadata"
             await interface.display_text(request_desc, prefix="Requesting:")
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "ReadResult":
+    def create_error_result(self, error_message: str, accepted: bool) -> ReadResult:
         """Create ReadResult with error."""
         return ReadResult(
             tool=self,
@@ -133,8 +131,8 @@ class ReadTool(BaseTool):
         )
 
     async def actually_solve(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "ReadResult":
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> ReadResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         try:

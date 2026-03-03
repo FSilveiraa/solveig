@@ -21,10 +21,9 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 
 
 def _parse_cli_args(tokens: list[str]) -> tuple[list[str], dict[str, str]]:

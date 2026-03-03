@@ -4,23 +4,21 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Self, TYPE_CHECKING
+from typing import Any, ClassVar, Self
 
 from pydantic import BaseModel, Field
 
+from solveig.config import SolveigConfig
 from solveig.exceptions import (
     PluginException,
     ProcessingError,
     UserCancel,
     ValidationError,
 )
+from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import PLUGIN_HOOKS
 from solveig.schema.result import ToolResult
 from solveig.subcommand.base import Subcommand
-
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-    from solveig.config import SolveigConfig
 
 
 def validate_non_empty_path(path: str) -> str:

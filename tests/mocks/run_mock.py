@@ -18,7 +18,6 @@ from solveig.schema import (
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task
-from solveig.schema.message.pending import PendingMessageQueue
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
 

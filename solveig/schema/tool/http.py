@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import ClassVar, Literal, TYPE_CHECKING
+from typing import ClassVar, Literal
 
 import httpx
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.result import HttpResult
 from solveig.schema.result.http import _format_body
 from solveig.subcommand.base import Subcommand
@@ -46,7 +44,7 @@ class HttpTool(BaseTool):
     def url_not_empty(cls, url: str) -> str:
         return validate_non_empty_path(url)
 
-    async def display_header(self, interface: "SolveigInterface") -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display HTTP tool header."""
         await super().display_header(interface)
         await interface.display_text(self.url, prefix=f"{self.method}")
@@ -67,7 +65,7 @@ class HttpTool(BaseTool):
         if self.output_file:
             await interface.display_text(self.output_file, prefix="Output file:")
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "HttpResult":
+    def create_error_result(self, error_message: str, accepted: bool) -> HttpResult:
         """Create HttpResult with error."""
         return HttpResult(
             tool=self,
@@ -85,8 +83,8 @@ class HttpTool(BaseTool):
         )
 
     async def actually_solve(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "HttpResult":
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> HttpResult:
         # Step 1: consent to send the request
         if (
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])

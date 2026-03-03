@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import re
-from typing import ClassVar, Literal, TYPE_CHECKING
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import PersistentShell, get_persistent_shell
@@ -45,7 +43,7 @@ class CommandTool(BaseTool):
             raise ValueError("Empty command") from e
         return command
 
-    async def display_header(self, interface: "SolveigInterface") -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display command tool header."""
         await super().display_header(interface)
         await interface.display_text(
@@ -53,9 +51,7 @@ class CommandTool(BaseTool):
         )
         await interface.display_text_block(self.command, title="Command")
 
-    def create_error_result(
-        self, error_message: str, accepted: bool
-    ) -> "CommandResult":
+    def create_error_result(self, error_message: str, accepted: bool) -> CommandResult:
         """Create CommandResult with error."""
         return CommandResult(
             tool=self,
@@ -71,7 +67,7 @@ class CommandTool(BaseTool):
         return "command(comment, command, timeout=10): execute shell commands and inspect their output"
 
     async def _execute_command(
-        self, config: "SolveigConfig", shell: PersistentShell
+        self, config: SolveigConfig, shell: PersistentShell
     ) -> tuple[str, str]:
         """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
         if self.command:
@@ -79,8 +75,8 @@ class CommandTool(BaseTool):
         raise ValueError("Empty command")
 
     async def actually_solve(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "CommandResult":
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> CommandResult:
         user_choice = -1
 
         # Check if command matches auto-execute patterns

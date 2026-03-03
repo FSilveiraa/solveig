@@ -4,8 +4,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 
 # Circular import fix:
 # - This module (result/base.py) needs Tool classes for type hints

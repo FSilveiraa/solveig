@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 from solveig.schema import BaseTool
 from solveig.schema.message.base import BaseMessage
 from solveig.schema.message.task import TASK_STATUS_MAP, Task
@@ -45,7 +44,7 @@ class AssistantMessage(BaseMessage):
             result["reasoning_details"] = self.reasoning_details
         return result
 
-    async def display(self, interface: "SolveigInterface") -> None:
+    async def display(self, interface: SolveigInterface) -> None:
         """Display the assistant's message, including reasoning, comment and tasks."""
         # Display reasoning before the comment (o1/o3 models)
         if self.reasoning:

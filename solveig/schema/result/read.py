@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 
 from ...utils.file import Metadata
 from .base import ToolResult

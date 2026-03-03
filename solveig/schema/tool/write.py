@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal, TYPE_CHECKING
+from typing import Literal
 
 from pydantic import Field, field_validator
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
 from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
 from solveig.schema.result import WriteResult
 from solveig.schema.tool.base import (
     BaseTool,
@@ -36,7 +34,7 @@ class WriteTool(BaseTool):
     def path_not_empty(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
-    async def display_header(self, interface: "SolveigInterface") -> None:
+    async def display_header(self, interface: SolveigInterface) -> None:
         """Display write tool header."""
         await super().display_header(interface)
         await interface.display_file_info(
@@ -46,7 +44,7 @@ class WriteTool(BaseTool):
             # show_overwrite_warning=False,
         )
 
-    def create_error_result(self, error_message: str, accepted: bool) -> "WriteResult":
+    def create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
         return WriteResult(
             tool=self,
@@ -61,8 +59,8 @@ class WriteTool(BaseTool):
         return "write(comment, path, is_directory, content=null): creates a new file or directory, or updates an existing file. If it's a file, you may provide content to write."
 
     async def actually_solve(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
-    ) -> "WriteResult":
+        self, config: SolveigConfig, interface: SolveigInterface
+    ) -> WriteResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         # Write access validation

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+from solveig.interface import SolveigInterface
 from solveig.schema import ToolResult
 from solveig.schema.base import BaseSolveigModel
 from solveig.schema.message.base import BaseMessage
@@ -19,7 +18,7 @@ class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
     responses: list[ToolResult | UserComment]
 
-    async def display(self, interface: "SolveigInterface"):
+    async def display(self, interface: SolveigInterface):
         """Display the user's comments from the message."""
         comments = [
             response.comment

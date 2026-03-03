@@ -8,6 +8,7 @@ from typing import Any
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.schema.base import BaseSolveigModel
+from solveig.schema.message.pending import PendingMessageQueue
 
 
 class MockInterface(TerminalInterface):
@@ -56,6 +57,7 @@ class MockInterface(TerminalInterface):
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
         self._timeout_task = None
+        self.pending_queue = PendingMessageQueue()
 
     # Core async display methods
     async def start(self) -> None:
