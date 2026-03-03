@@ -13,12 +13,13 @@ from typing import TYPE_CHECKING
 from solveig.utils.file import Metadata
 
 if TYPE_CHECKING:
+    from solveig.schema.message.pending import PendingMessageQueue
     from solveig.subcommand.runner import SubcommandRunner
 
 
 class SolveigInterface(ABC):
     """
-    Abstract base class defining the core interface any Solveig UI must implement.
+    Abstract base class defining the core interface any UI implementation (CLI, web, desktop) should provide.
 
     This is intentionally minimal and focused on what Solveig actually needs:
     - Display text with basic styling
@@ -28,13 +29,10 @@ class SolveigInterface(ABC):
     """
 
     subcommand_executor: "SubcommandRunner | None" = None
-    input_handler: Callable | None = None
+    pending_queue: "PendingMessageQueue | None" = None
 
     def set_subcommand_executor(self, subcommand_executor: "SubcommandRunner"):
         self.subcommand_executor = subcommand_executor
-
-    def set_input_handler(self, handler: Callable):
-        self.input_handler = handler
 
     @abstractmethod
     async def start(self) -> None:

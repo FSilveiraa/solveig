@@ -1,8 +1,11 @@
-from typing import Any, Literal
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
-from solveig.interface import SolveigInterface
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 from solveig.schema import BaseTool
 from solveig.schema.message.base import BaseMessage
 from solveig.schema.message.task import TASK_STATUS_MAP, Task

@@ -129,7 +129,7 @@ class TestAsyncMessageHistory:
         """
         history = MessageHistory(system_prompt="System")
         mock_interface = MockInterface()
-        assert history.current_responses.empty()
+        assert history.pending_messages.empty()
 
         async def condense_task():
             await history.condense_responses_into_user_message(
@@ -161,7 +161,7 @@ class TestAsyncMessageHistory:
         """
         history = MessageHistory(system_prompt="System")
         mock_interface = MockInterface()
-        assert history.current_responses.empty()
+        assert history.pending_messages.empty()
 
         await history.condense_responses_into_user_message(
             mock_interface, wait_for_input=False
@@ -183,7 +183,7 @@ class TestAsyncMessageHistory:
 
         # Pre-fill the queue with a user comment
         await history.add_user_comment("User typed ahead.")
-        assert not history.current_responses.empty()
+        assert not history.pending_messages.empty()
 
         # Call condense with wait_for_input=True
         await history.condense_responses_into_user_message(
@@ -195,7 +195,7 @@ class TestAsyncMessageHistory:
         last_message = history.messages[-1]
         assert isinstance(last_message, UserMessage)
         assert last_message.comment == "User typed ahead."
-        assert history.current_responses.empty()  # It should have consumed the comment
+        assert history.pending_messages.empty()  # It should have consumed the comment
         # Should not have displayed waiting status
         assert (
             "awaiting input..." not in mock_interface.get_all_status_updates().lower()

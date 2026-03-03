@@ -1,12 +1,16 @@
 """Command tool - allows LLM to execute shell commands."""
 
+from __future__ import annotations
+
 import re
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import PersistentShell, get_persistent_shell

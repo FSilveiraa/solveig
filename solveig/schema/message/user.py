@@ -1,6 +1,9 @@
-from typing import Literal
+from __future__ import annotations
 
-from solveig.interface import SolveigInterface
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 from solveig.schema import ToolResult
 from solveig.schema.base import BaseSolveigModel
 from solveig.schema.message.base import BaseMessage

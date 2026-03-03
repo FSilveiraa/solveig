@@ -23,6 +23,7 @@ from solveig.schema.message import (
     AssistantMessage,
     MessageHistory,
 )
+from solveig.schema.message.pending import PendingMessageQueue
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
@@ -176,8 +177,6 @@ async def main_loop(
         )
 
     await initialize_plugins(config=config, interface=interface)
-    # Pass the message history's input method to the interface
-    interface.set_input_handler(message_history.add_user_comment)
 
     # Pass the sub-command executor to the interface so it can check if
     # user input is a sub-command or a message
@@ -286,17 +285,21 @@ async def run_async(
     client_ref = ClientRef(client=raw_client)
 
     interface = interface or TerminalInterface(
-        theme=config.theme, code_theme=config.code_theme
+        theme=config.theme, code_theme=config.code_theme, pending_queue=PendingMessageQueue()
     )
 
     # Create the system prompt and pass it to the message history
     sys_prompt = await system_prompt.get_system_prompt(config)
     message_history = MessageHistory(
+        pending_messages=interface.pending_queue,
         system_prompt=sys_prompt,
         max_context=config.max_context,
         api_type=config.api_type,
         encoder=config.encoder,
     )
+
+    # Wire up the pending message queue to the UI display
+    # interface.pending_queue = message_history.pending_messages
 
     session_manager = (
         SessionManager(config=config)

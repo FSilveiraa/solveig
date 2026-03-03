@@ -1,11 +1,15 @@
 """Read tool - allows LLM to read files and directories."""
 
-from typing import Any, ClassVar, Literal
+from __future__ import annotations
+
+from typing import Any, ClassVar, Literal, TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 

@@ -3,9 +3,14 @@ from dataclasses import dataclass, field
 
 from openai.types import CompletionUsage
 
+from typing import TYPE_CHECKING
+
 from solveig import APIType
-from solveig.interface import SolveigInterface
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 from solveig.schema.message.assistant import AssistantMessage
+from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.system import SystemMessage
 from solveig.schema.message.user import UserComment, UserMessage
 from solveig.schema.result import ToolResult
@@ -25,9 +30,7 @@ class MessageHistory:
     total_tokens_sent: int = field(default=0)  # Total sent to LLM across all calls
     total_tokens_received: int = field(default=0)  # Total received from LLM
     # contains both results to tools and user comments
-    current_responses: asyncio.Queue[UserComment | ToolResult] = field(
-        default_factory=asyncio.Queue, init=False, repr=False
-    )
+    pending_messages: PendingMessageQueue = field(default_factory=PendingMessageQueue)
 
     def __post_init__(self):
         """Initialize with system message after dataclass init."""
@@ -86,13 +89,13 @@ class MessageHistory:
 
     async def add_result(self, result: ToolResult):
         """Producer method to add a tool result to the event queue."""
-        await self.current_responses.put(result)
+        await self.pending_messages.put(result)
 
     async def add_user_comment(self, comment: UserComment | str):
         """Producer method to add a user comment to the event queue."""
         if isinstance(comment, str):
             comment = UserComment(comment=comment)
-        await self.current_responses.put(comment)
+        await self.pending_messages.put(comment)
 
     def record_api_usage(self, usage: "CompletionUsage") -> None:
         """Updates the total token counts from the API's response."""
@@ -114,8 +117,8 @@ class MessageHistory:
         has_user_comment = False
 
         # 1. Consume all events that are *already* in the queue.
-        while not self.current_responses.empty():
-            event = self.current_responses.get_nowait()
+        while not self.pending_messages.empty():
+            event = self.pending_messages.get_nowait()
             if isinstance(event, UserComment):
                 has_user_comment = True
             responses.append(event)
@@ -124,7 +127,7 @@ class MessageHistory:
         if wait_for_input and not has_user_comment:
             # Block until the user provides the next comment.
             async with interface.with_animation("Awaiting input..."):
-                event = await self.current_responses.get()
+                event = await self.pending_messages.get()
             responses.append(event)
 
         # 3. If we have collected any events, create and display the message.

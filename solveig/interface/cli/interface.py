@@ -6,6 +6,7 @@ import random
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
+from typing import TYPE_CHECKING
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
@@ -22,6 +23,8 @@ from solveig.utils.misc import (
 from ...exceptions import UserCancel
 from .app import SolveigTextualApp
 from .conversation import BANNER
+if TYPE_CHECKING:
+    from ...schema.message.pending import PendingMessageQueue
 
 
 class TerminalInterface(SolveigInterface):
@@ -31,15 +34,18 @@ class TerminalInterface(SolveigInterface):
 
     def __init__(
         self,
+        pending_queue: "PendingMessageQueue",
         theme: Palette = DEFAULT_THEME,
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
         **kwargs,
     ):
+        self.pending_queue = pending_queue
         self._theme = theme
         self.app = SolveigTextualApp(
-            theme=theme, input_callback=self._handle_input, **kwargs
+            theme=theme, pending_queue=pending_queue, input_callback=self._handle_input, **kwargs
         )
+        self.pending_queue.set_on_change(self.app.update_queued_display)
         self.base_indent = base_indent
         self.code_theme = code_theme
 
@@ -75,6 +81,8 @@ class TerminalInterface(SolveigInterface):
 
     async def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the message history event queue."""
+        from solveig.schema.message.user import UserComment
+
         # Check if it's a command
         is_subcommand = False
         if self.subcommand_executor is not None:
@@ -88,8 +96,8 @@ class TerminalInterface(SolveigInterface):
                     f"Found error when executing '{user_input}' sub-command: {e}"
                 )
 
-        if not is_subcommand and self.input_handler:
-            await self.input_handler(user_input)
+        if not is_subcommand and self.pending_queue is not None:
+            await self.pending_queue.put(UserComment(comment=user_input))
 
     async def _display_text(
         self, text: str, style: str = "text", prefix: str | None = None

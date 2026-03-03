@@ -1,11 +1,15 @@
 """Move tool - allows LLM to move files and directories."""
 
-from typing import ClassVar, Literal
+from __future__ import annotations
+
+from typing import ClassVar, Literal, TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem
 

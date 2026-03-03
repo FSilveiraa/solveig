@@ -1,12 +1,16 @@
 """Edit tool - allows LLM to edit files using string replacement."""
 
-from typing import ClassVar, Literal
+from __future__ import annotations
+
+from typing import ClassVar, Literal, TYPE_CHECKING
 
 from anyio import Path
 from pydantic import Field, field_validator
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.schema.result import EditResult
 from solveig.utils.file import Filesystem
 
