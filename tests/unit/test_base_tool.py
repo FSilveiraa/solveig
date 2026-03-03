@@ -29,7 +29,8 @@ class TestExecutionFailurePath:
             side_effect=RuntimeError("something went wrong"),
         ):
             result = await CommandTool(command="ls", comment="Test").solve(
-                DEFAULT_CONFIG, MockInterface(choices=[0])  # 0 = Yes
+                DEFAULT_CONFIG,
+                MockInterface(choices=[0]),  # 0 = Yes
             )
 
         assert not result.accepted
@@ -44,7 +45,8 @@ class TestExecutionFailurePath:
             side_effect=RuntimeError("something went wrong"),
         ):
             result = await CommandTool(command="ls", comment="Test").solve(
-                DEFAULT_CONFIG, MockInterface(choices=[1])  # 1 = No
+                DEFAULT_CONFIG,
+                MockInterface(choices=[1]),  # 1 = No
             )
 
         assert not result.accepted

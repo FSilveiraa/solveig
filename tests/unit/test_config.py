@@ -78,7 +78,9 @@ class TestConfigFileParsing:
         """Test successful config file parsing."""
         config_file = tmp_path / "config.json"
         config_file.write_text(DEFAULT_CONFIG.to_json())
-        result = SolveigConfig(**(await SolveigConfig.parse_from_file(PurePath(str(config_file)))))
+        result = SolveigConfig(
+            **(await SolveigConfig.parse_from_file(PurePath(str(config_file))))
+        )
         assert result == DEFAULT_CONFIG
 
     @pytest.mark.no_file_mocking

@@ -84,9 +84,7 @@ async def test_list_field_multiple_items():
 async def test_list_field_empty_string_returns_empty():
     """Empty string input for a list field returns an empty list."""
     config = DEFAULT_CONFIG.with_(briefing=["old.md"])
-    result = await prompt_for_field(
-        "briefing", config, MockInterface(user_inputs=[""])
-    )
+    result = await prompt_for_field("briefing", config, MockInterface(user_inputs=[""]))
     assert result == []
 
 
@@ -107,9 +105,7 @@ async def test_str_field_returns_string():
 async def test_str_or_none_empty_returns_none():
     """Empty input for an optional str field (model) returns None."""
     config = DEFAULT_CONFIG.with_(model=None)
-    result = await prompt_for_field(
-        "model", config, MockInterface(user_inputs=[""])
-    )
+    result = await prompt_for_field("model", config, MockInterface(user_inputs=[""]))
     assert result is None
 
 

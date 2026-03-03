@@ -28,12 +28,11 @@ confirm = (await cli.ask_choice("Continue?", choices=["Yes", "No"]) == 0
 """
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.cli.interface import TerminalInterface
-from solveig.interface.themes import Palette, terracotta
+from solveig.interface.themes import Palette, DEFAULT_THEME, DEFAULT_CODE_THEME
 
 __all__ = [
     "SolveigInterface",
-    "TerminalInterface",
     "Palette",
-    "terracotta",
+    "DEFAULT_THEME",
+    "DEFAULT_CODE_THEME",
 ]

@@ -7,7 +7,9 @@ from typing import Any
 
 from anyio import Path
 
-from solveig.interface import SolveigInterface, themes
+import solveig.interface.themes as themes
+from solveig.interface import SolveigInterface
+
 from solveig.llm import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size

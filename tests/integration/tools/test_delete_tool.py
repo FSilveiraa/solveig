@@ -191,9 +191,7 @@ class TestAutoAllowedPaths:
         interface = MockInterface()
         # No user inputs needed - should auto-approve
 
-        req = DeleteTool(
-            path=str(test_dir), comment="Auto-allowed directory deletion"
-        )
+        req = DeleteTool(path=str(test_dir), comment="Auto-allowed directory deletion")
 
         result = await req.solve(config, interface)
 
@@ -301,9 +299,7 @@ class TestErrorHandling:
         # Make file unreadable/undeletable after validation
 
         with open(test_file):  # Hold file open to potentially prevent deletion
-            req = DeleteTool(
-                path=str(test_file), comment="Deletion that might fail"
-            )
+            req = DeleteTool(path=str(test_file), comment="Deletion that might fail")
 
             result = await req.solve(DEFAULT_CONFIG, interface)
 

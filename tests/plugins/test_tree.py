@@ -104,7 +104,9 @@ class TestTreePlugin:
         assert str(error_result.path).startswith("/")  # Path should be absolute
 
     @pytest.mark.no_file_mocking
-    async def test_tree_depth_limiting_and_user_interaction(self, load_plugins, tmp_path):
+    async def test_tree_depth_limiting_and_user_interaction(
+        self, load_plugins, tmp_path
+    ):
         """Test tree with depth limits and user interaction through solve() method."""
         # Enable the tree plugin for this test
         config = DEFAULT_CONFIG.with_(plugins=["tree"])
@@ -120,9 +122,7 @@ class TestTreePlugin:
         (tmp_path / "subdir2/subdir3/subdir4/file4.txt").touch()
         (tmp_path / "subdir6").mkdir()
 
-        req = TreeTool(
-            path=str(tmp_path), max_depth=2, comment="Limited depth tree"
-        )
+        req = TreeTool(path=str(tmp_path), max_depth=2, comment="Limited depth tree")
         interface = MockInterface(choices=[0])  # read+send tree
 
         result = await req.solve(DEFAULT_CONFIG, interface)
@@ -140,9 +140,7 @@ class TestTreePlugin:
         # decline to send error for non-existent path
         interface = MockInterface(choices=[1])
 
-        error_req = TreeTool(
-            path=str(tmp_path / "nonexistent"), comment="Test tree"
-        )
+        error_req = TreeTool(path=str(tmp_path / "nonexistent"), comment="Test tree")
         result = await error_req.solve(DEFAULT_CONFIG, interface)
         assert result.accepted is False
         assert result.error

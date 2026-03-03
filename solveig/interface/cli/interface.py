@@ -6,7 +6,6 @@ import random
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import TYPE_CHECKING
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
@@ -20,11 +19,11 @@ from solveig.utils.misc import (
     convert_size_to_human_readable,
 )
 
-from ...exceptions import UserCancel
-from .app import SolveigTextualApp
-from .conversation import BANNER
-if TYPE_CHECKING:
-    from ...schema.message.pending import PendingMessageQueue
+from solveig.exceptions import UserCancel
+from solveig.interface.cli.app import SolveigTextualApp
+from solveig.interface.cli.conversation import BANNER
+from solveig.schema.message.pending import PendingMessageQueue
+from solveig.schema.message.user import UserComment
 
 
 class TerminalInterface(SolveigInterface):
@@ -34,16 +33,19 @@ class TerminalInterface(SolveigInterface):
 
     def __init__(
         self,
-        pending_queue: "PendingMessageQueue",
+        pending_queue: PendingMessageQueue | None = None,
         theme: Palette = DEFAULT_THEME,
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
         **kwargs,
     ):
-        self.pending_queue = pending_queue
-        self._theme = theme
+        self.pending_queue = pending_queue or PendingMessageQueue()
+        self.theme = theme
         self.app = SolveigTextualApp(
-            theme=theme, pending_queue=pending_queue, input_callback=self._handle_input, **kwargs
+            theme=theme,
+            pending_queue=self.pending_queue,
+            input_callback=self._handle_input,
+            **kwargs,
         )
         self.pending_queue.set_on_change(self.app.update_queued_display)
         self.base_indent = base_indent
@@ -81,8 +83,6 @@ class TerminalInterface(SolveigInterface):
 
     async def _handle_input(self, user_input: str):
         """Handle input from the textual app by putting it in the message history event queue."""
-        from solveig.schema.message.user import UserComment
-
         # Check if it's a command
         is_subcommand = False
         if self.subcommand_executor is not None:
@@ -105,7 +105,7 @@ class TerminalInterface(SolveigInterface):
         """Display text with optional styling."""
         to_display = text
         if prefix:
-            to_display = f"[{self._theme.info}]{prefix}[/]  {to_display}"
+            to_display = f"[{self.theme.info}]{prefix}[/]  {to_display}"
         await self.app.add_text(to_display, style, markup=prefix is not None)
 
     async def display_text(self, text: str, prefix: str | None = None) -> None:

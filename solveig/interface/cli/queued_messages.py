@@ -107,9 +107,10 @@ class QueuedMessagesDisplay(Vertical):
         return f"""
         QueuedMessagesDisplay {{
             height: auto;
-            margin: 0 0 0 1;
+            margin: 1 0 0 0;
             padding: 0;
             border-left: heavy {theme.info};
+            border-top: heavy {theme.info};
         }}
 
         QueuedMessagesDisplay Collapsible {{
@@ -122,7 +123,8 @@ class QueuedMessagesDisplay(Vertical):
         QueuedMessagesDisplay CollapsibleTitle {{
             background: {theme.background};
             color: {theme.info};
-            padding: 0 1;
+            padding: 0;
+            margin: 0;
             height: 1;
         }}
 

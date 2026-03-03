@@ -6,7 +6,7 @@ from os import PathLike
 from typing import Any
 
 from solveig import utils
-from solveig.interface import TerminalInterface
+from solveig.interface.cli.interface import TerminalInterface
 from solveig.schema.base import BaseSolveigModel
 
 

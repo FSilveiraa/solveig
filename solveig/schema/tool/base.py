@@ -8,10 +8,6 @@ from typing import Any, ClassVar, Self, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
-
-from solveig.config import SolveigConfig
 from solveig.exceptions import (
     PluginException,
     ProcessingError,
@@ -21,6 +17,10 @@ from solveig.exceptions import (
 from solveig.plugins.hooks import PLUGIN_HOOKS
 from solveig.schema.result import ToolResult
 from solveig.subcommand.base import Subcommand
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
+    from solveig.config import SolveigConfig
 
 
 def validate_non_empty_path(path: str) -> str:

@@ -393,8 +393,7 @@ class TestErrorHandling:
             assert not result.accepted
             assert result.error is not None
             assert any(
-                sig in result.error.lower()
-                for sig in {"error", "permission denied"}
+                sig in result.error.lower() for sig in {"error", "permission denied"}
             )
 
         finally:
@@ -519,9 +518,7 @@ class TestIntegrationScenarios:
     async def test_file_with_complex_content(self, tmp_path):
         """Test writing file with complex content (unicode, special chars)."""
         test_file = tmp_path / "complex_content.txt"
-        complex_content = (
-            'Unicode: 🌟 Special chars: \n\t"\'\\/ JSON: {"key": "value"}'
-        )
+        complex_content = 'Unicode: 🌟 Special chars: \n\t"\'\\/ JSON: {"key": "value"}'
 
         interface = MockInterface()
         interface.choices.append(0)  # Accept

@@ -32,16 +32,20 @@ class HookRegistry:
 
     def register_before(self, tools: tuple[type, ...] | None = None):
         """Decorator factory — register a before-hook, optionally scoped to tool types."""
+
         def register(fun: Callable) -> Callable:
             self.all[self._plugin_name(fun)][0].append((fun, tools))
             return fun
+
         return register
 
     def register_after(self, tools: tuple[type, ...] | None = None):
         """Decorator factory — register an after-hook, optionally scoped to tool types."""
+
         def register(fun: Callable) -> Callable:
             self.all[self._plugin_name(fun)][1].append((fun, tools))
             return fun
+
         return register
 
 

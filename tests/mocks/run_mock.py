@@ -5,7 +5,7 @@ import asyncio
 import random
 
 from solveig import SolveigConfig
-from solveig.interface import TerminalInterface
+from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema import (
@@ -144,7 +144,10 @@ if __name__ == "__main__":
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
     config = config.with_(plugins={**config.plugins, "tree": {}})
-    interface = TerminalInterface(theme=config.theme, code_theme=config.code_theme, pending_queue=PendingMessageQueue())
+    interface = TerminalInterface(
+        theme=config.theme,
+        code_theme=config.code_theme,
+    )
     # interface = DemoInterface(theme=config.theme, code_theme=config.code_theme, user_messages=user_messages)
 
     try:

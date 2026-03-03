@@ -15,7 +15,8 @@ from solveig import llm, system_prompt
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
 from solveig.exceptions import UserCancel
-from solveig.interface import SolveigInterface, TerminalInterface
+from solveig.interface import SolveigInterface
+from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm import ClientRef, ModelNotFound
 from solveig.plugins import initialize_plugins
 from solveig.schema.dynamic import get_response_model
@@ -285,7 +286,8 @@ async def run_async(
     client_ref = ClientRef(client=raw_client)
 
     interface = interface or TerminalInterface(
-        theme=config.theme, code_theme=config.code_theme, pending_queue=PendingMessageQueue()
+        theme=config.theme,
+        code_theme=config.code_theme,
     )
 
     # Create the system prompt and pass it to the message history
@@ -349,16 +351,7 @@ async def run_async(
 
 def main():
     """Entry point for the main CLI."""
-
-    async def _run():
-        (
-            config,
-            user_prompt,
-            resume_session,
-        ) = await SolveigConfig.parse_config_and_prompt()
-        await run_async(config, user_prompt, resume_session=resume_session)
-
-    asyncio.run(_run())
+    asyncio.run(run_async())
 
 
 if __name__ == "__main__":
