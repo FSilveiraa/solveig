@@ -114,9 +114,24 @@ class SolveigTextualApp(TextualApp):
         self.is_ready.set()
 
     async def on_key(self, event) -> None:
-        """Handle key events directly."""
+        """Handle key events directly.
+
+        Ctrl+C behavior:
+        - If there's an active network request: cancel it
+        - Otherwise: exit the application
+        """
         if event.key == "ctrl+c":
-            self.exit()
+            # Check if there's an active network request via the interface
+            interface = getattr(self, "_interface_ref", None)
+            if interface is not None and interface.has_active_request:
+                event.stop()
+                interface.cancel_request()
+            else:
+                self.exit()
+
+    def set_interface_ref(self, interface) -> None:
+        """Store a reference to the interface for cancellation checks."""
+        self._interface_ref = interface
 
     async def ask_user(self, question: str) -> str:
         """Ask for any kind of input with a prompt."""

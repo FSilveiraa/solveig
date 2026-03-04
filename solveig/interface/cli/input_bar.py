@@ -59,6 +59,14 @@ class GrowingInput(TextArea):
                 self.text = ""
             # If there is no text, let the event bubble up to the app to exit
 
+        elif event.key == "escape":
+            # Check if there's an active network request via the app
+            app = self.app
+            interface = getattr(app, "_interface_ref", None)
+            if interface is not None and interface.has_active_request:
+                event.stop()
+                interface.cancel_request()
+
         elif (
             event.key == "up"
             and self._mode_getter() == InputMode.FREE_FORM

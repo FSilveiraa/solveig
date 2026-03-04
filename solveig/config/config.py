@@ -69,6 +69,7 @@ class SolveigConfig:
 
     http_timeout: float = 10.0
     http_max_response_bytes: int = 50_000
+    request_timeout: float = 60.0  # Timeout for LLM API requests in seconds
 
     no_commands: bool = False
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)

@@ -29,6 +29,73 @@ from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import default_json_serialize, serialize_response_model
 
 
+async def _send_single_request(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    client_ref: ClientRef,
+    message_history: MessageHistory,
+    response_model,
+) -> AssistantMessage:
+    """Send a single request to the LLM."""
+    # this has to be done here - the message_history dumping auto-adds the token counting upon
+    # the serialization that we would have to do anyway to avoid expensive re-counting on every update
+    message_history_dumped = message_history.to_openai()
+    if config.verbose:
+        await interface.display_text_block(
+            title="Sending",
+            text=json.dumps(
+                message_history_dumped, indent=2, default=default_json_serialize
+            ),
+        )
+
+    await interface.display_section(title="Assistant")
+
+    # Wrap the LLM call with a timeout
+    llm_coro = client_ref.client.chat.completions.create(
+        messages=message_history_dumped,
+        response_model=response_model,
+        model=config.model,
+        temperature=config.temperature,
+        max_retries=1,
+    )
+
+    try:
+        assistant_response = await asyncio.wait_for(llm_coro, timeout=config.request_timeout)
+    except asyncio.TimeoutError:
+        raise asyncio.TimeoutError(f"Request timed out after {config.request_timeout}s")
+
+    assert isinstance(assistant_response, AssistantMessage)
+
+    # Add to the message history immediately, which updates (corrects) the token counts
+    model = None
+    if hasattr(assistant_response, "_raw_response"):
+        raw = assistant_response._raw_response
+        model = raw.model
+        # Extract reasoning and reasoning_details from o1/o3/Gemini models
+        if hasattr(raw, "choices") and raw.choices:
+            message = raw.choices[0].message
+            if hasattr(message, "reasoning") and message.reasoning:
+                assistant_response.reasoning = message.reasoning
+            if (
+                hasattr(message, "reasoning_details")
+                and message.reasoning_details
+            ):
+                assistant_response.reasoning_details = message.reasoning_details
+
+    # Add the message to the history, this also updates
+    # the total tokens so update the stats display
+    message_history.add_messages(assistant_response)
+    await interface.update_stats(
+        tokens=(
+            message_history.total_tokens_sent,
+            message_history.total_tokens_received,
+        ),
+        model=model,
+    )
+
+    return assistant_response
+
+
 async def send_message_to_llm_with_retry(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -43,58 +110,22 @@ async def send_message_to_llm_with_retry(
         await asyncio.sleep(0)
 
         try:
-            # this has to be done here - the message_history dumping auto-adds the token counting upon
-            # the serialization that we would have to do anyway to avoid expensive re-counting on every update
-            message_history_dumped = message_history.to_openai()
-            if config.verbose:
-                await interface.display_text_block(
-                    title="Sending",
-                    text=json.dumps(
-                        message_history_dumped, indent=2, default=default_json_serialize
-                    ),
+            # Use context manager for cancellable request
+            async with interface.cancellable_request(
+                _send_single_request(
+                    config, interface, client_ref, message_history, response_model
                 )
+            ) as request_task:
+                assistant_response = await request_task
+                return assistant_response
 
-            await interface.display_section(title="Assistant")
-            assistant_response = await client_ref.client.chat.completions.create(
-                messages=message_history_dumped,
-                response_model=response_model,
-                model=config.model,
-                temperature=config.temperature,
-                max_retries=1,
-            )
-            assert isinstance(assistant_response, AssistantMessage)
+        except asyncio.CancelledError:
+            # Request was cancelled by user (Ctrl+C or Esc) - return None to go back to user input
+            await interface.display_info("Request cancelled")
+            return None
 
-            # Add to the message history immediately, which updates (corrects) the token counts
-            model = None
-            if hasattr(assistant_response, "_raw_response"):
-                raw = assistant_response._raw_response
-                model = raw.model
-                # Extract reasoning and reasoning_details from o1/o3/Gemini models
-                if hasattr(raw, "choices") and raw.choices:
-                    message = raw.choices[0].message
-                    if hasattr(message, "reasoning") and message.reasoning:
-                        assistant_response.reasoning = message.reasoning
-                    if (
-                        hasattr(message, "reasoning_details")
-                        and message.reasoning_details
-                    ):
-                        assistant_response.reasoning_details = message.reasoning_details
-
-            # Add the message to the history, this also updates
-            # the total tokens so update the stats display
-            message_history.add_messages(assistant_response)
-            await interface.update_stats(
-                tokens=(
-                    message_history.total_tokens_sent,
-                    message_history.total_tokens_received,
-                ),
-                model=model,
-            )
-
-            return assistant_response
-
-        except KeyboardInterrupt:
-            raise
+        except asyncio.TimeoutError as e:
+            await interface.display_error(str(e))
 
         except InstructorRetryException as e:
             attempt_exc = e.failed_attempts[0][1] if e.failed_attempts else e

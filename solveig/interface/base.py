@@ -6,6 +6,7 @@ Defines the minimal interface that any UI implementation (CLI, web, desktop) sho
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
@@ -32,9 +33,27 @@ class SolveigInterface(ABC):
 
     subcommand_executor: SubcommandRunner | None = None
     pending_queue: PendingMessageQueue
+    _request_task: asyncio.Task | None = None
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
+
+    @asynccontextmanager
+    async def cancellable_request(self, coro):
+        """Context manager for cancellable network requests.
+
+        Usage:
+            async with interface.cancellable_request(some_async_call()) as task:
+                result = await task
+
+        The task is automatically cancelled if the user presses Ctrl+C or Esc.
+        """
+        task = asyncio.create_task(coro)
+        self._request_task = task
+        try:
+            yield task
+        finally:
+            self._request_task = None
 
     @abstractmethod
     async def start(self) -> None:

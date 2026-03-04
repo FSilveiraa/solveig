@@ -46,6 +46,8 @@ class TerminalInterface(SolveigInterface):
             input_callback=self._handle_input,
             **kwargs,
         )
+        # Store reference to interface for cancellation checks
+        self.app.set_interface_ref(self)
         self.pending_queue.set_on_change(self.app.update_queued_display)
         self.base_indent = base_indent
         self.code_theme = code_theme
