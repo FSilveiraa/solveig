@@ -60,9 +60,11 @@ async def _send_single_request(
     )
 
     try:
-        assistant_response = await asyncio.wait_for(llm_coro, timeout=config.request_timeout)
-    except asyncio.TimeoutError:
-        raise asyncio.TimeoutError(f"Request timed out after {config.request_timeout}s")
+        assistant_response = await asyncio.wait_for(
+            llm_coro, timeout=config.request_timeout
+        )
+    except TimeoutError as e:
+        raise TimeoutError(f"Request timed out after {config.request_timeout}s") from e
 
     assert isinstance(assistant_response, AssistantMessage)
 
@@ -76,10 +78,7 @@ async def _send_single_request(
             message = raw.choices[0].message
             if hasattr(message, "reasoning") and message.reasoning:
                 assistant_response.reasoning = message.reasoning
-            if (
-                hasattr(message, "reasoning_details")
-                and message.reasoning_details
-            ):
+            if hasattr(message, "reasoning_details") and message.reasoning_details:
                 assistant_response.reasoning_details = message.reasoning_details
 
     # Add the message to the history, this also updates
@@ -124,7 +123,7 @@ async def send_message_to_llm_with_retry(
             await interface.display_info("Request cancelled")
             return None
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             await interface.display_error(str(e))
 
         except InstructorRetryException as e:
