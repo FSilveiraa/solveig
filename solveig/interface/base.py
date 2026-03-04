@@ -55,6 +55,22 @@ class SolveigInterface(ABC):
         finally:
             self._request_task = None
 
+    def cancel_request(self) -> bool:
+        """Cancel the current network request task.
+
+        Returns True if there was an active request to cancel,
+        False otherwise.
+        """
+        if self._request_task is not None and not self._request_task.done():
+            self._request_task.cancel()
+            return True
+        return False
+
+    @property
+    def has_active_request(self) -> bool:
+        """Check if there's an active network request running."""
+        return self._request_task is not None and not self._request_task.done()
+
     @abstractmethod
     async def start(self) -> None:
         """Start the interface."""
