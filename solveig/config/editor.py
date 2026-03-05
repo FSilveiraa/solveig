@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 from solveig.interface import SolveigInterface, themes
-from solveig.llm import API_TYPES, ClientRef, ModelInfo, ModelNotFound
+from solveig.llm.api import API_TYPES, ClientRef, ModelInfo, ModelNotFound
 from solveig.schema.message import MessageHistory
 from solveig.system_prompt import get_system_prompt
 from solveig.utils.misc import parse_human_readable_size

@@ -65,17 +65,15 @@ async def run_async_mock(
     if mock_messages is None:
         mock_messages = [
             AssistantMessage(
-                comment="I'll help you investigate the contents of ~/Sync and write a Fibonacci sequence solver",
-                reasoning="The user wants me to review the contents of ~/Sync, then write an algorithm to solve the Fibonacci sequence. I should first get a tree structure, write a Pyhon script, then investigate individual files that stand out",
+                comment="I'll help you investigate the contents of ~/Sync, edit your README and write a Fibonacci sequence solver",
+                reasoning="The user wants me to review the contents of ~/Sync, edit README.md, then write an algorithm to solve the Fibonacci sequence. I should first get a tree structure, write a Pyhon script, then investigate individual files that stand out",
                 tasks=[
                     Task(description="Read the contents of ~/Sync", status="ongoing"),
+                    Task(description="Edit README", status="pending"),
                     Task(description="Write a Fibonacci solver", status="pending"),
                     Task(
-                        description="Read suspicious files inside ~/Sync",
+                        description="Provide a summary of contents, focused on safety and functionality",
                         status="pending",
-                    ),
-                    Task(
-                        description="Provide a summary of contents, focused on safety and functionality"
                     ),
                 ],
                 tools=[

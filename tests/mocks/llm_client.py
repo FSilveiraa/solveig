@@ -32,6 +32,8 @@ class MockLLMClient:
         self.sleep_seconds = sleep_seconds
         self.sleep_delta = abs(sleep_delta)
         self.mode = Mode.TOOLS
+        # Mock the underlying raw client (OpenAI client) - set to None for tests
+        self.client = None
 
     async def _create_completion(self, **kwargs) -> AssistantMessage:
         """Return next response or raise next exception."""
