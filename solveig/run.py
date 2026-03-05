@@ -19,6 +19,7 @@ from solveig.llm import ClientRef
 from solveig.llm.request_manager import RequestManager
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import MessageHistory
+from solveig.schema.dynamic import get_response_model
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import serialize_response_model
@@ -109,16 +110,28 @@ async def main_loop(
 
         # Send message and await response
         request_manager = RequestManager(
-            config=config,
-            interface=interface,
-            client_ref=client_ref,
+            client=client_ref.client,
             message_history=message_history,
         )
 
         async with interface.with_animation("Thinking...", "Processing"):
-            llm_response = await request_manager.send_with_retry()
+            llm_response = await request_manager.send_with_retry(
+                config=config,
+                interface=interface,
+                message_history=message_history,
+            )
 
         if llm_response:
+            # Add the message to the history, this also updates
+            # the total tokens so update the stats display
+            message_history.add_messages(llm_response)
+            await interface.update_stats(
+                tokens=(
+                    message_history.total_tokens_sent,
+                    message_history.total_tokens_received,
+                ),
+            )
+
             if config.verbose:
                 await interface.display_text_block(str(llm_response), title="Received")
 
