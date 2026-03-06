@@ -60,10 +60,9 @@ class QueuedMessagesDisplay(Vertical):
         self._content_container = Vertical(classes="queued-messages-content")
 
         with self._collapsible:
-            yield self._content_container
-
-        # Initial population
-        self._refresh_messages()
+            with self._content_container:
+                for comment in self._queue.get_user_comments():
+                    yield QueuedMessageItem(comment, classes="queued-message-item")
 
     def _get_title(self) -> str:
         """Generate the collapsible title based on queue state."""

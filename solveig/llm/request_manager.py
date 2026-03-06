@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from instructor import AsyncInstructor
 from instructor.core import InstructorRetryException
 
-from solveig.llm.api import ModelNotFound
+from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
 from solveig.interface import SolveigInterface
 from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import AssistantMessage, MessageHistory
@@ -25,20 +25,34 @@ class RequestManager:
     """
     Handles all LLM communication with retry logic and error handling.
 
+    Owns the ClientRef so that the client can be swapped at runtime (e.g. via
+    /config set api_key) without requiring run.py to know about ClientRef.
+
     Responsibilities:
-    - Build and send requests to LLM
-    - Handle retries on failure
+    - Build the LLM client from config (or accept an injected one for testing)
+    - Hold and expose client_ref for components that need to swap the client
+    - Send requests to the LLM with retry logic
     - Manage timeouts
     - Convert errors to user-facing messages
     """
 
     def __init__(
         self,
-        client: AsyncInstructor,
-        message_history: MessageHistory,
+        config: SolveigConfig,
+        client: AsyncInstructor | None = None,
     ):
-        self.client = client
-        self.message_history = message_history
+        raw = client or get_instructor_client(
+            api_type=config.api_type, api_key=config.api_key, url=config.url
+        )
+        self._client_ref = ClientRef(client=raw)
+
+    @property
+    def client_ref(self) -> ClientRef:
+        return self._client_ref
+
+    @property
+    def client(self) -> AsyncInstructor:
+        return self._client_ref.client
 
     async def send_with_retry(self, config: SolveigConfig, interface: SolveigInterface, message_history: MessageHistory) -> AssistantMessage | None:
         """
@@ -55,7 +69,7 @@ class RequestManager:
             try:
                 # Use context manager for cancellable request
                 async with interface.cancellable_request(
-                    self._send_single(config,interface, response_model, message_history)
+                    self._send_single(config, interface, response_model, message_history)
                 ) as request_task:
                     assistant_response = await request_task
                     return assistant_response

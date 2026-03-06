@@ -1,5 +1,10 @@
 """
-Modern async CLI entry point for Solveig using TextualCLI.
+Async entry point for Solveig.
+
+Architecture note: the Textual interface must run in the foreground (it owns the
+event loop via interface.start()), so the conversation logic runs as a background
+asyncio Task. run_async() wires everything up, spawns main_loop as a Task, then
+awaits interface.start(). When the interface exits, the Task is cancelled.
 """
 
 import asyncio
@@ -9,13 +14,12 @@ import traceback
 
 from instructor import AsyncInstructor
 
-from solveig import llm, system_prompt
+from solveig import system_prompt
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
-from solveig.llm import ClientRef
 from solveig.llm.request_manager import RequestManager
 from solveig.plugins import initialize_plugins
 from solveig.schema.message import MessageHistory
@@ -25,16 +29,15 @@ from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import serialize_response_model
 
 
-async def main_loop(
+async def _setup_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    client_ref: ClientRef,
-    user_prompt: str,
+    request_manager: RequestManager,
     message_history: MessageHistory,
-    session_manager: SessionManager | None = None,
-    loaded_session: dict | None = None,
-):
-    """Main async conversation loop."""
+    session_manager: SessionManager | None,
+    loaded_session: dict | None,
+) -> None:
+    """One-time setup that runs after the interface is ready."""
     if config.verbose:
         logging.basicConfig(level=logging.DEBUG)
         logging.getLogger("instructor").setLevel(logging.DEBUG)
@@ -59,7 +62,9 @@ async def main_loop(
             "No model configured. Use /model set <name> or /config set model <name>."
         )
     else:
-        await fetch_and_apply_model_info(config, client_ref, interface, message_history)
+        await fetch_and_apply_model_info(
+            config, request_manager.client_ref, interface, message_history
+        )
 
     await interface.update_stats(url=config.url, model=config.model)
 
@@ -70,12 +75,10 @@ async def main_loop(
 
     await initialize_plugins(config=config, interface=interface)
 
-    # Pass the sub-command executor to the interface so it can check if
-    # user input is a sub-command or a message
     subcommand_executor = SubcommandRunner(
         config=config,
         message_history=message_history,
-        client_ref=client_ref,
+        client_ref=request_manager.client_ref,
         session_manager=session_manager,
     )
     interface.set_subcommand_executor(subcommand_executor)
@@ -88,31 +91,55 @@ async def main_loop(
             text=serialized_response_model,
         )
 
-    # Create user message from initial user prompt or expect a new one
-    if user_prompt:
-        await message_history.add_user_comment(user_prompt)
-    await message_history.condense_responses_into_user_message(
-        interface=interface, wait_for_input=True
+
+async def main_loop(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    request_manager: RequestManager,
+    message_history: MessageHistory,
+    session_manager: SessionManager | None = None,
+    loaded_session: dict | None = None,
+):
+    """Main async conversation loop.
+
+    Each iteration: condense pending events into a UserMessage → send to LLM →
+    execute any tools → repeat. Whether the condense step blocks for user input
+    is controlled by `need_user_input`, which is set to True by default and only
+    lowered to False when tools ran and autonomy is enabled (so results are sent
+    back to the LLM immediately without waiting for the user).
+
+    Any user_prompt supplied at startup is queued in run_async before this task
+    starts, so the first condense picks it up without blocking.
+    """
+    await _setup_loop(
+        config=config,
+        interface=interface,
+        request_manager=request_manager,
+        message_history=message_history,
+        session_manager=session_manager,
+        loaded_session=loaded_session,
     )
 
+    need_user_input = True
+
     while True:
+        # Drain pending tool results and/or user comments into a single UserMessage.
+        # If need_user_input is True and no UserComment is in the queue yet, this
+        # blocks until the user types something. Resetting to True immediately
+        # after ensures any `continue` below also blocks on the next iteration.
+        await message_history.condense_responses_into_user_message(
+            interface=interface, wait_for_input=need_user_input
+        )
         need_user_input = True
 
-        # Pre-send guard: refuse to send if no model name is configured
+        # Pre-send guard: refuse to send if no model name is configured.
+        # The user input was already consumed above, so the next iteration will
+        # block again — giving the user a chance to set a model via subcommand.
         if config.model is None:
             await interface.display_error(
                 "No model set. Use /model set <name> or /config set model <name>."
             )
-            await message_history.condense_responses_into_user_message(
-                interface=interface, wait_for_input=True
-            )
             continue
-
-        # Send message and await response
-        request_manager = RequestManager(
-            client=client_ref.client,
-            message_history=message_history,
-        )
 
         async with interface.with_animation("Thinking...", "Processing"):
             llm_response = await request_manager.send_with_retry(
@@ -121,9 +148,9 @@ async def main_loop(
                 message_history=message_history,
             )
 
+        # None means the request was cancelled or the user chose not to retry.
+        # need_user_input stays True so the next condense blocks for fresh input.
         if llm_response:
-            # Add the message to the history, this also updates
-            # the total tokens so update the stats display
             message_history.add_messages(llm_response)
             await interface.update_stats(
                 tokens=(
@@ -141,7 +168,8 @@ async def main_loop(
                 await session_manager.auto_save(message_history)
 
             if llm_response.tools:
-                # We have something to respond with, so user input is not mandatory
+                # In autonomous mode (default), send results back without waiting.
+                # In manual mode or after a UserCancel, drop back to waiting.
                 need_user_input = config.disable_autonomy
                 try:
                     for req in llm_response.tools:
@@ -158,13 +186,7 @@ async def main_loop(
                             )
                         await message_history.add_result(result)
                 except UserCancel:
-                    # User cancelled processing
                     need_user_input = True
-
-        # If we need a new user message, await for it, then condense everything into a new message
-        await message_history.condense_responses_into_user_message(
-            interface=interface, wait_for_input=need_user_input
-        )
 
 
 async def run_async(
@@ -173,13 +195,11 @@ async def run_async(
     interface: SolveigInterface | None = None,
     llm_client: AsyncInstructor | None = None,
     resume_session: str | None = None,
-    # message_history: MessageHistory | None = None,
 ) -> MessageHistory:
     """
     Initializes the initial dependencies (or accepts mocks from tests),
     starts the main loop in the background and the interface task in the foreground.
     """
-    # Parse config and run main loop
     if not config:
         (
             config,
@@ -187,18 +207,15 @@ async def run_async(
             resume_session,
         ) = await SolveigConfig.parse_config_and_prompt()
 
-    # Create LLM client and interface
-    raw_client = llm_client or llm.get_instructor_client(
-        api_type=config.api_type, api_key=config.api_key, url=config.url
-    )
-    client_ref = ClientRef(client=raw_client)
-
+    # Interface and message_history are created before spawning the loop task so
+    # that user_prompt can be queued into pending_messages immediately. By the
+    # time the loop calls condense(), the comment is already there and it won't
+    # block waiting for input on the first iteration.
     interface = interface or TerminalInterface(
         theme=config.theme,
         code_theme=config.code_theme,
     )
 
-    # Create the system prompt and pass it to the message history
     sys_prompt = await system_prompt.get_system_prompt(config)
     message_history = MessageHistory(
         pending_messages=interface.pending_queue,
@@ -208,8 +225,10 @@ async def run_async(
         encoder=config.encoder,
     )
 
-    # Wire up the pending message queue to the UI display
-    # interface.pending_queue = message_history.pending_messages
+    if user_prompt:
+        await message_history.add_user_comment(user_prompt)
+
+    request_manager = RequestManager(config=config, client=llm_client)
 
     session_manager = (
         SessionManager(config=config)
@@ -226,18 +245,16 @@ async def run_async(
                 session_manager.reconstruct_messages(loaded_session)
             )
         except FileNotFoundError as e:
-            # Interface not started yet — display happens after wait_until_ready in main_loop
+            # Interface not started yet — display happens after wait_until_ready in _setup_loop
             loaded_session = {"_error": str(e)}
 
-    # Create an asyncio Task for the main loop since the Textual interface has to run in the foreground
     loop_task = None
     try:
         loop_task = asyncio.create_task(
             main_loop(
                 interface=interface,
                 config=config,
-                client_ref=client_ref,
-                user_prompt=user_prompt,
+                request_manager=request_manager,
                 message_history=message_history,
                 session_manager=session_manager,
                 loaded_session=loaded_session,
