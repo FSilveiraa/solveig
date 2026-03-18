@@ -29,13 +29,13 @@ from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import serialize_response_model
 
 
-async def _setup_loop(
+async def setup_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
     request_manager: RequestManager,
     message_history: MessageHistory,
     session_manager: SessionManager | None,
-    loaded_session: dict | None,
+    resume_session: str | None,
 ) -> None:
     """One-time setup that runs after the interface is ready."""
     if config.verbose:
@@ -47,16 +47,21 @@ async def _setup_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
-    if loaded_session is not None:
-        if "_error" in loaded_session:
-            await interface.display_error(
-                f"Could not resume session: {loaded_session['_error']}"
+    if resume_session and session_manager:
+        name = None if resume_session == "__latest__" else resume_session
+        try:
+            session_data = await session_manager.load(name)
+            message_history.load_messages(
+                session_manager.reconstruct_messages(session_data)
             )
-        elif session_manager is not None:
             await session_manager.display_loaded_session(
-                loaded_session, message_history, interface
+                session_data, message_history, interface
             )
+        except FileNotFoundError as e:
+            await interface.display_error(f"Could not resume session: {e}")
 
+    # If there is no model set, just display a warning and await input. Once the user sets a model,
+    # it will run the
     if config.model is None:
         await interface.display_warning(
             "No model configured. Use /model set <name> or /config set model <name>."
@@ -98,7 +103,7 @@ async def main_loop(
     request_manager: RequestManager,
     message_history: MessageHistory,
     session_manager: SessionManager | None = None,
-    loaded_session: dict | None = None,
+    resume_session: str | None = None,
 ):
     """Main async conversation loop.
 
@@ -111,13 +116,13 @@ async def main_loop(
     Any user_prompt supplied at startup is queued in run_async before this task
     starts, so the first condense picks it up without blocking.
     """
-    await _setup_loop(
+    await setup_loop(
         config=config,
         interface=interface,
         request_manager=request_manager,
         message_history=message_history,
         session_manager=session_manager,
-        loaded_session=loaded_session,
+        resume_session=resume_session,
     )
 
     need_user_input = True
@@ -197,8 +202,8 @@ async def run_async(
     resume_session: str | None = None,
 ) -> MessageHistory:
     """
-    Initializes the initial dependencies (or accepts mocks from tests),
-    starts the main loop in the background and the interface task in the foreground.
+    Initializes dependencies, spawns the main loop as a background task, and
+    runs the interface in the foreground. Accepts injected mocks for testing.
     """
     if not config:
         (
@@ -236,18 +241,6 @@ async def run_async(
         else None
     )
 
-    loaded_session: dict | None = None
-    if resume_session and session_manager:
-        name = None if resume_session == "__latest__" else resume_session
-        try:
-            loaded_session = await session_manager.load(name)
-            message_history.load_messages(
-                session_manager.reconstruct_messages(loaded_session)
-            )
-        except FileNotFoundError as e:
-            # Interface not started yet — display happens after wait_until_ready in _setup_loop
-            loaded_session = {"_error": str(e)}
-
     loop_task = None
     try:
         loop_task = asyncio.create_task(
@@ -257,7 +250,7 @@ async def run_async(
                 request_manager=request_manager,
                 message_history=message_history,
                 session_manager=session_manager,
-                loaded_session=loaded_session,
+                resume_session=resume_session,
             )
         )
         await interface.start()
