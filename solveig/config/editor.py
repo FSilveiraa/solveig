@@ -236,16 +236,6 @@ async def _hook_model_changed(
     await fetch_and_apply_model_info(config, client_ref, interface, message_history)
 
 
-async def _hook_encoder_changed(
-    config: SolveigConfig,
-    client_ref: ClientRef,
-    interface: SolveigInterface,
-    message_history: MessageHistory | None,
-) -> None:
-    if message_history is not None:
-        message_history.encoder = config.encoder
-
-
 async def _hook_briefing_changed(
     config: SolveigConfig,
     client_ref: ClientRef,
@@ -263,8 +253,6 @@ async def _hook_max_context_changed(
     interface: SolveigInterface,
     message_history: MessageHistory | None,
 ) -> None:
-    if message_history is not None:
-        message_history.max_context = config.max_context
     await interface.update_stats(max_context=config.max_context)
 
 
@@ -278,7 +266,6 @@ _HookFn = Callable[
 
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
-    "encoder": _hook_encoder_changed,
     "max_context": _hook_max_context_changed,
     "briefing": _hook_briefing_changed,
     # Layer 2+: add_examples, add_os_info, exclude_username, system_prompt,

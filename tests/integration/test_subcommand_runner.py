@@ -19,9 +19,7 @@ pytestmark = pytest.mark.anyio
 
 def make_runner(config=None, session_manager=None):
     cfg = config if config is not None else DEFAULT_CONFIG.with_()
-    history = MessageHistory(
-        system_prompt="test", api_type=cfg.api_type, encoder=cfg.encoder
-    )
+    history = MessageHistory(system_prompt="test", config=cfg)
     client_ref = ClientRef(client=MagicMock())
     runner = SubcommandRunner(
         config=cfg,

@@ -137,6 +137,9 @@ async def main_loop(
         )
         need_user_input = True
 
+        if session_manager:
+            await session_manager.auto_save(message_history)
+
         # Pre-send guard: refuse to send if no model name is configured.
         # The user input was already consumed above, so the next iteration will
         # block again — giving the user a chance to set a model via subcommand.

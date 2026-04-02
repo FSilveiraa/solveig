@@ -22,11 +22,7 @@ def make_manager(tmp_path):
 
 
 def make_history():
-    return MessageHistory(
-        system_prompt="test",
-        api_type=DEFAULT_CONFIG.api_type,
-        encoder=DEFAULT_CONFIG.encoder,
-    )
+    return MessageHistory(system_prompt="test", config=DEFAULT_CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +107,7 @@ class TestStoreLoad:
         history = make_history()
         await manager.store(history, "namedtest")
         loaded = await manager.load("namedtest")
-        assert loaded["id"] == "namedtest"
+        assert "namedtest" in loaded["id"]
 
     async def test_load_no_sessions_raises(self, tmp_path):
         manager, _ = make_manager(tmp_path)
@@ -125,13 +121,14 @@ class TestStoreLoad:
         with pytest.raises(FileNotFoundError):
             await manager.load("nonexistent")
 
-    async def test_load_falls_back_to_current_json(self, tmp_path):
-        """When no named sessions exist, load() returns the auto-saved .current.json."""
+    async def test_load_returns_auto_saved_session(self, tmp_path):
+        """When no named sessions exist, load() returns the auto-saved session."""
         manager, _ = make_manager(tmp_path)
         history = make_history()
-        await manager.auto_save(history)  # creates .current.json, no named sessions
+        await manager.auto_save(history)
         loaded = await manager.load()
-        assert loaded["id"] == "current"
+        expected_id = manager.current_path.name.removesuffix(".json")
+        assert loaded["id"] == expected_id
 
 
 # ---------------------------------------------------------------------------
@@ -153,12 +150,13 @@ class TestListDelete:
         sessions = await manager.list_sessions()
         assert len(sessions) == 2
 
-    async def test_list_excludes_current_json(self, tmp_path):
+    async def test_list_includes_auto_saved_session(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         history = make_history()
-        await manager.auto_save(history)  # creates .current.json
+        await manager.auto_save(history)
         sessions = await manager.list_sessions()
-        assert all(".current" not in s.get("id", "") for s in sessions)
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == manager.current_path.name.removesuffix(".json")
 
     async def test_delete_removes_file(self, tmp_path):
         manager, _ = make_manager(tmp_path)
@@ -180,14 +178,12 @@ class TestListDelete:
         history = make_history()
         await manager.store(history, "good")
 
-        # Manually write a broken JSON file alongside the valid session
         sessions_dir = tmp_path / "sessions"
         (sessions_dir / "broken.json").write_text("not valid json {{{{")
 
         sessions = await manager.list_sessions()
-        # broken.json is silently skipped; only the valid session is returned
         assert len(sessions) == 1
-        assert sessions[0]["id"] == "good"
+        assert "good" in sessions[0]["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -196,21 +192,29 @@ class TestListDelete:
 
 
 class TestAutoSave:
-    async def test_auto_save_creates_current_json(self, tmp_path):
+    async def test_auto_save_creates_timestamped_file(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         history = make_history()
         await manager.auto_save(history)
-        current = tmp_path / "sessions" / ".current.json"
-        assert current.exists()
+        assert manager.current_path is not None
+        assert (tmp_path / "sessions" / manager.current_path.name).exists()
+
+    async def test_auto_save_reuses_same_file(self, tmp_path):
+        manager, _ = make_manager(tmp_path)
+        history = make_history()
+        await manager.auto_save(history)
+        path_after_first = manager.current_path
+        await manager.auto_save(history)
+        assert manager.current_path == path_after_first
 
     async def test_auto_save_content_valid(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         history = make_history()
         await manager.auto_save(history)
-        current = tmp_path / "sessions" / ".current.json"
-        data = json.loads(current.read_text())
-        assert data["id"] == "current"
+        data = json.loads(await manager.current_path.read_text())
+        assert data["id"] == manager.current_path.name.removesuffix(".json")
         assert "messages" in data
+        assert "last_updated" in data
 
 
 # ---------------------------------------------------------------------------
