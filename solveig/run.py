@@ -225,9 +225,7 @@ async def run_async(
     message_history = MessageHistory(
         pending_messages=interface.pending_queue,
         system_prompt=sys_prompt,
-        max_context=config.max_context,
-        api_type=config.api_type,
-        encoder=config.encoder,
+        config=config,
     )
 
     if user_prompt:

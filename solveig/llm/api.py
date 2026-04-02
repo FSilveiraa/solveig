@@ -1,6 +1,5 @@
 import contextlib
 from dataclasses import dataclass
-from typing import Any
 
 import instructor
 import openai
@@ -27,40 +26,22 @@ class ClientRef:
 
 class APIType:
     class BaseAPI:
-        # keep a cache of encoders instantiated for each model used
-        _encoder_cache: dict[str | None, Any] = {
-            None: tiktoken.get_encoding("cl100k_base")
-        }
         default_url = ""
         name = ""
 
+        try:
+            default_encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            default_encoder = None
+
         @classmethod
         def count_tokens(
-            cls, text: str | dict, encoder_or_model: str | None = None
+            cls, text: str | dict, *, model: str | None = None, encoder: str | None = None
         ) -> int:
-            # account for openai-format message
             if isinstance(text, dict):
                 text = text.get("content", "") + text.get("role", "")
-
-            try:
-                encoder = cls._encoder_cache[encoder_or_model]
-            except KeyError:
-                assert encoder_or_model is not None
-                try:
-                    encoder = tiktoken.encoding_for_model(encoder_or_model)
-                except (KeyError, ValueError):
-                    try:
-                        encoder = tiktoken.get_encoding(encoder_or_model)
-                    except Exception:
-                        # available = set(tiktoken.list_encoding_names())
-                        # available.update(tiktoken.model.MODEL_TO_ENCODING.keys())
-                        # e.add_note(
-                        #     f"Could not find an encoding for '{encoder_or_model}', use one of {available}"
-                        # )
-                        # raise e
-                        encoder = cls._encoder_cache[None]
-                cls._encoder_cache[encoder_or_model] = encoder
-            return len(encoder.encode(text))
+            enc = cls.default_encoder
+            return len(enc.encode(text)) if enc else len(text) // 4
 
         @staticmethod
         def get_client(
@@ -80,6 +61,30 @@ class APIType:
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
         name = "openai"
+
+        _encoder_cache: dict[str, tiktoken.Encoding] = {}
+
+        @classmethod
+        def count_tokens(
+                cls, text: str | dict, *, model: str | None = None, encoder: str | None = None
+        ) -> int:
+            if isinstance(text, dict):
+                text = text.get("content", "") + text.get("role", "")
+            if encoder is not None:
+                try:
+                    if encoder not in cls._encoder_cache:
+                        cls._encoder_cache[encoder] = tiktoken.get_encoding(encoder)
+                    return len(cls._encoder_cache[encoder].encode(text))
+                except Exception:
+                    pass
+            if model is not None:
+                try:
+                    if model not in cls._encoder_cache:
+                        cls._encoder_cache[model] = tiktoken.encoding_for_model(model)
+                    return len(cls._encoder_cache[model].encode(text))
+                except Exception:
+                    pass
+            return super().count_tokens(text)
 
         @classmethod
         def get_client(
@@ -131,23 +136,12 @@ class APIType:
         default_url = "https://localhost:5001/v1"
         name = "local"
 
-        @classmethod
-        def _find_encoder_for_model(cls, model: str) -> Any:
-            assert model
-            return tiktoken.encoding_for_model(model)
-
     class ANTHROPIC(BaseAPI):
         default_url = "https://api.anthropic.com/v1"
         name = "anthropic"
 
         # TODO: there's an official API for this, for now stick to the default one
         # https://docs.claude.com/en/docs/build-with-claude/token-counting
-        # @classmethod
-        # def _get_encoder(cls, encoder: str | None = None) -> Any:
-        #      if config.use_anthropic_api:
-        #          ...
-        #      else:
-        #          return OPENAI._get_encoder(encoder)
 
         @classmethod
         def get_client(

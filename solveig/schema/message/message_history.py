@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 from openai.types import CompletionUsage
 
-from solveig import APIType
+from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.pending import PendingMessageQueue
@@ -16,9 +16,7 @@ Message = SystemMessage | UserMessage | AssistantMessage
 @dataclass
 class MessageHistory:
     system_prompt: str
-    api_type: type[APIType.BaseAPI] = APIType.BaseAPI
-    max_context: int = -1
-    encoder: str | None = None
+    config: SolveigConfig = field(default_factory=SolveigConfig)
     messages: list[Message] = field(default_factory=list)
     message_cache: list[tuple[dict, int]] = field(default_factory=list)
     token_count: int = field(default=0)  # Current cache size for pruning
@@ -38,13 +36,12 @@ class MessageHistory:
 
     def prune_message_cache(self):
         """Remove old messages to stay under context limit, preserving system message."""
-        if self.max_context <= 0:
+        if self.config.max_context <= 0:
             return
 
-        while self.token_count > self.max_context and len(self.message_cache) > 1:
+        while self.token_count > self.config.max_context and len(self.message_cache) > 1:
             if len(self.message_cache) > 1:
                 message, size = self.message_cache.pop(1)
-                # self.token_count -= self.api_type.count_tokens(message, self.encoder)
                 self.token_count -= size
             else:
                 break
@@ -70,8 +67,10 @@ class MessageHistory:
                 self.total_tokens_received += received
             else:
                 # Update token count using encoder approximation for all other messages
-                message_size = self.api_type.count_tokens(
-                    message_serialized["content"], self.encoder
+                message_size = self.config.api_type.count_tokens(
+                    message_serialized["content"],
+                    model=self.config.model,
+                    encoder=self.config.encoder,
                 )
                 self.token_count += message_size
 
@@ -155,7 +154,11 @@ class MessageHistory:
         self.system_prompt = new_prompt
         new_sys_msg = SystemMessage(system_prompt=new_prompt)
         serialized = new_sys_msg.to_openai()
-        new_size = self.api_type.count_tokens(serialized["content"], self.encoder)
+        new_size = self.config.api_type.count_tokens(
+            serialized["content"],
+            model=self.config.model,
+            encoder=self.config.encoder,
+        )
         old_size = self.message_cache[0][1]
         self.token_count = self.token_count - old_size + new_size
         self.message_cache[0] = (serialized, new_size)
