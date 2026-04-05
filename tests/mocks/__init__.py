@@ -13,19 +13,10 @@ DEFAULT_CONFIG = SolveigConfig(
     verbose=False,
     min_disk_space_left="1gb",
     wait_between=0,
+    auto_save_session=False,
 )
 
-VERBOSE_CONFIG = SolveigConfig(
-    api_type=APIType.OPENAI,
-    api_key="test-key",
-    url="test-url",
-    model="test-model",
-    encoder="cl100k_base",
-    temperature=0.0,
-    verbose=True,
-    min_disk_space_left="1gb",
-    wait_between=0,
-)
+VERBOSE_CONFIG = DEFAULT_CONFIG.with_(verbose=True)
 
 __all__ = [
     "DEFAULT_CONFIG",
