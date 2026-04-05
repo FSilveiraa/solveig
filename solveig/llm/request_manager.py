@@ -186,7 +186,10 @@ class RequestManager:
             await interface.display_error(error_message)
 
         # If this is an invalid model error, use the existing method to find and list the available ones
-        if "is not a valid model ID" in error_message and self.client.client is not None:
+        if (
+            "is not a valid model ID" in error_message
+            and self.client.client is not None
+        ):
             try:
                 await config.api_type.get_model_details(
                     client=self.client.client, model=config.model

@@ -423,9 +423,7 @@ class SubcommandRunner:
             await interface.display_error("No model configured to refresh.")
             return
         self.config.model_info = None
-        await fetch_and_apply_model_info(
-            self.config, self.client_ref, interface
-        )
+        await fetch_and_apply_model_info(self.config, self.client_ref, interface)
 
     async def _model_list(self, interface: SolveigInterface, *args) -> None:
         raw_client = getattr(self.client_ref.client, "client", None)

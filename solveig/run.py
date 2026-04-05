@@ -65,9 +65,7 @@ async def setup_loop(
             "No model configured. Use /model set <name> or /config set model <name>."
         )
     else:
-        await fetch_and_apply_model_info(
-            config, request_manager.client_ref, interface
-        )
+        await fetch_and_apply_model_info(config, request_manager.client_ref, interface)
 
     await interface.update_stats(url=config.url, model=config.model)
 
