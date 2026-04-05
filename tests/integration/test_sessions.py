@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from solveig.schema.message import SystemMessage, AssistantMessage
+from solveig.schema.message import SystemMessage
 from solveig.schema.message.message_history import MessageHistory
 from solveig.sessions.manager import SessionManager
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -91,8 +91,8 @@ class TestStoreLoad:
         history = make_history()
         filename = await manager.store(history)
         path = tmp_path / "sessions" / filename
-        lines = [l for l in path.read_text().splitlines() if l.strip()]
-        assert all(json.loads(l) for l in lines)
+        lines = [line for line in path.read_text().splitlines() if line.strip()]
+        assert all(json.loads(line) for line in lines)
 
     async def test_load_latest_after_store(self, tmp_path):
         manager, _ = make_manager(tmp_path)
@@ -210,8 +210,12 @@ class TestStore:
         manager, _ = make_manager(tmp_path)
         history = make_history()
         await manager.store(history)
-        lines = [l for l in (await manager.current_path.read_text()).splitlines() if l.strip()]
-        assert all(json.loads(l) for l in lines)
+        lines = [
+            line
+            for line in (await manager.current_path.read_text()).splitlines()
+            if line.strip()
+        ]
+        assert all(json.loads(line) for line in lines)
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +253,8 @@ class TestReconstructMessages:
         assert messages[1].comment == "Hello!"
 
     async def test_reconstruct_user_comment(self, tmp_path):
-        from solveig.schema.message.user import UserComment, UserMessage
         from solveig.schema.message.message_history import MessageHistory
+        from solveig.schema.message.user import UserComment, UserMessage
 
         manager, _ = make_manager(tmp_path)
         data = {

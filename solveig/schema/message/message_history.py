@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, field
+
 from pydantic import TypeAdapter
 
 from solveig.config import SolveigConfig
@@ -40,7 +41,9 @@ class MessageHistory:
         if self.config.max_context <= 0:
             return
 
-        while self.token_count > self.config.max_context and len(self.message_cache) > 1:
+        while (
+            self.token_count > self.config.max_context and len(self.message_cache) > 1
+        ):
             if len(self.message_cache) > 1:
                 message, size = self.message_cache.pop(1)
                 self.token_count -= size
@@ -169,8 +172,12 @@ class MessageHistory:
                         )
                         result_idx += 1
                         if tool is not None:
-                            result_cls = result_classes.get(r.get("title", ""), ToolResult)
-                            responses.append(result_cls.model_validate({**r, "tool": tool}))
+                            result_cls = result_classes.get(
+                                r.get("title", ""), ToolResult
+                            )
+                            responses.append(
+                                result_cls.model_validate({**r, "tool": tool})
+                            )
                     elif "comment" in r:
                         responses.append(UserComment(comment=r["comment"]))
                 if responses:

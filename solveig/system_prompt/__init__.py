@@ -64,7 +64,8 @@ def get_available_tools(config: SolveigConfig) -> str:
     # Get ALL active tools from the unified registry (core + plugins)
     active_tools = get_tools_union(config)
     return "Available tools:\n" + "\n".join(
-        f"- {req_class.get_description()}" for req_class in typing.get_args(active_tools)
+        f"- {req_class.get_description()}"
+        for req_class in typing.get_args(active_tools)
     )
 
 

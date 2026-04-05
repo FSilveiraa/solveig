@@ -1,7 +1,7 @@
 from solveig.plugins.tools.tree import TreeResult, TreeTool
-from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.message.assistant import AssistantMessage, Task
-from solveig.schema.message.user import UserMessage, UserComment
+from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.user import UserComment, UserMessage
 from solveig.schema.result import (
     CommandResult,
     MoveResult,

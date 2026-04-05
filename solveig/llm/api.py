@@ -36,7 +36,11 @@ class APIType:
 
         @classmethod
         def count_tokens(
-            cls, text: str | dict, *, model: str | None = None, encoder: str | None = None
+            cls,
+            text: str | dict,
+            *,
+            model: str | None = None,
+            encoder: str | None = None,
         ) -> int:
             if isinstance(text, dict):
                 text = text.get("content", "") + text.get("role", "")
@@ -66,7 +70,11 @@ class APIType:
 
         @classmethod
         def count_tokens(
-                cls, text: str | dict, *, model: str | None = None, encoder: str | None = None
+            cls,
+            text: str | dict,
+            *,
+            model: str | None = None,
+            encoder: str | None = None,
         ) -> int:
             if isinstance(text, dict):
                 text = text.get("content", "") + text.get("role", "")

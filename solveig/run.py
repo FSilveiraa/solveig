@@ -22,8 +22,8 @@ from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
 from solveig.plugins import initialize_plugins
-from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.dynamic import get_response_model
+from solveig.schema.message.message_history import MessageHistory
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import serialize_response_model

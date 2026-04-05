@@ -3,8 +3,8 @@ LLM client and request management.
 """
 
 from .api import (
-    APIType,
     API_TYPES,
+    APIType,
     ClientRef,
     ModelInfo,
     ModelNotFound,

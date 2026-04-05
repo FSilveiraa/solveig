@@ -11,8 +11,8 @@ from openai.types.completion_usage import CompletionUsage
 from solveig.schema import CopyResult, CopyTool, WriteResult, WriteTool
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.base import BaseMessage
-from solveig.schema.message.user import UserMessage, UserComment
 from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.user import UserComment, UserMessage
 from tests.mocks import MockInterface
 
 pytestmark = pytest.mark.anyio

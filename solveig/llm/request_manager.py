@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from instructor import AsyncInstructor
 from instructor.core import InstructorRetryException
 
-from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
 from solveig.interface import SolveigInterface
+from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
 from solveig.schema.dynamic import get_response_model
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.message_history import MessageHistory
@@ -55,7 +55,12 @@ class RequestManager:
     def client(self) -> AsyncInstructor:
         return self._client_ref.client
 
-    async def send_with_retry(self, config: SolveigConfig, interface: SolveigInterface, message_history: MessageHistory) -> AssistantMessage | None:
+    async def send_with_retry(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        message_history: MessageHistory,
+    ) -> AssistantMessage | None:
         """
         Send message to LLM with retry logic.
 
@@ -70,7 +75,9 @@ class RequestManager:
             try:
                 # Use context manager for cancellable request
                 async with interface.cancellable_request(
-                    self._send_single(config, interface, response_model, message_history)
+                    self._send_single(
+                        config, interface, response_model, message_history
+                    )
                 ) as request_task:
                     assistant_response = await request_task
                     return assistant_response
@@ -94,7 +101,13 @@ class RequestManager:
             if not should_retry:
                 return None
 
-    async def _send_single(self, config: SolveigConfig, interface: SolveigInterface, response_model: type, message_history: MessageHistory) -> AssistantMessage:
+    async def _send_single(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        response_model: type,
+        message_history: MessageHistory,
+    ) -> AssistantMessage:
         """Send a single request to the LLM."""
         message_history_dumped = message_history.to_openai()
 
@@ -134,12 +147,14 @@ class RequestManager:
 
         return assistant_response
 
-    async def _process_response(self, interface: SolveigInterface, response: AssistantMessage) -> AssistantMessage:
+    async def _process_response(
+        self, interface: SolveigInterface, response: AssistantMessage
+    ) -> AssistantMessage:
         """Extract metadata from response and update message history."""
         model = None
         if hasattr(response, "_raw_response"):
             raw = response._raw_response
-            if (model := raw.model):
+            if model := raw.model:
                 await interface.update_stats(model=model)
 
             # Extract reasoning and reasoning_details from o1/o3/Gemini models
@@ -152,7 +167,12 @@ class RequestManager:
 
         return response
 
-    async def _handle_instructor_error(self, config: SolveigConfig, interface: SolveigInterface, exc: InstructorRetryException) -> None:
+    async def _handle_instructor_error(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        exc: InstructorRetryException,
+    ) -> None:
         """Handle InstructorRetryException with user-friendly messages."""
         attempt_exc = exc.failed_attempts[0][1] if exc.failed_attempts else exc
         body = getattr(attempt_exc, "body", None)
@@ -175,7 +195,9 @@ class RequestManager:
                 await e.print(interface)
 
     @staticmethod
-    async def _handle_generic_error(interface: SolveigInterface, exc: Exception) -> None:
+    async def _handle_generic_error(
+        interface: SolveigInterface, exc: Exception
+    ) -> None:
         """Handle generic exceptions."""
         import traceback
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Literal
 
 from solveig.interface import SolveigInterface
-from solveig.schema.result import ToolResult
 from solveig.schema.base import BaseSolveigModel
 from solveig.schema.message.base import BaseMessage
+from solveig.schema.result import ToolResult
 
 
 class UserComment(BaseSolveigModel):
