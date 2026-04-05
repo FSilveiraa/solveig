@@ -263,8 +263,8 @@ class TestReconstructMessages:
         result = manager.reconstruct_messages(data)
         assert len(result) == 1
         assert isinstance(result[0], UserMessage)
-        assert isinstance(result[0].responses[0], UserComment)
-        assert result[0].responses[0].comment == "User said this"
+        assert isinstance(result[0].results[0], UserComment)
+        assert result[0].results[0].comment == "User said this"
 
 
 # ---------------------------------------------------------------------------

@@ -76,9 +76,9 @@ class TestAsyncMessageHistory:
         assert len(history.messages) == 2
         last_message = history.messages[-1]
         assert isinstance(last_message, UserMessage)
-        assert len(last_message.responses) == 1
-        assert isinstance(last_message.responses[0], UserComment)
-        assert last_message.responses[0].comment == "This is a user comment."
+        assert len(last_message.results) == 1
+        assert isinstance(last_message.results[0], UserComment)
+        assert last_message.results[0].comment == "This is a user comment."
         assert "User" in mock_interface.get_all_output()
 
     async def test_condense_with_mixed_queue(self):
@@ -117,10 +117,10 @@ class TestAsyncMessageHistory:
         assert len(history.messages) == 2
         last_message = history.messages[-1]
         assert isinstance(last_message, UserMessage)
-        assert len(last_message.responses) == 3
-        assert last_message.responses[0] == result1
-        assert isinstance(last_message.responses[1], UserComment)
-        assert last_message.responses[2] == result2
+        assert len(last_message.results) == 3
+        assert last_message.results[0] == result1
+        assert isinstance(last_message.results[1], UserComment)
+        assert last_message.results[2] == result2
 
     async def test_condense_blocks_for_input(self):
         """

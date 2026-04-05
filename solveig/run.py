@@ -51,9 +51,7 @@ async def setup_loop(
         name = None if resume_session == "__latest__" else resume_session
         try:
             session_data = await session_manager.load(name)
-            message_history.load_messages(
-                session_manager.reconstruct_messages(session_data)
-            )
+            message_history.load_from_session(session_data)
             await session_manager.display_loaded_session(
                 session_data, message_history, interface
             )
@@ -132,13 +130,19 @@ async def main_loop(
         # If need_user_input is True and no UserComment is in the queue yet, this
         # blocks until the user types something. Resetting to True immediately
         # after ensures any `continue` below also blocks on the next iteration.
-        await message_history.condense_responses_into_user_message(
+        user_message = await message_history.condense_responses_into_user_message(
             interface=interface, wait_for_input=need_user_input
+        )
+        await interface.update_stats(
+            tokens=(
+                message_history.total_tokens_sent,
+                message_history.total_tokens_received,
+            ),
         )
         need_user_input = True
 
-        if session_manager:
-            await session_manager.auto_save(message_history)
+        if session_manager and user_message:
+            await session_manager.append(user_message)
 
         # Pre-send guard: refuse to send if no model name is configured.
         # The user input was already consumed above, so the next iteration will
@@ -172,8 +176,9 @@ async def main_loop(
 
             await llm_response.display(interface)
 
+            # Add the assistant response to the persistent session logging
             if session_manager:
-                await session_manager.auto_save(message_history)
+                await session_manager.append(llm_response)
 
             if llm_response.tools:
                 # In autonomous mode (default), send results back without waiting.

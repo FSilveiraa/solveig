@@ -1,9 +1,10 @@
+import json
 from dataclasses import dataclass, field
-
-from openai.types import CompletionUsage
+from pydantic import TypeAdapter
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
+from solveig.schema.dynamic import get_result_classes, get_tools_union
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.system import SystemMessage
@@ -91,15 +92,9 @@ class MessageHistory:
             comment = UserComment(comment=comment)
         await self.pending_messages.put(comment)
 
-    def record_api_usage(self, usage: "CompletionUsage") -> None:
-        """Updates the total token counts from the API's response."""
-        if usage:
-            self.total_tokens_sent += usage.prompt_tokens
-            self.total_tokens_received += usage.completion_tokens
-
     async def condense_responses_into_user_message(
         self, interface: SolveigInterface, wait_for_input: bool = True
-    ):
+    ) -> UserMessage | None:
         """
         Consolidates events into a UserMessage, optionally waiting for user input.
 
@@ -126,13 +121,62 @@ class MessageHistory:
 
         # 3. If we have collected any events, create and display the message.
         if responses:
-            user_message = UserMessage(responses=responses)
+            user_message = UserMessage(results=responses)
             self.add_messages(user_message)
             await user_message.display(interface)
+            return user_message
+        return None
 
-    def to_session(self) -> list[dict]:
-        """Return OpenAI-format messages excluding the system prompt."""
-        return [msg for msg, _ in self.message_cache[1:]]
+    def load_from_session(self, session_data: dict) -> None:
+        """Reconstruct messages from a stored session dict and load them into history."""
+        tool_adapter: TypeAdapter = TypeAdapter(get_tools_union(self.config))
+        result_classes = get_result_classes(self.config)
+        messages: list[Message] = []
+        pending_tools: list = []
+
+        for msg in session_data.get("messages", []):
+            role = msg.get("role", "unknown")
+            content = msg.get("content") or ""
+            try:
+                parsed = json.loads(content)
+            except (json.JSONDecodeError, AttributeError):
+                parsed = {}
+
+            if role == "assistant":
+                pending_tools = []
+                for tool_dict in parsed.get("tools") or []:
+                    try:
+                        pending_tools.append(tool_adapter.validate_python(tool_dict))
+                    except Exception:
+                        pass
+                messages.append(
+                    AssistantMessage(
+                        comment=parsed.get("comment", content),
+                        tasks=parsed.get("tasks"),
+                        tools=pending_tools or None,
+                    )
+                )
+
+            elif role == "user":
+                responses: list[ToolResult | UserComment] = []
+                result_idx = 0
+                for r in parsed.get("responses", []):
+                    if "title" in r and "accepted" in r:
+                        tool = (
+                            pending_tools[result_idx]
+                            if result_idx < len(pending_tools)
+                            else None
+                        )
+                        result_idx += 1
+                        if tool is not None:
+                            result_cls = result_classes.get(r.get("title", ""), ToolResult)
+                            responses.append(result_cls.model_validate({**r, "tool": tool}))
+                    elif "comment" in r:
+                        responses.append(UserComment(comment=r["comment"]))
+                if responses:
+                    messages.append(UserMessage(results=responses))  # type: ignore[arg-type]
+
+        self.load_messages(messages)
 
     def load_messages(self, messages: list[Message]) -> None:
         """Replace message history in-place from reconstructed Message objects.

@@ -124,7 +124,7 @@ tree_metadata = Metadata(
 
 EXAMPLE.add_messages(
     UserMessage(
-        responses=[
+        results=[
             UserComment(
                 comment="Hey I don't recognize the contents of ~/Sync, can you take a look to see if it looks suspicious?"
             )
@@ -138,7 +138,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        responses=[
+        results=[
             UserComment(comment="Here you go"),
             TreeResult(
                 tool=tree_req,
@@ -174,7 +174,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        responses=[
+        results=[
             ReadResult(
                 tool=read_hello_py_req,
                 path="/home/user/Sync/hello.py",
@@ -242,7 +242,7 @@ EXAMPLE.add_messages(
         tasks=tasks_3,
     ),
     UserMessage(
-        responses=[
+        results=[
             UserComment(
                 comment="Thanks! Can you improve that print script to accept CLI args with a default?"
             )
@@ -292,7 +292,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        responses=[
+        results=[
             UserComment(
                 comment="Cool, it works! Thanks, can you clean up the old file now?"
             ),
@@ -337,7 +337,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        responses=[
+        results=[
             UserComment(comment="I'd rather use a simple move operation for this"),
             CommandResult(
                 tool=script_delete_move_req,
@@ -370,7 +370,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        responses=[
+        results=[
             UserComment(comment="Great, thanks!"),
             MoveResult(
                 tool=script_move_req,

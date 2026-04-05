@@ -1,16 +1,15 @@
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 
 from anyio import Path
-from pydantic import TypeAdapter
 
+from solveig import utils
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.dynamic import get_result_classes, get_tools_union
 from solveig.schema.message import MessageHistory
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.message_history import Message
-from solveig.schema.message.user import UserComment, UserMessage
+from solveig.schema.message.user import UserMessage
 from solveig.schema.result import ToolResult
 from solveig.utils.file import Filesystem
 
@@ -45,7 +44,7 @@ class SessionManager:
         items = [
             (path_str, m.modified_time)
             for path_str, m in meta.listing.items()
-            if path_str.rsplit("/", 1)[-1].endswith(".json")
+            if path_str.rsplit("/", 1)[-1].endswith(".jsonl")
             and not m.is_directory
         ]
         return sorted(items, key=lambda pm: pm[1], reverse=True)
@@ -68,37 +67,19 @@ class SessionManager:
 
     def _session_filename(self, name: str | None) -> str:
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        return f"{ts}_{name}.json" if name else f"{ts}.json"
-
-    def _build_session_data(
-        self, message_history: MessageHistory, session_id: str
-    ) -> str:
-        messages = message_history.to_session()
-        data = {
-            "id": session_id,
-            "last_updated": datetime.now(UTC).isoformat(),
-            "model": self.config.model,
-            "messages": messages,
-            "metadata": {
-                "total_tokens_sent": message_history.total_tokens_sent,
-                "total_tokens_received": message_history.total_tokens_received,
-                "message_count": len(messages),
-            },
-        }
-        return json.dumps(data, indent=2)
+        return f"{ts}_{name}.jsonl" if name else f"{ts}.jsonl"
 
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------
 
-    async def auto_save(self, message_history: MessageHistory) -> None:
-        """Save to the current session file, creating it if needed."""
+    async def append(self, *messages: Message) -> None:
+        """Append one or more messages to the session file, creating it if needed."""
         sessions_dir = await self._ensure_dir()
         if self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(None)}")
-        session_id = self.current_path.name.removesuffix(".json")
-        content = self._build_session_data(message_history, session_id)
-        await Filesystem.write_file_text(self.current_path, content)
+        lines = "\n".join(json.dumps(m.to_openai(), default=utils.misc.default_json_serialize) for m in messages) + "\n"
+        await Filesystem.write_file_text(self.current_path, lines, append=True)
 
     async def store(
         self, message_history: MessageHistory, name: str | None = None
@@ -108,9 +89,8 @@ class SessionManager:
         sessions_dir = await self._ensure_dir()
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
-        session_id = self.current_path.name.removesuffix(".json")
-        content = self._build_session_data(message_history, session_id)
-        await Filesystem.write_file_text(self.current_path, content)
+        lines = "\n".join(json.dumps(m.to_openai(), default=utils.misc.default_json_serialize) for m in message_history.messages[1:]) + "\n"
+        await Filesystem.write_file_text(self.current_path, lines)
         return self.current_path.name
 
     async def load(self, name: str | None = None) -> dict:
@@ -124,7 +104,9 @@ class SessionManager:
             path_str = sessions[0][0]
         self.current_path = Path(path_str)
         file_content = await Filesystem.read_file(self.current_path)
-        return json.loads(file_content.content)
+        messages = [json.loads(l) for l in file_content.content.splitlines() if l.strip()]
+        session_id = self.current_path.name.removesuffix(".jsonl")
+        return { "id": session_id, "messages": messages }
 
     async def list_sessions(self) -> list[dict]:
         """Return metadata for all named sessions, newest first."""
@@ -132,9 +114,9 @@ class SessionManager:
         for path_str, mtime in await self._get_sessions():
             try:
                 file_content = await Filesystem.read_file(Path(path_str))
-                data = json.loads(file_content.content)
-                data["_mtime"] = mtime
-                data["_path"] = path_str
+                messages = [json.loads(l) for l in file_content.content.splitlines() if l.strip()]
+                session_id = path_str.rsplit("/", 1)[-1].removesuffix(".jsonl")
+                data = {"id": session_id, "messages": messages, "metadata": {"message_count": len(messages)}, "_mtime": mtime, "_path": path_str}
                 result.append(data)
             except Exception:
                 pass
@@ -150,61 +132,6 @@ class SessionManager:
     # Display
     # ------------------------------------------------------------------
 
-    def reconstruct_messages(self, session_data: dict) -> list[Message]:
-        """Reconstruct typed Pydantic Message objects from a stored session dict."""
-        tool_adapter: TypeAdapter = TypeAdapter(get_tools_union())
-        result_classes = get_result_classes()
-        messages: list[Message] = []
-        pending_tools: list = []
-
-        for msg in session_data.get("messages", []):
-            role = msg.get("role", "unknown")
-            content = msg.get("content") or ""
-            try:
-                parsed = json.loads(content)
-            except (json.JSONDecodeError, AttributeError):
-                parsed = {}
-
-            if role == "assistant":
-                pending_tools = []
-                for tool_dict in parsed.get("tools") or []:
-                    try:
-                        pending_tools.append(tool_adapter.validate_python(tool_dict))
-                    except Exception:
-                        pass
-                messages.append(
-                    AssistantMessage(
-                        comment=parsed.get("comment", content),
-                        tasks=parsed.get("tasks"),
-                        tools=pending_tools or None,
-                    )
-                )
-
-            elif role == "user":
-                responses: list[ToolResult | UserComment] = []
-                result_idx = 0
-                for r in parsed.get("responses", []):
-                    if "title" in r and "accepted" in r:
-                        tool = (
-                            pending_tools[result_idx]
-                            if result_idx < len(pending_tools)
-                            else None
-                        )
-                        result_idx += 1
-                        if tool is not None:
-                            result_cls = result_classes.get(
-                                r.get("title", ""), ToolResult
-                            )
-                            responses.append(
-                                result_cls.model_validate({**r, "tool": tool})
-                            )
-                    elif "comment" in r:
-                        responses.append(UserComment(comment=r["comment"]))
-                if responses:
-                    messages.append(UserMessage(responses=responses))  # type: ignore[arg-type]
-
-        return messages
-
     async def display_loaded_session(
         self,
         session_data: dict,
@@ -212,22 +139,20 @@ class SessionManager:
         interface: SolveigInterface,
     ) -> None:
         """Re-display all messages from a loaded session."""
-        meta = session_data.get("metadata", {})
         header = (
             f"**Session:** {session_data.get('id', '?')}  \n"
-            f"**Model:** {session_data.get('model', '?')}  \n"
-            f"**Messages:** {meta.get('message_count', '?')}  \n"
+            f"**Messages:** {len(message_history.messages) - 1}  \n"
             f"**Tokens sent / received:** "
-            f"{meta.get('total_tokens_sent', 0)} / {meta.get('total_tokens_received', 0)}"
+            f"{message_history.total_tokens_sent} / {message_history.total_tokens_received}"
         )
-        await interface.display_text_block(header, title="Resumed session")
+        await interface.display_text_block(header, language="markdown", title="Resumed session")
 
         for msg in message_history.messages[1:]:  # skip system message
             if isinstance(msg, AssistantMessage):
                 await interface.display_section("Assistant")
                 await msg.display(interface)
             elif isinstance(msg, UserMessage):
-                for response in msg.responses:
+                for response in msg.results:
                     if isinstance(response, ToolResult):
                         try:
                             await response.display(interface)
