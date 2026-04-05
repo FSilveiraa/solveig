@@ -169,7 +169,6 @@ async def fetch_and_apply_model_info(
     config: SolveigConfig,
     client_ref: ClientRef,
     interface: SolveigInterface,
-    message_history: MessageHistory | None = None,
 ) -> bool:
     """
     Fetch model details from the API and apply them to config.
@@ -209,8 +208,6 @@ async def fetch_and_apply_model_info(
     if model_info.context_length is not None:
         if config.max_context < 0 or config.max_context > model_info.context_length:
             config.max_context = model_info.context_length
-            if message_history is not None:
-                message_history.max_context = config.max_context
 
     await interface.update_stats(
         model=config.model,
@@ -233,7 +230,7 @@ async def _hook_model_changed(
     message_history: MessageHistory | None,
 ) -> None:
     config.model_info = None
-    await fetch_and_apply_model_info(config, client_ref, interface, message_history)
+    await fetch_and_apply_model_info(config, client_ref, interface)
 
 
 async def _hook_briefing_changed(

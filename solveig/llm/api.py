@@ -43,7 +43,7 @@ class APIType:
             encoder: str | None = None,
         ) -> int:
             if isinstance(text, dict):
-                text = text.get("content", "") + text.get("role", "")
+                text = str(text.get("content", "") + text.get("role", ""))
             enc = cls.default_encoder
             return len(enc.encode(text)) if enc else len(text) // 4
 
@@ -77,7 +77,7 @@ class APIType:
             encoder: str | None = None,
         ) -> int:
             if isinstance(text, dict):
-                text = text.get("content", "") + text.get("role", "")
+                text = str(text.get("content", "") + text.get("role", ""))
             if encoder is not None:
                 try:
                     if encoder not in cls._encoder_cache:

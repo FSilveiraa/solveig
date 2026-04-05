@@ -66,7 +66,7 @@ async def setup_loop(
         )
     else:
         await fetch_and_apply_model_info(
-            config, request_manager.client_ref, interface, message_history
+            config, request_manager.client_ref, interface
         )
 
     await interface.update_stats(url=config.url, model=config.model)

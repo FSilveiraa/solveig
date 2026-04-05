@@ -424,7 +424,7 @@ class SubcommandRunner:
             return
         self.config.model_info = None
         await fetch_and_apply_model_info(
-            self.config, self.client_ref, interface, self.message_history
+            self.config, self.client_ref, interface
         )
 
     async def _model_list(self, interface: SolveigInterface, *args) -> None:
