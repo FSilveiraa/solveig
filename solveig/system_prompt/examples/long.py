@@ -1,11 +1,7 @@
 from solveig.plugins.tools.tree import TreeResult, TreeTool
-from solveig.schema.message import (
-    AssistantMessage,
-    MessageHistory,
-    UserComment,
-)
-from solveig.schema.message.assistant import Task
-from solveig.schema.message.user import UserMessage
+from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.assistant import AssistantMessage, Task
+from solveig.schema.message.user import UserMessage, UserComment
 from solveig.schema.result import (
     CommandResult,
     MoveResult,
@@ -124,7 +120,7 @@ tree_metadata = Metadata(
 
 EXAMPLE.add_messages(
     UserMessage(
-        results=[
+        responses=[
             UserComment(
                 comment="Hey I don't recognize the contents of ~/Sync, can you take a look to see if it looks suspicious?"
             )
@@ -138,7 +134,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        results=[
+        responses=[
             UserComment(comment="Here you go"),
             TreeResult(
                 tool=tree_req,
@@ -174,7 +170,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        results=[
+        responses=[
             ReadResult(
                 tool=read_hello_py_req,
                 path="/home/user/Sync/hello.py",
@@ -242,7 +238,7 @@ EXAMPLE.add_messages(
         tasks=tasks_3,
     ),
     UserMessage(
-        results=[
+        responses=[
             UserComment(
                 comment="Thanks! Can you improve that print script to accept CLI args with a default?"
             )
@@ -292,7 +288,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        results=[
+        responses=[
             UserComment(
                 comment="Cool, it works! Thanks, can you clean up the old file now?"
             ),
@@ -337,7 +333,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        results=[
+        responses=[
             UserComment(comment="I'd rather use a simple move operation for this"),
             CommandResult(
                 tool=script_delete_move_req,
@@ -370,7 +366,7 @@ EXAMPLE.add_messages(
         ],
     ),
     UserMessage(
-        results=[
+        responses=[
             UserComment(comment="Great, thanks!"),
             MoveResult(
                 tool=script_move_req,

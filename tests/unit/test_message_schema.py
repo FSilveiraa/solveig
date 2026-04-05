@@ -176,7 +176,7 @@ class TestMessageSerialization:
     async def test_user_message_serialization_and_validation(self):
         """Test UserMessage serialization with validation."""
         # Test serialization with a UserComment
-        message = UserMessage(results=[UserComment(comment="test comment")])
+        message = UserMessage(responses=[UserComment(comment="test comment")])
         assert message.comment == "test comment"
 
         # Test serialization
@@ -223,7 +223,7 @@ class TestMessageSerialization:
 
         # Create UserMessage with a comment and results
         user_msg = UserMessage(
-            results=[UserComment(comment="Here are the results"), result]
+            responses=[UserComment(comment="Here are the results"), result]
         )
 
         # Test serialization

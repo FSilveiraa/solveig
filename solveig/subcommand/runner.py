@@ -19,7 +19,7 @@ from solveig.config.editor import (
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
 from solveig.schema.dynamic import get_tools_union
-from solveig.schema.message import MessageHistory
+from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS
 from solveig.schema.tool.base import BaseTool
 from solveig.sessions.manager import SessionManager

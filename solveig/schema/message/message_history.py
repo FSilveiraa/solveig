@@ -121,7 +121,7 @@ class MessageHistory:
 
         # 3. If we have collected any events, create and display the message.
         if responses:
-            user_message = UserMessage(results=responses)
+            user_message = UserMessage(responses=responses)
             self.add_messages(user_message)
             await user_message.display(interface)
             return user_message
@@ -174,7 +174,7 @@ class MessageHistory:
                     elif "comment" in r:
                         responses.append(UserComment(comment=r["comment"]))
                 if responses:
-                    messages.append(UserMessage(results=responses))  # type: ignore[arg-type]
+                    messages.append(UserMessage(responses=responses))  # type: ignore[arg-type]
 
         self.load_messages(messages)
 

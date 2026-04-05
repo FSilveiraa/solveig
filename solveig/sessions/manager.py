@@ -6,7 +6,7 @@ from anyio import Path
 from solveig import utils
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.message import MessageHistory
+from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.message_history import Message
 from solveig.schema.message.user import UserMessage
@@ -152,7 +152,7 @@ class SessionManager:
                 await interface.display_section("Assistant")
                 await msg.display(interface)
             elif isinstance(msg, UserMessage):
-                for response in msg.results:
+                for response in msg.responses:
                     if isinstance(response, ToolResult):
                         try:
                             await response.display(interface)

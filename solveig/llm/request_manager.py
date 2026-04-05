@@ -14,7 +14,8 @@ from instructor.core import InstructorRetryException
 from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
 from solveig.interface import SolveigInterface
 from solveig.schema.dynamic import get_response_model
-from solveig.schema.message import AssistantMessage, MessageHistory
+from solveig.schema.message import AssistantMessage
+from solveig.schema.message.message_history import MessageHistory
 from solveig.utils.misc import default_json_serialize
 
 if TYPE_CHECKING:

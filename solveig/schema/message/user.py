@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from solveig.interface import SolveigInterface
-from solveig.schema import ToolResult
+from solveig.schema.result import ToolResult
 from solveig.schema.base import BaseSolveigModel
 from solveig.schema.message.base import BaseMessage
 
@@ -16,13 +16,13 @@ class UserComment(BaseSolveigModel):
 
 class UserMessage(BaseMessage):
     role: Literal["user"] = "user"
-    results: list[ToolResult | UserComment]
+    responses: list[ToolResult | UserComment]
 
     async def display(self, interface: SolveigInterface):
         """Display the user's comments from the message."""
         comments = [
             response.comment
-            for response in self.results
+            for response in self.responses
             if isinstance(response, UserComment)
         ]
         if comments:
@@ -34,6 +34,6 @@ class UserMessage(BaseMessage):
     def comment(self) -> str:
         return "\n".join(
             response.comment
-            for response in self.results
+            for response in self.responses
             if isinstance(response, UserComment)
         )

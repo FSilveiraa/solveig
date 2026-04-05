@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from solveig.llm import ClientRef
-from solveig.schema.message import MessageHistory
+from solveig.schema.message.message_history import MessageHistory
 from solveig.subcommand.runner import SubcommandRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
