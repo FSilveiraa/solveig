@@ -141,7 +141,6 @@ class SessionManager:
                 data = {
                     "id": session_id,
                     "messages": messages,
-                    "metadata": {"message_count": len(messages)},
                     "_mtime": mtime,
                     "_path": path_str,
                 }
