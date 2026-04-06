@@ -3,7 +3,7 @@ import platform
 import typing
 
 from solveig.config import SolveigConfig
-from solveig.schema.dynamic import get_tools_union
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.system_prompt.examples import long
 from solveig.utils.file import Filesystem
 
@@ -59,13 +59,11 @@ async def get_briefing_content(briefing_files: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def get_available_tools(config: SolveigConfig) -> str:
-    """Generate capabilities list from currently filtered tools."""
-    # Get ALL active tools from the unified registry (core + plugins)
-    active_tools = get_tools_union(config)
+def get_available_tools() -> str:
+    """Generate capabilities list from currently active tools."""
     return "Available tools:\n" + "\n".join(
         f"- {req_class.get_description()}"
-        for req_class in typing.get_args(active_tools)
+        for req_class in typing.get_args(AVAILABLE_TOOLS.tools_union)
     )
 
 
@@ -73,7 +71,7 @@ async def get_system_prompt(config: SolveigConfig) -> str:
     system_prompt = config.system_prompt.strip()
     if briefing_content := await get_briefing_content(config.briefing):
         system_prompt += "\n\n" + briefing_content
-    if tools_info := get_available_tools(config):
+    if tools_info := get_available_tools():
         system_prompt += "\n\n" + tools_info
     if os_info := get_basic_os_info(exclude_username=config.exclude_username):
         system_prompt += "\n\n" + os_info

@@ -11,6 +11,7 @@ from typing import Any
 
 from solveig.interface import SolveigInterface, themes
 from solveig.llm.api import API_TYPES, ClientRef, ModelInfo, ModelNotFound
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.system_prompt import get_system_prompt
 from solveig.utils.misc import parse_human_readable_size
@@ -253,6 +254,15 @@ async def _hook_max_context_changed(
     await interface.update_stats(max_context=config.max_context)
 
 
+async def _hook_no_commands_changed(
+    config: SolveigConfig,
+    client_ref: ClientRef,
+    interface: SolveigInterface,
+    message_history: MessageHistory | None,
+) -> None:
+    AVAILABLE_TOOLS.rebuild(config)
+
+
 # ---------------------------------------------------------------------------
 # Hook registry
 # ---------------------------------------------------------------------------
@@ -265,6 +275,7 @@ CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "max_context": _hook_max_context_changed,
     "briefing": _hook_briefing_changed,
+    "no_commands": _hook_no_commands_changed,
     # Layer 2+: add_examples, add_os_info, exclude_username, system_prompt,
     #           auto_allowed_paths, auto_execute_commands, plugins,
     #           url, api_type, api_key, theme, code_theme

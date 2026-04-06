@@ -22,7 +22,7 @@ from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
 from solveig.plugins import initialize_plugins
-from solveig.schema.dynamic import get_response_model
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
@@ -47,11 +47,10 @@ async def setup_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
-    # Initialize plugins as soon as possible (after the interface is running)
-    # to ensure the cached tools union accounts for existing plugins
+    # Initialize plugins, then rebuild the tools union so it includes them.
     await initialize_plugins(config=config, interface=interface)
+    AVAILABLE_TOOLS.rebuild(config)
 
-    # The system prompt reads the tool union cached above
     sys_prompt = await system_prompt.get_system_prompt(config)
     message_history.update_system_prompt(sys_prompt)
 
@@ -92,7 +91,7 @@ async def setup_loop(
     interface.set_subcommand_executor(subcommand_executor)
 
     if config.verbose:
-        response_model = get_response_model(config)
+        response_model = AVAILABLE_TOOLS.response_model
         serialized_response_model = serialize_response_model(model=response_model)
         await interface.display_text_block(
             title="Response Model",

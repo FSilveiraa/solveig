@@ -13,7 +13,7 @@ from instructor.core import InstructorRetryException
 
 from solveig.interface import SolveigInterface
 from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
-from solveig.schema.dynamic import get_response_model
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.message_history import MessageHistory
 from solveig.utils.misc import default_json_serialize
@@ -66,7 +66,7 @@ class RequestManager:
 
         Returns AssistantMessage on success, None if user chooses not to retry.
         """
-        response_model = get_response_model(config)
+        response_model = AVAILABLE_TOOLS.response_model
 
         while True:
             # This prevents general errors in testing, allowing for the task to get cancelled mid-loop

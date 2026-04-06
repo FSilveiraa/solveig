@@ -5,7 +5,7 @@ from pydantic import TypeAdapter
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.dynamic import get_result_classes, get_tools_union
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.system import SystemMessage
@@ -158,8 +158,8 @@ class MessageHistory:
 
     def load_from_session(self, session_data: dict) -> None:
         """Reconstruct messages from a stored session dict and load them into history."""
-        tool_adapter: TypeAdapter = TypeAdapter(get_tools_union(self.config))
-        result_classes = get_result_classes(self.config)
+        tool_adapter: TypeAdapter = TypeAdapter(AVAILABLE_TOOLS.tools_union)
+        result_classes = AVAILABLE_TOOLS.result_classes
         messages: list[Message] = []
         pending_tools: list = []
 

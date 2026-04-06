@@ -18,7 +18,7 @@ from solveig.config.editor import (
 )
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
-from solveig.schema.dynamic import get_tools_union
+from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS
 from solveig.schema.tool.base import BaseTool
@@ -237,7 +237,7 @@ class SubcommandRunner:
             self._reg_alias(f"/sessions{sub}", self._registry[f"/session{sub}"])
 
     def _register_tool_subcommands(self) -> None:
-        for tool_cls in typing.get_args(get_tools_union()):
+        for tool_cls in typing.get_args(AVAILABLE_TOOLS.tools_union):
             template: Subcommand | None = getattr(tool_cls, "subcommand", None)
             if not isinstance(template, Subcommand):
                 continue
