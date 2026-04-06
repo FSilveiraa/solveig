@@ -192,6 +192,7 @@ class SolveigInterface(ABC):
         url: str | None = None,
         path: str | PathLike | None = None,
         max_context: int | None = None,
+        used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
     ) -> None:

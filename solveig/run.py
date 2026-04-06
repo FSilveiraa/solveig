@@ -55,6 +55,9 @@ async def setup_loop(
             await session_manager.display_loaded_session(
                 session_data, message_history, interface
             )
+            await interface.update_stats(
+                used_context=message_history.token_count
+            )
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
 
@@ -136,6 +139,7 @@ async def main_loop(
                 message_history.total_tokens_sent,
                 message_history.total_tokens_received,
             ),
+            used_context=message_history.token_count,
         )
         need_user_input = True
 
@@ -171,6 +175,7 @@ async def main_loop(
                     message_history.total_tokens_sent,
                     message_history.total_tokens_received,
                 ),
+                used_context=message_history.token_count,
             )
 
             if config.verbose:

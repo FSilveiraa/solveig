@@ -240,6 +240,7 @@ class TerminalInterface(SolveigInterface):
         url: str | None = None,
         path: str | PathLike | None = None,
         max_context: int | None = None,
+        used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
     ) -> None:
@@ -254,6 +255,7 @@ class TerminalInterface(SolveigInterface):
             url=url,
             path=path,
             max_context=_max_context,
+            used_context=used_context,
             input_price=input_price,
             output_price=output_price,
         )

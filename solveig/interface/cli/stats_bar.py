@@ -28,7 +28,8 @@ class StatsBar(Widget):
         self._path = Filesystem.get_current_directory(simplify=True)
         self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
-        self.max_context: str | int = ""
+        self.max_context = 0
+        self.used_context = 0
         self.input_price: float = 0
         self.output_price: float = 0
 
@@ -39,6 +40,10 @@ class StatsBar(Widget):
     @property
     def path(self):
         return f"🗁  {self._path}" if self._path else ""
+
+    @property
+    def context(self):
+        return f"{self.used_context} / {self.max_context}"
 
     @property
     def status(self):
@@ -70,7 +75,7 @@ class StatsBar(Widget):
                 f"Tokens: {self.tokens}"
             )
             self._row_keys["table1_row2"] = self._table1.add_row(
-                f"Context length: {self.max_context}"
+                f"Context: {self.context}"
             )
 
             self._table2 = DataTable(
@@ -117,7 +122,8 @@ class StatsBar(Widget):
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
-        max_context: int | str | None = None,
+        max_context: int | None = None,
+        used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
     ):
@@ -150,6 +156,9 @@ class StatsBar(Widget):
         if max_context is not None:
             self.max_context = max_context
             updated_stats = True
+
+        if used_context is not None:
+            self.used_context = used_context
 
         if input_price is not None:
             self.input_price = input_price
@@ -195,7 +204,7 @@ class StatsBar(Widget):
         self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
         self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
         self._row_keys["table1_row2"] = self._table1.add_row(
-            f"Context length: {self.max_context}"
+            f"Context: {self.context}"
         )
         self._row_keys["table2_row2"] = self._table2.add_row(
             f"Input price: ${self.input_price}/M"
