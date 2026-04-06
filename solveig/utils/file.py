@@ -82,13 +82,12 @@ class Filesystem:
 
     @staticmethod
     async def _append_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
-        """Async text file appending using AnyIO."""
-        # AnyIO doesn't have append mode, so we read + write
-        try:
-            existing = await abs_path.read_text(encoding=encoding)
-            await abs_path.write_text(existing + content, encoding=encoding)
-        except FileNotFoundError:
-            await abs_path.write_text(content, encoding=encoding)
+        """Async text file appending with true O_APPEND semantics via asyncio.to_thread."""
+        def _do_append():
+            with open(abs_path, "a", encoding=encoding) as f:
+                f.write(content)
+
+        await asyncio.to_thread(_do_append)
 
     @staticmethod
     async def _write_bytes(abs_path: Path, content: bytes) -> None:
