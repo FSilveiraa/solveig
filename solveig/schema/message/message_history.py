@@ -70,18 +70,25 @@ class MessageHistory:
                 # Deducting the approximate user size gives the pre-user total; the difference
                 # from prompt_tokens is the exact user message size. Works through pruning
                 # because both sides have the same evictions already applied.
-                if (
-                    self.message_cache
-                    and self.message_cache[-1][0].get("role") == "user"
-                ):
-                    approx_user_size = self.message_cache[-1][1]
+                if self.message_cache and isinstance(previous_user_message := self.messages[-1], UserMessage):
+                    approx_user_size = previous_user_message.token_count
                     exact_user_size = sent - (self.token_count - approx_user_size)
                     if exact_user_size > 0:
-                        self.message_cache[-1] = (
-                            self.message_cache[-1][0],
-                            exact_user_size,
-                        )
-                        self.messages[-1].token_count = exact_user_size
+                        previous_user_message.token_count = exact_user_size
+                        dumped_message, _ = self.message_cache[-1]
+                        self.message_cache[-1] = (dumped_message, exact_user_size)
+
+                        # If there are multiple user messages in a row (cancel sending and add another)
+                        # then we can't just correct the latest one and leave the others with encoder counts
+                        # Iterate the previous user messages, if any, and set their sizes to 0
+                        for i in reversed(range(-1 * len(self.messages), -1)):
+                            previous_message = self.messages[i]
+                            if not isinstance(previous_message, UserMessage):
+                                break
+                            previous_message.token_count = 0
+                            dumped_message, _ = self.message_cache[i]
+                            self.message_cache[i] = (dumped_message, 0)
+
                 self.token_count = sent + received
                 self.total_tokens_sent += sent
                 self.total_tokens_received += received
