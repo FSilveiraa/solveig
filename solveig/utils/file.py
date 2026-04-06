@@ -278,7 +278,7 @@ class Filesystem:
                 tasks.append((abs_sub_path, task))
 
             results = await asyncio.gather(*(task for _, task in tasks))
-            listing = {str(p): r for (p, _), r in zip(tasks, results)}
+            listing = {str(p): r for (p, _), r in zip(tasks, results, strict=False)}
         else:
             listing = None
 

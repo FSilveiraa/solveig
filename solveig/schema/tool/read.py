@@ -91,7 +91,9 @@ class ReadTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display read tool header."""
         await super().display_header(interface)
-        self._cached_metadata = metadata = await self.display_path_info(interface, self.path)
+        self._cached_metadata = metadata = await self.display_path_info(
+            interface, self.path
+        )
 
         if not metadata:
             return
@@ -144,7 +146,9 @@ class ReadTool(BaseTool):
             abs_path, config.auto_allowed_paths
         )
 
-        metadata: Metadata = self._cached_metadata or await Filesystem.read_metadata(abs_path)
+        metadata: Metadata = self._cached_metadata or await Filesystem.read_metadata(
+            abs_path
+        )
 
         # Case 1: Directories or metadata-only requests
         if metadata.is_directory or self.metadata_only:

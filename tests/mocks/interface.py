@@ -2,7 +2,6 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
-from os import PathLike
 from typing import Any
 
 from solveig import utils

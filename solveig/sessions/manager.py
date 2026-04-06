@@ -71,19 +71,20 @@ class SessionManager:
     # Core operations
     # ------------------------------------------------------------------
 
-    async def _write_messages(self, messages: list[Message] | tuple[Message, ...], *, append: bool) -> None:
+    async def _write_messages(
+        self, messages: list[Message] | tuple[Message, ...], *, append: bool
+    ) -> None:
         serialized_messages = []
         for message in messages:
             message_serialized = message.to_openai()
             message_serialized["token_count"] = message.token_count
-            serialized_messages.append(json.dumps(
-                message_serialized,
-                default=utils.misc.default_json_serialize,
-            ))
-        lines = (
-            "\n".join(serialized_messages)
-            + "\n"
-        )
+            serialized_messages.append(
+                json.dumps(
+                    message_serialized,
+                    default=utils.misc.default_json_serialize,
+                )
+            )
+        lines = "\n".join(serialized_messages) + "\n"
         await Filesystem.write_file_text(self.current_path, lines, append=append)
 
     async def append(self, *messages: Message) -> None:

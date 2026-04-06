@@ -312,4 +312,3 @@ class TerminalInterface(SolveigInterface):
             stats_dashboard.clear_spinner()
 
             await self.update_stats(final_status)
-

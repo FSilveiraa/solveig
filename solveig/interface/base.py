@@ -198,4 +198,3 @@ class SolveigInterface(ABC):
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...
-

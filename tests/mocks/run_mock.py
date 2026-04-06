@@ -3,7 +3,6 @@
 
 import asyncio
 import random
-from importlib.metadata import metadata
 
 from solveig import SolveigConfig
 from solveig.interface.cli.interface import TerminalInterface
@@ -140,13 +139,22 @@ if __name__ == "__main__":
         ]
 
     mock_messages = [
-        AssistantMessage(comment="Testing tree", tools=[TreeTool(comment="Tree", path="~/Sync/")]),
-        AssistantMessage(comment="Testing read", tools=[ReadTool(comment="Read", path="~/Sync/README.md", metadata_only=False)]),
+        AssistantMessage(
+            comment="Testing tree", tools=[TreeTool(comment="Tree", path="~/Sync/")]
+        ),
+        AssistantMessage(
+            comment="Testing read",
+            tools=[
+                ReadTool(comment="Read", path="~/Sync/README.md", metadata_only=False)
+            ],
+        ),
     ]
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
-    config = config.with_(plugins={**config.plugins, "tree": {}}).with_(model="fake-model")
+    config = config.with_(plugins={**config.plugins, "tree": {}}).with_(
+        model="fake-model"
+    )
     interface = TerminalInterface(
         theme=config.theme,
         code_theme=config.code_theme,

@@ -13,7 +13,7 @@ from solveig.schema.tool.base import (
     BaseTool,
     validate_non_empty_path,
 )
-from solveig.utils.file import Filesystem
+from solveig.utils.file import Filesystem, Metadata
 
 
 class WriteTool(BaseTool):
@@ -75,7 +75,9 @@ class WriteTool(BaseTool):
                 tool=self, path=str(abs_path), accepted=False, error=str(e)
             )
 
-        already_exists = self._cached_metadata is not None or await Filesystem.exists(abs_path)
+        already_exists = self._cached_metadata is not None or await Filesystem.exists(
+            abs_path
+        )
 
         if not self.is_directory and self.content:
             if already_exists:

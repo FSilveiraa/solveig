@@ -171,8 +171,10 @@ class BaseTool(BaseModel, ABC):
             if await Filesystem.exists(abs_path)
             else None
         )
-        is_dir = is_directory if is_directory is not None else (
-            metadata.is_directory if metadata else False
+        is_dir = (
+            is_directory
+            if is_directory is not None
+            else (metadata.is_directory if metadata else False)
         )
         await interface.display_text(
             format_path_info(
