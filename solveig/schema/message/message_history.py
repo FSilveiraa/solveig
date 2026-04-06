@@ -70,11 +70,17 @@ class MessageHistory:
                 # Deducting the approximate user size gives the pre-user total; the difference
                 # from prompt_tokens is the exact user message size. Works through pruning
                 # because both sides have the same evictions already applied.
-                if self.message_cache and self.message_cache[-1][0].get("role") == "user":
+                if (
+                    self.message_cache
+                    and self.message_cache[-1][0].get("role") == "user"
+                ):
                     approx_user_size = self.message_cache[-1][1]
                     exact_user_size = sent - (self.token_count - approx_user_size)
                     if exact_user_size > 0:
-                        self.message_cache[-1] = (self.message_cache[-1][0], exact_user_size)
+                        self.message_cache[-1] = (
+                            self.message_cache[-1][0],
+                            exact_user_size,
+                        )
                         self.messages[-1].token_count = exact_user_size
                 self.token_count = sent + received
                 self.total_tokens_sent += sent
