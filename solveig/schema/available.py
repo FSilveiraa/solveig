@@ -70,12 +70,16 @@ class AvailableTools:
 
     @property
     def tools_union(self) -> type[BaseTool]:
-        assert self._tools_union is not None, "Call rebuild() before accessing tools_union"
+        assert self._tools_union is not None, (
+            "Call rebuild() before accessing tools_union"
+        )
         return self._tools_union
 
     @property
     def response_model(self) -> type[AssistantMessage]:
-        assert self._response_model is not None, "Call rebuild() before accessing response_model"
+        assert self._response_model is not None, (
+            "Call rebuild() before accessing response_model"
+        )
         return self._response_model
 
     @property

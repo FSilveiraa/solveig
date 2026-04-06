@@ -43,9 +43,7 @@ class MCPToolBase(BaseTool):
     ) -> MCPToolResult:
         raise NotImplementedError
 
-    def create_error_result(
-        self, error_message: str, accepted: bool
-    ) -> MCPToolResult:
+    def create_error_result(self, error_message: str, accepted: bool) -> MCPToolResult:
         raise NotImplementedError
 
     @classmethod
@@ -125,10 +123,16 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
         )
         if choice != 0:
             return MCPToolResult(
-                tool=self, title=_name, accepted=False, error="User rejected", output=None
+                tool=self,
+                title=_name,
+                accepted=False,
+                error="User rejected",
+                output=None,
             )
 
-        arguments = {k: getattr(self, k) for k in _fields if getattr(self, k) is not None}
+        arguments = {
+            k: getattr(self, k) for k in _fields if getattr(self, k) is not None
+        }
         try:
             result = await _session.call_tool(_name, arguments)
             output = "\n".join(
