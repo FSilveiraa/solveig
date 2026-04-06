@@ -40,9 +40,8 @@ class WriteTool(BaseTool):
         await interface.display_file_info(
             source_path=self.path,
             is_directory=self.is_directory,
-            source_content=self.content,
-            # show_overwrite_warning=False,
         )
+        await interface.display_info(f"{len(self.content.splitlines())} lines")
 
     def create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
@@ -77,6 +76,19 @@ class WriteTool(BaseTool):
             )
 
         already_exists = await Filesystem.exists(abs_path)
+
+        if already_exists:
+            old = (await Filesystem.read_file(abs_path)).content.strip()
+            await self.display_diff(
+                old_content=str(old), new_content=self.content
+            )
+        else:
+            file_ext = abs_path.suffix.lstrip(".")
+            await self.display_text_block(
+                self.content,
+                language=file_ext,
+                title="Content",
+            )
 
         auto_write = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths

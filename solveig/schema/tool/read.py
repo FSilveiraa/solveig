@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
@@ -30,6 +30,8 @@ class ReadTool(BaseTool):
         ...,
         description="If true read only file/directory metadata, otherwise also read file content",
     )
+    _cached_metadata: Metadata | None = PrivateAttr(default=None)
+
     line_ranges: list[list[int]] | None = Field(
         None,
         description="Optional line ranges to read, e.g., [[10, 50], [100, -1]]. "
@@ -95,7 +97,8 @@ class ReadTool(BaseTool):
         if not await Filesystem.exists(abs_path):
             return
 
-        metadata = await Filesystem.read_metadata(abs_path)
+        self._cached_metadata = await Filesystem.read_metadata(abs_path)
+        metadata = self._cached_metadata
 
         # Display the dir listing for directories (1-depth tree)
         if metadata.is_directory:
@@ -145,8 +148,7 @@ class ReadTool(BaseTool):
             abs_path, config.auto_allowed_paths
         )
 
-        metadata: Metadata | None = await Filesystem.read_metadata(abs_path)
-        assert metadata is not None
+        metadata: Metadata = self._cached_metadata or await Filesystem.read_metadata(abs_path)
 
         # Case 1: Directories or metadata-only requests
         if metadata.is_directory or self.metadata_only:

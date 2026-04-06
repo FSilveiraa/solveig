@@ -51,4 +51,4 @@ class PendingMessageQueue(asyncio.Queue):
 
     def count_user_comments(self) -> int:
         """Count user comments in the queue."""
-        return len(self.get_user_comments())
+        return sum(1 for item in self._queue if isinstance(item, UserComment))

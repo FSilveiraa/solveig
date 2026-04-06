@@ -7,7 +7,6 @@ from textual.containers import Horizontal
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import DataTable
-from textual.widgets._data_table import RowKey
 
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 from solveig.interface.themes import Palette
@@ -26,7 +25,6 @@ class StatsBar(Widget):
         self._model = ""
         self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
-        self._row_keys: dict[str, RowKey] = {}
         self._theme = theme
         self.max_context = 0
         self.used_context = 0
@@ -69,18 +67,18 @@ class StatsBar(Widget):
             self._table1 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
-            self._col1 = self._table1.add_column("stats1", width=None)
+            self._table1.add_column("stats1", width=None)
 
             self._table2 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
-            self._col2 = self._table2.add_column("stats2", width=None)
+            self._table2.add_column("stats2", width=None)
 
             # The 3rd table gets a different CSS class to prevent the separator bar
             self._table3 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table-final"
             )
-            self._col3 = self._table3.add_column("stats3", width=None)
+            self._table3.add_column("stats3", width=None)
 
             yield Horizontal(
                 self._table1,
@@ -173,16 +171,12 @@ class StatsBar(Widget):
         self._table2.clear()
         self._table3.clear()
 
-        self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
-        self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
-        self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
-        self._row_keys["table1_row2"] = self._table1.add_row(f"Context: {self.context}")
-        self._row_keys["table2_row2"] = self._table2.add_row(
-            f"Input price: ${self.input_price}/M"
-        )
-        self._row_keys["table3_row2"] = self._table3.add_row(
-            f"Output price: ${self.output_price}/M"
-        )
+        self._table1.add_row(f"Tokens: {self.tokens}")
+        self._table1.add_row(f"Context: {self.context}")
+        self._table2.add_row(f"Endpoint: {self._url}")
+        self._table2.add_row(f"Input price: ${self.input_price}/M")
+        self._table3.add_row(f"Model: {self._model}")
+        self._table3.add_row(f"Output price: ${self.output_price}/M")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
