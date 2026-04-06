@@ -40,4 +40,4 @@ class ToolResult(BaseModel):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         """Override in subclasses to show type-specific result content."""
-        raise NotImplementedError()
+        pass

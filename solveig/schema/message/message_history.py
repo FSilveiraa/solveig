@@ -44,11 +44,8 @@ class MessageHistory:
         while (
             self.token_count > self.config.max_context and len(self.message_cache) > 1
         ):
-            if len(self.message_cache) > 1:
-                message, size = self.message_cache.pop(1)
-                self.token_count -= size
-            else:
-                break
+            message, size = self.message_cache.pop(1)
+            self.token_count -= size
 
     def add_messages(
         self,

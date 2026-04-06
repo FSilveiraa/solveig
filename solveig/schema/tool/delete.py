@@ -35,11 +35,6 @@ class DeleteTool(BaseTool):
         """Display delete tool header."""
         await super().display_header(interface)
         await interface.display_file_info(source_path=self.path)
-        # abs_path = Filesystem.get_absolute_path(self.path)
-        # path_info = format_path_info(
-        #     path=self.path, abs_path=abs_path, is_dir=await Filesystem.is_dir(abs_path)
-        # )
-        # await interface.display_text(path_info)
         await interface.display_warning(
             "This operation is permanent and cannot be undone!"
         )
@@ -96,5 +91,5 @@ class DeleteTool(BaseTool):
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
             return DeleteResult(
-                tool=self, accepted=True, error=str(e), path=str(abs_path)
+                tool=self, accepted=False, error=str(e), path=str(abs_path)
             )

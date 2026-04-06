@@ -277,9 +277,8 @@ class Filesystem:
                 task = cls.read_metadata(abs_sub_path, descend_level=descend_level - 1)
                 tasks.append((abs_sub_path, task))
 
-            # Wait for all metadata reads to complete
-            for abs_sub_path, task in tasks:
-                listing[str(abs_sub_path)] = await task
+            results = await asyncio.gather(*(task for _, task in tasks))
+            listing = {str(p): r for (p, _), r in zip(tasks, results)}
         else:
             listing = None
 

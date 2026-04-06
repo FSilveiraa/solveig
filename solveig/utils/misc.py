@@ -11,7 +11,7 @@ YES = {"y", "yes"}
 
 def format_age(mtime: int) -> str:
     """Convert a unix timestamp to a human-readable age string (e.g. '2 hours ago')."""
-    delta = int(datetime.now(UTC).timestamp()) - mtime
+    delta = max(0, int(datetime.now(UTC).timestamp()) - mtime)
     if delta < 60:
         return "just now"
     if delta < 3600:
