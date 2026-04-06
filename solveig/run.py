@@ -139,9 +139,6 @@ async def main_loop(
         )
         need_user_input = True
 
-        if session_manager and user_message:
-            await session_manager.append(user_message)
-
         # Pre-send guard: refuse to send if no model name is configured.
         # The user input was already consumed above, so the next iteration will
         # block again — giving the user a chance to set a model via subcommand.
@@ -161,7 +158,14 @@ async def main_loop(
         # None means the request was cancelled or the user chose not to retry.
         # need_user_input stays True so the next condense blocks for fresh input.
         if llm_response:
+            # add_messages corrects the user message's cached token count internally
+            # using exact prompt_tokens from the raw response, so append the user
+            # message only after that correction has been applied.
             message_history.add_messages(llm_response)
+            if session_manager:
+                if user_message:
+                    await session_manager.append(user_message)
+                await session_manager.append(llm_response)
             await interface.update_stats(
                 tokens=(
                     message_history.total_tokens_sent,
@@ -173,10 +177,6 @@ async def main_loop(
                 await interface.display_text_block(str(llm_response), title="Received")
 
             await llm_response.display(interface)
-
-            # Add the assistant response to the persistent session logging
-            if session_manager:
-                await session_manager.append(llm_response)
 
             if llm_response.tools:
                 # In autonomous mode (default), send results back without waiting.
