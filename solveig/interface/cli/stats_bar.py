@@ -66,52 +66,31 @@ class StatsBar(Widget):
         )
 
         with self._collapsible:
-            # Create detail tables - shown when expanded with flexible sizing
             self._table1 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
-            self._col1 = self._table1.add_column("stats1", width=None)  # Auto-sizing
-            self._row_keys["table1_row1"] = self._table1.add_row(
-                f"Tokens: {self.tokens}"
-            )
-            self._row_keys["table1_row2"] = self._table1.add_row(
-                f"Context: {self.context}"
-            )
+            self._col1 = self._table1.add_column("stats1", width=None)
 
             self._table2 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
-            self._col2 = self._table2.add_column("stats2", width=None)  # Auto-sizing
-            self._row_keys["table2_row1"] = self._table2.add_row(
-                f"Endpoint: {self._url}"
-            )
-            self._row_keys["table2_row2"] = self._table2.add_row(
-                f"Input price: ${self.input_price}/M"
-            )
+            self._col2 = self._table2.add_column("stats2", width=None)
 
             # The 3rd table gets a different CSS class to prevent the separator bar
             self._table3 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table-final"
             )
-            self._col3 = self._table3.add_column("stats3", width=None)  # Auto-sizing
-            self._row_keys["table3_row1"] = self._table3.add_row(
-                f"Model: {self._model}"
-            )
-            self._row_keys["table2_row2"] = self._table3.add_row(
-                f"Output price: ${self.output_price}/M"
-            )
+            self._col3 = self._table3.add_column("stats3", width=None)
 
             yield Horizontal(
                 self._table1,
-                # Static("│", classes="stats-separator"),
                 self._table2,
-                # Static("│", classes="stats-separator"),
                 self._table3,
                 classes="stats-container",
             )
 
     def on_mount(self):
-        """Update both title and tables for initial setup."""
+        """Populate tables and title after mount."""
         self._refresh_title()
         self._refresh_stats()
 
@@ -159,6 +138,7 @@ class StatsBar(Widget):
 
         if used_context is not None:
             self.used_context = used_context
+            updated_stats = True
 
         if input_price is not None:
             self.input_price = input_price
@@ -188,14 +168,7 @@ class StatsBar(Widget):
         self._collapsible.update_sections(center=self.status, right=self.path)
 
     def _refresh_stats(self):
-        """Update table content (heavy, only when stats actually change)."""
-        if not self._row_keys:
-            return
-
-        # TODO: Optimize to update only changed cells instead of clearing all tables
-        # Currently clears all tables even if only one value changed
-        # Consider using update_cell() if Textual supports it
-        # Clear and re-add rows to force column width recalculation
+        """Rebuild table rows with current values."""
         self._table1.clear()
         self._table2.clear()
         self._table3.clear()
@@ -203,9 +176,7 @@ class StatsBar(Widget):
         self._row_keys["table1_row1"] = self._table1.add_row(f"Tokens: {self.tokens}")
         self._row_keys["table2_row1"] = self._table2.add_row(f"Endpoint: {self._url}")
         self._row_keys["table3_row1"] = self._table3.add_row(f"Model: {self._model}")
-        self._row_keys["table1_row2"] = self._table1.add_row(
-            f"Context: {self.context}"
-        )
+        self._row_keys["table1_row2"] = self._table1.add_row(f"Context: {self.context}")
         self._row_keys["table2_row2"] = self._table2.add_row(
             f"Input price: ${self.input_price}/M"
         )
