@@ -166,11 +166,14 @@ class BaseTool(BaseModel, ABC):
         (e.g. WriteTool creating a new file/directory).
         """
         abs_path = Filesystem.get_absolute_path(path)
-        metadata = (
-            await Filesystem.read_metadata(abs_path)
-            if await Filesystem.exists(abs_path)
-            else None
-        )
+        try:
+            metadata = (
+                await Filesystem.read_metadata(abs_path)
+                if await Filesystem.exists(abs_path)
+                else None
+            )
+        except PermissionError:
+            metadata = None
         is_dir = (
             is_directory
             if is_directory is not None

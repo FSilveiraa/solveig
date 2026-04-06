@@ -494,9 +494,11 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             await interface.display_text("No stored sessions.")
             return
         lines = []
-        for i, (token_count, session_data) in enumerate(sessions, 1):
+        for i, session_data in enumerate(sessions, 1):
             age = format_age(session_data["_mtime"])
-            message_count = session_data.get("metadata", {}).get("message_count", "?")
+            messages = session_data.get("messages", [])
+            message_count = len(messages)
+            token_count = sum(m.get("token_count", 0) for m in messages)
             lines.append(
                 f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {token_count} tokens."
             )

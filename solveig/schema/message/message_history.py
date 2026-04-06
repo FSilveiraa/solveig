@@ -242,6 +242,7 @@ class MessageHistory:
         )
         old_size = self.message_cache[0][1]
         self.token_count = self.token_count - old_size + new_size
+        self.messages[0] = new_sys_msg
         self.message_cache[0] = (serialized, new_size)
 
     def to_openai(self):
