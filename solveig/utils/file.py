@@ -83,6 +83,7 @@ class Filesystem:
     @staticmethod
     async def _append_text(abs_path: Path, content: str = "", encoding="utf-8") -> None:
         """Async text file appending with true O_APPEND semantics via asyncio.to_thread."""
+
         def _do_append():
             with open(abs_path, "a", encoding=encoding) as f:
                 f.write(content)
