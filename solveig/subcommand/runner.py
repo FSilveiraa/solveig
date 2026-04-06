@@ -18,6 +18,7 @@ from solveig.config.editor import (
 )
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
+from solveig.mcp.client import MCP_CONNECTIONS, connect, disconnect
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS
@@ -47,12 +48,14 @@ class SubcommandRunner:
         self._session: dict[str, Subcommand] = {}
         self._tools: dict[str, Subcommand] = {}  # core tool subcommands
         self._plugins: dict[str, Subcommand] = {}  # plugin tool subcommands
+        self._mcp: dict[str, Subcommand] = {}  # MCP subcommands
 
         # Flat registry for O(1) lookup in __call__
         self._registry: dict[str, Subcommand] = {}
 
         self._register_builtins()
         self._register_tool_subcommands()
+        self._register_mcp_subcommands()
 
     # ------------------------------------------------------------------
     # Registration helpers
@@ -235,6 +238,13 @@ class SubcommandRunner:
         )
         for sub in ("", " list", " store", " delete", " resume"):
             self._reg_alias(f"/sessions{sub}", self._registry[f"/session{sub}"])
+
+    def _register_mcp_subcommands(self) -> None:
+        r, s = self._reg, self._sub
+        r(self._mcp, s("/mcp", self._mcp_list_cmd, "Manage MCP server connections"))
+        r(self._mcp, s("/mcp list", self._mcp_list_cmd, "List connected MCP servers", is_detail=True))
+        r(self._mcp, s("/mcp connect", self._mcp_connect_cmd, "Connect to an MCP server", usage="<url>", is_detail=True))
+        r(self._mcp, s("/mcp disconnect", self._mcp_disconnect_cmd, "Disconnect from an MCP server", usage="<name>", is_detail=True))
 
     def _register_tool_subcommands(self) -> None:
         for tool_cls in typing.get_args(AVAILABLE_TOOLS.tools_union):
@@ -459,6 +469,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             ("Config sub-commands", self._config),
             ("Model sub-commands", self._model),
             ("Session sub-commands", self._session),
+            ("MCP sub-commands", self._mcp),
             ("Tool sub-commands", self._tools),
             ("Plugin tools", self._plugins),
         ]
@@ -475,6 +486,48 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 
         await interface.display_text_block(help_str, title="Help")
         return help_str
+
+    # ------------------------------------------------------------------
+    # /mcp subcommands
+    # ------------------------------------------------------------------
+
+    async def _mcp_list_cmd(self, interface: SolveigInterface, *args, **kwargs) -> None:
+        if not MCP_CONNECTIONS:
+            await interface.display_info("No MCP servers connected.")
+            return
+        lines = []
+        for name, conn in MCP_CONNECTIONS.items():
+            tool_names = [t.model_fields["title"].default for t in conn.tools]
+            lines.append(f"**{name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}")
+        await interface.display_text_block("\n".join(lines), title="MCP Connections")
+
+    async def _mcp_connect_cmd(self, interface: SolveigInterface, *args, **kwargs) -> None:
+        if not args:
+            await interface.display_error("Usage: /mcp connect <url>")
+            return
+        url = args[0]
+        try:
+            async with interface.with_animation(f"Connecting to {url}..."):
+                conn = await connect(url, self.config)
+            tool_names = [t.model_fields["title"].default for t in conn.tools]
+            await interface.display_success(
+                f"Connected to '{conn.name}': {len(conn.tools)} tools available: {', '.join(tool_names)}"
+            )
+        except Exception as e:
+            await interface.display_error(f"Failed to connect to '{url}': {e}")
+
+    async def _mcp_disconnect_cmd(self, interface: SolveigInterface, *args, **kwargs) -> None:
+        if not args:
+            await interface.display_error("Usage: /mcp disconnect <name>")
+            return
+        name = args[0]
+        if name not in MCP_CONNECTIONS:
+            await interface.display_error(
+                f"No connection named '{name}'. Use /mcp list to see active connections."
+            )
+            return
+        await disconnect(name, self.config)
+        await interface.display_success(f"Disconnected from '{name}'.")
 
     async def stop_interface(self, interface: SolveigInterface, *args, **kwargs):
         await interface.stop()

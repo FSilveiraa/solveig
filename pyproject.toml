@@ -31,13 +31,14 @@ requires-python = ">=3.13"
 dependencies = [
     "distro>=1.9.0",
     "aiofiles>=25.1.0",
-    "instructor==1.13.0",
+    "instructor==1.14.5",
     "openai>=1.108.0",
     "pydantic>=2.11.0",
     "tiktoken>=0.11.0",
     "textual>=6.1.0",
     "rich>=14.0.0",
     "httpx>=0.28.0",
+    "mcp>=1.27.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "fastmcp>=3.2.0",
 ]
 anthropic = ["anthropic>=0.68.0"]
 google = ["google-generativeai>=0.8.5"]

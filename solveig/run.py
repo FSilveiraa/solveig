@@ -21,6 +21,7 @@ from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
+from solveig.mcp import connect_all
 from solveig.plugins import initialize_plugins
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
@@ -47,8 +48,9 @@ async def setup_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
-    # Initialize plugins, then rebuild the tools union so it includes them.
+    # Initialize plugins and MCP servers, then rebuild the tools union.
     await initialize_plugins(config=config, interface=interface)
+    await connect_all(config=config, interface=interface)
     AVAILABLE_TOOLS.rebuild(config)
 
     sys_prompt = await system_prompt.get_system_prompt(config)

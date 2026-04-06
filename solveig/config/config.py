@@ -72,6 +72,7 @@ class SolveigConfig:
     request_timeout: float = 60.0  # Timeout for LLM API requests in seconds
 
     no_commands: bool = False
+    mcp_servers: list[str] = field(default_factory=list)
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     # Runtime state — not persisted or exposed as CLI arguments
     model_info: ModelInfo | None = field(default=None)
@@ -270,6 +271,14 @@ class SolveigConfig:
             dest="no_commands",
             default=False,
             help="Disable command execution (secure mode)",
+        )
+        parser.add_argument(
+            "--mcp",
+            action="append",
+            dest="mcp_servers",
+            default=None,
+            metavar="URL",
+            help="MCP server URL to connect at startup (can be passed multiple times)",
         )
         parser.add_argument(
             "--wait-between",
