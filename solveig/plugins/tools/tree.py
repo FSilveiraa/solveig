@@ -21,6 +21,10 @@ class TreeResult(ToolResult):
     path: str
     metadata: Metadata | None  # Complete tree metadata
 
+    async def _display_content(self, interface: SolveigInterface) -> None:
+        if self.metadata:
+            await interface.display_tree(self.metadata)
+
 
 @tool
 class TreeTool(BaseTool):
