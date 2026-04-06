@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
-from solveig.utils.file import Filesystem
+from solveig.utils.file import Filesystem, Metadata
 
 from .base import BaseTool, Subcommand, validate_non_empty_path
 
@@ -34,12 +34,17 @@ class MoveTool(BaseTool):
     def validate_paths(cls, path: str) -> str:
         return validate_non_empty_path(path)
 
+    _cached_source_metadata: Metadata | None = PrivateAttr(default=None)
+    _cached_dest_metadata: Metadata | None = PrivateAttr(default=None)
+
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display move tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(
-            source_path=self.source_path,
-            destination_path=self.destination_path,
+        self._cached_source_metadata = await self.display_path_info(
+            interface, self.source_path, prefix="Source:     "
+        )
+        self._cached_dest_metadata = await self.display_path_info(
+            interface, self.destination_path, prefix="Destination:"
         )
 
     def create_error_result(self, error_message: str, accepted: bool) -> MoveResult:
@@ -67,7 +72,11 @@ class MoveTool(BaseTool):
         try:
             await Filesystem.validate_read_access(abs_source_path)
             await Filesystem.validate_write_access(abs_destination_path)
-            is_dir = await Filesystem.is_dir(abs_source_path)
+            is_dir = (
+                self._cached_source_metadata.is_directory
+                if self._cached_source_metadata
+                else await Filesystem.is_dir(abs_source_path)
+            )
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(
                 f"Cannot move from {str(abs_source_path)} to {str(abs_destination_path)}: {e}"
@@ -86,6 +95,12 @@ class MoveTool(BaseTool):
         ) and Filesystem.path_matches_patterns(
             abs_destination_path, config.auto_allowed_paths
         )
+
+        if not is_dir and self._cached_dest_metadata is not None:
+            old = (await Filesystem.read_file(abs_destination_path)).content.strip()
+            new = (await Filesystem.read_file(abs_source_path)).content.strip()
+            await interface.display_diff(old_content=old, new_content=new)
+            await interface.display_warning("Overwriting existing file")
 
         if auto_move:
             await interface.display_info(

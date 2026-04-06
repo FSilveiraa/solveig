@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
@@ -29,6 +29,8 @@ class WriteTool(BaseTool):
         None, description="File content to write (only used when is_directory=false)"
     )
 
+    _cached_metadata: Metadata | None = PrivateAttr(default=None)
+
     @field_validator("path")
     @classmethod
     def path_not_empty(cls, path: str) -> str:
@@ -37,11 +39,9 @@ class WriteTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display write tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(
-            source_path=self.path,
-            is_directory=self.is_directory,
+        self._cached_metadata = await self.display_path_info(
+            interface, self.path, is_directory=self.is_directory
         )
-        await interface.display_info(f"{len(self.content.splitlines())} lines")
 
     def create_error_result(self, error_message: str, accepted: bool) -> WriteResult:
         """Create WriteResult with error."""
@@ -75,20 +75,18 @@ class WriteTool(BaseTool):
                 tool=self, path=str(abs_path), accepted=False, error=str(e)
             )
 
-        already_exists = await Filesystem.exists(abs_path)
+        already_exists = self._cached_metadata is not None or await Filesystem.exists(abs_path)
 
-        if already_exists:
-            old = (await Filesystem.read_file(abs_path)).content.strip()
-            await self.display_diff(
-                old_content=str(old), new_content=self.content
-            )
-        else:
-            file_ext = abs_path.suffix.lstrip(".")
-            await self.display_text_block(
-                self.content,
-                language=file_ext,
-                title="Content",
-            )
+        if not self.is_directory and self.content:
+            if already_exists:
+                old = (await Filesystem.read_file(abs_path)).content.strip()
+                await interface.display_diff(old_content=old, new_content=self.content)
+            else:
+                await interface.display_text_block(
+                    self.content,
+                    language=abs_path.suffix.lstrip("."),
+                    title="Content",
+                )
 
         auto_write = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths

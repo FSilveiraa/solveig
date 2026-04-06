@@ -19,6 +19,8 @@ from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import PLUGIN_HOOKS
 from solveig.schema.result import ToolResult
 from solveig.subcommand.base import Subcommand
+from solveig.utils.file import Filesystem, Metadata
+from solveig.utils.misc import format_path_info
 
 
 def validate_non_empty_path(path: str) -> str:
@@ -150,6 +152,39 @@ class BaseTool(BaseModel, ABC):
         return result
 
     ### Abstract methods to implement:
+
+    async def display_path_info(
+        self,
+        interface: SolveigInterface,
+        path: str,
+        prefix: str = "Path:",
+        is_directory: bool | None = None,
+    ) -> Metadata | None:
+        """Fetch metadata for path, display the formatted line, and return the metadata.
+
+        Pass is_directory to override the is_dir flag when the file does not exist yet
+        (e.g. WriteTool creating a new file/directory).
+        """
+        abs_path = Filesystem.get_absolute_path(path)
+        metadata = (
+            await Filesystem.read_metadata(abs_path)
+            if await Filesystem.exists(abs_path)
+            else None
+        )
+        is_dir = is_directory if is_directory is not None else (
+            metadata.is_directory if metadata else False
+        )
+        await interface.display_text(
+            format_path_info(
+                path=path,
+                abs_path=abs_path,
+                is_dir=is_dir,
+                size=metadata.size if metadata else None,
+                line_count=metadata.line_count if metadata else None,
+            ),
+            prefix=prefix,
+        )
+        return metadata
 
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display the tool header/summary using the interface directly."""

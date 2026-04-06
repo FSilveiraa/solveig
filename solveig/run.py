@@ -47,6 +47,14 @@ async def setup_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
+    # Initialize plugins as soon as possible (after the interface is running)
+    # to ensure the cached tools union accounts for existing plugins
+    await initialize_plugins(config=config, interface=interface)
+
+    # The system prompt reads the tool union cached above
+    sys_prompt = await system_prompt.get_system_prompt(config)
+    message_history.update_system_prompt(sys_prompt)
+
     if resume_session and session_manager:
         name = None if resume_session == "__latest__" else resume_session
         try:
@@ -77,8 +85,6 @@ async def setup_loop(
             message_history.system_prompt, title="System Prompt"
         )
 
-    await initialize_plugins(config=config, interface=interface)
-
     subcommand_executor = SubcommandRunner(
         config=config,
         message_history=message_history,
@@ -101,9 +107,8 @@ async def main_loop(
     interface: SolveigInterface,
     request_manager: RequestManager,
     message_history: MessageHistory,
-    session_manager: SessionManager | None = None,
     resume_session: str | None = None,
-):
+) -> None:
     """Main async conversation loop.
 
     Each iteration: condense pending events into a UserMessage → send to LLM →
@@ -115,6 +120,8 @@ async def main_loop(
     Any user_prompt supplied at startup is queued in run_async before this task
     starts, so the first condense picks it up without blocking.
     """
+    session_manager = SessionManager(config=config)
+
     await setup_loop(
         config=config,
         interface=interface,
@@ -204,6 +211,10 @@ async def main_loop(
                 except UserCancel:
                     need_user_input = True
 
+        # Whether or not the user message's size was corrected, add it and the response if it exists to the session
+        elif config.auto_save_session and user_message:
+            await session_manager.append(user_message)
+
 
 async def run_async(
     config: SolveigConfig | None = None,
@@ -232,10 +243,8 @@ async def run_async(
         code_theme=config.code_theme,
     )
 
-    sys_prompt = await system_prompt.get_system_prompt(config)
     message_history = MessageHistory(
         pending_messages=interface.pending_queue,
-        system_prompt=sys_prompt,
         config=config,
     )
 
@@ -243,12 +252,6 @@ async def run_async(
         await message_history.add_user_comment(user_prompt)
 
     request_manager = RequestManager(config=config, client=llm_client)
-
-    session_manager = (
-        SessionManager(config=config)
-        if config.auto_save_session or resume_session
-        else None
-    )
 
     loop_task = None
     try:
@@ -258,7 +261,6 @@ async def run_async(
                 config=config,
                 request_manager=request_manager,
                 message_history=message_history,
-                session_manager=session_manager,
                 resume_session=resume_session,
             )
         )

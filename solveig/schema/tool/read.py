@@ -91,14 +91,10 @@ class ReadTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display read tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(source_path=self.path)
+        self._cached_metadata = metadata = await self.display_path_info(interface, self.path)
 
-        abs_path = Filesystem.get_absolute_path(self.path)
-        if not await Filesystem.exists(abs_path):
+        if not metadata:
             return
-
-        self._cached_metadata = await Filesystem.read_metadata(abs_path)
-        metadata = self._cached_metadata
 
         # Display the dir listing for directories (1-depth tree)
         if metadata.is_directory:

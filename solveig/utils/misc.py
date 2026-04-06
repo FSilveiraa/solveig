@@ -3,8 +3,12 @@ import re
 from datetime import UTC, datetime
 from os import PathLike
 from pathlib import PurePath
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from anyio import Path
 
 YES = {"y", "yes"}
 
@@ -114,6 +118,24 @@ def serialize_response_model(model: type[BaseModel]) -> str:
     return json.dumps(
         model.model_json_schema(), indent=2, default=default_json_serialize
     )
+
+
+def format_path_info(
+    path: str | PathLike,
+    abs_path: "Path",
+    is_dir: bool,
+    size: int | None = None,
+    line_count: int | None = None,
+) -> str:
+    """Format a filesystem path into a single display line with optional metadata."""
+    path_info = f"{'🗁 ' if is_dir else '🗎'} {path}"
+    if str(abs_path) != str(path):
+        path_info += f"  ({abs_path})"
+    if size is not None:
+        path_info += f"  |  ⛁ {convert_size_to_human_readable(size)}"
+    if line_count is not None:
+        path_info += f"  |  ☰ {line_count} lines"
+    return path_info
 
 
 class TEXT_BOX:

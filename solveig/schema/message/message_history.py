@@ -17,7 +17,7 @@ Message = SystemMessage | UserMessage | AssistantMessage
 
 @dataclass
 class MessageHistory:
-    system_prompt: str
+    system_prompt: str = ""
     config: SolveigConfig = field(default_factory=SolveigConfig)
     messages: list[Message] = field(default_factory=list)
     message_cache: list[tuple[dict, int]] = field(default_factory=list)
@@ -89,8 +89,12 @@ class MessageHistory:
                 self.token_count = sent + received
                 self.total_tokens_sent += sent
                 self.total_tokens_received += received
+            elif message.token_count > 0:
+                # Use stored token count (from session resume) — exact, no re-estimation needed
+                message_size = message.token_count
+                self.token_count += message_size
             else:
-                # Update token count using encoder approximation for all other messages
+                # Fall back to encoder approximation for messages without a stored count
                 message_size = self.config.api_type.count_tokens(
                     message_serialized["content"],
                     model=self.config.model,
@@ -158,6 +162,7 @@ class MessageHistory:
         pending_tools: list = []
 
         for msg in session_data.get("messages", []):
+            token_count = msg.get("token_count", -1)
             role = msg.get("role", "unknown")
             content = msg.get("content") or ""
             try:
@@ -165,6 +170,7 @@ class MessageHistory:
             except (json.JSONDecodeError, AttributeError):
                 parsed = {}
 
+            message: Message | None = None
             if role == "assistant":
                 pending_tools = []
                 for tool_dict in parsed.get("tools") or []:
@@ -172,12 +178,11 @@ class MessageHistory:
                         pending_tools.append(tool_adapter.validate_python(tool_dict))
                     except Exception:
                         pass
-                messages.append(
-                    AssistantMessage(
-                        comment=parsed.get("comment", content),
-                        tasks=parsed.get("tasks"),
-                        tools=pending_tools or None,
-                    )
+                message = AssistantMessage(
+                    comment=parsed.get("comment", content),
+                    tasks=parsed.get("tasks"),
+                    tools=pending_tools or None,
+                    token_count=token_count,
                 )
 
             elif role == "user":
@@ -201,7 +206,10 @@ class MessageHistory:
                     elif "comment" in r:
                         responses.append(UserComment(comment=r["comment"]))
                 if responses:
-                    messages.append(UserMessage(responses=responses))  # type: ignore[arg-type]
+                    message = UserMessage(responses=responses, token_count=token_count)  # type: ignore[arg-type]
+
+            if message is not None:
+                messages.append(message)
 
         self.load_messages(messages)
 

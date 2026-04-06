@@ -18,11 +18,8 @@ from solveig.interface.cli.conversation import BANNER
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment
-from solveig.utils.file import Filesystem, Metadata
-from solveig.utils.misc import (
-    FILE_EXTENSION_TO_LANGUAGE,
-    convert_size_to_human_readable,
-)
+from solveig.utils.file import Metadata
+from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE
 
 
 class TerminalInterface(SolveigInterface):
@@ -316,107 +313,3 @@ class TerminalInterface(SolveigInterface):
 
             await self.update_stats(final_status)
 
-    @staticmethod
-    def _format_path_info(
-        path: str | PathLike,
-        abs_path: PathLike,
-        is_dir: bool,
-        size: int | None = None,
-        line_count: int | None = None,
-    ) -> str:
-        """Format path information for display - shared by all tools."""
-        # if the real path is different from the canonical one (~/Documents vs /home/jdoe/Documents),
-        # add it to the printed info
-        path_info = f"{'🗁 ' if is_dir else '🗎'} {path}"
-        if str(abs_path) != path:
-            path_info += f"  ({abs_path})"
-        if size is not None:
-            size_str = convert_size_to_human_readable(size)
-            path_info += f"  |  ⛁ {size_str}"
-        if line_count is not None:
-            path_info += f"  |  ☰ {line_count} lines"
-        return path_info
-
-    async def display_file_info(
-        self,
-        source_path: str | PathLike,
-        destination_path: str | PathLike | None = None,
-        is_directory: bool | None = None,
-        source_content: str | None = None,
-        show_overwrite_warning: bool = True,
-    ) -> None:
-        """Display move tool header."""
-        abs_source = Filesystem.get_absolute_path(source_path)
-        abs_dest = (
-            Filesystem.get_absolute_path(destination_path) if destination_path else None
-        )
-
-        source_exists = await Filesystem.exists(abs_source)
-        dest_exists = await Filesystem.exists(abs_dest) if abs_dest else None
-
-        is_directory = (
-            is_directory
-            if is_directory is not None
-            else await Filesystem.is_dir(abs_source)
-        )
-        source_meta = (
-            await Filesystem.read_metadata(abs_source) if source_exists else None
-        )
-        dest_meta = (
-            await Filesystem.read_metadata(abs_dest)
-            if abs_dest and dest_exists
-            else None
-        )
-
-        await self.display_text(
-            self._format_path_info(
-                path=source_path,
-                abs_path=abs_source,
-                size=source_meta.size if source_meta else None,
-                line_count=source_meta.line_count if source_meta else None,
-                is_dir=is_directory,
-            ),
-            prefix=(
-                "Source:     " if destination_path else "Path:"
-            ),  # padding to align, look it's late
-        )
-        if destination_path and abs_dest:
-            await self.display_text(
-                self._format_path_info(
-                    path=destination_path,
-                    abs_path=abs_dest,
-                    size=dest_meta.size if dest_meta else None,
-                    line_count=dest_meta.line_count if dest_meta else None,
-                    is_dir=is_directory,
-                ),
-                prefix="Destination:",
-            )
-
-        # Only show diff/content for files, and only when both files exist OR we have source_content
-        if not is_directory:
-            if source_exists and dest_exists:
-                # Both exist - show diff
-                old = (
-                    (await Filesystem.read_file(abs_dest)).content.strip()
-                    if abs_dest
-                    else ""
-                )  # MyPy quirk
-                new = (await Filesystem.read_file(abs_source)).content.strip()
-                await self.display_diff(old_content=str(old), new_content=str(new))
-                if show_overwrite_warning:
-                    await self.display_warning("Overwriting existing file")
-            elif source_content and source_exists:
-                # Source exists, have new content - show diff
-                old = (await Filesystem.read_file(abs_source)).content.strip()
-                await self.display_diff(
-                    old_content=str(old), new_content=source_content
-                )
-                if show_overwrite_warning:
-                    await self.display_warning("Overwriting existing file")
-            elif source_content:
-                # New file with content - just show content
-                await self.display_text_block(
-                    source_content,
-                    language=abs_source.suffix.lstrip("."),
-                    title="Content",
-                )

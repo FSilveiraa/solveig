@@ -54,7 +54,7 @@ class MockLLMClient:
             return response
 
         # No more responses - return simple default
-        raise ValueError("No further responses configured")
+        return AssistantMessage(comment=f"No further responses configured - call count {self.call_count}")
 
     def get_call_count(self) -> int:
         """Get number of calls made."""

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.result import DeleteResult
-from solveig.utils.file import Filesystem
+from solveig.utils.file import Filesystem, Metadata
 
 from .base import BaseTool, Subcommand, validate_non_empty_path
 
@@ -26,6 +26,8 @@ class DeleteTool(BaseTool):
         description="Path of file/directory to permanently delete (supports ~ for home directory)",
     )
 
+    _cached_metadata: Metadata | None = PrivateAttr(default=None)
+
     @field_validator("path", mode="before")
     @classmethod
     def path_not_empty(cls, path: str) -> str:
@@ -34,7 +36,7 @@ class DeleteTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display delete tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(source_path=self.path)
+        self._cached_metadata = await self.display_path_info(interface, self.path)
         await interface.display_warning(
             "This operation is permanent and cannot be undone!"
         )
@@ -60,7 +62,11 @@ class DeleteTool(BaseTool):
         abs_path = Filesystem.get_absolute_path(self.path)
 
         try:
-            is_directory = await Filesystem.is_dir(abs_path)
+            is_directory = (
+                self._cached_metadata.is_directory
+                if self._cached_metadata
+                else await Filesystem.is_dir(abs_path)
+            )
             await Filesystem.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(f"Cannot delete {str(abs_path)}: {e}")

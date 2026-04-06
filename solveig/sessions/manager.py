@@ -71,40 +71,36 @@ class SessionManager:
     # Core operations
     # ------------------------------------------------------------------
 
+    async def _write_messages(self, messages: list[Message] | tuple[Message, ...], *, append: bool) -> None:
+        serialized_messages = []
+        for message in messages:
+            message_serialized = message.to_openai()
+            message_serialized["token_count"] = message.token_count
+            serialized_messages.append(json.dumps(
+                message_serialized,
+                default=utils.misc.default_json_serialize,
+            ))
+        lines = (
+            "\n".join(serialized_messages)
+            + "\n"
+        )
+        await Filesystem.write_file_text(self.current_path, lines, append=append)
+
     async def append(self, *messages: Message) -> None:
-        """Append one or more messages to the session file, creating it if needed."""
+        """Append messages to the current session file, creating it if needed."""
         sessions_dir = await self._ensure_dir()
         if self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(None)}")
-        lines = (
-            "\n".join(
-                json.dumps(
-                    message.to_openai(), default=utils.misc.default_json_serialize
-                )
-                for message in messages
-            )
-            + "\n"
-        )
-        await Filesystem.write_file_text(self.current_path, lines, append=True)
+        await self._write_messages(messages, append=True)
 
     async def store(
         self, message_history: MessageHistory, name: str | None = None
     ) -> str:
-        """Save session. With a name, always creates a new file. Without a name,
-        updates the current file in place (or creates one if none exists yet)."""
+        """Overwrite the session file with the full history. Creates a new named file if requested."""
         sessions_dir = await self._ensure_dir()
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
-        lines = (
-            "\n".join(
-                json.dumps(
-                    message.to_openai(), default=utils.misc.default_json_serialize
-                )
-                for message in message_history.messages[1:]
-            )
-            + "\n"
-        )
-        await Filesystem.write_file_text(self.current_path, lines)
+        await self._write_messages(message_history.messages[1:], append=False)
         return self.current_path.name
 
     async def load(self, name: str | None = None) -> dict:

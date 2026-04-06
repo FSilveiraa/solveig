@@ -56,7 +56,7 @@ class EditTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display edit tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(source_path=self.path)
+        await self.display_path_info(interface, self.path)
 
         # Show truncated preview of what we're replacing
         old_preview = repr(

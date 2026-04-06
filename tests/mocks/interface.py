@@ -135,26 +135,6 @@ class MockInterface(TerminalInterface):
             json.dumps(serializable_dict, default=utils.misc.default_json_serialize)
         )
 
-    async def display_file_info(
-        self,
-        source_path: str | PathLike,
-        destination_path: str | PathLike | None = None,
-        is_directory: bool | None = None,
-        source_content: str | None = None,
-        show_overwrite_warning: bool = True,
-    ) -> None:
-        file_type = "directory" if is_directory else "file"
-        if destination_path:
-            self.outputs.append(
-                f"📄 File info: {source_path} → {destination_path} ({file_type})"
-            )
-        else:
-            self.outputs.append(f"📄 File info: {source_path} ({file_type})")
-        if source_content:
-            self.outputs.append(f"Content preview: {source_content[:50]}...")
-        if show_overwrite_warning and destination_path:
-            self.outputs.append("⚠️ Overwrite warning shown")
-
     async def display_text_block(
         self, text: str, title: str | None = None, language: str | None = None
     ) -> None:

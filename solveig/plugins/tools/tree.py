@@ -42,11 +42,7 @@ class TreeTool(BaseTool):
     ) -> None:
         """Display tree tool header."""
         await super().display_header(interface)
-        await interface.display_file_info(source_path=self.path)
-        # abs_path = Filesystem.get_absolute_path(self.path)
-        # is_dir = await Filesystem.is_dir(abs_path)
-        # path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
-        # await interface.display_text(path_info)
+        await self.display_path_info(interface, self.path)
 
     def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
         """Create TreeResult with error."""
