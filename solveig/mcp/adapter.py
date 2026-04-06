@@ -32,7 +32,7 @@ class MCPToolResult(ToolResult):
             await interface.display_text_block(self.output, title="Output")
 
 
-class _MCPToolBase(BaseTool):
+class MCPToolBase(BaseTool):
     """Concrete intermediate base so create_model doesn't produce an abstract class.
 
     Methods are replaced per-tool by create_tool_class().
@@ -104,11 +104,30 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
     _name = tool_name
     _fields = extra_fields
 
+    async def display_header(self, interface: SolveigInterface) -> None:
+        await BaseTool.display_header(self, interface)
+        for field_name in _fields:
+            val = getattr(self, field_name, None)
+            if val is not None:
+                await interface.display_text(str(val), prefix=f"{field_name}:")
+
     async def actually_solve(
-        self: _MCPToolBase,
+        self: MCPToolBase,
         config: SolveigConfig,
         interface: SolveigInterface,
     ) -> MCPToolResult:
+        choice = await interface.ask_choice(
+            "Allow MCP call?",
+            [
+                "Yes",
+                "No",
+            ],
+        )
+        if choice != 0:
+            return MCPToolResult(
+                tool=self, title=_name, accepted=False, error="User rejected", output=None
+            )
+
         arguments = {k: getattr(self, k) for k in _fields if getattr(self, k) is not None}
         try:
             result = await _session.call_tool(_name, arguments)
@@ -117,6 +136,8 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
                 for block in result.content
                 if hasattr(block, "text") and block.text
             )
+            if output:
+                await interface.display_text_block(output, title="Result")
             return MCPToolResult(
                 tool=self, title=_name, accepted=True, output=output or None
             )
@@ -126,18 +147,19 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
             )
 
     def create_error_result(
-        self: _MCPToolBase, error_message: str, accepted: bool
+        self: MCPToolBase, error_message: str, accepted: bool
     ) -> MCPToolResult:
         return MCPToolResult(
             tool=self, title=_name, accepted=accepted, error=error_message, output=None
         )
 
     tool_class: type[BaseTool] = create_model(  # type: ignore[call-overload]
-        tool_name,
+        tool_name.title(),
         title=(Literal[tool_name], tool_name),  # type: ignore[valid-type]
         **extra_fields,
-        __base__=_MCPToolBase,
+        __base__=MCPToolBase,
     )
+    tool_class.display_header = display_header  # type: ignore[attr-defined]
     tool_class.actually_solve = actually_solve  # type: ignore[attr-defined]
     tool_class.create_error_result = create_error_result  # type: ignore[attr-defined]
     sig = _schema_signature(mcp_tool.inputSchema or {})
