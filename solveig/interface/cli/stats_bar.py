@@ -26,7 +26,7 @@ class StatsBar(Widget):
         self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
         self._theme = theme
-        self.max_context = 0
+        self.max_context: int | str = 0
         self.used_context = 0
         self.input_price: float = 0
         self.output_price: float = 0
@@ -99,7 +99,7 @@ class StatsBar(Widget):
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
-        max_context: int | None = None,
+        max_context: int | str | None = None,
         used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,

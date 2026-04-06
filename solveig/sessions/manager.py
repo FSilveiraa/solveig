@@ -85,6 +85,7 @@ class SessionManager:
                 )
             )
         lines = "\n".join(serialized_messages) + "\n"
+        assert self.current_path
         await Filesystem.write_file_text(self.current_path, lines, append=append)
 
     async def append(self, *messages: Message) -> None:

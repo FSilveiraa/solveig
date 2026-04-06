@@ -146,9 +146,10 @@ class ReadTool(BaseTool):
             abs_path, config.auto_allowed_paths
         )
 
-        metadata: Metadata = self._cached_metadata or await Filesystem.read_metadata(
-            abs_path
+        metadata: Metadata | None = (
+            self._cached_metadata or await Filesystem.read_metadata(abs_path)
         )
+        assert metadata is not None  # mypy
 
         # Case 1: Directories or metadata-only requests
         if metadata.is_directory or self.metadata_only:
