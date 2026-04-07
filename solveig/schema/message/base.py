@@ -2,6 +2,7 @@ import json
 from typing import Literal
 
 from pydantic import Field
+from pydantic.json_schema import SkipJsonSchema
 
 from solveig import utils
 from solveig.schema.base import BaseSolveigModel
@@ -9,7 +10,7 @@ from solveig.schema.base import BaseSolveigModel
 
 class BaseMessage(BaseSolveigModel):
     role: Literal["system", "user", "assistant"]
-    token_count: int = Field(default=-1, exclude=True)
+    token_count: SkipJsonSchema[int] = Field(default=-1, exclude=True)
 
     def to_openai(self) -> dict:
         data = self.model_dump()

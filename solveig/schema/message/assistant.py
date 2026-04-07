@@ -4,6 +4,7 @@ import json
 from typing import Any, Literal
 
 from pydantic import Field
+from pydantic.json_schema import SkipJsonSchema
 
 from solveig import SolveigConfig, utils
 from solveig.interface import SolveigInterface
@@ -15,7 +16,7 @@ from solveig.schema.message.task import TASK_STATUS_MAP, Task
 class AssistantMessage(BaseMessage):
     """Assistant message containing a comment and optionally a task plan and a list of required operations"""
 
-    role: Literal["assistant"] = "assistant"
+    role: SkipJsonSchema[Literal["assistant"]] = "assistant"
     comment: str = Field(..., description="Conversation with user and plan description")
     tasks: list[Task] | None = Field(
         None, description="List of tasks to track and display"
@@ -25,10 +26,10 @@ class AssistantMessage(BaseMessage):
     )
     # Store reasoning content and details from o1/o3/Gemini models
     # Note: we don't communicate these fields to the LLM in the response model
-    reasoning: str | None = Field(
+    reasoning: SkipJsonSchema[str | None] = Field(
         default=None, exclude=True, description="Reasoning text from o1/o3 models"
     )
-    reasoning_details: list[dict[str, Any]] | None = Field(
+    reasoning_details: SkipJsonSchema[list[dict[str, Any]]] | None = Field(
         default=None, exclude=True, description="Reasoning details from API response"
     )
 

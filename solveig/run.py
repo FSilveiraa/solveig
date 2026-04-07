@@ -9,7 +9,6 @@ awaits interface.start(). When the interface exits, the Task is cancelled.
 
 import asyncio
 import contextlib
-import logging
 import traceback
 
 from instructor import AsyncInstructor
@@ -39,11 +38,6 @@ async def setup_loop(
     resume_session: str | None,
 ) -> None:
     """One-time setup that runs after the interface is ready."""
-    if config.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-        logging.getLogger("instructor").setLevel(logging.DEBUG)
-        logging.getLogger("openai").setLevel(logging.DEBUG)
-
     await interface.wait_until_ready()
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
