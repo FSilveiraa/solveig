@@ -152,7 +152,7 @@ class RequestManager:
     ) -> AssistantMessage:
         """Extract metadata from response and update message history."""
         model = None
-        if hasattr(response, "_raw_response"):
+        if response._raw_response is not None:
             raw = response._raw_response
             if model := raw.model:
                 await interface.update_stats(model=model)

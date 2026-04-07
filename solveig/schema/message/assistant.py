@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from pydantic.json_schema import SkipJsonSchema
 
 from solveig import SolveigConfig, utils
@@ -32,6 +32,7 @@ class AssistantMessage(BaseMessage):
     reasoning_details: SkipJsonSchema[list[dict[str, Any]]] | None = Field(
         default=None, exclude=True, description="Reasoning details from API response"
     )
+    _raw_response: Any = PrivateAttr(default=None)
 
     def to_openai(self) -> dict:
         """Override to include reasoning and reasoning_details at message level.
@@ -49,15 +50,13 @@ class AssistantMessage(BaseMessage):
 
     @property
     def raw_message(self) -> dict | None:
-        try:
-            raw_response = self._raw_response.choices[0].message
-        except AttributeError:
+        if self._raw_response is None:
             return None
-        else:
-            return {
-                "content": raw_response.content,
-                **raw_response.model_extra,
-            }
+        raw_response = self._raw_response.choices[0].message
+        return {
+            "content": raw_response.content,
+            **raw_response.model_extra,
+        }
 
     async def display(self, config: SolveigConfig, interface: SolveigInterface) -> None:
         """Display the assistant's message, including reasoning, comment and tasks."""

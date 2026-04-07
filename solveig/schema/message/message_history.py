@@ -56,8 +56,9 @@ class MessageHistory:
             message_serialized = message.to_openai()
 
             # The _raw_response is only present on AssistantMessage, and only when it's from a real API call
-            if isinstance(message, AssistantMessage) and hasattr(
-                message, "_raw_response"
+            if (
+                isinstance(message, AssistantMessage)
+                and message._raw_response is not None
             ):
                 # Update token count using API usage field from the raw response
                 raw_response = message._raw_response

@@ -288,6 +288,8 @@ class TestDisplayLoadedSession:
         interface = MockInterface()
         history = make_history()
         session_data = {"id": "my-session", "messages": []}
-        await manager.display_loaded_session(session_data, history, interface)
+        await manager.display_loaded_session(
+            history.config, session_data, history, interface
+        )
         output = interface.get_all_output()
         assert "my-session" in output
