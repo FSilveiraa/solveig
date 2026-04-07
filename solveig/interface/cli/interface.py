@@ -237,7 +237,8 @@ class TerminalInterface(SolveigInterface):
     async def update_stats(
         self,
         status: str | None = None,
-        tokens: tuple[int, int] | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
@@ -245,21 +246,21 @@ class TerminalInterface(SolveigInterface):
         used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
     ) -> None:
         """Update stats dashboard with multiple pieces of information."""
-        _max_context = (
-            "Unlimited" if max_context is not None and max_context < 0 else max_context
-        )
         self.app._stats_dashboard.update(
             status=status,
-            tokens=tokens,
+            sent_tokens=sent_tokens,
+            received_tokens=received_tokens,
             model=model,
             url=url,
             path=path,
-            max_context=_max_context,
+            max_context=max_context,
             used_context=used_context,
             input_price=input_price,
             output_price=output_price,
+            mcp_servers=mcp_servers,
         )
 
     async def wait_until_ready(self):

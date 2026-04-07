@@ -538,7 +538,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         url = args[0]
         try:
             async with interface.with_animation(f"Connecting to {url}..."):
-                conn = await connect(url, self.config)
+                conn = await connect(url, self.config, interface)
             tool_names = [t.model_fields["title"].default for t in conn.tools]
             await interface.display_success(
                 f"Connected to '{conn.name}': {len(conn.tools)} tools available: {', '.join(tool_names)}"
@@ -558,7 +558,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
                 f"No connection named '{name}'. Use /mcp list to see active connections."
             )
             return
-        await disconnect(name, self.config)
+        await disconnect(name, self.config, interface)
         await interface.display_success(f"Disconnected from '{name}'.")
 
     async def stop_interface(self, interface: SolveigInterface, *args, **kwargs):

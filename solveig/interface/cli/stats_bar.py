@@ -21,7 +21,8 @@ class StatsBar(Widget):
         self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
-        self._tokens = (0, 0)
+        self._sent_tokens = 0
+        self._received_tokens = 0
         self._model = ""
         self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
@@ -30,10 +31,11 @@ class StatsBar(Widget):
         self.used_context = 0
         self.input_price: float = 0
         self.output_price: float = 0
+        self.mcp_servers: list[str] = []
 
     @property
     def tokens(self):
-        return f"{self._tokens[0]}↑ / {self._tokens[1]}↓"
+        return f"{self._sent_tokens}↑ / {self._received_tokens}↓"
 
     @property
     def path(self):
@@ -41,7 +43,19 @@ class StatsBar(Widget):
 
     @property
     def context(self):
-        return f"{self.used_context} / {self.max_context}"
+        return f"{self.used_context} / {self.max_context if self.max_context >= 0 else "Unlimited"}"
+
+    @property
+    def price(self):
+        return f"${self.input_price}/M↑ / ${self.output_price}/M↓"
+
+    @property
+    def mcp(self):
+        return (
+            "Disconnected" if not self.mcp_servers
+            else self.mcp_servers[0] if len(self.mcp_servers) == 1
+            else f"{len(self.mcp_servers)} servers"
+        )
 
     @property
     def status(self):
@@ -95,7 +109,8 @@ class StatsBar(Widget):
     def update(
         self,
         status: str | None = None,
-        tokens: tuple[int, int] | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
@@ -103,6 +118,7 @@ class StatsBar(Widget):
         used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
     ):
         """Update the stats dashboard with new information."""
         updated_title = updated_stats = False
@@ -118,8 +134,12 @@ class StatsBar(Widget):
             self._path = Filesystem.get_current_directory(abs_path, simplify=True)
             updated_title = True
 
-        if tokens is not None:
-            self._tokens = tokens
+        if sent_tokens is not None:
+            self._sent_tokens = sent_tokens
+            updated_stats = True
+
+        if received_tokens is not None:
+            self._received_tokens = received_tokens
             updated_stats = True
 
         if model is not None:
@@ -144,6 +164,10 @@ class StatsBar(Widget):
 
         if output_price is not None:
             self.output_price = output_price
+            updated_stats = True
+
+        if mcp_servers is not None:
+            self.mcp_servers = mcp_servers
             updated_stats = True
 
         if updated_title:
@@ -171,12 +195,12 @@ class StatsBar(Widget):
         self._table2.clear()
         self._table3.clear()
 
+        self._table1.add_row(f"Endpoint: {self._url}")
         self._table1.add_row(f"Tokens: {self.tokens}")
-        self._table1.add_row(f"Context: {self.context}")
-        self._table2.add_row(f"Endpoint: {self._url}")
-        self._table2.add_row(f"Input price: ${self.input_price}/M")
-        self._table3.add_row(f"Model: {self._model}")
-        self._table3.add_row(f"Output price: ${self.output_price}/M")
+        self._table2.add_row(f"Model: {self._model}")
+        self._table2.add_row(f"Context: {self.context}")
+        self._table3.add_row(f"MCP: {self.mcp}")
+        self._table3.add_row(f"Price: {self.price}")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:

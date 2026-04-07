@@ -188,7 +188,8 @@ class SolveigInterface(ABC):
     async def update_stats(
         self,
         status: str | None = None,
-        tokens: tuple[int, int] | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
         model: str | None = None,
         url: str | None = None,
         path: str | PathLike | None = None,
@@ -196,6 +197,7 @@ class SolveigInterface(ABC):
         used_context: int | None = None,
         input_price: float | None = None,
         output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
     ) -> None:
         """Update status bar with multiple pieces of information."""
         ...

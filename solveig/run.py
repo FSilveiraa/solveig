@@ -145,10 +145,8 @@ async def main_loop(
             interface=interface, wait_for_input=need_user_input
         )
         await interface.update_stats(
-            tokens=(
-                message_history.total_tokens_sent,
-                message_history.total_tokens_received,
-            ),
+            sent_tokens=message_history.total_tokens_sent,
+            received_tokens=message_history.total_tokens_received,
             used_context=message_history.token_count,
         )
         need_user_input = True
@@ -181,10 +179,8 @@ async def main_loop(
                     await session_manager.append(user_message)
                 await session_manager.append(llm_response)
             await interface.update_stats(
-                tokens=(
-                    message_history.total_tokens_sent,
-                    message_history.total_tokens_received,
-                ),
+                sent_tokens=message_history.total_tokens_sent,
+                received_tokens=message_history.total_tokens_received,
                 used_context=message_history.token_count,
             )
 

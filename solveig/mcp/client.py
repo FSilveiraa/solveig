@@ -74,22 +74,23 @@ class MCPConnection:
 MCP_CONNECTIONS: dict[str, MCPConnection] = {}
 
 
-async def connect(url: str, config: SolveigConfig) -> MCPConnection:
+async def connect(url: str, config: SolveigConfig, interface: SolveigInterface) -> MCPConnection:
     """Connect to an MCP server, register its tools, and rebuild the tools union."""
     conn = MCPConnection(url)
     await conn.open()
 
     # Replace any existing connection with the same name
     if conn.name in MCP_CONNECTIONS:
-        await disconnect(conn.name, config)
+        await disconnect(conn.name, config, interface)
 
     MCP_CONNECTIONS[conn.name] = conn
     MCP_TOOLS.extend(conn.tools)
     AVAILABLE_TOOLS.rebuild(config)
+    await interface.update_stats(mcp_servers=list(MCP_CONNECTIONS.keys()))
     return conn
 
 
-async def disconnect(name: str, config: SolveigConfig) -> None:
+async def disconnect(name: str, config: SolveigConfig, interface: SolveigInterface) -> None:
     """Disconnect from a named MCP server and rebuild the tools union."""
     conn = MCP_CONNECTIONS.pop(name, None)
     if conn is None:
@@ -99,13 +100,14 @@ async def disconnect(name: str, config: SolveigConfig) -> None:
             MCP_TOOLS.remove(tool)
     await conn.close()
     AVAILABLE_TOOLS.rebuild(config)
+    await interface.update_stats(mcp_servers=list(MCP_CONNECTIONS.keys()))
 
 
 async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> None:
     """Connect to all servers listed in config.mcp_servers at startup."""
     for url in config.mcp_servers:
         try:
-            conn = await connect(url, config)
+            conn = await connect(url, config, interface)
             tool_names = [t.model_fields["title"].default for t in conn.tools]
             await interface.display_success(
                 f"MCP '{conn.name}': connected ({len(conn.tools)} tools: {', '.join(tool_names)})"
