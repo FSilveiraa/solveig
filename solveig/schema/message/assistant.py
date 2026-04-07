@@ -50,12 +50,19 @@ class AssistantMessage(BaseMessage):
         """Display the assistant's message, including reasoning, comment and tasks."""
         # Display the raw response if available
         if config.verbose:
-            await interface.display_text_box(json.dumps(self.to_openai(), default=utils.misc.default_json_serialize), title="Raw Response", collapsible=True)
+            await interface.display_text_box(
+                json.dumps(self.to_openai(), default=utils.misc.default_json_serialize),
+                title="Raw Response",
+                collapsible=True,
+            )
 
         # Display reasoning before the comment (o1/o3 models)
         if self.reasoning:
             await interface.display_text_box(
-                self.reasoning, title="Reasoning", collapsible=True, italic=True,
+                self.reasoning,
+                title="Reasoning",
+                collapsible=True,
+                italic=True,
             )
 
         if self.comment:

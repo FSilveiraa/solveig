@@ -43,7 +43,7 @@ class StatsBar(Widget):
 
     @property
     def context(self):
-        return f"{self.used_context} / {self.max_context if self.max_context >= 0 else "Unlimited"}"
+        return f"{self.used_context} / {self.max_context if self.max_context >= 0 else 'Unlimited'}"
 
     @property
     def price(self):
@@ -52,8 +52,10 @@ class StatsBar(Widget):
     @property
     def mcp(self):
         return (
-            "Disconnected" if not self.mcp_servers
-            else self.mcp_servers[0] if len(self.mcp_servers) == 1
+            "Disconnected"
+            if not self.mcp_servers
+            else self.mcp_servers[0]
+            if len(self.mcp_servers) == 1
             else f"{len(self.mcp_servers)} servers"
         )
 

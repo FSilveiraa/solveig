@@ -83,7 +83,7 @@ async def setup_loop(
         message_history.system_prompt,
         title="System Prompt",
         collapsible=True,
-        collapsed=True
+        collapsed=True,
     )
 
     subcommand_executor = SubcommandRunner(

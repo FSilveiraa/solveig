@@ -135,13 +135,13 @@ class MockInterface(TerminalInterface):
         )
 
     async def display_text_box(
-            self,
-            text: str,
-            title: str | None = None,
-            language: str | None = None,
-            italic: bool = False,
-            collapsible: bool = False,
-            collapsed: bool = True,
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        italic: bool = False,
+        collapsible: bool = False,
+        collapsed: bool = True,
     ) -> None:
         if title:
             self.outputs.append(f"📋 {title}")

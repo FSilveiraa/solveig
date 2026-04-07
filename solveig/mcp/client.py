@@ -74,7 +74,9 @@ class MCPConnection:
 MCP_CONNECTIONS: dict[str, MCPConnection] = {}
 
 
-async def connect(url: str, config: SolveigConfig, interface: SolveigInterface) -> MCPConnection:
+async def connect(
+    url: str, config: SolveigConfig, interface: SolveigInterface
+) -> MCPConnection:
     """Connect to an MCP server, register its tools, and rebuild the tools union."""
     conn = MCPConnection(url)
     await conn.open()
@@ -90,7 +92,9 @@ async def connect(url: str, config: SolveigConfig, interface: SolveigInterface) 
     return conn
 
 
-async def disconnect(name: str, config: SolveigConfig, interface: SolveigInterface) -> None:
+async def disconnect(
+    name: str, config: SolveigConfig, interface: SolveigInterface
+) -> None:
     """Disconnect from a named MCP server and rebuild the tools union."""
     conn = MCP_CONNECTIONS.pop(name, None)
     if conn is None:
