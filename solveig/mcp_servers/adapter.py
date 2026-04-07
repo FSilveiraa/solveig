@@ -32,27 +32,6 @@ class MCPToolResult(ToolResult):
             await interface.display_text_box(self.output, title="Output")
 
 
-class MCPToolBase(BaseTool):
-    """Intermediate base for dynamically created MCP tool classes.
-
-    Concrete implementations are produced by create_tool_class(), which builds
-    a proper subclass with all methods defined via closures before handing off
-    to create_model() for Pydantic field generation.
-    """
-
-    async def actually_solve(
-        self, config: SolveigConfig, interface: SolveigInterface
-    ) -> MCPToolResult:
-        raise NotImplementedError
-
-    def create_error_result(self, error_message: str, accepted: bool) -> MCPToolResult:
-        raise NotImplementedError
-
-    @classmethod
-    def get_description(cls) -> str:
-        return cls.model_fields["title"].default or "MCP tool"
-
-
 def _json_type(prop: dict) -> type:
     match prop.get("type", "string"):
         case "integer":
@@ -93,21 +72,20 @@ def _schema_fields(input_schema: dict) -> dict[str, Any]:
     return fields
 
 
-def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[MCPToolBase]:
+def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseTool]:
     """Create a concrete BaseTool subclass for a single MCP tool."""
     tool_name = mcp_tool.name
     description = mcp_tool.description or tool_name
     extra_fields = _schema_fields(mcp_tool.inputSchema or {})
     sig = _schema_signature(mcp_tool.inputSchema or {})
 
-    # Capture everything the methods need via closure so no post-hoc patching is required.
     _session = session
     _name = tool_name
     _field_names = list(extra_fields.keys())
     _sig = sig
     _desc = description
 
-    class ToolImpl(MCPToolBase):
+    class MCPToolBase(BaseTool):
         async def display_header(self, interface: SolveigInterface) -> None:
             await BaseTool.display_header(self, interface)
             for field_name in _field_names:
@@ -173,5 +151,5 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[MCPTool
         tool_name.title(),
         title=(Literal[tool_name], tool_name),  # type: ignore[valid-type]
         **extra_fields,
-        __base__=ToolImpl,
+        __base__=MCPToolBase,
     )
