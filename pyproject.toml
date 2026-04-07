@@ -39,6 +39,7 @@ dependencies = [
     "rich>=14.0.0",
     "httpx>=0.28.0",
     "mcp>=1.27.0",
+    "pyperclip>=1.9.0",
 ]
 
 [project.optional-dependencies]

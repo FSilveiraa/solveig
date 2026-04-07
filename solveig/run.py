@@ -55,6 +55,12 @@ async def setup_loop(
 
     sys_prompt = await system_prompt.get_system_prompt(config)
     message_history.update_system_prompt(sys_prompt)
+    await interface.display_text_box(
+        message_history.system_prompt,
+        title="System Prompt",
+        collapsible=True,
+        collapsed=True,
+    )
 
     if resume_session and session_manager:
         name = None if resume_session == "__latest__" else resume_session
@@ -78,13 +84,6 @@ async def setup_loop(
         await fetch_and_apply_model_info(config, request_manager.client_ref, interface)
 
     await interface.update_stats(url=config.url, model=config.model)
-
-    await interface.display_text_box(
-        message_history.system_prompt,
-        title="System Prompt",
-        collapsible=True,
-        collapsed=True,
-    )
 
     subcommand_executor = SubcommandRunner(
         config=config,

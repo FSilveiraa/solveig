@@ -13,6 +13,8 @@ from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
 
+from .widgets import CopyFooter
+
 
 class CustomCollapsibleTitleBar(CollapsibleTitle):
     """Base class for custom collapsible title bars.
@@ -246,12 +248,14 @@ class CollapsibleTextBox(Widget):
             start_collapsed=self._collapsed,
         )
 
+        raw = self._content if isinstance(self._content, str) else self._content.code
         with self._collapsible:
             yield Static(
                 self._content,
                 markup=False,
                 classes=self._content_classes,
             )
+        yield CopyFooter(raw)
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -293,4 +297,6 @@ class CollapsibleTextBox(Widget):
         .italic {{
             text-style: italic;
         }}
+
+        {CopyFooter.get_css(theme)}
         """

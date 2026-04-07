@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import shlex
 from typing import TYPE_CHECKING
 
 from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 
 from solveig.interface import SolveigInterface
@@ -36,10 +38,22 @@ class MCPConnection:
         self._done: asyncio.Event = asyncio.Event()
         self._error: BaseException | None = None
 
-    async def _run(self) -> None:
-        """Background task: holds the HTTP + session context managers open."""
-        try:
+    @contextlib.asynccontextmanager
+    async def _transport(self):  # type: ignore[return]
+        """Yield (read, write) streams for the appropriate transport."""
+        if self.url.startswith("stdio://"):
+            parts = shlex.split(self.url[len("stdio://"):])
+            params = StdioServerParameters(command=parts[0], args=parts[1:])
+            async with stdio_client(params) as (read, write):
+                yield read, write
+        else:
             async with streamable_http_client(self.url) as (read, write, _):
+                yield read, write
+
+    async def _run(self) -> None:
+        """Background task: holds the transport + session context managers open."""
+        try:
+            async with self._transport() as (read, write):
                 async with ClientSession(read, write) as session:
                     self._session = session
                     self._ready.set()

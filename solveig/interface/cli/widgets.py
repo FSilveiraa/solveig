@@ -1,20 +1,58 @@
 """Basic UI widgets for the Textual CLI interface."""
-
+import pyperclip
 from rich.syntax import Syntax
+from textual.widget import Widget
 from textual.widgets import Static
 
 from solveig.interface.themes import Palette
 
 
-class TextBox(Static):
+class CopyFooter(Static):
+    """A small clickable widget that copies text to the clipboard."""
+
+    def __init__(self, content: str):
+        super().__init__("⧉ copy", markup=False, classes="copy-footer")
+        self._copy_content = content
+
+    def on_click(self) -> None:
+        # Copy to clipboard
+        pyperclip.copy(self._copy_content)
+        # Display a success message for 1s
+        _content = self.content
+        self.update("✓ copied!")
+        self.set_timer(1.0, lambda: self.update(_content))
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        return f"""
+        .copy-footer {{
+            color: {theme.box};
+            text-align: right;
+            padding: 0 1;
+            height: 1;
+        }}
+
+        .copy-footer:hover {{
+            color: {theme.section};
+            text-style: bold;
+        }}
+        """
+
+
+class TextBox(Widget):
     """A text block widget with optional title and border."""
 
     def __init__(self, content: str | Syntax, title: str | None = None, **kwargs):
-        super().__init__(content, markup=False, **kwargs)
-        self.border = "solid"
+        super().__init__(**kwargs)
+        self._content = content
         if title:
             self.border_title = title
         self.add_class("text_block")
+
+    def compose(self):
+        raw = self._content if isinstance(self._content, str) else self._content.code
+        yield Static(self._content, markup=False)
+        yield CopyFooter(raw)
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -24,7 +62,10 @@ class TextBox(Static):
             border: solid {theme.box};
             margin: 1;
             padding: 0 1;
+            height: auto;
         }}
+
+        {CopyFooter.get_css(theme)}
         """
 
 
