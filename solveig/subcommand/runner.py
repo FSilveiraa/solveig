@@ -637,6 +637,6 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             return
         self.message_history.load_from_session(session_data)
         await self.session_manager.display_loaded_session(
-            session_data, self.message_history, interface
+            self.config, session_data, self.message_history, interface
         )
         await interface.display_success("Session loaded. Continue your conversation.")

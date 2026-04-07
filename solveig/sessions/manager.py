@@ -187,3 +187,5 @@ class SessionManager:
                         except Exception:
                             pass
                 await msg.display(interface)  # shows user comments
+
+        await interface.update_stats(used_context=message_history.token_count)
