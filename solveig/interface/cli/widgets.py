@@ -1,4 +1,5 @@
 """Basic UI widgets for the Textual CLI interface."""
+
 import pyperclip
 from rich.syntax import Syntax
 from textual.widget import Widget

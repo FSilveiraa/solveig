@@ -42,7 +42,7 @@ class MCPConnection:
     async def _transport(self):  # type: ignore[return]
         """Yield (read, write) streams for the appropriate transport."""
         if self.url.startswith("stdio://"):
-            parts = shlex.split(self.url[len("stdio://"):])
+            parts = shlex.split(self.url[len("stdio://") :])
             params = StdioServerParameters(command=parts[0], args=parts[1:])
             async with stdio_client(params) as (read, write):
                 yield read, write

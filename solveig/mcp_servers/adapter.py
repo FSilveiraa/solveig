@@ -33,9 +33,11 @@ class MCPToolResult(ToolResult):
 
 
 class MCPToolBase(BaseTool):
-    """Concrete intermediate base so create_model doesn't produce an abstract class.
+    """Intermediate base for dynamically created MCP tool classes.
 
-    Methods are replaced per-tool by create_tool_class().
+    Concrete implementations are produced by create_tool_class(), which builds
+    a proper subclass with all methods defined via closures before handing off
+    to create_model() for Pydantic field generation.
     """
 
     async def actually_solve(
@@ -91,83 +93,85 @@ def _schema_fields(input_schema: dict) -> dict[str, Any]:
     return fields
 
 
-def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseTool]:
+def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[MCPToolBase]:
     """Create a concrete BaseTool subclass for a single MCP tool."""
     tool_name = mcp_tool.name
     description = mcp_tool.description or tool_name
     extra_fields = _schema_fields(mcp_tool.inputSchema or {})
+    sig = _schema_signature(mcp_tool.inputSchema or {})
 
-    # Capture for closures
+    # Capture everything the methods need via closure so no post-hoc patching is required.
     _session = session
     _name = tool_name
-    _fields = extra_fields
+    _field_names = list(extra_fields.keys())
+    _sig = sig
+    _desc = description
 
-    async def display_header(self, interface: SolveigInterface) -> None:
-        await BaseTool.display_header(self, interface)
-        for field_name in _fields:
-            val = getattr(self, field_name, None)
-            if val is not None:
-                await interface.display_text(str(val), prefix=f"{field_name}:")
+    class ToolImpl(MCPToolBase):
+        async def display_header(self, interface: SolveigInterface) -> None:
+            await BaseTool.display_header(self, interface)
+            for field_name in _field_names:
+                val = getattr(self, field_name, None)
+                if val is not None:
+                    await interface.display_text(str(val), prefix=f"{field_name}:")
 
-    async def actually_solve(
-        self: MCPToolBase,
-        config: SolveigConfig,
-        interface: SolveigInterface,
-    ) -> MCPToolResult:
-        choice = await interface.ask_choice(
-            "Allow MCP call?",
-            [
-                "Yes",
-                "No",
-            ],
-        )
-        if choice != 0:
+        async def actually_solve(
+            self,
+            config: SolveigConfig,
+            interface: SolveigInterface,
+        ) -> MCPToolResult:
+            choice = await interface.ask_choice("Allow MCP call?", ["Yes", "No"])
+            if choice != 0:
+                return MCPToolResult(
+                    tool=self,
+                    title=_name,
+                    accepted=False,
+                    error="User rejected",
+                    output=None,
+                )
+
+            arguments = {
+                k: getattr(self, k)
+                for k in _field_names
+                if getattr(self, k) is not None
+            }
+            try:
+                result = await _session.call_tool(_name, arguments)
+                output = "\n".join(
+                    block.text
+                    for block in result.content
+                    if hasattr(block, "text") and block.text
+                )
+                if output:
+                    await interface.display_text_box(output, title="Result")
+                return MCPToolResult(
+                    tool=self, title=_name, accepted=True, output=output or None
+                )
+            except Exception as e:
+                return MCPToolResult(
+                    tool=self, title=_name, accepted=False, error=str(e), output=None
+                )
+
+        def create_error_result(
+            self, error_message: str, accepted: bool
+        ) -> MCPToolResult:
             return MCPToolResult(
                 tool=self,
                 title=_name,
-                accepted=False,
-                error="User rejected",
+                accepted=accepted,
+                error=error_message,
                 output=None,
             )
 
-        arguments = {
-            k: getattr(self, k) for k in _fields if getattr(self, k) is not None
-        }
-        try:
-            result = await _session.call_tool(_name, arguments)
-            output = "\n".join(
-                block.text
-                for block in result.content
-                if hasattr(block, "text") and block.text
-            )
-            if output:
-                await interface.display_text_box(output, title="Result")
-            return MCPToolResult(
-                tool=self, title=_name, accepted=True, output=output or None
-            )
-        except Exception as e:
-            return MCPToolResult(
-                tool=self, title=_name, accepted=False, error=str(e), output=None
-            )
+        @classmethod
+        def get_description(cls) -> str:
+            return f"{_name}{_sig}: {_desc}"
 
-    def create_error_result(
-        self: MCPToolBase, error_message: str, accepted: bool
-    ) -> MCPToolResult:
-        return MCPToolResult(
-            tool=self, title=_name, accepted=accepted, error=error_message, output=None
-        )
-
-    tool_class: type[BaseTool] = create_model(  # type: ignore[call-overload]
+    # create_model is used solely for the dynamic Pydantic fields and the Literal title.
+    # All methods are already on ToolImpl; nothing is patched after the fact.
+    return create_model(  # type: ignore[call-overload]
         tool_name.title(),
         title=(Literal[tool_name], tool_name),  # type: ignore[valid-type]
         **extra_fields,
-        __base__=MCPToolBase,
+        __base__=ToolImpl,
     )
-    tool_class.display_header = display_header  # type: ignore[attr-defined]
-    tool_class.actually_solve = actually_solve  # type: ignore[attr-defined]
-    tool_class.create_error_result = create_error_result  # type: ignore[attr-defined]
-    sig = _schema_signature(mcp_tool.inputSchema or {})
-    tool_class.get_description = classmethod(  # type: ignore[attr-defined]
-        lambda cls, n=tool_name, s=sig, d=description: f"{n}{s}: {d}"
-    )
-    return tool_class

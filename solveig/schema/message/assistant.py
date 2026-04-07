@@ -46,12 +46,24 @@ class AssistantMessage(BaseMessage):
             result["reasoning_details"] = self.reasoning_details
         return result
 
+    @property
+    def raw_message(self) -> dict | None:
+        try:
+            raw_response = self._raw_response.choices[0].message
+        except AttributeError:
+            return None
+        else:
+            return {
+                "content": raw_response.content,
+                **raw_response.model_extra,
+            }
+
     async def display(self, config: SolveigConfig, interface: SolveigInterface) -> None:
         """Display the assistant's message, including reasoning, comment and tasks."""
         # Display the raw response if available
-        if config.verbose:
+        if config.verbose and (raw := self.raw_message):
             await interface.display_text_box(
-                json.dumps(self.to_openai(), default=utils.misc.default_json_serialize),
+                json.dumps(raw, default=utils.misc.default_json_serialize),
                 title="Raw Response",
                 collapsible=True,
             )

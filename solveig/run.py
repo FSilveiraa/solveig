@@ -21,7 +21,7 @@ from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
-from solveig.mcp import connect_all
+from solveig.mcp_servers import connect_all
 from solveig.plugins import initialize_plugins
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
