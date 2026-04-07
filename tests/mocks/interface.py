@@ -134,8 +134,14 @@ class MockInterface(TerminalInterface):
             json.dumps(serializable_dict, default=utils.misc.default_json_serialize)
         )
 
-    async def display_text_block(
-        self, text: str, title: str | None = None, language: str | None = None
+    async def display_text_box(
+            self,
+            text: str,
+            title: str | None = None,
+            language: str | None = None,
+            italic: bool = False,
+            collapsible: bool = False,
+            collapsed: bool = True,
     ) -> None:
         if title:
             self.outputs.append(f"📋 {title}")

@@ -37,14 +37,14 @@ class HttpResult(ToolResult):
             headers_text = "\n".join(
                 f"{k}: {v}" for k, v in self.response_headers.items()
             )
-            await interface.display_text_block(headers_text, title="Response Headers")
+            await interface.display_text_box(headers_text, title="Response Headers")
 
         if self.output_file:
             await interface.display_success(f"Saved to {self.output_file}")
         elif self.body:
             content_type = (self.response_headers or {}).get("content-type")
             body_display, language = _format_body(self.body, content_type)
-            await interface.display_text_block(
+            await interface.display_text_box(
                 body_display, title="Response Body", language=language
             )
             if self.truncated:

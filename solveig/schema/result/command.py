@@ -15,4 +15,4 @@ class CommandResult(ToolResult):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         if self.stdout:
-            await interface.display_text_block(self.stdout.rstrip(), title="Output")
+            await interface.display_text_box(self.stdout.rstrip(), title="Output")

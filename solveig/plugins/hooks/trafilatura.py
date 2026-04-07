@@ -66,7 +66,7 @@ async def convert_html_to_markdown(
     new_size = len(markdown)
     savings = round((1 - new_size / original_size) * 100)
     await interface.display_success(f"{new_size:,} chars — {savings}% smaller")
-    await interface.display_text_block(
+    await interface.display_text_box(
         title="Markdown Response",
         text=markdown,
         collapsible=True,

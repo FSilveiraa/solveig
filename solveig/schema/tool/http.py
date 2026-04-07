@@ -50,7 +50,7 @@ class HttpTool(BaseTool):
         await interface.display_text(self.url, prefix=f"{self.method}")
         if self.headers:
             headers_text = "\n".join(f"{k}: {v}" for k, v in self.headers.items())
-            await interface.display_text_block(headers_text, title="Request Headers")
+            await interface.display_text_box(headers_text, title="Request Headers")
         if self.body:
             try:
                 parsed = json.loads(self.body)
@@ -59,7 +59,7 @@ class HttpTool(BaseTool):
             except (json.JSONDecodeError, ValueError):
                 body_display = self.body
                 language = ""
-            await interface.display_text_block(
+            await interface.display_text_box(
                 body_display, title="Request Body", language=language
             )
         if self.output_file:
@@ -178,7 +178,7 @@ class HttpTool(BaseTool):
             if send_choice == 1:
                 content_type = response_headers.get("content-type")
                 body_display, language = _format_body(raw, content_type)
-                await interface.display_text_block(
+                await interface.display_text_box(
                     body_display, title="Response Body", language=language
                 )
                 if truncated:

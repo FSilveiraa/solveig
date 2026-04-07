@@ -49,19 +49,20 @@ class ConversationArea(ScrollableContainer):
         style_class = f"{style}_message" if style != "text" else style
         await self._add_element(Static(text, classes=style_class, markup=markup))
 
-    async def add_text_block(self, content: str | Syntax, title: str | None = None):
+    async def add_text_box(self, content: str | Syntax, title: str | None = None):
         """Add a text block with border and optional title."""
         await self._add_element(TextBox(content, title=title))
 
-    async def add_collapsible_text_block(
+    async def add_collapsible_text_box(
         self,
         content: str | Syntax,
         title: str,
         collapsed: bool = False,
+        italic: bool = False,
     ):
         """Add a collapsible text block (for reasoning, verbose output, etc.)."""
         await self._add_element(
-            CollapsibleTextBox(content, title=title, collapsed=collapsed)
+            CollapsibleTextBox(content, title=title, italic=italic, collapsed=collapsed)
         )
 
     async def add_section_header(self, title: str):

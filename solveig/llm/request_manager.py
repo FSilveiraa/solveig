@@ -110,13 +110,13 @@ class RequestManager:
     ) -> AssistantMessage:
         """Send a single request to the LLM."""
         message_history_dumped = message_history.to_openai()
-
         if config.verbose:
-            await interface.display_text_block(
+            await interface.display_text_box(
                 title="Sending",
                 text=json.dumps(
                     message_history_dumped, indent=2, default=default_json_serialize
                 ),
+                collapsible=True,
             )
 
         await interface.display_section(title="Assistant")
@@ -205,7 +205,7 @@ class RequestManager:
         import traceback
 
         await interface.display_error(exc)
-        await interface.display_text_block(
+        await interface.display_text_box(
             title=f"{exc.__class__.__name__}",
             text=str(exc) + traceback.format_exc(),
         )

@@ -159,6 +159,7 @@ class SessionManager:
 
     async def display_loaded_session(
         self,
+        config: SolveigConfig,
         session_data: dict,
         message_history: MessageHistory,
         interface: SolveigInterface,
@@ -170,14 +171,14 @@ class SessionManager:
             f"**Tokens sent / received:** "
             f"{message_history.total_tokens_sent} / {message_history.total_tokens_received}"
         )
-        await interface.display_text_block(
+        await interface.display_text_box(
             header, language="markdown", title="Resumed session"
         )
 
         for msg in message_history.messages[1:]:  # skip system message
             if isinstance(msg, AssistantMessage):
                 await interface.display_section("Assistant")
-                await msg.display(interface)
+                await msg.display(config, interface)
             elif isinstance(msg, UserMessage):
                 for response in msg.responses:
                     if isinstance(response, ToolResult):

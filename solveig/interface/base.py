@@ -128,13 +128,14 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def display_text_block(
+    async def display_text_box(
         self,
         text: str,
         title: str | None = None,
         language: str | None = None,
+        italic: bool = False,
         collapsible: bool = False,
-        collapsed: bool = False,
+        collapsed: bool = True,
     ) -> None:
         """Display a text block with optional title."""
         ...

@@ -62,7 +62,7 @@ async def setup_loop(
             session_data = await session_manager.load(name)
             message_history.load_from_session(session_data)
             await session_manager.display_loaded_session(
-                session_data, message_history, interface
+                config, session_data, message_history, interface
             )
             await interface.update_stats(used_context=message_history.token_count)
         except FileNotFoundError as e:
@@ -79,10 +79,12 @@ async def setup_loop(
 
     await interface.update_stats(url=config.url, model=config.model)
 
-    if config.verbose:
-        await interface.display_text_block(
-            message_history.system_prompt, title="System Prompt"
-        )
+    await interface.display_text_box(
+        message_history.system_prompt,
+        title="System Prompt",
+        collapsible=True,
+        collapsed=True
+    )
 
     subcommand_executor = SubcommandRunner(
         config=config,
@@ -95,9 +97,11 @@ async def setup_loop(
     if config.verbose:
         response_model = AVAILABLE_TOOLS.response_model
         serialized_response_model = serialize_response_model(model=response_model)
-        await interface.display_text_block(
+        await interface.display_text_box(
             title="Response Model",
             text=serialized_response_model,
+            collapsible=True,
+            collapsed=True,
         )
 
 
@@ -184,10 +188,7 @@ async def main_loop(
                 used_context=message_history.token_count,
             )
 
-            if config.verbose:
-                await interface.display_text_block(str(llm_response), title="Received")
-
-            await llm_response.display(interface)
+            await llm_response.display(config, interface)
 
             if llm_response.tools:
                 # In autonomous mode (default), send results back without waiting.

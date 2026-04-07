@@ -49,7 +49,7 @@ class CommandTool(BaseTool):
         await interface.display_text(
             f"Timeout: {f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}"
         )
-        await interface.display_text_block(self.command, title="Command")
+        await interface.display_text_box(self.command, title="Command")
 
     def create_error_result(self, error_message: str, accepted: bool) -> CommandResult:
         """Create CommandResult with error."""
@@ -120,14 +120,14 @@ class CommandTool(BaseTool):
                     )
 
             if output:
-                await interface.display_text_block(output, title="Output")
+                await interface.display_text_box(output, title="Output")
             else:
                 await interface.display_info(
                     "No output" if self.timeout > 0 else "Detached process, no output"
                 )
             if error:
                 async with interface.with_group("Error"):
-                    await interface.display_text_block(error, title="Error")
+                    await interface.display_text_box(error, title="Error")
 
             # If we have an output or an error, and previously we decided to inspect before sending, ask again
             # If the user decides to not send, obfuscate the output

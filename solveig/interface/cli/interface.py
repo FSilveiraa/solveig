@@ -146,11 +146,12 @@ class TerminalInterface(SolveigInterface):
             display_metadata=display_metadata,
         )
 
-    async def display_text_block(
+    async def display_text_box(
         self,
         text: str,
         title: str | None = None,
         language: str | None = None,
+        italic: bool = False,
         collapsible: bool = False,
         collapsed: bool = True,
     ) -> None:
@@ -162,12 +163,16 @@ class TerminalInterface(SolveigInterface):
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
         if collapsible:
-            await self.app._conversation_area.add_collapsible_text_block(
-                to_display, title=title or "Text Block", collapsed=collapsed
+            await self.app._conversation_area.add_collapsible_text_box(
+                to_display,
+                title=title or "Text Block",
+                collapsed=collapsed,
+                italic=italic,
             )
         else:
-            await self.app._conversation_area.add_text_block(
-                to_display, title=title or "Text Block"
+            await self.app._conversation_area.add_text_box(
+                to_display,
+                title=title or "Text Block",
             )
 
     async def display_diff(
@@ -204,7 +209,7 @@ class TerminalInterface(SolveigInterface):
         else:
             # TODO: add color hightlighting here
             to_display = "(Same content)"
-        await self.app._conversation_area.add_text_block(
+        await self.app._conversation_area.add_text_box(
             to_display, title=title or "Diff"
         )
 

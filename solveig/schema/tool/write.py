@@ -84,7 +84,7 @@ class WriteTool(BaseTool):
                 old = (await Filesystem.read_file(abs_path)).content.strip()
                 await interface.display_diff(old_content=old, new_content=self.content)
             else:
-                await interface.display_text_block(
+                await interface.display_text_box(
                     self.content,
                     language=abs_path.suffix.lstrip("."),
                     title="Content",

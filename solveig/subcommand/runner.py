@@ -332,7 +332,7 @@ class SubcommandRunner:
             value = getattr(self.config, field_name)
             display = self._format_field_value(field_name, value)
             lines.append(f"{field_name:<26} = {display}")
-        await interface.display_text_block(
+        await interface.display_text_box(
             "\n".join(lines), title="Config (editable fields)"
         )
 
@@ -452,7 +452,7 @@ class SubcommandRunner:
                 lines.append(f"Output price: ${info.output_price}/M tokens")
         else:
             lines.append("(No details cached — try /model refresh)")
-        await interface.display_text_block("\n".join(lines), title="Model Info")
+        await interface.display_text_box("\n".join(lines), title="Model Info")
 
     async def _model_refresh(self, interface: SolveigInterface, *args) -> None:
         if not self.config.model:
@@ -472,7 +472,7 @@ class SubcommandRunner:
             async with interface.with_animation("Fetching model list...", "Ready"):
                 models = await raw_client.models.list()
             names = sorted(m.id for m in models.data)
-            await interface.display_text_block(
+            await interface.display_text_box(
                 "\n".join(f"• {n}" for n in names),
                 title=f"Available Models ({len(names)})",
             )
@@ -510,7 +510,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             for _cmd, sub in details:
                 help_str += f"\n      {sub.help_line()}"
 
-        await interface.display_text_block(help_str, title="Help")
+        await interface.display_text_box(help_str, title="Help")
         return help_str
 
     # ------------------------------------------------------------------
@@ -527,7 +527,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             lines.append(
                 f"**{name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
             )
-        await interface.display_text_block("\n".join(lines), title="MCP Connections")
+        await interface.display_text_box("\n".join(lines), title="MCP Connections")
 
     async def _mcp_connect_cmd(
         self, interface: SolveigInterface, *args, **kwargs
@@ -587,7 +587,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             lines.append(
                 f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {token_count} tokens."
             )
-        await interface.display_text_block("\n".join(lines), title="Sessions")
+        await interface.display_text_box("\n".join(lines), title="Sessions")
 
     async def session_store(self, interface: SolveigInterface, *args, **kwargs):
         if self.session_manager is None:

@@ -29,7 +29,7 @@ class MCPToolResult(ToolResult):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         if self.output:
-            await interface.display_text_block(self.output, title="Output")
+            await interface.display_text_box(self.output, title="Output")
 
 
 class MCPToolBase(BaseTool):
@@ -141,7 +141,7 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
                 if hasattr(block, "text") and block.text
             )
             if output:
-                await interface.display_text_block(output, title="Result")
+                await interface.display_text_box(output, title="Result")
             return MCPToolResult(
                 tool=self, title=_name, accepted=True, output=output or None
             )

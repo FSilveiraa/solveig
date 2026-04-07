@@ -240,7 +240,7 @@ class ModelNotFound(Exception):
             f"Could not find model '{self.model_name}'. Try setting with '/model set <modelname>'"
         )
         if self.available:
-            await interface.display_text_block(
+            await interface.display_text_box(
                 text="\n".join(self.available),
                 title="Available models",
                 collapsible=True,

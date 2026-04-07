@@ -94,10 +94,9 @@ async def check_command(
             return
 
         if proc.returncode == 0:
-            if config.verbose:
-                await interface.display_success(
-                    f"Shellcheck: No issues with command `{tool.command}`"
-                )
+            await interface.display_success(
+                f"Shellcheck: No issues with command `{tool.command}`"
+            )
             return
 
         # Parse shellcheck warnings and raise validation error

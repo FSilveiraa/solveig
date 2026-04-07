@@ -223,12 +223,12 @@ class CollapsibleTextBox(Widget):
         content: str | Syntax,
         title: str,
         collapsed: bool = False,
-        content_classes: str = "reasoning-content",
+        italic: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._content = content
-        self._content_classes = content_classes
+        self._content_classes = "italic" if italic else ""
         self._title = title
         self._collapsed = collapsed
 
@@ -259,9 +259,10 @@ class CollapsibleTextBox(Widget):
         return f"""
         CollapsibleTextBox {{
             margin: 0 0 0 1;
-            padding: 0;
             height: auto;
+            padding: 0 1;
             border: solid {theme.box};
+            color: {theme.text};
             background: {theme.background};
         }}
 
@@ -289,11 +290,7 @@ class CollapsibleTextBox(Widget):
             color: {theme.section};
         }}
 
-        .reasoning-content {{
+        .italic {{
             text-style: italic;
-            color: {theme.text};
-            height: auto;
-            padding: 0 1;
-            background: {theme.background};
         }}
         """

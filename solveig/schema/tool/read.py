@@ -211,7 +211,7 @@ class ReadTool(BaseTool):
 
                     # Display each range in its own block
                     for start, end, text in content:
-                        await interface.display_text_block(
+                        await interface.display_text_box(
                             text,
                             title=f"Content: {abs_path} (lines {start} to {end})",
                             language=abs_path.suffix,
@@ -229,7 +229,7 @@ class ReadTool(BaseTool):
                         # Binary file - use (0, 0) to indicate whole binary file
                         content = [(0, 0, read_result.content)]
 
-                    await interface.display_text_block(
+                    await interface.display_text_box(
                         read_result.content
                         if read_result.encoding == "text"
                         else "(binary content)",
