@@ -247,7 +247,7 @@ class MessageHistory:
 
     def to_openai(self):
         """Return cache for OpenAI API."""
-        return [message for message, _ in self.message_cache]
+        return [dict(message) for message, _ in self.message_cache]
 
     def to_example(self):
         return "\n".join(
