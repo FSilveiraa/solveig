@@ -52,7 +52,7 @@ class MessageHistory:
         # from prompt_tokens is the exact user message size. Works through pruning
         # because both sides have the same evictions already applied.
         if self.message_cache and isinstance(
-                previous_user_message := self.messages[-1], UserMessage
+            previous_user_message := self.messages[-1], UserMessage
         ):
             approx_user_size = previous_user_message.token_count
             exact_user_size = sent - (self.token_count - approx_user_size)
