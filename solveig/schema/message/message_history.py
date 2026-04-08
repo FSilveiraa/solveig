@@ -47,6 +47,31 @@ class MessageHistory:
             message, size = self.message_cache.pop(1)
             self.token_count -= size
 
+    def _correct_previous_user_message(self, sent: int):
+        # Deducting the approximate user size gives the pre-user total; the difference
+        # from prompt_tokens is the exact user message size. Works through pruning
+        # because both sides have the same evictions already applied.
+        if self.message_cache and isinstance(
+                previous_user_message := self.messages[-1], UserMessage
+        ):
+            approx_user_size = previous_user_message.token_count
+            exact_user_size = sent - (self.token_count - approx_user_size)
+            if exact_user_size > 0:
+                previous_user_message.token_count = exact_user_size
+                dumped_message, _ = self.message_cache[-1]
+                self.message_cache[-1] = (dumped_message, exact_user_size)
+
+                # If there are multiple user messages in a row (cancel sending and add another)
+                # then we can't just correct the latest one and leave the others with encoder counts
+                # Iterate the previous user messages, if any, and set their sizes to 0
+                for i in reversed(range(-1 * len(self.messages), -1)):
+                    previous_message = self.messages[i]
+                    if not isinstance(previous_message, UserMessage):
+                        break
+                    previous_message.token_count = 0
+                    dumped_message, _ = self.message_cache[i]
+                    self.message_cache[i] = (dumped_message, 0)
+
     def add_messages(
         self,
         *messages: Message,
@@ -62,51 +87,27 @@ class MessageHistory:
             ):
                 # Update token count using API usage field from the raw response
                 raw_response = message._raw_response
-                sent = raw_response.usage.prompt_tokens
-                message_size = received = raw_response.usage.completion_tokens
-                # Correct the preceding user message's cached size using exact prompt_tokens.
-                # Deducting the approximate user size gives the pre-user total; the difference
-                # from prompt_tokens is the exact user message size. Works through pruning
-                # because both sides have the same evictions already applied.
-                if self.message_cache and isinstance(
-                    previous_user_message := self.messages[-1], UserMessage
-                ):
-                    approx_user_size = previous_user_message.token_count
-                    exact_user_size = sent - (self.token_count - approx_user_size)
-                    if exact_user_size > 0:
-                        previous_user_message.token_count = exact_user_size
-                        dumped_message, _ = self.message_cache[-1]
-                        self.message_cache[-1] = (dumped_message, exact_user_size)
+                sent_size = raw_response.usage.prompt_tokens
+                message.token_count = raw_response.usage.completion_tokens
+                # Correct the preceding user message's cached size using exact prompt_tokens
+                # This uses self.token_count internally to get a diff, so don't correct token count yet
+                self._correct_previous_user_message(sent_size)
 
-                        # If there are multiple user messages in a row (cancel sending and add another)
-                        # then we can't just correct the latest one and leave the others with encoder counts
-                        # Iterate the previous user messages, if any, and set their sizes to 0
-                        for i in reversed(range(-1 * len(self.messages), -1)):
-                            previous_message = self.messages[i]
-                            if not isinstance(previous_message, UserMessage):
-                                break
-                            previous_message.token_count = 0
-                            dumped_message, _ = self.message_cache[i]
-                            self.message_cache[i] = (dumped_message, 0)
+                # The total token count is size of what we just sent to get this response
+                self.token_count = sent_size
+                self.total_tokens_sent += sent_size
+                self.total_tokens_received += message.token_count
 
-                self.token_count = sent + received
-                self.total_tokens_sent += sent
-                self.total_tokens_received += received
-            elif message.token_count > 0:
-                # Use stored token count (from session resume) — exact, no re-estimation needed
-                message_size = message.token_count
-                self.token_count += message_size
-            else:
+            elif message.token_count <= 0:
                 # Fall back to encoder approximation for messages without a stored count
-                message_size = self.config.api_type.count_tokens(
+                message.token_count = self.config.api_type.count_tokens(
                     message_serialized["content"],
                     model=self.config.model,
                     encoder=self.config.encoder,
                 )
-                self.token_count += message_size
 
-            # Regardless of how we found the token count, update it for that message
-            message.token_count = message_size
+            # Regardless of how we found the token count, update it for this message
+            self.token_count += message.token_count
             self.messages.append(message)
             self.message_cache.append((message_serialized, message.token_count))
 
