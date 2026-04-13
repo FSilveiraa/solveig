@@ -8,6 +8,7 @@ from typing import ClassVar, Literal
 from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
+from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
@@ -133,6 +134,8 @@ class CommandTool(BaseTool):
                         path=Filesystem.get_absolute_path(shell.cwd)
                     )
 
+            except UserCancel:
+                raise
             except Exception as e:
                 error_str = str(e)
                 await interface.display_error(
