@@ -232,9 +232,9 @@ class TestCommandExecution:
     """Test command execution with the centralized asyncio subprocess mock."""
 
     async def test_run_detached_process(self, mock_asyncio_subprocess):
-        """Test detached process execution for timeout <= 0."""
+        """Test detached process execution via run_detached."""
         shell = PersistentShell()
-        stdout, stderr = await shell.run("echo hello", timeout=0)
+        await shell.run_detached("echo hello")
 
         mock_asyncio_subprocess.shell.assert_called_once_with(
             "echo hello",
@@ -242,8 +242,6 @@ class TestCommandExecution:
             stderr=asyncio.subprocess.DEVNULL,
             start_new_session=True,
         )
-        assert stdout == ""
-        assert stderr == ""
 
     async def test_run_persistent_command_execution(self, mock_asyncio_subprocess):
         """Test command execution in persistent shell."""

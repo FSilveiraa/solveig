@@ -22,7 +22,8 @@ async def sandboxed_shell(tmp_path: Path):
     """
     shell = await get_persistent_shell()
     # Use the shell's own logic to move into the sandbox
-    await shell.run(f"cd {tmp_path}")
+    async for _ in shell.run(f"cd {tmp_path}"):
+        pass
     # The shell's CWD is now the temp path
     return shell
 

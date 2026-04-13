@@ -1,4 +1,5 @@
 """Basic UI widgets for the Textual CLI interface."""
+from typing import Callable
 
 import pyperclip
 from rich.syntax import Syntax
@@ -49,11 +50,32 @@ class TextBox(Widget):
         if title:
             self.border_title = title
         self.add_class("text_block")
+        # self._scroll_end = scroll_end
 
     def compose(self):
         raw = self._content if isinstance(self._content, str) else self._content.code
         yield Static(self._content, markup=False)
         yield CopyFooter(raw)
+
+    def append_line(self, line: str) -> None:
+        """Append a line to the box, refresh the display, and scroll the parent to end."""
+        if isinstance(self._content, str):
+            self._content += line
+        else:
+            self._content = line
+        try:
+            self.query_one(Static).update(self._content)
+            self.query_one(CopyFooter)._copy_content = self._content
+        except Exception:
+            pass
+        self.refresh(layout=True)
+        parent = self.parent
+        while parent is not None:
+            if hasattr(parent, "scroll_end") and hasattr(parent, "call_after_refresh"):
+                parent.scroll_end(animate=False)
+                parent.call_after_refresh(parent.scroll_end)
+                # break
+            parent = parent.parent
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:

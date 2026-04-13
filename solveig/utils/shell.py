@@ -9,6 +9,20 @@ from solveig.utils.file import Filesystem
 MARKER = "__SOLVEIG_CMD_END__"
 
 
+class ShellExecution:
+    """
+    Returned by PersistentShell.run(). Iterate with `async for` to stream stdout lines.
+    After the loop, `execution.stderr` holds any stderr output from the command.
+    """
+
+    def __init__(self):
+        self.stderr: str = ""
+        self._gen = None
+
+    def __aiter__(self):
+        return self._gen
+
+
 class PersistentShell:
     """A persistent shell session that maintains working directory and environment state."""
 
@@ -50,43 +64,56 @@ class PersistentShell:
                 break  # No more data available
         return "".join(lines), marker_line
 
-    async def run(self, cmd: str, *, timeout=None) -> tuple[str, str]:
+    def run(self, cmd: str, *, timeout: float = 10.0) -> ShellExecution:
         """
-        Run a command and return (stdout_text, stderr_text).
-        Updates internal state tracking (cwd, return code).
-        If timeout <= 0, runs as detached process.
+        Stream stdout lines from a command. Returns a ShellExecution immediately;
+        iteration drives the actual execution. After the loop, execution.stderr is populated.
         """
-        if timeout is not None and timeout <= 0:
-            # Detached process - use separate subprocess
-            _ = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            return "", ""
+        execution = ShellExecution()
+        execution._gen = self._stream(cmd, timeout=timeout, execution=execution)
+        return execution
 
+    async def _stream(
+        self, cmd: str, *, timeout: float, execution: "ShellExecution | None"
+    ):
         async with self._lock:
             if self.proc is None:
                 await self.start()
 
-            # Append marker command to capture state after execution
-            # Using a composed command instead of chaining two commands *probably* ensure more atomicity
             full = f"{cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
             self.proc.stdin.write(full.encode())
             await self.proc.stdin.drain()
 
-            # Read stdout until command completes (marker found), then read available stderr
-            stdout_text, marker_line = await self._read_stream(
-                self.proc.stdout, until_marker=MARKER, timeout=timeout
-            )
+            while True:
+                try:
+                    raw = await asyncio.wait_for(
+                        self.proc.stdout.readline(), timeout=timeout
+                    )
+                except TimeoutError:
+                    break
+                if not raw:  # EOF
+                    break
+                try:
+                    line = raw.decode()
+                except Exception:
+                    line = str(raw)
+                if MARKER in line:
+                    self._parse_marker(line.strip())
+                    break
+                yield line
+
             stderr_text, _ = await self._read_stream(self.proc.stderr, timeout=0.1)
+            if execution is not None:
+                execution.stderr = stderr_text.strip()
 
-            # Parse marker to update state
-            if marker_line:
-                self._parse_marker(marker_line)
-
-            return stdout_text.strip(), stderr_text.strip()
+    async def run_detached(self, cmd: str) -> None:
+        """Spawn a detached background process. Returns immediately with no output."""
+        await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
+        )
 
     def _parse_marker(self, marker_line: str):
         """Parse marker line to update internal state."""
@@ -96,7 +123,6 @@ class PersistentShell:
                 if marker.strip() == MARKER:
                     self.current_cwd = cwd.strip()
         except (ValueError, AttributeError):
-            # Log parsing failure but don't crash
             pass
 
     async def stop(self):

@@ -272,9 +272,9 @@ class TestDetachedCommands:
         assert result.stdout == ""
         assert result.error == ""
 
-        # Verify "Detached process, no output" message
+        # Verify detached launch feedback
         output = interface.get_all_output()
-        assert "Detached process, no output" in output
+        assert "Detached process launched" in output
 
     async def test_detached_vs_blocking_timeout_handling(self, sandboxed_shell):
         """Test timeout parameter affects execution mode with a real shell."""

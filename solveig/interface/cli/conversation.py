@@ -49,9 +49,11 @@ class ConversationArea(ScrollableContainer):
         style_class = f"{style}_message" if style != "text" else style
         await self._add_element(Static(text, classes=style_class, markup=markup))
 
-    async def add_text_box(self, content: str | Syntax, title: str | None = None):
-        """Add a text block with border and optional title."""
-        await self._add_element(TextBox(content, title=title))
+    async def add_text_box(self, content: str | Syntax, title: str | None = None) -> TextBox:
+        """Add a text block with border and optional title. Returns the box for live updates."""
+        box = TextBox(content, title=title)
+        await self._add_element(box)
+        return box
 
     async def add_collapsible_text_box(
         self,

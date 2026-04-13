@@ -154,8 +154,8 @@ class TerminalInterface(SolveigInterface):
         italic: bool = False,
         collapsible: bool = False,
         collapsed: bool = True,
-    ) -> None:
-        """Display a text block with optional title."""
+    ):
+        """Display a text block with optional title. Returns the TextBox for live updates."""
         to_display: str | Syntax = text
         if language:
             # .js -> js
@@ -169,11 +169,11 @@ class TerminalInterface(SolveigInterface):
                 collapsed=collapsed,
                 italic=italic,
             )
-        else:
-            await self.app._conversation_area.add_text_box(
-                to_display,
-                title=title or "Text Block",
-            )
+            return None
+        return await self.app._conversation_area.add_text_box(
+            to_display,
+            title=title or "Text Block",
+        )
 
     async def display_diff(
         self,

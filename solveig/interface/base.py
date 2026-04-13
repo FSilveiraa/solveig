@@ -136,7 +136,7 @@ class SolveigInterface(ABC):
         italic: bool = False,
         collapsible: bool = False,
         collapsed: bool = True,
-    ) -> None:
+    ):
         """Display a text block with optional title."""
         ...
 

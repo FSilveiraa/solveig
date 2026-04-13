@@ -142,10 +142,17 @@ class MockInterface(TerminalInterface):
         italic: bool = False,
         collapsible: bool = False,
         collapsed: bool = True,
-    ) -> None:
+    ):
         if title:
             self.outputs.append(f"📋 {title}")
         self.outputs.append(f"{language + ': ' if language else ''}{text}")
+        outputs = self.outputs
+
+        class _Box:
+            def append_line(self_, line: str) -> None:
+                outputs.append(line.rstrip())
+
+        return _Box()
 
     async def display_section(self, title: str) -> None:
         self.sections.append(title)

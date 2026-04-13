@@ -11,7 +11,7 @@ from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
-from solveig.utils.shell import PersistentShell, get_persistent_shell
+from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 from .base import BaseTool, Subcommand
 
@@ -64,88 +64,112 @@ class CommandTool(BaseTool):
     @classmethod
     def get_description(cls) -> str:
         """Return description of command capability."""
-        return "command(comment, command, timeout=10): execute shell commands and inspect their output"
-
-    async def _execute_command(
-        self, config: SolveigConfig, shell: PersistentShell
-    ) -> tuple[str, str]:
-        """Execute command and return stdout, stderr (OS interaction - can be mocked)."""
-        if self.command:
-            return await shell.run(self.command, timeout=self.timeout)
-        raise ValueError("Empty command")
+        return (
+            "command(comment, command, timeout=10): execute shell commands and inspect their output."
+            "Changing cwd path persists between commands"
+        )
 
     async def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> CommandResult:
-        user_choice = -1
+        is_detached = self.timeout <= 0
+        run = False
+        inspect = False
 
         # Check if command matches auto-execute patterns
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command.strip()):
-                user_choice = 0  # run and send
+                run = True
                 await interface.display_info(
                     "Running command and sending output since it matches config.auto_execute_commands"
                 )
                 break
         else:
-            user_choice = await interface.ask_choice(
-                "Allow running command?",
-                ["Run and send output", "Run and inspect output first", "Don't run"],
-            )
-        if user_choice <= 1:
-            output: str | None
-            error: str | None
-
-            async with interface.with_animation("Executing..."):
-                try:
-                    shell = await get_persistent_shell()
-                    output, error = await self._execute_command(config, shell)
-
-                    # Update interface stats with current working directory
-                    if self.timeout > 0:  # Only for non-detached commands
-                        canonical_cwd = Filesystem.get_absolute_path(shell.cwd)
-                        await interface.update_stats(path=canonical_cwd)
-
-                except Exception as e:
-                    error_str = str(e)
-                    await interface.display_error(
-                        f"Found error when running command: {error_str}"
+            if is_detached:
+                run = (
+                    await interface.ask_choice(
+                        "Allow running command?", ["Run", "Don't run"]
                     )
-                    return CommandResult(
-                        tool=self,
-                        command=self.command,
-                        accepted=True,
-                        success=False,
-                        error=error_str,
-                    )
-
-            if output:
-                await interface.display_text_box(output, title="Output")
+                ) == 0
             else:
-                await interface.display_info(
-                    "No output" if self.timeout > 0 else "Detached process, no output"
+                choice = await interface.ask_choice(
+                    "Allow running command?",
+                    [
+                        "Run and send output",
+                        "Run and inspect output first",
+                        "Don't run",
+                    ],
                 )
-            if error:
-                async with interface.with_group("Error"):
-                    await interface.display_text_box(error, title="Error")
+                run = choice <= 1
+                inspect = choice == 1
 
-            # If we have an output or an error, and previously we decided to inspect before sending, ask again
-            # If the user decides to not send, obfuscate the output
-            if (
-                (output or error)
-                and user_choice == 1
-                and (await interface.ask_choice("Allow sending output?", ["Yes", "No"]))
-                == 1
-            ):
-                output = "<hidden>"
-                error = "<hidden>"
+        if not run:
+            return CommandResult(tool=self, command=self.command, accepted=False)
 
-            return CommandResult(
-                tool=self,
-                command=self.command,
-                accepted=True,
-                success=True,
-                stdout=output,
-                error=error,
-            )
-        return CommandResult(tool=self, command=self.command, accepted=False)
+        output = ""
+        error = ""
+
+        async with interface.with_animation("Executing..."):
+            try:
+                shell = await get_persistent_shell()
+
+                if is_detached:
+                    await shell.run_detached(self.command)
+                else:
+                    box = None
+                    lines: list[str] = []
+                    execution: ShellExecution = shell.run(
+                        self.command, timeout=self.timeout
+                    )
+                    async for line in execution:
+                        lines.append(line)
+                        if box is None:
+                            box = await interface.display_text_box(line, title="Output")
+                        else:
+                            box.append_line(line)
+                    output = "".join(lines).strip()
+                    error = execution.stderr
+                    await interface.update_stats(
+                        path=Filesystem.get_absolute_path(shell.cwd)
+                    )
+
+            except Exception as e:
+                error_str = str(e)
+                await interface.display_error(
+                    f"Found error when running command: {error_str}"
+                )
+                return CommandResult(
+                    tool=self,
+                    command=self.command,
+                    accepted=True,
+                    success=False,
+                    error=error_str,
+                )
+
+        if is_detached:
+            await interface.display_info("Detached process launched")
+        elif not output:
+            await interface.display_info("No output")
+
+        if error:
+            async with interface.with_group("Error"):
+                await interface.display_text_box(error, title="Error")
+
+        # In inspect mode, output is already visible — ask whether to include it in the result
+        if (
+            inspect
+            and (output or error)
+            and (await interface.ask_choice("Allow sending output?", ["Yes", "No"]))
+            == 1
+        ):
+            output = "<hidden>"
+            error = "<hidden>"
+
+        return CommandResult(
+            tool=self,
+            command=self.command,
+            accepted=True,
+            success=True,
+            stdout=output,
+            error=error,
+        )
