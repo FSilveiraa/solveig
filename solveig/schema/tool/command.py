@@ -126,7 +126,7 @@ class CommandTool(BaseTool):
                         if box is None:
                             box = await interface.display_text_box(line, title="Output")
                         else:
-                            box.append_line(line)
+                            box.append(line)
                     output = "".join(lines).strip()
                     error = execution.stderr
                     await interface.update_stats(

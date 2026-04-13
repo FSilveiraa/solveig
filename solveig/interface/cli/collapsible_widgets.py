@@ -13,82 +13,32 @@ from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
 
-from .widgets import CopyFooter
-
-
-class CustomCollapsibleTitleBar(CollapsibleTitle):
-    """Base class for custom collapsible title bars.
-
-    Provides automatic symbol (▶/▼) and text updates when collapsed state changes.
-    All custom collapsibles have "click to expand/collapse" text functionality.
-
-    This simple implementation shows symbol + text in a single section.
-    Subclasses can override to create more complex multi-section layouts.
-    """
-
-    def __init__(
-        self,
-        collapsed_text: str,
-        expanded_text: str,
-        start_collapsed: bool = True,
-    ):
-        self._collapsed_text = collapsed_text
-        self._expanded_text = expanded_text
-        super().__init__(
-            label="",
-            collapsed_symbol="▶",
-            expanded_symbol="▼",
-            collapsed=start_collapsed,
-        )
-
-    def compose(self):
-        """Yield single Static widget with symbol + text."""
-        yield Static(self._get_content(), classes="simple-title")
-
-    def _get_content(self):
-        """Generate symbol + text based on collapsed state."""
-        if self.collapsed:
-            return f"{self.collapsed_symbol} {self._collapsed_text}"
-        else:
-            return f"{self.expanded_symbol} {self._expanded_text}"
-
-    def _watch_collapsed(self, collapsed: bool) -> None:
-        """When collapsed state changes, update the display."""
-        self._update_content()
-
-    def _update_content(self):
-        """Update the Static widget with current content."""
-        try:
-            static = self.query_one(Static)
-            static.update(self._get_content())
-        except NoMatches:
-            # Widget not mounted yet - will update when compose() completes
-            pass
+from .widgets import CopyButton
+from ..base import MutableTextBox
 
 
 class DividedCollapsibleTitleBar(CollapsibleTitle):
-    """3-section title bar with left/center/right content areas.
+    """3-section title bar: (symbol + left text) | center | right.
 
-    Layout: left (symbol + text) | center | right
-
-    Generic container that can be used for any purpose - stats, logs,
-    reasoning display, etc. Each section can be independently updated.
+    Left text switches between left_collapsed/left_expanded based on state.
+    Center and right accept str (rendered as Static) or any Widget.
+    Widget sections are never overwritten by update_sections.
     """
 
     def __init__(
         self,
-        left: str,
-        center: str = "",
-        right: str = "",
+        left_collapsed: str | None,
+        left_expanded: str | None,
+        center: str | Widget = "",
+        right: str | Widget = "",
         collapsed_symbol: str = "▶",
         expanded_symbol: str = "▼",
         start_collapsed: bool = True,
     ):
-        self._left = left
+        self._left_collapsed = left_collapsed if left_collapsed is not None else "Show"
+        self._left_expanded = left_expanded if left_expanded is not None else "Hide"
         self._center = center
         self._right = right
-        self._collapsed_symbol = collapsed_symbol
-        self._expanded_symbol = expanded_symbol
         super().__init__(
             label="",
             collapsed_symbol=collapsed_symbol,
@@ -96,77 +46,95 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
             collapsed=start_collapsed,
         )
 
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        return f"""
+        /* Custom title bar responsive layout */
+        DividedCollapsibleTitleBar {{
+            width: 100%;
+            height: 1;
+            color: {theme.text};
+            background: {theme.background};
+        }}
+
+        .title-left {{
+            text-align: left;
+            width: 1fr;
+        }}
+
+        .title-left:hover {{
+            color: {theme.section};
+        }}
+
+        .title-center {{
+            text-align: center;
+            width: auto;
+        }}
+
+        .title-right {{
+            text-align: right;
+            width: 1fr;
+        }}
+        """
+
+    @property
+    def _left(self) -> str:
+        symbol = self.collapsed_symbol if self.collapsed else self.expanded_symbol
+        text = self._left_collapsed if self.collapsed else self._left_expanded
+        return f"{symbol} {text}"
+
     def compose(self):
-        """Yield 3-section layout."""
-        left_content, center_content, right_content = self._get_content()
+        def _child(section: str | Widget, classes: str) -> Widget:
+            if isinstance(section, str):
+                return Static(section, classes=classes)
+            else:
+                section.add_class(classes)
+                return section
 
         yield Horizontal(
-            Static(left_content, classes="title-left"),
-            Static(center_content, classes="title-center"),
-            Static(right_content, classes="title-right"),
+            Static(self._left, classes="title-left"),
+            _child(self._center, "title-center"),
+            _child(self._right, "title-right"),
             classes="custom-title-bar",
         )
 
-    def _get_content(self):
-        """Generate content for all 3 sections based on collapsed state."""
-        symbol = self._collapsed_symbol if self.collapsed else self._expanded_symbol
-        left_content = f"{symbol} {self._left}"
-        return left_content, self._center, self._right
+    def _update_label(self) -> None:
+        pass  # We render via compose(); prevent base Static.update() from conflicting.
 
     def _watch_collapsed(self, collapsed: bool) -> None:
-        """Update display when collapsed state changes."""
-        self._update_content()
-
-    def _update_content(self):
-        """Update all 3 static widgets."""
         try:
-            horizontal = self.query_one(Horizontal)
-            statics = horizontal.query(Static)
-            left_content, center_content, right_content = self._get_content()
-
-            statics[0].update(left_content)
-            statics[1].update(center_content)
-            statics[2].update(right_content)
+            self.query_one(".title-left", Static).update(self._left)
         except NoMatches:
             pass
 
     def update_sections(
         self,
-        left: str | None = None,
+        left_collapsed: str | None = None,
+        left_expanded: str | None = None,
         center: str | None = None,
         right: str | None = None,
     ):
-        """Update any or all sections of the title bar.
-
-        Args:
-            left: New content for left section (includes symbol)
-            center: New content for center section
-            right: New content for right section
-        """
-        if left is not None:
-            self._left = left
-        if center is not None:
+        if left_collapsed is not None:
+            self._left_collapsed = left_collapsed
+        if left_expanded is not None:
+            self._left_expanded = left_expanded
+        if left_collapsed is not None or left_expanded is not None:
+            try:
+                self.query_one(".title-left", Static).update(self._left)
+            except NoMatches:
+                pass
+        if center is not None and isinstance(self._center, str):
             self._center = center
-        if right is not None:
+            try:
+                self.query_one(".title-center", Static).update(center)
+            except NoMatches:
+                pass
+        if right is not None and isinstance(self._right, str):
             self._right = right
-        self._update_content()
-
-    def update_symbols(
-        self,
-        collapsed: str | None = None,
-        expanded: str | None = None,
-    ):
-        """Update the collapse/expand symbols.
-
-        Args:
-            collapsed: Symbol shown when collapsed (default: ▶)
-            expanded: Symbol shown when expanded (default: ▼)
-        """
-        if collapsed is not None:
-            self._collapsed_symbol = collapsed
-        if expanded is not None:
-            self._expanded_symbol = expanded
-        self._update_content()
+            try:
+                self.query_one(".title-right", Static).update(right)
+            except NoMatches:
+                pass
 
 
 class CustomCollapsible(Collapsible):
@@ -178,18 +146,19 @@ class CustomCollapsible(Collapsible):
 
     def __init__(
         self,
-        left: str,
-        center: str = "",
-        right: str = "",
+        left_collapsed: str | None = None,
+        left_expanded: str | None = None,
+        center: Widget | str = "",
+        right: Widget | str = "",
         collapsed_symbol: str = "▶",
         expanded_symbol: str = "▼",
         start_collapsed: bool = True,
         **kwargs,
     ):
         super().__init__(title="", collapsed=start_collapsed, **kwargs)
-        # Replace the _title widget with our custom one
         self._title: DividedCollapsibleTitleBar = DividedCollapsibleTitleBar(
-            left=left,
+            left_collapsed=left_collapsed,
+            left_expanded=left_expanded,
             center=center,
             right=right,
             collapsed_symbol=collapsed_symbol,
@@ -197,23 +166,40 @@ class CustomCollapsible(Collapsible):
             start_collapsed=start_collapsed,
         )
 
-    def update_sections(
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        return f"""
+            CustomCollapsible {{
+                background: {theme.background};
+                border: none;
+                margin: 0;
+                padding: 0;
+            }}
+
+            CustomCollapsible > Contents {{
+                padding: 0 1 0 1;
+                border-top: {theme.box};
+            }}
+
+            {DividedCollapsibleTitleBar.get_css(theme)}
+            """
+
+    def update_title(
         self,
-        left: str | None = None,
+        left_collapsed: str | None = None,
+        left_expanded: str | None = None,
         center: str | None = None,
         right: str | None = None,
     ):
-        """Update any section(s) of the title bar.
-
-        Args:
-            left: New content for left section
-            center: New content for center section
-            right: New content for right section
-        """
-        self._title.update_sections(left=left, center=center, right=right)
+        self._title.update_sections(
+            left_collapsed=left_collapsed,
+            left_expanded=left_expanded,
+            center=center,
+            right=right,
+        )
 
 
-class CollapsibleTextBox(Widget):
+class CollapsibleTextBox(Widget, MutableTextBox):
     """A collapsible text block widget for reasoning, verbose output, etc.
 
     Similar to StatsBar pattern - a Widget that contains a Collapsible.
@@ -223,80 +209,65 @@ class CollapsibleTextBox(Widget):
     def __init__(
         self,
         content: str | Syntax,
-        title: str,
+        title: str | None = None,
         collapsed: bool = False,
         italic: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._content = content
-        self._content_classes = "italic" if italic else ""
-        self._title = title
+        self._content_classes = "box-content " + ("italic" if italic else "")
         self._collapsed = collapsed
+        self.border_title = title
 
     def compose(self):
-        """Yield a Collapsible containing the content - like StatsBar pattern."""
-        self._collapsible = Collapsible(
-            title="",  # Empty title, will be replaced with custom one
-            collapsed=self._collapsed,
-        )
-
-        # Replace default title with CustomCollapsibleTitleBar
-        self._collapsible._title = CustomCollapsibleTitleBar(
-            collapsed_text=f"{self._title} - Click to expand",
-            expanded_text=f"{self._title} - Click to collapse",
+        self._collapsible = CustomCollapsible(
+            right=CopyButton(lambda: self._content if isinstance(self._content, str) else self._content.code),
             start_collapsed=self._collapsed,
         )
-
-        raw = self._content if isinstance(self._content, str) else self._content.code
+        self._text_container = Static(self._content, markup=False, classes=self._content_classes)
         with self._collapsible:
-            yield Static(
-                self._content,
-                markup=False,
-                classes=self._content_classes,
-            )
-        yield CopyFooter(raw)
+            yield self._text_container
+
+    def append(self, line: str) -> None:
+        """Append a line to the content and scroll the conversation to the end."""
+        self._content = str(self._text_container.renderable) + line
+        self._text_container.update(self._content)
+        self._on_content_changed()
+
+    def reset(self, content: str) -> None:
+        self._content = content
+        self._text_container.update(content)
+        self._on_content_changed()
+
+    def _on_content_changed(self):
+        self.refresh(layout=True)
+        parent = self.parent
+        while parent is not None:
+            if hasattr(parent, "scroll_end") and hasattr(parent, "call_after_refresh"):
+                parent.scroll_end(animate=False)
+                parent.call_after_refresh(parent.scroll_end)
+                break
+            parent = parent.parent
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         """Generate CSS for CollapsibleTextBox."""
         return f"""
         CollapsibleTextBox {{
-            margin: 0 0 0 1;
+            margin: 1 0 1 1;
             height: auto;
-            padding: 0 1;
+            padding: 0 0;
             border: solid {theme.box};
+            border-title-style: bold;
             color: {theme.text};
             background: {theme.background};
-        }}
-
-        CollapsibleTextBox Collapsible {{
-            background: {theme.background};
-            border: none;
-            margin: 0;
-            padding: 0;
-        }}
-
-        CollapsibleTextBox CollapsibleTitle {{
-            background: {theme.background};
-            padding: 0;
-            height: auto;
-        }}
-
-        CollapsibleTextBox .simple-title {{
-            background: {theme.background};
-            color: {theme.text};
-            padding: 0 1;
-            height: 1;
-        }}
-
-        CollapsibleTextBox .simple-title:hover {{
-            color: {theme.section};
         }}
 
         .italic {{
             text-style: italic;
         }}
 
-        {CopyFooter.get_css(theme)}
+        {CustomCollapsible.get_css(theme)}
+        {CopyButton.get_css(theme)}
         """

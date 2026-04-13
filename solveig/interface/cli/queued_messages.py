@@ -50,7 +50,8 @@ class QueuedMessagesDisplay(Vertical):
         # Center section shows the message count, styled with theme color
         center = f"[{self._theme.info}]{self._get_title()}[/]"
         self._collapsible = CustomCollapsible(
-            left="Message queue - Click to expand",
+            left_collapsed="Message queue - Click to expand",
+            left_expanded="Message queue - Click to collapse",
             center=center,
             right="",
             start_collapsed=True,
@@ -100,7 +101,7 @@ class QueuedMessagesDisplay(Vertical):
         if count > 0 and self._collapsible is not None:
             # Update title
             center = f"[{self._theme.info}]{self._get_title()}[/]"
-            self._collapsible.update_sections(center=center)
+            self._collapsible.update_title(center=center)
             # Refresh message list
             self._refresh_messages()
 

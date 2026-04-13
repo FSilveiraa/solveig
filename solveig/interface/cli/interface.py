@@ -12,7 +12,7 @@ from rich.syntax import Syntax
 from textual.widgets import Markdown
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import SolveigInterface, MutableTextBox
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
@@ -152,9 +152,8 @@ class TerminalInterface(SolveigInterface):
         title: str | None = None,
         language: str | None = None,
         italic: bool = False,
-        collapsible: bool = False,
-        collapsed: bool = True,
-    ):
+        collapsed: bool = False,
+    ) -> MutableTextBox:
         """Display a text block with optional title. Returns the TextBox for live updates."""
         to_display: str | Syntax = text
         if language:
@@ -162,17 +161,12 @@ class TerminalInterface(SolveigInterface):
             language_name = FILE_EXTENSION_TO_LANGUAGE.get(language.lstrip("."))
             if language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
-        if collapsible:
-            await self.app._conversation_area.add_collapsible_text_box(
-                to_display,
-                title=title or "Text Block",
-                collapsed=collapsed,
-                italic=italic,
-            )
-            return None
+
         return await self.app._conversation_area.add_text_box(
             to_display,
-            title=title or "Text Block",
+            title=title,
+            collapsed=collapsed,
+            italic=italic,
         )
 
     async def display_diff(

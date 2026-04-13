@@ -233,8 +233,9 @@ class ReadTool(BaseTool):
                         read_result.content
                         if read_result.encoding == "text"
                         else "(binary content)",
-                        title=f"Content: {abs_path}",
-                        language=abs_path.suffix,
+                        title = f"Content: {abs_path}",
+                        language = abs_path.suffix,
+                        collapsed = choice == 0,  # Only expand the box if the user chose to inspect
                     )
 
                 # 0: Read and send

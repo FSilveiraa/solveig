@@ -116,7 +116,7 @@ class RequestManager:
                 text=json.dumps(
                     message_history_dumped, indent=2, default=default_json_serialize
                 ),
-                collapsible=True,
+                collapsed=True,
             )
 
         await interface.display_section(title="Assistant")

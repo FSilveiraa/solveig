@@ -73,7 +73,8 @@ class StatsBar(Widget):
     def compose(self):
         """Create collapsible with stats tables."""
         self._collapsible = CustomCollapsible(
-            left="Click for more stats",
+            left_collapsed="Show stats",
+            left_expanded="Hide stats",
             center=self.status,
             right=self.path,
             start_collapsed=True,
@@ -189,7 +190,7 @@ class StatsBar(Widget):
 
     def _refresh_title(self):
         """Update only the collapsible title (lightweight, for frequent spinner updates)."""
-        self._collapsible.update_sections(center=self.status, right=self.path)
+        self._collapsible.update_title(center=self.status, right=self.path)
 
     def _refresh_stats(self):
         """Rebuild table rows with current values."""
@@ -215,43 +216,6 @@ class StatsBar(Widget):
             background: {theme.background};
             color: {theme.text};
             border: solid {theme.box};
-        }}
-
-        StatsBar Collapsible {{
-            background: {theme.background};
-            border: none;
-            margin: 0;
-            padding: 0;
-        }}
-
-        StatsBar CollapsibleTitle {{
-            color: {theme.text};
-            background: {theme.background};
-        }}
-
-        /* Custom title bar responsive layout */
-        .custom-title-bar {{
-            width: 100%;
-            height: 1;
-        }}
-
-        .title-left {{
-            text-align: left;
-            width: 1fr;
-        }}
-
-        .title-left:hover {{
-            color: {theme.section};
-        }}
-
-        .title-center {{
-            text-align: center;
-            width: auto;
-        }}
-
-        .title-right {{
-            text-align: right;
-            width: 1fr;
         }}
 
         /* Stats container responsive layout */

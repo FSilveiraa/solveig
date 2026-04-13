@@ -20,6 +20,14 @@ if TYPE_CHECKING:
     from solveig.subcommand.runner import SubcommandRunner
 
 
+class MutableTextBox:
+    def append(self, text: str) -> None:
+        """Append text to the end of the box."""
+
+    def reset(self, text: str) -> None:
+        """Reset the box content."""
+
+
 class SolveigInterface(ABC):
     """
     Abstract base class defining the core interface any UI implementation (CLI, web, desktop) should provide.
@@ -134,9 +142,8 @@ class SolveigInterface(ABC):
         title: str | None = None,
         language: str | None = None,
         italic: bool = False,
-        collapsible: bool = False,
-        collapsed: bool = True,
-    ):
+        collapsed: bool = False,
+    ) -> MutableTextBox:
         """Display a text block with optional title."""
         ...
 

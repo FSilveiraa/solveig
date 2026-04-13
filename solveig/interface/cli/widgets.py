@@ -3,40 +3,45 @@ from typing import Callable
 
 import pyperclip
 from rich.syntax import Syntax
+from textual.events import Click
 from textual.widget import Widget
 from textual.widgets import Static
 
 from solveig.interface.themes import Palette
 
 
-class CopyFooter(Static):
+class CopyButton(Static):
     """A small clickable widget that copies text to the clipboard."""
 
-    def __init__(self, content: str):
-        super().__init__("⧉ copy", markup=False, classes="copy-footer")
+    def __init__(self, content: str | Callable[[], str], **kwargs):
+        super().__init__("⧉ Copy", markup=False, classes="copy-button")
         self._copy_content = content
 
-    def on_click(self) -> None:
+    @property
+    def copy_content(self):
+        return self._copy_content() if isinstance(self._copy_content, Callable) else self._copy_content
+
+    def on_click(self, event: Click) -> None:
+        event.stop()
         # Copy to clipboard
-        pyperclip.copy(self._copy_content)
+        pyperclip.copy(self.copy_content)
         # Display a success message for 1s
         _content = self.content
-        self.update("✓ copied!")
+        self.update("✓ Copied!")
         self.set_timer(1.0, lambda: self.update(_content))
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         return f"""
-        .copy-footer {{
-            color: {theme.box};
+        CopyButton {{
+            color: {theme.text};
             text-align: right;
             padding: 0 1;
             height: 1;
         }}
 
-        .copy-footer:hover {{
+        CopyButton:hover {{
             color: {theme.section};
-            text-style: bold;
         }}
         """
 
@@ -55,9 +60,9 @@ class TextBox(Widget):
     def compose(self):
         raw = self._content if isinstance(self._content, str) else self._content.code
         yield Static(self._content, markup=False)
-        yield CopyFooter(raw)
+        yield CopyButton(raw)
 
-    def append_line(self, line: str) -> None:
+    def append(self, line: str) -> None:
         """Append a line to the box, refresh the display, and scroll the parent to end."""
         if isinstance(self._content, str):
             self._content += line
@@ -65,7 +70,7 @@ class TextBox(Widget):
             self._content = line
         try:
             self.query_one(Static).update(self._content)
-            self.query_one(CopyFooter)._copy_content = self._content
+            self.query_one(CopyButton)._copy_content = self._content
         except Exception:
             pass
         self.refresh(layout=True)
@@ -88,7 +93,7 @@ class TextBox(Widget):
             height: auto;
         }}
 
-        {CopyFooter.get_css(theme)}
+        {CopyButton.get_css(theme)}
         """
 
 

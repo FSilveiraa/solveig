@@ -69,7 +69,6 @@ async def convert_html_to_markdown(
     await interface.display_text_box(
         title="Markdown Response",
         text=markdown,
-        collapsible=True,
         collapsed=True,
     )
 

@@ -52,7 +52,6 @@ async def setup_loop(
     await interface.display_text_box(
         message_history.system_prompt,
         title="System Prompt",
-        collapsible=True,
         collapsed=True,
     )
 
@@ -93,7 +92,6 @@ async def setup_loop(
         await interface.display_text_box(
             title="Response Model",
             text=serialized_response_model,
-            collapsible=True,
             collapsed=True,
         )
 
