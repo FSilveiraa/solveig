@@ -46,7 +46,6 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Behaviour
     "disable_autonomy": "Require user approval between agentic steps",
     "verbose": "Show debug output (API payloads, response models)",
-    "wait_between": "Delay in seconds between displayed operations",
     # Plugins
     "plugins": "Plugin configuration (JSON object)",
     # Interface

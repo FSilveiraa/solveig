@@ -12,7 +12,6 @@ DEFAULT_CONFIG = SolveigConfig(
     temperature=0.0,
     verbose=False,
     min_disk_space_left="1gb",
-    wait_between=0,
     auto_save_session=False,
 )
 

@@ -1,7 +1,7 @@
 import argparse
 import json
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from importlib.metadata import version
 from typing import Any
 
@@ -77,7 +77,6 @@ class SolveigConfig:
     # Runtime state — not persisted or exposed as CLI arguments
     model_info: ModelInfo | None = field(default=None)
     code_theme: str = themes.DEFAULT_CODE_THEME
-    wait_between: float = 0.5
 
     def __post_init__(self):
         # convert API type string to class
@@ -181,10 +180,11 @@ class SolveigConfig:
             "--briefing",
             "-b",
             type=str,
-            nargs="*",
+            action="append",
             dest="briefing",
-            default=["BRIEFING.md"],
-            help="Markdown file(s) to append to the system prompt in order (default: BRIEFING.md). Pass with no args to disable.",
+            default=None,
+            metavar="PATH",
+            help="Markdown file to append to the system prompt (can be passed multiple times; default: BRIEFING.md).",
         )
         parser.add_argument(
             "--add-examples",
@@ -281,13 +281,6 @@ class SolveigConfig:
             help="MCP server URL to connect at startup (can be passed multiple times)",
         )
         parser.add_argument(
-            "--wait-between",
-            "-w",
-            type=float,
-            default=-1.0,
-            help="UX-friendly time to wait between displaying operations requested by the Assistant (<=0 to disable, default: 0.3)",
-        )
-        parser.add_argument(
             "--theme",
             default=None,
             type=str,
@@ -328,8 +321,6 @@ class SolveigConfig:
         for k, v in args_dict.items():
             if v is not None:
                 # flag-specific rules
-                if k == "wait_between" and v < 0:
-                    continue
                 merged_config[k] = v
 
         # Display a warning if ".*" is in allowed_commands or / is in allowed_paths
@@ -383,6 +374,16 @@ class SolveigConfig:
                     "Please specify --url or -u."
                 )
             merged_config["url"] = api_type_class.default_url
+
+        # Strip unknown keys (e.g. removed fields still present in old config files)
+        valid_fields = {f.name for f in fields(cls)}
+        unknown_keys = [k for k in merged_config if k not in valid_fields]
+        if unknown_keys and interface:
+            for k in unknown_keys:
+                await interface.display_warning(
+                    f"Unknown config field '{k}' ignored (removed or renamed)"
+                )
+        merged_config = {k: v for k, v in merged_config.items() if k in valid_fields}
 
         return (cls(**merged_config), user_prompt.strip(), resume_session)
 

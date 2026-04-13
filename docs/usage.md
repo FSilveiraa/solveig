@@ -98,7 +98,6 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
   "no_commands": false,
   "theme": "terracotta",
   "code_theme": "coffee",
-  "wait_between": 0.3,
   "plugins": {
     "shellcheck": {
       "shell": "bash"
@@ -130,54 +129,65 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 
 ### Interface
 
-| Option         | CLI Flag             | Description                                                            | Default      |
-|----------------|----------------------|------------------------------------------------------------------------|--------------|
-| `verbose`      | `-v, --verbose`      | Enable verbose logging (displays system prompt, messages, etc)         | `false`      |
-| `wait_between` | `-w, --wait-between` | Time (seconds) between displaying tools                                | `0.3`        |
-| `theme`        | `--theme`            | CLI theme to use (`none` to disable, see [Themes](./themes/themes.md)) | `terracotta` |              |
-| `code_theme`   | `--code-theme`       | Code linting theme to use (see [Themes](./themes/themes.md))           | `material`   |              |
+| Option       | CLI Flag        | Description                                                              | Default      |
+|--------------|-----------------|--------------------------------------------------------------------------|--------------|
+| `verbose`    | `-v, --verbose` | Show debug output: raw API payloads and the active response model schema | `false`      |
+| `theme`      | `--theme`       | CLI theme to use (see [Themes](./themes/themes.md))                      | `terracotta` |
+| `code_theme` | `--code-theme`  | Code syntax highlighting theme (see [Themes](./themes/themes.md))        | `coffee`     | 
+
+### Autonomous Behaviour
+
+| Option              | CLI Flag              | Description                                                          | Default |
+|---------------------|-----------------------|----------------------------------------------------------------------|---------|
+| `disable_autonomy`  | `--disable-autonomy`  | Require user approval between agentic steps (disables auto-looping)  | `false` |
+
+### Session Management
+
+| Option              | CLI Flag              | Description                                              | Default             |
+|---------------------|-----------------------|----------------------------------------------------------|---------------------|
+| `sessions_dir`      | `--sessions-dir`      | Directory to store session files                         | `.solveig/sessions` |
+| `auto_save_session` | `--no-auto-save`      | Disable automatic session saving after each turn         | enabled             |
+| *(startup)*         | `-r, --resume [name]` | Resume a named session at startup (omit name for latest) | -                   |
 
 ### System Prompt and Resources
 
-| Option                | CLI Flag                        | Description                       | Default   |
-|-----------------------|---------------------------------|-----------------------------------|-----------|
-| `min_disk_space_left` | `-d, --min-disk-space-left`     | Minimum disk space required       | `1GiB`    |
-| `add_os_info`         | `--add-os-info, --os`           | Include OS info in system prompt  | `false`   |
-| `exclude_username`    | `--exclude-username, --no-user` | Exclude username from OS info     | `false`   |
-| `add_examples`        | `--add-examples, --ex`          | Include examples in system prompt | `false`   |
+| Option                | CLI Flag                        | Description                                   | Default         |
+|-----------------------|---------------------------------|-----------------------------------------------|-----------------|
+| `min_disk_space_left` | `-d, --min-disk-space-left`     | Minimum disk space required                   | `1GiB`          |
+| `add_os_info`         | `--add-os-info, --os`           | Include OS info in system prompt              | `false`         |
+| `exclude_username`    | `--exclude-username, --no-user` | Exclude username from OS info                 | `false`         |
+| `add_examples`        | `--add-examples, --ex`          | Include examples in system prompt             | `false`         |
+| `briefing`            | `-b, --briefing [paths...]`     | Markdown files appended to the system prompt  | `BRIEFING.md`   |
 
 ## System Prompt
 
-You can configure the System Prompt using your own template, controlling what is sent to the assistant.
-If you write your own System Prompt, remember to include the following tags, otherwise their respective
-config flags will not work:
-- `{AVAILABLE_TOOLS}` - descriptive list of available operations
-- `{SYSTEM_INFO}` - details about the running operating system
-- `{EXAMPLES}` - conversation examples
+Solveig builds the system prompt by appending sections to `config.system_prompt` in this order:
 
-Of course, you can also just hardcode the information on the System Prompt itself.
-Keep in mind, `SYSTEM_INFO` and `EXAMPLES` are optional, so don't for example use a header like
-`System info:\n{SYSTEM_INFO}` that would be followed by nothing if the  flag isn't used.
+1. `config.system_prompt` (the base template — editable at runtime with `/config set system_prompt`)
+2. Briefing file contents (from `--briefing` paths)
+3. Available tools list (always included)
+4. OS information (only if `--add-os-info` is set)
+5. Few-shot examples (only if `--add-examples` is set)
 
-Below is the current System Prompt template:
+You can replace the base template entirely with `--system-prompt` or `/config set system_prompt`. The default template is:
 
 ```
-You are an AI assistant helping users solve problems through tool use.
+You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
 
 Guidelines:
-- Use the comment field to explain each operation, use tasks().comment to communicate simple answers
-- For multi-step work, start with a task list showing your plan, then execute operations
-- Update task status as you progress through the plan
+- The `comment` field is required for all communication with the user (supports Markdown formatting)
+- For multi-step work, include a tasks list in your response showing your plan
+- For simple requests, avoid plans and respond directly
+- Update task status (pending → ongoing → completed/failed) as you progress
+- Work autonomously - continue executing operations until the task is complete
 - Prefer file operations over shell commands when possible
-- Ask before destructive actions (delete, overwrite)
+- Avoid unnecessary destructive actions (delete, overwrite)
 - If an operation fails, adapt your approach and continue
 
-Available tools:
-{AVAILABLE_TOOLS}
-
-{SYSTEM_INFO}
-
-{EXAMPLES}
+Response format:
+- comment: Required field for all communication and explanations (use Markdown formatting)
+- tasks: Optional array of Task(description, status) objects
+- tools: Optional list of tools to use
 ```
 
 ## Security Modes
@@ -199,7 +209,7 @@ aware of commands as possible resource.
 You can auto-approve certain operations if they match certain patterns for both command regex and file path
 glob patterns - keep in mind if these are the final CLI args, you will need to add `--` before the user prompt:
 
-`python -m tests.mocks.run_mock --auto-allowed-paths "~/src/**/*.js" "~/tests/**/*.py" --auto-execute-commands "^git status$" "^git --no-pager diff$" -- "Review my project"`
+`solveig --api-type local --auto-allowed-paths "~/src/**/*.js" "~/tests/**/*.py" --auto-execute-commands "^git status$" "^git --no-pager diff$" -- "Review my project"`
 
 You can also include this in the config file:
 
@@ -240,14 +250,79 @@ Configuration is loaded in this order (later values override earlier ones):
 
 During a conversation with Solveig, you can use special subcommands that start with `/` to control the session:
 
-| Command       | Description                                                             |
-|---------------|-------------------------------------------------------------------------|
-| `/help`       | Display help information and list all available subcommands             |
-| `/exit`       | Exit the application (alternatively, use Ctrl+C)                        |
-| `/log <path>` | Export the current conversation history to a file at the specified path |
+| Command                    | Description                                                  |
+|----------------------------|--------------------------------------------------------------|
+| `/help`                    | List all available subcommands                               |
+| `/exit`                    | Exit the application (Ctrl+C also works)                     |
+| `/config list`             | Show all editable config fields with current values          |
+| `/config get <field>`      | Show value and description for a single field                |
+| `/config set <field> [v]`  | Set a field inline or interactively                          |
+| `/model`                   | Show current model details (context length, pricing)         |
+| `/model set [name]`        | Change model (prompts if name omitted)                       |
+| `/model refresh`           | Re-fetch model info from the API                             |
+| `/model list`              | List models available from the current API                   |
+| `/session list`            | List stored sessions                                         |
+| `/session store [name]`    | Save current session (auto-named if no name given)           |
+| `/session resume [name]`   | Restore a session (latest if name omitted)                   |
+| `/session delete <name>`   | Delete a session (fuzzy name match)                          |
+| `/store [name]`            | Shorthand for `/session store`                               |
+| `/resume [name]`           | Shorthand for `/session resume`                              |
+| `/mcp`                     | List connected MCP servers                                   |
+| `/mcp connect <url>`       | Connect to an MCP server at runtime                          |
+| `/mcp disconnect <name>`   | Disconnect from an MCP server                                |
 
-These commands are processed directly by Solveig's interface and don't require AI model interaction,
-making them fast and reliable for session management.
+These commands are processed directly by Solveig's interface and don't require AI model interaction.
+
+### Sessions
+
+Solveig automatically saves conversation sessions as JSONL files and lets you resume them later:
+
+```bash
+# Resume the latest session on startup
+solveig --api-type local -r
+
+# Resume a named session
+solveig --api-type local --resume my-project
+```
+
+Mid-conversation subcommands:
+- `/session store [name]` — save a named checkpoint
+- `/session resume [name]` — restore a session (latest if no name)
+- `/session list` — list all stored sessions with age and message count
+- `/session delete <name>` — delete a session (fuzzy name match)
+- `/store` and `/resume` are shorthands for the above
+
+Sessions are stored in `.solveig/sessions/` by default (override with `--sessions-dir`). Auto-save can be disabled with `--no-auto-save`.
+
+### MCP (Model Context Protocol)
+
+Connect Solveig to external tool servers at startup or at runtime:
+
+```bash
+# Connect to an MCP server at startup
+solveig --api-type local --mcp "http://localhost:8080/mcp" "Use the tools from this server"
+```
+
+Mid-conversation:
+- `/mcp` — list connected servers
+- `/mcp connect <url>` — connect to a server (its tools become immediately available)
+- `/mcp disconnect <name>` — disconnect from a server
+
+### Briefing Files
+
+Append project-specific Markdown context to the system prompt:
+
+```bash
+# Default: loads BRIEFING.md from the current directory if it exists
+solveig --api-type local "Review this project"
+
+# Explicit briefing file(s) — pass -b once per file
+solveig --api-type local -b BRIEFING.md -b docs/api.md "Review this project"
+```
+
+To disable briefing entirely, set `"briefing": []` in your config file.
+
+You can also update the briefing paths at runtime with `/config set briefing`.
 
 ### Environment Variables
 
