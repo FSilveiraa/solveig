@@ -65,7 +65,7 @@ class AssistantMessage(BaseMessage):
             await interface.display_text_box(
                 json.dumps(raw, default=utils.misc.default_json_serialize),
                 title="Raw Response",
-                collapsed=True
+                collapsed=True,
             )
 
         # Display reasoning before the comment (o1/o3 models)

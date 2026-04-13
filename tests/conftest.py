@@ -93,20 +93,34 @@ def mock_asyncio_subprocess(request):
         patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_shell,
     ):
-        # By default, have both return the same mock process
         mock_exec.return_value = mock_process
         mock_shell.return_value = mock_process
 
-        # Yield a convenient object to access the mocks
-        yield type(
-            "MockAsyncioSubprocess",
-            (),
-            {
-                "exec": mock_exec,
-                "shell": mock_shell,
-                "mock_process": mock_process,
-            },
-        )()
+        from solveig.utils.shell import PersistentShell
+
+        class MockAsyncioSubprocess:
+            exec = mock_exec
+            shell = mock_shell
+
+            @property
+            def mock_process(self):
+                return mock_process
+
+            def configure(
+                self,
+                stdout_lines: list[bytes],
+                stderr_lines: list[bytes] | None = None,
+            ) -> PersistentShell:
+                """Wire stdout/stderr side-effects and return a ready PersistentShell."""
+                mock_process.stdin.write = MagicMock(return_value=None)
+                mock_process.stdin.drain = AsyncMock()
+                mock_process.stdout.readline.side_effect = stdout_lines
+                mock_process.stderr.readline.side_effect = stderr_lines or [b""]
+                shell = PersistentShell()
+                shell.proc = mock_process
+                return shell
+
+        yield MockAsyncioSubprocess()
 
 
 @pytest.fixture

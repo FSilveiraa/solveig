@@ -98,21 +98,19 @@ async def run_async_mock(
 ):
     """Entry point for the async textual CLI."""
 
-    # user_messages: list[tuple[float, str]] = [
-    #     (0.5, "Review the project tree and the readme"),
-    #     (0.5, "/mcp connect http://localhost:8001/mcp"),
-    #     (0.5, "Now search"),
-    #     (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
-    # ]
-    #
-    #
-    # mock_messages = mock_messages or [
-    #     AssistantMessage(
-    #         comment="I'll help you review your project documentation and structure",
-    #         reasoning="",
-    #     )
-    # ]
+    user_messages: list[tuple[float, str]] = [
+        (0.5, "Review the project tree and the readme"),
+        (0.5, "/mcp connect http://localhost:8001/mcp"),
+        (0.5, "Now search"),
+        (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
+    ]
 
+    mock_messages = mock_messages or [
+        AssistantMessage(
+            comment="I'll help you review your project documentation and structure",
+            reasoning="",
+        )
+    ]
 
     if mock_messages is None:
         mock_messages = [

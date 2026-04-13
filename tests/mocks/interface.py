@@ -140,8 +140,7 @@ class MockInterface(TerminalInterface):
         title: str | None = None,
         language: str | None = None,
         italic: bool = False,
-        collapsible: bool = False,
-        collapsed: bool = True,
+        collapsed: bool = False,
     ):
         if title:
             self.outputs.append(f"📋 {title}")
@@ -149,8 +148,11 @@ class MockInterface(TerminalInterface):
         outputs = self.outputs
 
         class _Box:
-            def append_line(self_, line: str) -> None:
+            def append(self_, line: str) -> None:
                 outputs.append(line.rstrip())
+
+            def reset(self_, content: str) -> None:
+                outputs.append(content)
 
         return _Box()
 

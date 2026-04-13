@@ -7,7 +7,10 @@ from textual.widgets import Static
 from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
 
-from .collapsible_widgets import CollapsibleTextBox, DividedCollapsibleTitleBar, CustomCollapsible
+from .collapsible_widgets import (
+    CollapsibleTextBox,
+    CustomCollapsible,
+)
 from .tree_display import TreeDisplay
 from .widgets import SectionHeader, TextBox
 
@@ -57,7 +60,9 @@ class ConversationArea(ScrollableContainer):
         italic: bool = False,
     ):
         """Add a collapsible text block (for reasoning, verbose output, etc.)."""
-        box = CollapsibleTextBox(content, title=title, italic=italic, collapsed=collapsed)
+        box = CollapsibleTextBox(
+            content, title=title, italic=italic, collapsed=collapsed
+        )
         await self._add_element(box)
         return box
 

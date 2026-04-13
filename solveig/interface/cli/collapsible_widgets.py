@@ -13,8 +13,8 @@ from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
 
-from .widgets import CopyButton
 from ..base import MutableTextBox
+from .widgets import CopyButton
 
 
 class DividedCollapsibleTitleBar(CollapsibleTitle):
@@ -222,10 +222,16 @@ class CollapsibleTextBox(Widget, MutableTextBox):
 
     def compose(self):
         self._collapsible = CustomCollapsible(
-            right=CopyButton(lambda: self._content if isinstance(self._content, str) else self._content.code),
+            right=CopyButton(
+                lambda: self._content
+                if isinstance(self._content, str)
+                else self._content.code
+            ),
             start_collapsed=self._collapsed,
         )
-        self._text_container = Static(self._content, markup=False, classes=self._content_classes)
+        self._text_container = Static(
+            self._content, markup=False, classes=self._content_classes
+        )
         with self._collapsible:
             yield self._text_container
 

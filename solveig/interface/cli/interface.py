@@ -12,7 +12,7 @@ from rich.syntax import Syntax
 from textual.widgets import Markdown
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import SolveigInterface, MutableTextBox
+from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette

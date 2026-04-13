@@ -11,16 +11,45 @@ MARKER = "__SOLVEIG_CMD_END__"
 
 class ShellExecution:
     """
-    Returned by PersistentShell.run(). Iterate with `async for` to stream stdout lines.
-    After the loop, `execution.stderr` holds any stderr output from the command.
+    Returned by PersistentShell.run(). Two usage patterns:
+
+    Stream stdout line-by-line:
+        async for line in execution:
+            ...
+        # execution.stdout and execution.stderr are available after the loop
+
+    Collect everything at once:
+        stdout, stderr = await execution
     """
 
     def __init__(self):
-        self.stderr: str = ""
+        self._stdout_lines: list[str] = []
+        self._stderr_text: str = ""
         self._gen = None
 
     def __aiter__(self):
-        return self._gen
+        return self._collecting_iter()
+
+    async def _collecting_iter(self):
+        async for line in self._gen:
+            self._stdout_lines.append(line)
+            yield line
+
+    def __await__(self):
+        return self._collect().__await__()
+
+    async def _collect(self):
+        async for _ in self:
+            pass
+        return self.stdout, self.stderr
+
+    @property
+    def stdout(self) -> str:
+        return "".join(self._stdout_lines).rstrip("\n")
+
+    @property
+    def stderr(self) -> str:
+        return self._stderr_text
 
 
 class PersistentShell:
@@ -104,7 +133,7 @@ class PersistentShell:
 
             stderr_text, _ = await self._read_stream(self.proc.stderr, timeout=0.1)
             if execution is not None:
-                execution.stderr = stderr_text.strip()
+                execution._stderr_text = stderr_text.strip()
 
     async def run_detached(self, cmd: str) -> None:
         """Spawn a detached background process. Returns immediately with no output."""

@@ -1,5 +1,6 @@
 """Basic UI widgets for the Textual CLI interface."""
-from typing import Callable
+
+from collections.abc import Callable
 
 import pyperclip
 from rich.syntax import Syntax
@@ -19,7 +20,11 @@ class CopyButton(Static):
 
     @property
     def copy_content(self):
-        return self._copy_content() if isinstance(self._copy_content, Callable) else self._copy_content
+        return (
+            self._copy_content()
+            if isinstance(self._copy_content, Callable)
+            else self._copy_content
+        )
 
     def on_click(self, event: Click) -> None:
         event.stop()

@@ -1,4 +1,4 @@
-"""Unit tests for PersistentShell component with minimal mocking."""
+"""Unit tests for PersistentShell and ShellExecution."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
@@ -15,164 +15,87 @@ from solveig.utils.shell import (
 pytestmark = pytest.mark.anyio
 
 
-class TestPersistentShellBasics:
-    """Test PersistentShell basic properties and initialization."""
+# ---------------------------------------------------------------------------
+# Initialisation
+# ---------------------------------------------------------------------------
 
-    async def test_init_default_shell(self):
-        """Test PersistentShell initializes with correct defaults."""
+
+class TestInit:
+    async def test_defaults(self):
         shell = PersistentShell()
         assert shell.shell == "/bin/bash"
         assert shell.proc is None
         assert shell.current_cwd is not None
         assert isinstance(shell._lock, asyncio.Lock)
 
-    async def test_init_custom_shell(self):
-        """Test PersistentShell accepts custom shell."""
+    async def test_custom_shell(self):
         shell = PersistentShell(shell="/bin/zsh")
         assert shell.shell == "/bin/zsh"
 
-    async def test_cwd_property(self):
-        """Test cwd property returns current working directory."""
+    async def test_cwd_property_mirrors_current_cwd(self):
         shell = PersistentShell()
-        original_cwd = shell.current_cwd
         shell.current_cwd = "/test/path"
         assert shell.cwd == "/test/path"
-        # Restore for cleanup
-        shell.current_cwd = original_cwd
+
+
+# ---------------------------------------------------------------------------
+# Marker parsing
+# ---------------------------------------------------------------------------
 
 
 class TestMarkerParsing:
-    """Test marker parsing logic without any mocking."""
-
-    async def test_parse_marker_valid_format(self):
-        """Test parsing valid marker updates current directory."""
+    async def test_valid_marker_updates_cwd(self):
         shell = PersistentShell()
-        original_cwd = shell.current_cwd
-
         shell._parse_marker(f"{MARKER}:/new/directory")
-
         assert shell.current_cwd == "/new/directory"
-        # Restore for cleanup
-        shell.current_cwd = original_cwd
 
-    async def test_parse_marker_with_whitespace(self):
-        """Test parsing marker handles whitespace correctly."""
+    async def test_marker_with_colon_in_path(self):
+        """Paths containing colons are preserved (split on first colon only)."""
         shell = PersistentShell()
-        original_cwd = shell.current_cwd
+        shell._parse_marker(f"{MARKER}:/path/with:colons")
+        assert shell.current_cwd == "/path/with:colons"
 
-        shell._parse_marker(f"  {MARKER}  :  /path/with/spaces  \n")
-
-        assert shell.current_cwd == "/path/with/spaces"
-        # Restore for cleanup
-        shell.current_cwd = original_cwd
-
-    async def test_parse_marker_invalid_formats(self):
-        """Test parsing invalid markers doesn't change directory."""
+    async def test_marker_with_spaces_in_path(self):
         shell = PersistentShell()
-        original_cwd = shell.current_cwd
+        shell._parse_marker(f"{MARKER}:/path/with spaces/in it")
+        assert shell.current_cwd == "/path/with spaces/in it"
 
-        # Test formats that should NOT change directory
-        invalid_markers = [
-            f"{MARKER}",  # No colon
-            "WRONG_MARKER:/path",  # Wrong marker
-            "no_marker_at_all:/path",  # No marker
-            "",  # Empty string
-        ]
+    async def test_marker_with_trailing_slash(self):
+        shell = PersistentShell()
+        shell._parse_marker(f"{MARKER}:/path/trailing/")
+        assert shell.current_cwd == "/path/trailing/"
 
-        for invalid_marker in invalid_markers:
-            shell._parse_marker(invalid_marker)
-            assert shell.current_cwd == original_cwd, f"Failed for: {invalid_marker}"
+    async def test_invalid_marker_no_colon(self):
+        shell = PersistentShell()
+        original = shell.current_cwd
+        shell._parse_marker(f"{MARKER}")
+        assert shell.current_cwd == original
 
-    async def test_parse_marker_empty_path(self):
-        """Test parsing marker with empty path sets cwd to empty string."""
+    async def test_wrong_marker_name(self):
+        shell = PersistentShell()
+        original = shell.current_cwd
+        shell._parse_marker("WRONG_MARKER:/path")
+        assert shell.current_cwd == original
+
+    async def test_empty_string(self):
+        shell = PersistentShell()
+        original = shell.current_cwd
+        shell._parse_marker("")
+        assert shell.current_cwd == original
+
+    async def test_empty_path_after_colon(self):
         shell = PersistentShell()
         shell._parse_marker(f"{MARKER}:")
-        assert shell.current_cwd == ""  # Empty string is valid behavior
-
-    async def test_parse_marker_handles_none(self):
-        """Test parsing None marker raises TypeError (not caught by exception handler)."""
-        shell = PersistentShell()
-
-        # None should raise TypeError because ":" in None fails
-        # This is not caught by the (ValueError, AttributeError) handler
-        with pytest.raises(TypeError):
-            shell._parse_marker(None)
+        assert shell.current_cwd == ""
 
 
-class TestStreamReading:
-    """Test stream reading logic with real async streams."""
-
-    async def test_read_stream_basic_lines(self):
-        """Test reading lines from stream until EOF."""
-        shell = PersistentShell()
-
-        # Create mock stream that returns real data
-        mock_stream = AsyncMock()
-        mock_stream.readline.side_effect = [
-            b"first line\n",
-            b"second line\n",
-            b"third line\n",
-            b"",  # EOF
-        ]
-
-        result, marker = await shell._read_stream(mock_stream)
-
-        assert result == "first line\nsecond line\nthird line\n"
-        assert marker is None
-
-    async def test_read_stream_until_marker_found(self):
-        """Test reading stops when marker is found."""
-        shell = PersistentShell()
-
-        mock_stream = AsyncMock()
-        mock_stream.readline.side_effect = [
-            b"before marker\n",
-            b"more content\n",
-            f"{MARKER}:/some/path\n".encode(),
-            b"after marker\n",  # This shouldn't be read
-        ]
-
-        result, marker = await shell._read_stream(mock_stream, until_marker=MARKER)
-
-        assert result == "before marker\nmore content\n"
-        assert marker == f"{MARKER}:/some/path"
-
-    async def test_read_stream_handles_timeout(self):
-        """Test reading respects timeout."""
-        shell = PersistentShell()
-
-        mock_stream = AsyncMock()
-        mock_stream.readline.side_effect = TimeoutError()
-
-        result, marker = await shell._read_stream(mock_stream, timeout=0.1)
-
-        assert result == ""
-        assert marker is None
-
-    @pytest.mark.skip(
-        reason="Bug: _read_stream does not handle invalid UTF-8 — bytes are not decoded and crash ''.join()"
-    )
-    async def test_read_stream_decode_errors(self):
-        """Test that _read_stream handles invalid UTF-8 bytes gracefully (e.g. with replacement chars)."""
-        shell = PersistentShell()
-
-        mock_stream = AsyncMock()
-        mock_stream.readline.side_effect = [
-            b"\xff\xfe invalid utf-8\n",  # Invalid UTF-8
-            b"valid content\n",
-            b"",  # EOF
-        ]
-
-        result, _ = await shell._read_stream(mock_stream)
-        assert isinstance(result, str)
-        assert "valid content" in result
+# ---------------------------------------------------------------------------
+# Process lifecycle
+# ---------------------------------------------------------------------------
 
 
 class TestProcessLifecycle:
-    """Test process start/stop with the centralized asyncio subprocess mock."""
-
-    async def test_start_creates_process(self, mock_asyncio_subprocess):
-        """Test start creates subprocess when none exists."""
+    async def test_start_creates_subprocess(self, mock_asyncio_subprocess):
         shell = PersistentShell()
         await shell.start()
 
@@ -185,54 +108,187 @@ class TestProcessLifecycle:
         assert shell.proc == mock_asyncio_subprocess.mock_process
 
     async def test_start_idempotent(self, mock_asyncio_subprocess):
-        """Test start doesn't create new process if one exists."""
         shell = PersistentShell()
-        existing_process = AsyncMock()
-        shell.proc = existing_process
-
+        shell.proc = AsyncMock()
         await shell.start()
-
         mock_asyncio_subprocess.exec.assert_not_called()
-        assert shell.proc == existing_process
 
-    async def test_stop_terminates_process(self):
-        """Test stop properly terminates process."""
+    async def test_stop_writes_exit_and_waits(self):
         shell = PersistentShell()
-
-        mock_process = AsyncMock()
-        mock_process.stdin.write = MagicMock(return_value=None)  # sync method
-        mock_process.stdin.drain = AsyncMock()  # async method
-        mock_process.wait = AsyncMock()  # async method
-        shell.proc = mock_process
+        proc = AsyncMock()
+        proc.stdin.write = MagicMock(return_value=None)
+        proc.stdin.drain = AsyncMock()
+        proc.wait = AsyncMock()
+        shell.proc = proc
 
         await shell.stop()
 
-        mock_process.stdin.write.assert_called_once_with(b"exit\n")
-        mock_process.stdin.drain.assert_called_once()
-        mock_process.wait.assert_called_once()
+        proc.stdin.write.assert_called_once_with(b"exit\n")
+        proc.stdin.drain.assert_called_once()
+        proc.wait.assert_called_once()
         assert shell.proc is None
 
-    async def test_stop_handles_stdin_errors(self):
-        """Test stop gracefully handles stdin write errors."""
+    async def test_stop_handles_broken_pipe(self):
         shell = PersistentShell()
+        proc = AsyncMock()
+        proc.stdin.write = MagicMock(side_effect=OSError("Broken pipe"))
+        proc.wait = AsyncMock()
+        shell.proc = proc
 
-        mock_process = AsyncMock()
-        mock_process.stdin.write = MagicMock(side_effect=Exception("Broken pipe"))
-        mock_process.wait = AsyncMock()
-        shell.proc = mock_process
+        await shell.stop()  # must not raise
 
-        # Should not raise exception
-        await shell.stop()
-
-        mock_process.wait.assert_called_once()
+        proc.wait.assert_called_once()
         assert shell.proc is None
+
+    async def test_stop_noop_when_no_process(self):
+        shell = PersistentShell()
+        await shell.stop()  # must not raise
+        assert shell.proc is None
+
+
+# ---------------------------------------------------------------------------
+# ShellExecution — the new API
+# ---------------------------------------------------------------------------
+
+
+class TestShellExecution:
+    async def test_await_returns_stdout_stderr_tuple(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[b"line one\n", b"line two\n", f"{MARKER}:/cwd\n".encode()],
+            stderr_lines=[b"err\n", b""],
+        )
+
+        stdout, stderr = await shell.run("echo test")
+
+        assert stdout == "line one\nline two"
+        assert stderr == "err"
+
+    async def test_async_for_streams_stdout_lines(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[b"a\n", b"b\n", b"c\n", f"{MARKER}:/cwd\n".encode()],
+        )
+
+        streamed = []
+        async for line in shell.run("echo abc"):
+            streamed.append(line)
+
+        assert streamed == ["a\n", "b\n", "c\n"]
+
+    async def test_stdout_property_available_after_async_for(
+        self, mock_asyncio_subprocess
+    ):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[b"hello\n", f"{MARKER}:/cwd\n".encode()],
+        )
+
+        execution = shell.run("echo hello")
+        async for _ in execution:
+            pass
+
+        assert execution.stdout == "hello"
+        assert execution.stderr == ""
+
+    async def test_stderr_property_available_after_async_for(
+        self, mock_asyncio_subprocess
+    ):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+            stderr_lines=[b"something failed\n", b""],
+        )
+
+        execution = shell.run("failing-cmd")
+        async for _ in execution:
+            pass
+
+        assert execution.stderr == "something failed"
+
+    async def test_await_after_async_for_returns_already_collected(
+        self, mock_asyncio_subprocess
+    ):
+        """Awaiting an already-exhausted execution returns the collected data."""
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[b"result\n", f"{MARKER}:/cwd\n".encode()],
+        )
+
+        execution = shell.run("cmd")
+        async for _ in execution:
+            pass
+
+        stdout, stderr = await execution
+        assert stdout == "result"
+
+    async def test_empty_output(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+        )
+
+        stdout, stderr = await shell.run("true")
+        assert stdout == ""
+        assert stderr == ""
+
+
+# ---------------------------------------------------------------------------
+# Command execution details
+# ---------------------------------------------------------------------------
 
 
 class TestCommandExecution:
-    """Test command execution with the centralized asyncio subprocess mock."""
+    async def test_writes_command_with_marker_suffix(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+        )
 
-    async def test_run_detached_process(self, mock_asyncio_subprocess):
-        """Test detached process execution via run_detached."""
+        await shell.run("ls -la")
+
+        expected = f"ls -la\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+        mock_asyncio_subprocess.mock_process.stdin.write.assert_called_once_with(
+            expected.encode()
+        )
+        mock_asyncio_subprocess.mock_process.stdin.drain.assert_called_once()
+
+    async def test_updates_cwd_from_marker(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[f"{MARKER}:/home/user/projects\n".encode()],
+        )
+
+        await shell.run("cd /home/user/projects")
+
+        assert shell.cwd == "/home/user/projects"
+
+    async def test_starts_process_automatically_if_none(self, mock_asyncio_subprocess):
+        mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
+            f"{MARKER}:/cwd\n".encode()
+        ]
+        mock_asyncio_subprocess.mock_process.stderr.readline.side_effect = [b""]
+
+        shell = PersistentShell()
+        assert shell.proc is None
+
+        await shell.run("echo test")
+
+        mock_asyncio_subprocess.exec.assert_called_once()
+        assert shell.proc == mock_asyncio_subprocess.mock_process
+
+    async def test_cwd_persists_across_commands(self, mock_asyncio_subprocess):
+        shell = mock_asyncio_subprocess.configure(
+            stdout_lines=[f"{MARKER}:/home/user/projects\n".encode()],
+        )
+        await shell.run("cd /home/user/projects")
+        assert shell.cwd == "/home/user/projects"
+
+        mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
+            b"file1.txt\n",
+            b"file2.txt\n",
+            f"{MARKER}:/home/user/projects\n".encode(),
+        ]
+        mock_asyncio_subprocess.mock_process.stderr.readline.side_effect = [b""]
+
+        stdout, _ = await shell.run("ls")
+        assert "file1.txt" in stdout
+        assert "file2.txt" in stdout
+        assert shell.cwd == "/home/user/projects"
+
+    async def test_run_detached_uses_shell_and_devnull(self, mock_asyncio_subprocess):
         shell = PersistentShell()
         await shell.run_detached("echo hello")
 
@@ -243,212 +299,27 @@ class TestCommandExecution:
             start_new_session=True,
         )
 
-    async def test_run_persistent_command_execution(self, mock_asyncio_subprocess):
-        """Test command execution in persistent shell."""
-        shell = PersistentShell()
 
-        # Configure the mock process from the fixture
-        mock_process = mock_asyncio_subprocess.mock_process
-        mock_process.stdin.write = MagicMock(return_value=None)
-        mock_process.stdin.drain = AsyncMock()
-
-        # Mock stdout stream to return command output + marker
-        mock_process.stdout.readline.side_effect = [
-            b"command output line 1\n",
-            b"command output line 2\n",
-            f"{MARKER}:/new/working/dir\n".encode(),
-        ]
-
-        # Mock stderr stream
-        mock_process.stderr.readline.side_effect = [
-            b"some error output\n",
-            b"",  # EOF after timeout
-        ]
-
-        shell.proc = mock_process
-
-        stdout, stderr = await shell.run("test command", timeout=5.0)
-
-        # Verify command was written correctly
-        expected_cmd = f"test command\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
-        mock_process.stdin.write.assert_called_once_with(expected_cmd.encode())
-        mock_process.stdin.drain.assert_called_once()
-
-        # Verify output parsing
-        assert stdout == "command output line 1\ncommand output line 2"
-        assert stderr == "some error output"
-
-        # Verify state was updated from marker
-        assert shell.current_cwd == "/new/working/dir"
-
-    async def test_run_starts_process_automatically(self, mock_asyncio_subprocess):
-        """Test run starts process if none exists."""
-        # Configure the mock process from the fixture
-        mock_process = mock_asyncio_subprocess.mock_process
-        mock_process.stdout.readline.side_effect = [
-            f"{MARKER}:/current\n".encode(),
-        ]
-        mock_process.stderr.readline.side_effect = [b""]
-
-        shell = PersistentShell()
-        shell.proc = None  # Ensure no process initially
-
-        await shell.run("echo test")
-
-        # Should have created subprocess via shell.start()
-        mock_asyncio_subprocess.exec.assert_called_once()
-        assert shell.proc == mock_process
-
-    async def test_run_uses_lock_for_thread_safety(self, mock_asyncio_subprocess):
-        """Test run method properly acquires and releases lock."""
-        shell = PersistentShell()
-
-        # Configure the mock process from the fixture
-        mock_process = mock_asyncio_subprocess.mock_process
-        mock_process.stdin.write = MagicMock(return_value=None)
-        mock_process.stdin.drain = AsyncMock()
-        mock_process.stdout.readline.side_effect = [f"{MARKER}:/cwd\n".encode()]
-        mock_process.stderr.readline.side_effect = [b""]
-        shell.proc = mock_process
-
-        # Test that we can run commands (lock is working)
-        stdout, stderr = await shell.run("test command")
-
-        # If lock wasn't working properly, this would have issues
-        # Just verify the command completed successfully
-        assert stdout == ""
-        assert stderr == ""
+# ---------------------------------------------------------------------------
+# Global singleton
+# ---------------------------------------------------------------------------
 
 
 class TestGlobalSingleton:
-    """Test global singleton management."""
-
-    async def test_get_persistent_shell_singleton(self, mock_asyncio_subprocess):
-        """Test get_persistent_shell returns singleton."""
-        # Clear any existing singleton first
+    async def test_returns_same_instance(self, mock_asyncio_subprocess):
         await stop_persistent_shell()
 
         shell1 = await get_persistent_shell()
         shell2 = await get_persistent_shell()
 
-        # Should return same instance
         assert shell1 is shell2
-
-        # Should only create subprocess once
         assert mock_asyncio_subprocess.exec.call_count == 1
 
-    async def test_stop_persistent_shell_cleanup(self, mock_asyncio_subprocess):
-        """Test stop_persistent_shell properly cleans up."""
-        # Create singleton
-        shell = await get_persistent_shell()
-        # Ensure the mock is fresh for this test
-        mock_asyncio_subprocess.exec.reset_mock()
-
-        # Mock the stop method to verify it's called
-        original_stop = shell.stop
-        stop_called = False
-
-        async def mock_stop():
-            nonlocal stop_called
-            stop_called = True
-            # We don't call original_stop here because it would try to interact
-            # with a real process if we're not careful. We just want to know
-            # that the singleton logic called our stop().
-            shell.proc = None  # Manually reset state as original_stop would
-
-        shell.stop = mock_stop
-
+    async def test_stop_clears_singleton(self, mock_asyncio_subprocess):
         await stop_persistent_shell()
+        shell1 = await get_persistent_shell()
+        await stop_persistent_shell()
+        shell2 = await get_persistent_shell()
 
-        assert stop_called, "Shell stop method should have been called"
-
-        # Now, getting the shell again should create a new instance and call the mock
-        new_shell = await get_persistent_shell()
-        assert new_shell is not shell
-        mock_asyncio_subprocess.exec.assert_called_once()
-
-        # Restore original method to avoid side effects
-        new_shell.stop = original_stop
-
-
-class TestRealWorldScenarios:
-    """Test realistic command execution scenarios."""
-
-    async def test_directory_change_persistence(self):
-        """Test directory changes persist between commands."""
-        shell = PersistentShell()
-
-        # Mock process with changing directories
-        mock_process = AsyncMock()
-        mock_process.stdin.write = MagicMock(return_value=None)  # sync method
-        mock_process.stdin.drain = AsyncMock()  # async method
-        shell.proc = mock_process
-
-        # First command - cd to new directory
-        mock_process.stdout.readline.side_effect = [
-            f"{MARKER}:/home/user/projects\n".encode(),
-        ]
-        mock_process.stderr.readline.side_effect = [b""]
-
-        await shell.run("cd /home/user/projects")
-        assert shell.cwd == "/home/user/projects"
-
-        # Second command - should be in new directory
-        mock_process.stdout.readline.side_effect = [
-            b"file1.txt\n",
-            b"file2.txt\n",
-            f"{MARKER}:/home/user/projects\n".encode(),
-        ]
-        mock_process.stderr.readline.side_effect = [b""]
-
-        stdout, stderr = await shell.run("ls")
-        assert "file1.txt" in stdout
-        assert "file2.txt" in stdout
-        assert shell.cwd == "/home/user/projects"
-
-    async def test_command_with_error_output(self):
-        """Test command that produces both stdout and stderr."""
-        shell = PersistentShell()
-
-        mock_process = AsyncMock()
-        mock_process.stdin.write = MagicMock(return_value=None)  # sync method
-        mock_process.stdin.drain = AsyncMock()  # async method
-        shell.proc = mock_process
-
-        # Command with mixed output
-        mock_process.stdout.readline.side_effect = [
-            b"normal output\n",
-            f"{MARKER}:/current\n".encode(),
-        ]
-        mock_process.stderr.readline.side_effect = [
-            b"warning: something happened\n",
-            b"error: operation failed\n",
-            b"",  # EOF after timeout
-        ]
-
-        stdout, stderr = await shell.run("command_with_errors")
-
-        assert stdout == "normal output"
-        assert "warning: something happened" in stderr
-        assert "error: operation failed" in stderr
-
-    async def test_marker_parsing_edge_cases(self):
-        """Test marker parsing with unusual but valid paths."""
-        shell = PersistentShell()
-        original_cwd = shell.current_cwd
-
-        # Test various path formats that should work
-        test_cases = [
-            "/simple/path",
-            "/path/with spaces/in it",
-            "/path/with:colons",
-            "/path/with/trailing/slash/",
-            "relative/path",
-        ]
-
-        for test_path in test_cases:
-            shell._parse_marker(f"{MARKER}:{test_path}")
-            assert shell.cwd == test_path, f"Failed for path: {test_path}"
-
-        # Restore original for cleanup
-        shell.current_cwd = original_cwd
+        assert shell1 is not shell2
+        assert mock_asyncio_subprocess.exec.call_count == 2
