@@ -187,6 +187,8 @@ class MessageHistory:
                     tasks=parsed.get("tasks"),
                     tools=pending_tools or None,
                     token_count=token_count,
+                    reasoning=msg.get("reasoning"),
+                    reasoning_details=msg.get("reasoning_details"),
                 )
 
             elif role == "user":
