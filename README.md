@@ -9,7 +9,7 @@
 
 # Solveig
 
-**An AI assistant that brings safe agentic behavior from any LLM to your terminal**
+**Turns any LLM into an agentic AI assistant in your terminal**
 
 ![Demo](./docs/demo.png)
 
@@ -48,14 +48,14 @@ pip install solveig[all]
 solveig -u "http://localhost:5001/v1" "Create a demo BlackSheep webapp"
 
 # Run from a remote API like OpenRouter
-solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2:free"
+solveig -u "https://openrouter.ai/api/v1" -k "<API_KEY>" -m "moonshotai/kimi-k2.5:free"
 ```
 
 ---
 
 ## Features
 
-🤖 **AI Terminal Assistant** - Automate file management, code analysis, project setup, and system tasks using
+🤖 **Agentic CLI Assistant** - Automate file management, code analysis, project setup, and system tasks using
 natural language in your terminal.
 
 🛡️ **Safe by Design** - Granular consent controls with pattern-based permissions and file operations
@@ -64,8 +64,10 @@ prioritized over shell commands.
 🔌 **Plugin Architecture** - Extend capabilities through drop-in Python plugins. Add SQL queries, web scraping,
 or custom workflows with 100 lines of Python.
 
-📋 **Modern CLI** - Clear interface with task planning, file and metadata previews, diff editing,
-usage stats, code linting, waiting animations and directory tree displays for informed user decisions.
+📋 **Modern CLI** - Clear interface with task planning, collapsible usage stats, diff editing, code linting,
+waiting animations and directory tree displays for informed user decisions. Supports multiple themes.
+
+📋 **MCP Support** - easily add and filter multiple tools from MCP servers.   
 
 🌐 **Provider Independence**  - Works with any OpenAI-compatible API, including local models.
 

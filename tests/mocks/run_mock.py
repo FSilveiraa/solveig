@@ -3,8 +3,10 @@
 
 import asyncio
 import random
+from os import PathLike
 
 from solveig import SolveigConfig
+from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
@@ -28,39 +30,89 @@ async def cleanup():
 
 
 class DemoInterface(TerminalInterface):
+    """
+    TerminalInterface subclass that auto-types scripted user messages.
+
+    Detects when the app is awaiting input (via the "awaiting input" status update
+    emitted by with_animation in condense_responses_into_user_message), then schedules
+    an async task that types each character into the input widget with a realistic delay
+    before submitting — producing a live typing animation in the demo.
+    """
+
     def __init__(
         self, *args, user_messages: list[tuple[float, str]] | None = None, **kwargs
     ):
         self._user_messages = user_messages or []
+        self._typing_task: asyncio.Task | None = None
         super().__init__(*args, **kwargs)
 
-    async def wait_type(self):
-        await asyncio.sleep(0.1 + ((random.random() * 2 - 1) * 0.02))
+    async def _type_and_submit(self, sleep_time: float, message: str) -> None:
+        """Wait sleep_time, then type each character with a small jitter, then submit."""
+        await asyncio.sleep(sleep_time)
+        text_input = self.app._input_widget._text_input
+        for char in message:
+            text_input.insert(char)
+            jitter = (random.random() * 2 - 1) * 0.02
+            await asyncio.sleep(0.1 + jitter)
+        # Simulate Enter — the InputBar handler clears the box and calls _handle_input
+        text_input.post_message(GrowingInput.Submitted(message))
 
-    # Input overrides
-    async def ask_user(self, prompt: str, placeholder: str | None = None) -> str:
-        return await self.get_input()
-
-    async def get_input(self) -> str:
-        try:
+    async def update_stats(
+        self,
+        status: str | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
+        model: str | None = None,
+        url: str | None = None,
+        path: str | PathLike | None = None,
+        max_context: int | None = None,
+        used_context: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
+    ) -> None:
+        await super().update_stats(
+            status=status,
+            sent_tokens=sent_tokens,
+            received_tokens=received_tokens,
+            model=model,
+            url=url,
+            path=path,
+            max_context=max_context,
+            used_context=used_context,
+            input_price=input_price,
+            output_price=output_price,
+            mcp_servers=mcp_servers,
+        )
+        if status and "awaiting input" in status.lower() and self._user_messages:
             sleep_time, message = self._user_messages.pop(0)
-        except Exception:
-            return await super().get_input()
-        else:
-            await asyncio.sleep(sleep_time)
-            self.app._input_widget.action_cursor_right()
-            for char in message:
-                self.app._input_widget.insert_text_at_cursor(char)
-                await self.wait_type()
-            await self.app._input_widget.action_submit()
-            await self.wait_type()
-            return await super().get_input()
+            if self._typing_task and not self._typing_task.done():
+                self._typing_task.cancel()
+            self._typing_task = asyncio.create_task(
+                self._type_and_submit(sleep_time, message)
+            )
 
 
 async def run_async_mock(
     mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 3
 ):
     """Entry point for the async textual CLI."""
+
+    # user_messages: list[tuple[float, str]] = [
+    #     (0.5, "Review the project tree and the readme"),
+    #     (0.5, "/mcp connect http://localhost:8001/mcp"),
+    #     (0.5, "Now search"),
+    #     (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
+    # ]
+    #
+    #
+    # mock_messages = mock_messages or [
+    #     AssistantMessage(
+    #         comment="I'll help you review your project documentation and structure",
+    #         reasoning="",
+    #     )
+    # ]
+
 
     if mock_messages is None:
         mock_messages = [
@@ -77,7 +129,6 @@ async def run_async_mock(
                     ),
                 ],
                 tools=[
-                    # BrokenTool(comment="crash test — loop should survive this"),
                     EditTool(
                         comment="Edit README to change `docker` to `podman`",
                         path="~/Sync/README.md",
@@ -148,6 +199,7 @@ if __name__ == "__main__":
                 ReadTool(comment="Read", path="~/Sync/README.md", metadata_only=False)
             ],
         ),
+        AssistantMessage(comment="All done! Let me know if you need anything else."),
     ]
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
@@ -155,11 +207,11 @@ if __name__ == "__main__":
     config = config.with_(plugins={**config.plugins, "tree": {}}).with_(
         model="fake-model"
     )
-    interface = TerminalInterface(
+    interface = DemoInterface(
         theme=config.theme,
         code_theme=config.code_theme,
+        user_messages=user_messages,
     )
-    # interface = DemoInterface(theme=config.theme, code_theme=config.code_theme, user_messages=user_messages)
 
     try:
         await run_async(

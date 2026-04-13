@@ -39,8 +39,16 @@ class WriteTool(BaseTool):
     async def display_header(self, interface: SolveigInterface) -> None:
         """Display write tool header."""
         await super().display_header(interface)
+        new_line_count = (
+            len(self.content.splitlines())
+            if self.content and not self.is_directory
+            else None
+        )
         self._cached_metadata = await self.display_path_info(
-            interface, self.path, is_directory=self.is_directory
+            interface,
+            self.path,
+            is_directory=self.is_directory,
+            line_count=new_line_count,
         )
 
     def create_error_result(self, error_message: str, accepted: bool) -> WriteResult:

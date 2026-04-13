@@ -159,11 +159,14 @@ class BaseTool(BaseModel, ABC):
         path: str,
         prefix: str = "Path:",
         is_directory: bool | None = None,
+        line_count: int | None = None,
     ) -> Metadata | None:
         """Fetch metadata for path, display the formatted line, and return the metadata.
 
         Pass is_directory to override the is_dir flag when the file does not exist yet
         (e.g. WriteTool creating a new file/directory).
+        Pass line_count to override the displayed line count (e.g. show incoming content
+        size rather than the existing file's size).
         """
         abs_path = Filesystem.get_absolute_path(path)
         try:
@@ -179,13 +182,18 @@ class BaseTool(BaseModel, ABC):
             if is_directory is not None
             else (metadata.is_directory if metadata else False)
         )
+        displayed_line_count = (
+            line_count
+            if line_count is not None
+            else (metadata.line_count if metadata else None)
+        )
         await interface.display_text(
             format_path_info(
                 path=path,
                 abs_path=abs_path,
                 is_dir=is_dir,
                 size=metadata.size if metadata else None,
-                line_count=metadata.line_count if metadata else None,
+                line_count=displayed_line_count,
             ),
             prefix=prefix,
         )
