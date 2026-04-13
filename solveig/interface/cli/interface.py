@@ -88,6 +88,8 @@ class TerminalInterface(SolveigInterface):
                 is_subcommand = await self.subcommand_executor(
                     subcommand=user_input, interface=self
                 )
+            except UserCancel:
+                is_subcommand = True
             except Exception as e:
                 is_subcommand = True
                 await self.display_error(
