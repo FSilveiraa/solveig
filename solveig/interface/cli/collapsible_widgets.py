@@ -215,34 +215,34 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._content = content
+        self._initial_content = content
+        if isinstance(self._initial_content, str):
+            self._initial_content = self._initial_content.rstrip("\n")
         self._content_classes = "box-content " + ("italic" if italic else "")
         self._collapsed = collapsed
         self.border_title = title
 
     def compose(self):
         self._collapsible = CustomCollapsible(
-            right=CopyButton(
-                lambda: self._content
-                if isinstance(self._content, str)
-                else self._content.code
-            ),
+            right=CopyButton(lambda: str(self._text_container.content)),
             start_collapsed=self._collapsed,
         )
         self._text_container = Static(
-            self._content, markup=False, classes=self._content_classes
+            self._initial_content, markup=False, classes=self._content_classes
         )
         with self._collapsible:
             yield self._text_container
 
+    @property
+    def content(self) -> str:
+        return self._text_container.content
+
     def append(self, line: str) -> None:
         """Append a line to the content and scroll the conversation to the end."""
-        self._content = str(self._text_container.renderable) + line
-        self._text_container.update(self._content)
+        self._text_container.update(f"{self.content}\n{line.rstrip('\n')}")
         self._on_content_changed()
 
     def reset(self, content: str) -> None:
-        self._content = content
         self._text_container.update(content)
         self._on_content_changed()
 
@@ -253,7 +253,7 @@ class CollapsibleTextBox(Widget, MutableTextBox):
             if hasattr(parent, "scroll_end") and hasattr(parent, "call_after_refresh"):
                 parent.scroll_end(animate=False)
                 parent.call_after_refresh(parent.scroll_end)
-                break
+                # break
             parent = parent.parent
 
     @classmethod
