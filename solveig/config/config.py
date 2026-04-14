@@ -37,13 +37,6 @@ Response format:
 
 @dataclass()
 class SolveigConfig:
-    # write paths in the format of /path/to/file:permissions
-    # ex: "/home/francisco/Documents:w" means every file in ~/Documents can be read/written
-    # permissions:
-    # m: (default) read metadata only
-    # r: read file and metadata
-    # w: read and write
-    # n: negate (useful for denying access to sub-paths contained in another allowed path)
     url: str = ""
     api_type: type[APIType.BaseAPI] = APIType.LOCAL
     api_key: str = (

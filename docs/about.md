@@ -9,29 +9,45 @@
 
 ## Features and Principles
 
-**User consent and safety** - Every operation requires explicit user approval by default. Solveig shows you
-exactly what it plans to do, asks permission for any action, and supports granular pattern-based configuration
-for auto-trusted operations. Built around secure defaults so users can try Solveig safely without
-having to be aware of documentation quirks.
+I built Solveig under the clear knowledge that it arrived late into a space competing with long-existing
+and widely-adopted tools.
+I've used most of its relevant competitors, some at length and often to build Solveig itself - see
+[Market Comparison](./comparison.md) for more on that - and used it to build a basic set of guiding principles
+for why and how I want Solveig to exist.
 
-**File API over Shell commands** - Solveig prioritizes direct file operations over shell execution for
-fundamental safety, and the configuration allows disabling commands entirely. Code restrictions enforce
-what's allowed rather than relying solely on assistant notes.
+**Exceptional UI** - Solveig is built on [Textual](https://textual.textualize.io/), with hundreds of hours put
+into building widgets, themes, stats bars, animations, buttons, multi-choice selection, directory trees and several
+other custom elements to create one of the most responsive UIs achieved in a terminal.
 
-**Advanced configurability** - Extensive customization through glob patterns, permission rules, and
-operation-specific controls. Besides typical LLM configurations like Temperature and Context Size, power
-users can disable commands, auto-approve trusted paths and commands using patterns - see [Usage](./usage.md) for more.
+**Informed UX** - Solveig uses this powerful UI to provide all the information necessary to allow informed user choices.
+Token usage, model pricing, API URL, file metadata, diff views for file editing, code linting, reasoning
+details, queued messages, task lists - Solveig keeps all of these constantly inspectable to ensure a clear, safe usage.
 
-**Plugin extensibility** - New capabilities are additive, not core modifications that require code PRs.
-Plugins are simple drop-in Python files that anyone can develop without requiring project PRs - see
-[Plugins](plugins.md) for more
+**Filesystem Tools** - Solveig prioritizes tool-based file operations over shell execution for fundamental safety,
+allowing a tighter use of UI capabilities, more granular user approval controls and a more predictable outcome preview.
 
-**Provider independence** - Works with any OpenAI-compatible API, plus native support for OpenAI, Claude,
-Gemini, and local models. Solveig is a free and open-source tool with no artificial limitations.
+**Persistent Shell** - Commands are executed in a shell that persists important metadata like the `cwd`.
+The UI makes this information clearly visible at all times so the user is always aware of where a command would run.
 
-**Visual transparency** - Styled terminal output with progress tracking, clear task breakdowns, and rich metadata
-display. Informed decisions require clear information display. The interface remains abstract enough to support
-future alternatives like web interfaces - see the [Roadmap](https://github.com/FSilveiraa/solveig/discussions/2) for more.
+**Advanced configurability** - Nearly every aspect of Solveig that can be configurable is.
+Extensive customization is achieved through glob patterns, permission rules, and filters for tools and plugins.
+Besides typical LLM configurations like Temperature and Context Size, users can disable commands, auto-approve
+trusted paths and commands using patterns - see [Usage](./usage.md) for more.
+
+**Sub-command framework** - Solveig includes a sub-command parser that allows running tools, managing sessions,
+editing config values, changing models and APIs, connecting to MCP servers and more. See [Subcommands](./subcommands.md)
+for more.
+
+**Session management** - Sessions are stored by default in `./.solveig/sessions/` and can be reloaded or resumed
+to continue long-running conversations.
+
+**Plugin framework and MCP server support** - New capabilities are additive, not core modifications that require code PRs.
+Plugins are simple drop-in Python files that anyone can develop, while MCP servers can easily be added and filtered.
+All added tools are instantly available to the assistant. See [Plugins](plugins.md) and [MCP](./mcp.md) for more
+
+**FOSS and provider-independent** - Solveig is a free and open-source tool, aiming to work with any
+OpenAI-compatible API. I've tested Solveig with a wide range of models and providers, including local LLMs, to
+ensure wide compatibility with the evolving landscape of models.
 
 **Industry standards** - Adopts proven patterns from leading agentic AI tools. Several features were inspired
 by or functionally copied from other tools, building on what works rather than reinventing solutions - see
