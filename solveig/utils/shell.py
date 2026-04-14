@@ -9,9 +9,25 @@ from solveig.utils.file import Filesystem
 MARKER = "__SOLVEIG_CMD_END__"
 
 
+async def _read_lines(stream, timeout: float):
+    """Yield decoded lines from a stream until EOF or timeout."""
+    while True:
+        try:
+            raw = await asyncio.wait_for(stream.readline(), timeout=timeout)
+        except TimeoutError:
+            break
+        if not raw:
+            break
+        try:
+            yield raw.decode()
+        except Exception:
+            yield str(raw)
+
+
 class ShellExecution:
     """
-    Returned by PersistentShell.run(). Two usage patterns:
+    Handle for a single command execution within a PersistentShell session.
+    Single-use: first iteration runs the command; subsequent iterations replay cached output.
 
     Stream stdout line-by-line:
         async for line in execution:
@@ -22,18 +38,16 @@ class ShellExecution:
         stdout, stderr = await execution
     """
 
-    def __init__(self):
+    def __init__(self, shell: "PersistentShell", cmd: str, timeout: float) -> None:
+        self._shell = shell
+        self._cmd = cmd
+        self._timeout = timeout
         self._stdout_lines: list[str] = []
         self._stderr_text: str = ""
-        self._gen = None
+        self._ran = False
 
     def __aiter__(self):
-        return self._collecting_iter()
-
-    async def _collecting_iter(self):
-        async for line in self._gen:
-            self._stdout_lines.append(line)
-            yield line
+        return self._run()
 
     def __await__(self):
         return self._collect().__await__()
@@ -42,6 +56,33 @@ class ShellExecution:
         async for _ in self:
             pass
         return self.stdout, self.stderr
+
+    async def _run(self):
+        if self._ran:
+            for line in self._stdout_lines:
+                yield line
+            return
+        self._ran = True
+
+        async with self._shell._lock:
+            await self._shell.start()
+            proc = self._shell.proc
+            assert proc is not None
+
+            full = f"{self._cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+            proc.stdin.write(full.encode())
+            await proc.stdin.drain()
+
+            async for line in _read_lines(proc.stdout, self._timeout):
+                if MARKER in line:
+                    self._shell._parse_marker(line.strip())
+                    break
+                self._stdout_lines.append(line)
+                yield line
+
+            self._stderr_text = "".join(
+                [line async for line in _read_lines(proc.stderr, 0.1)]
+            ).strip()
 
     @property
     def stdout(self) -> str:
@@ -55,13 +96,13 @@ class ShellExecution:
 class PersistentShell:
     """A persistent shell session that maintains working directory and environment state."""
 
-    def __init__(self, shell="/bin/bash"):
+    def __init__(self, shell: str = "/bin/bash") -> None:
         self.shell = shell
-        self.proc = None
+        self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
         self.current_cwd = Filesystem.get_current_directory()
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the persistent shell process if not already running."""
         if self.proc is not None:
             return
@@ -72,68 +113,12 @@ class PersistentShell:
             stderr=asyncio.subprocess.PIPE,
         )
 
-    async def _read_stream(self, stream, until_marker=None, timeout=None):
-        """Read lines from stream, optionally until marker appears."""
-        lines = []
-        marker_line = None
-        while True:
-            try:
-                line = await asyncio.wait_for(stream.readline(), timeout=timeout)
-                if not line:
-                    break  # EOF
-                try:
-                    line = line.decode()
-                except Exception:
-                    pass
-                if until_marker and until_marker in line:
-                    marker_line = line.strip()
-                    break
-                lines.append(line)
-            except TimeoutError:
-                break  # No more data available
-        return "".join(lines), marker_line
-
     def run(self, cmd: str, *, timeout: float = 10.0) -> ShellExecution:
         """
-        Stream stdout lines from a command. Returns a ShellExecution immediately;
-        iteration drives the actual execution. After the loop, execution.stderr is populated.
+        Return a ShellExecution for the given command.
+        Iterate over it to stream stdout, or await it to collect stdout and stderr.
         """
-        execution = ShellExecution()
-        execution._gen = self._stream(cmd, timeout=timeout, execution=execution)
-        return execution
-
-    async def _stream(
-        self, cmd: str, *, timeout: float, execution: "ShellExecution | None"
-    ):
-        async with self._lock:
-            if self.proc is None:
-                await self.start()
-
-            full = f"{cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
-            self.proc.stdin.write(full.encode())
-            await self.proc.stdin.drain()
-
-            while True:
-                try:
-                    raw = await asyncio.wait_for(
-                        self.proc.stdout.readline(), timeout=timeout
-                    )
-                except TimeoutError:
-                    break
-                if not raw:  # EOF
-                    break
-                try:
-                    line = raw.decode()
-                except Exception:
-                    line = str(raw)
-                if MARKER in line:
-                    self._parse_marker(line.strip())
-                    break
-                yield line
-
-            stderr_text, _ = await self._read_stream(self.proc.stderr, timeout=0.1)
-            if execution is not None:
-                execution._stderr_text = stderr_text.strip()
+        return ShellExecution(self, cmd, timeout)
 
     async def run_detached(self, cmd: str) -> None:
         """Spawn a detached background process. Returns immediately with no output."""
@@ -144,8 +129,8 @@ class PersistentShell:
             start_new_session=True,
         )
 
-    def _parse_marker(self, marker_line: str):
-        """Parse marker line to update internal state."""
+    def _parse_marker(self, marker_line: str) -> None:
+        """Parse marker line to update current working directory."""
         try:
             if ":" in marker_line:
                 marker, cwd = marker_line.split(":", 1)
@@ -154,12 +139,13 @@ class PersistentShell:
         except (ValueError, AttributeError):
             pass
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the persistent shell process."""
         if self.proc:
             try:
-                self.proc.stdin.write(b"exit\n")
-                await self.proc.stdin.drain()
+                if self.proc.stdin:
+                    self.proc.stdin.write(b"exit\n")
+                    await self.proc.stdin.drain()
             except Exception:
                 pass
             await self.proc.wait()
@@ -167,7 +153,7 @@ class PersistentShell:
 
     @property
     def cwd(self) -> str:
-        """Get current working directory of the shell."""
+        """Current working directory of the shell."""
         return self.current_cwd
 
 
@@ -184,7 +170,7 @@ async def get_persistent_shell() -> PersistentShell:
     return _shell_instance
 
 
-async def stop_persistent_shell():
+async def stop_persistent_shell() -> None:
     """Stop the global persistent shell."""
     global _shell_instance
     if _shell_instance:
