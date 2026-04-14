@@ -1,9 +1,10 @@
 import argparse
+import fnmatch
 import json
 import re
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from importlib.metadata import version
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anyio import Path
 
@@ -12,6 +13,58 @@ from solveig.interface import SolveigInterface
 from solveig.llm import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
+
+if TYPE_CHECKING:
+    from solveig.schema import BaseTool
+
+
+@dataclass
+class MCPServerConfig:
+    """Per-server MCP configuration.
+
+    allowed_tools: glob patterns for tools to include. Empty list (default) accepts all tools.
+    blocked_tools: glob patterns for tools to always exclude, applied after allowed_tools.
+    Patterns use fnmatch glob syntax (case-sensitive).
+
+    headers: HTTP headers sent with every request (e.g. {"Authorization": "Bearer ..."}).
+    timeout: per-server connection timeout in seconds. None inherits the global default.
+    enabled: set to False to skip this server on startup without removing the entry.
+    """
+
+    url: str
+    allowed_tools: list[str] = field(default_factory=list)
+    blocked_tools: list[str] = field(default_factory=list)
+    headers: dict[str, str] = field(default_factory=dict)
+    timeout: float | None = None
+    enabled: bool = True
+
+    def filter_tools(self, tools: list[type["BaseTool"]]) -> list[type[Any]]:
+        """Apply allowed_tools and blocked_tools filters to a list of tool classes."""
+
+        def name(tool: type["BaseTool"]) -> str:
+            return tool.model_fields["title"].default  # type: ignore[attr-defined]
+
+        result = tools
+        if self.allowed_tools:
+            result = [
+                _tool
+                for _tool in result
+                if any(
+                    fnmatch.fnmatchcase(name(_tool), allowed)
+                    for allowed in self.allowed_tools
+                )
+            ]
+        if self.blocked_tools:
+            result = [
+                _tool
+                for _tool in result
+                if not any(
+                    fnmatch.fnmatchcase(name(_tool), blocked)
+                    for blocked in self.blocked_tools
+                )
+            ]
+        return result
+
 
 DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
 
@@ -65,7 +118,7 @@ class SolveigConfig:
     request_timeout: float = 60.0  # Timeout for LLM API requests in seconds
 
     no_commands: bool = False
-    mcp_servers: list[str] = field(default_factory=list)
+    mcp_servers: dict[str, MCPServerConfig] = field(default_factory=dict)
     theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
     # Runtime state — not persisted or exposed as CLI arguments
     model_info: ModelInfo | None = field(default=None)
@@ -84,6 +137,12 @@ class SolveigConfig:
         if isinstance(self.theme, str):
             self.theme = themes.THEMES[self.theme.strip().lower()]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
+
+        # Normalize mcp_servers: raw dicts from JSON deserialization → MCPServerConfig
+        self.mcp_servers = {
+            name: MCPServerConfig(**cfg) if isinstance(cfg, dict) else cfg
+            for name, cfg in self.mcp_servers.items()
+        }
 
         # Validate regex patterns for auto_execute_commands
         for pattern in self.auto_execute_commands:
@@ -310,11 +369,20 @@ class SolveigConfig:
                 )
 
         # Merge config from file and CLI
+        cli_mcp_urls: list[str] = args_dict.pop("mcp_servers") or []
         merged_config: dict = {**file_config}
         for k, v in args_dict.items():
             if v is not None:
-                # flag-specific rules
                 merged_config[k] = v
+
+        # --mcp URLs are merged into the mcp_servers dict (not replaced)
+        # Each URL is added as a minimal entry keyed by the URL itself
+        if cli_mcp_urls:
+            file_mcp: dict = merged_config.get("mcp_servers", {})
+            for url in cli_mcp_urls:
+                if url not in file_mcp:
+                    file_mcp[url] = {"url": url}
+            merged_config["mcp_servers"] = file_mcp
 
         # Display a warning if ".*" is in allowed_commands or / is in allowed_paths
         # I know this looks bad, but it's so much easier than designing a regex to capture
@@ -391,10 +459,13 @@ class SolveigConfig:
             if field_name in self._RUNTIME_FIELDS:
                 continue
             if field_name == "api_type" and hasattr(field_value, "name"):
-                # Convert class to string name using static attribute
                 config_dict[field_name] = field_value.name
             elif field_name == "theme":
                 config_dict[field_name] = field_value.name
+            elif field_name == "mcp_servers":
+                config_dict[field_name] = {
+                    name: asdict(cfg) for name, cfg in field_value.items()
+                }
             else:
                 config_dict[field_name] = field_value
 

@@ -7,7 +7,7 @@ import shlex
 import typing
 from collections.abc import Callable
 
-from solveig.config import SolveigConfig
+from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
     _parse_field_value,
@@ -538,7 +538,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         url = args[0]
         try:
             async with interface.with_animation(f"Connecting to {url}..."):
-                conn = await connect(url, self.config, interface)
+                conn = await connect(MCPServerConfig(url=url), self.config, interface)
             tool_names = [t.model_fields["title"].default for t in conn.tools]
             await interface.display_success(
                 f"Connected to '{conn.name}': {len(conn.tools)} tools available: {', '.join(tool_names)}"
