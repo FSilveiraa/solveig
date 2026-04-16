@@ -181,7 +181,7 @@ async def fetch_and_apply_model_info(
     Returns True on success, False on failure (error already displayed).
     """
     try:
-        async with interface.with_animation("Fetching model info..."):
+        async with interface.with_animation("Connecting to assistant..."):
             model_info = await config.api_type.get_model_details(
                 client=client_ref.client, model=config.model
             )

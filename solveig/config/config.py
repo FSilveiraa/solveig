@@ -22,21 +22,24 @@ if TYPE_CHECKING:
 class MCPServerConfig:
     """Per-server MCP configuration.
 
+    url is the server endpoint and also serves as the dict key in
+    SolveigConfig.mcp_servers. In the config file the key is the URL and the
+    value holds the remaining options; normalization injects the key as url.
+
     allowed_tools: glob patterns for tools to include. Empty list (default) accepts all tools.
     blocked_tools: glob patterns for tools to always exclude, applied after allowed_tools.
     Patterns use fnmatch glob syntax (case-sensitive).
 
     headers: HTTP headers sent with every request (e.g. {"Authorization": "Bearer ..."}).
-    timeout: per-server connection timeout in seconds. None inherits the global default.
-    enabled: set to False to skip this server on startup without removing the entry.
+    timeout: per-server connection timeout in seconds. None uses a built-in default.
     """
 
     url: str
+    name: str | None = None
     allowed_tools: list[str] = field(default_factory=list)
     blocked_tools: list[str] = field(default_factory=list)
     headers: dict[str, str] = field(default_factory=dict)
-    timeout: float | None = None
-    enabled: bool = True
+    timeout: float = 30.0
 
     def filter_tools(self, tools: list[type["BaseTool"]]) -> list[type[Any]]:
         """Apply allowed_tools and blocked_tools filters to a list of tool classes."""
@@ -138,10 +141,13 @@ class SolveigConfig:
             self.theme = themes.THEMES[self.theme.strip().lower()]
         self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
 
-        # Normalize mcp_servers: raw dicts from JSON deserialization → MCPServerConfig
+        # Normalize mcp_servers: the key is the URL; inject it as url into the config
+        # object. Strip url from the raw dict first to avoid duplicate-keyword errors
+        # when re-loading a saved config that already has url in the value.
         self.mcp_servers = {
-            name: MCPServerConfig(**cfg) if isinstance(cfg, dict) else cfg
-            for name, cfg in self.mcp_servers.items()
+            url: MCPServerConfig(url=url, **{k: v for k, v in cfg.items() if k != "url"})
+            if isinstance(cfg, dict) else cfg
+            for url, cfg in self.mcp_servers.items()
         }
 
         # Validate regex patterns for auto_execute_commands
@@ -381,7 +387,7 @@ class SolveigConfig:
             file_mcp: dict = merged_config.get("mcp_servers", {})
             for url in cli_mcp_urls:
                 if url not in file_mcp:
-                    file_mcp[url] = {"url": url}
+                    file_mcp[url] = {}
             merged_config["mcp_servers"] = file_mcp
 
         # Display a warning if ".*" is in allowed_commands or / is in allowed_paths

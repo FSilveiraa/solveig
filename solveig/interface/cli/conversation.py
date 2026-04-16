@@ -41,11 +41,14 @@ class ConversationArea(ScrollableContainer):
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
         await target.mount(element)
-        # Force layout computation for widgets with height: auto
-        element.refresh(layout=True)
-        # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
-        self.scroll_end()
-        self.call_after_refresh(self.scroll_end)
+        # Defer layout refresh so child widgets finish composing first, then
+        # force a layout pass with their correct sizes (fixes height: auto on
+        # complex widgets like Tree, Collapsible, etc.)
+        def _after_mount():
+            element.refresh(layout=True)
+            self.scroll_end()
+            self.call_after_refresh(self.scroll_end)
+        self.call_after_refresh(_after_mount)
 
     async def add_text(self, text: str, style: str = "text", markup: bool = False):
         """Add text with specific styling using semantic style names."""
@@ -89,12 +92,10 @@ class ConversationArea(ScrollableContainer):
         # Print title before adding group
         title_corner = Static(f"┏━ [bold]{title}[/]", classes="group_top")
         await target.mount(title_corner)
-        title_corner.refresh(layout=True)
 
         # Create group container with border styling for content and mount it
         group_container = Vertical(classes="group_container")
         await target.mount(group_container)
-        group_container.refresh(layout=True)
 
         # Push onto stack
         self._group_stack.append(group_container)
@@ -111,7 +112,6 @@ class ConversationArea(ScrollableContainer):
             end_corner = Static("┗━━━", classes="group_bottom")
             target = self._group_stack[-1] if self._group_stack else self
             await target.mount(end_corner)
-            end_corner.refresh(layout=True)
             # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
             self.scroll_end()
             self.call_after_refresh(self.scroll_end)

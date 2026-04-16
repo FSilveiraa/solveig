@@ -18,7 +18,7 @@ from solveig.config.editor import (
 )
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
-from solveig.mcp_servers.client import MCP_CONNECTIONS, connect, disconnect
+from solveig.mcp_servers.client import MCP_CONNECTIONS, connect, disconnect, find_connection
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS
@@ -522,10 +522,10 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             await interface.display_info("No MCP servers connected.")
             return
         lines = []
-        for name, conn in MCP_CONNECTIONS.items():
+        for conn in MCP_CONNECTIONS.values():
             tool_names = [t.model_fields["title"].default for t in conn.tools]
             lines.append(
-                f"**{name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
+                f"**{conn.display_name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
             )
         await interface.display_text_box("\n".join(lines), title="MCP Connections")
 
@@ -535,31 +535,26 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         if not args:
             await interface.display_error("Usage: /mcp connect <url>")
             return
-        url = args[0]
         try:
-            async with interface.with_animation(f"Connecting to {url}..."):
-                conn = await connect(MCPServerConfig(url=url), self.config, interface)
-            tool_names = [t.model_fields["title"].default for t in conn.tools]
-            await interface.display_success(
-                f"Connected to '{conn.name}': {len(conn.tools)} tools available: {', '.join(tool_names)}"
-            )
-        except Exception as e:
-            await interface.display_error(f"Failed to connect to '{url}': {e}")
+            await connect(MCPServerConfig(url=args[0]), self.config, interface)
+        except Exception:
+            pass  # error already displayed by connect()
 
     async def _mcp_disconnect_cmd(
         self, interface: SolveigInterface, *args, **kwargs
     ) -> None:
         if not args:
-            await interface.display_error("Usage: /mcp disconnect <name>")
+            await interface.display_error("Usage: /mcp disconnect <name or url>")
             return
-        name = args[0]
-        if name not in MCP_CONNECTIONS:
+        identifier = args[0]
+        conn = find_connection(identifier)
+        if conn is None:
             await interface.display_error(
-                f"No connection named '{name}'. Use /mcp list to see active connections."
+                f"No connection matching '{identifier}'. Use /mcp list to see active connections."
             )
             return
-        await disconnect(name, self.config, interface)
-        await interface.display_success(f"Disconnected from '{name}'.")
+        await disconnect(conn.url, self.config, interface)
+        await interface.display_success(f"Disconnected from '{conn.display_name}'.")
 
     async def stop_interface(self, interface: SolveigInterface, *args, **kwargs):
         await interface.stop()

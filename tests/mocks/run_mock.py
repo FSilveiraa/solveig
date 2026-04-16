@@ -189,15 +189,13 @@ if __name__ == "__main__":
 
     mock_messages = [
         AssistantMessage(
-            comment="Testing tree", tools=[TreeTool(comment="Tree", path="~/Sync/")]
-        ),
-        AssistantMessage(
-            comment="Testing read",
+            comment="I'll review the project documentation.",
+            tasks=[Task(description="Review documentation", status="ongoing")],
             tools=[
-                ReadTool(comment="Read", path="~/Sync/README.md", metadata_only=False)
-            ],
+                ReadTool(comment="Read README", path="~/Sync/README.md", metadata_only=False),
+                ReadTool(comment="List PGP certificates", path="~/Sync/certs/", metadata_only=True),
+            ]
         ),
-        AssistantMessage(comment="All done! Let me know if you need anything else."),
     ]
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
@@ -208,7 +206,7 @@ if __name__ == "__main__":
     interface = DemoInterface(
         theme=config.theme,
         code_theme=config.code_theme,
-        user_messages=user_messages,
+        # user_messages=user_messages,
     )
 
     try:

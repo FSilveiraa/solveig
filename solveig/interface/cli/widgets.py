@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import pyperclip
 from rich.syntax import Syntax
+from textual.containers import ScrollableContainer
 from textual.events import Click
 from textual.widget import Widget
 from textual.widgets import Static
@@ -81,10 +82,11 @@ class TextBox(Widget):
         self.refresh(layout=True)
         parent = self.parent
         while parent is not None:
-            if hasattr(parent, "scroll_end") and hasattr(parent, "call_after_refresh"):
+            if isinstance(parent, ScrollableContainer):
                 parent.scroll_end(animate=False)
                 parent.call_after_refresh(parent.scroll_end)
-                # break
+            if parent.id == "conversation":
+                break
             parent = parent.parent
 
     @classmethod

@@ -5,7 +5,7 @@ for any content that needs to be expandable/collapsible (stats, reasoning, logs,
 """
 
 from rich.syntax import Syntax
-from textual.containers import Horizontal
+from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Collapsible, Static
@@ -250,10 +250,12 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         self.refresh(layout=True)
         parent = self.parent
         while parent is not None:
-            if hasattr(parent, "scroll_end") and hasattr(parent, "call_after_refresh"):
+            if isinstance(parent, ScrollableContainer):
                 parent.scroll_end(animate=False)
                 parent.call_after_refresh(parent.scroll_end)
-                # break
+            # Stop after reaching the conversation area
+            if parent.id == "conversation":
+                break
             parent = parent.parent
 
     @classmethod
