@@ -131,11 +131,11 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
             margin: 0 0 1 0;
+            padding: 0 0 0 1;
         }}
 
         .group_container {{
             border-left: heavy {theme.group};
-            margin: 0 0 0 1;
             padding: 0 0 0 1;
             height: auto;
             min-height: 0;
@@ -143,12 +143,12 @@ class ConversationArea(ScrollableContainer):
 
         .group_bottom {{
             color: {theme.group};
-            margin: 0 0 1 1;
+            margin: 0 0 1 0;
         }}
 
         .group_top {{
             color: {theme.group};
-            margin: 1 0 0 1;
+            margin: 1 0 0 0;
         }}
 
         {TextBox.get_css(theme)}

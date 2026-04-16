@@ -119,8 +119,6 @@ class RequestManager:
                 collapsed=True,
             )
 
-        await interface.display_section(title="Assistant")
-
         # Build LLM coroutine
         llm_coro = self.client.chat.completions.create(
             messages=message_history_dumped,

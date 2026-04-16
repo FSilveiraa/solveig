@@ -173,7 +173,7 @@ class SolveigInterface(ABC):
 
     # Additional methods for compatibility
     @abstractmethod
-    async def display_section(self, title: str) -> None:
+    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
         """Display a section header."""
         ...
 

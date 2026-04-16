@@ -60,6 +60,8 @@ class AssistantMessage(BaseMessage):
 
     async def display(self, config: SolveigConfig, interface: SolveigInterface) -> None:
         """Display the assistant's message, including reasoning, comment and tasks."""
+        await interface.display_section("Assistant")
+
         # Display the raw response if available
         if config.verbose and (raw := self.raw_message):
             await interface.display_text_box(

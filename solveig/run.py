@@ -152,7 +152,7 @@ async def main_loop(
             continue
 
         async with interface.with_animation("Thinking...", "Processing"):
-            llm_response = await request_manager.send_with_retry(
+            assistant_message = await request_manager.send_with_retry(
                 config=config,
                 interface=interface,
                 message_history=message_history,
@@ -160,38 +160,38 @@ async def main_loop(
 
         # None means the request was cancelled or the user chose not to retry.
         # need_user_input stays True so the next condense blocks for fresh input.
-        if llm_response:
+        if assistant_message:
             # add_messages corrects the user message's cached token count internally
             # using exact prompt_tokens from the raw response, so append the user
             # message only after that correction has been applied.
-            message_history.add_messages(llm_response)
+            message_history.add_messages(assistant_message)
             if session_manager:
                 if user_message:
                     await session_manager.append(user_message)
-                await session_manager.append(llm_response)
+                await session_manager.append(assistant_message)
             await interface.update_stats(
                 sent_tokens=message_history.total_tokens_sent,
                 received_tokens=message_history.total_tokens_received,
                 used_context=message_history.token_count,
             )
 
-            await llm_response.display(config, interface)
+            await assistant_message.display(config, interface)
 
-            if llm_response.tools:
+            if assistant_message.tools:
                 # In autonomous mode (default), send results back without waiting.
                 # In manual mode or after a UserCancel, drop back to waiting.
                 need_user_input = config.disable_autonomy
                 try:
-                    for req in llm_response.tools:
+                    for tool_index, tool in enumerate(assistant_message.tools):
                         try:
-                            result = await req.solve(config=config, interface=interface)
+                            result = await tool.solve(config=config, interface=interface, index=tool_index+1, total=len(assistant_message.tools))
                         except UserCancel:
                             raise
                         except Exception as e:
                             await interface.display_error(
-                                f"Unexpected error executing {req.title}: {e}"
+                                f"Unexpected error executing {tool.title}: {e}"
                             )
-                            result = req.create_error_result(
+                            result = tool.create_error_result(
                                 f"Unexpected error: {e}", accepted=False
                             )
                         await message_history.add_result(result)

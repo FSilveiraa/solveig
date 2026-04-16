@@ -48,6 +48,8 @@ class TerminalInterface(SolveigInterface):
         self.pending_queue.set_on_change(self.app.update_queued_display)
         self.base_indent = base_indent
         self.code_theme = code_theme
+        # Section title for tracking
+        self._section_title: str = ""
 
         # Rich's implementation forces us to create custom spinners by
         # starting from an existing spinner and altering it
@@ -268,9 +270,11 @@ class TerminalInterface(SolveigInterface):
         # Print banner
         await self.display_text(BANNER)
 
-    async def display_section(self, title: str) -> None:
+    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
         """Display a section header with line extending to the right."""
-        await self.app._conversation_area.add_section_header(title)
+        if even_if_repeated or self._section_title != title:
+            self._section_title = title
+            await self.app._conversation_area.add_section_header(title)
 
     @asynccontextmanager
     async def with_group(self, title: str):

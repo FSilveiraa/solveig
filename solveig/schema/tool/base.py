@@ -91,9 +91,14 @@ class BaseTool(BaseModel, ABC):
         values.update(kwargs)
         return cls.model_validate(values)
 
-    async def solve(self, config: SolveigConfig, interface: SolveigInterface):
+    async def solve(self, config: SolveigConfig, interface: SolveigInterface, index: int = 1, total: int = 1):
         """Solve this tool with plugin integration and error handling."""
-        async with interface.with_group(self.title.title()):
+        # 1 tool  -> Read
+        # N tools -> Read (3/5)
+        title = self.title.title()
+        if total > 1:
+            title += f" ({index}/{total})"
+        async with interface.with_group(title):
             await self.display_header(interface)
 
             # Run before hooks - they validate and can throw exceptions
