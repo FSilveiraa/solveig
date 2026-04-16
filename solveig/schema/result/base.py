@@ -25,7 +25,9 @@ class ToolResult(BaseModel):
     accepted: bool
     error: str | None = None
 
-    async def display(self, interface: SolveigInterface, index: int = 1, total: int = 1) -> None:
+    async def display(
+        self, interface: SolveigInterface, index: int = 1, total: int = 1
+    ) -> None:
         # 1 result  -> Read
         # N results -> Read (3/5)
         title = self.title.title()

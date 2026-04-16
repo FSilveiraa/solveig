@@ -145,8 +145,11 @@ class SolveigConfig:
         # object. Strip url from the raw dict first to avoid duplicate-keyword errors
         # when re-loading a saved config that already has url in the value.
         self.mcp_servers = {
-            url: MCPServerConfig(url=url, **{k: v for k, v in cfg.items() if k != "url"})
-            if isinstance(cfg, dict) else cfg
+            url: MCPServerConfig(
+                url=url, **{k: v for k, v in cfg.items() if k != "url"}
+            )
+            if isinstance(cfg, dict)
+            else cfg
             for url, cfg in self.mcp_servers.items()
         }
 

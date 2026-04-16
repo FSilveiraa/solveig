@@ -11,6 +11,7 @@ from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema import (
+    CommandTool,
     CopyTool,
     DeleteTool,
     EditTool,
@@ -98,12 +99,12 @@ async def run_async_mock(
 ):
     """Entry point for the async textual CLI."""
 
-    user_messages: list[tuple[float, str]] = [
-        (0.5, "Review the project tree and the readme"),
-        (0.5, "/mcp connect http://localhost:8001/mcp"),
-        (0.5, "Now search"),
-        (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
-    ]
+    # user_messages: list[tuple[float, str]] = [
+    #     (0.5, "Review the project tree and the readme"),
+    #     (0.5, "/mcp connect http://localhost:8001/mcp"),
+    #     (0.5, "Now search"),
+    #     (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
+    # ]
 
     mock_messages = mock_messages or [
         AssistantMessage(
@@ -187,16 +188,35 @@ if __name__ == "__main__":
             ),
         ]
 
-    mock_messages = [
-        AssistantMessage(
-            comment="I'll review the project documentation.",
-            tasks=[Task(description="Review documentation", status="ongoing")],
-            tools=[
-                ReadTool(comment="Read README", path="~/Sync/README.md", metadata_only=False),
-                ReadTool(comment="List PGP certificates", path="~/Sync/certs/", metadata_only=True),
-            ]
-        ),
-    ]
+        mock_messages = [
+            AssistantMessage(
+                comment="I'll review the project documentation.",
+                tasks=[Task(description="Review documentation", status="ongoing")],
+                tools=[
+                    ReadTool(
+                        comment="Read README",
+                        path="~/Sync/README.md",
+                        metadata_only=False,
+                    ),
+                    CommandTool(
+                        comment="Run a waiting command",
+                        command="for i in $(seq 1 10); do sleep 1 && echo $i; done",
+                        timeout=30,
+                    ),
+                    ReadTool(
+                        comment="List PGP certificates",
+                        path="~/Sync/certs/",
+                        metadata_only=True,
+                    ),
+                ],
+            ),
+            AssistantMessage(
+                comment="I'm sorry about that command. Here's a tree request instead",
+                tools=[
+                    TreeTool(comment="Maybe this is better", path="~/Sync/"),
+                ],
+            ),
+        ]
 
     mock_client = create_mock_client(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()

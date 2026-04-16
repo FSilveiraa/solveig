@@ -91,7 +91,13 @@ class BaseTool(BaseModel, ABC):
         values.update(kwargs)
         return cls.model_validate(values)
 
-    async def solve(self, config: SolveigConfig, interface: SolveigInterface, index: int = 1, total: int = 1):
+    async def solve(
+        self,
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        index: int = 1,
+        total: int = 1,
+    ):
         """Solve this tool with plugin integration and error handling."""
         # 1 tool  -> Read
         # N tools -> Read (3/5)

@@ -184,7 +184,12 @@ async def main_loop(
                 try:
                     for tool_index, tool in enumerate(assistant_message.tools):
                         try:
-                            result = await tool.solve(config=config, interface=interface, index=tool_index+1, total=len(assistant_message.tools))
+                            result = await tool.solve(
+                                config=config,
+                                interface=interface,
+                                index=tool_index + 1,
+                                total=len(assistant_message.tools),
+                            )
                         except UserCancel:
                             raise
                         except Exception as e:

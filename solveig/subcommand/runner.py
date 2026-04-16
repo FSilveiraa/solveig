@@ -18,7 +18,12 @@ from solveig.config.editor import (
 )
 from solveig.interface import SolveigInterface
 from solveig.llm import ClientRef
-from solveig.mcp_servers.client import MCP_CONNECTIONS, connect, disconnect, find_connection
+from solveig.mcp_servers.client import (
+    MCP_CONNECTIONS,
+    connect,
+    disconnect,
+    find_connection,
+)
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message.message_history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS

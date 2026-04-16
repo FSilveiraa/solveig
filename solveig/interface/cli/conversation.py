@@ -41,6 +41,7 @@ class ConversationArea(ScrollableContainer):
         # Add to current group or main area
         target = self._group_stack[-1] if self._group_stack else self
         await target.mount(element)
+
         # Defer layout refresh so child widgets finish composing first, then
         # force a layout pass with their correct sizes (fixes height: auto on
         # complex widgets like Tree, Collapsible, etc.)
@@ -48,6 +49,7 @@ class ConversationArea(ScrollableContainer):
             element.refresh(layout=True)
             self.scroll_end()
             self.call_after_refresh(self.scroll_end)
+
         self.call_after_refresh(_after_mount)
 
     async def add_text(self, text: str, style: str = "text", markup: bool = False):

@@ -6,7 +6,6 @@ from anyio import Path
 from solveig import utils
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.message import UserComment
 from solveig.schema.message.assistant import AssistantMessage
 from solveig.schema.message.message_history import Message, MessageHistory
 from solveig.schema.message.user import UserMessage
@@ -181,7 +180,9 @@ class SessionManager:
                 await msg.display(config, interface)
 
             elif isinstance(msg, UserMessage):
-                result_count = sum(1 for result in msg.responses if isinstance(result, ToolResult))
+                result_count = sum(
+                    1 for result in msg.responses if isinstance(result, ToolResult)
+                )
                 result_index = 0
 
                 for response in msg.responses:
@@ -189,7 +190,9 @@ class SessionManager:
                         # await interface.display_section("Assistant")
                         result_index += 1
                         try:
-                            await response.display(interface, index=result_index, total=result_count)
+                            await response.display(
+                                interface, index=result_index, total=result_count
+                            )
                         except Exception:
                             pass
 

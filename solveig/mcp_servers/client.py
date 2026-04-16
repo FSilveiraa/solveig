@@ -63,8 +63,7 @@ class MCPConnection:
     async def load_tools(self):
         available_tools = await self._session.list_tools()
         parsed_tools = [
-            create_tool_class(tool, self._session)
-            for tool in available_tools.tools
+            create_tool_class(tool, self._session) for tool in available_tools.tools
         ]
         self.tools = self.server_config.filter_tools(parsed_tools)
 
@@ -137,9 +136,7 @@ async def connect(
         try:
             await conn.open()
         except Exception as err:
-            await interface.display_error(
-                f"MCP '{conn.display_name}': {err}"
-            )
+            await interface.display_error(f"MCP '{conn.display_name}': {err}")
             return None
 
     # Only reached on success — replace any existing connection at this URL
