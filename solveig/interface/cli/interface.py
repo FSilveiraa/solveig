@@ -142,12 +142,14 @@ class TerminalInterface(SolveigInterface):
         metadata: Metadata,
         title: str | None = None,
         display_metadata: bool = False,
+        expand_root=True,
     ) -> None:
         """Display an interactive tree structure of a directory."""
         await self.app._conversation_area.add_tree_display(
             metadata,
             title=title or str(metadata.path),
             display_metadata=display_metadata,
+            expand_root=expand_root,
         )
 
     async def display_text_box(

@@ -106,13 +106,6 @@ async def run_async_mock(
     #     (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
     # ]
 
-    mock_messages = mock_messages or [
-        AssistantMessage(
-            comment="I'll help you review your project documentation and structure",
-            reasoning="",
-        )
-    ]
-
     if mock_messages is None:
         mock_messages = [
             AssistantMessage(
@@ -189,31 +182,31 @@ if __name__ == "__main__":
         ]
 
         mock_messages = [
-            AssistantMessage(
-                comment="I'll review the project documentation.",
-                tasks=[Task(description="Review documentation", status="ongoing")],
-                tools=[
-                    ReadTool(
-                        comment="Read README",
-                        path="~/Sync/README.md",
-                        metadata_only=False,
-                    ),
-                    CommandTool(
-                        comment="Run a waiting command",
-                        command="for i in $(seq 1 10); do sleep 1 && echo $i; done",
-                        timeout=30,
-                    ),
-                    ReadTool(
-                        comment="List PGP certificates",
-                        path="~/Sync/certs/",
-                        metadata_only=True,
-                    ),
-                ],
-            ),
+            # AssistantMessage(
+            #     comment="I'll review the project documentation.",
+            #     tasks=[Task(description="Review documentation", status="ongoing")],
+            #     tools=[
+            #         ReadTool(
+            #             comment="Read README",
+            #             path="~/Sync/README.md",
+            #             metadata_only=False,
+            #         ),
+            #         CommandTool(
+            #             comment="Run a waiting command",
+            #             command="for i in $(seq 1 10); do sleep 1 && echo $i; done",
+            #             timeout=30,
+            #         ),
+            #         ReadTool(
+            #             comment="List PGP certificates",
+            #             path="~/Sync/certs/",
+            #             metadata_only=True,
+            #         ),
+            #     ],
+            # ),
             AssistantMessage(
                 comment="I'm sorry about that command. Here's a tree request instead",
                 tools=[
-                    TreeTool(comment="Maybe this is better", path="~/Sync/"),
+                    TreeTool(comment="Maybe this is better", path="~"),
                 ],
             ),
         ]

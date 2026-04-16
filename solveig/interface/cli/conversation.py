@@ -80,9 +80,10 @@ class ConversationArea(ScrollableContainer):
         metadata: Metadata,
         title: str | None = None,
         display_metadata: bool = False,
+        expand_root=True,
     ):
         """Add an interactive tree display widget."""
-        tree_widget = TreeDisplay(metadata, display_metadata)
+        tree_widget = TreeDisplay(metadata=metadata, display_metadata=display_metadata, expand_root=expand_root)
         if title:
             tree_widget.border_title = title
         await self._add_element(tree_widget)
@@ -132,8 +133,7 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background: {theme.background};
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
-            margin: 0 0 1 0;
-            padding: 0 0 0 1;
+            padding: 0 0 1 1;
         }}
 
         .group_container {{

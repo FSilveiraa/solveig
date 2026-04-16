@@ -19,7 +19,7 @@ class TreeDisplay(Tree):
     of user interaction.
     """
 
-    def __init__(self, metadata: Metadata, display_metadata: bool = False, **kwargs):
+    def __init__(self, metadata: Metadata, display_metadata: bool = False, expand_root = True, **kwargs):
         # Create tree with root node
         super().__init__(self._format_node_label(metadata, display_metadata), **kwargs)
         self._display_metadata = display_metadata
@@ -28,7 +28,8 @@ class TreeDisplay(Tree):
         self._build_tree_from_metadata(self.root, metadata)
 
         # Expand root by default to show content
-        self.root.expand()
+        if expand_root:
+            self.root.expand()
 
     def _format_node_label(
         self, metadata: Metadata, display_metadata: bool = False

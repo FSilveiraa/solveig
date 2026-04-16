@@ -148,7 +148,6 @@ class SectionHeader(Static):
         SectionHeader {{
             color: {theme.section};
             text-style: bold;
-            margin: 1 0;
-            padding: 0;
+            margin: 2 0 1 0;
         }}
         """

@@ -131,6 +131,7 @@ class SolveigInterface(ABC):
         metadata: Metadata,
         title: str | None = None,
         display_metadata: bool = False,
+        expand_root=True,
     ) -> None:
         """Display a tree structure of a directory"""
         ...
