@@ -15,6 +15,7 @@ from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
+from solveig.interface.cli.widgets import CopyButton, Comment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment
@@ -133,9 +134,13 @@ class TerminalInterface(SolveigInterface):
         """Display a comment message."""
         # HACK: the string below contains a magic character that lets it render with proper spacing
         # TODO: move this to a dedicated method in TextualApp
-        await self.app._conversation_area._add_element(
-            Markdown(f"🗩 ⠀{message}", classes="text_message")
-        )
+        await self.app._conversation_area._add_element(Comment(message))
+        # await self.app._conversation_area._add_element(
+        #     comment:=Markdown(f"🗩 ⠀{message}", classes="text_message")
+        # )
+        # await self.app._conversation_area._add_element(
+        #     CopyButton(message)
+        # )
 
     async def display_tree(
         self,

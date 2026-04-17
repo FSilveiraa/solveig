@@ -41,17 +41,6 @@ class SolveigTextualApp(TextualApp):
             background: {theme.background};
             color: {theme.text};
         }}
-
-        .text_message {{
-            margin: 0 0 1 0;
-        }}
-        
-        Markdown {{                                                                                                                             
-            padding: 0;                                                                                                                           
-        }}                                                                                                                            
-        MarkdownBlock:last-of-type {{                                                                                                              
-            margin-bottom: 0;                                                                                                                     
-        }}
         
         .info_message {{ color: {theme.info}; }}
         .warning_message {{ color: {theme.warning}; }}

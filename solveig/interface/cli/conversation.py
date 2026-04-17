@@ -12,7 +12,7 @@ from .collapsible_widgets import (
     CustomCollapsible,
 )
 from .tree_display import TreeDisplay
-from .widgets import SectionHeader, TextBox
+from .widgets import SectionHeader, TextBox, Comment
 
 BANNER = """
                               888                                  d8b
@@ -153,9 +153,12 @@ class ConversationArea(ScrollableContainer):
             margin: 1 0 0 0;
         }}
 
-        {TextBox.get_css(theme)}
+        {Comment.get_css(theme)}
         {CustomCollapsible.get_css(theme)}
         {CollapsibleTextBox.get_css(theme)}
         {SectionHeader.get_css(theme)}
         {TreeDisplay.get_css(theme)}
         """
+
+        # {TextBox.get_css(theme)}
+

@@ -7,9 +7,36 @@ from rich.syntax import Syntax
 from textual.containers import ScrollableContainer
 from textual.events import Click
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Static, Markdown
 
 from solveig.interface.themes import Palette
+
+
+class Comment(Static):
+    def __init__(self, comment: str):
+        super().__init__()
+        self.comment = comment
+        self.add_class("text_comment")
+
+    def compose(self):
+        yield Markdown(f"🗩 ⠀{self.comment}")
+        yield CopyButton(self.comment)
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        return f"""
+        .text_comment {{
+            margin: 0 0 1 0;
+        }}
+        
+        Markdown {{
+            color: {theme.text};                                                                                                                    
+            padding: 0;                                                                                                                           
+        }}                                                                                                                            
+        MarkdownBlock:last-of-type {{                                                                                                              
+            margin-bottom: 0;                                                                                                                     
+        }}
+        """
 
 
 class CopyButton(Static):
