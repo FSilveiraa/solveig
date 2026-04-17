@@ -4,7 +4,7 @@ from typing import Literal
 
 from solveig.interface import SolveigInterface
 
-from ...utils.file import Metadata, Filesystem
+from ...utils.file import Filesystem, Metadata
 from .base import ToolResult
 
 
@@ -20,7 +20,9 @@ class ReadResult(ToolResult):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         if self.content:
-            abs_path = Filesystem.get_absolute_path(self.metadata.path if self.metadata else self.path)
+            abs_path = Filesystem.get_absolute_path(
+                self.metadata.path if self.metadata else self.path
+            )
 
             if len(self.content) > 1:
                 for start, end, text in self.content:

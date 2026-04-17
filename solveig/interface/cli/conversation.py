@@ -12,7 +12,7 @@ from .collapsible_widgets import (
     CustomCollapsible,
 )
 from .tree_display import TreeDisplay
-from .widgets import SectionHeader, TextBox, Comment
+from .widgets import Comment, SectionHeader
 
 BANNER = """
                               888                                  d8b
@@ -83,7 +83,11 @@ class ConversationArea(ScrollableContainer):
         expand_root=True,
     ):
         """Add an interactive tree display widget."""
-        tree_widget = TreeDisplay(metadata=metadata, display_metadata=display_metadata, expand_root=expand_root)
+        tree_widget = TreeDisplay(
+            metadata=metadata,
+            display_metadata=display_metadata,
+            expand_root=expand_root,
+        )
         if title:
             tree_widget.border_title = title
         await self._add_element(tree_widget)
@@ -161,4 +165,3 @@ class ConversationArea(ScrollableContainer):
         """
 
         # {TextBox.get_css(theme)}
-

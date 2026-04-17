@@ -41,7 +41,7 @@ class SolveigTextualApp(TextualApp):
             background: {theme.background};
             color: {theme.text};
         }}
-        
+
         .info_message {{ color: {theme.info}; }}
         .warning_message {{ color: {theme.warning}; }}
         .error_message {{ color: {theme.error}; }}

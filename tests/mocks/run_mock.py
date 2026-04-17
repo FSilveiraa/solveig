@@ -11,7 +11,6 @@ from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema import (
-    CommandTool,
     CopyTool,
     DeleteTool,
     EditTool,

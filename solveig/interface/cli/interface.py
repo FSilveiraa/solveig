@@ -9,13 +9,12 @@ from os import PathLike
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
-from textual.widgets import Markdown
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
-from solveig.interface.cli.widgets import CopyButton, Comment
+from solveig.interface.cli.widgets import Comment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment

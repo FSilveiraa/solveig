@@ -23,7 +23,7 @@ class TreeResult(ToolResult):
 
     async def _display_content(self, interface: SolveigInterface) -> None:
         if self.metadata:
-            await interface.display_tree(self.metadata, expand_root = False)
+            await interface.display_tree(self.metadata, expand_root=False)
 
 
 @tool

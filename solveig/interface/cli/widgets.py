@@ -7,7 +7,7 @@ from rich.syntax import Syntax
 from textual.containers import ScrollableContainer
 from textual.events import Click
 from textual.widget import Widget
-from textual.widgets import Static, Markdown
+from textual.widgets import Markdown, Static
 
 from solveig.interface.themes import Palette
 
@@ -28,13 +28,14 @@ class Comment(Static):
         .text_comment {{
             margin: 0 0 1 0;
         }}
-        
+
         Markdown {{
-            color: {theme.text};                                                                                                                    
-            padding: 0;                                                                                                                           
-        }}                                                                                                                            
-        MarkdownBlock:last-of-type {{                                                                                                              
-            margin-bottom: 0;                                                                                                                     
+            color: {theme.text};
+            padding: 0;
+        }}
+
+        MarkdownBlock:last-of-type {{
+            margin-bottom: 0;
         }}
         """
 
