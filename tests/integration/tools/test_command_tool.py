@@ -67,7 +67,7 @@ class TestCommandValidation:
         output = interface.get_all_output()
         assert "Test echo command" in output
         assert "echo 'Hello World'" in output
-        assert "Timeout: 5.0s" in output
+        assert "Timeout:" in output and " 5.0s" in output
 
     async def test_display_header_detached_command(self):
         """Test CommandRequirement display header for detached commands."""

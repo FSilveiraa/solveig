@@ -80,7 +80,9 @@ class RequestManager:
                     response_model=response_model,
                     message_history=message_history,
                 )
-                async with interface.with_cancellable(coro, status="Thinking...") as task:
+                async with interface.with_cancellable(
+                    coro, status="Thinking..."
+                ) as task:
                     return await task
 
             except asyncio.CancelledError:

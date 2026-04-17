@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from solveig.utils.file import Filesystem
 from solveig.utils.shell import (
     MARKER,
     PersistentShell,
@@ -101,6 +102,7 @@ class TestProcessLifecycle:
 
         mock_asyncio_subprocess.exec.assert_called_once_with(
             "/bin/bash",
+            cwd=Filesystem.get_current_directory(),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

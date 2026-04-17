@@ -9,7 +9,6 @@ from typing import ClassVar, Literal
 from pydantic import Field, field_validator
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
@@ -49,7 +48,8 @@ class CommandTool(BaseTool):
         """Display command tool header."""
         await super().display_header(interface)
         await interface.display_text(
-            f"{f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}", prefix="Timeout:",
+            f"{f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}",
+            prefix="Timeout:",
         )
         await interface.display_text_box(self.command, title="Command")
 

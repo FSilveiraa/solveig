@@ -243,6 +243,5 @@ class ModelNotFound(Exception):
             await interface.display_text_box(
                 text="\n".join(self.available),
                 title="Available models",
-
                 collapsed=True,
             )

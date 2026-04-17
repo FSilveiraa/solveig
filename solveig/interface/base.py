@@ -52,7 +52,7 @@ class SolveigInterface(ABC):
         coro: Any,
         status: str | None = None,
         final_status: str | None = None,
-    ) -> AsyncGenerator[asyncio.Task, None]:
+    ) -> AsyncGenerator[asyncio.Task]:
         """Run a coroutine as a cancellable task. Ctrl+C / Esc will cancel it.
 
         Pass status to also show a spinner animation while the task runs.
@@ -196,7 +196,7 @@ class SolveigInterface(ABC):
         self,
         status: str = "Processing",
         final_status: str | None = None,
-    ) -> AsyncGenerator[None, None]:
+    ) -> AsyncGenerator[None]:
         """Context manager for displaying animation during async operations."""
         raise NotImplementedError("Subclass must implement with_animation")
         yield  # This line will never execute but makes it a valid generator

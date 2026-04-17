@@ -1,8 +1,8 @@
 import asyncio
 import json
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface

@@ -11,12 +11,13 @@ from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
 from solveig.schema import (
+    CommandTool,
     CopyTool,
     DeleteTool,
     EditTool,
     MoveTool,
     ReadTool,
-    WriteTool, CommandTool,
+    WriteTool,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task

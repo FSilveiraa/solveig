@@ -183,7 +183,9 @@ async def fetch_and_apply_model_info(
     """
     try:
         async with interface.with_cancellable(
-            config.api_type.get_model_details(client=client_ref.client, model=config.model),
+            config.api_type.get_model_details(
+                client=client_ref.client, model=config.model
+            ),
             status="Connecting to assistant...",
         ) as task:
             model_info = await task

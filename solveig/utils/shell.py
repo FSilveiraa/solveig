@@ -3,7 +3,6 @@ Persistent shell utilities for maintaining session state across command executio
 """
 
 import asyncio
-import shlex
 from os import PathLike
 
 from solveig.utils.file import Filesystem
@@ -102,11 +101,13 @@ class ShellExecution:
 class PersistentShell:
     """A persistent shell session that maintains working directory and environment state."""
 
-    def __init__(self, shell: str = "/bin/bash", cwd: str | PathLike | None = None) -> None:
+    def __init__(
+        self, shell: str = "/bin/bash", cwd: str | PathLike | None = None
+    ) -> None:
         self.shell = shell
         self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
-        self.current_cwd = cwd = Filesystem.get_current_directory()
+        self.current_cwd = Filesystem.get_current_directory()
 
     async def start(self) -> None:
         """Start the persistent shell process if not already running."""
