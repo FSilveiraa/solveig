@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import ClassVar, Literal
 
@@ -92,24 +93,29 @@ class HttpTool(BaseTool):
             return HttpResult(tool=self, accepted=False)
 
         # Step 2: make the request
-        async with interface.with_animation("Sending request..."):
-            try:
-                async with httpx.AsyncClient(
-                    timeout=config.http_timeout,
-                    follow_redirects=self.follow_redirects,
-                ) as client:
-                    response = await client.request(
-                        method=self.method,
-                        url=self.url,
-                        headers=self.headers or {},
-                        content=self.body.encode() if self.body else None,
-                    )
-            except httpx.TimeoutException as e:
-                await interface.display_error(f"Request timed out: {e}")
-                return self.create_error_result(f"Timeout: {e}", accepted=True)
-            except httpx.RequestError as e:
-                await interface.display_error(f"Request failed: {e}")
-                return self.create_error_result(f"Request error: {e}", accepted=True)
+        async def _request():
+            async with httpx.AsyncClient(
+                timeout=config.http_timeout,
+                follow_redirects=self.follow_redirects,
+            ) as client:
+                return await client.request(
+                    method=self.method,
+                    url=self.url,
+                    headers=self.headers or {},
+                    content=self.body.encode() if self.body else None,
+                )
+
+        try:
+            async with interface.with_cancellable(_request(), status="Sending request...") as task:
+                response = await task
+        except asyncio.CancelledError:
+            return self.create_error_result("Request cancelled by user", accepted=False)
+        except httpx.TimeoutException as e:
+            await interface.display_error(f"Request timed out: {e}")
+            return self.create_error_result(f"Timeout: {e}", accepted=True)
+        except httpx.RequestError as e:
+            await interface.display_error(f"Request failed: {e}")
+            return self.create_error_result(f"Request error: {e}", accepted=True)
 
         status_code = response.status_code
         response_headers = dict(response.headers)

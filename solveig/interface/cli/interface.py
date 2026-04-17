@@ -73,6 +73,10 @@ class TerminalInterface(SolveigInterface):
             "cool": cool_spinner,
         }
 
+    @property
+    def stats(self):
+        return self.app._stats_dashboard
+
     # SolveigInterface implementation
     async def start(self) -> None:
         """Start the interface."""
@@ -304,26 +308,17 @@ class TerminalInterface(SolveigInterface):
             if final_status is not None
             else self.app._stats_dashboard._status
         )
-        # Start animation using working pattern - set up timer directly in interface context
         await self.update_stats(status)
-        # Yield control to the event loop to ensure UI is ready for animation
         await asyncio.sleep(0)
 
-        # Pick random spinner and set up animation
-        stats_dashboard = self.app._stats_dashboard
         spinner_name = random.choice(list(self.spinners.keys()))
-        stats_dashboard.set_spinner(self.spinners[spinner_name])
-        # Create a timer that only calls the title refresh
-        stats_dashboard._timer = self.app.set_interval(
-            0.1, stats_dashboard._refresh_title
-        )
+        self.stats.set_spinner(self.spinners[spinner_name])
+        self.stats._timer = self.app.set_interval(0.1, self.stats._refresh_title)
         try:
             yield
         finally:
-            # Stop animation - clean up timer and spinner
-            if stats_dashboard._timer:
-                stats_dashboard._timer.stop()
-                stats_dashboard._timer = None
-            stats_dashboard.clear_spinner()
-
+            if self.stats._timer:
+                self.stats._timer.stop()
+                self.stats._timer = None
+            self.stats.clear_spinner()
             await self.update_stats(final_status)

@@ -132,12 +132,17 @@ async def connect(
     need to react programmatically can, but callers that don't can suppress.
     """
     conn = MCPConnection(server_config)
-    async with interface.with_animation(f"MCP connecting to {conn.display_name}"):
-        try:
-            await conn.open()
-        except Exception as err:
-            await interface.display_error(f"MCP '{conn.display_name}': {err}")
-            return None
+    try:
+        async with interface.with_cancellable(
+            conn.open(), status=f"MCP connecting to {conn.display_name}"
+        ) as task:
+            await task
+    except asyncio.CancelledError:
+        await interface.display_info(f"MCP connection to {conn.display_name} cancelled")
+        return None
+    except Exception as err:
+        await interface.display_error(f"MCP '{conn.display_name}': {err}")
+        return None
 
     # Only reached on success — replace any existing connection at this URL
     if server_config.url in MCP_CONNECTIONS:

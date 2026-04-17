@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import shlex
 import typing
@@ -474,8 +475,10 @@ class SubcommandRunner:
             )
             return
         try:
-            async with interface.with_animation("Fetching model list...", "Ready"):
-                models = await raw_client.models.list()
+            async with interface.with_cancellable(
+                raw_client.models.list(), status="Fetching model list..."
+            ) as task:
+                models = await task
             names = sorted(m.id for m in models.data)
             await interface.display_text_box(
                 "\n".join(f"• {n}" for n in names),

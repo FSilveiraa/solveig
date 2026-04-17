@@ -47,19 +47,26 @@ class SolveigInterface(ABC):
         self.subcommand_executor = subcommand_executor
 
     @asynccontextmanager
-    async def cancellable_request(self, coro):
-        """Context manager for cancellable network requests.
+    async def with_cancellable(
+        self,
+        coro: Any,
+        status: str | None = None,
+        final_status: str | None = None,
+    ) -> AsyncGenerator[asyncio.Task, None]:
+        """Run a coroutine as a cancellable task. Ctrl+C / Esc will cancel it.
 
-        Usage:
-            async with interface.cancellable_request(some_async_call()) as task:
-                result = await task
-
-        The task is automatically cancelled if the user presses Ctrl+C or Esc.
+        Pass status to also show a spinner animation while the task runs.
         """
         task = asyncio.create_task(coro)
         self._request_task = task
         try:
-            yield task
+            if status is not None:
+                async with self.with_animation(
+                    f"{status} (Esc/Ctrl+C to cancel)", final_status
+                ):
+                    yield task
+            else:
+                yield task
         finally:
             self._request_task = None
 
@@ -189,7 +196,7 @@ class SolveigInterface(ABC):
         self,
         status: str = "Processing",
         final_status: str | None = None,
-    ):
+    ) -> AsyncGenerator[None, None]:
         """Context manager for displaying animation during async operations."""
         raise NotImplementedError("Subclass must implement with_animation")
         yield  # This line will never execute but makes it a valid generator

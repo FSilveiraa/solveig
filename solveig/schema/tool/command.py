@@ -49,7 +49,7 @@ class CommandTool(BaseTool):
         """Display command tool header."""
         await super().display_header(interface)
         await interface.display_text(
-            f"Timeout: {f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}"
+            f"{f'{self.timeout}s' if self.timeout > 0.0 else 'None (detached process)'}", prefix="Timeout:",
         )
         await interface.display_text_box(self.command, title="Command")
 
@@ -125,28 +125,32 @@ class CommandTool(BaseTool):
             return "".join(lines).strip(), execution.stderr
 
         try:
-            async with interface.with_animation("Executing... (Ctrl+C to stop)"):
-                try:
-                    if is_detached:
-                        await shell.run_detached(self.command)
-                    else:
-                        async with interface.cancellable_request(_execute()) as task:
-                            output, error = await task
+            if is_detached:
+                async with interface.with_animation("Executing..."):
+                    await shell.run_detached(self.command)
+            else:
+                async with interface.with_cancellable(
+                    _execute(), status="Executing..."
+                ) as task:
+                    try:
+                        output, error = await task
                         await interface.update_stats(
                             path=Filesystem.get_absolute_path(shell.cwd)
                         )
-                except Exception as e:
-                    error_str = str(e)
-                    await interface.display_error(
-                        f"Found error when running command: {error_str}"
-                    )
-                    return CommandResult(
-                        tool=self,
-                        command=self.command,
-                        accepted=True,
-                        success=False,
-                        error=error_str,
-                    )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        error_str = str(e)
+                        await interface.display_error(
+                            f"Found error when running command: {error_str}"
+                        )
+                        return CommandResult(
+                            tool=self,
+                            command=self.command,
+                            accepted=True,
+                            success=False,
+                            error=error_str,
+                        )
         except asyncio.CancelledError:
             await interface.display_warning("Command cancelled by user")
             return CommandResult(

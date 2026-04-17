@@ -151,12 +151,11 @@ async def main_loop(
             )
             continue
 
-        async with interface.with_animation("Thinking... (Esc/Ctrl+C to cancel)", "Processing"):
-            assistant_message = await request_manager.send_with_retry(
-                config=config,
-                interface=interface,
-                message_history=message_history,
-            )
+        assistant_message = await request_manager.send_with_retry(
+            config=config,
+            interface=interface,
+            message_history=message_history,
+        )
 
         # None means the request was cancelled or the user chose not to retry.
         # need_user_input stays True so the next condense blocks for fresh input.

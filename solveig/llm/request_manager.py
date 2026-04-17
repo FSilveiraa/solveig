@@ -74,13 +74,14 @@ class RequestManager:
 
             try:
                 # Use context manager for cancellable request
-                async with interface.cancellable_request(
-                    self._send_single(
-                        config, interface, response_model, message_history
-                    )
-                ) as request_task:
-                    assistant_response = await request_task
-                    return assistant_response
+                coro = self._send_single(
+                    config=config,
+                    interface=interface,
+                    response_model=response_model,
+                    message_history=message_history,
+                )
+                async with interface.with_cancellable(coro, status="Thinking...") as task:
+                    return await task
 
             except asyncio.CancelledError:
                 # Request was cancelled by user (Ctrl+C or Esc) - return None to go back to user input

@@ -5,6 +5,7 @@ Provides type-aware prompting, field application, and post-set hooks so that
 any config field can be read or changed at runtime without restarting.
 """
 
+import asyncio
 import typing
 from collections.abc import Callable
 from typing import Any
@@ -181,10 +182,14 @@ async def fetch_and_apply_model_info(
     Returns True on success, False on failure (error already displayed).
     """
     try:
-        async with interface.with_animation("Connecting to assistant..."):
-            model_info = await config.api_type.get_model_details(
-                client=client_ref.client, model=config.model
-            )
+        async with interface.with_cancellable(
+            config.api_type.get_model_details(client=client_ref.client, model=config.model),
+            status="Connecting to assistant...",
+        ) as task:
+            model_info = await task
+    except asyncio.CancelledError:
+        await interface.display_info("Model info fetch cancelled")
+        return False
     except NotImplementedError:
         # Provider doesn't support model detail fetching — set minimal info
         if config.model:
