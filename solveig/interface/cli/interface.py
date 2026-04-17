@@ -3,9 +3,10 @@
 import asyncio
 import difflib
 import random
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
+from typing import Any
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
@@ -283,7 +284,7 @@ class TerminalInterface(SolveigInterface):
             await self.app._conversation_area.add_section_header(title)
 
     @asynccontextmanager
-    async def with_group(self, title: str):
+    async def with_group(self, title: str) -> AsyncGenerator[None, Any]:
         """Context manager for grouping related output."""
         await self.app._conversation_area.enter_group(title)
         try:
@@ -293,7 +294,9 @@ class TerminalInterface(SolveigInterface):
 
     @asynccontextmanager
     async def with_animation(
-        self, status: str = "Processing", final_status: str | None = None
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
     ):
         """Context manager for displaying animation during async operations."""
         final_status = (

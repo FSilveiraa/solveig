@@ -3,6 +3,8 @@ Persistent shell utilities for maintaining session state across command executio
 """
 
 import asyncio
+import shlex
+from os import PathLike
 
 from solveig.utils.file import Filesystem
 
@@ -64,25 +66,29 @@ class ShellExecution:
             return
         self._ran = True
 
-        async with self._shell._lock:
-            await self._shell.start()
-            proc = self._shell.proc
-            assert proc is not None
+        try:
+            async with self._shell._lock:
+                await self._shell.start()
+                proc = self._shell.proc
+                assert proc is not None
 
-            full = f"{self._cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
-            proc.stdin.write(full.encode())
-            await proc.stdin.drain()
+                full = f"{self._cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+                proc.stdin.write(full.encode())
+                await proc.stdin.drain()
 
-            async for line in _read_lines(proc.stdout, self._timeout):
-                if MARKER in line:
-                    self._shell._parse_marker(line.strip())
-                    break
-                self._stdout_lines.append(line)
-                yield line
+                async for line in _read_lines(proc.stdout, self._timeout):
+                    if MARKER in line:
+                        self._shell._parse_marker(line.strip())
+                        break
+                    self._stdout_lines.append(line)
+                    yield line
 
-            self._stderr_text = "".join(
-                [line async for line in _read_lines(proc.stderr, 0.1)]
-            ).strip()
+                self._stderr_text = "".join(
+                    [line async for line in _read_lines(proc.stderr, 0.1)]
+                ).strip()
+        except asyncio.CancelledError:
+            await self._shell.restart()
+            raise
 
     @property
     def stdout(self) -> str:
@@ -96,11 +102,11 @@ class ShellExecution:
 class PersistentShell:
     """A persistent shell session that maintains working directory and environment state."""
 
-    def __init__(self, shell: str = "/bin/bash") -> None:
+    def __init__(self, shell: str = "/bin/bash", cwd: str | PathLike | None = None) -> None:
         self.shell = shell
         self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
-        self.current_cwd = Filesystem.get_current_directory()
+        self.current_cwd = cwd = Filesystem.get_current_directory()
 
     async def start(self) -> None:
         """Start the persistent shell process if not already running."""
@@ -108,6 +114,7 @@ class PersistentShell:
             return
         self.proc = await asyncio.create_subprocess_exec(
             self.shell,
+            cwd=self.current_cwd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -138,6 +145,21 @@ class PersistentShell:
                     self.current_cwd = cwd.strip()
         except (ValueError, AttributeError):
             pass
+
+    async def restart(self) -> None:
+        """Kill and restart the shell, restoring current_cwd."""
+        # cwd = self.current_cwd
+        if self.proc:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(self.proc.wait(), timeout=2.0)
+            except Exception:
+                pass
+            self.proc = None
+        await self.start()
 
     async def stop(self) -> None:
         """Stop the persistent shell process."""

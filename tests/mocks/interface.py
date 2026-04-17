@@ -1,8 +1,8 @@
 import asyncio
 import json
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
@@ -122,6 +122,7 @@ class MockInterface(TerminalInterface):
         metadata,  # Metadata type
         title: str | None = None,
         display_metadata: bool = False,
+        expand_root=True,
     ) -> None:
         tree_title = title or str(metadata.path)
         self.outputs.append(f"Tree: {tree_title}")
@@ -156,7 +157,7 @@ class MockInterface(TerminalInterface):
 
         return _Box()
 
-    async def display_section(self, title: str) -> None:
+    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
         self.sections.append(title)
         self.outputs.append(f"=== {title} ===")
 
@@ -204,7 +205,10 @@ class MockInterface(TerminalInterface):
 
     @asynccontextmanager
     async def with_animation(
-        self, status: str = "Processing", final_status: str = "Ready"
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        append: str | None = "",
     ) -> AsyncGenerator[None, Any]:
         await self.update_stats(status=status)
         try:
@@ -221,7 +225,7 @@ class MockInterface(TerminalInterface):
             pass  # no status update
         else:
             # app is awaiting user input, insert it by calling the callback for user input
-            if "awaiting input" in status_update.lower():
+            if status_update and "awaiting input" in status_update.lower():
                 try:
                     user_input = self.user_inputs.pop(0)
                 except IndexError:

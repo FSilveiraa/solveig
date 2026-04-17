@@ -16,7 +16,7 @@ from solveig.schema import (
     EditTool,
     MoveTool,
     ReadTool,
-    WriteTool,
+    WriteTool, CommandTool,
 )
 from solveig.schema.message import AssistantMessage
 from solveig.schema.message.assistant import Task
@@ -181,27 +181,27 @@ if __name__ == "__main__":
         ]
 
         mock_messages = [
-            # AssistantMessage(
-            #     comment="I'll review the project documentation.",
-            #     tasks=[Task(description="Review documentation", status="ongoing")],
-            #     tools=[
-            #         ReadTool(
-            #             comment="Read README",
-            #             path="~/Sync/README.md",
-            #             metadata_only=False,
-            #         ),
-            #         CommandTool(
-            #             comment="Run a waiting command",
-            #             command="for i in $(seq 1 10); do sleep 1 && echo $i; done",
-            #             timeout=30,
-            #         ),
-            #         ReadTool(
-            #             comment="List PGP certificates",
-            #             path="~/Sync/certs/",
-            #             metadata_only=True,
-            #         ),
-            #     ],
-            # ),
+            AssistantMessage(
+                comment="I'll review the project documentation.",
+                tasks=[Task(description="Review documentation", status="ongoing")],
+                tools=[
+                    ReadTool(
+                        comment="Read README",
+                        path="~/Sync/README.md",
+                        metadata_only=False,
+                    ),
+                    CommandTool(
+                        comment="Run a waiting command",
+                        command="for i in $(seq 1 10); do sleep 1 && echo $i; done",
+                        timeout=30,
+                    ),
+                    ReadTool(
+                        comment="List PGP certificates",
+                        path="~/Sync/certs/",
+                        metadata_only=True,
+                    ),
+                ],
+            ),
             AssistantMessage(
                 comment="I'm sorry about that command. Here's a tree request instead",
                 tools=[

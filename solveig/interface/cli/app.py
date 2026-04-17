@@ -13,9 +13,7 @@ from .input_bar import InputBar
 from .queued_messages import QueuedMessagesDisplay
 from .stats_bar import StatsBar
 
-DEFAULT_INPUT_PLACEHOLDER = (
-    "Click to focus, type and press Enter to send, '/help' for more"
-)
+DEFAULT_INPUT_PLACEHOLDER = "Type and press Enter to send, '/help' for more"
 
 
 class SolveigTextualApp(TextualApp):

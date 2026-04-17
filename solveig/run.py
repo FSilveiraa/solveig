@@ -151,7 +151,7 @@ async def main_loop(
             )
             continue
 
-        async with interface.with_animation("Thinking...", "Processing"):
+        async with interface.with_animation("Thinking... (Esc/Ctrl+C to cancel)", "Processing"):
             assistant_message = await request_manager.send_with_retry(
                 config=config,
                 interface=interface,

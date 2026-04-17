@@ -361,8 +361,6 @@ class TestWorkingDirectoryTracking:
         # Verify stats were updated with status messages, but not CWD
         assert len(interface.stats_updates) > 0
         assert not any("path" in s for s in interface.stats_updates)
-        last_stats = interface.stats_updates[-1]
-        assert last_stats.get("status") == "Ready"
 
 
 class TestShellIntegration:

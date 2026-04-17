@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import ClassVar, Literal
 
@@ -109,45 +110,52 @@ class CommandTool(BaseTool):
 
         output = ""
         error = ""
+        shell = await get_persistent_shell()
 
-        async with interface.with_animation("Executing..."):
-            try:
-                shell = await get_persistent_shell()
-
-                if is_detached:
-                    await shell.run_detached(self.command)
+        async def _execute() -> tuple[str, str]:
+            box = None
+            lines: list[str] = []
+            execution: ShellExecution = shell.run(self.command, timeout=self.timeout)
+            async for line in execution:
+                lines.append(line)
+                if box is None:
+                    box = await interface.display_text_box(line, title="Output")
                 else:
-                    box = None
-                    lines: list[str] = []
-                    execution: ShellExecution = shell.run(
-                        self.command, timeout=self.timeout
-                    )
-                    async for line in execution:
-                        lines.append(line)
-                        if box is None:
-                            box = await interface.display_text_box(line, title="Output")
-                        else:
-                            box.append(line)
-                    output = "".join(lines).strip()
-                    error = execution.stderr
-                    await interface.update_stats(
-                        path=Filesystem.get_absolute_path(shell.cwd)
-                    )
+                    box.append(line)
+            return "".join(lines).strip(), execution.stderr
 
-            except UserCancel:
-                raise
-            except Exception as e:
-                error_str = str(e)
-                await interface.display_error(
-                    f"Found error when running command: {error_str}"
-                )
-                return CommandResult(
-                    tool=self,
-                    command=self.command,
-                    accepted=True,
-                    success=False,
-                    error=error_str,
-                )
+        try:
+            async with interface.with_animation("Executing... (Ctrl+C to stop)"):
+                try:
+                    if is_detached:
+                        await shell.run_detached(self.command)
+                    else:
+                        async with interface.cancellable_request(_execute()) as task:
+                            output, error = await task
+                        await interface.update_stats(
+                            path=Filesystem.get_absolute_path(shell.cwd)
+                        )
+                except Exception as e:
+                    error_str = str(e)
+                    await interface.display_error(
+                        f"Found error when running command: {error_str}"
+                    )
+                    return CommandResult(
+                        tool=self,
+                        command=self.command,
+                        accepted=True,
+                        success=False,
+                        error=error_str,
+                    )
+        except asyncio.CancelledError:
+            await interface.display_warning("Command cancelled by user")
+            return CommandResult(
+                tool=self,
+                command=self.command,
+                accepted=False,
+                success=False,
+                error="Command cancelled by user",
+            )
 
         if is_detached:
             await interface.display_info("Detached process launched")
