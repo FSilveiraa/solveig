@@ -118,9 +118,10 @@ class CommandTool(BaseTool):
             execution: ShellExecution = shell.run(self.command, timeout=self.timeout)
             async for line in execution:
                 lines.append(line)
-                if box is None:
+                # Only add whitespace/empty lines if it's in the middle of already existing output
+                if box is None and line.strip():
                     box = await interface.display_text_box(line, title="Output")
-                else:
+                elif box is not None:
                     box.append(line)
             return "".join(lines).strip(), execution.stderr
 
@@ -167,8 +168,8 @@ class CommandTool(BaseTool):
             await interface.display_info("No output")
 
         if error:
-            async with interface.with_group("Error"):
-                await interface.display_text_box(error, title="Error")
+            # async with interface.with_group("Error"):
+            await interface.display_text_box(error, title="Error")
 
         # In inspect mode, output is already visible — ask whether to include it in the result
         if (

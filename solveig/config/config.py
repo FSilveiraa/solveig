@@ -118,7 +118,7 @@ class SolveigConfig:
 
     http_timeout: float = 10.0
     http_max_response_bytes: int = 50_000
-    request_timeout: float = 60.0  # Timeout for LLM API requests in seconds
+    timeout: float = 60.0  # Timeout for LLM API requests in seconds
 
     no_commands: bool = False
     mcp_servers: dict[str, MCPServerConfig] = field(default_factory=dict)
@@ -340,6 +340,11 @@ class SolveigConfig:
             default=None,
             metavar="URL",
             help="MCP server URL to connect at startup (can be passed multiple times)",
+        )
+        parser.add_argument(
+            "--timeout",
+            type=int,
+            help="LLM response timeout in seconds"
         )
         parser.add_argument(
             "--theme",

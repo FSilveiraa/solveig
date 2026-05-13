@@ -134,11 +134,11 @@ class RequestManager:
         # Wrap with timeout
         try:
             assistant_response = await asyncio.wait_for(
-                llm_coro, timeout=config.request_timeout
+                llm_coro, timeout=config.timeout
             )
         except TimeoutError as e:
             raise TimeoutError(
-                f"Request timed out after {config.request_timeout}s"
+                f"Request timed out after {config.timeout}s"
             ) from e
 
         assert isinstance(assistant_response, AssistantMessage)
