@@ -23,7 +23,7 @@ from solveig.llm.request_manager import RequestManager
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import initialize_plugins
 from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.history import MessageHistory
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.utils.misc import serialize_response_model

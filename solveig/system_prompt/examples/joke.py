@@ -1,5 +1,5 @@
 from solveig.schema.message.assistant import AssistantMessage
-from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.history import MessageHistory
 from solveig.schema.message.user import UserComment, UserMessage
 
 EXAMPLE = MessageHistory(

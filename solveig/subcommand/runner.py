@@ -25,7 +25,7 @@ from solveig.mcp_servers.client import (
     find_connection,
 )
 from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.history import MessageHistory
 from solveig.schema.tool import CORE_TOOLS
 from solveig.schema.tool.base import BaseTool
 from solveig.sessions.manager import SessionManager

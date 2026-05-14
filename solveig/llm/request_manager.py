@@ -15,7 +15,7 @@ from solveig.interface import SolveigInterface
 from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
 from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.message import AssistantMessage
-from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.history import MessageHistory
 from solveig.utils.misc import default_json_serialize
 
 if TYPE_CHECKING:

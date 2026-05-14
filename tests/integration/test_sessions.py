@@ -5,7 +5,7 @@ import json
 import pytest
 
 from solveig.schema.message import SystemMessage
-from solveig.schema.message.message_history import MessageHistory
+from solveig.schema.message.history import MessageHistory
 from solveig.sessions.manager import SessionManager
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -253,7 +253,7 @@ class TestReconstructMessages:
         assert messages[1].comment == "Hello!"
 
     async def test_reconstruct_user_comment(self, tmp_path):
-        from solveig.schema.message.message_history import MessageHistory
+        from solveig.schema.message.history import MessageHistory
         from solveig.schema.message.user import UserComment, UserMessage
 
         manager, _ = make_manager(tmp_path)

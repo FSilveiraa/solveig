@@ -103,7 +103,7 @@ class SolveigConfig:
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    briefing: list[str] = field(default_factory=lambda: ["BRIEFING.md"])
+    briefing: list[str] = field(default_factory=lambda: ["AGENTS.md"])
     add_examples: bool = False
     add_os_info: bool = False
     exclude_username: bool = False
@@ -245,7 +245,7 @@ class SolveigConfig:
             dest="briefing",
             default=None,
             metavar="PATH",
-            help="Markdown file to append to the system prompt (can be passed multiple times; default: BRIEFING.md).",
+            help="Markdown file to append to the system prompt (can be passed multiple times; default: AGENTS.md).",
         )
         parser.add_argument(
             "--add-examples",

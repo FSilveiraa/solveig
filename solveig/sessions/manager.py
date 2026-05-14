@@ -7,7 +7,7 @@ from solveig import utils
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.message.assistant import AssistantMessage
-from solveig.schema.message.message_history import Message, MessageHistory
+from solveig.schema.message.history import Message, MessageHistory
 from solveig.schema.message.user import UserMessage
 from solveig.schema.result import ToolResult
 from solveig.utils.file import Filesystem

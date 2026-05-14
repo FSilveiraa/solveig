@@ -8,21 +8,26 @@ from os import PathLike
 from solveig.utils.file import Filesystem
 
 MARKER = "__SOLVEIG_CMD_END__"
+STDERR_MARKER = "__SOLVEIG_STDERR_END__"
 
 
-async def _read_lines(stream, timeout: float):
-    """Yield decoded lines from a stream until EOF or timeout."""
+async def _drain_pipe(stream, *, marker: str | None = None, timeout: float | None = None):
+    """Yield decoded lines from a stream until EOF, timeout, or marker line."""
     while True:
         try:
-            raw = await asyncio.wait_for(stream.readline(), timeout=timeout)
+            coro = stream.readline()
+            raw = await (asyncio.wait_for(coro, timeout=timeout) if timeout is not None else coro)
         except TimeoutError:
             break
         if not raw:
             break
         try:
-            yield raw.decode()
+            line = raw.decode()
         except Exception:
-            yield str(raw)
+            line = str(raw)
+        yield line
+        if marker is not None and marker in line:
+            break
 
 
 class ShellExecution:
@@ -58,6 +63,21 @@ class ShellExecution:
             pass
         return self.stdout, self.stderr
 
+    async def _stream_stdout(self, stream):
+        async for line in _drain_pipe(stream, marker=MARKER, timeout=self._timeout):
+            if MARKER in line:
+                self._shell._parse_marker(line.strip())
+                break
+            self._stdout_lines.append(line)
+            yield line
+
+    async def _collect_stderr(self, stream) -> str:
+        lines = []
+        async for line in _drain_pipe(stream, marker=STDERR_MARKER):
+            if STDERR_MARKER not in line:
+                lines.append(line)
+        return "".join(lines).strip()
+
     async def _run(self):
         if self._ran:
             for line in self._stdout_lines:
@@ -65,27 +85,31 @@ class ShellExecution:
             return
         self._ran = True
 
+        stderr_task: asyncio.Task | None = None
         try:
             async with self._shell._lock:
                 await self._shell.start()
-                proc = self._shell.proc
-                assert proc is not None
+                process = self._shell.proc
+                assert process is not None
 
-                full = f"{self._cmd}\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
-                proc.stdin.write(full.encode())
-                await proc.stdin.drain()
-
-                async for line in _read_lines(proc.stdout, self._timeout):
-                    if MARKER in line:
-                        self._shell._parse_marker(line.strip())
-                        break
-                    self._stdout_lines.append(line)
+                full_command = (
+                    f"{self._cmd}\n"
+                    f"printf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+                    f"printf '\\n{STDERR_MARKER}\\n' >&2\n"
+                )
+                process.stdin.write(full_command.encode())
+                await process.stdin.drain()
+                # Create a background task for draining stderr until the marker
+                stderr_task = asyncio.create_task(self._collect_stderr(process.stderr))
+                # Stream stdout line-by-line
+                async for line in self._stream_stdout(process.stdout):
                     yield line
-
-                self._stderr_text = "".join(
-                    [line async for line in _read_lines(proc.stderr, 0.1)]
-                ).strip()
+                # Once stdout is drained, await until stderr is as well
+                self._stderr_text = await stderr_task
+                stderr_task = None
         except asyncio.CancelledError:
+            if stderr_task is not None:
+                stderr_task.cancel()
             await self._shell.restart()
             raise
 
