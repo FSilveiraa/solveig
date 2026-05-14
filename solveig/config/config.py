@@ -342,9 +342,7 @@ class SolveigConfig:
             help="MCP server URL to connect at startup (can be passed multiple times)",
         )
         parser.add_argument(
-            "--timeout",
-            type=int,
-            help="LLM response timeout in seconds"
+            "--timeout", type=int, help="LLM response timeout in seconds"
         )
         parser.add_argument(
             "--theme",

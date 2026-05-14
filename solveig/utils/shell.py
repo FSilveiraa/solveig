@@ -7,16 +7,20 @@ from os import PathLike
 
 from solveig.utils.file import Filesystem
 
-MARKER = "__SOLVEIG_CMD_END__"
-STDERR_MARKER = "__SOLVEIG_STDERR_END__"
+STDOUT_MARKER = "__SOLVEIG_CMD_STDOUT__"
+STDERR_MARKER = "__SOLVEIG_CMD_STDERR__"
 
 
-async def _drain_pipe(stream, *, marker: str | None = None, timeout: float | None = None):
+async def _drain_pipe(
+    stream, *, marker: str | None = None, timeout: float | None = None
+):
     """Yield decoded lines from a stream until EOF, timeout, or marker line."""
     while True:
         try:
             coro = stream.readline()
-            raw = await (asyncio.wait_for(coro, timeout=timeout) if timeout is not None else coro)
+            raw = await (
+                asyncio.wait_for(coro, timeout=timeout) if timeout is not None else coro
+            )
         except TimeoutError:
             break
         if not raw:
@@ -64,8 +68,10 @@ class ShellExecution:
         return self.stdout, self.stderr
 
     async def _stream_stdout(self, stream):
-        async for line in _drain_pipe(stream, marker=MARKER, timeout=self._timeout):
-            if MARKER in line:
+        async for line in _drain_pipe(
+            stream, marker=STDOUT_MARKER, timeout=self._timeout
+        ):
+            if STDOUT_MARKER in line:
                 self._shell._parse_marker(line.strip())
                 break
             self._stdout_lines.append(line)
@@ -94,7 +100,7 @@ class ShellExecution:
 
                 full_command = (
                     f"{self._cmd}\n"
-                    f"printf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+                    f"printf '\\n{STDOUT_MARKER}:%s\\n' \"$(pwd)\"\n"
                     f"printf '\\n{STDERR_MARKER}\\n' >&2\n"
                 )
                 process.stdin.write(full_command.encode())
@@ -166,7 +172,7 @@ class PersistentShell:
         try:
             if ":" in marker_line:
                 marker, cwd = marker_line.split(":", 1)
-                if marker.strip() == MARKER:
+                if marker.strip() == STDOUT_MARKER:
                     self.current_cwd = cwd.strip()
         except (ValueError, AttributeError):
             pass

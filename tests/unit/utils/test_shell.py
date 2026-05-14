@@ -7,7 +7,8 @@ import pytest
 
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import (
-    MARKER,
+    STDERR_MARKER,
+    STDOUT_MARKER,
     PersistentShell,
     get_persistent_shell,
     stop_persistent_shell,
@@ -47,29 +48,29 @@ class TestInit:
 class TestMarkerParsing:
     async def test_valid_marker_updates_cwd(self):
         shell = PersistentShell()
-        shell._parse_marker(f"{MARKER}:/new/directory")
+        shell._parse_marker(f"{STDOUT_MARKER}:/new/directory")
         assert shell.current_cwd == "/new/directory"
 
     async def test_marker_with_colon_in_path(self):
         """Paths containing colons are preserved (split on first colon only)."""
         shell = PersistentShell()
-        shell._parse_marker(f"{MARKER}:/path/with:colons")
+        shell._parse_marker(f"{STDOUT_MARKER}:/path/with:colons")
         assert shell.current_cwd == "/path/with:colons"
 
     async def test_marker_with_spaces_in_path(self):
         shell = PersistentShell()
-        shell._parse_marker(f"{MARKER}:/path/with spaces/in it")
+        shell._parse_marker(f"{STDOUT_MARKER}:/path/with spaces/in it")
         assert shell.current_cwd == "/path/with spaces/in it"
 
     async def test_marker_with_trailing_slash(self):
         shell = PersistentShell()
-        shell._parse_marker(f"{MARKER}:/path/trailing/")
+        shell._parse_marker(f"{STDOUT_MARKER}:/path/trailing/")
         assert shell.current_cwd == "/path/trailing/"
 
     async def test_invalid_marker_no_colon(self):
         shell = PersistentShell()
         original = shell.current_cwd
-        shell._parse_marker(f"{MARKER}")
+        shell._parse_marker(f"{STDOUT_MARKER}")
         assert shell.current_cwd == original
 
     async def test_wrong_marker_name(self):
@@ -86,7 +87,7 @@ class TestMarkerParsing:
 
     async def test_empty_path_after_colon(self):
         shell = PersistentShell()
-        shell._parse_marker(f"{MARKER}:")
+        shell._parse_marker(f"{STDOUT_MARKER}:")
         assert shell.current_cwd == ""
 
 
@@ -156,7 +157,11 @@ class TestProcessLifecycle:
 class TestShellExecution:
     async def test_await_returns_stdout_stderr_tuple(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[b"line one\n", b"line two\n", f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[
+                b"line one\n",
+                b"line two\n",
+                f"{STDOUT_MARKER}:/cwd\n".encode(),
+            ],
             stderr_lines=[b"err\n", b""],
         )
 
@@ -167,7 +172,7 @@ class TestShellExecution:
 
     async def test_async_for_streams_stdout_lines(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[b"a\n", b"b\n", b"c\n", f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[b"a\n", b"b\n", b"c\n", f"{STDOUT_MARKER}:/cwd\n".encode()],
         )
 
         streamed = []
@@ -180,7 +185,7 @@ class TestShellExecution:
         self, mock_asyncio_subprocess
     ):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[b"hello\n", f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[b"hello\n", f"{STDOUT_MARKER}:/cwd\n".encode()],
         )
 
         execution = shell.run("echo hello")
@@ -194,7 +199,7 @@ class TestShellExecution:
         self, mock_asyncio_subprocess
     ):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:/cwd\n".encode()],
             stderr_lines=[b"something failed\n", b""],
         )
 
@@ -209,7 +214,7 @@ class TestShellExecution:
     ):
         """Awaiting an already-exhausted execution returns the collected data."""
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[b"result\n", f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[b"result\n", f"{STDOUT_MARKER}:/cwd\n".encode()],
         )
 
         execution = shell.run("cmd")
@@ -221,7 +226,7 @@ class TestShellExecution:
 
     async def test_empty_output(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:/cwd\n".encode()],
         )
 
         stdout, stderr = await shell.run("true")
@@ -237,12 +242,12 @@ class TestShellExecution:
 class TestCommandExecution:
     async def test_writes_command_with_marker_suffix(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{MARKER}:/cwd\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:/cwd\n".encode()],
         )
 
         await shell.run("ls -la")
 
-        expected = f"ls -la\nprintf '\\n{MARKER}:%s\\n' \"$(pwd)\"\n"
+        expected = f"ls -la\nprintf '\\n{STDOUT_MARKER}:%s\\n' \"$(pwd)\"\nprintf '\\n{STDERR_MARKER}\\n' >&2\n"
         mock_asyncio_subprocess.mock_process.stdin.write.assert_called_once_with(
             expected.encode()
         )
@@ -250,7 +255,7 @@ class TestCommandExecution:
 
     async def test_updates_cwd_from_marker(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{MARKER}:/home/user/projects\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:/home/user/projects\n".encode()],
         )
 
         await shell.run("cd /home/user/projects")
@@ -259,7 +264,7 @@ class TestCommandExecution:
 
     async def test_starts_process_automatically_if_none(self, mock_asyncio_subprocess):
         mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
-            f"{MARKER}:/cwd\n".encode()
+            f"{STDOUT_MARKER}:/cwd\n".encode()
         ]
         mock_asyncio_subprocess.mock_process.stderr.readline.side_effect = [b""]
 
@@ -273,7 +278,7 @@ class TestCommandExecution:
 
     async def test_cwd_persists_across_commands(self, mock_asyncio_subprocess):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{MARKER}:/home/user/projects\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:/home/user/projects\n".encode()],
         )
         await shell.run("cd /home/user/projects")
         assert shell.cwd == "/home/user/projects"
@@ -281,7 +286,7 @@ class TestCommandExecution:
         mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
             b"file1.txt\n",
             b"file2.txt\n",
-            f"{MARKER}:/home/user/projects\n".encode(),
+            f"{STDOUT_MARKER}:/home/user/projects\n".encode(),
         ]
         mock_asyncio_subprocess.mock_process.stderr.readline.side_effect = [b""]
 

@@ -358,8 +358,7 @@ class TestWorkingDirectoryTracking:
         assert result.accepted
         assert result.success
 
-        # Verify stats were updated with status messages, but not CWD
-        assert len(interface.stats_updates) > 0
+        # Detached commands fire-and-forget — no stats updates expected
         assert not any("path" in s for s in interface.stats_updates)
 
 

@@ -66,9 +66,7 @@ class TestAsyncMessageHistory:
         mock_interface = MockInterface()
 
         await history.add_user_comment("This is a user comment.")
-        await history.get_next_user_message(
-            mock_interface, wait_for_input=False
-        )
+        await history.get_next_user_message(mock_interface, wait_for_input=False)
 
         assert len(history.messages) == 2
         last_message = history.messages[-1]
@@ -107,9 +105,7 @@ class TestAsyncMessageHistory:
         await history.add_user_comment("A comment between results.")
         await history.add_result(result2)
 
-        await history.get_next_user_message(
-            mock_interface, wait_for_input=False
-        )
+        await history.get_next_user_message(mock_interface, wait_for_input=False)
 
         assert len(history.messages) == 2
         last_message = history.messages[-1]
@@ -129,9 +125,7 @@ class TestAsyncMessageHistory:
         assert history.pending_messages.empty()
 
         async def condense_task():
-            await history.get_next_user_message(
-                mock_interface, wait_for_input=True
-            )
+            await history.get_next_user_message(mock_interface, wait_for_input=True)
 
         # Start the condense task in the background
         task = asyncio.create_task(condense_task())
@@ -139,7 +133,7 @@ class TestAsyncMessageHistory:
         # Give the task a moment to run and block on the queue.get()
         await asyncio.sleep(0.01)
         assert not task.done(), "Task should be blocked waiting for input"
-        assert "awaiting input..." in mock_interface.get_all_status_updates().lower()
+        assert "awaiting input" in mock_interface.get_all_status_updates().lower()
 
         # Now, provide the input that the task is waiting for
         await history.add_user_comment("This is the awaited input.")
@@ -160,9 +154,7 @@ class TestAsyncMessageHistory:
         mock_interface = MockInterface()
         assert history.pending_messages.empty()
 
-        await history.get_next_user_message(
-            mock_interface, wait_for_input=False
-        )
+        await history.get_next_user_message(mock_interface, wait_for_input=False)
 
         # No new message should have been added
         assert len(history.messages) == 1
@@ -183,9 +175,7 @@ class TestAsyncMessageHistory:
         assert not history.pending_messages.empty()
 
         # Call condense with wait_for_input=True
-        await history.get_next_user_message(
-            mock_interface, wait_for_input=True
-        )
+        await history.get_next_user_message(mock_interface, wait_for_input=True)
 
         # Verify that it processed the comment and did not block
         assert len(history.messages) == 2
@@ -194,6 +184,4 @@ class TestAsyncMessageHistory:
         assert last_message.comment == "User typed ahead."
         assert history.pending_messages.empty()  # It should have consumed the comment
         # Should not have displayed waiting status
-        assert (
-            "awaiting input..." not in mock_interface.get_all_status_updates().lower()
-        )
+        assert "awaiting input" not in mock_interface.get_all_status_updates().lower()

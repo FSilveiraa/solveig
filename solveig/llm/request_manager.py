@@ -137,9 +137,7 @@ class RequestManager:
                 llm_coro, timeout=config.timeout
             )
         except TimeoutError as e:
-            raise TimeoutError(
-                f"Request timed out after {config.timeout}s"
-            ) from e
+            raise TimeoutError(f"Request timed out after {config.timeout}s") from e
 
         assert isinstance(assistant_response, AssistantMessage)
 
