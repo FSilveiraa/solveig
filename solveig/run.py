@@ -132,7 +132,7 @@ async def main_loop(
         # If need_user_input is True and no UserComment is in the queue yet, this
         # blocks until the user types something. Resetting to True immediately
         # after ensures any `continue` below also blocks on the next iteration.
-        user_message = await message_history.condense_responses_into_user_message(
+        user_message = await message_history.get_next_user_message(
             interface=interface, wait_for_input=need_user_input
         )
         await interface.update_stats(

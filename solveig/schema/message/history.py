@@ -123,7 +123,7 @@ class MessageHistory:
             comment = UserComment(comment=comment)
         await self.pending_messages.put(comment)
 
-    async def condense_responses_into_user_message(
+    async def get_next_user_message(
         self, interface: SolveigInterface, wait_for_input: bool = True
     ) -> UserMessage | None:
         """
@@ -145,9 +145,9 @@ class MessageHistory:
 
         # 2. If we must wait for input and haven't seen a user comment, block and wait.
         if wait_for_input and not has_user_comment:
-            # Block until the user provides the next comment.
-            async with interface.with_animation("Awaiting input..."):
-                event = await self.pending_messages.get()
+            await interface.update_stats(status="Awaiting input")
+            event = await self.pending_messages.get()
+            await interface.update_stats(status=None)
             responses.append(event)
 
         # 3. If we have collected any events, create and display the message.

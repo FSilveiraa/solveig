@@ -127,8 +127,7 @@ class CommandTool(BaseTool):
 
         try:
             if is_detached:
-                async with interface.with_animation("Executing..."):
-                    await shell.run_detached(self.command)
+                await shell.run_detached(self.command)
             else:
                 async with interface.with_cancellable(
                     _execute(), status="Executing..."

@@ -66,7 +66,7 @@ class TestAsyncMessageHistory:
         mock_interface = MockInterface()
 
         await history.add_user_comment("This is a user comment.")
-        await history.condense_responses_into_user_message(
+        await history.get_next_user_message(
             mock_interface, wait_for_input=False
         )
 
@@ -107,7 +107,7 @@ class TestAsyncMessageHistory:
         await history.add_user_comment("A comment between results.")
         await history.add_result(result2)
 
-        await history.condense_responses_into_user_message(
+        await history.get_next_user_message(
             mock_interface, wait_for_input=False
         )
 
@@ -129,7 +129,7 @@ class TestAsyncMessageHistory:
         assert history.pending_messages.empty()
 
         async def condense_task():
-            await history.condense_responses_into_user_message(
+            await history.get_next_user_message(
                 mock_interface, wait_for_input=True
             )
 
@@ -160,7 +160,7 @@ class TestAsyncMessageHistory:
         mock_interface = MockInterface()
         assert history.pending_messages.empty()
 
-        await history.condense_responses_into_user_message(
+        await history.get_next_user_message(
             mock_interface, wait_for_input=False
         )
 
@@ -183,7 +183,7 @@ class TestAsyncMessageHistory:
         assert not history.pending_messages.empty()
 
         # Call condense with wait_for_input=True
-        await history.condense_responses_into_user_message(
+        await history.get_next_user_message(
             mock_interface, wait_for_input=True
         )
 

@@ -57,7 +57,7 @@ class SolveigInterface(ABC):
 
         Pass status to also show a spinner animation while the task runs.
         """
-        task = asyncio.create_task(coro)
+        task = asyncio.ensure_future(coro)
         self._request_task = task
         try:
             if status is not None:
