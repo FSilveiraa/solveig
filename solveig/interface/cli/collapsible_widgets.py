@@ -224,21 +224,21 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         self._text_container: Static | Markdown
 
     @property
-    def _is_markdown(self) -> bool:
-        return isinstance(self._text_container, Markdown)
-
-    @property
     def content(self) -> str:
-        if self._is_markdown:
+        if isinstance(self._text_container, Markdown):
             return self._text_container._markdown
+        elif isinstance(self._text_container, Static):
+            return str(self._text_container.content)
         else:
-            return self._text_container.content
+            return str(self._text_container)
 
     def compose(self):
         if isinstance(self._initial_content, Markdown):
             self._text_container = self._initial_content
         else:
-            self._text_container = Static(self._initial_content, markup=False, classes=self._content_classes)
+            self._text_container = Static(
+                self._initial_content, markup=False, classes=self._content_classes
+            )
 
         self._collapsible = CustomCollapsible(
             right=CopyButton(lambda: self.content),
@@ -249,7 +249,7 @@ class CollapsibleTextBox(Widget, MutableTextBox):
             yield self._text_container
 
     # Note: by coincidence, both Markdown and Static have an update(str) method, so the interface doesn't break
-    # and we don't need `if self._is_markdown` checks in append/reset
+    # and we don't need `isintance()` checks in append/reset
 
     def append(self, line: str) -> None:
         """Append a line to the content and scroll the conversation to the end."""

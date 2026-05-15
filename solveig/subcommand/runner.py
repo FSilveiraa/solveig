@@ -589,7 +589,9 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             lines.append(
                 f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {token_count} tokens."
             )
-        await interface.display_text_box("\n".join(lines), language="markdown", title="Sessions")
+        await interface.display_text_box(
+            "\n".join(lines), language="markdown", title="Sessions"
+        )
 
     async def session_store(self, interface: SolveigInterface, *args, **kwargs):
         if self.session_manager is None:
