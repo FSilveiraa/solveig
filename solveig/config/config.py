@@ -106,7 +106,6 @@ class SolveigConfig:
     briefing: list[str] = field(default_factory=lambda: ["AGENTS.md"])
     add_examples: bool = False
     add_os_info: bool = False
-    exclude_username: bool = False
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -260,13 +259,6 @@ class SolveigConfig:
             action="store_true",
             default=None,
             help="Include helpful OS information in the system prompt",
-        )
-        parser.add_argument(
-            "--exclude-username",
-            "--no-user",
-            action="store_true",
-            default=None,
-            help="Exclude the username and home path from the OS info (this flag is ignored if you're not also passing --os)",
         )
         parser.add_argument(
             "--min-disk-space-left",

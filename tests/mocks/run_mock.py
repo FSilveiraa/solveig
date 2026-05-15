@@ -10,6 +10,10 @@ from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
+from solveig.schema.message.assistant import AssistantMessage as AssistantMsg
+from solveig.schema.message.history import MessageHistory
+from solveig.schema.message.user import UserComment, UserMessage
+from solveig.sessions.manager import SessionManager
 from solveig.schema import (
     CommandTool,
     CopyTool,
@@ -94,8 +98,35 @@ class DemoInterface(TerminalInterface):
             )
 
 
+async def load_session_for_demo(
+    name: str | None = None,
+    typing_delay: float = 0.5,
+) -> tuple[list[AssistantMsg], list[tuple[float, str]]]:
+    """Load a stored session and extract assistant messages and user comments for demo replay."""
+    config, _, _ = await SolveigConfig.parse_config_and_prompt()
+    session_data = await SessionManager(config.sessions_dir).load(name)
+
+    history = MessageHistory()
+    history.load_from_session(session_data)
+
+    assistant_messages: list[AssistantMsg] = []
+    user_messages: list[tuple[float, str]] = []
+
+    for msg in history.messages[1:]:  # skip system message
+        if isinstance(msg, AssistantMsg):
+            assistant_messages.append(msg)
+        elif isinstance(msg, UserMessage):
+            for response in msg.responses:
+                if isinstance(response, UserComment):
+                    user_messages.append((typing_delay, response.comment))
+
+    return assistant_messages, user_messages
+
+
 async def run_async_mock(
-    mock_messages: list[AssistantMessage] | None = None, sleep_seconds: int = 3
+    mock_messages: list[AssistantMessage] | None = None,
+    sleep_seconds: int = 3,
+    user_messages: list[tuple[float, str]] | None = None,
 ):
     """Entry point for the async textual CLI."""
 
@@ -219,7 +250,7 @@ if __name__ == "__main__":
     interface = DemoInterface(
         theme=config.theme,
         code_theme=config.code_theme,
-        # user_messages=user_messages,
+        user_messages=user_messages or [],
     )
 
     try:
@@ -238,7 +269,15 @@ if __name__ == "__main__":
 
 
 def main():
-    asyncio.run(run_async_mock())
+    import sys
+    if len(sys.argv) > 1:
+        session_name = sys.argv[1]
+        async def _replay():
+            assistant_messages, user_messages = await load_session_for_demo(session_name)
+            await run_async_mock(mock_messages=assistant_messages, user_messages=user_messages)
+        asyncio.run(_replay())
+    else:
+        asyncio.run(run_async_mock())
 
 
 if __name__ == "__main__":

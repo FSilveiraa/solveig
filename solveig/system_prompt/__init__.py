@@ -13,24 +13,20 @@ except ImportError:
     distro = None  # type: ignore
 
 
-def get_basic_os_info(exclude_username=False):
+def get_basic_os_info():
     info = {
-        "os_name": platform.system(),  # e.g., 'Linux', 'Windows', 'Darwin'
-        "os_release": platform.release(),  # e.g., '6.9.1-arch1-1'
-        "os_version": platform.version(),  # detailed kernel version
+        "os_name": platform.system(),
+        "os_release": platform.release(),
+        "os_version": platform.version(),
+        "cwd": Filesystem.get_current_directory(simplify=True),
     }
-    # Add username and home path
-    if not exclude_username:
-        info["cwd"] = os.getcwd()
-        try:
-            username = os.getlogin()
-        except OSError:
-            username = os.environ.get("USER") or os.environ.get("LOGNAME")
-        info["username"] = username
-        info["home_dir"] = os.path.expanduser("~")
-    # Add distro info if we're in Linux
+    try:
+        info["username"] = os.getlogin()
+    except OSError:
+        info["username"] = os.environ.get("USER") or os.environ.get("LOGNAME")
+    info["home_dir"] = os.path.expanduser("~")
     if info["os_name"] == "Linux" and distro:
-        info["linux_distribution"] = distro.name(pretty=True)  # e.g. 'Manjaro Linux'
+        info["linux_distribution"] = distro.name(pretty=True)
     return "System information:" + "".join(
         [f"\n- {name}: {value}" for name, value in info.items()]
     )
@@ -73,9 +69,7 @@ async def get_system_prompt(config: SolveigConfig) -> str:
         system_prompt += "\n\n" + briefing_content
     if tools_info := get_available_tools():
         system_prompt += "\n\n" + tools_info
-    if config.add_os_info and (
-        os_info := get_basic_os_info(exclude_username=config.exclude_username)
-    ):
+    if config.add_os_info and (os_info := get_basic_os_info()):
         system_prompt += "\n\n" + os_info
     if config.add_examples and (examples_info := get_examples_info()):
         system_prompt += "\n\n" + examples_info

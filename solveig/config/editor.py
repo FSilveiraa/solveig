@@ -36,7 +36,6 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # System prompt
     "add_examples": "Include few-shot examples in system prompt",
     "add_os_info": "Include OS info in system prompt",
-    "exclude_username": "Omit username from OS info (only if add_os_info is True)",
     "system_prompt": "Raw system prompt template",
     "briefing": "Markdown files appended to the system prompt in order (comma-separated paths)",
     # Safety & permissions
@@ -282,7 +281,7 @@ CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "max_context": _hook_max_context_changed,
     "briefing": _hook_briefing_changed,
     "no_commands": _hook_no_commands_changed,
-    # Layer 2+: add_examples, add_os_info, exclude_username, system_prompt,
+    # Layer 2+: add_examples, add_os_info, system_prompt,
     #           auto_allowed_paths, auto_execute_commands, plugins,
     #           url, api_type, api_key, theme, code_theme
 }
