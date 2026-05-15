@@ -49,7 +49,7 @@ class TestReadValidation:
         output = interface.get_all_output()
         assert "Read test" in output
         assert str(test_file) in output
-        assert "content and metadata" in output
+        assert "Content and metadata" in output
 
 
 class TestDirectoryOperations:

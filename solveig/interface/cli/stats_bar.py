@@ -21,6 +21,9 @@ class StatsBar(Widget):
         self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
+        self._animation_start: float | None = None
+        self._animation_timeout: float | None = None
+        self._status_suffix: str | None = None
         self._sent_tokens = 0
         self._received_tokens = 0
         self._model = ""
@@ -66,8 +69,16 @@ class StatsBar(Widget):
             frame = self._spinner.render(time.time())
             spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
             status_text = f"{spinner_char} {status_text}"
-
-        # Format center with theme color, right with folder icon
+        if self._animation_start is not None:
+            elapsed = int(time.time() - self._animation_start)
+            timer = (
+                f"{elapsed}/{int(self._animation_timeout)}s"
+                if self._animation_timeout
+                else f"{elapsed}s"
+            )
+            status_text = f"{status_text} for {timer}..."
+        if self._status_suffix:
+            status_text = f"{status_text} {self._status_suffix}"
         return f"[{self._theme.info}]{status_text}[/]" if status_text else ""
 
     def compose(self):
@@ -187,6 +198,17 @@ class StatsBar(Widget):
         """Clear spinner from status display."""
         self._spinner = None
         self._refresh_title()
+
+    def start_animation_timer(self, timeout: float | None = None) -> None:
+        self._animation_start = time.time()
+        self._animation_timeout = timeout
+
+    def stop_animation_timer(self) -> None:
+        self._animation_start = None
+        self._animation_timeout = None
+
+    def set_status_suffix(self, suffix: str | None) -> None:
+        self._status_suffix = suffix
 
     def _refresh_title(self):
         """Update only the collapsible title (lightweight, for frequent spinner updates)."""

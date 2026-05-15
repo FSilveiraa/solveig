@@ -10,10 +10,6 @@ from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.plugins.tools.tree import TreeTool
 from solveig.run import run_async
-from solveig.schema.message.assistant import AssistantMessage as AssistantMsg
-from solveig.schema.message.history import MessageHistory
-from solveig.schema.message.user import UserComment, UserMessage
-from solveig.sessions.manager import SessionManager
 from solveig.schema import (
     CommandTool,
     CopyTool,
@@ -24,7 +20,11 @@ from solveig.schema import (
     WriteTool,
 )
 from solveig.schema.message import AssistantMessage
+from solveig.schema.message.assistant import AssistantMessage as AssistantMsg
 from solveig.schema.message.assistant import Task
+from solveig.schema.message.history import MessageHistory
+from solveig.schema.message.user import UserComment, UserMessage
+from solveig.sessions.manager import SessionManager
 from solveig.utils.file import Filesystem
 from tests.mocks.llm_client import create_mock_client
 
@@ -270,11 +270,18 @@ if __name__ == "__main__":
 
 def main():
     import sys
+
     if len(sys.argv) > 1:
         session_name = sys.argv[1]
+
         async def _replay():
-            assistant_messages, user_messages = await load_session_for_demo(session_name)
-            await run_async_mock(mock_messages=assistant_messages, user_messages=user_messages)
+            assistant_messages, user_messages = await load_session_for_demo(
+                session_name
+            )
+            await run_async_mock(
+                mock_messages=assistant_messages, user_messages=user_messages
+            )
+
         asyncio.run(_replay())
     else:
         asyncio.run(run_async_mock())

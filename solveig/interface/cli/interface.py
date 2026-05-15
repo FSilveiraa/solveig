@@ -303,6 +303,8 @@ class TerminalInterface(SolveigInterface):
         self,
         status: str = "Processing",
         final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
     ):
         """Context manager for displaying animation during async operations."""
         final_status = (
@@ -315,6 +317,8 @@ class TerminalInterface(SolveigInterface):
 
         spinner_name = random.choice(list(self.spinners.keys()))
         self.stats.set_spinner(self.spinners[spinner_name])
+        self.stats.start_animation_timer(timeout)
+        self.stats.set_status_suffix(suffix)
         self.stats._timer = self.app.set_interval(0.1, self.stats._refresh_title)
         try:
             yield
@@ -323,4 +327,6 @@ class TerminalInterface(SolveigInterface):
                 self.stats._timer.stop()
                 self.stats._timer = None
             self.stats.clear_spinner()
+            self.stats.stop_animation_timer()
+            self.stats.set_status_suffix(None)
             await self.update_stats(final_status)

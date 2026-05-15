@@ -33,6 +33,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Generation
     "temperature": "Model temperature 0.0–2.0",
     "max_context": "Max context window in tokens (-1 = model's limit)",
+    "timeout": "LLM API request timeout in seconds",
     # System prompt
     "add_examples": "Include few-shot examples in system prompt",
     "add_os_info": "Include OS info in system prompt",
@@ -185,7 +186,7 @@ async def fetch_and_apply_model_info(
             config.api_type.get_model_details(
                 client=client_ref.client, model=config.model
             ),
-            status="Connecting to assistant...",
+            status="Connecting to assistant",
         ) as task:
             model_info = await task
     except asyncio.CancelledError:

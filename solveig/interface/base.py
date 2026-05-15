@@ -52,17 +52,22 @@ class SolveigInterface(ABC):
         coro: Any,
         status: str | None = None,
         final_status: str | None = None,
+        timeout: float | None = None,
     ) -> AsyncGenerator[asyncio.Task]:
         """Run a coroutine as a cancellable task. Ctrl+C / Esc will cancel it.
 
         Pass status to also show a spinner animation while the task runs.
+        Pass timeout to display elapsed/max seconds in the animation.
         """
         task = asyncio.ensure_future(coro)
         self._request_task = task
         try:
             if status is not None:
                 async with self.with_animation(
-                    f"{status} (Esc/Ctrl+C to cancel)", final_status
+                    status,
+                    final_status,
+                    timeout=timeout,
+                    suffix="(Esc/Ctrl+C to cancel)",
                 ):
                     yield task
             else:
@@ -196,6 +201,8 @@ class SolveigInterface(ABC):
         self,
         status: str = "Processing",
         final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         """Context manager for displaying animation during async operations."""
         raise NotImplementedError("Subclass must implement with_animation")

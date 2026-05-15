@@ -81,7 +81,7 @@ class RequestManager:
                     message_history=message_history,
                 )
                 async with interface.with_cancellable(
-                    coro, status="Thinking..."
+                    coro, status="Thinking", timeout=config.timeout
                 ) as task:
                     return await task
 
@@ -203,10 +203,18 @@ class RequestManager:
         """Handle generic exceptions."""
         import traceback
 
-        await interface.display_error(exc)
+        from pydantic import ValidationError
+
+        if isinstance(exc, ValidationError):
+            await interface.display_error(
+                f"Invalid response from model ({exc.error_count()} validation errors)"
+            )
+        else:
+            await interface.display_error(exc)
         await interface.display_text_box(
-            title=f"{exc.__class__.__name__}",
-            text=str(exc) + traceback.format_exc(),
+            title=exc.__class__.__name__,
+            text=str(exc) + "\n\n" + traceback.format_exc(),
+            collapsed=True,
         )
 
     @staticmethod

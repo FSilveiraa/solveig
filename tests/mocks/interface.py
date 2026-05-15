@@ -208,6 +208,8 @@ class MockInterface(TerminalInterface):
         self,
         status: str = "Processing",
         final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
     ) -> AsyncGenerator[None, Any]:
         await self.update_stats(status=status)
         try:

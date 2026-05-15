@@ -475,7 +475,7 @@ class SubcommandRunner:
             return
         try:
             async with interface.with_cancellable(
-                raw_client.models.list(), status="Fetching model list..."
+                raw_client.models.list(), status="Fetching model list"
             ) as task:
                 models = await task
             names = sorted(m.id for m in models.data)

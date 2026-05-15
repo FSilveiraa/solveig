@@ -107,7 +107,7 @@ class HttpTool(BaseTool):
 
         try:
             async with interface.with_cancellable(
-                _request(), status="Sending request..."
+                _request(), status="Sending request", timeout=config.http_timeout
             ) as task:
                 response = await task
         except asyncio.CancelledError:

@@ -104,14 +104,14 @@ class ReadTool(BaseTool):
         # The metadata vs content distinction only makes sense for files
         else:
             if self.metadata_only:
-                request_desc = "metadata"
+                request_desc = "Metadata"
             elif self.line_ranges:
                 ranges_str = ", ".join(
-                    f"[{start} to {end}]" for start, end in self.line_ranges
+                    f"{start} to {end}" for start, end in self.line_ranges
                 )
-                request_desc = f"lines {ranges_str} and metadata"
+                request_desc = f"Lines {ranges_str} and metadata"
             else:
-                request_desc = "content and metadata"
+                request_desc = "Content and metadata"
             await interface.display_text(request_desc, prefix="Requesting:")
 
     def create_error_result(self, error_message: str, accepted: bool) -> ReadResult:
