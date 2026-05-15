@@ -172,7 +172,7 @@ class SessionManager:
             f"{message_history.total_tokens_sent} / {message_history.total_tokens_received}"
         )
         await interface.display_text_box(
-            header, language="markdown", title="Resumed session"
+            text=header, language="markdown", title="Resumed session"
         )
 
         for msg in message_history.messages[1:]:  # skip system message

@@ -2,7 +2,7 @@
 
 from rich.syntax import Syntax
 from textual.containers import ScrollableContainer, Vertical
-from textual.widgets import Static
+from textual.widgets import Markdown, Static
 
 from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
@@ -59,7 +59,7 @@ class ConversationArea(ScrollableContainer):
 
     async def add_text_box(
         self,
-        content: str | Syntax,
+        content: str | Syntax | Markdown,
         title: str | None = None,
         collapsed: bool = False,
         italic: bool = False,

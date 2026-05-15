@@ -10,6 +10,7 @@ from typing import Any
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
+from textual.widgets import Markdown
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
@@ -20,7 +21,7 @@ from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment
 from solveig.utils.file import Metadata
-from solveig.utils.misc import FILE_EXTENSION_TO_LANGUAGE
+from solveig.utils.misc import get_language
 
 
 class TerminalInterface(SolveigInterface):
@@ -170,11 +171,12 @@ class TerminalInterface(SolveigInterface):
         collapsed: bool = False,
     ) -> MutableTextBox:
         """Display a text block with optional title. Returns the TextBox for live updates."""
-        to_display: str | Syntax = text
+        to_display: str | Syntax | Markdown = text
         if language:
-            # .js -> js
-            language_name = FILE_EXTENSION_TO_LANGUAGE.get(language.lstrip("."))
-            if language_name:
+            language_name = get_language(language.lstrip("."))
+            if language_name == "markdown":
+                to_display = Markdown(text)
+            elif language_name:
                 to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
 
         return await self.app._conversation_area.add_text_box(

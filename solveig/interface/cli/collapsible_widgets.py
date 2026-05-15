@@ -8,7 +8,7 @@ from rich.syntax import Syntax
 from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
 from textual.widget import Widget
-from textual.widgets import Collapsible, Static
+from textual.widgets import Collapsible, Markdown, Static
 from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
@@ -208,7 +208,7 @@ class CollapsibleTextBox(Widget, MutableTextBox):
 
     def __init__(
         self,
-        content: str | Syntax,
+        content: str | Syntax | Markdown,
         title: str | None = None,
         collapsed: bool = False,
         italic: bool = False,
@@ -221,28 +221,42 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         self._content_classes = "box-content " + ("italic" if italic else "")
         self._collapsed = collapsed
         self.border_title = title
+        self._text_container: Static | Markdown
 
-    def compose(self):
-        self._collapsible = CustomCollapsible(
-            right=CopyButton(lambda: str(self._text_container.content)),
-            start_collapsed=self._collapsed,
-        )
-        self._text_container = Static(
-            self._initial_content, markup=False, classes=self._content_classes
-        )
-        with self._collapsible:
-            yield self._text_container
+    @property
+    def _is_markdown(self) -> bool:
+        return isinstance(self._text_container, Markdown)
 
     @property
     def content(self) -> str:
-        return self._text_container.content
+        if self._is_markdown:
+            return self._text_container._markdown
+        else:
+            return self._text_container.content
+
+    def compose(self):
+        if isinstance(self._initial_content, Markdown):
+            self._text_container = self._initial_content
+        else:
+            self._text_container = Static(self._initial_content, markup=False, classes=self._content_classes)
+
+        self._collapsible = CustomCollapsible(
+            right=CopyButton(lambda: self.content),
+            start_collapsed=self._collapsed,
+        )
+
+        with self._collapsible:
+            yield self._text_container
+
+    # Note: by coincidence, both Markdown and Static have an update(str) method, so the interface doesn't break
+    # and we don't need `if self._is_markdown` checks in append/reset
 
     def append(self, line: str) -> None:
         """Append a line to the content and scroll the conversation to the end."""
         self._text_container.update(f"{self.content}\n{line.rstrip('\n')}")
         self._on_content_changed()
 
-    def reset(self, content: str) -> None:
+    def reset(self, content: str = "") -> None:
         self._text_container.update(content)
         self._on_content_changed()
 

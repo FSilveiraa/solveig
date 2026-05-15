@@ -217,3 +217,16 @@ FILE_EXTENSION_TO_LANGUAGE = {
     "md": "markdown",
     "dockerfile": "dockerfile",
 }
+
+def get_language(language_sig):
+    """
+
+    :param language_sig: language name or extension
+    :return: formal language name
+    """
+    try:
+        return FILE_EXTENSION_TO_LANGUAGE[language_sig]
+    except KeyError:
+        if language_sig in FILE_EXTENSION_TO_LANGUAGE.values():
+            return language_sig
+        return None
