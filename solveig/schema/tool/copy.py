@@ -67,9 +67,14 @@ class CopyTool(BaseTool):
     async def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> CopyResult:
-        # Pre-flight validation - use utils/file.py validation
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
+
+        for blocked in (abs_source_path, abs_destination_path):
+            if Filesystem.path_matches_patterns(blocked, config.ignore_paths):
+                return self.create_error_result(
+                    f"Path blocked by ignore_paths: {blocked}", accepted=False
+                )
 
         try:
             await Filesystem.validate_read_access(abs_source_path)

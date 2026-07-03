@@ -272,7 +272,7 @@ def main():
     import sys
 
     if len(sys.argv) > 1:
-        session_name = sys.argv[1]
+        session_name = sys.argv.pop(1)
 
         async def _replay():
             assistant_messages, user_messages = await load_session_for_demo(

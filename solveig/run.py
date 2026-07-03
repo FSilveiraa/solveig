@@ -71,7 +71,7 @@ async def setup_loop(
     # it will run the
     if config.model is None:
         await interface.display_warning(
-            "No model configured. Use /model set <name> or /config set model <name>."
+            "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
         await fetch_and_apply_model_info(config, request_manager.client_ref, interface)

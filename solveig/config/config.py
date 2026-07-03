@@ -110,6 +110,7 @@ class SolveigConfig:
     verbose: bool = False
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     auto_allowed_paths: list[Path] = field(default_factory=list)
+    ignore_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     disable_autonomy: bool = False
     sessions_dir: str = ".solveig/sessions"
@@ -135,6 +136,10 @@ class SolveigConfig:
         if self.auto_allowed_paths:
             self.auto_allowed_paths = [
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
+            ]
+        if self.ignore_paths:
+            self.ignore_paths = [
+                Filesystem.get_absolute_path(path) for path in self.ignore_paths
             ]
         if isinstance(self.theme, str):
             self.theme = themes.THEMES[self.theme.strip().lower()]
@@ -280,6 +285,13 @@ class SolveigConfig:
             nargs="*",
             dest="auto_allowed_paths",
             help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py') ! Use with caution !",
+        )
+        parser.add_argument(
+            "--ignore-paths",
+            type=str,
+            nargs="*",
+            dest="ignore_paths",
+            help="Glob patterns for paths that are fully blocked from all tool access (e.g., '~/.solveig/sessions/**')",
         )
         parser.add_argument(
             "--auto-execute-commands",

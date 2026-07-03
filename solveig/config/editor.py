@@ -42,6 +42,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Safety & permissions
     "min_disk_space_left": "Minimum free disk space before blocking writes",
     "auto_allowed_paths": "Glob patterns for auto-approved file paths (comma-separated)",
+    "ignore_paths": "Glob patterns for paths that are fully blocked from all tool access (comma-separated)",
     "auto_execute_commands": "Regex patterns for auto-approved shell commands (comma-separated)",
     "no_commands": "Disable shell command execution entirely",
     # Behaviour

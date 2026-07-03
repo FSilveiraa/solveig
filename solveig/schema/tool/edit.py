@@ -238,6 +238,11 @@ class EditTool(BaseTool):
     ) -> EditResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
+        if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
+            return self.create_error_result(
+                f"Path blocked by ignore_paths: {abs_path}", accepted=False
+            )
+
         # 1. Validate file exists and is readable/writable
         if error_result := await self._validate_edit(config, interface, abs_path):
             return error_result

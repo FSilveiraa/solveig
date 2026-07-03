@@ -58,8 +58,12 @@ class DeleteTool(BaseTool):
     async def actually_solve(
         self, config: SolveigConfig, interface: SolveigInterface
     ) -> DeleteResult:
-        # Pre-flight validation - use utils/file.py validation
         abs_path = Filesystem.get_absolute_path(self.path)
+
+        if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
+            return self.create_error_result(
+                f"Path blocked by ignore_paths: {abs_path}", accepted=False
+            )
 
         try:
             is_directory = (

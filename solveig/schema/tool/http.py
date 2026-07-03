@@ -127,6 +127,11 @@ class HttpTool(BaseTool):
         if self.output_file:
             output_abs_path = Filesystem.get_absolute_path(self.output_file)
 
+            if Filesystem.path_matches_patterns(output_abs_path, config.ignore_paths):
+                return self.create_error_result(
+                    f"Path blocked by ignore_paths: {output_abs_path}", accepted=False
+                )
+
             # Validate write access now that we have the actual content
             try:
                 await Filesystem.validate_write_access(

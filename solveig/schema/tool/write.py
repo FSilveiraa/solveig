@@ -70,6 +70,11 @@ class WriteTool(BaseTool):
     ) -> WriteResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
+        if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
+            return self.create_error_result(
+                f"Path blocked by ignore_paths: {abs_path}", accepted=False
+            )
+
         # Write access validation
         try:
             await Filesystem.validate_write_access(
