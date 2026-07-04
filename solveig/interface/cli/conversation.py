@@ -104,10 +104,10 @@ class ConversationArea(ScrollableContainer):
         group = CustomCollapsible(
             left_collapsed=title,
             left_expanded=title,
-            collapsed_symbol="▶",
-            expanded_symbol="▼",
+            collapsed_symbol="┏━ ▶",
+            expanded_symbol="┏━ ▼",
             start_collapsed=False,
-            classes="tool_group",
+            classes="group",
         )
         await self._mount_target.mount(group)
         self._group_stack.append(group)
@@ -119,7 +119,7 @@ class ConversationArea(ScrollableContainer):
         """Exit the current group, optionally collapsing it."""
         if self._group_stack:
             group = self._group_stack.pop()
-            await group.mount(Static("┗━━━", classes="tool_group_end"))
+            await group.mount(Static("┗━━━", classes="group_end"))
             if auto_collapse:
                 group.collapsed = True
             self.scroll_end()
@@ -142,33 +142,38 @@ class ConversationArea(ScrollableContainer):
             padding: 0 0 1 1;
         }}
 
-        .tool_group {{
+        .group {{
             height: auto;
             margin: 1 0 0 0;
+            padding-bottom: 0;
         }}
 
-        .tool_group > Contents {{
+        .group > Contents {{
             border: none;
             border-left: heavy {theme.group};
             padding: 0 0 0 1;
             height: auto;
         }}
 
-        .tool_group_end {{
+        .group_end {{
             color: {theme.group};
         }}
 
-        .tool_group.-collapsed > .tool_group_end {{
-            display: none;
-        }}
-
-        .tool_group DividedCollapsibleTitleBar {{
+        .group DividedCollapsibleTitleBar {{
             color: {theme.group};
             text-style: bold;
             padding: 0;
         }}
 
-        .tool_group DividedCollapsibleTitleBar .title-left:hover {{
+        .group.-hovering DividedCollapsibleTitleBar {{
+            color: {theme.section};
+        }}
+
+        .group.-hovering > Contents {{
+            border-left: heavy {theme.section};
+        }}
+
+        .group.-hovering > .group_end {{
             color: {theme.section};
         }}
 
