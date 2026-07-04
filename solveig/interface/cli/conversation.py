@@ -60,6 +60,17 @@ class ConversationArea(ScrollableContainer):
             self._hovered_group.remove_class("-hovering")
             self._hovered_group = None
 
+    async def _on_click(self, event: events.Click) -> None:
+        """Clicking a group's border/cap (not nested content) toggles its collapse."""
+        widget = event.widget
+        is_structural = isinstance(widget, Collapsible.Contents) or (
+            isinstance(widget, Static) and widget.has_class("group_end")
+        )
+        if is_structural:
+            group = self._nearest_group(widget)
+            if group is not None:
+                group.collapsed = not group.collapsed
+
     @property
     def _mount_target(self):
         """The widget to mount new elements into: innermost group's Contents, or self."""
