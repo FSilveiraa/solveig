@@ -5,7 +5,6 @@ for any content that needs to be expandable/collapsible (stats, reasoning, logs,
 """
 
 from rich.syntax import Syntax
-from textual import events
 from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
 from textual.widget import Widget
@@ -166,14 +165,6 @@ class CustomCollapsible(Collapsible):
             expanded_symbol=expanded_symbol,
             start_collapsed=start_collapsed,
         )
-
-    def _on_enter(self, event: events.Enter) -> None:
-        event.stop()
-        self.add_class("-hovering")
-
-    def _on_leave(self, event: events.Leave) -> None:
-        event.stop()
-        self.remove_class("-hovering")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:

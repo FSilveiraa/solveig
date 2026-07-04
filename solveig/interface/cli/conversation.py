@@ -1,7 +1,9 @@
 """Conversation area widget for displaying messages and content."""
 
 from rich.syntax import Syntax
+from textual import events
 from textual.containers import ScrollableContainer
+from textual.dom import DOMNode
 from textual.widgets import Collapsible, Markdown, Static
 
 from solveig.interface.themes import Palette
@@ -35,6 +37,28 @@ class ConversationArea(ScrollableContainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._group_stack: list[CustomCollapsible] = []
+        self._hovered_group: CustomCollapsible | None = None
+
+    @staticmethod
+    def _nearest_group(widget: DOMNode | None) -> CustomCollapsible | None:
+        """Walk up from a widget to find its nearest enclosing group, if any."""
+        while widget is not None and not isinstance(widget, CustomCollapsible):
+            widget = widget.parent
+        return widget
+
+    def _on_mouse_move(self, event: events.MouseMove) -> None:
+        group = self._nearest_group(event.widget)
+        if group is not self._hovered_group:
+            if self._hovered_group is not None:
+                self._hovered_group.remove_class("-hovering")
+            self._hovered_group = group
+            if group is not None:
+                group.add_class("-hovering")
+
+    def _on_leave(self, event: events.Leave) -> None:
+        if event.node is self and self._hovered_group is not None:
+            self._hovered_group.remove_class("-hovering")
+            self._hovered_group = None
 
     @property
     def _mount_target(self):
@@ -165,7 +189,7 @@ class ConversationArea(ScrollableContainer):
             padding: 0;
         }}
 
-        .group.-hovering DividedCollapsibleTitleBar {{
+        .group.-hovering > DividedCollapsibleTitleBar {{
             color: {theme.section};
         }}
 
