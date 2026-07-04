@@ -48,6 +48,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Behaviour
     "disable_autonomy": "Require user approval between agentic steps",
     "auto_collapse_tools": "Auto-collapse tool groups after approval",
+    "auto_copy_selection": "Auto-copy click-drag selected text to clipboard on mouse release",
     "verbose": "Show debug output (API payloads, response models)",
     # Plugins
     "plugins": "Plugin configuration (JSON object)",

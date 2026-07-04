@@ -232,6 +232,7 @@ async def run_async(
     interface = interface or TerminalInterface(
         theme=config.theme,
         code_theme=config.code_theme,
+        auto_copy_selection=config.auto_copy_selection,
     )
 
     message_history = MessageHistory(

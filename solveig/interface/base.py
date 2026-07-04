@@ -224,6 +224,12 @@ class SolveigInterface(ABC):
         input_price: float | None = None,
         output_price: float | None = None,
         mcp_servers: list[str] | None = None,
+        duration: float | None = None,
     ) -> None:
-        """Update status bar with multiple pieces of information."""
+        """Update status bar with multiple pieces of information.
+
+        Pass `duration` to show `status` as a flash message: it reverts to whatever
+        status was set before this call once `duration` seconds pass, unless something
+        else has changed the status in the meantime.
+        """
         ...

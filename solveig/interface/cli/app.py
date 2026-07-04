@@ -2,6 +2,7 @@
 
 import asyncio
 
+from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
@@ -26,12 +27,14 @@ class SolveigTextualApp(TextualApp):
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
         pending_queue: PendingMessageQueue | None = None,
+        auto_copy_selection: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._input_callback = input_callback
         self._theme = theme
         self._pending_queue = pending_queue
+        self._auto_copy_selection = auto_copy_selection
 
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
@@ -125,6 +128,21 @@ class SolveigTextualApp(TextualApp):
                 interface.cancel_request()
             else:
                 self.exit()
+
+    async def on_event(self, event) -> None:
+        """Intercept mouse-up to auto-copy a completed click-drag text selection."""
+        await super().on_event(event)
+        if self._auto_copy_selection and isinstance(event, events.MouseUp):
+            selected_text = self.screen.get_selected_text()
+            if selected_text:
+                self.copy_to_clipboard(selected_text)
+                self.screen.clear_selection()
+                interface = getattr(self, "_interface_ref", None)
+                if interface is not None:
+                    await interface.update_stats(
+                        status=f"Copied {len(selected_text)} characters to clipboard",
+                        duration=2,
+                    )
 
     def set_interface_ref(self, interface) -> None:
         """Store a reference to the interface for cancellation checks."""

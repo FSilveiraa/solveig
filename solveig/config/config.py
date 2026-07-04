@@ -114,6 +114,7 @@ class SolveigConfig:
     auto_execute_commands: list[str] = field(default_factory=list)
     disable_autonomy: bool = False
     auto_collapse_tools: bool = True
+    auto_copy_selection: bool = True
     sessions_dir: str = ".solveig/sessions"
     auto_save_session: bool = True
 
@@ -307,6 +308,13 @@ class SolveigConfig:
             dest="auto_collapse_tools",
             default=None,
             help="Disable automatic collapsing of tool groups after approval",
+        )
+        parser.add_argument(
+            "--no-auto-copy-selection",
+            action="store_false",
+            dest="auto_copy_selection",
+            default=None,
+            help="Disable automatically copying click-drag selected text to the clipboard on mouse release",
         )
         parser.add_argument(
             "--disable-autonomy",

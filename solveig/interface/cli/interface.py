@@ -258,8 +258,15 @@ class TerminalInterface(SolveigInterface):
         input_price: float | None = None,
         output_price: float | None = None,
         mcp_servers: list[str] | None = None,
+        duration: float | None = None,
     ) -> None:
-        """Update stats dashboard with multiple pieces of information."""
+        """Update stats dashboard with multiple pieces of information.
+
+        Pass `duration` to show `status` as a flash message: it reverts to whatever
+        status was set before this call once `duration` seconds pass, unless something
+        else has changed the status in the meantime.
+        """
+        previous_status = self.app._stats_dashboard._status if duration else None
         self.app._stats_dashboard.update(
             status=status,
             sent_tokens=sent_tokens,
@@ -273,6 +280,15 @@ class TerminalInterface(SolveigInterface):
             output_price=output_price,
             mcp_servers=mcp_servers,
         )
+
+        if duration and status is not None:
+
+            async def _restore_status() -> None:
+                # Only restore if nothing else has changed the status in the meantime
+                if self.app._stats_dashboard._status == status:
+                    await self.update_stats(status=previous_status)
+
+            self.app.set_timer(duration, _restore_status)
 
     async def wait_until_ready(self):
         await self.app.is_ready.wait()
