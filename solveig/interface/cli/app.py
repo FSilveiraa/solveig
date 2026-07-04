@@ -8,6 +8,7 @@ from textual.app import ComposeResult
 
 from solveig.interface.themes import DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
+from solveig.utils.misc import copy_to_clipboard
 
 from .conversation import ConversationArea
 from .input_bar import InputBar
@@ -135,7 +136,7 @@ class SolveigTextualApp(TextualApp):
         if self._auto_copy_selection and isinstance(event, events.MouseUp):
             selected_text = self.screen.get_selected_text()
             if selected_text:
-                self.copy_to_clipboard(selected_text)
+                copy_to_clipboard(selected_text)
                 self.screen.clear_selection()
                 interface = getattr(self, "_interface_ref", None)
                 if interface is not None:

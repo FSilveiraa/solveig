@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 
-import pyperclip
 from rich.syntax import Syntax
 from textual.containers import ScrollableContainer
 from textual.events import Click
@@ -10,6 +9,7 @@ from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
 from solveig.interface.themes import Palette
+from solveig.utils.misc import copy_to_clipboard
 
 
 class Comment(Static):
@@ -58,7 +58,7 @@ class CopyButton(Static):
     def on_click(self, event: Click) -> None:
         event.stop()
         # Copy to clipboard
-        pyperclip.copy(self.copy_content)
+        copy_to_clipboard(self.copy_content)
         # Display a success message for 1s
         _content = self.content
         self.update("✓ Copied!")

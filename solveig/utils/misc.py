@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from os import PathLike
 from pathlib import PurePath
 from typing import TYPE_CHECKING
+import pyperclip
 
 from pydantic import BaseModel
 
@@ -231,3 +232,8 @@ def get_language(language_sig):
         if language_sig in FILE_EXTENSION_TO_LANGUAGE.values():
             return language_sig
         return None
+
+
+def copy_to_clipboard(text: str) -> None:
+    """Copy text to the OS clipboard."""
+    pyperclip.copy(text)
