@@ -8,6 +8,7 @@ from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import DataTable
 
+from solveig.exceptions import UserCancel
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 from solveig.interface.themes import Palette
 from solveig.utils.file import Filesystem
@@ -96,17 +97,21 @@ class StatsBar(Widget):
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
             self._table1.add_column("stats1", width=None)
+            # Row -> SolveigConfig field edited on click; None = read-only/computed.
+            self._table1.row_fields: list[str | None] = ["url", None]
 
             self._table2 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table"
             )
             self._table2.add_column("stats2", width=None)
+            self._table2.row_fields: list[str | None] = ["model", "max_context"]
 
             # The 3rd table gets a different CSS class to prevent the separator bar
             self._table3 = DataTable(
                 show_header=False, zebra_stripes=False, classes="stats-table-final"
             )
             self._table3.add_column("stats3", width=None)
+            self._table3.row_fields: list[str | None] = [None, None]
 
             yield Horizontal(
                 self._table1,
@@ -119,6 +124,26 @@ class StatsBar(Widget):
         """Populate tables and title after mount."""
         self._refresh_title()
         self._refresh_stats()
+
+    async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
+        """Clicking a stat cell opens the equivalent `/config set` prompt, if editable."""
+        row_fields = getattr(event.data_table, "row_fields", None)
+        field_name = row_fields[event.coordinate.row] if row_fields else None
+
+        interface = getattr(self.app, "_interface_ref", None)
+        if interface is None or interface.subcommand_executor is None:
+            return
+
+        if field_name is None:
+            await interface.update_stats(status="This stat isn't editable", duration=2)
+            return
+
+        try:
+            await interface.subcommand_executor(
+                subcommand=f"/config set {field_name}", interface=interface
+            )
+        except UserCancel:
+            pass
 
     def update(
         self,
@@ -256,12 +281,11 @@ class StatsBar(Widget):
             border-right: solid {theme.box}
         }}
 
-        .stats-table > .datatable--cursor {{
-            background: {theme.background};
-            color: {theme.text};
-        }}
-
-        .stats-table > .datatable--hover {{
+        /* Cursor/hover are required for click-to-edit to fire, but shouldn't
+           look visually distinct from a normal cell - the cursor position
+           (defaulting to row 0) carries no meaning here. */
+        .stats-table > .datatable--hover, .stats-table-final > .datatable--hover,
+        .stats-table > .datatable--cursor, .stats-table-final > .datatable--cursor {{
             background: {theme.background};
             color: {theme.text};
         }}

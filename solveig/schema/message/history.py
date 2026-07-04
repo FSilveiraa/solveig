@@ -180,6 +180,10 @@ class MessageHistory:
             if role == "assistant":
                 pending_tools = []
                 for tool_dict in parsed.get("tools") or []:
+                    # Backward compat: sessions stored before the tool discriminator
+                    # field was renamed title -> type use the old key name.
+                    if "type" not in tool_dict and "title" in tool_dict:
+                        tool_dict = {**tool_dict, "type": tool_dict["title"]}
                     try:
                         pending_tools.append(tool_adapter.validate_python(tool_dict))
                     except Exception:

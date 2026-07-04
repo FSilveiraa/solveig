@@ -11,6 +11,7 @@ from textual.events import Key
 from textual.message import Message
 from textual.widgets import OptionList, TextArea
 
+from solveig.exceptions import UserCancel
 from solveig.interface.themes import Palette
 
 
@@ -36,6 +37,10 @@ class GrowingInput(TextArea):
             ""  # Caching text typed before entering history navigation
         )
 
+    @property
+    def mode(self) -> InputMode:
+        return self._mode_getter()
+
     class Submitted(Message):
         """Posted when the user presses Enter."""
 
@@ -53,7 +58,11 @@ class GrowingInput(TextArea):
             self.post_message(self.Submitted(self.text))
 
         elif event.key == "ctrl+c":
-            if self.text:
+            if self.mode != InputMode.FREE_FORM:
+                # A question/choice prompt is active - let it bubble to
+                # InputBar, which cancels the prompt rather than clearing text.
+                pass
+            elif self.text:
                 # If there is text, clear it and stop the event
                 event.stop()
                 self.text = ""
@@ -69,7 +78,7 @@ class GrowingInput(TextArea):
 
         elif (
             event.key == "up"
-            and self._mode_getter() == InputMode.FREE_FORM
+            and self.mode == InputMode.FREE_FORM
             and self.cursor_location[0] == 0
         ):
             event.prevent_default()
@@ -84,7 +93,7 @@ class GrowingInput(TextArea):
 
         elif (
             event.key == "down"
-            and self._mode_getter() == InputMode.FREE_FORM
+            and self.mode == InputMode.FREE_FORM
             and self.cursor_location[0] == len(self.text.splitlines()) - 1
         ):
             if self._history_index is not None:
@@ -157,6 +166,21 @@ class InputBar(Container):
         else:
             if focused is not self._text_input:
                 self.call_after_refresh(self._text_input.focus)
+
+    def on_key(self, event: Key) -> None:
+        """Escape/Ctrl+C cancel an active question or choice prompt, from either
+        the text input or the option list - this is the common ancestor of both.
+        """
+        if event.key not in ("escape", "ctrl+c"):
+            return
+        if self._mode == InputMode.QUESTION and self._question_future:
+            if not self._question_future.done():
+                event.stop()
+                self._question_future.set_exception(UserCancel())
+        elif self._mode == InputMode.MULTIPLE_CHOICE and self._choice_future:
+            if not self._choice_future.done():
+                event.stop()
+                self._choice_future.set_exception(UserCancel())
 
     async def on_growing_input_submitted(self, event: GrowingInput.Submitted) -> None:
         """Handle the custom Submitted message from the GrowingInput widget."""
