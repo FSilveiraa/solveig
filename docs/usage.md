@@ -157,7 +157,7 @@ You can pass Solveig a JSON configuration file through the `-c` file or omit for
 | `add_os_info`         | `--add-os-info, --os`           | Include OS info in system prompt              | `false`         |
 | `exclude_username`    | `--exclude-username, --no-user` | Exclude username from OS info                 | `false`         |
 | `add_examples`        | `--add-examples, --ex`          | Include examples in system prompt             | `false`         |
-| `briefing`            | `-b, --briefing [paths...]`     | Markdown files appended to the system prompt  | `BRIEFING.md`   |
+| `briefing`            | `-b, --briefing [paths...]`     | Markdown files appended to the system prompt  | [`AGENTS.md`](https://agents.md) |
 
 ## System Prompt
 
@@ -313,11 +313,11 @@ Mid-conversation:
 Append project-specific Markdown context to the system prompt:
 
 ```bash
-# Default: loads BRIEFING.md from the current directory if it exists
+# Default: loads AGENTS.md from the current directory if it exists
 solveig --api-type local "Review this project"
 
 # Explicit briefing file(s) — pass -b once per file
-solveig --api-type local -b BRIEFING.md -b docs/api.md "Review this project"
+solveig --api-type local -b AGENTS.md -b docs/api.md "Review this project"
 ```
 
 To disable briefing entirely, set `"briefing": []` in your config file.

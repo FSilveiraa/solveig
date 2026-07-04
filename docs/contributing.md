@@ -18,6 +18,8 @@ The `[dev]` optional dependencies include:
 - `ruff`, `mypy` for code quality
 - `anthropic`, `google-generativeai` for API testing
 
+Development commands are managed via [`just`](https://github.com/casey/just), a handy command runner. Install it (e.g. `cargo install just`, `brew install just`, or see the [installation docs](https://github.com/casey/just#installation)), then run `just --list` from the repo root to see all available recipes (defined in the `justfile`).
+
 ## Code Quality
 
 ### Required Checks
@@ -25,24 +27,17 @@ The `[dev]` optional dependencies include:
 All code submitted to the `main` branch must pass these checks (same as CI):
 
 ```bash
-# Format code
-ruff format .
-
-# Lint code  
-ruff check . --fix
-
-# Type checking
-mypy solveig/ --ignore-missing-imports
-
-# Run tests with coverage
-pytest ./tests/ --cov=solveig --cov-report=term-missing -v
+just format    # ruff format .
+just lint      # ruff check .
+just typecheck # mypy solveig/ --ignore-missing-imports
+just test      # pytest --cov=solveig --cov-report=term-missing
 ```
 
 ### Full CI Command
 
 ```bash
 # Run everything at once (what CI runs)
-ruff format . && ruff check . && mypy solveig/ --ignore-missing-imports && pytest ./tests/ --cov=solveig --cov-report=term-missing -vv
+just ci
 ```
 
 ## User Interaction Philosophy
