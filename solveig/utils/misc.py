@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from os import PathLike
 from pathlib import PurePath
 from typing import TYPE_CHECKING
-import pyperclip
 
+import pyperclip
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
