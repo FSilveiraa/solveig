@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, PrivateAttr, field_validator
 
@@ -11,14 +11,15 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import WriteResult
 from solveig.schema.tool.base import (
     BaseTool,
+    Positional,
     validate_non_empty_path,
 )
 from solveig.utils.file import Filesystem, Metadata
 
 
 class WriteTool(BaseTool):
-    title: Literal["write"] = "write"
-    path: str = Field(
+    type: Literal["write"] = "write"
+    path: Annotated[str, Positional(0)] = Field(
         ...,
         description="File or directory path to create/update (supports ~ for home directory)",
     )

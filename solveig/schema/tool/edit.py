@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from anyio import Path
 from pydantic import Field, field_validator
@@ -12,27 +12,26 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import EditResult
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, Subcommand, validate_non_empty_path
+from .base import BaseTool, Positional, Subcommand, validate_non_empty_path
 
 
 class EditTool(BaseTool):
     """Edit files using exact string replacement."""
 
-    title: Literal["edit"] = "edit"
+    type: Literal["edit"] = "edit"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/edit"],
-        positional=["path", "old_string", "new_string"],
     )
 
-    path: str = Field(
+    path: Annotated[str, Positional(0)] = Field(
         ...,
         description="File path to edit (supports ~ for home directory)",
     )
-    old_string: str = Field(
+    old_string: Annotated[str, Positional(1)] = Field(
         ...,
         description="Exact string to find (including whitespace and indentation)",
     )
-    new_string: str = Field(
+    new_string: Annotated[str, Positional(2)] = Field(
         ...,
         description="String to replace with (can be empty for deletion)",
     )

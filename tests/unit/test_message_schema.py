@@ -75,22 +75,26 @@ class TestDynamicAssistantMessage:
         assert DynamicModel is not AssistantMessage
 
     async def test_dynamic_model_has_correctly_typed_requirements_field(self):
-        """Verify the 'tools' field has the correct list[Union[...]] type annotation."""
+        """Verify the 'tools' field has the correct list[Annotated[Union[...], discriminator]] annotation."""
         AVAILABLE_TOOLS.rebuild(SolveigConfig(no_commands=False))
         DynamicModel = AVAILABLE_TOOLS.response_model
 
         requirements_field = DynamicModel.model_fields.get("tools")
         assert requirements_field is not None
 
-        # The full annotation should be Optional[list[Union[...]]]
+        # The full annotation should be Optional[list[Annotated[Union[...], discriminator]]]
         field_outer_type, none_type = get_args(requirements_field.annotation)
         assert none_type is type(None)
 
         assert get_origin(field_outer_type) is list
         list_contents = get_args(field_outer_type)[0]
 
-        assert get_origin(list_contents) is Union
-        union_args = get_args(list_contents)
+        # list_contents is Annotated[Union[...], Field(discriminator="type")]
+        discriminated_union, field_info = get_args(list_contents)
+        assert field_info.discriminator == "type"
+
+        assert get_origin(discriminated_union) is Union
+        union_args = get_args(discriminated_union)
         assert CommandTool in union_args
         assert ReadTool in union_args
 
@@ -101,7 +105,8 @@ class TestDynamicAssistantMessage:
 
         requirements_field = DynamicModel.model_fields["tools"]
         list_union = get_args(requirements_field.annotation)[0]
-        requirements_union = get_args(list_union)[0]
+        discriminated_union = get_args(list_union)[0]
+        requirements_union = get_args(discriminated_union)[0]
         final_requirement_types = get_args(requirements_union)
 
         assert CommandTool not in final_requirement_types

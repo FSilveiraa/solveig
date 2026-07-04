@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 import httpx
 from pydantic import Field, field_validator
@@ -16,17 +16,18 @@ from solveig.schema.result.http import _format_body
 from solveig.subcommand.base import Subcommand
 from solveig.utils.file import Filesystem
 
-from .base import BaseTool, validate_non_empty_path
+from .base import BaseTool, Positional, validate_non_empty_path
 
 
 class HttpTool(BaseTool):
-    title: Literal["http"] = "http"
+    type: Literal["http"] = "http"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/http"],
-        positional=["url"],
     )
 
-    url: str = Field(..., description="URL to send the request to")
+    url: Annotated[str, Positional(0)] = Field(
+        ..., description="URL to send the request to"
+    )
     method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] = Field(
         "GET", description="HTTP method"
     )

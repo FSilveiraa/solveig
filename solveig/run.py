@@ -193,7 +193,7 @@ async def main_loop(
                             raise
                         except Exception as e:
                             await interface.display_error(
-                                f"Unexpected error executing {tool.title}: {e}"
+                                f"Unexpected error executing {tool.type}: {e}"
                             )
                             result = tool.create_error_result(
                                 f"Unexpected error: {e}", accepted=False

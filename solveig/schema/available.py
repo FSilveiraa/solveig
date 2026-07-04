@@ -6,7 +6,7 @@ tool set: plugin load/unload, MCP server connect/disconnect, or config mutations
 that affect the tool set (e.g. toggling no_commands).
 """
 
-from typing import Union, cast
+from typing import Annotated, Any, Union, cast
 
 from pydantic import Field, create_model
 
@@ -36,6 +36,7 @@ class AvailableTools:
 
     def __init__(self) -> None:
         self._tools_union: type[BaseTool] | None = None
+        self._discriminated_tools_union: Any = None
         self._response_model: type[AssistantMessage] | None = None
         self._result_classes: dict[str, type[ToolResult]] = {}
 
@@ -52,13 +53,20 @@ class AvailableTools:
             raise ValueError("No tools available: the active tools list is empty.")
 
         tools_union = cast(type[BaseTool], Union[*active])
+        # Tagging the union with the `type` discriminator lets Pydantic jump straight
+        # to the matching tool class instead of trying each member in turn ("smart mode").
+        discriminated_tools_union = Annotated[
+            tools_union,  # type: ignore[valid-type]
+            Field(discriminator="type"),
+        ]
 
         self._tools_union = tools_union
+        self._discriminated_tools_union = discriminated_tools_union
         self._response_model = create_model(
             "DynamicAssistantMessage",
             tools=(
                 # HACK: no way to express dynamic Union[BaseTool] to mypy
-                list[tools_union] | None,  # type: ignore[valid-type]
+                list[discriminated_tools_union] | None,  # type: ignore[valid-type]
                 Field(None),
             ),
             __base__=AssistantMessage,
@@ -70,10 +78,19 @@ class AvailableTools:
 
     @property
     def tools_union(self) -> type[BaseTool]:
+        """Plain Union of active tool types — use with `typing.get_args()` to enumerate members."""
         assert self._tools_union is not None, (
             "Call rebuild() before accessing tools_union"
         )
         return self._tools_union
+
+    @property
+    def discriminated_tools_union(self) -> Any:
+        """Union tagged with the `type` discriminator — use for validation (TypeAdapter, etc.)."""
+        assert self._discriminated_tools_union is not None, (
+            "Call rebuild() before accessing discriminated_tools_union"
+        )
+        return self._discriminated_tools_union
 
     @property
     def response_model(self) -> type[AssistantMessage]:

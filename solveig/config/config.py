@@ -45,7 +45,7 @@ class MCPServerConfig:
         """Apply allowed_tools and blocked_tools filters to a list of tool classes."""
 
         def name(tool: type["BaseTool"]) -> str:
-            return tool.model_fields["title"].default  # type: ignore[attr-defined]
+            return tool.model_fields["type"].default  # type: ignore[attr-defined]
 
         result = tools
         if self.allowed_tools:

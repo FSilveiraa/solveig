@@ -152,7 +152,7 @@ async def connect(
     MCP_CONNECTIONS[server_config.url] = conn
     MCP_TOOLS.extend(conn.tools)
     AVAILABLE_TOOLS.rebuild(config)
-    tool_names = [t.model_fields["title"].default for t in conn.tools]
+    tool_names = [t.model_fields["type"].default for t in conn.tools]
     # Display connection details and update MCP stats
     await interface.display_success(
         f"MCP '{conn.display_name}': connected ({len(conn.tools)} tools: {', '.join(tool_names)})"

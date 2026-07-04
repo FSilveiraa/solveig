@@ -294,8 +294,10 @@ class SubcommandRunner:
             try:
                 tool = tool_cls.from_cli_args(*args, **kwargs)
             except Exception as e:
-                title = tool_cls.model_fields["title"].default
-                await interface.display_error(f"Invalid arguments for /{title}: {e}")
+                tool_type = tool_cls.model_fields["type"].default
+                await interface.display_error(
+                    f"Invalid arguments for /{tool_type}: {e}"
+                )
                 return
             result = await tool.solve(config=self.config, interface=interface)
             if result:
@@ -530,7 +532,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             return
         lines = []
         for conn in MCP_CONNECTIONS.values():
-            tool_names = [t.model_fields["title"].default for t in conn.tools]
+            tool_names = [t.model_fields["type"].default for t in conn.tools]
             lines.append(
                 f"**{conn.display_name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
             )

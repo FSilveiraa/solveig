@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
@@ -11,6 +11,7 @@ from solveig.plugins.tools import tool
 from solveig.schema.result.base import ToolResult
 from solveig.schema.tool.base import (
     BaseTool,
+    Positional,
     validate_non_empty_path,
 )
 from solveig.utils.file import Filesystem, Metadata
@@ -30,8 +31,10 @@ class TreeResult(ToolResult):
 class TreeTool(BaseTool):
     """Generate a directory tree listing showing file structure."""
 
-    title: Literal["tree"] = "tree"
-    path: str = Field(..., description="Directory path to generate tree for")
+    type: Literal["tree"] = "tree"
+    path: Annotated[str, Positional(0)] = Field(
+        ..., description="Directory path to generate tree for"
+    )
     max_depth: int = Field(
         default=-1, description="Maximum depth to explore (-1 for full tree)"
     )

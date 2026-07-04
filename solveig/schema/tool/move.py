@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, PrivateAttr, field_validator
 
@@ -11,21 +11,20 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import MoveResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import BaseTool, Subcommand, validate_non_empty_path
+from .base import BaseTool, Positional, Subcommand, validate_non_empty_path
 
 
 class MoveTool(BaseTool):
-    title: Literal["move"] = "move"
+    type: Literal["move"] = "move"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/move", "/mv"],
-        positional=["source_path", "destination_path"],
     )
 
-    source_path: str = Field(
+    source_path: Annotated[str, Positional(0)] = Field(
         ...,
         description="Current path of file/directory to move (supports ~ for home directory)",
     )
-    destination_path: str = Field(
+    destination_path: Annotated[str, Positional(1)] = Field(
         ..., description="New path where file/directory should be moved to"
     )
 

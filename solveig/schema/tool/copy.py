@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, PrivateAttr, field_validator
 
@@ -11,21 +11,20 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import CopyResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import BaseTool, Subcommand, validate_non_empty_path
+from .base import BaseTool, Positional, Subcommand, validate_non_empty_path
 
 
 class CopyTool(BaseTool):
-    title: Literal["copy"] = "copy"
+    type: Literal["copy"] = "copy"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/copy", "/cp"],
-        positional=["source_path", "destination_path"],
     )
 
-    source_path: str = Field(
+    source_path: Annotated[str, Positional(0)] = Field(
         ...,
         description="Path of file/directory to copy from (supports ~ for home directory)",
     )
-    destination_path: str = Field(
+    destination_path: Annotated[str, Positional(1)] = Field(
         ..., description="Path where file/directory should be copied to"
     )
 

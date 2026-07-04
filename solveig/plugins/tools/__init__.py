@@ -26,7 +26,7 @@ class ToolRegistry:
 
     def register(self, tool_class: type[T]) -> type[T]:
         """Register a plugin tool. Used as a decorator."""
-        self.all[tool_class.model_fields["title"].default] = tool_class
+        self.all[tool_class.model_fields["type"].default] = tool_class
         return tool_class
 
 

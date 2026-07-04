@@ -8,10 +8,8 @@ Plugin example::
     class GitTool(BaseTool):
         \"\"\"Run git commands in the repository.\"\"\"
 
-        subcommand: ClassVar[Subcommand] = Subcommand(
-            commands=["/git"],
-            positional=["git_command"],
-        )
+        subcommand: ClassVar[Subcommand] = Subcommand(commands=["/git"])
+        git_command: Annotated[str, Positional(0)] = Field(...)
         # handler, description, and usage are injected automatically
         # by BaseTool.__init_subclass__ — nothing else required.
 """
@@ -55,8 +53,6 @@ class Subcommand:
         handler:     Async callable ``(interface, *args, **kwargs)``.
                      ``None`` while stored as a ClassVar template on a tool;
                      always set by the time the subcommand is called.
-        positional:  Field names matched to positional CLI tokens by index,
-                     used by ``BaseTool.from_cli_args``.
         description: Short human-readable description for ``/help``.
         usage:       Usage string shown after the command names in ``/help``,
                      e.g. ``"<path> [start-end]"``.  Auto-generated from
@@ -67,7 +63,6 @@ class Subcommand:
 
     commands: list[str]
     handler: Callable | None = field(default=None, repr=False)
-    positional: list[str] = field(default_factory=list)
     description: str = ""
     usage: str = ""
     is_detail: bool = False

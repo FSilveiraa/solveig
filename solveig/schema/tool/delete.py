@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, PrivateAttr, field_validator
 
@@ -11,17 +11,16 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import DeleteResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import BaseTool, Subcommand, validate_non_empty_path
+from .base import BaseTool, Positional, Subcommand, validate_non_empty_path
 
 
 class DeleteTool(BaseTool):
-    title: Literal["delete"] = "delete"
+    type: Literal["delete"] = "delete"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/delete", "/rm"],
-        positional=["path"],
     )
 
-    path: str = Field(
+    path: Annotated[str, Positional(0)] = Field(
         ...,
         description="Path of file/directory to permanently delete (supports ~ for home directory)",
     )

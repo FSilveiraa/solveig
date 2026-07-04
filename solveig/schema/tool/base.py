@@ -34,6 +34,23 @@ def validate_non_empty_path(path: str) -> str:
     return path
 
 
+class Positional:
+    """Annotation marking a field as a positional CLI argument, ordered by index.
+
+    Usage: ``path: Annotated[str, Positional(0)] = Field(...)``.
+    Read back via ``BaseTool._positional_fields()``, which drives both
+    ``/subcommand`` argument parsing and usage-string generation.
+    """
+
+    __slots__ = ("order",)
+
+    def __init__(self, order: int) -> None:
+        self.order = order
+
+    def __repr__(self) -> str:
+        return f"Positional({self.order})"
+
+
 class BaseTool(BaseModel, ABC):
     """
     Base class for all tools that LLMs can make.
@@ -45,7 +62,7 @@ class BaseTool(BaseModel, ABC):
     to fill them in.
     """
 
-    title: str
+    type: str
     comment: str = Field(
         ..., description="Brief explanation of why this operation is needed"
     )
@@ -62,7 +79,19 @@ class BaseTool(BaseModel, ABC):
         if not own.description:
             own.description = cls.get_description()
         if not own.usage:
-            own.usage = cls._generate_usage(own.positional)
+            own.usage = cls._generate_usage(cls._positional_fields())
+
+    @classmethod
+    def _positional_fields(cls) -> list[str]:
+        """Field names marked with `Positional`, ordered by their declared index."""
+        ordered: list[tuple[int, str]] = []
+        for name, info in cls.model_fields.items():
+            for meta in info.metadata:
+                if isinstance(meta, Positional):
+                    ordered.append((meta.order, name))
+                    break
+        ordered.sort(key=lambda pair: pair[0])
+        return [name for _, name in ordered]
 
     @classmethod
     def _generate_usage(cls, positional: list[str]) -> str:
@@ -73,7 +102,7 @@ class BaseTool(BaseModel, ABC):
         positional_set = set(positional)
         parts = [f"<{f}>" for f in positional]
         for name, fi in cls.model_fields.items():
-            if name in ("title", "comment") or name in positional_set:
+            if name in ("type", "comment") or name in positional_set:
                 continue
             if fi.is_required() or fi.default is None:
                 continue
@@ -83,7 +112,7 @@ class BaseTool(BaseModel, ABC):
     @classmethod
     def from_cli_args(cls, *args: str, **kwargs: str) -> Self:
         """Build a tool instance from parsed CLI tokens. Override for custom parsing."""
-        positional = cls.subcommand.positional if cls.subcommand else []
+        positional = cls._positional_fields()
         values: dict[str, Any] = {"comment": ""}
         for i, val in enumerate(args):
             if i < len(positional):
@@ -101,7 +130,7 @@ class BaseTool(BaseModel, ABC):
         """Solve this tool with plugin integration and error handling."""
         # 1 tool  -> Read
         # N tools -> Read (3/5)
-        title = self.title.title()
+        title = self.type.title()
         if total > 1:
             title += f" ({index}/{total})"
         async with interface.with_group(
@@ -232,7 +261,7 @@ class BaseTool(BaseModel, ABC):
     def parse_session_result(self, data: dict) -> ToolResult:
         """Reconstruct a typed result from a stored session dict, pairing it with this tool."""
         return ToolResult(
-            title=self.title,
+            title=self.type,
             tool=self,
             accepted=data.get("accepted", False),
             error=data.get("error"),

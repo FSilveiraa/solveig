@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, field_validator
 
@@ -14,17 +14,16 @@ from solveig.schema.result import CommandResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
-from .base import BaseTool, Subcommand
+from .base import BaseTool, Positional, Subcommand
 
 
 class CommandTool(BaseTool):
-    title: Literal["command"] = "command"
+    type: Literal["command"] = "command"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/command", "/cmd"],
-        positional=["command"],
     )
 
-    command: str = Field(
+    command: Annotated[str, Positional(0)] = Field(
         ..., description="Shell command to execute (e.g., 'ls -la', 'cat file.txt')"
     )
     timeout: float = Field(

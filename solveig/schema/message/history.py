@@ -160,7 +160,9 @@ class MessageHistory:
 
     def load_from_session(self, session_data: dict) -> None:
         """Reconstruct messages from a stored session dict and load them into history."""
-        tool_adapter: TypeAdapter = TypeAdapter(AVAILABLE_TOOLS.tools_union)
+        tool_adapter: TypeAdapter = TypeAdapter(
+            AVAILABLE_TOOLS.discriminated_tools_union
+        )
         result_classes = AVAILABLE_TOOLS.result_classes
         messages: list[Message] = []
         pending_tools: list = []

@@ -145,11 +145,11 @@ def create_tool_class(mcp_tool: MCPTool, session: ClientSession) -> type[BaseToo
         def get_description(cls) -> str:
             return f"{_name}{_sig}: {_desc}"
 
-    # create_model is used solely for the dynamic Pydantic fields and the Literal title.
+    # create_model is used solely for the dynamic Pydantic fields and the Literal type tag.
     # All methods are already on ToolImpl; nothing is patched after the fact.
     return create_model(  # type: ignore[call-overload]
         tool_name.title(),
-        title=(Literal[tool_name], tool_name),  # type: ignore[valid-type]
+        type=(Literal[tool_name], tool_name),  # type: ignore[valid-type]
         **extra_fields,
         __base__=MCPToolBase,
     )

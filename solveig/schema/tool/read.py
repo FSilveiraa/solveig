@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import Field, PrivateAttr, field_validator
 
@@ -11,18 +11,17 @@ from solveig.interface import SolveigInterface
 from solveig.schema.result import ReadResult
 from solveig.utils.file import Filesystem, Metadata
 
-from .base import BaseTool, Subcommand, validate_non_empty_path
+from .base import BaseTool, Positional, Subcommand, validate_non_empty_path
 
 
 class ReadTool(BaseTool):
-    title: Literal["read"] = "read"
+    type: Literal["read"] = "read"
     subcommand: ClassVar[Subcommand] = Subcommand(
         commands=["/read"],
-        positional=["path"],
         usage="<path> [start-end]",
     )
 
-    path: str = Field(
+    path: Annotated[str, Positional(0)] = Field(
         ...,
         description="File or directory path to read (supports ~ for home directory)",
     )
