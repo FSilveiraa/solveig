@@ -104,7 +104,9 @@ class BaseTool(BaseModel, ABC):
         title = self.title.title()
         if total > 1:
             title += f" ({index}/{total})"
-        async with interface.with_group(title):
+        async with interface.with_group(
+            title, auto_collapse=config.auto_collapse_tools
+        ):
             await self.display_header(interface)
 
             # Run before hooks - they validate and can throw exceptions

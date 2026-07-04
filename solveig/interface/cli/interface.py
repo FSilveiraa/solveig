@@ -290,13 +290,15 @@ class TerminalInterface(SolveigInterface):
             await self.app._conversation_area.add_section_header(title)
 
     @asynccontextmanager
-    async def with_group(self, title: str) -> AsyncGenerator[None, Any]:
+    async def with_group(
+        self, title: str, auto_collapse: bool = False
+    ) -> AsyncGenerator[None, Any]:
         """Context manager for grouping related output."""
         await self.app._conversation_area.enter_group(title)
         try:
             yield
         finally:
-            await self.app._conversation_area.exit_group()
+            await self.app._conversation_area.exit_group(auto_collapse=auto_collapse)
 
     @asynccontextmanager
     async def with_animation(

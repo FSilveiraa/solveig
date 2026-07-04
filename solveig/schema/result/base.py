@@ -26,14 +26,18 @@ class ToolResult(BaseModel):
     error: str | None = None
 
     async def display(
-        self, interface: SolveigInterface, index: int = 1, total: int = 1
+        self,
+        interface: SolveigInterface,
+        index: int = 1,
+        total: int = 1,
+        auto_collapse: bool = False,
     ) -> None:
         # 1 result  -> Read
         # N results -> Read (3/5)
         title = self.title.title()
         if total > 1:
             title += f" ({index}/{total})"
-        async with interface.with_group(title):
+        async with interface.with_group(title, auto_collapse=auto_collapse):
             await self.tool.display_header(interface)
             await self._display_content(interface)
             if self.error:

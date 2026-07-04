@@ -194,7 +194,7 @@ class MockInterface(TerminalInterface):
 
     # Context managers
     @asynccontextmanager
-    async def with_group(self, title: str):
+    async def with_group(self, title: str, auto_collapse: bool = False):
         self.groups.append(f"START: {title}")
         self.outputs.append(f"┏━ {title}")
         try:

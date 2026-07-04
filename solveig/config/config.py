@@ -113,6 +113,7 @@ class SolveigConfig:
     ignore_paths: list[Path] = field(default_factory=list)
     auto_execute_commands: list[str] = field(default_factory=list)
     disable_autonomy: bool = False
+    auto_collapse_tools: bool = True
     sessions_dir: str = ".solveig/sessions"
     auto_save_session: bool = True
 
@@ -299,6 +300,13 @@ class SolveigConfig:
             nargs="*",
             dest="auto_execute_commands",
             help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !",
+        )
+        parser.add_argument(
+            "--no-auto-collapse",
+            action="store_false",
+            dest="auto_collapse_tools",
+            default=None,
+            help="Disable automatic collapsing of tool groups after approval",
         )
         parser.add_argument(
             "--disable-autonomy",

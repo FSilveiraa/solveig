@@ -191,7 +191,10 @@ class SessionManager:
                         result_index += 1
                         try:
                             await response.display(
-                                interface, index=result_index, total=result_count
+                                interface,
+                                index=result_index,
+                                total=result_count,
+                                auto_collapse=config.auto_collapse_tools,
                             )
                         except Exception:
                             pass

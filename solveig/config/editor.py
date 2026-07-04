@@ -47,6 +47,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     "no_commands": "Disable shell command execution entirely",
     # Behaviour
     "disable_autonomy": "Require user approval between agentic steps",
+    "auto_collapse_tools": "Auto-collapse tool groups after approval",
     "verbose": "Show debug output (API payloads, response models)",
     # Plugins
     "plugins": "Plugin configuration (JSON object)",

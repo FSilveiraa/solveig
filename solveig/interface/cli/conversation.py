@@ -1,8 +1,8 @@
 """Conversation area widget for displaying messages and content."""
 
 from rich.syntax import Syntax
-from textual.containers import ScrollableContainer, Vertical
-from textual.widgets import Markdown, Static
+from textual.containers import ScrollableContainer
+from textual.widgets import Collapsible, Markdown, Static
 
 from solveig.interface.themes import Palette
 from solveig.utils.file import Metadata
@@ -34,13 +34,20 @@ class ConversationArea(ScrollableContainer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._group_stack = []  # Stack of current group containers
+        self._group_stack: list[CustomCollapsible] = []
+
+    @property
+    def _mount_target(self):
+        """The widget to mount new elements into: innermost group's Contents, or self."""
+        return (
+            self._group_stack[-1].query_one(Collapsible.Contents)
+            if self._group_stack
+            else self
+        )
 
     async def _add_element(self, element):
         """Add element to the scrollable container."""
-        # Add to current group or main area
-        target = self._group_stack[-1] if self._group_stack else self
-        await target.mount(element)
+        await self._mount_target.mount(element)
 
         # Defer layout refresh so child widgets finish composing first, then
         # force a layout pass with their correct sizes (fixes height: auto on
@@ -92,34 +99,29 @@ class ConversationArea(ScrollableContainer):
             tree_widget.border_title = title
         await self._add_element(tree_widget)
 
-    async def enter_group(self, title: str):
-        """Enter a new group container."""
-        target = self._group_stack[-1] if self._group_stack else self
-
-        # Print title before adding group
-        title_corner = Static(f"┏━ [bold]{title}[/]", classes="group_top")
-        await target.mount(title_corner)
-
-        # Create group container with border styling for content and mount it
-        group_container = Vertical(classes="group_container")
-        await target.mount(group_container)
-
-        # Push onto stack
-        self._group_stack.append(group_container)
-        # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
+    async def enter_group(self, title: str) -> CustomCollapsible:
+        """Enter a new collapsible group. Returns the group widget."""
+        group = CustomCollapsible(
+            left_collapsed=title,
+            left_expanded=title,
+            collapsed_symbol="▶",
+            expanded_symbol="▼",
+            start_collapsed=False,
+            classes="tool_group",
+        )
+        await self._mount_target.mount(group)
+        self._group_stack.append(group)
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
+        return group
 
-    async def exit_group(self):
-        """Exit the current group container."""
+    async def exit_group(self, auto_collapse: bool = False) -> None:
+        """Exit the current group, optionally collapsing it."""
         if self._group_stack:
-            self._group_stack.pop()
-
-            # Print end cap after exiting group
-            end_corner = Static("┗━━━", classes="group_bottom")
-            target = self._group_stack[-1] if self._group_stack else self
-            await target.mount(end_corner)
-            # Scroll twice: immediately (fast layouts) and after refresh (slow layouts)
+            group = self._group_stack.pop()
+            await group.mount(Static("┗━━━", classes="tool_group_end"))
+            if auto_collapse:
+                group.collapsed = True
             self.scroll_end()
             self.call_after_refresh(self.scroll_end)
 
@@ -140,21 +142,34 @@ class ConversationArea(ScrollableContainer):
             padding: 0 0 1 1;
         }}
 
-        .group_container {{
+        .tool_group {{
+            height: auto;
+            margin: 1 0 0 0;
+        }}
+
+        .tool_group > Contents {{
+            border: none;
             border-left: heavy {theme.group};
             padding: 0 0 0 1;
             height: auto;
-            min-height: 0;
         }}
 
-        .group_bottom {{
+        .tool_group_end {{
             color: {theme.group};
-            margin: 0 0 1 0;
         }}
 
-        .group_top {{
+        .tool_group.-collapsed > .tool_group_end {{
+            display: none;
+        }}
+
+        .tool_group DividedCollapsibleTitleBar {{
             color: {theme.group};
-            margin: 1 0 0 0;
+            text-style: bold;
+            padding: 0;
+        }}
+
+        .tool_group DividedCollapsibleTitleBar .title-left:hover {{
+            color: {theme.section};
         }}
 
         {Comment.get_css(theme)}

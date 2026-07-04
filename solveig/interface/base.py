@@ -191,7 +191,9 @@ class SolveigInterface(ABC):
         ...
 
     @asynccontextmanager
-    async def with_group(self, title: str) -> AsyncGenerator[None, Any]:
+    async def with_group(
+        self, title: str, auto_collapse: bool = False
+    ) -> AsyncGenerator[None, Any]:
         """Context manager for grouping related output."""
         raise NotImplementedError("Subclass must implement with_group")
         yield  # This line will never execute but makes it a valid generator
