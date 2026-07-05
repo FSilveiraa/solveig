@@ -9,7 +9,7 @@ from pydantic_ai.toolsets.abstract import ToolsetTool
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.http import HttpResult
+from solveig.schema.result import HttpResult, accepted
 
 try:
     import trafilatura as _trafilatura
@@ -37,7 +37,7 @@ class TrafilaturaToolset(WrapperToolset[SolveigDeps]):
             return result
 
         metadata = result.metadata
-        if not isinstance(metadata, HttpResult) or not metadata.accepted:
+        if not isinstance(metadata, HttpResult):
             return result
 
         content_type = (metadata.response_headers or {}).get("content-type", "")
@@ -92,11 +92,9 @@ class TrafilaturaToolset(WrapperToolset[SolveigDeps]):
             collapsed=True,
         )
 
-        return ToolReturn(
-            return_value=f"Status: {metadata.status_code}\n{markdown}",
-            metadata=metadata.model_copy(
-                update={"body": markdown, "truncated": False}
-            ),
+        return accepted(
+            f"Status: {metadata.status_code}\n{markdown}",
+            metadata=metadata.model_copy(update={"body": markdown, "truncated": False}),
         )
 
 

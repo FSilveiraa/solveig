@@ -4,7 +4,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.move import MoveResult
+from solveig.schema.result import accepted, declined, failed
 from solveig.schema.tool._validation import validate_non_empty_path
 from solveig.utils.file import Filesystem
 
@@ -35,9 +35,7 @@ async def move(
                 await interface.display_error(
                     f"Path blocked by ignore_paths: {blocked}"
                 )
-                return ToolReturn(
-                    return_value=f"Error: path blocked by ignore_paths: {blocked}"
-                )
+                return failed(f"path blocked by ignore_paths: {blocked}")
 
         try:
             await Filesystem.validate_read_access(abs_source_path)
@@ -47,7 +45,7 @@ async def move(
             await interface.display_error(
                 f"Cannot move from {abs_source_path} to {abs_destination_path}: {e}"
             )
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)
 
         await interface.display_text(str(abs_source_path), prefix="Source:")
         await interface.display_text(str(abs_destination_path), prefix="Destination:")
@@ -75,19 +73,12 @@ async def move(
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return ToolReturn(return_value="User declined the move.")
+            return declined("User declined the move.")
 
         try:
             await Filesystem.move(abs_source_path, abs_destination_path)
             await interface.display_success("Moved")
-            return ToolReturn(
-                return_value=f"Moved {abs_source_path} to {abs_destination_path}",
-                metadata=MoveResult(
-                    accepted=True,
-                    source_path=str(abs_source_path),
-                    destination_path=str(abs_destination_path),
-                ),
-            )
+            return accepted(f"Moved {abs_source_path} to {abs_destination_path}")
         except (PermissionError, OSError, FileExistsError) as e:
             await interface.display_error(f"Found error when moving: {e}")
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)

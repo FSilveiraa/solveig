@@ -7,7 +7,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.command import CommandResult
+from solveig.schema.result import accepted, declined, failed
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
@@ -75,7 +75,7 @@ async def command(
 
         if not run:
             await interface.display_warning("Rejected")
-            return ToolReturn(return_value="User declined to run the command.")
+            return declined("User declined to run the command.")
 
         output = ""
         error = ""
@@ -111,10 +111,10 @@ async def command(
                         await interface.display_error(
                             f"Found error when running command: {e}"
                         )
-                        return ToolReturn(return_value=f"Error: {e}")
+                        return failed(e)
         except asyncio.CancelledError:
             await interface.display_warning("Command cancelled by user")
-            return ToolReturn(return_value="Error: command cancelled by user")
+            return failed("command cancelled by user")
 
         if is_detached:
             await interface.display_info("Detached process launched")
@@ -131,20 +131,10 @@ async def command(
             == 1
         ):
             await interface.display_warning("Output hidden from assistant")
-            return ToolReturn(
-                return_value="User ran the command but declined to send the output."
-            )
+            return declined("User ran the command but declined to send the output.")
 
         await interface.display_success("Accepted")
         result = f"stdout:\n{output}"
         if error:
             result += f"\nstderr:\n{error}"
-        return ToolReturn(
-            return_value=result,
-            metadata=CommandResult(
-                accepted=True,
-                command=command,
-                stdout=output or None,
-                stderr=error or None,
-            ),
-        )
+        return accepted(result)

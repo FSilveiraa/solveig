@@ -23,10 +23,10 @@ class HttpResult(BaseSolveigModel):
 
     `trafilatura` (a `WrapperToolset` wrapping the `http` tool) reads
     `response_headers`/`body` off this directly instead of parsing the tool's
-    plain-text return value.
+    plain-text return value. Only ever attached on the accepted/success path -
+    no `accepted` field needed, its mere presence means the call succeeded.
     """
 
-    accepted: bool
     url: str
     status_code: int | None = None
     response_headers: dict[str, str] | None = None

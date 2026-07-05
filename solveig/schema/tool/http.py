@@ -8,7 +8,8 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.http import HttpResult, _format_body
+from solveig.schema.result import HttpResult, accepted, declined, failed
+from solveig.schema.result.http import _format_body
 from solveig.schema.tool._validation import validate_non_empty_path
 from solveig.utils.file import Filesystem
 
@@ -65,7 +66,7 @@ async def http(
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])
         ) != 0:
             await interface.display_warning("Rejected")
-            return ToolReturn(return_value="User declined to send the request.")
+            return declined("User declined to send the request.")
 
         # Step 2: make the request
         async def _request():
@@ -85,13 +86,13 @@ async def http(
             ) as task:
                 response = await task
         except asyncio.CancelledError:
-            return ToolReturn(return_value="Error: request cancelled by user.")
+            return failed("request cancelled by user.")
         except httpx.TimeoutException as e:
             await interface.display_error(f"Request timed out: {e}")
-            return ToolReturn(return_value=f"Error: timeout: {e}")
+            return failed(f"timeout: {e}")
         except httpx.RequestError as e:
             await interface.display_error(f"Request failed: {e}")
-            return ToolReturn(return_value=f"Error: request error: {e}")
+            return failed(f"request error: {e}")
 
         status_code = response.status_code
         response_headers = dict(response.headers)
@@ -105,9 +106,7 @@ async def http(
                 await interface.display_error(
                     f"Path blocked by ignore_paths: {output_abs_path}"
                 )
-                return ToolReturn(
-                    return_value=f"Error: path blocked by ignore_paths: {output_abs_path}"
-                )
+                return failed(f"path blocked by ignore_paths: {output_abs_path}")
 
             try:
                 await Filesystem.validate_write_access(
@@ -117,7 +116,7 @@ async def http(
                 )
             except (OSError, PermissionError) as e:
                 await interface.display_error(f"Cannot write to {output_abs_path}: {e}")
-                return ToolReturn(return_value=f"Error: {e}")
+                return failed(e)
 
             auto_write = Filesystem.path_matches_patterns(
                 output_abs_path, config.auto_allowed_paths
@@ -132,8 +131,8 @@ async def http(
                 )
             ) != 0:
                 await interface.display_warning("Rejected")
-                return ToolReturn(
-                    return_value=f"Status {status_code}. User declined to write the response."
+                return declined(
+                    f"Status {status_code}. User declined to write the response."
                 )
 
             try:
@@ -145,12 +144,11 @@ async def http(
                 await interface.display_success(f"Saved to {output_abs_path}")
             except OSError as e:
                 await interface.display_error(f"Failed to write file: {e}")
-                return ToolReturn(return_value=f"Error: {e}")
+                return failed(e)
 
-            return ToolReturn(
-                return_value=f"Status {status_code}. Saved response body to {output_abs_path}",
+            return accepted(
+                f"Status {status_code}. Saved response body to {output_abs_path}",
                 metadata=HttpResult(
-                    accepted=True,
                     url=url,
                     status_code=status_code,
                     response_headers=response_headers,
@@ -168,9 +166,7 @@ async def http(
         )
         if send_choice == 2:
             await interface.display_warning("Rejected")
-            return ToolReturn(
-                return_value=f"Status {status_code}. User declined to send the response."
-            )
+            return declined(f"Status {status_code}. User declined to send the response.")
 
         if send_choice == 1:
             content_type = response_headers.get("content-type")
@@ -186,18 +182,17 @@ async def http(
                 await interface.ask_choice("Send to assistant?", ["Send", "Don't send"])
             ) != 0:
                 await interface.display_warning("Rejected")
-                return ToolReturn(
-                    return_value=f"Status {status_code}. User declined to send the response."
+                return declined(
+                    f"Status {status_code}. User declined to send the response."
                 )
 
         await interface.display_success("Accepted")
         result = f"Status: {status_code}\n{raw}"
         if truncated:
             result += "\n(truncated)"
-        return ToolReturn(
-            return_value=result,
+        return accepted(
+            result,
             metadata=HttpResult(
-                accepted=True,
                 url=url,
                 status_code=status_code,
                 response_headers=response_headers,

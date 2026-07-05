@@ -4,7 +4,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.delete import DeleteResult
+from solveig.schema.result import accepted, declined, failed
 from solveig.schema.tool._validation import validate_non_empty_path
 from solveig.utils.file import Filesystem
 
@@ -26,16 +26,14 @@ async def delete(ctx: RunContext[SolveigDeps], path: str) -> ToolReturn:
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return ToolReturn(
-                return_value=f"Error: path blocked by ignore_paths: {abs_path}"
-            )
+            return failed(f"path blocked by ignore_paths: {abs_path}")
 
         try:
             is_directory = await Filesystem.is_dir(abs_path)
             await Filesystem.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(f"Cannot delete {abs_path}: {e}")
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)
 
         await interface.display_warning(
             "This operation is permanent and cannot be undone!"
@@ -54,15 +52,12 @@ async def delete(ctx: RunContext[SolveigDeps], path: str) -> ToolReturn:
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return ToolReturn(return_value="User declined the delete.")
+            return declined("User declined the delete.")
 
         try:
             await Filesystem.delete(abs_path)
             await interface.display_success("Deleted")
-            return ToolReturn(
-                return_value=f"Deleted {abs_path}",
-                metadata=DeleteResult(accepted=True, path=str(abs_path)),
-            )
+            return accepted(f"Deleted {abs_path}")
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)

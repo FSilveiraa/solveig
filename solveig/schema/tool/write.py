@@ -4,7 +4,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result.write import WriteResult
+from solveig.schema.result import accepted, declined, failed
 from solveig.schema.tool._validation import validate_non_empty_path
 from solveig.utils.file import Filesystem
 
@@ -33,9 +33,7 @@ async def write(
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return ToolReturn(
-                return_value=f"Error: path blocked by ignore_paths: {abs_path}"
-            )
+            return failed(f"path blocked by ignore_paths: {abs_path}")
 
         try:
             await Filesystem.validate_write_access(
@@ -45,7 +43,7 @@ async def write(
             )
         except (OSError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot write to {abs_path}: {e}")
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)
 
         already_exists = await Filesystem.exists(abs_path)
 
@@ -73,7 +71,7 @@ async def write(
             )
             if (await interface.ask_choice(question, ["Yes", "No"])) != 0:
                 await interface.display_warning("Rejected")
-                return ToolReturn(return_value="User declined the write.")
+                return declined("User declined the write.")
 
         try:
             if is_directory:
@@ -81,10 +79,7 @@ async def write(
             else:
                 await Filesystem.write_file_text(abs_path, content=content or "")
             await interface.display_success("Updated" if already_exists else "Created")
-            return ToolReturn(
-                return_value=f"{'Updated' if already_exists else 'Created'} {abs_path}",
-                metadata=WriteResult(accepted=True, path=str(abs_path)),
-            )
+            return accepted(f"{'Updated' if already_exists else 'Created'} {abs_path}")
         except Exception as e:
             await interface.display_error(f"Found error when writing file: {e}")
-            return ToolReturn(return_value=f"Error: {e}")
+            return failed(e)
