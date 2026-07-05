@@ -1,66 +1,12 @@
 """
 Schema definitions for Solveig's structured communication with LLMs.
 
-This module defines the data structures used for:
-- Messages exchanged between user, LLM, and system
-- Tools (file operations, shell commands)
-- Results and error handling
+Migration in progress - see ignore/project-logs/2026-07-04-18-34-pydantic-ai-migration.md.
+Tools are now plain pydantic-ai tool functions (solveig.schema.tool); the old
+BaseTool/ToolResult/discriminated-union model has been moved to
+ignore/pre-pydantic-ai-schema/ for reference and is being phased out.
 """
 
-from .result import (  # noqa: F401
-    CommandResult,
-    CopyResult,
-    DeleteResult,
-    EditResult,
-    HttpResult,
-    MoveResult,
-    ReadResult,
-    ToolResult,
-    WriteResult,
-)
-from .tool import (  # noqa: F401
-    BaseTool,
-    CommandTool,
-    CopyTool,
-    DeleteTool,
-    EditTool,
-    HttpTool,
-    MoveTool,
-    ReadTool,
-    WriteTool,
-)
+from .tool import CORE_TOOLS  # noqa: F401
 
-CORE_TOOLS: list[type[BaseTool]] = [
-    CommandTool,
-    CopyTool,
-    DeleteTool,
-    EditTool,
-    HttpTool,
-    MoveTool,
-    ReadTool,
-    WriteTool,
-]
-
-CORE_RESULTS: list[type[ToolResult]] = [
-    ReadResult,
-    WriteResult,
-    EditResult,
-    CommandResult,
-    HttpResult,
-    MoveResult,
-    CopyResult,
-    DeleteResult,
-    ToolResult,
-]
-
-
-# Rebuild Pydantic models to resolve forward references
-# Order matters: tools first, then results that reference them
-for tool in CORE_TOOLS:
-    tool.model_rebuild()
-
-for result in CORE_RESULTS:
-    result.model_rebuild()
-
-
-__all__ = ["CORE_TOOLS", "BaseTool"]
+__all__ = ["CORE_TOOLS"]

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from .base import ToolResult
+from solveig.schema.base import BaseSolveigModel
 
 
-class WriteResult(ToolResult):
-    title: Literal["write"] = "write"
+class WriteResult(BaseSolveigModel):
+    """Structured metadata for an accepted `write` call - not sent to the LLM."""
+
+    accepted: bool
     path: str

@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from solveig.interface import SolveigInterface
-
-from .base import ToolResult
+from solveig.schema.base import BaseSolveigModel
 
 
-class CommandResult(ToolResult):
-    title: Literal["command"] = "command"
+class CommandResult(BaseSolveigModel):
+    """Structured metadata for an accepted `command` call - not sent to the LLM."""
+
+    accepted: bool
     command: str
-    success: bool | None = None
     stdout: str | None = None
-
-    async def _display_content(self, interface: SolveigInterface) -> None:
-        if self.stdout:
-            await interface.display_text_box(self.stdout.rstrip(), title="Output")
+    stderr: str | None = None

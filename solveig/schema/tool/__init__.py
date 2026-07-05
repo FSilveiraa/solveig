@@ -1,39 +1,37 @@
-"""Tools module - core request types that LLMs can make."""
+"""Core tool functions the LLM can call, registered on a pydantic-ai FunctionToolset.
 
-from .base import BaseTool
-from .command import CommandTool
-from .copy import CopyTool
-from .delete import DeleteTool
-from .edit import EditTool
-from .http import HttpTool
-from .move import MoveTool
-from .read import ReadTool
-from .write import WriteTool
+Migration in progress - see ignore/project-logs/2026-07-04-18-34-pydantic-ai-migration.md.
+Old BaseTool-model implementations moved to ignore/pre-pydantic-ai-schema/ for reference.
+"""
 
-CORE_TOOLS: list[type[BaseTool]] = [
-    CommandTool,
-    CopyTool,
-    DeleteTool,
-    EditTool,
-    HttpTool,
-    MoveTool,
-    ReadTool,
-    WriteTool,
+from .command import command
+from .copy import copy
+from .delete import delete
+from .edit import edit
+from .http import http
+from .move import move
+from .read import read
+from .write import write
+
+CORE_TOOLS = [
+    read,
+    write,
+    edit,
+    delete,
+    copy,
+    move,
+    command,
+    http,
 ]
-
-# Rebuild Pydantic models to resolve forward references
-for tool in CORE_TOOLS:
-    tool.model_rebuild()
 
 __all__ = [
     "CORE_TOOLS",
-    "BaseTool",
-    "ReadTool",
-    "WriteTool",
-    "EditTool",
-    "CommandTool",
-    "HttpTool",
-    "MoveTool",
-    "CopyTool",
-    "DeleteTool",
+    "read",
+    "write",
+    "edit",
+    "delete",
+    "copy",
+    "move",
+    "command",
+    "http",
 ]

@@ -1,6 +1,9 @@
-"""Results module - response types for tool operations."""
+"""Structured metadata models for accepted tool calls.
 
-from .base import ToolResult
+Carried via `pydantic_ai.messages.ToolReturn.metadata` - not sent to the LLM,
+but readable by wrapper toolsets (hooks) and later session-replay display.
+"""
+
 from .command import CommandResult
 from .copy import CopyResult
 from .delete import DeleteResult
@@ -11,7 +14,6 @@ from .read import ReadResult
 from .write import WriteResult
 
 __all__ = [
-    "ToolResult",
     "ReadResult",
     "WriteResult",
     "EditResult",

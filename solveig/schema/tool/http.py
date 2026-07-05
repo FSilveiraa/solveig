@@ -1,0 +1,207 @@
+"""HTTP tool - makes HTTP requests."""
+
+import asyncio
+import json
+
+import httpx
+from pydantic_ai import RunContext
+from pydantic_ai.messages import ToolReturn
+
+from solveig.schema.deps import SolveigDeps
+from solveig.schema.result.http import HttpResult, _format_body
+from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.utils.file import Filesystem
+
+
+async def http(
+    ctx: RunContext[SolveigDeps],
+    url: str,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    body: str | None = None,
+    follow_redirects: bool = True,
+    output_file: str | None = None,
+) -> ToolReturn:
+    """Make an HTTP request.
+
+    Use output_file to download binary content to disk.
+
+    Args:
+        url: URL to send the request to.
+        method: HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD).
+        headers: Optional request headers.
+        body: Optional request body (raw string or JSON).
+        follow_redirects: Whether to follow redirects.
+        output_file: If set, write the response body to this file path instead of returning it.
+    """
+    config = ctx.deps.config
+    interface = ctx.deps.interface
+
+    url = validate_non_empty_path(url)
+
+    async with interface.with_group(
+        f"Http: {method} {url}", auto_collapse=config.auto_collapse_tools
+    ):
+        await interface.display_text(url, prefix=method)
+        if headers:
+            headers_text = "\n".join(f"{k}: {v}" for k, v in headers.items())
+            await interface.display_text_box(headers_text, title="Request Headers")
+        if body:
+            try:
+                parsed = json.loads(body)
+                body_display = json.dumps(parsed, indent=2)
+                language = ".json"
+            except (json.JSONDecodeError, ValueError):
+                body_display = body
+                language = ""
+            await interface.display_text_box(
+                body_display, title="Request Body", language=language
+            )
+        if output_file:
+            await interface.display_text(output_file, prefix="Output file:")
+
+        # Step 1: consent to send the request
+        if (
+            await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])
+        ) != 0:
+            await interface.display_warning("Rejected")
+            return ToolReturn(return_value="User declined to send the request.")
+
+        # Step 2: make the request
+        async def _request():
+            async with httpx.AsyncClient(
+                timeout=config.http_timeout, follow_redirects=follow_redirects
+            ) as client:
+                return await client.request(
+                    method=method,
+                    url=url,
+                    headers=headers or {},
+                    content=body.encode() if body else None,
+                )
+
+        try:
+            async with interface.with_cancellable(
+                _request(), status="Sending request", timeout=config.http_timeout
+            ) as task:
+                response = await task
+        except asyncio.CancelledError:
+            return ToolReturn(return_value="Error: request cancelled by user.")
+        except httpx.TimeoutException as e:
+            await interface.display_error(f"Request timed out: {e}")
+            return ToolReturn(return_value=f"Error: timeout: {e}")
+        except httpx.RequestError as e:
+            await interface.display_error(f"Request failed: {e}")
+            return ToolReturn(return_value=f"Error: request error: {e}")
+
+        status_code = response.status_code
+        response_headers = dict(response.headers)
+        await interface.display_text(str(status_code), prefix="Status:")
+
+        # Step 3: consent to send back / write result
+        if output_file:
+            output_abs_path = Filesystem.get_absolute_path(output_file)
+
+            if Filesystem.path_matches_patterns(output_abs_path, config.ignore_paths):
+                await interface.display_error(
+                    f"Path blocked by ignore_paths: {output_abs_path}"
+                )
+                return ToolReturn(
+                    return_value=f"Error: path blocked by ignore_paths: {output_abs_path}"
+                )
+
+            try:
+                await Filesystem.validate_write_access(
+                    path=output_abs_path,
+                    content=response.content,
+                    min_disk_size_left=config.min_disk_space_left,
+                )
+            except (OSError, PermissionError) as e:
+                await interface.display_error(f"Cannot write to {output_abs_path}: {e}")
+                return ToolReturn(return_value=f"Error: {e}")
+
+            auto_write = Filesystem.path_matches_patterns(
+                output_abs_path, config.auto_allowed_paths
+            )
+            if auto_write:
+                await interface.display_info(
+                    "Writing output file since path is auto-allowed."
+                )
+            elif (
+                await interface.ask_choice(
+                    f"Write response to {output_abs_path}?", ["Yes", "No"]
+                )
+            ) != 0:
+                await interface.display_warning("Rejected")
+                return ToolReturn(
+                    return_value=f"Status {status_code}. User declined to write the response."
+                )
+
+            try:
+                await Filesystem.write_file_bytes(
+                    output_abs_path,
+                    content=response.content,
+                    min_space_left=config.min_disk_space_left,
+                )
+                await interface.display_success(f"Saved to {output_abs_path}")
+            except OSError as e:
+                await interface.display_error(f"Failed to write file: {e}")
+                return ToolReturn(return_value=f"Error: {e}")
+
+            return ToolReturn(
+                return_value=f"Status {status_code}. Saved response body to {output_abs_path}",
+                metadata=HttpResult(
+                    accepted=True,
+                    url=url,
+                    status_code=status_code,
+                    response_headers=response_headers,
+                    output_file=str(output_abs_path),
+                ),
+            )
+
+        raw = response.text
+        truncated = len(raw) > config.http_max_response_bytes
+        if truncated:
+            raw = raw[: config.http_max_response_bytes]
+
+        send_choice = await interface.ask_choice(
+            "Send response to assistant?", ["Send", "Inspect first", "Don't send"]
+        )
+        if send_choice == 2:
+            await interface.display_warning("Rejected")
+            return ToolReturn(
+                return_value=f"Status {status_code}. User declined to send the response."
+            )
+
+        if send_choice == 1:
+            content_type = response_headers.get("content-type")
+            body_display, language = _format_body(raw, content_type)
+            await interface.display_text_box(
+                body_display, title="Response Body", language=language
+            )
+            if truncated:
+                await interface.display_warning(
+                    "Response body was truncated (see config.http_max_response_bytes)"
+                )
+            if (
+                await interface.ask_choice("Send to assistant?", ["Send", "Don't send"])
+            ) != 0:
+                await interface.display_warning("Rejected")
+                return ToolReturn(
+                    return_value=f"Status {status_code}. User declined to send the response."
+                )
+
+        await interface.display_success("Accepted")
+        result = f"Status: {status_code}\n{raw}"
+        if truncated:
+            result += "\n(truncated)"
+        return ToolReturn(
+            return_value=result,
+            metadata=HttpResult(
+                accepted=True,
+                url=url,
+                status_code=status_code,
+                response_headers=response_headers,
+                body=raw,
+                truncated=truncated,
+            ),
+        )

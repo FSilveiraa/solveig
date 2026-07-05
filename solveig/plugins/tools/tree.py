@@ -1,82 +1,51 @@
-"""TreeTool plugin - Generate directory tree listings."""
+"""Tree plugin tool - generates directory tree listings."""
 
-from __future__ import annotations
+from pydantic_ai import RunContext
+from pydantic_ai.messages import ToolReturn
 
-from typing import Annotated, Literal
-
-from pydantic import Field, field_validator
-
-from solveig.interface import SolveigInterface
-from solveig.plugins.tools import tool
-from solveig.schema.result.base import ToolResult
-from solveig.schema.tool.base import (
-    BaseTool,
-    Positional,
-    validate_non_empty_path,
-)
+from solveig.schema.base import BaseSolveigModel
+from solveig.schema.deps import SolveigDeps
+from solveig.schema.tool._validation import validate_non_empty_path
 from solveig.utils.file import Filesystem, Metadata
 
 
-class TreeResult(ToolResult):
-    title: Literal["tree"] = "tree"
+class TreeResult(BaseSolveigModel):
+    """Structured metadata for an accepted `tree` call - not sent to the LLM."""
+
+    accepted: bool
     path: str
-    metadata: Metadata | None  # Complete tree metadata
-
-    async def _display_content(self, interface: SolveigInterface) -> None:
-        if self.metadata:
-            await interface.display_tree(self.metadata, expand_root=False)
+    metadata: Metadata | None = None
 
 
-@tool
-class TreeTool(BaseTool):
-    """Generate a directory tree listing showing file structure."""
+async def tree(
+    ctx: RunContext[SolveigDeps],
+    path: str,
+    max_depth: int = -1,
+) -> str | ToolReturn:
+    """Generate a directory tree listing showing file structure.
 
-    type: Literal["tree"] = "tree"
-    path: Annotated[str, Positional(0)] = Field(
-        ..., description="Directory path to generate tree for"
-    )
-    max_depth: int = Field(
-        default=-1, description="Maximum depth to explore (-1 for full tree)"
-    )
+    Args:
+        path: Directory path to generate tree for (supports ~ for home directory).
+        max_depth: Maximum depth to explore (-1 for full tree).
+    """
+    config = ctx.deps.config
+    interface = ctx.deps.interface
 
-    @field_validator("path")
-    @classmethod
-    def path_not_empty(cls, path: str) -> str:
-        return validate_non_empty_path(path)
+    path = validate_non_empty_path(path)
+    abs_path = Filesystem.get_absolute_path(path)
 
-    async def display_header(
-        self, interface: SolveigInterface, detailed: bool = False
-    ) -> None:
-        """Display tree tool header."""
-        await super().display_header(interface)
-        await self.display_path_info(interface, self.path)
-
-    def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
-        """Create TreeResult with error."""
-        return TreeResult(
-            tool=self,
-            path=self.path,
-            accepted=accepted,
-            error=error_message,
-            metadata=None,
-        )
-
-    @classmethod
-    def get_description(cls) -> str:
-        """Return description of tree capability."""
-        return (
-            "tree(path): generates a directory tree structure showing files and folders"
-        )
-
-    async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
-        abs_path = Filesystem.get_absolute_path(self.path)
-
+    async with interface.with_group(
+        f"Tree: {path}", auto_collapse=config.auto_collapse_tools
+    ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
-            return self.create_error_result(
-                f"Path blocked by ignore_paths: {abs_path}", accepted=False
-            )
+            await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
+            return f"Error: path blocked by ignore_paths: {abs_path}"
 
-        await Filesystem.validate_read_access(abs_path)
+        try:
+            await Filesystem.validate_read_access(abs_path)
+        except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
+            await interface.display_error(f"Cannot access {abs_path}: {e}")
+            return f"Error: {e}"
 
         choice_read_tree = await interface.ask_choice(
             "Allow reading tree?",
@@ -87,47 +56,35 @@ class TreeTool(BaseTool):
             ],
         )
 
-        if choice_read_tree <= 1:
-            metadata = await Filesystem.read_metadata(
-                abs_path, descend_level=self.max_depth
-            )
+        if choice_read_tree > 1:
+            await interface.display_warning("Rejected")
+            return "User declined to read the tree."
 
-            # Display the tree structure
-            await interface.display_tree(
-                metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
-            )
-
-            if (
-                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
-                or choice_read_tree == 0
-            ):
-                accepted = True
-                if choice_read_tree != 0:
-                    await interface.display_text(
-                        f"Sending tree since {abs_path} matches config.auto_allowed_paths"
-                    )
-            else:
-                accepted = (
-                    await interface.ask_choice(
-                        "Allow sending tree?", choices=["Yes", "No"]
-                    )
-                ) == 0
-
-            if accepted:
-                return TreeResult(
-                    tool=self,
-                    accepted=True,
-                    path=str(abs_path),
-                    metadata=metadata,
-                )
-
-        return TreeResult(
-            tool=self,
-            accepted=False,
-            path=str(abs_path),
-            metadata=None,
+        metadata = await Filesystem.read_metadata(abs_path, descend_level=max_depth)
+        await interface.display_tree(
+            metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
         )
 
+        path_matches = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
+        if path_matches or choice_read_tree == 0:
+            if path_matches and choice_read_tree != 0:
+                await interface.display_info(
+                    f"Sending tree since {abs_path} matches config.auto_allowed_paths"
+                )
+            accepted = True
+        else:
+            accepted = (
+                await interface.ask_choice("Allow sending tree?", ["Yes", "No"]) == 0
+            )
 
-# Fix possible forward typing references
-TreeResult.model_rebuild()
+        if not accepted:
+            await interface.display_warning("Rejected")
+            return "User declined to send the tree."
+
+        await interface.display_success("Accepted")
+        return ToolReturn(
+            return_value=str(BaseSolveigModel._dump_pydantic_field(metadata)),
+            metadata=TreeResult(accepted=True, path=str(abs_path), metadata=metadata),
+        )

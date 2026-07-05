@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from .base import ToolResult
+from solveig.schema.base import BaseSolveigModel
 
 
-class CopyResult(ToolResult):
-    title: Literal["copy"] = "copy"
+class CopyResult(BaseSolveigModel):
+    """Structured metadata for an accepted `copy` call - not sent to the LLM."""
+
+    accepted: bool
     source_path: str
     destination_path: str

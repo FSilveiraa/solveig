@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Literal
 
-from solveig.interface import SolveigInterface
-
-from .base import ToolResult
+from solveig.schema.base import BaseSolveigModel
 
 
 def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
@@ -21,33 +18,18 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
     return body, ""
 
 
-class HttpResult(ToolResult):
-    title: Literal["http"] = "http"
+class HttpResult(BaseSolveigModel):
+    """Structured metadata for an accepted `http` call - not sent to the LLM.
+
+    `trafilatura` (a `WrapperToolset` wrapping the `http` tool) reads
+    `response_headers`/`body` off this directly instead of parsing the tool's
+    plain-text return value.
+    """
+
+    accepted: bool
+    url: str
     status_code: int | None = None
     response_headers: dict[str, str] | None = None
     body: str | None = None
     truncated: bool = False
     output_file: str | None = None
-
-    async def _display_content(self, interface: SolveigInterface) -> None:
-        if self.status_code is not None:
-            await interface.display_text(str(self.status_code), prefix="Status:")
-
-        if self.response_headers:
-            headers_text = "\n".join(
-                f"{k}: {v}" for k, v in self.response_headers.items()
-            )
-            await interface.display_text_box(headers_text, title="Response Headers")
-
-        if self.output_file:
-            await interface.display_success(f"Saved to {self.output_file}")
-        elif self.body:
-            content_type = (self.response_headers or {}).get("content-type")
-            body_display, language = _format_body(self.body, content_type)
-            await interface.display_text_box(
-                body_display, title="Response Body", language=language
-            )
-            if self.truncated:
-                await interface.display_warning(
-                    "Response body was truncated (see config.http_max_response_bytes)"
-                )
