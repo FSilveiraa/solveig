@@ -1,28 +1,25 @@
 """Tree plugin tool - generates directory tree listings."""
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool import ToolResult, tool
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
+@tool
 async def tree(
-    ctx: RunContext[SolveigDeps],
+    config: SolveigConfig,
+    interface: SolveigInterface,
     path: str,
     max_depth: int = -1,
-) -> ToolReturn:
+) -> ToolResult:
     """Generate a directory tree listing showing file structure.
 
     Args:
         path: Directory path to generate tree for (supports ~ for home directory).
         max_depth: Maximum depth to explore (-1 for full tree).
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 
@@ -31,13 +28,13 @@ async def tree(
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return failed(f"path blocked by ignore_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot access {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         choice_read_tree = await interface.ask_choice(
             "Allow reading tree?",
@@ -50,7 +47,7 @@ async def tree(
 
         if choice_read_tree > 1:
             await interface.display_warning("Rejected")
-            return declined("User declined to read the tree.")
+            return ToolResult(content="User declined to read the tree.")
 
         metadata = await Filesystem.read_metadata(abs_path, descend_level=max_depth)
         await interface.display_tree(
@@ -73,7 +70,7 @@ async def tree(
 
         if not allow_send:
             await interface.display_warning("Rejected")
-            return declined("User declined to send the tree.")
+            return ToolResult(content="User declined to send the tree.")
 
         await interface.display_success("Accepted")
-        return accepted(metadata)
+        return ToolResult(content=metadata)

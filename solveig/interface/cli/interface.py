@@ -20,7 +20,7 @@ from solveig.interface.cli.widgets import Comment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.schema.message.pending import PendingMessageQueue
 from solveig.schema.message.user import UserComment
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
 
@@ -149,7 +149,7 @@ class TerminalInterface(SolveigInterface):
 
     async def display_tree(
         self,
-        metadata: Metadata,
+        metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
         expand_root=True,

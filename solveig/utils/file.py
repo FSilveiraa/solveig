@@ -18,7 +18,7 @@ from solveig.utils.misc import parse_human_readable_size
 
 
 @dataclass
-class Metadata:
+class FileMetadata:
     owner_name: str
     group_name: str
     path: str
@@ -31,7 +31,7 @@ class Metadata:
         description="Last modified time for file or dir as UNIX timestamp",
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
-    listing: dict[str, "Metadata"] | None = None
+    listing: dict[str, "FileMetadata"] | None = None
     line_count: int | None = None
 
 
@@ -259,7 +259,7 @@ class Filesystem:
             return False
 
     @classmethod
-    async def read_metadata(cls, abs_path: Path, descend_level=1) -> Metadata:
+    async def read_metadata(cls, abs_path: Path, descend_level=1) -> FileMetadata:
         """Async read metadata and dir structure from filesystem using AnyIO."""
         # Use AnyIO for stat operations
         stats = await abs_path.stat()
@@ -306,7 +306,7 @@ class Filesystem:
             except Exception:
                 pass
 
-        return Metadata(
+        return FileMetadata(
             path=str(abs_path),
             size=stats.st_size,
             modified_time=int(stats.st_mtime),

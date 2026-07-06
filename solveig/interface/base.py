@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
 
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
     from solveig.schema.message.pending import PendingMessageQueue
@@ -140,7 +140,7 @@ class SolveigInterface(ABC):
     @abstractmethod
     async def display_tree(
         self,
-        metadata: Metadata,
+        metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
         expand_root=True,

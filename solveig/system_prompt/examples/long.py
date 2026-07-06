@@ -14,7 +14,7 @@ from solveig.schema.tool import (
     ReadTool,
     WriteTool,
 )
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 
 EXAMPLE = MessageHistory(system_prompt="")
 
@@ -29,7 +29,7 @@ tree_req = TreeTool(
     comment="I'll analyze the tree structure of ~/Sync",
     path="~/Sync",
 )
-tree_metadata = Metadata(
+tree_metadata = FileMetadata(
     owner_name="user",
     group_name="user",
     path="/home/user/Sync",
@@ -40,7 +40,7 @@ tree_metadata = Metadata(
     modified_time=1758556702,
     encoding=None,
     listing={
-        "/home/user/Sync/config.json": Metadata(
+        "/home/user/Sync/config.json": FileMetadata(
             owner_name="user",
             group_name="user",
             path="/home/user/Sync/config.json",
@@ -52,7 +52,7 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        "/home/user/Sync/d1": Metadata(
+        "/home/user/Sync/d1": FileMetadata(
             owner_name="user",
             group_name="user",
             path="/home/user/Sync/d1",
@@ -63,7 +63,7 @@ tree_metadata = Metadata(
             modified_time=1758556735,
             encoding=None,
             listing={
-                "/home/user/Sync/d1/d2": Metadata(
+                "/home/user/Sync/d1/d2": FileMetadata(
                     owner_name="user",
                     group_name="user",
                     path="/home/user/Sync/d1/d2",
@@ -74,7 +74,7 @@ tree_metadata = Metadata(
                     modified_time=1758556743,
                     encoding=None,
                     listing={
-                        "/home/user/Sync/d1/d2/f1": Metadata(
+                        "/home/user/Sync/d1/d2/f1": FileMetadata(
                             owner_name="user",
                             group_name="user",
                             path="/home/user/Sync/d1/d2/f1",
@@ -90,7 +90,7 @@ tree_metadata = Metadata(
                 )
             },
         ),
-        "/home/user/Sync/init.sh": Metadata(
+        "/home/user/Sync/init.sh": FileMetadata(
             owner_name="user",
             group_name="user",
             path="/home/user/Sync/init.sh",
@@ -102,7 +102,7 @@ tree_metadata = Metadata(
             encoding=None,
             listing=None,
         ),
-        "/home/user/Sync/hello.py": Metadata(
+        "/home/user/Sync/hello.py": FileMetadata(
             owner_name="user",
             group_name="user",
             path="/home/user/Sync/hello.py",
@@ -175,7 +175,7 @@ EXAMPLE.add_messages(
                 tool=read_hello_py_req,
                 path="/home/user/Sync/hello.py",
                 accepted=True,
-                metadata=Metadata(
+                metadata=FileMetadata(
                     owner_name="user",
                     group_name="user",
                     path="/home/user/Sync/hello.py",
@@ -204,7 +204,7 @@ echo "Project initialized." > tmp/init.flag
                 ],
                 path="/home/user/Sync/init.sh",
                 accepted=True,
-                metadata=Metadata(
+                metadata=FileMetadata(
                     owner_name="user",
                     group_name="user",
                     path="/home/user/Sync/init.sh",

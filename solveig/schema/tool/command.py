@@ -3,20 +3,21 @@
 import asyncio
 import re
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 
+@tool
 async def command(
-    ctx: RunContext[SolveigDeps],
+    config: SolveigConfig,
+    interface: SolveigInterface,
     command: str,
     timeout: float = 10.0,
-) -> ToolReturn:
+) -> ToolResult:
     """Execute a shell command and inspect its output.
 
     Changing cwd path persists between commands.
@@ -27,9 +28,6 @@ async def command(
             timeout<=0 to launch a detached process (non-blocking, like '&' in a shell,
             does not capture stdout/stderr, useful for long-running or GUI processes).
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     command = command.strip()
     if not command:
         raise ValueError("Empty command")
@@ -75,7 +73,7 @@ async def command(
 
         if not run:
             await interface.display_warning("Rejected")
-            return declined("User declined to run the command.")
+            return ToolResult(content="User declined to run the command.")
 
         output = ""
         error = ""
@@ -111,10 +109,10 @@ async def command(
                         await interface.display_error(
                             f"Found error when running command: {e}"
                         )
-                        return failed(e)
+                        return ToolResult(issues=[e])
         except asyncio.CancelledError:
             await interface.display_warning("Command cancelled by user")
-            return failed("command cancelled by user")
+            return ToolResult(issues=["command cancelled by user"])
 
         if is_detached:
             await interface.display_info("Detached process launched")
@@ -131,10 +129,12 @@ async def command(
             == 1
         ):
             await interface.display_warning("Output hidden from assistant")
-            return declined("User ran the command but declined to send the output.")
+            return ToolResult(
+                content="User ran the command but declined to send the output."
+            )
 
         await interface.display_success("Accepted")
         result = f"stdout:\n{output}"
         if error:
             result += f"\nstderr:\n{error}"
-        return accepted(result)
+        return ToolResult(content=result)

@@ -1,26 +1,26 @@
 """Move tool - moves files and directories."""
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
+@tool
 async def move(
-    ctx: RunContext[SolveigDeps], source_path: str, destination_path: str
-) -> ToolReturn:
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    source_path: str,
+    destination_path: str,
+) -> ToolResult:
     """Move a file or directory.
 
     Args:
         source_path: Current path of file/directory to move (supports ~ for home directory).
         destination_path: New path where file/directory should be moved to.
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     source_path = validate_non_empty_path(source_path)
     destination_path = validate_non_empty_path(destination_path)
     abs_source_path = Filesystem.get_absolute_path(source_path)
@@ -35,7 +35,7 @@ async def move(
                 await interface.display_error(
                     f"Path blocked by ignore_paths: {blocked}"
                 )
-                return failed(f"path blocked by ignore_paths: {blocked}")
+                return ToolResult(issues=[f"path blocked by ignore_paths: {blocked}"])
 
         try:
             await Filesystem.validate_read_access(abs_source_path)
@@ -45,7 +45,7 @@ async def move(
             await interface.display_error(
                 f"Cannot move from {abs_source_path} to {abs_destination_path}: {e}"
             )
-            return failed(e)
+            return ToolResult(issues=[e])
 
         await interface.display_text(str(abs_source_path), prefix="Source:")
         await interface.display_text(str(abs_destination_path), prefix="Destination:")
@@ -73,12 +73,14 @@ async def move(
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return declined("User declined the move.")
+            return ToolResult(content="User declined the move.")
 
         try:
             await Filesystem.move(abs_source_path, abs_destination_path)
             await interface.display_success("Moved")
-            return accepted(f"Moved {abs_source_path} to {abs_destination_path}")
+            return ToolResult(
+                content=f"Moved {abs_source_path} to {abs_destination_path}"
+            )
         except (PermissionError, OSError, FileExistsError) as e:
             await interface.display_error(f"Found error when moving: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])

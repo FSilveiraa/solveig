@@ -1,14 +1,13 @@
 """Read tool - reads files and directories."""
 
 from anyio import Path
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
 
+from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
-from solveig.utils.file import Filesystem, Metadata
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
+from solveig.utils.file import FileMetadata, Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
 def _validate_line_ranges(ranges: list[list[int]]) -> None:
@@ -27,8 +26,8 @@ def _validate_line_ranges(ranges: list[list[int]]) -> None:
 
 
 async def _read_metadata_only(
-    interface: SolveigInterface, path_matches: bool, metadata: Metadata
-) -> ToolReturn:
+    interface: SolveigInterface, path_matches: bool, metadata: FileMetadata
+) -> ToolResult:
     """Directory or metadata_only request: offer to send just the file/dir metadata."""
     if metadata.is_directory:
         await interface.display_tree(metadata=metadata)
@@ -44,10 +43,10 @@ async def _read_metadata_only(
 
     if not send_metadata:
         await interface.display_warning("Rejected")
-        return declined("User declined to send metadata.")
+        return ToolResult(content="User declined to send metadata.")
 
     await interface.display_success("Accepted")
-    return accepted(metadata)
+    return ToolResult(content=metadata)
 
 
 async def _read_content(
@@ -55,8 +54,8 @@ async def _read_content(
     abs_path: Path,
     path_matches: bool,
     line_ranges: list[list[int]] | None,
-    metadata: Metadata,
-) -> ToolReturn:
+    metadata: FileMetadata,
+) -> ToolResult:
     """File content request: negotiate depth of access, read, display, then send."""
     if line_ranges:
         request_desc = ", ".join(f"{start} to {end}" for start, end in line_ranges)
@@ -84,11 +83,11 @@ async def _read_content(
 
     if choice == 2:
         await interface.display_warning("Rejected")
-        return accepted(metadata)
+        return ToolResult(content=metadata)
 
     if choice == 3:
         await interface.display_warning("Rejected")
-        return declined("User declined to send anything.")
+        return ToolResult(content="User declined to send anything.")
 
     # choice in (0, 1): read and display the content before deciding further
     if line_ranges:
@@ -98,7 +97,7 @@ async def _read_content(
             )
         except ValueError as e:
             await interface.display_error(f"Invalid line range: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
         for start, end, text in content_ranges:
             await interface.display_text_box(
                 text,
@@ -122,7 +121,7 @@ async def _read_content(
 
     if choice == 0:
         await interface.display_success("Accepted")
-        return accepted(content_str)
+        return ToolResult(content=content_str)
 
     # choice == 1: inspect first, then decide
     send_choice = await interface.ask_choice(
@@ -131,20 +130,22 @@ async def _read_content(
     )
     if send_choice == 0:
         await interface.display_success("Accepted")
-        return accepted(content_str)
+        return ToolResult(content=content_str)
     if send_choice == 1:
         await interface.display_warning("Rejected")
-        return accepted(metadata)
+        return ToolResult(content=metadata)
     await interface.display_warning("Rejected")
-    return declined("User declined to send anything.")
+    return ToolResult(content="User declined to send anything.")
 
 
+@tool
 async def read(
-    ctx: RunContext[SolveigDeps],
+    config: SolveigConfig,
+    interface: SolveigInterface,
     path: str,
     metadata_only: bool,
     line_ranges: list[list[int]] | None = None,
-) -> ToolReturn:
+) -> ToolResult:
     """Read a file or directory.
 
     Files can be read for metadata only, full contents, or specific line ranges.
@@ -157,9 +158,6 @@ async def read(
             of file, e.g. [[10, -1]]. If not provided, reads the entire file. Ignored for
             directories and metadata_only.
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     path = validate_non_empty_path(path)
     if line_ranges:
         _validate_line_ranges(line_ranges)
@@ -171,13 +169,13 @@ async def read(
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return failed(f"path blocked by ignore_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot access {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         path_matches = Filesystem.path_matches_patterns(
             abs_path, config.auto_allowed_paths

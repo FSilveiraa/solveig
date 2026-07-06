@@ -7,7 +7,7 @@ from textual.dom import DOMNode
 from textual.widgets import Collapsible, Markdown, Static
 
 from solveig.interface.themes import Palette
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 
 from .collapsible_widgets import (
     CollapsibleTextBox,
@@ -119,7 +119,7 @@ class ConversationArea(ScrollableContainer):
 
     async def add_tree_display(
         self,
-        metadata: Metadata,
+        metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
         expand_root=True,

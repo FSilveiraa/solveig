@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pytest
 
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 from solveig.utils.misc import parse_human_readable_size
 
 pytestmark = pytest.mark.anyio
@@ -55,11 +55,11 @@ class TestSizeNotationParsing:
 
 
 class TestMetadata:
-    """Test Metadata dataclass."""
+    """Test FileMetadata dataclass."""
 
     async def test_metadata_creation(self):
         """Test creating metadata object."""
-        metadata = Metadata(
+        metadata = FileMetadata(
             owner_name="test_user",
             group_name="test_group",
             path="/test/file.txt",

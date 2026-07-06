@@ -1,23 +1,22 @@
 """Delete tool - permanently deletes files and directories."""
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
-async def delete(ctx: RunContext[SolveigDeps], path: str) -> ToolReturn:
+@tool
+async def delete(
+    config: SolveigConfig, interface: SolveigInterface, path: str
+) -> ToolResult:
     """Permanently delete a file or directory.
 
     Args:
         path: Path of file/directory to permanently delete (supports ~ for home directory).
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 
@@ -26,14 +25,14 @@ async def delete(ctx: RunContext[SolveigDeps], path: str) -> ToolReturn:
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return failed(f"path blocked by ignore_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
 
         try:
             is_directory = await Filesystem.is_dir(abs_path)
             await Filesystem.validate_delete_access(abs_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(f"Cannot delete {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         await interface.display_warning(
             "This operation is permanent and cannot be undone!"
@@ -52,12 +51,12 @@ async def delete(ctx: RunContext[SolveigDeps], path: str) -> ToolReturn:
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return declined("User declined the delete.")
+            return ToolResult(content="User declined the delete.")
 
         try:
             await Filesystem.delete(abs_path)
             await interface.display_success("Deleted")
-            return accepted(f"Deleted {abs_path}")
+            return ToolResult(content=f"Deleted {abs_path}")
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Found error when deleting: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])

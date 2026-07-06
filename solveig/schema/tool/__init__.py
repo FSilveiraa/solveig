@@ -4,6 +4,8 @@ Migration in progress - see ignore/project-logs/2026-07-04-18-34-pydantic-ai-mig
 Old BaseTool-model implementations moved to ignore/pre-pydantic-ai-schema/ for reference.
 """
 
+from ._decorator import tool
+from ._result import ToolResult
 from .command import command
 from .copy import copy
 from .delete import delete
@@ -26,6 +28,8 @@ CORE_TOOLS = [
 
 __all__ = [
     "CORE_TOOLS",
+    "ToolResult",
+    "tool",
     "read",
     "write",
     "edit",

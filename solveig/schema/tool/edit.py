@@ -1,21 +1,22 @@
 """Edit tool - edits files using exact string replacement."""
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
+@tool
 async def edit(
-    ctx: RunContext[SolveigDeps],
+    config: SolveigConfig,
+    interface: SolveigInterface,
     path: str,
     old_string: str,
     new_string: str,
     replace_all: bool = False,
-) -> ToolReturn:
+) -> ToolResult:
     """Edit a file by replacing exact string matches.
 
     old_string must exist in the file. new_string can be empty for deletion.
@@ -27,9 +28,6 @@ async def edit(
         new_string: String to replace with (can be empty for deletion).
         replace_all: Replace all occurrences (default: replace first only, error if multiple).
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     path = validate_non_empty_path(path)
     if not old_string:
         raise ValueError("old_string cannot be empty")
@@ -41,7 +39,7 @@ async def edit(
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return failed(f"path blocked by ignore_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
 
         old_preview = repr(
             old_string[:60] + "..." if len(old_string) > 60 else old_string
@@ -59,11 +57,11 @@ async def edit(
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
             await interface.display_error(f"Cannot read {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         if await Filesystem.is_dir(abs_path):
             await interface.display_error("Cannot edit a directory")
-            return failed("cannot edit a directory")
+            return ToolResult(issues=["cannot edit a directory"])
 
         try:
             await Filesystem.validate_write_access(
@@ -71,31 +69,31 @@ async def edit(
             )
         except (PermissionError, OSError) as e:
             await interface.display_error(f"Cannot write to {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         # 2. Read current content
         try:
             read_result = await Filesystem.read_file(abs_path)
             if read_result.encoding != "text":
                 await interface.display_error("Cannot edit binary files")
-                return failed("cannot edit binary files")
+                return ToolResult(issues=["cannot edit binary files"])
             original_content = read_result.content
         except Exception as e:
             await interface.display_error(f"Failed to read file: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         # 3. Validate old_string exists
         occurrences_found = original_content.count(old_string)
         if occurrences_found == 0:
             await interface.display_error(f"String not found in file: {old_preview}")
-            return failed(f"string not found: {old_preview}")
+            return ToolResult(issues=[f"string not found: {old_preview}"])
         if occurrences_found > 1 and not replace_all:
             await interface.display_error(
                 f"String appears {occurrences_found} times. "
                 f"Use replace_all=true or make the search string more specific."
             )
-            return failed(
-                f"string appears {occurrences_found} times, replace_all=false"
+            return ToolResult(
+                issues=[f"string appears {occurrences_found} times, replace_all=false"]
             )
         occurrences_replaced = occurrences_found if replace_all else 1
 
@@ -124,7 +122,7 @@ async def edit(
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return declined("User declined the edit.")
+            return ToolResult(content="User declined the edit.")
 
         # 6. Apply edit
         try:
@@ -134,9 +132,9 @@ async def edit(
             await interface.display_success(
                 f"Edit applied: {occurrences_replaced} replacement(s)"
             )
-            return accepted(
-                f"Edited {abs_path}: {occurrences_replaced} replacement(s)"
+            return ToolResult(
+                content=f"Edited {abs_path}: {occurrences_replaced} replacement(s)"
             )
         except Exception as e:
             await interface.display_error(f"Failed to write file: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])

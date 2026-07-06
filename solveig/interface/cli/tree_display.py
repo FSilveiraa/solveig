@@ -6,22 +6,22 @@ from pathlib import PurePath
 from textual.widgets import Tree
 
 from solveig.interface.themes import Palette
-from solveig.utils.file import Metadata
+from solveig.utils.file import FileMetadata
 from solveig.utils.misc import convert_size_to_human_readable
 
 
 class TreeDisplay(Tree):
     """
-    Interactive tree widget that displays directory structures from Metadata.
+    Interactive tree widget that displays directory structures from FileMetadata.
 
     Unlike DirectoryTree, this builds a complete static tree from existing
-    Metadata without on-demand loading, ensuring consistent display regardless
+    FileMetadata without on-demand loading, ensuring consistent display regardless
     of user interaction.
     """
 
     def __init__(
         self,
-        metadata: Metadata,
+        metadata: FileMetadata,
         display_metadata: bool = False,
         expand_root=True,
         **kwargs,
@@ -38,7 +38,7 @@ class TreeDisplay(Tree):
             self.root.expand()
 
     def _format_node_label(
-        self, metadata: Metadata, display_metadata: bool = False
+        self, metadata: FileMetadata, display_metadata: bool = False
     ) -> str:
         """Format a node label from metadata, matching current tree display format."""
         icon = "🗁" if metadata.is_directory else "🗎"
@@ -58,7 +58,7 @@ class TreeDisplay(Tree):
 
         return label
 
-    def _build_tree_from_metadata(self, parent_node, metadata: Metadata):
+    def _build_tree_from_metadata(self, parent_node, metadata: FileMetadata):
         """Recursively build tree nodes from metadata structure."""
         if not metadata.is_directory or not metadata.listing:
             return

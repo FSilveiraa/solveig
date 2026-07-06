@@ -1,20 +1,21 @@
 """Write tool - creates or updates files and directories."""
 
-from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
-
-from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import accepted, declined, failed
-from solveig.schema.tool._validation import validate_non_empty_path
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.tool._decorator import tool
+from solveig.schema.tool._result import ToolResult
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import validate_non_empty_path
 
 
+@tool
 async def write(
-    ctx: RunContext[SolveigDeps],
+    config: SolveigConfig,
+    interface: SolveigInterface,
     path: str,
     is_directory: bool,
     content: str | None = None,
-) -> ToolReturn:
+) -> ToolResult:
     """Create a new file or directory, or update an existing file.
 
     Args:
@@ -22,9 +23,6 @@ async def write(
         is_directory: If true, create a directory; if false, create a file.
         content: File content to write (only used when is_directory=false).
     """
-    config = ctx.deps.config
-    interface = ctx.deps.interface
-
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 
@@ -33,7 +31,7 @@ async def write(
     ):
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return failed(f"path blocked by ignore_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_write_access(
@@ -43,7 +41,7 @@ async def write(
             )
         except (OSError, PermissionError, IsADirectoryError) as e:
             await interface.display_error(f"Cannot write to {abs_path}: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])
 
         already_exists = await Filesystem.exists(abs_path)
 
@@ -71,7 +69,7 @@ async def write(
             )
             if (await interface.ask_choice(question, ["Yes", "No"])) != 0:
                 await interface.display_warning("Rejected")
-                return declined("User declined the write.")
+                return ToolResult(content="User declined the write.")
 
         try:
             if is_directory:
@@ -79,7 +77,9 @@ async def write(
             else:
                 await Filesystem.write_file_text(abs_path, content=content or "")
             await interface.display_success("Updated" if already_exists else "Created")
-            return accepted(f"{'Updated' if already_exists else 'Created'} {abs_path}")
+            return ToolResult(
+                content=f"{'Updated' if already_exists else 'Created'} {abs_path}"
+            )
         except Exception as e:
             await interface.display_error(f"Found error when writing file: {e}")
-            return failed(e)
+            return ToolResult(issues=[e])

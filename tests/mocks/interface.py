@@ -119,7 +119,7 @@ class MockInterface(TerminalInterface):
 
     async def display_tree(
         self,
-        metadata,  # Metadata type
+        metadata,  # FileMetadata type
         title: str | None = None,
         display_metadata: bool = False,
         expand_root=True,
