@@ -5,7 +5,16 @@ in that list is the only "this is a tool" signal), plugin tools are found by
 scanning modules at runtime (`rescan_and_load_plugins`), so there's no static
 list anyone edits by hand. `@tool` here is that missing piece: a plugin
 author's only job is to decorate their function so it self-registers into
-`PLUGIN_TOOLS.all` by plugin name - pure bookkeeping, no signature rewriting.
+`PLUGIN_TOOLS.all` - pure bookkeeping, no signature rewriting.
+
+Indexed by tool (function) name, not plugin (file) name - pydantic-ai already
+requires tool names to be globally unique, so this is free uniqueness rather
+than an assumption. Keying by file name instead would silently collide
+whenever one plugin file exports more than one tool (only the last
+registration in that file would survive). `owners` tracks tool name -> plugin
+name separately, for `config.plugins` enable/disable and reporting - a file
+exporting several tools is one enable/disable unit, but each tool is its own
+schema entry.
 """
 
 from collections.abc import Awaitable, Callable
@@ -31,14 +40,17 @@ def _plugin_name(fn: PluginTool) -> str:
 class ToolRegistry:
     all: dict[str, PluginTool] = field(default_factory=dict)
     active: dict[str, PluginTool] = field(default_factory=dict)
+    owners: dict[str, str] = field(default_factory=dict)
 
     def clear(self) -> None:
         self.all.clear()
         self.active.clear()
+        self.owners.clear()
 
     def register(self, fn: PluginTool) -> PluginTool:
-        """Register a plugin tool, indexed by plugin name."""
-        self.all[_plugin_name(fn)] = fn
+        """Register a plugin tool, indexed by tool (function) name."""
+        self.all[fn.__name__] = fn
+        self.owners[fn.__name__] = _plugin_name(fn)
         return fn
 
 
@@ -58,14 +70,19 @@ async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterfa
         interface=interface,
     )
 
-    for plugin_name, plugin_fn in PLUGIN_TOOLS.all.items():
+    reported_plugins: set[str] = set()
+    for tool_name, plugin_fn in PLUGIN_TOOLS.all.items():
+        plugin_name = PLUGIN_TOOLS.owners[tool_name]
         if config.plugins and plugin_name in config.plugins:
-            PLUGIN_TOOLS.active[plugin_name] = plugin_fn
-            await interface.display_success(f"'{plugin_name}': Loaded")
+            PLUGIN_TOOLS.active[tool_name] = plugin_fn
+            if plugin_name not in reported_plugins:
+                await interface.display_success(f"'{plugin_name}': Loaded")
         else:
-            await interface.display_warning(
-                f"'{plugin_name}': Skipped (missing from config)"
-            )
+            if plugin_name not in reported_plugins:
+                await interface.display_warning(
+                    f"'{plugin_name}': Skipped (missing from config)"
+                )
+        reported_plugins.add(plugin_name)
 
 
 __all__ = [

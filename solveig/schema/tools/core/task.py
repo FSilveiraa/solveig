@@ -11,7 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from solveig.schema.deps import SolveigContext
-from solveig.schema.tool.result import ToolResult
+from solveig.schema.tools.result import ToolResult
 
 TASK_STATUS_MAP = {
     "pending": "⚪",

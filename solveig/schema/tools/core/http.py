@@ -6,7 +6,7 @@ import json
 import httpx
 
 from solveig.schema.deps import SolveigContext
-from solveig.schema.tool.result import ToolResult
+from solveig.schema.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 

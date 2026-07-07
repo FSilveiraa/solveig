@@ -1,21 +1,21 @@
-"""Copy tool - copies files and directories."""
+"""Move tool - moves files and directories."""
 
 from solveig.schema.deps import SolveigContext
-from solveig.schema.tool.result import ToolResult
+from solveig.schema.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-async def copy(
+async def move(
     ctx: SolveigContext,
     source_path: str,
     destination_path: str,
 ) -> ToolResult:
-    """Copy a file or directory.
+    """Move a file or directory.
 
     Args:
-        source_path: Path of file/directory to copy from (supports ~ for home directory).
-        destination_path: Path where file/directory should be copied to.
+        source_path: Current path of file/directory to move (supports ~ for home directory).
+        destination_path: New path where file/directory should be moved to.
     """
     config, interface = ctx.deps.config, ctx.deps.interface
     source_path = validate_non_empty_path(source_path)
@@ -24,7 +24,7 @@ async def copy(
     abs_destination_path = Filesystem.get_absolute_path(destination_path)
 
     async with interface.with_group(
-        f"Copy: {source_path} -> {destination_path}",
+        f"Move: {source_path} -> {destination_path}",
         auto_collapse=config.auto_collapse_tools,
     ):
         for blocked in (abs_source_path, abs_destination_path):
@@ -40,14 +40,14 @@ async def copy(
             is_dir = await Filesystem.is_dir(abs_source_path)
         except (FileNotFoundError, PermissionError, OSError) as e:
             await interface.display_error(
-                f"Cannot copy from {abs_source_path} to {abs_destination_path}: {e}"
+                f"Cannot move from {abs_source_path} to {abs_destination_path}: {e}"
             )
             return ToolResult(issues=[e])
 
         await interface.display_text(str(abs_source_path), prefix="Source:")
         await interface.display_text(str(abs_destination_path), prefix="Destination:")
 
-        auto_copy = Filesystem.path_matches_patterns(
+        auto_move = Filesystem.path_matches_patterns(
             abs_source_path, config.auto_allowed_paths
         ) and Filesystem.path_matches_patterns(
             abs_destination_path, config.auto_allowed_paths
@@ -60,28 +60,24 @@ async def copy(
             await interface.display_diff(old_content=old, new_content=new)
             await interface.display_warning("Overwriting existing file")
 
-        if auto_copy:
+        if auto_move:
             await interface.display_info(
-                f"Copying {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
+                f"Moving {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
             )
         elif (
             await interface.ask_choice(
-                f"Allow copying {'directory' if is_dir else 'file'}?", ["Yes", "No"]
+                f"Allow moving {'directory' if is_dir else 'file'}?", ["Yes", "No"]
             )
         ) != 0:
             await interface.display_warning("Rejected")
-            return ToolResult(content="User declined the copy.")
+            return ToolResult(content="User declined the move.")
 
         try:
-            await Filesystem.copy(
-                abs_source_path,
-                abs_destination_path,
-                min_space_left=config.min_disk_space_left,
-            )
-            await interface.display_success("Copied")
+            await Filesystem.move(abs_source_path, abs_destination_path)
+            await interface.display_success("Moved")
             return ToolResult(
-                content=f"Copied {abs_source_path} to {abs_destination_path}"
+                content=f"Moved {abs_source_path} to {abs_destination_path}"
             )
         except (PermissionError, OSError, FileExistsError) as e:
-            await interface.display_error(f"Found error when copying: {e}")
+            await interface.display_error(f"Found error when moving: {e}")
             return ToolResult(issues=[e])

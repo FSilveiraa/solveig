@@ -52,8 +52,8 @@ from pydantic_ai.toolsets.wrapper import WrapperToolset
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.deps import SolveigContext, SolveigDeps
-from solveig.schema.tool import CORE_TOOLS, command
-from solveig.schema.tool.result import Finalizer, ToolResult
+from solveig.schema.tools import CORE_TOOLS, command
+from solveig.schema.tools.result import Finalizer, ToolResult
 
 # MCP tools are appended here when an MCP server connects, removed on disconnect.
 # Call AVAILABLE_TOOLS.rebuild(config) after mutating.
@@ -179,15 +179,11 @@ class AvailableTools:
         if not all_tools:
             raise ValueError("No tools available: the tool list is empty.")
 
-        plugin_by_tool_name = {
-            fn.__name__: plugin_name for plugin_name, fn in PLUGIN_TOOLS.all.items()
-        }
-
         def is_tool_active(ctx: SolveigContext, tool_def: ToolDefinition) -> bool:
             active_config = ctx.deps.config
             if tool_def.name == command.__name__ and active_config.no_commands:
                 return False
-            plugin_name = plugin_by_tool_name.get(tool_def.name)
+            plugin_name = PLUGIN_TOOLS.owners.get(tool_def.name)
             if plugin_name is not None and plugin_name not in active_config.plugins:
                 return False
             return True

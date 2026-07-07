@@ -4,7 +4,7 @@ from anyio import Path
 
 from solveig.interface import SolveigInterface
 from solveig.schema.deps import SolveigContext
-from solveig.schema.tool.result import ToolResult
+from solveig.schema.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import validate_non_empty_path
 

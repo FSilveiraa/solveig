@@ -23,10 +23,10 @@ class TestToolPluginFiltering:
 
     async def test_tool_enabled_when_in_config(self):
         """Tools in config.plugins are moved into active after loading."""
-        mock_tool_cls = MagicMock()
+        mock_tool_cls = MagicMock(__name__="my_tool")
 
         async def fake_rescan(**_):
-            PLUGIN_TOOLS.all["my_tool"] = mock_tool_cls
+            PLUGIN_TOOLS.register(mock_tool_cls)
 
         config = DEFAULT_CONFIG.with_(plugins={"my_tool": {}})
         with patch(
@@ -38,10 +38,10 @@ class TestToolPluginFiltering:
 
     async def test_tool_disabled_when_not_in_config(self):
         """Tools absent from config.plugins are not moved into active."""
-        mock_tool_cls = MagicMock()
+        mock_tool_cls = MagicMock(__name__="my_tool")
 
         async def fake_rescan(**_):
-            PLUGIN_TOOLS.all["my_tool"] = mock_tool_cls
+            PLUGIN_TOOLS.register(mock_tool_cls)
 
         config = DEFAULT_CONFIG.with_(plugins={})
         with patch(

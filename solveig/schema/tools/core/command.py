@@ -4,7 +4,7 @@ import asyncio
 import re
 
 from solveig.schema.deps import SolveigContext
-from solveig.schema.tool.result import ToolResult
+from solveig.schema.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 

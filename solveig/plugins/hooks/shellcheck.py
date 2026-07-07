@@ -9,7 +9,7 @@ import tempfile
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface import SolveigInterface
-from solveig.schema.tool import command
+from solveig.schema.tools import command
 from solveig.schema.toolset import before
 
 DANGEROUS_PATTERNS = [
@@ -38,7 +38,7 @@ def detect_shell(plugin_config: dict) -> str:
 
 
 @before(tools=(command,))
-async def check_command(
+async def shellcheck(
     tool_args: dict, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
     """Lint the requested command with `shellcheck`, raising to block execution.

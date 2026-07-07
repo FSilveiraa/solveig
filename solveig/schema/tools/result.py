@@ -3,7 +3,7 @@ becomes the `ToolReturn` pydantic-ai actually sends to the model.
 
 Tool functions take `ctx: SolveigContext` directly, like any pydantic-ai
 tool - no decorator or signature adaptation involved. The
-convention each tool follows (see `solveig/schema/tool/read.py` etc.) is to
+convention each tool follows (see `solveig/schema/tools/core/read.py` etc.) is to
 destructure `config, interface = ctx.deps.config, ctx.deps.interface` as the
 first line of the body, so the rest of the function reads exactly like
 before pydantic-ai was introduced, while `ctx` itself stays available for

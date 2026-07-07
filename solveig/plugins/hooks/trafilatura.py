@@ -2,7 +2,7 @@
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.tool import ToolResult, http
+from solveig.schema.tools import ToolResult, http
 from solveig.schema.toolset import after
 
 try:
@@ -12,7 +12,7 @@ except ImportError:
 
 
 @after(tools=(http,))
-async def convert_html_to_markdown(
+async def trafilatura(
     result: ToolResult, config: SolveigConfig, interface: SolveigInterface
 ) -> ToolResult:
     """Offer to convert an HTML response body to markdown.
