@@ -1,16 +1,13 @@
 """Edit tool - edits files using exact string replacement."""
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-@tool
 async def edit(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     path: str,
     old_string: str,
     new_string: str,
@@ -27,6 +24,7 @@ async def edit(
         new_string: String to replace with (can be empty for deletion).
         replace_all: Replace all occurrences (default: replace first only, error if multiple).
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     path = validate_non_empty_path(path)
     if not old_string:
         raise ValueError("old_string cannot be empty")

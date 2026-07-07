@@ -2,9 +2,9 @@
 
 from anyio import Path
 
-from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
@@ -137,10 +137,8 @@ async def _read_content(
     return ToolResult(content="User declined to send anything.")
 
 
-@tool
 async def read(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     path: str,
     metadata_only: bool,
     line_ranges: list[list[int]] | None = None,
@@ -157,6 +155,7 @@ async def read(
             of file, e.g. [[10, -1]]. If not provided, reads the entire file. Ignored for
             directories and metadata_only.
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     path = validate_non_empty_path(path)
     if line_ranges:
         _validate_line_ranges(line_ranges)

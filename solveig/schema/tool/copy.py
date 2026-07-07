@@ -1,16 +1,13 @@
 """Copy tool - copies files and directories."""
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-@tool
 async def copy(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     source_path: str,
     destination_path: str,
 ) -> ToolResult:
@@ -20,6 +17,7 @@ async def copy(
         source_path: Path of file/directory to copy from (supports ~ for home directory).
         destination_path: Path where file/directory should be copied to.
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     source_path = validate_non_empty_path(source_path)
     destination_path = validate_non_empty_path(destination_path)
     abs_source_path = Filesystem.get_absolute_path(source_path)

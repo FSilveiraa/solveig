@@ -1,16 +1,13 @@
 """Write tool - creates or updates files and directories."""
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-@tool
 async def write(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     path: str,
     is_directory: bool,
     content: str | None = None,
@@ -22,6 +19,7 @@ async def write(
         is_directory: If true, create a directory; if false, create a file.
         content: File content to write (only used when is_directory=false).
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 

@@ -1,21 +1,18 @@
 """Delete tool - permanently deletes files and directories."""
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-@tool
-async def delete(
-    config: SolveigConfig, interface: SolveigInterface, path: str
-) -> ToolResult:
+async def delete(ctx: SolveigContext, path: str) -> ToolResult:
     """Permanently delete a file or directory.
 
     Args:
         path: Path of file/directory to permanently delete (supports ~ for home directory).
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 

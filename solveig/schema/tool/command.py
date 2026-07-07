@@ -3,17 +3,14 @@
 import asyncio
 import re
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 
-@tool
 async def command(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     command: str,
     timeout: float = 10.0,
 ) -> ToolResult:
@@ -27,6 +24,7 @@ async def command(
             timeout<=0 to launch a detached process (non-blocking, like '&' in a shell,
             does not capture stdout/stderr, useful for long-running or GUI processes).
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     command = command.strip()
     if not command:
         raise ValueError("Empty command")

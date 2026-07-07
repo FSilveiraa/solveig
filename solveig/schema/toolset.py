@@ -1,10 +1,19 @@
 """Assembles and runs the active toolset - the pipeline from raw tool
-functions to the one `Finalizer(HookRunner(FunctionToolset(...)))` object
-handed to `Agent(toolsets=[...])`.
+functions to the one
+`Finalizer(HookRunner(FunctionToolset(...).filtered(...)))` object handed to
+`Agent(toolsets=[...])`.
 
-`AVAILABLE_TOOLS.rebuild(config)` must be called after any change to the
-active tool set: plugin load/unload, MCP server connect/disconnect, or
-config mutations that affect the tool set (e.g. toggling no_commands).
+`AVAILABLE_TOOLS.rebuild(config)` only needs to be called after a genuine
+change in tool *membership*: plugin modules (re)scanned (new tools may now
+exist that didn't before) or an MCP server connecting/disconnecting (whole
+new toolsets of previously-unknown tools appearing/disappearing). It does
+NOT need to be called for `config.no_commands` or `config.plugins`
+toggling - visibility for those is decided live, per step, by the
+`FilteredToolset` wrapped around the base `FunctionToolset`, using whatever
+`ctx.deps.config` says *right now*. This is deliberately built on
+pydantic-ai's own `FilteredToolset` rather than a hand-rolled visibility
+check, since "hide some already-known tools based on live config" is exactly
+what it's for.
 
 `HookRunner` and the `@before`/`@after` registry live here too - they're the
 middle stage of the same pipeline (raw tools -> hooks -> active toolset),
@@ -35,16 +44,16 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from pydantic_ai import RunContext
+from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets.abstract import ToolsetTool
 from pydantic_ai.toolsets.function import FunctionToolset
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.deps import SolveigDeps
+from solveig.schema.deps import SolveigContext, SolveigDeps
 from solveig.schema.tool import CORE_TOOLS, command
-from solveig.schema.tool.contract import Finalizer, ToolResult
+from solveig.schema.tool.result import Finalizer, ToolResult
 
 # MCP tools are appended here when an MCP server connects, removed on disconnect.
 # Call AVAILABLE_TOOLS.rebuild(config) after mutating.
@@ -66,7 +75,7 @@ _after_hooks: dict[str, list[AfterHook]] = defaultdict(list)
 
 
 def _tool_key(target: str | Callable[..., Any]) -> str:
-    return target if isinstance(target, str) else target.tool_name  # type: ignore[attr-defined]
+    return target if isinstance(target, str) else target.__name__
 
 
 def _plugin_name(fn: Callable[..., Any]) -> str:
@@ -121,7 +130,7 @@ class HookRunner(WrapperToolset[SolveigDeps]):
         self,
         name: str,
         tool_args: dict[str, Any],
-        ctx: RunContext[SolveigDeps],
+        ctx: SolveigContext,
         tool: ToolsetTool[SolveigDeps],
     ) -> Any:
         config = ctx.deps.config
@@ -153,21 +162,38 @@ class AvailableTools:
         self._toolset: Finalizer | None = None
 
     def rebuild(self, config: SolveigConfig) -> None:
-        """Recompute the active toolset from CORE_TOOLS, active plugin tools, and MCP_TOOLS."""
+        """Recompute the base toolset from CORE_TOOLS, every discovered plugin
+        tool, and MCP_TOOLS. Only needed after tool *membership* actually
+        changes - see the module docstring for why `no_commands`/`config.plugins`
+        toggling doesn't need this."""
         # Local import: solveig.plugins imports solveig.plugins.hooks, which
         # imports clear_hooks/registered_plugin_names from this module - a
         # module-level import here would be circular.
         from solveig.plugins.tools import PLUGIN_TOOLS
 
-        active = [*CORE_TOOLS, *PLUGIN_TOOLS.active.values(), *MCP_TOOLS]
+        # Every discovered plugin tool is included here, not just the ones
+        # config.plugins currently enables - the filter below decides
+        # visibility live, per step, from config.
+        all_tools = [*CORE_TOOLS, *PLUGIN_TOOLS.all.values(), *MCP_TOOLS]
 
-        if config.no_commands and command in active:
-            active.remove(command)
+        if not all_tools:
+            raise ValueError("No tools available: the tool list is empty.")
 
-        if not active:
-            raise ValueError("No tools available: the active tools list is empty.")
+        plugin_by_tool_name = {
+            fn.__name__: plugin_name for plugin_name, fn in PLUGIN_TOOLS.all.items()
+        }
 
-        self._toolset = Finalizer(HookRunner(FunctionToolset(active)))
+        def is_tool_active(ctx: SolveigContext, tool_def: ToolDefinition) -> bool:
+            active_config = ctx.deps.config
+            if tool_def.name == command.__name__ and active_config.no_commands:
+                return False
+            plugin_name = plugin_by_tool_name.get(tool_def.name)
+            if plugin_name is not None and plugin_name not in active_config.plugins:
+                return False
+            return True
+
+        base = FunctionToolset(all_tools).filtered(is_tool_active)
+        self._toolset = Finalizer(HookRunner(base))
 
     @property
     def toolset(self) -> Finalizer:

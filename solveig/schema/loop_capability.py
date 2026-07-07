@@ -23,14 +23,14 @@ transition (`CallToolsNode` -> next node):
   autonomy (that's what the always-on drain above already handles).
 """
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.messages import ModelResponse, TextPart, ThinkingPart
 from pydantic_graph import End
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.deps import SolveigDeps
+from solveig.schema.deps import SolveigContext, SolveigDeps
 
 
 def build_loop_capability(
@@ -40,13 +40,13 @@ def build_loop_capability(
     hooks: Hooks[SolveigDeps] = Hooks()
 
     @hooks.on.before_node_run
-    async def display_new_response(ctx: RunContext[SolveigDeps], node):
+    async def display_new_response(ctx: SolveigContext, node):
         if Agent.is_call_tools_node(node):
             await _display_response(interface, node.model_response)
         return node
 
     @hooks.on.after_node_run
-    async def gate_and_interleave(ctx: RunContext[SolveigDeps], node, result):
+    async def gate_and_interleave(ctx: SolveigContext, node, result):
         # Both concerns only apply at the CallToolsNode -> next-node boundary
         # - the point where tool execution for this round has just finished.
         # Draining after every node (e.g. right after UserPromptNode, before

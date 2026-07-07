@@ -10,9 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 
 TASK_STATUS_MAP = {
     "pending": "⚪",
@@ -33,10 +32,8 @@ class Task(BaseModel):
     )
 
 
-@tool
 async def update_tasks(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     tasks: list[Task],
 ) -> ToolResult:
     """Display the current task plan, replacing whatever was shown before.
@@ -45,6 +42,7 @@ async def update_tasks(
         tasks: The full current list of tasks, in order, each with its status.
             Always send the complete list, not just what changed.
     """
+    interface = ctx.deps.interface
     async with interface.with_group("Tasks"):
         for i, task in enumerate(tasks, 1):
             status_emoji = TASK_STATUS_MAP[task.status]

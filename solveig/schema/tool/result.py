@@ -1,87 +1,28 @@
-"""The tool calling contract - what a tool author's function looks like going
-in, and what it hands back going out. `@tool` and `ToolResult`/`Finalizer`
-are two halves of the same thing and are kept together on purpose: a tool
-author only ever needs this one file to know the full shape of a tool.
+"""The tool result contract - what a tool function hands back, and how it
+becomes the `ToolReturn` pydantic-ai actually sends to the model.
 
-**Input side (`@tool`)**: a tool author writes
-`async def read(config, interface, *args) -> ToolResult`. `@tool` rewrites
-the function pydantic-ai actually sees to `(ctx: RunContext[SolveigDeps],
-*args)`, resolving `config`/`interface` from `ctx.deps` fresh on every call -
-so a different live `SolveigDeps` at call time than at registration time
-still flows through correctly (needed for a future hot-swappable-interface
-session).
+Tool functions take `ctx: SolveigContext` directly, like any pydantic-ai
+tool - no decorator or signature adaptation involved. The
+convention each tool follows (see `solveig/schema/tool/read.py` etc.) is to
+destructure `config, interface = ctx.deps.config, ctx.deps.interface` as the
+first line of the body, so the rest of the function reads exactly like
+before pydantic-ai was introduced, while `ctx` itself stays available for
+anything that needs it (`ctx.enqueue()`, `ctx.tool_call_id`, retries, ...).
 
-Built on `makefun` rather than a hand-rolled signature rewrite: pydantic-ai's
-`function_schema()` calls both `inspect.signature()` (parameter list/order)
-and `get_type_hints()` (annotation resolution, reads raw `__annotations__`/
-`__globals__` - does not respect ad-hoc `__signature__` overrides).
-`makefun.create_function` builds a real function that satisfies both.
-
-**Output side (`ToolResult`/`Finalizer`)**: tool functions and `@before`/
-`@after` hooks (`solveig/schema/toolset.py`) all deal in `ToolResult`, never
-in `pydantic_ai.messages.ToolReturn` directly. A `Finalizer` (always the
-outermost toolset wrapper) is the only place a `ToolResult` gets converted
-into a `ToolReturn`.
+Tool functions and `@before`/`@after` hooks (`solveig/schema/toolset.py`)
+all deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn`
+directly. A `Finalizer` (always the outermost toolset wrapper) is the only
+place a `ToolResult` gets converted into a `ToolReturn`.
 """
 
-import inspect
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import makefun
-from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_ai.toolsets.abstract import ToolsetTool
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from solveig.schema.deps import SolveigDeps
-
-# ---------------------------------------------------------------------------
-# Input side - @tool
-# ---------------------------------------------------------------------------
-
-
-def _ctx_signature(fn: Callable[..., Any]) -> inspect.Signature:
-    sig = inspect.signature(fn)
-    params = list(sig.parameters.values())
-    if len(params) < 2 or params[0].name != "config" or params[1].name != "interface":
-        raise TypeError(
-            f"@tool functions must take (config, interface, ...) - got {fn.__name__}{sig}"
-        )
-    ctx_param = inspect.Parameter(
-        "ctx",
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        annotation=RunContext[SolveigDeps],
-    )
-    return sig.replace(parameters=[ctx_param, *params[2:]])
-
-
-def tool[F: Callable[..., Awaitable[Any]]](fn: F) -> F:
-    """Register `fn` as a pydantic-ai tool function with `ctx` hidden from its authored signature."""
-    new_sig = _ctx_signature(fn)
-
-    async def impl(*args: Any, **kwargs: Any) -> Any:
-        bound = new_sig.bind(*args, **kwargs)
-        bound.apply_defaults()
-        arguments = dict(bound.arguments)
-        ctx: RunContext[SolveigDeps] = arguments.pop("ctx")
-        return await fn(ctx.deps.config, ctx.deps.interface, **arguments)
-
-    wrapper = makefun.create_function(
-        new_sig,
-        impl,
-        func_name=fn.__name__,
-        doc=fn.__doc__ or "",
-        module_name=fn.__module__,
-    )
-    wrapper.tool_name = fn.__name__  # type: ignore[attr-defined]
-    return wrapper  # type: ignore[return-value]
-
-
-# ---------------------------------------------------------------------------
-# Output side - ToolResult / Finalizer
-# ---------------------------------------------------------------------------
+from solveig.schema.deps import SolveigContext, SolveigDeps
 
 
 @dataclass
@@ -152,7 +93,7 @@ class Finalizer(WrapperToolset[SolveigDeps]):
         self,
         name: str,
         tool_args: dict[str, Any],
-        ctx: RunContext[SolveigDeps],
+        ctx: SolveigContext,
         tool: ToolsetTool[SolveigDeps],
     ) -> Any:
         result = await super().call_tool(name, tool_args, ctx, tool)

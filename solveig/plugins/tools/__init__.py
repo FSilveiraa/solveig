@@ -1,4 +1,12 @@
-"""Registry for dynamically discovered plugin tools."""
+"""Registry for dynamically discovered plugin tools.
+
+Unlike core tools (hand-listed in `CORE_TOOLS`, no marker needed - inclusion
+in that list is the only "this is a tool" signal), plugin tools are found by
+scanning modules at runtime (`rescan_and_load_plugins`), so there's no static
+list anyone edits by hand. `@tool` here is that missing piece: a plugin
+author's only job is to decorate their function so it self-registers into
+`PLUGIN_TOOLS.all` by plugin name - pure bookkeeping, no signature rewriting.
+"""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -7,7 +15,6 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
-from solveig.schema.tool import tool as _tool
 
 PluginTool = Callable[..., Awaitable[Any]]
 
@@ -30,17 +37,14 @@ class ToolRegistry:
         self.active.clear()
 
     def register(self, fn: PluginTool) -> PluginTool:
-        """Register a plugin tool - applies `@tool`'s pydantic-ai wrapping, then indexes the result by plugin name."""
-        wrapped = _tool(fn)
-        self.all[_plugin_name(wrapped)] = wrapped
-        return wrapped
+        """Register a plugin tool, indexed by plugin name."""
+        self.all[_plugin_name(fn)] = fn
+        return fn
 
 
 PLUGIN_TOOLS = ToolRegistry()
 
 # Module-level aliases — callers can import these directly instead of going through PLUGIN_TOOLS.
-# Named `tool` (not `plugin_tool`) so plugin authors use the exact same decorator name as core
-# tools do - no collision in practice, since a plugin module imports this one, not `schema.tool`.
 tool = PLUGIN_TOOLS.register
 clear_tools = PLUGIN_TOOLS.clear
 

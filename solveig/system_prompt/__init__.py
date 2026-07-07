@@ -7,7 +7,7 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
 from solveig.config import SolveigConfig
-from solveig.schema.deps import SolveigDeps
+from solveig.schema.deps import SolveigContext
 from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.system_prompt.examples import long
 from solveig.utils.file import Filesystem
@@ -65,7 +65,7 @@ async def get_available_tools() -> str:
     tool-calling, not a second hand-parsed pass over each docstring."""
     # No real SolveigDeps needed - schema introspection never touches ctx.deps.
     ctx = cast(
-        RunContext[SolveigDeps],
+        SolveigContext,
         RunContext(deps=None, model=TestModel(), usage=RunUsage(), max_retries=1),
     )
     tools = await AVAILABLE_TOOLS.toolset.get_tools(ctx)

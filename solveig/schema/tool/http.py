@@ -5,9 +5,8 @@ import json
 
 import httpx
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
-from solveig.schema.tool.contract import ToolResult, tool
+from solveig.schema.deps import SolveigContext
+from solveig.schema.tool.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
@@ -25,10 +24,8 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
     return body, ""
 
 
-@tool
 async def http(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     url: str,
     method: str = "GET",
     headers: dict[str, str] | None = None,
@@ -48,6 +45,7 @@ async def http(
         follow_redirects: Whether to follow redirects.
         output_file: If set, write the response body to this file path instead of returning it.
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     url = validate_non_empty_path(url)
 
     async with interface.with_group(

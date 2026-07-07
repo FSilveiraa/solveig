@@ -1,8 +1,7 @@
 """Tree plugin tool - generates directory tree listings."""
 
-from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.plugins.tools import tool
+from solveig.schema.deps import SolveigContext
 from solveig.schema.tool import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -10,8 +9,7 @@ from solveig.utils.misc import validate_non_empty_path
 
 @tool
 async def tree(
-    config: SolveigConfig,
-    interface: SolveigInterface,
+    ctx: SolveigContext,
     path: str,
     max_depth: int = -1,
 ) -> ToolResult:
@@ -21,6 +19,7 @@ async def tree(
         path: Directory path to generate tree for (supports ~ for home directory).
         max_depth: Maximum depth to explore (-1 for full tree).
     """
+    config, interface = ctx.deps.config, ctx.deps.interface
     path = validate_non_empty_path(path)
     abs_path = Filesystem.get_absolute_path(path)
 
