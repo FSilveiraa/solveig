@@ -8,7 +8,8 @@ from .api import (
     ClientRef,
     ModelInfo,
     ModelNotFound,
-    get_instructor_client,
+    get_model,
+    get_provider,
     parse_api_type,
 )
 
@@ -18,6 +19,7 @@ __all__ = [
     "ClientRef",
     "ModelInfo",
     "ModelNotFound",
-    "get_instructor_client",
+    "get_model",
+    "get_provider",
     "parse_api_type",
 ]

@@ -1,10 +1,9 @@
 import contextlib
 from dataclasses import dataclass
 
-import instructor
-import openai
 import tiktoken
-from instructor import AsyncInstructor
+from pydantic_ai.models import Model
+from pydantic_ai.providers import Provider
 
 
 @dataclass
@@ -19,9 +18,9 @@ class ModelInfo:
 
 @dataclass
 class ClientRef:
-    """Mutable holder for AsyncInstructor, enabling runtime client replacement."""
+    """Mutable holder for the current provider connection, enabling runtime replacement."""
 
-    client: AsyncInstructor
+    client: Provider
 
 
 class APIType:
@@ -48,17 +47,21 @@ class APIType:
             return len(enc.encode(text)) if enc else len(text) // 4
 
         @staticmethod
-        def get_client(
-            instructor_mode: instructor.Mode,
+        def get_provider(
             url: str | None = default_url,
             api_key: str | None = None,
-            model: str | None = None,
-        ) -> instructor.AsyncInstructor:
+        ) -> Provider:
+            """Build the pydantic-ai `Provider` - it constructs its own SDK client internally from api_key/base_url."""
+            raise NotImplementedError()
+
+        @classmethod
+        def get_model(cls, provider: Provider, model: str) -> Model:
+            """Wrap a `Provider` (from `get_provider`) in the pydantic-ai `Model` used to drive the Agent."""
             raise NotImplementedError()
 
         @staticmethod
         async def get_model_details(
-            client: AsyncInstructor, model: str | None
+            provider: Provider, model: str | None
         ) -> "ModelInfo | None":
             raise NotImplementedError()
 
@@ -95,29 +98,26 @@ class APIType:
             return super().count_tokens(text)
 
         @classmethod
-        def get_client(
+        def get_provider(
             cls,
-            instructor_mode: instructor.Mode,
             url: str | None = default_url,
             api_key: str | None = None,
-            model: str | None = None,
-        ) -> instructor.AsyncInstructor:
-            try:
-                client = openai.AsyncOpenAI(
-                    api_key=api_key, base_url=url or cls.default_url
-                )
-                return instructor.from_openai(client, mode=instructor_mode)
-            except ImportError as e:
-                raise ValueError(
-                    "OpenAI client not available. Install with: pip install openai"
-                ) from e
+        ) -> Provider:
+            from pydantic_ai.providers.openai import OpenAIProvider
+
+            return OpenAIProvider(api_key=api_key, base_url=url or cls.default_url)
+
+        @classmethod
+        def get_model(cls, provider: Provider, model: str) -> Model:
+            from pydantic_ai.models.openai import OpenAIChatModel
+
+            return OpenAIChatModel(model, provider=provider)
 
         @staticmethod
         async def get_model_details(
-            client: AsyncInstructor, model: str | None
+            provider: Provider, model: str | None
         ) -> "ModelInfo | None":
-            assert client.client  # mypy
-            models_list = await client.client.models.list()
+            models_list = await provider.client.models.list()
             if model:
                 model_obj = next((m for m in models_list.data if m.id == model), None)
                 if model_obj is None:
@@ -140,10 +140,6 @@ class APIType:
                 )
             return info
 
-    class LOCAL(OPENAI):
-        default_url = "https://localhost:5001/v1"
-        name = "local"
-
     class ANTHROPIC(BaseAPI):
         default_url = "https://api.anthropic.com/v1"
         name = "anthropic"
@@ -152,51 +148,48 @@ class APIType:
         # https://docs.claude.com/en/docs/build-with-claude/token-counting
 
         @classmethod
-        def get_client(
+        def get_provider(
             cls,
-            instructor_mode: instructor.Mode,
             url: str | None = None,
             api_key: str | None = None,
-            model: str | None = None,
-        ) -> instructor.AsyncInstructor:
-            try:
-                import anthropic
+        ) -> Provider:
+            from pydantic_ai.providers.anthropic import AnthropicProvider
 
-                client = anthropic.AsyncAnthropic(
-                    api_key=api_key, base_url=url or cls.default_url
-                )
-                return instructor.from_anthropic(client, mode=instructor_mode)
-            except ImportError as e:
-                raise ImportError(
-                    "Install Anthropic support: pip install solveig[anthropic]"
-                ) from e
+            return AnthropicProvider(api_key=api_key, base_url=url or cls.default_url)
+
+        @classmethod
+        def get_model(cls, provider: Provider, model: str) -> Model:
+            from pydantic_ai.models.anthropic import AnthropicModel
+
+            return AnthropicModel(model, provider=provider)
 
     class GEMINI(BaseAPI):
         default_url = "https://generativelanguage.googleapis.com/v1beta"
         name = "gemini"
 
-        @staticmethod
-        def get_client(
-            instructor_mode: instructor.Mode,
+        @classmethod
+        def get_provider(
+            cls,
             url: str | None = None,
             api_key: str | None = None,
-            model: str | None = None,
-        ) -> instructor.AsyncInstructor:
-            try:
-                import google.generativeai as google_ai
+        ) -> Provider:
+            from pydantic_ai.providers.google import GoogleProvider
 
-                google_ai.configure(api_key=api_key)
-                gemini_client = google_ai.GenerativeModel(model or "gemini-pro")
-                return instructor.from_gemini(gemini_client, mode=instructor_mode)
-            except ImportError as e:
-                raise ImportError(
-                    "Install Google Generative AI support: pip install solveig[google]"
-                ) from e
+            # GoogleProvider's overloaded __init__ types api_key as `str` (not
+            # `str | None`) on the no-client branch, but its actual impl falls back
+            # to GOOGLE_API_KEY/GEMINI_API_KEY env vars when None - passing None
+            # through is correct at runtime, just untyped for it.
+            return GoogleProvider(api_key=api_key, base_url=url or None)  # type: ignore[arg-type]
+
+        @classmethod
+        def get_model(cls, provider: Provider, model: str) -> Model:
+            from pydantic_ai.models.google import GoogleModel
+
+            return GoogleModel(model, provider=provider)
 
 
 API_TYPES = {
     "OPENAI": APIType.OPENAI,
-    "LOCAL": APIType.LOCAL,
     "ANTHROPIC": APIType.ANTHROPIC,
     "GEMINI": APIType.GEMINI,
 }
@@ -211,23 +204,26 @@ def parse_api_type(api_type_str: str) -> type[APIType.BaseAPI]:
     return API_TYPES[api_name]
 
 
-def get_instructor_client(
+def get_provider(
     api_type: type[APIType.BaseAPI] | str,
     api_key: str | None = None,
     url: str | None = None,
-    model: str | None = None,
-    instructor_mode: instructor.Mode = instructor.Mode.JSON,
-) -> instructor.AsyncInstructor:
-    """Get instructor client - backwards compatible interface."""
-    # Handle legacy string API type names
+) -> Provider:
+    """Build the pydantic-ai `Provider` for the given API type."""
     if isinstance(api_type, str):
-        api_class = parse_api_type(api_type)
-    else:
-        api_class = api_type
+        api_type = parse_api_type(api_type)
+    return api_type.get_provider(url=url, api_key=api_key)
 
-    return api_class.get_client(
-        url=url, api_key=api_key, model=model, instructor_mode=instructor_mode
-    )
+
+def get_model(
+    api_type: type[APIType.BaseAPI] | str,
+    provider: Provider,
+    model: str,
+) -> Model:
+    """Wrap a `Provider` in the pydantic-ai `Model` used to drive the Agent."""
+    if isinstance(api_type, str):
+        api_type = parse_api_type(api_type)
+    return api_type.get_model(provider, model)
 
 
 class ModelNotFound(Exception):

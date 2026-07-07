@@ -28,7 +28,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     "model": "LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
     "encoder": "Token encoder for counting (defaults to model if unset)",
     "url": "LLM API endpoint URL",
-    "api_type": "API provider type (openai, anthropic, gemini, local)",
+    "api_type": "API provider type (openai, anthropic, gemini)",
     "api_key": "API authentication key",
     # Generation
     "temperature": "Model temperature 0.0–2.0",

@@ -94,10 +94,8 @@ Response format:
 @dataclass()
 class SolveigConfig:
     url: str = ""
-    api_type: type[APIType.BaseAPI] = APIType.LOCAL
-    api_key: str = (
-        ""  # Local models can work with "" through Instructor, but not with None
-    )
+    api_type: type[APIType.BaseAPI] = APIType.OPENAI
+    api_key: str = ""  # Local/custom OpenAI-compatible endpoints often don't need one
     model: str | None = None
     encoder: str | None = None
     temperature: float = 0
@@ -218,7 +216,7 @@ class SolveigConfig:
             "--api-type",
             "-a",
             type=str,
-            choices=["openai", "local", "anthropic", "gemini"],
+            choices=["openai", "anthropic", "gemini"],
             help="Type of API to use (uses API type's default URL if --url not specified)",
         )
         parser.add_argument("--api-key", "-k", type=str)

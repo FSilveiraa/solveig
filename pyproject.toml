@@ -31,7 +31,6 @@ requires-python = ">=3.13"
 dependencies = [
     "distro>=1.9.0",
     "aiofiles>=25.1.0",
-    "instructor==1.14.5",
     "openai>=1.108.0",
     "pydantic>=2.11.0",
     "pydantic-ai>=2.5.0",
@@ -48,7 +47,7 @@ dependencies = [
 dev = [
     "setuptools>=61.0",
     "anthropic>=0.68.0",
-    "google-generativeai>=0.8.5",
+    "google-genai>=1.0.0",
     "pytest>=8.3.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
@@ -56,7 +55,7 @@ dev = [
     "fastmcp>=3.2.0",
 ]
 anthropic = ["anthropic>=0.68.0"]
-google = ["google-generativeai>=0.8.5"]
+google = ["google-genai>=1.0.0"]
 trafilatura = ["trafilatura>=2.0.0"]
 
 [project.urls]

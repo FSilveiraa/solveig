@@ -2,7 +2,8 @@
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.tool import ToolResult, tool
+from solveig.plugins.tools import tool
+from solveig.schema.tool import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 

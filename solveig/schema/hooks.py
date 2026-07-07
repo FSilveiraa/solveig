@@ -32,7 +32,7 @@ from pydantic_ai.toolsets.wrapper import WrapperToolset
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.tool._result import ToolResult
+from solveig.schema.result import ToolResult
 
 BeforeHook = Callable[
     [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]
@@ -47,6 +47,29 @@ _after_hooks: dict[str, list[AfterHook]] = defaultdict(list)
 
 def _tool_key(target: str | Callable[..., Any]) -> str:
     return target if isinstance(target, str) else target.tool_name  # type: ignore[attr-defined]
+
+
+def _plugin_name(fn: Callable[..., Any]) -> str:
+    """Derive a hook's owning plugin name from its module path (e.g. `solveig.plugins.hooks.shellcheck` -> `shellcheck`)."""
+    module = fn.__module__
+    if ".hooks." in module:
+        return module.split(".hooks.")[-1]
+    return fn.__name__
+
+
+def registered_plugin_names() -> set[str]:
+    """All plugin names with at least one registered before/after hook - used to report load/skip status."""
+    names = {_plugin_name(hook) for hooks in _before_hooks.values() for hook in hooks}
+    names.update(
+        _plugin_name(hook) for hooks in _after_hooks.values() for hook in hooks
+    )
+    return names
+
+
+def clear_hooks() -> None:
+    """Drop all registered hooks - used before a plugin rescan/reload and in tests."""
+    _before_hooks.clear()
+    _after_hooks.clear()
 
 
 def before(
@@ -85,12 +108,14 @@ class HookRunner(WrapperToolset[SolveigDeps]):
         interface = ctx.deps.interface
 
         for hook in _before_hooks.get(name, ()):
-            await hook(tool_args, config, interface)
+            if _plugin_name(hook) in config.plugins:
+                await hook(tool_args, config, interface)
 
         result = await super().call_tool(name, tool_args, ctx, tool)
 
         if isinstance(result, ToolResult):
             for after_hook in _after_hooks.get(name, ()):
-                result = await after_hook(result, config, interface)
+                if _plugin_name(after_hook) in config.plugins:
+                    result = await after_hook(result, config, interface)
 
         return result
