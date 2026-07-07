@@ -11,33 +11,29 @@ import asyncio
 import contextlib
 import traceback
 
-from instructor import AsyncInstructor
-
 from solveig import system_prompt
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
-from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import initialize_plugins
 from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message.history import MessageHistory
+from solveig.schema.conversation import Conversation
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
-from solveig.utils.misc import serialize_response_model
 
 
 async def setup_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
     request_manager: RequestManager,
-    message_history: MessageHistory,
+    conversation: Conversation,
     session_manager: SessionManager | None,
     resume_session: str | None,
-) -> None:
-    """One-time setup that runs after the interface is ready."""
+) -> str:
+    """One-time setup that runs after the interface is ready. Returns the system prompt."""
     await interface.wait_until_ready()
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
@@ -48,9 +44,8 @@ async def setup_loop(
     AVAILABLE_TOOLS.rebuild(config)
 
     sys_prompt = await system_prompt.get_system_prompt(config)
-    message_history.update_system_prompt(sys_prompt)
     await interface.display_text_box(
-        message_history.system_prompt,
+        sys_prompt,
         title="System Prompt",
         collapsed=True,
     )
@@ -59,11 +54,12 @@ async def setup_loop(
         name = None if resume_session == "__latest__" else resume_session
         try:
             session_data = await session_manager.load(name)
-            message_history.load_from_session(session_data)
-            await session_manager.display_loaded_session(
-                config, session_data, message_history, interface
+            conversation.messages = session_data["messages"]
+            conversation.total_tokens_sent = session_data.get("total_tokens_sent", 0)
+            conversation.total_tokens_received = session_data.get(
+                "total_tokens_received", 0
             )
-            await interface.update_stats(used_context=message_history.token_count)
+            await session_manager.display_loaded_session(conversation, interface)
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
 
@@ -80,140 +76,85 @@ async def setup_loop(
 
     subcommand_executor = SubcommandRunner(
         config=config,
-        message_history=message_history,
+        conversation=conversation,
         client_ref=request_manager.client_ref,
         session_manager=session_manager,
     )
     interface.set_subcommand_executor(subcommand_executor)
 
-    if config.verbose:
-        response_model = AVAILABLE_TOOLS.response_model
-        serialized_response_model = serialize_response_model(model=response_model)
-        await interface.display_text_box(
-            title="Response Model",
-            text=serialized_response_model,
-            collapsed=True,
-        )
+    return sys_prompt
 
 
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
     request_manager: RequestManager,
-    message_history: MessageHistory,
+    conversation: Conversation,
     resume_session: str | None = None,
 ) -> None:
     """Main async conversation loop.
 
-    Each iteration: condense pending events into a UserMessage → send to LLM →
-    execute any tools → repeat. Whether the condense step blocks for user input
-    is controlled by `need_user_input`, which is set to True by default and only
-    lowered to False when tools ran and autonomy is enabled (so results are sent
-    back to the LLM immediately without waiting for the user).
-
-    Any user_prompt supplied at startup is queued in run_async before this task
-    starts, so the first condense picks it up without blocking.
+    Each iteration blocks for the next user prompt, then hands it to the
+    Agent for a full run - which may include any number of tool-call rounds,
+    all driven internally by pydantic-ai and the loop capability (autonomy
+    gate, live display, comment interleaving). There is no `need_user_input`
+    bookkeeping here anymore: autonomy is entirely a mid-run concern now
+    (see `schema/loop_capability.py`), so the outer loop's only job is to
+    wait for the next prompt and hand it off.
     """
     session_manager = SessionManager(config=config)
 
-    await setup_loop(
+    system_prompt_text = await setup_loop(
         config=config,
         interface=interface,
         request_manager=request_manager,
-        message_history=message_history,
+        conversation=conversation,
         session_manager=session_manager,
         resume_session=resume_session,
     )
 
-    need_user_input = True
-
     while True:
-        # Drain pending tool results and/or user comments into a single UserMessage.
-        # If need_user_input is True and no UserComment is in the queue yet, this
-        # blocks until the user types something. Resetting to True immediately
-        # after ensures any `continue` below also blocks on the next iteration.
-        user_message = await message_history.get_next_user_message(
-            interface=interface, wait_for_input=need_user_input
-        )
-        await interface.update_stats(
-            sent_tokens=message_history.total_tokens_sent,
-            received_tokens=message_history.total_tokens_received,
-            used_context=message_history.token_count,
-        )
-        need_user_input = True
+        await interface.update_stats(status="Awaiting input")
+        prompt = await interface.pending_queue.get()
+        await interface.notify_pending_queue_changed()
+        await interface.update_stats(status=None)
 
-        # Pre-send guard: refuse to send if no model name is configured.
-        # The user input was already consumed above, so the next iteration will
-        # block again — giving the user a chance to set a model via subcommand.
+        await interface.display_section("User")
+        await interface.display_comment(prompt)
+
         if config.model is None:
             await interface.display_error(
                 "No model set. Use /model set <name> or /config set model <name>."
             )
             continue
 
-        assistant_message = await request_manager.send_with_retry(
+        system_prompt_text = await system_prompt.get_system_prompt(config)
+        result = await request_manager.send_with_retry(
             config=config,
             interface=interface,
-            message_history=message_history,
+            conversation=conversation,
+            system_prompt=system_prompt_text,
+            prompt=prompt,
         )
+        if result is None:
+            continue
 
-        # None means the request was cancelled or the user chose not to retry.
-        # need_user_input stays True so the next condense blocks for fresh input.
-        if assistant_message:
-            # add_messages corrects the user message's cached token count internally
-            # using exact prompt_tokens from the raw response, so append the user
-            # message only after that correction has been applied.
-            message_history.add_messages(assistant_message)
-            if session_manager:
-                if user_message:
-                    await session_manager.append(user_message)
-                await session_manager.append(assistant_message)
-            await interface.update_stats(
-                sent_tokens=message_history.total_tokens_sent,
-                received_tokens=message_history.total_tokens_received,
-                used_context=message_history.token_count,
-            )
-
-            await assistant_message.display(config, interface)
-
-            if assistant_message.tools:
-                # In autonomous mode (default), send results back without waiting.
-                # In manual mode or after a UserCancel, drop back to waiting.
-                need_user_input = config.disable_autonomy
-                try:
-                    for tool_index, tool in enumerate(assistant_message.tools):
-                        try:
-                            result = await tool.solve(
-                                config=config,
-                                interface=interface,
-                                index=tool_index + 1,
-                                total=len(assistant_message.tools),
-                            )
-                        except UserCancel:
-                            raise
-                        except Exception as e:
-                            await interface.display_error(
-                                f"Unexpected error executing {tool.type}: {e}"
-                            )
-                            result = tool.create_error_result(
-                                f"Unexpected error: {e}", accepted=False
-                            )
-                        await message_history.add_result(result)
-                except UserCancel:
-                    need_user_input = True
-
-        # Whether or not the user message's size was corrected, add it and the response if it exists to the session
-        elif config.auto_save_session and user_message:
-            await session_manager.append(user_message)
+        conversation.apply(result)
+        await interface.update_stats(
+            sent_tokens=conversation.total_tokens_sent,
+            received_tokens=conversation.total_tokens_received,
+        )
+        if session_manager and config.auto_save_session:
+            await session_manager.store(conversation)
 
 
 async def run_async(
     config: SolveigConfig | None = None,
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
-    llm_client: AsyncInstructor | None = None,
+    request_manager: RequestManager | None = None,
     resume_session: str | None = None,
-) -> MessageHistory:
+) -> Conversation:
     """
     Initializes dependencies, spawns the main loop as a background task, and
     runs the interface in the foreground. Accepts injected mocks for testing.
@@ -225,25 +166,22 @@ async def run_async(
             resume_session,
         ) = await SolveigConfig.parse_config_and_prompt()
 
-    # Interface and message_history are created before spawning the loop task so
-    # that user_prompt can be queued into pending_messages immediately. By the
-    # time the loop calls condense(), the comment is already there and it won't
-    # block waiting for input on the first iteration.
+    # Interface and conversation are created before spawning the loop task so
+    # that user_prompt can be queued immediately. By the time the loop calls
+    # pending_queue.get(), the prompt is already there and won't block.
     interface = interface or TerminalInterface(
         theme=config.theme,
         code_theme=config.code_theme,
         auto_copy_selection=config.auto_copy_selection,
     )
 
-    message_history = MessageHistory(
-        pending_messages=interface.pending_queue,
-        config=config,
-    )
+    conversation = Conversation()
 
     if user_prompt:
-        await message_history.add_user_comment(user_prompt)
+        await interface.pending_queue.put(user_prompt)
+        await interface.notify_pending_queue_changed()
 
-    request_manager = RequestManager(config=config, client=llm_client)
+    request_manager = request_manager or RequestManager(config=config)
 
     loop_task = None
     try:
@@ -252,7 +190,7 @@ async def run_async(
                 interface=interface,
                 config=config,
                 request_manager=request_manager,
-                message_history=message_history,
+                conversation=conversation,
                 resume_session=resume_session,
             )
         )
@@ -267,7 +205,7 @@ async def run_async(
             loop_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
-    return message_history
+    return conversation
 
 
 def main():

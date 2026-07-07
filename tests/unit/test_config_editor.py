@@ -143,30 +143,20 @@ class TestApplyConfigField:
         assert cfg.verbose is True
 
     async def test_hook_called_for_encoder(self):
-        """Changing encoder should update message_history.encoder via hook."""
-        from solveig.schema.message.history import MessageHistory
-
+        """Changing encoder has no registered hook - just sets the field."""
         cfg = DEFAULT_CONFIG.with_(encoder="cl100k_base")
-        history = MessageHistory(system_prompt="test", config=cfg)
         interface = MockInterface()
         client_ref = ClientRef(client=MagicMock())
-        await apply_config_field("encoder", "gpt2", cfg, client_ref, interface, history)
+        await apply_config_field("encoder", "gpt2", cfg, client_ref, interface)
         assert cfg.encoder == "gpt2"
-        assert history.config.encoder == "gpt2"
 
     async def test_hook_called_for_max_context(self):
-        """Changing max_context should update message_history.max_context via hook."""
-        from solveig.schema.message.history import MessageHistory
-
+        """Changing max_context should update the stats bar via hook."""
         cfg = DEFAULT_CONFIG.with_(max_context=4096)
-        history = MessageHistory(system_prompt="test", config=cfg)
         interface = MockInterface()
         client_ref = ClientRef(client=MagicMock())
-        await apply_config_field(
-            "max_context", 8192, cfg, client_ref, interface, history
-        )
+        await apply_config_field("max_context", 8192, cfg, client_ref, interface)
         assert cfg.max_context == 8192
-        assert history.config.max_context == 8192
 
     async def test_model_hook_triggered(self):
         """Changing model calls fetch_and_apply_model_info via hook."""

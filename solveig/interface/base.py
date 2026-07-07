@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
-    from solveig.schema.message.pending import PendingMessageQueue
     from solveig.subcommand.runner import SubcommandRunner
 
 
@@ -40,11 +39,18 @@ class SolveigInterface(ABC):
     """
 
     subcommand_executor: SubcommandRunner | None = None
-    pending_queue: PendingMessageQueue
+    pending_queue: asyncio.Queue
     _request_task: asyncio.Task | None = None
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
+
+    async def notify_pending_queue_changed(self) -> None:  # noqa: B027
+        """Called after an item is put onto or taken off `pending_queue`.
+
+        Default no-op; concrete interfaces that display a live queued-message
+        indicator (e.g. `TerminalInterface`) override this to refresh it.
+        """
 
     @asynccontextmanager
     async def with_cancellable(

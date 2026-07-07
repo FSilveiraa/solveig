@@ -7,7 +7,6 @@ from typing import Any
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.schema.base import BaseSolveigModel
-from solveig.schema.message.pending import PendingMessageQueue
 
 
 class MockInterface(TerminalInterface):
@@ -56,7 +55,7 @@ class MockInterface(TerminalInterface):
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
         self._timeout_task = None
-        self.pending_queue = PendingMessageQueue()
+        self.pending_queue = asyncio.Queue()
 
     # Core async display methods
     async def start(self) -> None:
@@ -81,6 +80,9 @@ class MockInterface(TerminalInterface):
 
     async def wait_until_ready(self):
         self.outputs.append("INTERFACE_READY")
+
+    async def notify_pending_queue_changed(self) -> None:
+        pass  # no live "queued messages" widget to refresh outside the real Textual app
 
     async def stop(self) -> None:
         self.outputs.append("INTERFACE_STOPPED")

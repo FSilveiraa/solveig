@@ -1,74 +1,57 @@
-"""Simple mock LLM client for testing conversation loops."""
+"""Mock pydantic-ai Model for testing conversation loops.
+
+Replaces the old Instructor-based `MockLLMClient` (which returned
+`AssistantMessage` objects) with a `FunctionModel` that returns predefined
+`ModelResponse`s in sequence - the native pydantic-ai equivalent, injected
+via `RequestManager(config, model=...)`.
+"""
 
 import asyncio
 import random
-from unittest.mock import MagicMock
 
-from instructor import Mode
-
-from solveig.schema.message import AssistantMessage
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 
-class MockLLMClient:
-    """Thin wrapper around instructor client that returns predefined responses."""
+def create_mock_model(
+    *responses: ModelResponse | Exception,
+    sleep_seconds: float = 0.0,
+    sleep_delta: float = 1.5,
+) -> FunctionModel:
+    """Build a FunctionModel that returns each response in sequence.
 
-    def __init__(
-        self,
-        responses: list[AssistantMessage | Exception],
-        sleep_seconds: float = 0.0,
-        sleep_delta: float = 1.5,
-    ):
-        """
-        Args:
-            responses: List of AssistantMessage responses or exceptions to return in sequence
-        """
-        self.responses = responses
-        self.call_count = 0
+    Once `responses` is exhausted, returns a plain "no further responses"
+    text reply rather than raising, mirroring the old mock client's fallback.
+    """
+    responses_list = list(responses)
+    state = {"call_count": 0}
 
-        # Mimic instructor client structure: client.chat.completions.create()
-        self.chat = MagicMock()
-        self.chat.completions = MagicMock()
-        self.chat.completions.create = self._create_completion
-        self.sleep_seconds = sleep_seconds
-        self.sleep_delta = abs(sleep_delta)
-        self.mode = Mode.TOOLS
-        # Mock the underlying raw client (OpenAI client) - set to None for tests
-        self.client = None
+    async def _respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        call_index = state["call_count"]
+        state["call_count"] += 1
 
-    async def _create_completion(self, **kwargs) -> AssistantMessage:
-        """Return next response or raise next exception."""
-        if self.call_count < len(self.responses):
-            response = self.responses[self.call_count]
-            self.call_count += 1
+        if call_index < len(responses_list):
+            response = responses_list[call_index]
+
+            if sleep_seconds:
+                delta = abs(sleep_delta)
+                sleep_time = random.uniform(
+                    max(0.0, sleep_seconds - delta), sleep_seconds + delta
+                )
+                await asyncio.sleep(sleep_time)
 
             if isinstance(response, Exception):
                 raise response
-
-            if self.sleep_seconds:
-                sleep_time = random.uniform(
-                    max(0.0, self.sleep_seconds - self.sleep_delta),
-                    self.sleep_seconds + self.sleep_delta,
-                )
-                # print(f"Sleeping for {sleep_time} seconds...")
-                await asyncio.sleep(sleep_time)
             return response
 
-        # No more responses - return simple default
-        return AssistantMessage(
-            comment=f"No further responses configured - call count {self.call_count}"
+        return ModelResponse(
+            parts=[
+                TextPart(
+                    content=f"No further responses configured - call count {state['call_count']}"
+                )
+            ]
         )
 
-    def get_call_count(self) -> int:
-        """Get number of calls made."""
-        return self.call_count
-
-
-def create_mock_client(
-    *messages: AssistantMessage | Exception,
-    sleep_seconds: float = 0.0,
-    sleep_delta: float = 1.5,
-) -> MockLLMClient:
-    """Create mock client with predefined responses."""
-    return MockLLMClient(
-        list(messages), sleep_seconds=sleep_seconds, sleep_delta=sleep_delta
-    )
+    model = FunctionModel(_respond)
+    model.get_call_count = lambda: state["call_count"]  # type: ignore[attr-defined]
+    return model

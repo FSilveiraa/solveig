@@ -1,5 +1,7 @@
 """Queued messages display widget for Textual UI."""
 
+import asyncio
+
 from textual.containers import Vertical
 from textual.widgets import Static
 
@@ -7,20 +9,27 @@ from solveig.interface.cli.collapsible_widgets import (
     CustomCollapsible,
 )
 from solveig.interface.themes import Palette
-from solveig.schema.message.pending import PendingMessageQueue
-from solveig.schema.message.user import UserComment
+
+
+def _peek_all(queue: asyncio.Queue) -> list[str]:
+    """View all comments currently queued without consuming them.
+
+    `asyncio.Queue` has no public peek API - reaching into its private
+    `_queue` deque is the documented workaround for read-only inspection.
+    """
+    return list(queue._queue)  # type: ignore[attr-defined]
 
 
 class QueuedMessageItem(Static):
     """Single queued message item display."""
 
-    def __init__(self, comment: UserComment, **kwargs):
+    def __init__(self, comment: str, **kwargs):
         self._comment = comment
         super().__init__(**kwargs)
 
     def compose(self):
         """Create the message item layout."""
-        preview = self._comment.comment
+        preview = self._comment
         if len(preview) > 40:
             preview = preview[:37] + "..."
         yield Static(f"• {preview}", classes="queued-message-text")
@@ -33,7 +42,7 @@ class QueuedMessagesDisplay(Vertical):
     Only visible when there are messages in the queue.
     """
 
-    def __init__(self, queue: PendingMessageQueue, theme: Palette, **kwargs):
+    def __init__(self, queue: asyncio.Queue, theme: Palette, **kwargs):
         self._queue = queue
         self._theme = theme
         self._collapsible: CustomCollapsible | None = None
@@ -43,7 +52,7 @@ class QueuedMessagesDisplay(Vertical):
     def compose(self):
         """Create the widget layout."""
         # Start hidden if no messages
-        count = self._queue.count_user_comments()
+        count = self._queue.qsize()
         self.styles.display = "none" if count == 0 else "block"
 
         # Create collapsible with custom title
@@ -62,12 +71,12 @@ class QueuedMessagesDisplay(Vertical):
 
         with self._collapsible:
             with self._content_container:
-                for comment in self._queue.get_user_comments():
+                for comment in _peek_all(self._queue):
                     yield QueuedMessageItem(comment, classes="queued-message-item")
 
     def _get_title(self) -> str:
         """Generate the collapsible title based on queue state."""
-        count = self._queue.count_user_comments()
+        count = self._queue.qsize()
         if count == 0:
             return "No messages queued"
         elif count == 1:
@@ -84,7 +93,7 @@ class QueuedMessagesDisplay(Vertical):
         self._content_container.remove_children()
 
         # Add current user comments from queue
-        for comment in self._queue.get_user_comments():
+        for comment in _peek_all(self._queue):
             self._content_container.mount(
                 QueuedMessageItem(comment, classes="queued-message-item")
             )
@@ -95,7 +104,7 @@ class QueuedMessagesDisplay(Vertical):
         Call this when the queue changes.
         """
         # Update visibility
-        count = self._queue.count_user_comments()
+        count = self._queue.qsize()
         self.styles.display = "block" if count > 0 else "none"
 
         if count > 0 and self._collapsible is not None:

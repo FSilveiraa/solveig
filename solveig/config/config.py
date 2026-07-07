@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field, fields, replace
 from importlib.metadata import version
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from anyio import Path
 
@@ -13,9 +13,6 @@ from solveig.interface import SolveigInterface
 from solveig.llm import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
-
-if TYPE_CHECKING:
-    from solveig.schema import BaseTool
 
 
 @dataclass
@@ -41,11 +38,11 @@ class MCPServerConfig:
     headers: dict[str, str] = field(default_factory=dict)
     timeout: float = 30.0
 
-    def filter_tools(self, tools: list[type["BaseTool"]]) -> list[type[Any]]:
-        """Apply allowed_tools and blocked_tools filters to a list of tool classes."""
+    def filter_tools(self, tools: list[Any]) -> list[Any]:
+        """Apply allowed_tools and blocked_tools filters to a list of tool functions."""
 
-        def name(tool: type["BaseTool"]) -> str:
-            return tool.model_fields["type"].default  # type: ignore[attr-defined]
+        def name(tool: Any) -> str:
+            return getattr(tool, "tool_name", str(tool))
 
         result = tools
         if self.allowed_tools:

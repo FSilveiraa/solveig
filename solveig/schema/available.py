@@ -24,6 +24,7 @@ class AvailableTools:
 
     def __init__(self) -> None:
         self._toolset: Finalizer | None = None
+        self._active_tools: list = []
 
     def rebuild(self, config: SolveigConfig) -> None:
         """Recompute the active toolset from CORE_TOOLS, active plugin tools, and MCP_TOOLS."""
@@ -35,12 +36,18 @@ class AvailableTools:
         if not active:
             raise ValueError("No tools available: the active tools list is empty.")
 
+        self._active_tools = active
         self._toolset = Finalizer(HookRunner(FunctionToolset(active)))
 
     @property
     def toolset(self) -> Finalizer:
         assert self._toolset is not None, "Call rebuild() before accessing toolset"
         return self._toolset
+
+    @property
+    def active_tools(self) -> list:
+        """The plain tool functions currently active - used to describe them in the system prompt."""
+        return self._active_tools
 
 
 AVAILABLE_TOOLS = AvailableTools()

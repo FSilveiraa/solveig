@@ -18,8 +18,6 @@ from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.cli.widgets import Comment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-from solveig.schema.message.pending import PendingMessageQueue
-from solveig.schema.message.user import UserComment
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
@@ -31,13 +29,13 @@ class TerminalInterface(SolveigInterface):
 
     def __init__(
         self,
-        pending_queue: PendingMessageQueue | None = None,
+        pending_queue: asyncio.Queue | None = None,
         theme: Palette = DEFAULT_THEME,
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
         **kwargs,
     ):
-        self.pending_queue = pending_queue or PendingMessageQueue()
+        self.pending_queue = pending_queue or asyncio.Queue()
         self.theme = theme
         self.app = SolveigTextualApp(
             theme=theme,
@@ -47,7 +45,6 @@ class TerminalInterface(SolveigInterface):
         )
         # Store reference to interface for cancellation checks
         self.app.set_interface_ref(self)
-        self.pending_queue.set_on_change(self.app.update_queued_display)
         self.base_indent = base_indent
         self.code_theme = code_theme
         # Section title for tracking
@@ -105,7 +102,11 @@ class TerminalInterface(SolveigInterface):
                 )
 
         if not is_subcommand and self.pending_queue is not None:
-            await self.pending_queue.put(UserComment(comment=user_input))
+            await self.pending_queue.put(user_input)
+            await self.notify_pending_queue_changed()
+
+    async def notify_pending_queue_changed(self) -> None:
+        self.app.update_queued_display()
 
     async def _display_text(
         self, text: str, style: str = "text", prefix: str | None = None

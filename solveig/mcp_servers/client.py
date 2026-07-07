@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import shlex
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -14,7 +14,6 @@ from mcp.client.streamable_http import streamable_http_client
 from solveig.config import MCPServerConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.available import AVAILABLE_TOOLS, MCP_TOOLS
-from solveig.schema.tool.base import BaseTool
 
 from .adapter import create_tool_class
 
@@ -33,7 +32,7 @@ class MCPConnection:
         self.server_config = server_config
         self.url = server_config.url
         self._server_name: str | None = None
-        self.tools: list[type[BaseTool]] = []
+        self.tools: list[Any] = []
         self._session: ClientSession | None = None
         self._task: asyncio.Task | None = None
         self._ready: asyncio.Event = asyncio.Event()
@@ -152,7 +151,7 @@ async def connect(
     MCP_CONNECTIONS[server_config.url] = conn
     MCP_TOOLS.extend(conn.tools)
     AVAILABLE_TOOLS.rebuild(config)
-    tool_names = [t.model_fields["type"].default for t in conn.tools]
+    tool_names = [getattr(t, "tool_name", str(t)) for t in conn.tools]
     # Display connection details and update MCP stats
     await interface.display_success(
         f"MCP '{conn.display_name}': connected ({len(conn.tools)} tools: {', '.join(tool_names)})"

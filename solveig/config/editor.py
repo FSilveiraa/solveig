@@ -13,8 +13,6 @@ from typing import Any
 from solveig.interface import SolveigInterface, themes
 from solveig.llm.api import API_TYPES, ClientRef, ModelInfo, ModelNotFound
 from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message.history import MessageHistory
-from solveig.system_prompt import get_system_prompt
 from solveig.utils.misc import parse_human_readable_size
 
 from .config import SolveigConfig
@@ -187,7 +185,7 @@ async def fetch_and_apply_model_info(
     try:
         async with interface.with_cancellable(
             config.api_type.get_model_details(
-                client=client_ref.client, model=config.model
+                provider=client_ref.client, model=config.model
             ),
             status="Connecting to assistant",
         ) as task:
@@ -237,28 +235,15 @@ async def _hook_model_changed(
     config: SolveigConfig,
     client_ref: ClientRef,
     interface: SolveigInterface,
-    message_history: MessageHistory | None,
 ) -> None:
     config.model_info = None
     await fetch_and_apply_model_info(config, client_ref, interface)
-
-
-async def _hook_briefing_changed(
-    config: SolveigConfig,
-    client_ref: ClientRef,
-    interface: SolveigInterface,
-    message_history: MessageHistory | None,
-) -> None:
-    new_prompt = await get_system_prompt(config)
-    if message_history is not None:
-        message_history.update_system_prompt(new_prompt)
 
 
 async def _hook_max_context_changed(
     config: SolveigConfig,
     client_ref: ClientRef,
     interface: SolveigInterface,
-    message_history: MessageHistory | None,
 ) -> None:
     await interface.update_stats(max_context=config.max_context)
 
@@ -267,7 +252,6 @@ async def _hook_no_commands_changed(
     config: SolveigConfig,
     client_ref: ClientRef,
     interface: SolveigInterface,
-    message_history: MessageHistory | None,
 ) -> None:
     AVAILABLE_TOOLS.rebuild(config)
 
@@ -276,15 +260,14 @@ async def _hook_no_commands_changed(
 # Hook registry
 # ---------------------------------------------------------------------------
 
-_HookFn = Callable[
-    [SolveigConfig, ClientRef, SolveigInterface, MessageHistory | None], Any
-]
+_HookFn = Callable[[SolveigConfig, ClientRef, SolveigInterface], Any]
 
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "max_context": _hook_max_context_changed,
-    "briefing": _hook_briefing_changed,
     "no_commands": _hook_no_commands_changed,
+    # briefing needs no hook - run.py recomputes the system prompt fresh
+    # every turn, so a changed briefing path just takes effect next request.
     # Layer 2+: add_examples, add_os_info, system_prompt,
     #           auto_allowed_paths, auto_execute_commands, plugins,
     #           url, api_type, api_key, theme, code_theme
@@ -301,15 +284,14 @@ async def apply_config_field(
     config: SolveigConfig,
     client_ref: ClientRef,
     interface: SolveigInterface,
-    message_history: MessageHistory | None = None,
 ) -> None:
     """
     Set config.<field_name> = new_value and run any registered post-set hook.
 
     The hook is responsible for all side effects (stats updates, client
-    recreation, system prompt regeneration, etc.).
+    recreation, etc.).
     """
     setattr(config, field_name, new_value)
     hook = CONFIG_POST_SET_HOOKS.get(field_name)
     if hook:
-        await hook(config, client_ref, interface, message_history)
+        await hook(config, client_ref, interface)

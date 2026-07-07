@@ -7,7 +7,6 @@ from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
 from solveig.interface.themes import DEFAULT_THEME, Palette
-from solveig.schema.message.pending import PendingMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
 from .conversation import ConversationArea
@@ -27,7 +26,7 @@ class SolveigTextualApp(TextualApp):
         self,
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
-        pending_queue: PendingMessageQueue | None = None,
+        pending_queue: asyncio.Queue | None = None,
         auto_copy_selection: bool = True,
         **kwargs,
     ):

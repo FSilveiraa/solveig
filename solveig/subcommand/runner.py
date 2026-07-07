@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import shlex
 import typing
 from collections.abc import Callable
@@ -24,10 +23,7 @@ from solveig.mcp_servers.client import (
     disconnect,
     find_connection,
 )
-from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message.history import MessageHistory
-from solveig.schema.tool import CORE_TOOLS
-from solveig.schema.tool.base import BaseTool
+from solveig.schema.conversation import Conversation
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
 from solveig.utils.misc import convert_size_to_human_readable, format_age
@@ -37,12 +33,12 @@ class SubcommandRunner:
     def __init__(
         self,
         config: SolveigConfig,
-        message_history: MessageHistory,
+        conversation: Conversation,
         client_ref: ClientRef,
         session_manager: SessionManager | None = None,
     ):
         self.config = config
-        self.message_history = message_history
+        self.conversation = conversation
         self.client_ref = client_ref
         self.session_manager = session_manager
 
@@ -51,15 +47,12 @@ class SubcommandRunner:
         self._config: dict[str, Subcommand] = {}
         self._model: dict[str, Subcommand] = {}
         self._session: dict[str, Subcommand] = {}
-        self._tools: dict[str, Subcommand] = {}  # core tool subcommands
-        self._plugins: dict[str, Subcommand] = {}  # plugin tool subcommands
         self._mcp: dict[str, Subcommand] = {}  # MCP subcommands
 
         # Flat registry for O(1) lookup in __call__
         self._registry: dict[str, Subcommand] = {}
 
         self._register_builtins()
-        self._register_tool_subcommands()
         self._register_mcp_subcommands()
 
     # ------------------------------------------------------------------
@@ -277,33 +270,12 @@ class SubcommandRunner:
             ),
         )
 
-    def _register_tool_subcommands(self) -> None:
-        for tool_cls in typing.get_args(AVAILABLE_TOOLS.tools_union):
-            template: Subcommand | None = getattr(tool_cls, "subcommand", None)
-            if not isinstance(template, Subcommand):
-                continue
-            section = self._tools if tool_cls in CORE_TOOLS else self._plugins
-            handler = self._make_tool_handler(tool_cls)
-            registered = dataclasses.replace(template, handler=handler)
-            self._reg(section, registered)
-
-    def _make_tool_handler(self, tool_cls: type[BaseTool]) -> Callable:
-        async def handler(
-            interface: SolveigInterface, *args: str, **kwargs: str
-        ) -> None:
-            try:
-                tool = tool_cls.from_cli_args(*args, **kwargs)
-            except Exception as e:
-                tool_type = tool_cls.model_fields["type"].default
-                await interface.display_error(
-                    f"Invalid arguments for /{tool_type}: {e}"
-                )
-                return
-            result = await tool.solve(config=self.config, interface=interface)
-            if result:
-                await self.message_history.add_result(result)
-
-        return handler
+    # NOTE: per-tool subcommands (`/read <path>`, `/write <path> ...`, etc.)
+    # are not re-implemented yet. They depended on `BaseTool.from_cli_args`,
+    # which no longer exists now that tools are plain pydantic-ai tool
+    # functions rather than `BaseModel` subclasses. Re-introducing CLI-arg
+    # parsing for plain functions is Phase 5 (safety-policy/tool UX) scope,
+    # not this loop-handover phase.
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -412,7 +384,6 @@ class SubcommandRunner:
             self.config,
             self.client_ref,
             interface,
-            self.message_history,
         )
         old_display = self._format_field_value(field_name, old_value)
         new_display = self._format_field_value(field_name, new_value)
@@ -505,8 +476,6 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             ("Model sub-commands", self._model),
             ("Session sub-commands", self._session),
             ("MCP sub-commands", self._mcp),
-            ("Tool sub-commands", self._tools),
-            ("Plugin tools", self._plugins),
         ]
         for section_title, registry in sections:
             top = [(cmd, e) for cmd, e in registry.items() if not e.is_detail]
@@ -532,7 +501,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             return
         lines = []
         for conn in MCP_CONNECTIONS.values():
-            tool_names = [t.model_fields["type"].default for t in conn.tools]
+            tool_names = [getattr(t, "tool_name", str(t)) for t in conn.tools]
             lines.append(
                 f"**{conn.display_name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
             )
@@ -585,11 +554,12 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         lines = []
         for i, session_data in enumerate(sessions, 1):
             age = format_age(session_data["_mtime"])
-            messages = session_data.get("messages", [])
-            message_count = len(messages)
-            token_count = sum(m.get("token_count", 0) for m in messages)
+            message_count = session_data.get("message_count", 0)
+            tokens = session_data.get("total_tokens_sent", 0) + session_data.get(
+                "total_tokens_received", 0
+            )
             lines.append(
-                f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {token_count} tokens."
+                f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {tokens} tokens."
             )
         await interface.display_text_box(
             "\n".join(lines), language="markdown", title="Sessions"
@@ -602,7 +572,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             )
             return
         name = args[0] if args else None
-        filename = await self.session_manager.store(self.message_history, name)
+        filename = await self.session_manager.store(self.conversation, name)
         await interface.display_success(f"Session stored: {filename}")
 
     async def session_delete(self, interface: SolveigInterface, *args, **kwargs):
@@ -641,8 +611,10 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return
-        self.message_history.load_from_session(session_data)
-        await self.session_manager.display_loaded_session(
-            self.config, session_data, self.message_history, interface
+        self.conversation.messages = session_data["messages"]
+        self.conversation.total_tokens_sent = session_data.get("total_tokens_sent", 0)
+        self.conversation.total_tokens_received = session_data.get(
+            "total_tokens_received", 0
         )
+        await self.session_manager.display_loaded_session(self.conversation, interface)
         await interface.display_success("Session loaded. Continue your conversation.")

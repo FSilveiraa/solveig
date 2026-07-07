@@ -19,7 +19,7 @@ class TestSolveigConfigCore:
     async def test_default_values(self):
         """Test default configuration values."""
         config = SolveigConfig()
-        assert config.api_type == APIType.LOCAL
+        assert config.api_type == APIType.OPENAI
         assert config.api_key == ""
         assert config.verbose is False
         assert config.plugins == {}
@@ -97,9 +97,9 @@ class TestConfigSerialization:
 
     async def test_to_dict_enum_conversion(self):
         """Test to_dict converts api_type to strings."""
-        config = SolveigConfig(api_type=APIType.LOCAL)
+        config = SolveigConfig(api_type=APIType.OPENAI)
         result = config.to_dict()
-        assert result["api_type"] == "local"
+        assert result["api_type"] == "openai"
 
     async def test_to_json_works(self):
         """Test to_json produces valid JSON."""
@@ -111,9 +111,9 @@ class TestConfigSerialization:
 
     async def test_serialization_round_trip(self):
         """Test serialization preserves config data."""
-        original = SolveigConfig(api_type=APIType.LOCAL, temperature=0.8)
+        original = SolveigConfig(api_type=APIType.OPENAI, temperature=0.8)
         recreated = SolveigConfig(**original.to_dict())
-        assert recreated.api_type == APIType.LOCAL
+        assert recreated.api_type == APIType.OPENAI
         assert recreated.temperature == 0.8
 
 
@@ -122,12 +122,12 @@ class TestCLIIntegration:
 
     async def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
-        args = ["--api-type", "local", "test prompt"]
+        args = ["--api-type", "openai", "test prompt"]
         config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )
         assert isinstance(config, SolveigConfig)
-        assert config.api_type == APIType.LOCAL
+        assert config.api_type == APIType.OPENAI
         assert prompt == "test prompt"
 
     async def test_cli_overrides_work(self):
@@ -162,7 +162,7 @@ class TestCLIIntegration:
         with patch(
             "solveig.config.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
         ):
-            args = ["--api-type", "local", "test prompt"]  # Must provide required args
+            args = ["--api-type", "openai", "test prompt"]  # Must provide required args
             interface = MockInterface()
 
             config, _, __ = await SolveigConfig.parse_config_and_prompt(
@@ -185,7 +185,7 @@ class TestCLIIntegration:
 
     async def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
-        args = ["-a", "local", "test prompt"]
+        args = ["-a", "openai", "test prompt"]
         config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
             cli_args=args, interface=MockInterface()
         )

@@ -56,10 +56,9 @@ class TestTokenCounting:
         openai_count = APIType.OPENAI.count_tokens(text)
         anthropic_count = APIType.ANTHROPIC.count_tokens(text)
         gemini_count = APIType.GEMINI.count_tokens(text)
-        local_count = APIType.LOCAL.count_tokens(text)
 
         # All should be the same since they all use BaseAPI.count_tokens now
-        assert openai_count == anthropic_count == gemini_count == local_count
+        assert openai_count == anthropic_count == gemini_count
 
 
 class TestAPITypeParsing:
@@ -69,7 +68,6 @@ class TestAPITypeParsing:
         """Test parsing valid API types."""
         assert parse_api_type("openai") == APIType.OPENAI
         assert parse_api_type("OPENAI") == APIType.OPENAI  # Case insensitive
-        assert parse_api_type("local") == APIType.LOCAL
         assert parse_api_type("anthropic") == APIType.ANTHROPIC
         assert parse_api_type("gemini") == APIType.GEMINI
 

@@ -1,6 +1,5 @@
 import os
 import platform
-import typing
 
 from solveig.config import SolveigConfig
 from solveig.schema.available import AVAILABLE_TOOLS
@@ -33,8 +32,7 @@ def get_basic_os_info():
 
 
 def get_examples_info():
-    example = long.EXAMPLE.to_example()
-    return f"Use the following conversation example to guide your expected output format:\n{example}"
+    return f"Use the following conversation example to guide your expected output format:\n{long.EXAMPLE}"
 
 
 async def get_briefing_content(briefing_files: list[str]) -> str:
@@ -57,10 +55,15 @@ async def get_briefing_content(briefing_files: list[str]) -> str:
 
 def get_available_tools() -> str:
     """Generate capabilities list from currently active tools."""
-    return "Available tools:\n" + "\n".join(
-        f"- {req_class.get_description()}"
-        for req_class in typing.get_args(AVAILABLE_TOOLS.tools_union)
-    )
+    lines = []
+    for fn in AVAILABLE_TOOLS.active_tools:
+        name = getattr(fn, "tool_name", fn.__name__)
+        first_line = next(
+            (line.strip() for line in (fn.__doc__ or "").splitlines() if line.strip()),
+            "",
+        )
+        lines.append(f"- {name}: {first_line}")
+    return "Available tools:\n" + "\n".join(lines)
 
 
 async def get_system_prompt(config: SolveigConfig) -> str:

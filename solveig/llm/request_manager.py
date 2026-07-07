@@ -5,20 +5,21 @@ Manages LLM request lifecycle including retries, timeouts, and error handling.
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import TYPE_CHECKING
 
-from instructor import AsyncInstructor
-from instructor.core import InstructorRetryException
+from pydantic import ValidationError
+from pydantic_ai.agent import AgentRunResult
+from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 
+from solveig.agent import build_agent
 from solveig.interface import SolveigInterface
-from solveig.llm.api import ClientRef, ModelNotFound, get_instructor_client
-from solveig.schema.available import AVAILABLE_TOOLS
-from solveig.schema.message import AssistantMessage
-from solveig.schema.message.history import MessageHistory
-from solveig.utils.misc import default_json_serialize
+from solveig.llm.api import ClientRef, get_provider
+from solveig.schema.conversation import Conversation
+from solveig.schema.deps import SolveigDeps
 
 if TYPE_CHECKING:
+    from pydantic_ai.models import Model
+
     from solveig.config import SolveigConfig
 
 
@@ -26,196 +27,77 @@ class RequestManager:
     """
     Handles all LLM communication with retry logic and error handling.
 
-    Owns the ClientRef so that the client can be swapped at runtime (e.g. via
-    /config set api_key) without requiring run.py to know about ClientRef.
-
-    Responsibilities:
-    - Build the LLM client from config (or accept an injected one for testing)
-    - Hold and expose client_ref for components that need to swap the client
-    - Send requests to the LLM with retry logic
-    - Manage timeouts
-    - Convert errors to user-facing messages
+    Owns the ClientRef so that the underlying provider connection can be
+    swapped at runtime (e.g. via /config set api_key) without run.py needing
+    to know about it.
     """
 
     def __init__(
         self,
         config: SolveigConfig,
-        client: AsyncInstructor | None = None,
+        client_ref: ClientRef | None = None,
+        model: Model | None = None,
     ):
-        raw = client or get_instructor_client(
-            api_type=config.api_type, api_key=config.api_key, url=config.url
+        self._client_ref = client_ref or ClientRef(
+            client=get_provider(config.api_type, api_key=config.api_key, url=config.url)
         )
-        self._client_ref = ClientRef(client=raw)
+        # Lets tests/the mock demo inject a pydantic-ai Model (FunctionModel/
+        # TestModel) directly, bypassing client_ref's Provider resolution.
+        self._model = model
 
     @property
     def client_ref(self) -> ClientRef:
         return self._client_ref
 
-    @property
-    def client(self) -> AsyncInstructor:
-        return self._client_ref.client
-
     async def send_with_retry(
         self,
         config: SolveigConfig,
         interface: SolveigInterface,
-        message_history: MessageHistory,
-    ) -> AssistantMessage | None:
+        conversation: Conversation,
+        system_prompt: str,
+        prompt: str,
+    ) -> AgentRunResult | None:
         """
-        Send message to LLM with retry logic.
+        Send a user prompt to the LLM, driving the full agent run - which may
+        include any number of tool-call rounds, all handled internally by the
+        Agent and the loop capability - with retry logic.
 
-        Returns AssistantMessage on success, None if user chooses not to retry.
+        Returns the completed AgentRunResult, or None if the request was
+        cancelled or the user chose not to retry after a failure.
         """
-        response_model = AVAILABLE_TOOLS.response_model
-
         while True:
-            # This prevents general errors in testing, allowing for the task to get cancelled mid-loop
             await asyncio.sleep(0)
 
+            agent = build_agent(
+                config, self._client_ref, interface, system_prompt, model=self._model
+            )
+            run_coro = agent.run(
+                prompt,
+                message_history=conversation.messages,
+                deps=SolveigDeps(config=config, interface=interface),
+            )
+            if config.timeout and config.timeout > 0:
+                run_coro = asyncio.wait_for(run_coro, timeout=config.timeout)
+
             try:
-                # Use context manager for cancellable request
-                coro = self._send_single(
-                    config=config,
-                    interface=interface,
-                    response_model=response_model,
-                    message_history=message_history,
-                )
                 async with interface.with_cancellable(
-                    coro, status="Thinking", timeout=config.timeout
+                    run_coro, status="Thinking", timeout=config.timeout
                 ) as task:
                     return await task
-
             except asyncio.CancelledError:
-                # Request was cancelled by user (Ctrl+C or Esc) - return None to go back to user input
                 await interface.display_info("Request cancelled")
                 return None
-
-            except TimeoutError as e:
-                await interface.display_error(str(e))
-
-            except InstructorRetryException as e:
-                await self._handle_instructor_error(config, interface, e)
-
-            except Exception as e:
-                await self._handle_generic_error(interface, e)
-
-            # Ask user if they want to retry
-            should_retry = await self._ask_retry(interface)
-            if not should_retry:
-                return None
-
-    async def _send_single(
-        self,
-        config: SolveigConfig,
-        interface: SolveigInterface,
-        response_model: type,
-        message_history: MessageHistory,
-    ) -> AssistantMessage:
-        """Send a single request to the LLM."""
-        message_history_dumped = message_history.to_openai()
-        if config.verbose:
-            await interface.display_text_box(
-                title="Sending",
-                text=json.dumps(
-                    message_history_dumped, indent=2, default=default_json_serialize
-                ),
-                collapsed=True,
-            )
-
-        # Build LLM coroutine
-        llm_coro = self.client.chat.completions.create(
-            messages=message_history_dumped,
-            response_model=response_model,
-            model=config.model,
-            temperature=config.temperature,
-            max_retries=1,
-        )
-
-        # Wrap with timeout
-        try:
-            assistant_response = await asyncio.wait_for(
-                llm_coro, timeout=config.timeout
-            )
-        except TimeoutError as e:
-            raise TimeoutError(f"Request timed out after {config.timeout}s") from e
-
-        assert isinstance(assistant_response, AssistantMessage)
-
-        # Extract metadata and update history
-        await self._process_response(interface, assistant_response)
-
-        return assistant_response
-
-    async def _process_response(
-        self, interface: SolveigInterface, response: AssistantMessage
-    ) -> AssistantMessage:
-        """Extract metadata from response and update message history."""
-        model = None
-        if response._raw_response is not None:
-            raw = response._raw_response
-            if model := raw.model:
-                await interface.update_stats(model=model)
-
-            # Extract reasoning and reasoning_details from o1/o3/Gemini models
-            if hasattr(raw, "choices") and raw.choices:
-                message = raw.choices[0].message
-                if hasattr(message, "reasoning") and message.reasoning:
-                    response.reasoning = message.reasoning
-                if hasattr(message, "reasoning_details") and message.reasoning_details:
-                    response.reasoning_details = message.reasoning_details
-
-        return response
-
-    async def _handle_instructor_error(
-        self,
-        config: SolveigConfig,
-        interface: SolveigInterface,
-        exc: InstructorRetryException,
-    ) -> None:
-        """Handle InstructorRetryException with user-friendly messages."""
-        attempt_exc = exc.failed_attempts[0][1] if exc.failed_attempts else exc
-        body = getattr(attempt_exc, "body", None)
-
-        if isinstance(body, dict):
-            error_message = body.get("message", str(attempt_exc))
-            error_code = body.get("code", "unknown")
-            await interface.display_error(f"Error {error_code}: {error_message}")
-        else:
-            error_message = str(attempt_exc)
-            await interface.display_error(error_message)
-
-        # If this is an invalid model error, use the existing method to find and list the available ones
-        if (
-            "is not a valid model ID" in error_message
-            and self.client.client is not None
-        ):
-            try:
-                await config.api_type.get_model_details(
-                    client=self.client.client, model=config.model
+            except TimeoutError:
+                await interface.display_error(
+                    f"Request timed out after {config.timeout}s"
                 )
-            except ModelNotFound as e:
-                await e.print(interface)
+            except (UnexpectedModelBehavior, UserError, ValidationError) as e:
+                await interface.display_error(str(e))
+            except Exception as e:
+                await interface.display_error(f"{e.__class__.__name__}: {e}")
 
-    @staticmethod
-    async def _handle_generic_error(
-        interface: SolveigInterface, exc: Exception
-    ) -> None:
-        """Handle generic exceptions."""
-        import traceback
-
-        from pydantic import ValidationError
-
-        if isinstance(exc, ValidationError):
-            await interface.display_error(
-                f"Invalid response from model ({exc.error_count()} validation errors)"
-            )
-        else:
-            await interface.display_error(exc)
-        await interface.display_text_box(
-            title=exc.__class__.__name__,
-            text=str(exc) + "\n\n" + traceback.format_exc(),
-            collapsed=True,
-        )
+            if not await self._ask_retry(interface):
+                return None
 
     @staticmethod
     async def _ask_retry(interface: SolveigInterface) -> bool:

@@ -1,15 +1,23 @@
+"""Session persistence.
+
+Deliberately minimal for this phase - stores/restores `Conversation` as a
+single JSON blob per session file (whole-list `ModelMessagesTypeAdapter`
+dump, not the old per-tool-result rich replay). Phase 4 owns the real
+JSONL-per-message rework, matching pydantic-ai's `ModelMessage` shape and
+rebuilding the rich visual replay (diffs, tool output boxes, etc.) that the
+old `AssistantMessage`/`UserMessage` classes used to provide.
+"""
+
 import json
 from datetime import datetime
 
 from anyio import Path
+from pydantic_ai.messages import ModelMessagesTypeAdapter
+from pydantic_core import to_jsonable_python
 
-from solveig import utils
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.message.assistant import AssistantMessage
-from solveig.schema.message.history import Message, MessageHistory
-from solveig.schema.message.user import UserMessage
-from solveig.schema.result import ToolResult
+from solveig.schema.conversation import Conversation
 from solveig.utils.file import Filesystem
 
 
@@ -71,38 +79,19 @@ class SessionManager:
     # Core operations
     # ------------------------------------------------------------------
 
-    async def _write_messages(
-        self, messages: list[Message] | tuple[Message, ...], *, append: bool
-    ) -> None:
-        serialized_messages = []
-        for message in messages:
-            message_serialized = message.to_openai()
-            message_serialized["token_count"] = message.token_count
-            serialized_messages.append(
-                json.dumps(
-                    message_serialized,
-                    default=utils.misc.default_json_serialize,
-                )
-            )
-        lines = "\n".join(serialized_messages) + "\n"
-        assert self.current_path
-        await Filesystem.write_file_text(self.current_path, lines, append=append)
-
-    async def append(self, *messages: Message) -> None:
-        """Append messages to the current session file, creating it if needed."""
-        sessions_dir = await self._ensure_dir()
-        if self.current_path is None:
-            self.current_path = Path(f"{sessions_dir}/{self._session_filename(None)}")
-        await self._write_messages(messages, append=True)
-
-    async def store(
-        self, message_history: MessageHistory, name: str | None = None
-    ) -> str:
-        """Overwrite the session file with the full history. Creates a new named file if requested."""
+    async def store(self, conversation: Conversation, name: str | None = None) -> str:
+        """Overwrite the session file with the full conversation."""
         sessions_dir = await self._ensure_dir()
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
-        await self._write_messages(message_history.messages[1:], append=False)
+        blob = {
+            "total_tokens_sent": conversation.total_tokens_sent,
+            "total_tokens_received": conversation.total_tokens_received,
+            "messages": to_jsonable_python(conversation.messages),
+        }
+        await Filesystem.write_file_text(
+            self.current_path, json.dumps(blob) + "\n", append=False
+        )
         return self.current_path.name
 
     async def load(self, name: str | None = None) -> dict:
@@ -116,33 +105,33 @@ class SessionManager:
             path_str = sessions[0][0]
         self.current_path = Path(path_str)
         file_content = await Filesystem.read_file(self.current_path)
-        messages = [
-            json.loads(line)
-            for line in file_content.content.splitlines()
-            if line.strip()
-        ]
+        blob = json.loads(file_content.content)
         session_id = self.current_path.name.removesuffix(".jsonl")
-        return {"id": session_id, "messages": messages}
+        return {
+            "id": session_id,
+            "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
+            "total_tokens_sent": blob.get("total_tokens_sent", 0),
+            "total_tokens_received": blob.get("total_tokens_received", 0),
+        }
 
     async def list_sessions(self) -> list[dict]:
-        """Return metadata for all named sessions, newest first."""
+        """Return metadata for all stored sessions, newest first."""
         result = []
         for path_str, mtime in await self._get_sessions():
             try:
                 file_content = await Filesystem.read_file(Path(path_str))
-                messages = [
-                    json.loads(line)
-                    for line in file_content.content.splitlines()
-                    if line.strip()
-                ]
+                blob = json.loads(file_content.content)
                 session_id = path_str.rsplit("/", 1)[-1].removesuffix(".jsonl")
-                data = {
-                    "id": session_id,
-                    "messages": messages,
-                    "_mtime": mtime,
-                    "_path": path_str,
-                }
-                result.append(data)
+                result.append(
+                    {
+                        "id": session_id,
+                        "message_count": len(blob.get("messages", [])),
+                        "total_tokens_sent": blob.get("total_tokens_sent", 0),
+                        "total_tokens_received": blob.get("total_tokens_received", 0),
+                        "_mtime": mtime,
+                        "_path": path_str,
+                    }
+                )
             except Exception:
                 pass
         return result
@@ -159,46 +148,15 @@ class SessionManager:
 
     async def display_loaded_session(
         self,
-        config: SolveigConfig,
-        session_data: dict,
-        message_history: MessageHistory,
+        conversation: Conversation,
         interface: SolveigInterface,
     ) -> None:
-        """Re-display all messages from a loaded session."""
+        """Announce a resumed session. Full rich replay is Phase 4 scope."""
         header = (
-            f"**Session:** {session_data.get('id', '?')}  \n"
-            f"**Messages:** {len(message_history.messages) - 1}  \n"
+            f"**Messages:** {len(conversation.messages)}  \n"
             f"**Tokens sent / received:** "
-            f"{message_history.total_tokens_sent} / {message_history.total_tokens_received}"
+            f"{conversation.total_tokens_sent} / {conversation.total_tokens_received}"
         )
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"
         )
-
-        for msg in message_history.messages[1:]:  # skip system message
-            if isinstance(msg, AssistantMessage):
-                await msg.display(config, interface)
-
-            elif isinstance(msg, UserMessage):
-                result_count = sum(
-                    1 for result in msg.responses if isinstance(result, ToolResult)
-                )
-                result_index = 0
-
-                for response in msg.responses:
-                    if isinstance(response, ToolResult):
-                        # await interface.display_section("Assistant")
-                        result_index += 1
-                        try:
-                            await response.display(
-                                interface,
-                                index=result_index,
-                                total=result_count,
-                                auto_collapse=config.auto_collapse_tools,
-                            )
-                        except Exception:
-                            pass
-
-                await msg.display(interface)  # shows user comments
-
-        await interface.update_stats(used_context=message_history.token_count)
