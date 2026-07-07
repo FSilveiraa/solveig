@@ -12,8 +12,7 @@ from pydantic import BaseModel, Field
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.result import ToolResult
-from solveig.schema.tool._decorator import tool
+from solveig.schema.tool.contract import ToolResult, tool
 
 TASK_STATUS_MAP = {
     "pending": "⚪",

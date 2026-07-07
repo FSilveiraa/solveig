@@ -19,8 +19,8 @@ from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import initialize_plugins
-from solveig.schema.available import AVAILABLE_TOOLS
 from solveig.schema.conversation import Conversation
+from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 
@@ -70,14 +70,16 @@ async def setup_loop(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
-        await fetch_and_apply_model_info(config, request_manager.client_ref, interface)
+        await fetch_and_apply_model_info(
+            config, request_manager.provider_ref, interface
+        )
 
     await interface.update_stats(url=config.url, model=config.model)
 
     subcommand_executor = SubcommandRunner(
         config=config,
         conversation=conversation,
-        client_ref=request_manager.client_ref,
+        provider_ref=request_manager.provider_ref,
         session_manager=session_manager,
     )
     interface.set_subcommand_executor(subcommand_executor)

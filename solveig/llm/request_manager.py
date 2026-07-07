@@ -13,7 +13,7 @@ from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 
 from solveig.agent import build_agent
 from solveig.interface import SolveigInterface
-from solveig.llm.api import ClientRef, get_provider
+from solveig.llm.api import ProviderRef, get_provider
 from solveig.schema.conversation import Conversation
 from solveig.schema.deps import SolveigDeps
 
@@ -27,7 +27,7 @@ class RequestManager:
     """
     Handles all LLM communication with retry logic and error handling.
 
-    Owns the ClientRef so that the underlying provider connection can be
+    Owns the ProviderRef so that the underlying provider connection can be
     swapped at runtime (e.g. via /config set api_key) without run.py needing
     to know about it.
     """
@@ -35,19 +35,21 @@ class RequestManager:
     def __init__(
         self,
         config: SolveigConfig,
-        client_ref: ClientRef | None = None,
+        provider_ref: ProviderRef | None = None,
         model: Model | None = None,
     ):
-        self._client_ref = client_ref or ClientRef(
-            client=get_provider(config.api_type, api_key=config.api_key, url=config.url)
+        self._provider_ref = provider_ref or ProviderRef(
+            provider=get_provider(
+                config.api_type, api_key=config.api_key, url=config.url
+            )
         )
         # Lets tests/the mock demo inject a pydantic-ai Model (FunctionModel/
-        # TestModel) directly, bypassing client_ref's Provider resolution.
+        # TestModel) directly, bypassing provider_ref's Provider resolution.
         self._model = model
 
     @property
-    def client_ref(self) -> ClientRef:
-        return self._client_ref
+    def provider_ref(self) -> ProviderRef:
+        return self._provider_ref
 
     async def send_with_retry(
         self,
@@ -69,7 +71,7 @@ class RequestManager:
             await asyncio.sleep(0)
 
             agent = build_agent(
-                config, self._client_ref, interface, system_prompt, model=self._model
+                config, self._provider_ref, interface, system_prompt, model=self._model
             )
             run_coro = agent.run(
                 prompt,

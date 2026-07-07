@@ -5,9 +5,9 @@ LLM client and request management.
 from .api import (
     API_TYPES,
     APIType,
-    ClientRef,
     ModelInfo,
     ModelNotFound,
+    ProviderRef,
     get_model,
     get_provider,
     parse_api_type,
@@ -16,7 +16,7 @@ from .api import (
 __all__ = [
     "APIType",
     "API_TYPES",
-    "ClientRef",
+    "ProviderRef",
     "ModelInfo",
     "ModelNotFound",
     "get_model",

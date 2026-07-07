@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from solveig.llm import ClientRef
 from solveig.schema.message.history import MessageHistory
+
+from solveig.llm import ProviderRef
 from solveig.subcommand.runner import SubcommandRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -20,11 +20,11 @@ pytestmark = pytest.mark.anyio
 def make_runner(config=None, session_manager=None):
     cfg = config if config is not None else DEFAULT_CONFIG.with_()
     history = MessageHistory(system_prompt="test", config=cfg)
-    client_ref = ClientRef(client=MagicMock())
+    provider_ref = ProviderRef(provider=MagicMock())
     runner = SubcommandRunner(
         config=cfg,
         message_history=history,
-        client_ref=client_ref,
+        provider_ref=provider_ref,
         session_manager=session_manager,
     )
     return runner, history, cfg

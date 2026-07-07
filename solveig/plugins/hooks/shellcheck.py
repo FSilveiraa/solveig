@@ -9,8 +9,8 @@ import tempfile
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface import SolveigInterface
-from solveig.schema.hooks import before
 from solveig.schema.tool import command
+from solveig.schema.toolset import before
 
 DANGEROUS_PATTERNS = [
     "rm -rf",

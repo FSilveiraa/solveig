@@ -5,8 +5,7 @@ import re
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.result import ToolResult
-from solveig.schema.tool._decorator import tool
+from solveig.schema.tool.contract import ToolResult, tool
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 

@@ -13,9 +13,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from solveig.config import MCPServerConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.available import AVAILABLE_TOOLS, MCP_TOOLS
-
-from .adapter import create_tool_class
+from solveig.schema.toolset import AVAILABLE_TOOLS, MCP_TOOLS
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
@@ -61,10 +59,11 @@ class MCPConnection:
 
     async def load_tools(self):
         available_tools = await self._session.list_tools()
-        parsed_tools = [
-            create_tool_class(tool, self._session) for tool in available_tools.tools
-        ]
-        self.tools = self.server_config.filter_tools(parsed_tools)
+        if available_tools.tools:
+            raise NotImplementedError(
+                "MCP tool adapter is not yet ported to pydantic-ai native tool-calling"
+            )
+        self.tools = []
 
     async def _actually_open(self) -> None:
         """Background task: holds the transport + session context managers open."""

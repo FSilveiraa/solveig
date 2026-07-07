@@ -17,10 +17,10 @@ class ModelInfo:
 
 
 @dataclass
-class ClientRef:
+class ProviderRef:
     """Mutable holder for the current provider connection, enabling runtime replacement."""
 
-    client: Provider
+    provider: Provider
 
 
 class APIType:

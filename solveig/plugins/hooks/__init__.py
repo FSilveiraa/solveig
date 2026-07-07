@@ -1,13 +1,13 @@
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
-from solveig.schema.hooks import clear_hooks, registered_plugin_names
+from solveig.schema.toolset import clear_hooks, registered_plugin_names
 
 
 async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
     """Discover hook plugin modules and report which are active per `config.plugins`.
 
-    Hooks register themselves into `solveig.schema.hooks` at import time via
+    Hooks register themselves into `solveig.schema.toolset` at import time via
     `@before`/`@after`; `HookRunner` gates each hook on `config.plugins` at
     call time, so there's nothing to enable/disable here beyond discovery and
     user-facing status.

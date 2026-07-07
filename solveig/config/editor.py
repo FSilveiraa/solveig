@@ -11,8 +11,8 @@ from collections.abc import Callable
 from typing import Any
 
 from solveig.interface import SolveigInterface, themes
-from solveig.llm.api import API_TYPES, ClientRef, ModelInfo, ModelNotFound
-from solveig.schema.available import AVAILABLE_TOOLS
+from solveig.llm.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
+from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.utils.misc import parse_human_readable_size
 
 from .config import SolveigConfig
@@ -169,7 +169,7 @@ async def prompt_for_field(
 
 async def fetch_and_apply_model_info(
     config: SolveigConfig,
-    client_ref: ClientRef,
+    provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> bool:
     """
@@ -185,7 +185,7 @@ async def fetch_and_apply_model_info(
     try:
         async with interface.with_cancellable(
             config.api_type.get_model_details(
-                provider=client_ref.client, model=config.model
+                provider=provider_ref.provider, model=config.model
             ),
             status="Connecting to assistant",
         ) as task:
@@ -233,16 +233,16 @@ async def fetch_and_apply_model_info(
 
 async def _hook_model_changed(
     config: SolveigConfig,
-    client_ref: ClientRef,
+    provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
     config.model_info = None
-    await fetch_and_apply_model_info(config, client_ref, interface)
+    await fetch_and_apply_model_info(config, provider_ref, interface)
 
 
 async def _hook_max_context_changed(
     config: SolveigConfig,
-    client_ref: ClientRef,
+    provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
     await interface.update_stats(max_context=config.max_context)
@@ -250,7 +250,7 @@ async def _hook_max_context_changed(
 
 async def _hook_no_commands_changed(
     config: SolveigConfig,
-    client_ref: ClientRef,
+    provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
     AVAILABLE_TOOLS.rebuild(config)
@@ -260,7 +260,7 @@ async def _hook_no_commands_changed(
 # Hook registry
 # ---------------------------------------------------------------------------
 
-_HookFn = Callable[[SolveigConfig, ClientRef, SolveigInterface], Any]
+_HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
 
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
@@ -282,7 +282,7 @@ async def apply_config_field(
     field_name: str,
     new_value: Any,
     config: SolveigConfig,
-    client_ref: ClientRef,
+    provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
     """
@@ -294,4 +294,4 @@ async def apply_config_field(
     setattr(config, field_name, new_value)
     hook = CONFIG_POST_SET_HOOKS.get(field_name)
     if hook:
-        await hook(config, client_ref, interface)
+        await hook(config, provider_ref, interface)

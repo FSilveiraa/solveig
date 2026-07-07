@@ -1,8 +1,18 @@
-"""`@before`/`@after` hook registry and the `HookRunner` that drives it.
+"""Assembles and runs the active toolset - the pipeline from raw tool
+functions to the one `Finalizer(HookRunner(FunctionToolset(...)))` object
+handed to `Agent(toolsets=[...])`.
 
-`WrapperToolset` itself is never exposed to hook authors - `HookRunner` is
-the only thing that touches pydantic-ai's wrapper machinery. A hook plugin
-just writes plain functions and targets tools by function or by name:
+`AVAILABLE_TOOLS.rebuild(config)` must be called after any change to the
+active tool set: plugin load/unload, MCP server connect/disconnect, or
+config mutations that affect the tool set (e.g. toggling no_commands).
+
+`HookRunner` and the `@before`/`@after` registry live here too - they're the
+middle stage of the same pipeline (raw tools -> hooks -> active toolset),
+and `AvailableTools.rebuild()` wires `HookRunner` directly into the stack it
+builds. `WrapperToolset` itself is never exposed to hook authors -
+`HookRunner` is the only thing that touches pydantic-ai's wrapper machinery.
+A hook plugin just writes plain functions and targets tools by function or
+by name:
 
     @before(tools=(command,))
     async def check_something(tool_args, config, interface): ...
@@ -27,12 +37,22 @@ from typing import Any
 
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets.abstract import ToolsetTool
+from pydantic_ai.toolsets.function import FunctionToolset
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.schema.deps import SolveigDeps
-from solveig.schema.result import ToolResult
+from solveig.schema.tool import CORE_TOOLS, command
+from solveig.schema.tool.contract import Finalizer, ToolResult
+
+# MCP tools are appended here when an MCP server connects, removed on disconnect.
+# Call AVAILABLE_TOOLS.rebuild(config) after mutating.
+MCP_TOOLS: list = []
+
+# ---------------------------------------------------------------------------
+# @before / @after hook registry
+# ---------------------------------------------------------------------------
 
 BeforeHook = Callable[
     [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]
@@ -119,3 +139,40 @@ class HookRunner(WrapperToolset[SolveigDeps]):
                     result = await after_hook(result, config, interface)
 
         return result
+
+
+# ---------------------------------------------------------------------------
+# Active toolset assembly
+# ---------------------------------------------------------------------------
+
+
+class AvailableTools:
+    """Holds the currently active toolset, rebuilt from the current tool sources."""
+
+    def __init__(self) -> None:
+        self._toolset: Finalizer | None = None
+
+    def rebuild(self, config: SolveigConfig) -> None:
+        """Recompute the active toolset from CORE_TOOLS, active plugin tools, and MCP_TOOLS."""
+        # Local import: solveig.plugins imports solveig.plugins.hooks, which
+        # imports clear_hooks/registered_plugin_names from this module - a
+        # module-level import here would be circular.
+        from solveig.plugins.tools import PLUGIN_TOOLS
+
+        active = [*CORE_TOOLS, *PLUGIN_TOOLS.active.values(), *MCP_TOOLS]
+
+        if config.no_commands and command in active:
+            active.remove(command)
+
+        if not active:
+            raise ValueError("No tools available: the active tools list is empty.")
+
+        self._toolset = Finalizer(HookRunner(FunctionToolset(active)))
+
+    @property
+    def toolset(self) -> Finalizer:
+        assert self._toolset is not None, "Call rebuild() before accessing toolset"
+        return self._toolset
+
+
+AVAILABLE_TOOLS = AvailableTools()

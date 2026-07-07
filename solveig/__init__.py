@@ -12,12 +12,12 @@ __license__ = "MIT"
 
 # Import main classes for easy access
 from .config import SolveigConfig
-from .llm import APIType, ClientRef, ModelInfo, get_model, get_provider
+from .llm import APIType, ModelInfo, ProviderRef, get_model, get_provider
 
 __all__ = [
     "SolveigConfig",
     "APIType",
-    "ClientRef",
+    "ProviderRef",
     "ModelInfo",
     "get_model",
     "get_provider",

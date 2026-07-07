@@ -1,8 +1,14 @@
 import os
 import platform
+from typing import cast
+
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
 
 from solveig.config import SolveigConfig
-from solveig.schema.available import AVAILABLE_TOOLS
+from solveig.schema.deps import SolveigDeps
+from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.system_prompt.examples import long
 from solveig.utils.file import Filesystem
 
@@ -53,24 +59,37 @@ async def get_briefing_content(briefing_files: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def get_available_tools() -> str:
-    """Generate capabilities list from currently active tools."""
-    lines = []
-    for fn in AVAILABLE_TOOLS.active_tools:
-        name = getattr(fn, "tool_name", fn.__name__)
-        first_line = next(
-            (line.strip() for line in (fn.__doc__ or "").splitlines() if line.strip()),
-            "",
-        )
-        lines.append(f"- {name}: {first_line}")
-    return "Available tools:\n" + "\n".join(lines)
+async def get_available_tools() -> str:
+    """Generate the tool listing from pydantic-ai's own generated tool schemas -
+    the same descriptions/parameter docs the model receives via native
+    tool-calling, not a second hand-parsed pass over each docstring."""
+    # No real SolveigDeps needed - schema introspection never touches ctx.deps.
+    ctx = cast(
+        RunContext[SolveigDeps],
+        RunContext(deps=None, model=TestModel(), usage=RunUsage(), max_retries=1),
+    )
+    tools = await AVAILABLE_TOOLS.toolset.get_tools(ctx)
+
+    lines = ["Available tools:"]
+    for name, tool in sorted(tools.items()):
+        tool_def = tool.tool_def
+        summary = " ".join((tool_def.description or "").split())
+        lines.append(f"- {name}: {summary}")
+
+        schema = tool_def.parameters_json_schema
+        required = set(schema.get("required", ()))
+        for arg_name, arg_schema in schema.get("properties", {}).items():
+            marker = "required" if arg_name in required else "optional"
+            arg_desc = " ".join((arg_schema.get("description") or "").split())
+            lines.append(f"    - {arg_name} ({marker}): {arg_desc}")
+    return "\n".join(lines)
 
 
 async def get_system_prompt(config: SolveigConfig) -> str:
     system_prompt = config.system_prompt.strip()
     if briefing_content := await get_briefing_content(config.briefing):
         system_prompt += "\n\n" + briefing_content
-    if tools_info := get_available_tools():
+    if tools_info := await get_available_tools():
         system_prompt += "\n\n" + tools_info
     if config.add_os_info and (os_info := get_basic_os_info()):
         system_prompt += "\n\n" + os_info

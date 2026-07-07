@@ -11,7 +11,7 @@ from solveig.config.editor import (
     _unwrap_optional,
     apply_config_field,
 )
-from solveig.llm import ClientRef
+from solveig.llm import ProviderRef
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -138,24 +138,24 @@ class TestApplyConfigField:
     async def test_sets_verbose(self):
         cfg = DEFAULT_CONFIG.with_(verbose=False)
         interface = MockInterface()
-        client_ref = ClientRef(client=MagicMock())
-        await apply_config_field("verbose", True, cfg, client_ref, interface)
+        provider_ref = ProviderRef(provider=MagicMock())
+        await apply_config_field("verbose", True, cfg, provider_ref, interface)
         assert cfg.verbose is True
 
     async def test_hook_called_for_encoder(self):
         """Changing encoder has no registered hook - just sets the field."""
         cfg = DEFAULT_CONFIG.with_(encoder="cl100k_base")
         interface = MockInterface()
-        client_ref = ClientRef(client=MagicMock())
-        await apply_config_field("encoder", "gpt2", cfg, client_ref, interface)
+        provider_ref = ProviderRef(provider=MagicMock())
+        await apply_config_field("encoder", "gpt2", cfg, provider_ref, interface)
         assert cfg.encoder == "gpt2"
 
     async def test_hook_called_for_max_context(self):
         """Changing max_context should update the stats bar via hook."""
         cfg = DEFAULT_CONFIG.with_(max_context=4096)
         interface = MockInterface()
-        client_ref = ClientRef(client=MagicMock())
-        await apply_config_field("max_context", 8192, cfg, client_ref, interface)
+        provider_ref = ProviderRef(provider=MagicMock())
+        await apply_config_field("max_context", 8192, cfg, provider_ref, interface)
         assert cfg.max_context == 8192
 
     async def test_model_hook_triggered(self):
@@ -164,12 +164,12 @@ class TestApplyConfigField:
 
         cfg = DEFAULT_CONFIG.with_(model="old-model")
         interface = MockInterface()
-        client_ref = ClientRef(client=MagicMock())
+        provider_ref = ProviderRef(provider=MagicMock())
         with patch(
             "solveig.config.editor.fetch_and_apply_model_info",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_fetch:
-            await apply_config_field("model", "new-model", cfg, client_ref, interface)
+            await apply_config_field("model", "new-model", cfg, provider_ref, interface)
         assert cfg.model == "new-model"
         mock_fetch.assert_called_once()

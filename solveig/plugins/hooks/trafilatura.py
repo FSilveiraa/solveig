@@ -2,8 +2,8 @@
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.hooks import after
 from solveig.schema.tool import ToolResult, http
+from solveig.schema.toolset import after
 
 try:
     import trafilatura as _trafilatura

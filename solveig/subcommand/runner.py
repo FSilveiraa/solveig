@@ -16,7 +16,7 @@ from solveig.config.editor import (
     prompt_for_field,
 )
 from solveig.interface import SolveigInterface
-from solveig.llm import ClientRef
+from solveig.llm import ProviderRef
 from solveig.mcp_servers.client import (
     MCP_CONNECTIONS,
     connect,
@@ -34,12 +34,12 @@ class SubcommandRunner:
         self,
         config: SolveigConfig,
         conversation: Conversation,
-        client_ref: ClientRef,
+        provider_ref: ProviderRef,
         session_manager: SessionManager | None = None,
     ):
         self.config = config
         self.conversation = conversation
-        self.client_ref = client_ref
+        self.provider_ref = provider_ref
         self.session_manager = session_manager
 
         # Sectioned registries — used by draw_help for structured output
@@ -382,7 +382,7 @@ class SubcommandRunner:
             field_name,
             new_value,
             self.config,
-            self.client_ref,
+            self.provider_ref,
             interface,
         )
         old_display = self._format_field_value(field_name, old_value)
@@ -437,10 +437,10 @@ class SubcommandRunner:
             await interface.display_error("No model configured to refresh.")
             return
         self.config.model_info = None
-        await fetch_and_apply_model_info(self.config, self.client_ref, interface)
+        await fetch_and_apply_model_info(self.config, self.provider_ref, interface)
 
     async def _model_list(self, interface: SolveigInterface, *args) -> None:
-        raw_client = getattr(self.client_ref.client, "client", None)
+        raw_client = getattr(self.provider_ref.provider, "client", None)
         if raw_client is None:
             await interface.display_error(
                 "This API type does not support listing models."
