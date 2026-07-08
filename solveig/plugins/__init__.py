@@ -5,7 +5,7 @@ Plugin system for Solveig.
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
-from .hooks import clear_hooks, load_and_filter_hooks
+from .hooks import after, before, clear_hooks, load_and_filter_hooks
 from .tools import clear_tools, load_and_filter_tools, tool
 
 
@@ -31,4 +31,6 @@ __all__ = [
     "initialize_plugins",
     "clear_plugins",
     "tool",
+    "before",
+    "after",
 ]

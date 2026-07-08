@@ -15,10 +15,13 @@ pydantic-ai's own `FilteredToolset` rather than a hand-rolled visibility
 check, since "hide some already-known tools based on live config" is exactly
 what it's for.
 
-`HookRunner` and the `@before`/`@after` registry live here too - they're the
-middle stage of the same pipeline (raw tools -> hooks -> active toolset),
-and `AvailableTools.rebuild()` wires `HookRunner` directly into the stack it
-builds. `WrapperToolset` itself is never exposed to hook authors -
+`HookRunner` is the middle stage of the same pipeline (raw tools -> hooks ->
+active toolset); `AvailableTools.rebuild()` wires it directly into the stack
+it builds. The `@before`/`@after` registry itself lives in
+`solveig/plugins/hooks/__init__.py`, not here - a hook plugin author imports
+from their own package, not from schema internals. `HookRunner` is just a
+consumer of that registry, the same relationship `rebuild()` has with
+`PLUGIN_TOOLS`. `WrapperToolset` itself is never exposed to hook authors -
 `HookRunner` is the only thing that touches pydantic-ai's wrapper machinery.
 A hook plugin just writes plain functions and targets tools by function or
 by name:
@@ -40,8 +43,6 @@ there's no runner-level pairing between the two, since not every hook
 registers both (shellcheck is before-only, trafilatura is after-only).
 """
 
-from collections import defaultdict
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic_ai.tools import ToolDefinition
@@ -50,7 +51,7 @@ from pydantic_ai.toolsets.function import FunctionToolset
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, plugin_name
 from solveig.schema.deps import SolveigContext, SolveigDeps
 from solveig.schema.tools import CORE_TOOLS, command
 from solveig.schema.tools.result import Finalizer, ToolResult
@@ -59,72 +60,10 @@ from solveig.schema.tools.result import Finalizer, ToolResult
 # Call AVAILABLE_TOOLS.rebuild(config) after mutating.
 MCP_TOOLS: list = []
 
-# ---------------------------------------------------------------------------
-# @before / @after hook registry
-# ---------------------------------------------------------------------------
-
-BeforeHook = Callable[
-    [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]
-]
-AfterHook = Callable[
-    [ToolResult, SolveigConfig, SolveigInterface], Awaitable[ToolResult]
-]
-
-_before_hooks: dict[str, list[BeforeHook]] = defaultdict(list)
-_after_hooks: dict[str, list[AfterHook]] = defaultdict(list)
-
-
-def _tool_key(target: str | Callable[..., Any]) -> str:
-    return target if isinstance(target, str) else target.__name__
-
-
-def _plugin_name(fn: Callable[..., Any]) -> str:
-    """Derive a hook's owning plugin name from its module path (e.g. `solveig.plugins.hooks.shellcheck` -> `shellcheck`)."""
-    module = fn.__module__
-    if ".hooks." in module:
-        return module.split(".hooks.")[-1]
-    return fn.__name__
-
-
-def registered_plugin_names() -> set[str]:
-    """All plugin names with at least one registered before/after hook - used to report load/skip status."""
-    names = {_plugin_name(hook) for hooks in _before_hooks.values() for hook in hooks}
-    names.update(
-        _plugin_name(hook) for hooks in _after_hooks.values() for hook in hooks
-    )
-    return names
-
-
-def clear_hooks() -> None:
-    """Drop all registered hooks - used before a plugin rescan/reload and in tests."""
-    _before_hooks.clear()
-    _after_hooks.clear()
-
-
-def before(
-    tools: tuple[str | Callable[..., Any], ...],
-) -> Callable[[BeforeHook], BeforeHook]:
-    def register(fn: BeforeHook) -> BeforeHook:
-        for target in tools:
-            _before_hooks[_tool_key(target)].append(fn)
-        return fn
-
-    return register
-
-
-def after(
-    tools: tuple[str | Callable[..., Any], ...],
-) -> Callable[[AfterHook], AfterHook]:
-    def register(fn: AfterHook) -> AfterHook:
-        for target in tools:
-            _after_hooks[_tool_key(target)].append(fn)
-        return fn
-
-    return register
-
 
 class HookRunner(WrapperToolset[SolveigDeps]):
-    """Runs registered `@before`/`@after` hooks around any wrapped tool call."""
+    """Runs registered `@before`/`@after` hooks (registry in
+    `solveig/plugins/hooks/__init__.py`) around any wrapped tool call."""
 
     async def call_tool(
         self,
@@ -136,15 +75,15 @@ class HookRunner(WrapperToolset[SolveigDeps]):
         config = ctx.deps.config
         interface = ctx.deps.interface
 
-        for hook in _before_hooks.get(name, ()):
-            if _plugin_name(hook) in config.plugins:
+        for hook in BEFORE_HOOKS.get(name, ()):
+            if plugin_name(hook) in config.plugins:
                 await hook(tool_args, config, interface)
 
         result = await super().call_tool(name, tool_args, ctx, tool)
 
         if isinstance(result, ToolResult):
-            for after_hook in _after_hooks.get(name, ()):
-                if _plugin_name(after_hook) in config.plugins:
+            for after_hook in AFTER_HOOKS.get(name, ()):
+                if plugin_name(after_hook) in config.plugins:
                     result = await after_hook(result, config, interface)
 
         return result
@@ -166,9 +105,9 @@ class AvailableTools:
         tool, and MCP_TOOLS. Only needed after tool *membership* actually
         changes - see the module docstring for why `no_commands`/`config.plugins`
         toggling doesn't need this."""
-        # Local import: solveig.plugins imports solveig.plugins.hooks, which
-        # imports clear_hooks/registered_plugin_names from this module - a
-        # module-level import here would be circular.
+        # Local import: solveig.plugins.tools -> solveig.plugins (package init)
+        # -> solveig.plugins.tools again during that same init - a module-level
+        # import here would be circular.
         from solveig.plugins.tools import PLUGIN_TOOLS
 
         # Every discovered plugin tool is included here, not just the ones
@@ -183,8 +122,8 @@ class AvailableTools:
             active_config = ctx.deps.config
             if tool_def.name == command.__name__ and active_config.no_commands:
                 return False
-            plugin_name = PLUGIN_TOOLS.owners.get(tool_def.name)
-            if plugin_name is not None and plugin_name not in active_config.plugins:
+            owning_plugin = PLUGIN_TOOLS.owners.get(tool_def.name)
+            if owning_plugin is not None and owning_plugin not in active_config.plugins:
                 return False
             return True
 
