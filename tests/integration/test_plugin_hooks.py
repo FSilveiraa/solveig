@@ -1,211 +1,160 @@
-"""Tests for the exception-based plugin hook system."""
+"""Tests for the hook plugin registry (`solveig/plugins/hooks/__init__.py`).
+
+Replaces the old exception-based `PLUGIN_HOOKS.before`/`.after` list tests
+(`ValidationError`/`SecurityError`/`ProcessingError` stopping a `BaseTool.solve()`
+call) - that whole exception-translation layer is gone. Scope is split from
+`tests/unit/test_toolset.py`, mirroring the tools-side split between
+`test_plugin_tools.py` (registry/discovery) and whatever exercises
+`AvailableTools.rebuild()`'s `FilteredToolset`: this file owns registry
+mechanics (`before`/`after` registration, `plugin_name` derivation,
+`clear_hooks`) and real plugin discovery (`load_and_filter_hooks` finding
+`shellcheck`/`trafilatura`); `test_toolset.py` already owns `HookRunner`'s
+call-time orchestration (gating, blocking, chaining) using a synthetic tool,
+so that isn't retested here against real hooks.
+
+One architectural note worth keeping visible: unlike `PLUGIN_TOOLS.active`,
+`BEFORE_HOOKS`/`AFTER_HOOKS` are never filtered by `config.plugins` at load
+time - `load_and_filter_hooks()` discovers and registers everything
+unconditionally (hooks self-register via the decorator at import time), and
+`config.plugins` gating happens live, per call, inside `HookRunner`. So
+"skipped" here only ever means "not reported as active" (an interface
+message), never "absent from the registry".
+"""
 
 from unittest.mock import patch
 
 import pytest
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import ProcessingError, SecurityError, ValidationError
-from solveig.plugins import initialize_plugins
-from solveig.plugins.hooks import PLUGIN_HOOKS, load_and_filter_hooks
-from solveig.schema.tool import CommandTool, ReadTool
+from solveig.plugins import clear_plugins, initialize_plugins
+from solveig.plugins.hooks import (
+    AFTER_HOOKS,
+    BEFORE_HOOKS,
+    after,
+    before,
+    clear_hooks,
+    load_and_filter_hooks,
+    plugin_name,
+    registered_plugin_names,
+)
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
 
+@pytest.fixture(autouse=True)
+def clean_hooks():
+    clear_hooks()
+    yield
+    clear_hooks()
+
+
 # ---------------------------------------------------------------------------
-# Hook system behaviour
-# Hooks are registered directly into PLUGIN_HOOKS.before / after —
-# no file loading needed to test execution semantics.
+# @before / @after registration mechanics
 # ---------------------------------------------------------------------------
 
 
-class TestPluginHookSystem:
-    @pytest.fixture(autouse=True)
-    def clean_hooks(self):
-        PLUGIN_HOOKS.clear()
+class TestHookRegistration:
+    async def test_before_registers_under_tool_name(self):
+        async def my_hook(tool_args, config, interface): ...
 
-    async def test_before_hook_validation_error(self):
-        """ValidationError from a before hook stops processing."""
+        before(tools=("some_tool",))(my_hook)
 
-        async def failing_validator(config, interface, tool):
-            if "fail" in tool.command:
-                raise ValidationError("Command validation failed")
+        assert BEFORE_HOOKS["some_tool"] == [my_hook]
 
-        PLUGIN_HOOKS.before.append((failing_validator, (CommandTool,)))
+    async def test_before_registers_under_function_target(self):
+        async def target_tool(ctx): ...
 
-        result = await CommandTool(command="fail this command", comment="Test").solve(
-            DEFAULT_CONFIG, MockInterface()
-        )
+        async def my_hook(tool_args, config, interface): ...
 
-        assert not result.accepted
-        assert result.error == "Pre-processing failed: Command validation failed"
-        assert not result.success
+        before(tools=(target_tool,))(my_hook)
 
-    async def test_before_hook_security_error(self):
-        """SecurityError from a before hook stops processing."""
+        assert BEFORE_HOOKS["target_tool"] == [my_hook]
 
-        async def security_validator(config, interface, tool):
-            if "rm -rf" in tool.command:
-                raise SecurityError("Dangerous command detected")
+    async def test_after_registers_under_tool_name(self):
+        async def my_hook(result, config, interface):
+            return result
 
-        PLUGIN_HOOKS.before.append((security_validator, (CommandTool,)))
+        after(tools=("some_tool",))(my_hook)
 
-        result = await CommandTool(
-            command="rm -rf /important/data", comment="Test"
-        ).solve(DEFAULT_CONFIG, MockInterface())
+        assert AFTER_HOOKS["some_tool"] == [my_hook]
 
-        assert not result.accepted
-        assert result.error == "Pre-processing failed: Dangerous command detected"
+    async def test_hook_registers_under_multiple_targets(self):
+        async def my_hook(tool_args, config, interface): ...
 
-    async def test_before_hook_success_continues_to_user(self):
-        """A before hook that doesn't raise lets processing reach the user."""
-        side_effects = []
+        before(tools=("tool_a", "tool_b"))(my_hook)
 
-        async def passing_validator(config, interface, tool):
-            side_effects.append(f"validated: {tool.command}")
+        assert BEFORE_HOOKS["tool_a"] == [my_hook]
+        assert BEFORE_HOOKS["tool_b"] == [my_hook]
 
-        PLUGIN_HOOKS.before.append((passing_validator, (CommandTool,)))
+    async def test_clear_hooks_empties_both_registries(self):
+        async def my_before(tool_args, config, interface): ...
 
-        result = await CommandTool(command="echo hello", comment="Test").solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[2]),  # user declines
-        )
+        async def my_after(result, config, interface):
+            return result
 
-        assert not result.accepted  # declined by user, not blocked by hook
-        assert result.error is None  # no hook error
-        assert side_effects == ["validated: echo hello"]
+        before(tools=("some_tool",))(my_before)
+        after(tools=("some_tool",))(my_after)
+
+        clear_hooks()
+
+        assert BEFORE_HOOKS == {}
+        assert AFTER_HOOKS == {}
+
+    async def test_registered_plugin_names_covers_before_and_after(self):
+        async def before_hook(tool_args, config, interface): ...
+
+        async def after_hook(result, config, interface):
+            return result
+
+        before(tools=("some_tool",))(before_hook)
+        after(tools=("some_tool",))(after_hook)
+
+        # Neither function lives under a `.hooks.` module path (they're
+        # defined inline here), so plugin_name() falls back to the
+        # function's own __name__.
+        assert registered_plugin_names() == {"before_hook", "after_hook"}
+
+
+# ---------------------------------------------------------------------------
+# plugin_name() derivation
+# ---------------------------------------------------------------------------
+
+
+class TestPluginNameDerivation:
+    async def test_derives_name_from_hooks_module_path(self):
+        from solveig.plugins.hooks.shellcheck import shellcheck
+
+        assert plugin_name(shellcheck) == "shellcheck"
 
     @pytest.mark.no_file_mocking
-    async def test_after_hook_processing_error(self, tmp_path):
-        """ProcessingError from an after hook is attached to the result."""
+    async def test_derives_name_from_hooks_module_path_for_after_hook(self):
+        # trafilatura reads its own settings.cfg on import.
+        from solveig.plugins.hooks.trafilatura import trafilatura
 
-        async def failing_processor(config, interface, tool, result):
-            if result.accepted:
-                raise ProcessingError("Post-processing failed")
+        assert plugin_name(trafilatura) == "trafilatura"
 
-        PLUGIN_HOOKS.after.append((failing_processor, (ReadTool,)))
+    async def test_falls_back_to_function_name_outside_hooks_package(self):
+        async def a_locally_defined_hook(tool_args, config, interface): ...
 
-        result = await ReadTool(
-            comment="Test", path=str(tmp_path), metadata_only=True
-        ).solve(DEFAULT_CONFIG, MockInterface(choices=[0]))
-
-        assert result.accepted
-        assert "post-processing failed" in result.error.lower()
-
-    async def test_multiple_before_hooks_run_in_order(self):
-        """Multiple before hooks execute in the order they were registered."""
-        execution_order = []
-
-        async def first_hook(config, interface, tool):
-            execution_order.append("first")
-
-        async def second_hook(config, interface, tool):
-            execution_order.append("second")
-
-        PLUGIN_HOOKS.before.append((first_hook, (CommandTool,)))
-        PLUGIN_HOOKS.before.append((second_hook, (CommandTool,)))
-
-        await CommandTool(command="echo test", comment="Test").solve(
-            DEFAULT_CONFIG, MockInterface(choices=[2])
-        )
-
-        assert execution_order == ["first", "second"]
-
-    @pytest.mark.no_file_mocking
-    async def test_hook_tool_filtering(self, tmp_path):
-        """Hooks with a tools filter only fire for the specified tool type."""
-        called = []
-
-        async def command_hook(config, interface, tool):
-            called.append("command_hook")
-
-        async def read_hook(config, interface, tool):
-            called.append("read_hook")
-
-        PLUGIN_HOOKS.before.append((command_hook, (CommandTool,)))
-        PLUGIN_HOOKS.before.append((read_hook, (ReadTool,)))
-
-        await CommandTool(command="echo test", comment="Test").solve(
-            DEFAULT_CONFIG, MockInterface(choices=[2])
-        )
-        assert called == ["command_hook"]
-
-        (tmp_path / "f.txt").write_text("content")
-        await ReadTool(
-            path=str(tmp_path / "f.txt"), metadata_only=True, comment="Test"
-        ).solve(DEFAULT_CONFIG, MockInterface(choices=[1]))
-        assert called == ["command_hook", "read_hook"]
-
-    @pytest.mark.no_file_mocking
-    @pytest.mark.no_subprocess_mocking
-    async def test_hook_without_tool_filter_runs_for_all(self, tmp_path):
-        """A hook registered with no tool filter runs for every tool type."""
-        called = []
-
-        async def universal_hook(config, interface, tool):
-            called.append(type(tool).__name__)
-
-        PLUGIN_HOOKS.before.append((universal_hook, None))
-
-        (tmp_path / "f.txt").write_text("content")
-        await CommandTool(command="echo test", comment="Test").solve(
-            DEFAULT_CONFIG, MockInterface(choices=[0])
-        )
-        await ReadTool(
-            path=str(tmp_path / "f.txt"), metadata_only=True, comment="Test"
-        ).solve(DEFAULT_CONFIG, MockInterface(choices=[0]))
-
-        assert "CommandTool" in called
-        assert "ReadTool" in called
+        # This test module isn't under solveig/plugins/hooks/, so there's no
+        # ".hooks." to split on - plugin_name() must fall back to __name__.
+        assert plugin_name(a_locally_defined_hook) == "a_locally_defined_hook"
 
 
 # ---------------------------------------------------------------------------
-# Plugin filtering
-# The load/filter pipeline is tested by mocking rescan_and_load_plugins so it
-# pre-populates PLUGIN_HOOKS.all (as a real plugin import would), then letting
-# the filtering loop in load_and_filter_hooks run for real.
+# load_and_filter_hooks() - discovery and reporting
 # ---------------------------------------------------------------------------
 
 
-class TestPluginFiltering:
-    @pytest.fixture(autouse=True)
-    def clean_hooks(self):
-        PLUGIN_HOOKS.clear()
+class TestLoadAndFilterHooks:
+    async def test_hook_registered_regardless_of_config(self):
+        """Discovery/registration is unconditional - config.plugins only affects reporting."""
 
-    async def test_plugin_enabled_when_in_config(self):
-        """Plugins in config.plugins are activated after loading."""
-        called = []
-
-        async def my_hook(config, interface, tool):
-            called.append("executed")
+        async def my_hook(tool_args, config, interface): ...
 
         async def fake_rescan(**_):
-            PLUGIN_HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
-
-        config = DEFAULT_CONFIG.with_(plugins={"my_plugin": {}})
-        with patch(
-            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
-        ):
-            await load_and_filter_hooks(config, MockInterface())
-
-        assert len(PLUGIN_HOOKS.before) == 1
-
-        await CommandTool(command="echo test", comment="Test").solve(
-            config, MockInterface(choices=[2])
-        )
-        assert called == ["executed"]
-
-    async def test_plugin_disabled_when_not_in_config(self):
-        """Plugins absent from config.plugins are imported but not activated."""
-        called = []
-
-        async def my_hook(config, interface, tool):
-            called.append("should_not_run")
-
-        async def fake_rescan(**_):
-            PLUGIN_HOOKS.all["my_plugin"][0].append((my_hook, (CommandTool,)))
+            before(tools=("some_tool",))(my_hook)
 
         config = DEFAULT_CONFIG.with_(plugins={})  # my_plugin not listed
         with patch(
@@ -213,67 +162,95 @@ class TestPluginFiltering:
         ):
             await load_and_filter_hooks(config, MockInterface())
 
-        assert len(PLUGIN_HOOKS.before) == 0
+        assert BEFORE_HOOKS["some_tool"] == [my_hook]
 
-        await CommandTool(command="echo test", comment="Test").solve(
-            config, MockInterface(choices=[2])
+    async def test_reports_loaded_when_plugin_in_config(self):
+        async def my_hook(tool_args, config, interface): ...
+
+        async def fake_rescan(**_):
+            before(tools=("some_tool",))(my_hook)
+
+        config = DEFAULT_CONFIG.with_(plugins={"my_hook": {}})
+        interface = MockInterface()
+        with patch(
+            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
+        ):
+            await load_and_filter_hooks(config, interface)
+
+        assert any("'my_hook': Loaded" in line for line in interface.outputs)
+
+    async def test_reports_skipped_when_plugin_not_in_config(self):
+        async def my_hook(tool_args, config, interface): ...
+
+        async def fake_rescan(**_):
+            before(tools=("some_tool",))(my_hook)
+
+        config = DEFAULT_CONFIG.with_(plugins={})
+        interface = MockInterface()
+        with patch(
+            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
+        ):
+            await load_and_filter_hooks(config, interface)
+
+        assert any(
+            "'my_hook': Skipped (missing from config)" in line
+            for line in interface.outputs
         )
-        assert called == []
 
-    async def test_shellcheck_plugin_skipped_when_not_in_config(self):
-        """The real shellcheck plugin is skipped when absent from config.plugins."""
+    @pytest.mark.no_file_mocking
+    async def test_shellcheck_and_trafilatura_discovered_via_real_scan(self):
+        """Real hook plugins self-register on discovery, independent of config.plugins."""
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",
             plugins={"some_other_plugin": {}},
         )
+        await load_and_filter_hooks(config=config, interface=MockInterface())
 
-        interface = MockInterface()
-        await initialize_plugins(config=config, interface=interface)
+        before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
+        after_names = {plugin_name(hook) for hook in AFTER_HOOKS.get("http", [])}
+        assert "shellcheck" in before_names
+        assert "trafilatura" in after_names
 
-        assert len(PLUGIN_HOOKS.before) == 0
-        assert len(PLUGIN_HOOKS.after) == 0
-
-    async def test_plugin_receives_its_config_options(self):
-        """The hook receives config and can read its own config.plugins entry."""
-        received = []
-
-        async def configurable_hook(config, interface, tool):
-            received.append(config.plugins.get("my_plugin", {}))
-
-        async def fake_rescan(**_):
-            PLUGIN_HOOKS.all["my_plugin"][0].append((configurable_hook, (CommandTool,)))
-
-        config = DEFAULT_CONFIG.with_(
-            plugins={"my_plugin": {"option1": "value1", "option2": 42}}
-        )
-        with patch(
-            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
-        ):
-            await load_and_filter_hooks(config, MockInterface())
-
-        await CommandTool(command="echo test", comment="Test").solve(
-            config, MockInterface(choices=[2])
-        )
-
-        assert received == [{"option1": "value1", "option2": 42}]
-
-    async def test_no_duplicate_plugin_registration(self, load_plugins):
-        """Multiple calls to load_plugins don't duplicate hook entries."""
+    @pytest.mark.no_file_mocking
+    async def test_no_duplicate_registration_across_repeated_loads(self, load_plugins):
+        """Reloading plugin modules on repeated loads doesn't grow the registry unboundedly."""
         config = SolveigConfig(
             url="test-url", api_key="test-key", plugins={"shellcheck": {}}
         )
 
-        def hook_count():
-            before, after = PLUGIN_HOOKS.all["shellcheck"]
-            return len(before) + len(after)
+        def command_hook_count() -> int:
+            return len(BEFORE_HOOKS.get("command", []))
 
         await load_plugins(config)
-        count_after_first = hook_count()
+        count_after_first = command_hook_count()
 
         await load_plugins(config)
         await load_plugins(config)
 
         assert count_after_first > 0
-        assert hook_count() == count_after_first
-        assert len(PLUGIN_HOOKS.before) == count_after_first
+        assert command_hook_count() == count_after_first
+
+        clear_plugins()
+
+
+# ---------------------------------------------------------------------------
+# initialize_plugins() - full plugin bootstrap
+# ---------------------------------------------------------------------------
+
+
+class TestInitializePlugins:
+    @pytest.mark.no_file_mocking
+    async def test_hooks_registered_even_when_owning_plugin_not_enabled(self):
+        """initialize_plugins() discovers every hook plugin, active or not."""
+        config = SolveigConfig(
+            url="test-url",
+            api_key="test-key",
+            plugins={"some_other_plugin": {}},
+        )
+        await initialize_plugins(config=config, interface=MockInterface())
+
+        before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
+        assert "shellcheck" in before_names
+
+        clear_plugins()
