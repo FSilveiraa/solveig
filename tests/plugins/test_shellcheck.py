@@ -1,210 +1,200 @@
-"""
-Tests for the shellcheck plugin.
-This tests the shellcheck plugin in isolation from other plugins.
+"""Tests for the shellcheck hook plugin (`solveig/plugins/hooks/shellcheck.py`).
+
+`shellcheck` is a plain `@before(tools=(command,))`-decorated function now -
+no `PLUGIN_HOOKS.before` list, no `CommandTool`/`ReadTool` Pydantic models.
+Raising from it (`SecurityError`/`ValidationError`) blocks the call, per
+`HookRunner`'s contract (`schema/toolset.py`) - there's no result object to
+inspect for "was this blocked", just `pytest.raises(...)`.
+
+Three layers of coverage, matching the split established in
+`test_plugin_hooks.py`/`test_toolset.py`: calling the hook function
+directly (business logic - dangerous-pattern detection, shellcheck output
+parsing), registry/discovery (does it register on `command` and nowhere
+else), and one full-stack test through the real `HookRunner` proving it
+actually blocks a real `command()` call end to end.
 """
 
-# Config with shellcheck plugin enabled - manually create to avoid copy issues
-from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.toolsets.function import FunctionToolset
+from pydantic_ai.usage import RunUsage
 
-from solveig.plugins.hooks import PLUGIN_HOOKS
-from solveig.plugins.hooks.shellcheck import is_obviously_dangerous
-from solveig.schema.tool import (
-    CommandTool,
-    ReadTool,
+from solveig.exceptions import SecurityError, ValidationError
+from solveig.plugins.hooks import (
+    BEFORE_HOOKS,
+    clear_hooks,
+    load_and_filter_hooks,
+    plugin_name,
 )
+from solveig.plugins.hooks.shellcheck import is_obviously_dangerous, shellcheck
+from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.schema.tools.core.command import command
+from solveig.schema.toolset import HookRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
-SHELLCHECK_CONFIG = replace(DEFAULT_CONFIG, plugins={"shellcheck": {}})
+pytestmark = pytest.mark.anyio
+
+SHELLCHECK_CONFIG = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
 
 
-pytestmark = [pytest.mark.anyio]
+def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
+    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
 
-class TestShellcheckPlugin:
-    """Test the shellcheck plugin functionality in isolation."""
+class TestDangerousPatternDetection:
+    async def test_detects_dangerous_commands(self):
+        for cmd in ["rm -rf /", "rm -rf /*", "mkfs.ext4 /dev/sda1", ":(){:|:&};:"]:
+            assert is_obviously_dangerous(cmd), f"Should detect '{cmd}' as dangerous"
 
-    @pytest.mark.anyio
-    async def test_dangerous_patterns_detection(self):
-        """Test that dangerous patterns are correctly identified."""
-        dangerous_commands = [
-            "rm -rf /",
-            "rm -rf /*",
-            "mkfs.ext4 /dev/sda1",
-            ":(){:|:&};:",  # fork bomb
-        ]
-
-        safe_commands = [
+    async def test_allows_safe_commands(self):
+        for cmd in [
             "ls -la",
             "echo hello world",
             "mkdir test_directory",
-            "rm file.txt",  # specific file, not rm -rf
-        ]
-
-        for cmd in dangerous_commands:
-            assert is_obviously_dangerous(cmd), f"Should detect '{cmd}' as dangerous"
-
-        for cmd in safe_commands:
+            "rm file.txt",
+        ]:
             assert not is_obviously_dangerous(cmd), (
                 f"Should not detect '{cmd}' as dangerous"
             )
 
-    @pytest.mark.no_subprocess_mocking
-    async def test_security_error_message_format(self, tmp_path, load_plugins):
-        """Test that dangerous commands produce properly formatted error messages."""
+
+class TestShellcheckHookDirect:
+    """Calling the hook function directly - no toolset/registry involved."""
+
+    async def test_dangerous_pattern_raises_security_error(self, tmp_path):
         interface = MockInterface()
-        await load_plugins(SHELLCHECK_CONFIG)
-        req = CommandTool(
-            command=f"mkfs.ext4 {tmp_path}/__non-existent-path__/sdx1",
-            comment="Test dangerous command error formatting",
-        )
-        interface.choices.extend([1])  # Decline sending error back to assistant
 
-        result = await req.solve(SHELLCHECK_CONFIG, interface)
-
-        assert not result.accepted
-        assert "dangerous pattern" in result.error.lower()
-        assert (
-            "mkfs.ext4" in result.error
-        )  # Should mention the specific dangerous command
-        assert not result.success
+        with pytest.raises(SecurityError, match="dangerous pattern") as exc_info:
+            await shellcheck(
+                {"command": f"mkfs.ext4 {tmp_path}/__non-existent-path__/sdx1"},
+                SHELLCHECK_CONFIG,
+                interface,
+            )
+        assert "mkfs.ext4" in str(exc_info.value)
 
     @pytest.mark.no_subprocess_mocking
-    async def test_normal_command_passes_validation(self, load_plugins):
-        """
-        Test that normal commands pass shellcheck validation.
-        Note that this test runs the actual shellcheck command on the user's shell, it doesn't
-        just get rid of the mock's exception, and will likely fail if shellcheck isn't installed
-        """
+    async def test_valid_command_passes_without_raising(self):
+        """Runs the real `shellcheck` binary - skipped/failing if it's not installed."""
         interface = MockInterface()
-        await load_plugins(SHELLCHECK_CONFIG)
-        cmd_req = CommandTool(
-            command="echo 'hello world'", comment="Test normal command"
+
+        await shellcheck(
+            {"command": "echo 'hello world'"}, SHELLCHECK_CONFIG, interface
         )
-        interface.choices.extend([2])  # Decline to run
 
-        # Mock user declining to run the command (we just want to test plugin validation)
-        result = await cmd_req.solve(SHELLCHECK_CONFIG, interface)
-
-        # Should reach user prompt (not stopped by plugin) and be declined by user
-        assert not result.accepted
-        assert result.error is None  # No plugin validation error
+        assert "no issues" in interface.get_all_output().lower()
 
     @pytest.mark.no_subprocess_mocking
-    async def test_shellcheck_validation_success(self, load_plugins):
-        """Test successful shellcheck validation."""
+    async def test_invalid_syntax_declined_raises_validation_error(self):
+        interface = MockInterface(choices=[1])  # decline to execute anyway
+
+        with pytest.raises(ValidationError, match="Execution cancelled"):
+            await shellcheck(
+                {"command": "if then\n  echo 'broken'\nfi"},
+                SHELLCHECK_CONFIG,
+                interface,
+            )
+
+        assert "couldn't parse this if expression" in interface.get_all_output().lower()
+
+    @pytest.mark.no_subprocess_mocking
+    async def test_invalid_syntax_run_anyway_does_not_raise(self):
+        interface = MockInterface(choices=[0])  # execute anyway
+
+        await shellcheck(
+            {"command": "if then\n  echo 'broken'\nfi"},
+            SHELLCHECK_CONFIG,
+            interface,
+        )
+
+    async def test_shellcheck_not_available_warns_but_does_not_raise(self):
         interface = MockInterface()
-        await load_plugins(SHELLCHECK_CONFIG)
-        cmd_req = CommandTool(
-            command="echo 'properly quoted'", comment="Test successful validation"
-        )
-        interface.choices.extend([2])  # Decline to run
 
-        result = await cmd_req.solve(SHELLCHECK_CONFIG, interface)
-
-        # Should pass validation and reach user prompt
-        assert not result.accepted  # Declined by user
-        assert result.error is None  # No validation error
-
-    @pytest.mark.no_subprocess_mocking
-    async def test_shellcheck_validation_failure(self, load_plugins):
-        """Test shellcheck finding validation issues."""
-        interface = MockInterface()
-        await load_plugins(SHELLCHECK_CONFIG)
-        req = CommandTool(
-            comment="Test",
-            command="""
-if then
-  echo "broken"
-fi
-""",
-        )
-        interface.choices.extend([1])  # Decline sending error back to assistant
-
-        result = await req.solve(SHELLCHECK_CONFIG, interface)
-
-        assert not result.accepted
-        assert "execution cancelled due to shellcheck" in result.error.lower()
-        assert "Couldn't parse this if expression" in interface.get_all_output()
-
-    @pytest.mark.no_subprocess_mocking
-    async def test_shellcheck_not_available(self, load_plugins):
-        """Test graceful handling when shellcheck command is not found."""
-        await load_plugins(SHELLCHECK_CONFIG)
         with patch(
             "asyncio.create_subprocess_shell", new_callable=AsyncMock
         ) as mock_create_subprocess_shell:
             mock_process = AsyncMock()
             mock_process.returncode = 127
             mock_process.communicate.return_value = (
-                b"",  # stdout
-                b"/bin/sh: shellcheck: command not found",  # stderr
+                b"",
+                b"/bin/sh: shellcheck: command not found",
             )
             mock_create_subprocess_shell.return_value = mock_process
 
-            config = SHELLCHECK_CONFIG
-            req = CommandTool(command="echo test", comment="Test")
-            interface = MockInterface()
-            interface.choices.extend([2])  # Decline to run the command
+            await shellcheck({"command": "echo test"}, SHELLCHECK_CONFIG, interface)
 
-            result = await req.solve(config, interface)
-
-            # Verify the warning was displayed
-            output = interface.get_all_output()
-            assert all(
-                sig in output.lower()
-                for sig in [
-                    "warning",
-                    "shellcheck plugin is enabled",
-                    "command is not available.",
-                ]
-            )
-
-            # Verify that the command was not stopped by the plugin, but by the user
-            assert not result.accepted
-            assert result.error is None  # No plugin error should be raised
+        output = interface.get_all_output().lower()
+        assert "warning" in output
+        assert "shellcheck plugin is enabled" in output
+        assert "command is not available." in output
 
 
-class TestShellcheckPluginIntegration:
-    """Test shellcheck plugin integration with Solveig core."""
+class TestShellcheckDiscoveryAndRegistration:
+    @pytest.fixture(autouse=True)
+    def clean_hooks(self):
+        clear_hooks()
+        yield
+        clear_hooks()
 
-    async def test_plugin_registration(self, load_plugins):
-        """Test that shellcheck plugin is properly registered."""
-        await load_plugins(SHELLCHECK_CONFIG)
-        # Should have the shellcheck before hook loaded
-        assert len(PLUGIN_HOOKS.before) >= 1
-        hook_names = [hook[0].__name__ for hook in PLUGIN_HOOKS.before]
-        assert "check_command" in hook_names
+    async def test_registers_as_a_before_hook_on_command(self):
+        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+
+        hook_names = [plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])]
+        assert "shellcheck" in hook_names
+
+    async def test_does_not_register_for_other_tools(self):
+        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+
+        for tool_name, hooks in BEFORE_HOOKS.items():
+            if tool_name != "command":
+                assert not any(plugin_name(hook) == "shellcheck" for hook in hooks)
+
+
+class TestShellcheckBlocksCommandThroughHookRunner:
+    """Full stack: real registry + real `HookRunner`, proving shellcheck
+    actually blocks a real `command()` call when wired in - not just the
+    hook function in isolation."""
+
+    @pytest.fixture(autouse=True)
+    def clean_hooks(self):
+        clear_hooks()
+        yield
+        clear_hooks()
 
     @pytest.mark.no_subprocess_mocking
-    async def test_plugin_requirement_filtering(self, tmp_path, load_plugins):
-        """Test that shellcheck only runs for CommandRequirement."""
-        interface = MockInterface()
-        await load_plugins(SHELLCHECK_CONFIG)
+    async def test_dangerous_command_blocked(self):
+        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        toolset = HookRunner(FunctionToolset([command]))
+        ctx = make_ctx(SHELLCHECK_CONFIG, MockInterface())
 
-        # CommandRequirement with dangerous pattern should trigger shellcheck
-        cmd_req = CommandTool(
-            command="""
-if then
-  echo "broken"
-fi
-""",
-            comment="Test shellcheck error",
+        tools = await toolset.get_tools(ctx)
+        with pytest.raises(SecurityError):
+            await toolset.call_tool(
+                "command", {"command": "rm -rf /"}, ctx, tools["command"]
+            )
+
+    @pytest.mark.no_subprocess_mocking
+    async def test_read_is_never_gated_by_shellcheck(self, tmp_path):
+        """shellcheck only registered on `command` - a `read` call never
+        even consults it, regardless of what's in the registry."""
+        from solveig.schema.tools.core.read import read
+        from solveig.schema.tools.result import ToolResult
+
+        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        toolset = HookRunner(FunctionToolset([read]))
+        interface = MockInterface(choices=[1])  # decline to send metadata
+        ctx = make_ctx(SHELLCHECK_CONFIG, interface)
+
+        tools = await toolset.get_tools(ctx)
+        result = await toolset.call_tool(
+            "read",
+            {"path": str(tmp_path), "metadata_only": True},
+            ctx,
+            tools["read"],
         )
-        interface.choices.extend([1])  # Decline sending error back to assistant
-        result = await cmd_req.solve(SHELLCHECK_CONFIG, interface)
 
-        # Should be stopped by shellcheck plugin
-        assert not result.accepted
-        assert "execution cancelled due to shellcheck" in result.error.lower()
-
-        # Test that ReadRequirement doesn't trigger shellcheck
-        read_req = ReadTool(path=str(tmp_path), metadata_only=True, comment="Test read")
-        interface.choices.extend([1])  # Decline sending metadata
-        result = await read_req.solve(SHELLCHECK_CONFIG, interface)
-
-        # Should not be stopped by shellcheck, but declined by user
-        assert not result.accepted
-        assert result.error is None  # No plugin error
+        assert isinstance(result, ToolResult)
+        assert result.content == "User declined to send metadata."

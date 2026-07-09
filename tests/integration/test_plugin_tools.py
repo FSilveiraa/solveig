@@ -71,82 +71,12 @@ class TestToolPluginFiltering:
         )
         await load_and_filter_tools(config=config, interface=MockInterface())
 
-        # importlib.reload() produces a fresh class object, so check by name not identity
+        # `tree` is a plain @tool-decorated function now (no TreeTool class),
+        # so it's the real function object once loaded - not just a name match.
         assert "tree" in PLUGIN_TOOLS.active
-        assert PLUGIN_TOOLS.active["tree"].__name__ == "TreeTool"
+        assert PLUGIN_TOOLS.active["tree"].__name__ == "tree"
 
 
-# ---------------------------------------------------------------------------
-# TreeTool behaviour
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.no_file_mocking
-class TestTreeTool:
-    async def test_declined_returns_non_accepted_result(self, tmp_path):
-        """User choosing 'Don't read anything' returns accepted=False with no error."""
-        from solveig.plugins.tools.tree import TreeTool
-
-        result = await TreeTool(path=str(tmp_path), comment="Test").solve(
-            DEFAULT_CONFIG.with_(), MockInterface(choices=[2])
-        )
-
-        assert not result.accepted
-        assert result.error is None
-
-    async def test_read_and_send_returns_accepted_result_with_metadata(self, tmp_path):
-        """User choosing 'Read and send tree' returns accepted=True with metadata."""
-        from solveig.plugins.tools.tree import TreeResult, TreeTool
-
-        (tmp_path / "file.txt").write_text("hello")
-        (tmp_path / "subdir").mkdir()
-
-        result = await TreeTool(path=str(tmp_path), comment="Test").solve(
-            DEFAULT_CONFIG.with_(), MockInterface(choices=[0])
-        )
-
-        assert isinstance(result, TreeResult)
-        assert result.accepted
-        assert result.metadata is not None
-
-    async def test_inspect_first_then_send(self, tmp_path):
-        """User inspects tree then approves sending it."""
-        from solveig.plugins.tools.tree import TreeTool
-
-        result = await TreeTool(path=str(tmp_path), comment="Test").solve(
-            DEFAULT_CONFIG.with_(),
-            MockInterface(choices=[1, 0]),  # inspect, then Yes
-        )
-
-        assert result.accepted
-
-    async def test_inspect_first_then_decline(self, tmp_path):
-        """User inspects tree then declines sending it."""
-        from solveig.plugins.tools.tree import TreeTool
-
-        result = await TreeTool(path=str(tmp_path), comment="Test").solve(
-            DEFAULT_CONFIG.with_(),
-            MockInterface(choices=[1, 1]),  # inspect, then No
-        )
-
-        assert not result.accepted
-
-    async def test_metadata_listing_contains_created_files(self, tmp_path):
-        """Tree result metadata listing includes the files that actually exist."""
-        from solveig.plugins.tools.tree import TreeTool
-
-        (tmp_path / "alpha.txt").write_text("a")
-        (tmp_path / "beta.txt").write_text("b")
-        (tmp_path / "subdir").mkdir()
-
-        result = await TreeTool(path=str(tmp_path), comment="Test").solve(
-            DEFAULT_CONFIG.with_(), MockInterface(choices=[0])
-        )
-
-        assert result.accepted
-        # listing is keyed by absolute path; extract basenames for assertion
-        listing = result.metadata.listing or {}
-        names = {p.rsplit("/", 1)[-1] for p in listing}
-        assert "alpha.txt" in names
-        assert "beta.txt" in names
-        assert "subdir" in names
+# `tree`'s own behavior (declined/accepted/inspect flows, metadata listing
+# contents) is covered by tests/plugins/test_tree.py, which calls the plain
+# tree() function directly - no need to duplicate that here.

@@ -1,146 +1,130 @@
-"""Integration test for TreeTool plugin with real filesystem operations."""
+"""Integration tests for the `tree` plugin tool function.
+
+`tree` is a plain `@tool`-decorated async function
+(`async def tree(ctx, path, max_depth=-1) -> ToolResult`) now - no `TreeTool`
+Pydantic model, no `.solve()`/`.display_header()`/`.create_error_result()`/
+`.get_description()`. Called directly through `ctx`, same pattern as the
+core tool test files.
+
+`ToolResult` has no `accepted`/`error`/`metadata`/`path` fields. A
+successful "send tree" returns the `FileMetadata` instance directly as
+`result.content` (mirrors `read()`'s metadata-send path); declines are
+literal strings ("User declined to read the tree."/"...to send the
+tree."); failures land in `result.issues`.
+
+The old full-conversation test (`run_async` + `create_mock_client` +
+`AssistantMessage`) exercised the deleted message/loop architecture -
+dropped here since it duplicated tool-level coverage already exercised
+below; a real end-to-end run through `Agent` + `FunctionModel` is Task #9's
+job (`test_conversation_flow.py`), not this file's.
+"""
 
 from pathlib import PurePath
 
 import pytest
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
 
-from solveig.plugins.tools.tree import TreeTool
-from solveig.run import run_async
-from solveig.schema.message import AssistantMessage
-from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
+from solveig.plugins.tools.tree import tree
+from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.utils.file import FileMetadata
+from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
-class TestTreePlugin:
-    """Test TreeTool plugin with real filesystem operations."""
+def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
+    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
-    async def test_tree_plugin_with_real_files(self, load_plugins, tmp_path):
-        """Test tree plugin creates visual directory tree from real filesystem."""
-        # Enable the tree plugin for this test
-        config = DEFAULT_CONFIG.with_(plugins=["tree"])
-        await load_plugins(config)
 
-        # Create real directory structure
-        (tmp_path / "file1.txt").write_text("content1")
-        (tmp_path / "file2.py").write_text("print('hello')")
+class TestTreeValidation:
+    async def test_empty_path_raises(self):
+        with pytest.raises(ValueError, match="Empty path"):
+            await tree(make_ctx(), path="")
+
+    async def test_whitespace_path_raises(self):
+        with pytest.raises(ValueError, match="Empty path"):
+            await tree(make_ctx(), path="   \t\n   ")
+
+
+class TestTreeChoices:
+    async def test_declined_returns_decline_message(self, tmp_path):
+        interface = MockInterface(choices=[2])  # Don't read anything
+
+        result = await tree(make_ctx(interface=interface), path=str(tmp_path))
+
+        assert result.content == "User declined to read the tree."
+        assert result.issues == []
+
+    async def test_read_and_send_returns_metadata(self, tmp_path):
+        (tmp_path / "file.txt").write_text("hello")
         (tmp_path / "subdir").mkdir()
-        (tmp_path / "subdir" / "nested.md").write_text("# Nested file")
+        interface = MockInterface(choices=[0])  # Read and send tree
 
-        # LLM requests tree inspection
-        assistant_responses = [
-            AssistantMessage(
-                comment="I'll show you the directory structure.",
-                tools=[
-                    TreeTool(comment="", path=str(tmp_path), max_depth=2),
-                ],
-            ),
-            AssistantMessage(comment="Everything looks nice!"),
-        ]
+        result = await tree(make_ctx(interface=interface), path=str(tmp_path))
 
-        mock_client = create_mock_client(*assistant_responses)
-        interface = MockInterface(choices=[0])
+        assert isinstance(result.content, FileMetadata)
+        assert result.content.is_directory
+        assert len(result.content.listing) == 2
 
-        # Execute conversation
-        await run_async(
-            config=DEFAULT_CONFIG,
-            interface=interface,
-            llm_client=mock_client,
-            user_prompt=f"Show me what's in {tmp_path}",
-        )
+    async def test_inspect_first_then_send(self, tmp_path):
+        interface = MockInterface(choices=[1, 0])  # inspect, then Yes
 
-        # Verify tree output contains expected structure
-        output = interface.get_all_output()
-        assert "Tree:" in output
-        assert "file1.txt" in output
-        assert "file2.py" in output
-        assert "subdir" in output
-        assert "nested.md" in output
+        result = await tree(make_ctx(interface=interface), path=str(tmp_path))
 
-    async def test_tree_tool_creation_and_validation(self):
-        """Test TreeTool creation, validation, and configuration."""
-        # Valid creation with default settings
-        req = TreeTool(path="     /test/dir   ", comment="Generate tree listing")
-        assert req.path == "/test/dir"  # test whitespace stripping
-        assert req.comment == "Generate tree listing"
-        assert req.max_depth == -1  # Default unlimited depth
+        assert isinstance(result.content, FileMetadata)
 
-        # Custom max_depth configuration
-        req_limited = TreeTool(path="/test", max_depth=3, comment="test")
-        assert req_limited.max_depth == 3
+    async def test_inspect_first_then_decline(self, tmp_path):
+        interface = MockInterface(choices=[1, 1])  # inspect, then No
 
-        # Validation: empty path should fail
-        with pytest.raises(ValueError):
-            TreeTool(path="", comment="empty path")
+        result = await tree(make_ctx(interface=interface), path=str(tmp_path))
 
-        # Class description
-        description = TreeTool.get_description()
-        assert "tree(path)" in description
-        assert "directory tree structure" in description
+        assert result.content == "User declined to send the tree."
 
-    async def test_tree_tool_display_and_error_handling(self):
-        """Test TreeTool display functionality and error result creation."""
-        req = TreeTool(path="/test/dir", comment="Generate tree listing")
+
+class TestTreeAutoAllowedPaths:
+    async def test_auto_allowed_directory_bypasses_send_choice(self, tmp_path):
+        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
+        interface = MockInterface(choices=[1])  # still asked whether to read at all
+
+        result = await tree(make_ctx(config, interface), path=str(tmp_path))
+
+        assert isinstance(result.content, FileMetadata)
+        assert len(interface.questions) == 1
+
+
+class TestTreeErrorHandling:
+    async def test_nonexistent_path(self):
         interface = MockInterface()
 
-        # Test display header
-        await req.display_header(interface)
-        output = interface.get_all_output()
-        assert "Generate tree listing" in output
+        result = await tree(make_ctx(interface=interface), path="/nonexistent/dir")
 
-        # Test error result creation
-        error_result = req.create_error_result("Directory not found", accepted=False)
+        assert len(result.issues) == 1
 
-        # This import has to occur locally since Python reloads the plugin re.quirement class
-        # before each test and gives it a different class ID
-        from solveig.plugins.tools.tree import TreeResult
 
-        assert isinstance(error_result, TreeResult)
-
-        assert error_result.tool == req
-        assert error_result.accepted is False
-        assert error_result.error == "Directory not found"
-        assert error_result.metadata is None
-        assert str(error_result.path).startswith("/")  # Path should be absolute
-
-    @pytest.mark.no_file_mocking
-    async def test_tree_depth_limiting_and_user_interaction(
-        self, load_plugins, tmp_path
-    ):
-        """Test tree with depth limits and user interaction through solve() method."""
-        # Enable the tree plugin for this test
-        config = DEFAULT_CONFIG.with_(plugins=["tree"])
-        await load_plugins(config)
-
-        # Create temporary directory structure
+class TestTreeDepthLimiting:
+    async def test_max_depth_limits_listing(self, tmp_path):
         (tmp_path / "file1.txt").write_text("content1")
-        (tmp_path / "file2.py").write_text("print('hello')")
         (tmp_path / "subdir1").mkdir()
         final_subdir = tmp_path / "subdir2/subdir3/subdir4/subdir5"
         final_subdir.mkdir(parents=True)
         (tmp_path / "subdir2/subdir3/file3.txt").touch()
         (tmp_path / "subdir2/subdir3/subdir4/file4.txt").touch()
         (tmp_path / "subdir6").mkdir()
+        interface = MockInterface(choices=[0])
 
-        req = TreeTool(path=str(tmp_path), max_depth=2, comment="Limited depth tree")
-        interface = MockInterface(choices=[0])  # read+send tree
+        result = await tree(
+            make_ctx(interface=interface), path=str(tmp_path), max_depth=2
+        )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-        assert result.accepted is True
-        # we have until subdir3
-        assert result.metadata.listing[str(PurePath(tmp_path / "subdir6/"))]
-        final_level_metadata = result.metadata.listing[
-            str(PurePath(tmp_path / "subdir2/"))
-        ].listing[str(PurePath(tmp_path / "subdir2/subdir3/"))]
-        # however we don't get the metadata further down, even though it exists
-        assert not final_level_metadata.listing
+        listing = result.content.listing
+        assert str(PurePath(tmp_path / "subdir6")) in listing
+        deeper = listing[str(PurePath(tmp_path / "subdir2"))].listing[
+            str(PurePath(tmp_path / "subdir2/subdir3"))
+        ]
+        # metadata stops descending past max_depth, even though the real
+        # directory tree continues below this point
+        assert not deeper.listing
         assert final_subdir.exists()
-
-        # Test user interaction with error case
-        # decline to send error for non-existent path
-        interface = MockInterface(choices=[1])
-
-        error_req = TreeTool(path=str(tmp_path / "nonexistent"), comment="Test tree")
-        result = await error_req.solve(DEFAULT_CONFIG, interface)
-        assert result.accepted is False
-        assert result.error
