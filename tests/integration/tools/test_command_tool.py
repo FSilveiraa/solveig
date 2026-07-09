@@ -1,14 +1,33 @@
-"""Comprehensive integration tests for CommandRequirement."""
+"""Integration tests for the `command` tool function.
+
+`command` is a plain `async def command(ctx: SolveigContext, command: str,
+timeout: float = 10.0) -> ToolResult` now - no `CommandTool` Pydantic model,
+no `.solve()`/`.display_header()`/`.create_error_result()`/`.get_description()`.
+Called directly (`await command(ctx, command=..., timeout=...)`), same as
+production code does through the toolset - there's no separate
+"validate-then-execute" split to test, `command`'s own body does both.
+
+`ToolResult` has no `accepted`/`success`/`stdout`/`error` fields - just
+`content`/`metadata`/`issues`/`private`. Mapped from the old assertions:
+- declined/hidden-output text lives in `result.content` (a human-readable
+  message), not a boolean.
+- a successful run's `content` is `"stdout:\\n{output}"`, optionally with
+  `"\\nstderr:\\n{error}"` appended - checked via substring, not a separate
+  `.stdout` field.
+- execution failures/cancellation land in `result.issues`, not `.error`.
+"""
 
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
 
-from solveig.schema.tool import CommandTool
+from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.schema.tools.core.command import command
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
-# Mark all tests in this module to skip file mocking but allow subprocess mocking
 pytestmark = [
     pytest.mark.no_file_mocking,
     pytest.mark.anyio,
@@ -16,211 +35,152 @@ pytestmark = [
 ]
 
 
+def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
+    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+
+
 class TestCommandValidation:
-    """Test CommandRequirement validation and basic behavior."""
+    async def test_empty_command_raises(self):
+        with pytest.raises(ValueError, match="Empty command"):
+            await command(make_ctx(), command="")
 
-    async def test_command_validation_patterns(self):
-        """Test command validation for empty, whitespace, and valid commands."""
-        extra_kwargs = {"comment": "test"}
+    async def test_whitespace_command_raises(self):
+        with pytest.raises(ValueError, match="Empty command"):
+            await command(make_ctx(), command="   \t\n   ")
 
-        # Empty command should fail
-        with pytest.raises(ValidationError) as exc_info:
-            CommandTool(command="", **extra_kwargs)
-        error_msg = str(exc_info.value.errors()[0]["msg"])
-        assert "Empty command" in error_msg
+    async def test_command_strips_whitespace(self, sandboxed_shell):
+        interface = MockInterface(choices=[0])
+        result = await command(make_ctx(interface=interface), command="  echo hello  ")
+        assert "hello" in result.content
 
-        # Whitespace command should fail
-        with pytest.raises(ValidationError):
-            CommandTool(command="   \t\n   ", **extra_kwargs)
+    async def test_default_timeout(self, sandboxed_shell):
+        interface = MockInterface(choices=[2])  # don't run, just inspect the header
+        await command(make_ctx(interface=interface), command="echo test")
+        assert "10.0s" in interface.get_all_output()
 
-        # Valid command should strip whitespace
-        req = CommandTool(command="  echo hello  ", **extra_kwargs)
-        assert req.command == "echo hello"
-
-    async def test_timeout_defaults(self):
-        """Test timeout field defaults and validation."""
-        req = CommandTool(command="echo test", comment="test")
-        assert req.timeout == 10.0
-
-        # Custom timeout
-        req = CommandTool(command="echo test", comment="test", timeout=5.0)
-        assert req.timeout == 5.0
-
-        # Detached process timeout
-        req = CommandTool(command="echo test", comment="test", timeout=0)
-        assert req.timeout == 0
-
-    async def test_get_description(self):
-        """Test CommandTool description method."""
-        description = CommandTool.get_description()
-        assert "command(comment, command, timeout=" in description
-        assert "execute shell commands" in description
-
-    async def test_display_header_blocking_command(self):
-        """Test CommandTool display header for blocking commands."""
-        req = CommandTool(
-            command="echo 'Hello World'", comment="Test echo command", timeout=5.0
+    async def test_header_shows_blocking_timeout(self, sandboxed_shell):
+        interface = MockInterface(choices=[2])
+        await command(
+            make_ctx(interface=interface),
+            command="echo 'Hello World'",
+            timeout=5.0,
         )
-        interface = MockInterface()
-        await req.display_header(interface)
-
         output = interface.get_all_output()
-        assert "Test echo command" in output
         assert "echo 'Hello World'" in output
-        assert "Timeout:" in output and " 5.0s" in output
+        assert "Timeout:" in output and "5.0s" in output
 
-    async def test_display_header_detached_command(self):
-        """Test CommandRequirement display header for detached commands."""
-        req = CommandTool(
-            command="nohup long_process", comment="Test detached command", timeout=0
+    async def test_header_shows_detached_marker(self, sandboxed_shell):
+        interface = MockInterface(choices=[0])
+        await command(
+            make_ctx(interface=interface),
+            command="nohup long_process",
+            timeout=0,
         )
-        interface = MockInterface()
-        await req.display_header(interface)
-
         output = interface.get_all_output()
-        assert "Test detached command" in output
         assert "nohup long_process" in output
         assert "None (detached process)" in output
 
 
 class TestCommandChoices:
-    """Test CommandRequirement choice flow patterns."""
-
     async def test_run_and_send_choice(self, sandboxed_shell):
-        """Test choice 0: Run and send output with a real, sandboxed shell."""
-        interface = MockInterface(choices=[0])  # Run and send
+        """Choice 0: run and send output, real sandboxed shell."""
+        interface = MockInterface(choices=[0])
 
-        req = CommandTool(command="echo 'hello world'", comment="Test echo command")
-        result = await req.solve(DEFAULT_CONFIG, interface)
+        result = await command(
+            make_ctx(interface=interface), command="echo 'hello world'"
+        )
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == "hello world"
-        assert result.command == "echo 'hello world'"
+        assert result.issues == []
+        assert "hello world" in result.content
 
     async def test_run_and_inspect_then_send(self, sandboxed_shell):
-        """Test choice 1: Run and inspect first, then send, with a real shell."""
-        interface = MockInterface(choices=[1, 0])  # Inspect first, then send
+        """Choice 1: inspect first, then send, real shell."""
+        interface = MockInterface(choices=[1, 0])
 
-        req = CommandTool(
-            command="echo 'hostname.local'",  # Use echo to avoid network/system variance
-            comment="Get hostname",
+        result = await command(
+            make_ctx(interface=interface), command="echo 'hostname.local'"
         )
-        result = await req.solve(DEFAULT_CONFIG, interface)
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == "hostname.local"
-
-        # Verify both choices were asked
+        assert "hostname.local" in result.content
         assert len(interface.questions) == 2
         assert "Allow running command?" in interface.questions[0]
         assert "Allow sending output?" in interface.questions[1]
 
     async def test_run_and_inspect_then_hide(self, sandboxed_shell, tmp_path: Path):
-        """Test choice 1: Run and inspect first, then hide output, with a real shell."""
+        """Choice 1: inspect first, then decline sending, real shell."""
         secret_file = tmp_path / "secret.txt"
         secret_file.write_text("secret data")
-        interface = MockInterface(choices=[1, 1])  # Inspect first, then hide
+        interface = MockInterface(choices=[1, 1])
 
-        req = CommandTool(
-            command=f"cat {secret_file.name}", comment="Read sensitive file"
+        result = await command(
+            make_ctx(interface=interface), command=f"cat {secret_file.name}"
         )
-        result = await req.solve(DEFAULT_CONFIG, interface)
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == "<hidden>"
-        assert result.error == "<hidden>"
+        assert result.issues == []
+        assert result.content == "User ran the command but declined to send the output."
 
     async def test_dont_run_choice(self):
-        """Test choice 2: Don't run command."""
-        interface = MockInterface(choices=[2])  # Don't run
+        """Choice 2: don't run."""
+        interface = MockInterface(choices=[2])
 
-        req = CommandTool(command="rm important_file.txt", comment="Dangerous command")
+        result = await command(
+            make_ctx(interface=interface), command="rm important_file.txt"
+        )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert not result.accepted
-        assert result.command == "rm important_file.txt"
+        assert result.content == "User declined to run the command."
+        assert result.issues == []
 
     async def test_command_with_error_output(self, sandboxed_shell):
-        """Test command that produces stderr with a real shell."""
-        interface = MockInterface(choices=[0])  # Run and send
+        interface = MockInterface(choices=[0])
 
-        # This command is guaranteed to produce an error on stderr
-        req = CommandTool(
-            command="ls /nonexistent_directory_for_test", comment="Command with error"
+        result = await command(
+            make_ctx(interface=interface),
+            command="ls /nonexistent_directory_for_test",
         )
-        result = await req.solve(DEFAULT_CONFIG, interface)
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == ""
-        assert "No such file or directory" in result.error
+        assert result.issues == []
+        assert "stdout:\n" in result.content
+        assert "No such file or directory" in result.content
 
     async def test_command_with_no_output(self, sandboxed_shell, tmp_path: Path):
-        """Test command that produces no output with a real shell."""
         test_file = tmp_path / "newfile"
-        interface = MockInterface(choices=[0])  # Run and send
+        interface = MockInterface(choices=[0])
 
-        req = CommandTool(command=f"touch {test_file.name}", comment="Silent command")
-        result = await req.solve(DEFAULT_CONFIG, interface)
+        result = await command(
+            make_ctx(interface=interface), command=f"touch {test_file.name}"
+        )
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == ""
-        assert result.error == ""
-
-        # Verify the side-effect: the file should now exist
+        assert result.content == "stdout:\n"
         assert test_file.exists()
-
-        # Verify "No output" message was displayed
-        output = interface.get_all_output()
-        assert "No output" in output
+        assert "No output" in interface.get_all_output()
 
 
 class TestAutoExecuteCommands:
-    """Test auto-execute command pattern matching."""
-
     async def test_auto_execute_matching_pattern(self, sandboxed_shell, tmp_path: Path):
-        """Test command auto-execution when pattern matches with a real shell."""
         (tmp_path / "file1.txt").touch()
         (tmp_path / "file2.txt").touch()
         interface = MockInterface()
-
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
-        req = CommandTool(command="ls", comment="List directory")
-        result = await req.solve(config, interface)
 
-        assert result.accepted
-        assert result.success
-        assert "file1.txt" in result.stdout
-        assert "file2.txt" in result.stdout
+        result = await command(make_ctx(config, interface), command="ls")
 
-        # Verify no choices were asked for the `ls` command
+        assert "file1.txt" in result.content
+        assert "file2.txt" in result.content
         assert len(interface.questions) == 0
-        output = interface.get_all_output()
-        assert "auto_execute_commands" in output
+        assert "auto_execute_commands" in interface.get_all_output()
 
     async def test_auto_execute_non_matching_pattern(self, sandboxed_shell):
-        """Test normal choice flow when pattern doesn't match with a real shell."""
-        interface = MockInterface(choices=[0])  # Manually approve the command
+        interface = MockInterface(choices=[0])
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
-        req = CommandTool(command="echo hello", comment="Echo command")
-        result = await req.solve(config, interface)
+        result = await command(make_ctx(config, interface), command="echo hello")
 
-        assert result.accepted
-        assert result.success
-        assert result.stdout == "hello"
-
-        # Verify choice was asked for the `echo` command
+        assert "hello" in result.content
         assert len(interface.questions) == 1
         assert "Allow running command?" in interface.questions[0]
 
     async def test_auto_execute_complex_patterns(self, sandboxed_shell, tmp_path: Path):
-        """Test auto-execute with complex regex patterns with a real shell."""
         (tmp_path / "file.txt").touch()
         interface = MockInterface()
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls(\\s+-[a-z]+)*\\s*$"])
@@ -229,188 +189,123 @@ class TestAutoExecuteCommands:
             ("ls", True),
             ("ls -l", True),
             ("ls -la", True),
-            ("ls -a -l", True),  # This pattern does support multiple flag groups
-            ("ls --help", False),  # Long flags not allowed
-            ("ls file.txt", False),  # Arguments not allowed
+            ("ls -a -l", True),
+            ("ls --help", False),
+            ("ls file.txt", False),
         ]
 
-        for command, should_auto_execute in test_cases:
-            # Reset inputs for each loop
+        for command_str, should_auto_execute in test_cases:
             interface.choices.clear()
             if not should_auto_execute:
-                interface.choices.append(2)  # Don't run
+                interface.choices.append(2)
 
-            req = CommandTool(command=command, comment=f"Test {command}")
-            result = await req.solve(config, interface)
+            result = await command(make_ctx(config, interface), command=command_str)
 
             if should_auto_execute:
-                assert result.accepted, f"Command '{command}' should auto-execute"
-                assert "file.txt" in result.stdout
+                assert "file.txt" in result.content, (
+                    f"Command '{command_str}' should auto-execute"
+                )
             else:
-                assert not result.accepted, (
-                    f"Command '{command}' should not auto-execute"
+                assert result.content == "User declined to run the command.", (
+                    f"Command '{command_str}' should not auto-execute"
                 )
 
 
 class TestDetachedCommands:
-    """Test detached command execution (timeout <= 0)."""
-
     async def test_detached_command_execution(self, sandboxed_shell):
-        """Test that timeout <= 0 is treated as a detached process by the real shell."""
-        interface = MockInterface(choices=[0])  # Run and send
+        interface = MockInterface(choices=[0])
 
-        req = CommandTool(
+        result = await command(
+            make_ctx(interface=interface),
             command='echo "background" &',
-            comment="Detached echo",
-            timeout=0,  # Detached
+            timeout=0,
         )
-        result = await req.solve(DEFAULT_CONFIG, interface)
 
-        assert result.accepted
-        assert result.success
-        # The persistent shell does not wait for or capture output from background tasks
-        assert result.stdout == ""
-        assert result.error == ""
-
-        # Verify detached launch feedback
-        output = interface.get_all_output()
-        assert "Detached process launched" in output
+        assert result.issues == []
+        # The persistent shell does not wait for or capture detached output.
+        assert result.content == "stdout:\n"
+        assert "Detached process launched" in interface.get_all_output()
 
     async def test_detached_vs_blocking_timeout_handling(self, sandboxed_shell):
-        """Test timeout parameter affects execution mode with a real shell."""
-        interface = MockInterface(choices=[0])  # Run and send
+        interface = MockInterface(choices=[0])
+
+        result1 = await command(
+            make_ctx(interface=interface), command="echo blocking", timeout=5.0
+        )
+        assert "blocking" in result1.content
 
         interface.choices.append(0)
-        req1 = CommandTool(
-            command="echo blocking", comment="Blocking command", timeout=5.0
+        result2 = await command(
+            make_ctx(interface=interface), command="echo detached &", timeout=-1
         )
-        result1 = await req1.solve(DEFAULT_CONFIG, interface)
-        assert result1.accepted
-        assert result1.success
-        assert result1.stdout == "blocking"
-
-        # Test detached command
-        interface.choices.append(0)
-        req2 = CommandTool(
-            command="echo detached &",
-            comment="Detached command",
-            timeout=-1,  # Negative also means detached
-        )
-        result2 = await req2.solve(DEFAULT_CONFIG, interface)
-        assert result2.accepted
-        assert result2.success
-        assert result2.stdout == ""
-
-
-class TestErrorHandling:
-    """Test CommandRequirement error scenarios."""
-
-    async def test_error_result_creation(self):
-        """Test create_error_result method."""
-        req = CommandTool(command="test command", comment="Test")
-        error_result = req.create_error_result("Test error", accepted=False)
-
-        assert error_result.tool == req
-        assert error_result.accepted is False
-        assert error_result.success is False
-        assert error_result.error == "Test error"
-        assert error_result.command == "test command"
+        assert result2.content == "stdout:\n"
 
 
 class TestWorkingDirectoryTracking:
-    """Test working directory tracking and stats updates."""
-
     async def test_working_directory_stats_update(
         self, sandboxed_shell, tmp_path: Path
     ):
-        """Test that successful command updates interface stats with working directory."""
-        interface = MockInterface(choices=[0])  # Auto-approve `cd`
-
-        # 1. Create a subdirectory
+        interface = MockInterface(choices=[0])
         subdir = tmp_path / "new_dir"
         subdir.mkdir()
 
-        # 2. CD into the subdirectory
-        cd_req = CommandTool(command=f"cd {subdir.name}", comment="Change to new_dir")
-        cd_result = await cd_req.solve(DEFAULT_CONFIG, interface)
-        assert cd_result.success
-
-        # Verify stats were updated with the new CWD
-        assert len(interface.stats_updates) > 0
-        # Find the update that contains 'path'.
-        cwd_update = next((s for s in interface.stats_updates if "path" in s), None)
-        assert cwd_update is not None, (
-            "Expected a stats update containing 'path' but none was found."
+        result = await command(
+            make_ctx(interface=interface), command=f"cd {subdir.name}"
         )
+        assert result.issues == []
+
+        cwd_update = next((s for s in interface.stats_updates if "path" in s), None)
+        assert cwd_update is not None
         assert str(cwd_update["path"]) == str(subdir)
 
     async def test_detached_command_no_stats_update(self, sandboxed_shell):
-        """Test that detached commands don't update stats with CWD."""
-        interface = MockInterface(choices=[0])  # Run and send
+        interface = MockInterface(choices=[0])
 
-        req = CommandTool(
+        result = await command(
+            make_ctx(interface=interface),
             command="echo background &",
-            comment="Detached process",
-            timeout=0,  # Detached
+            timeout=0,
         )
-        result = await req.solve(DEFAULT_CONFIG, interface)
 
-        assert result.accepted
-        assert result.success
-
-        # Detached commands fire-and-forget — no stats updates expected
+        assert result.issues == []
         assert not any("path" in s for s in interface.stats_updates)
 
 
 class TestShellIntegration:
-    """Test integration with PersistentShell singleton."""
-
     async def test_shell_reuse_within_test(self, sandboxed_shell, tmp_path: Path):
-        """Test that multiple commands within the same test reuse the same shell."""
         interface = MockInterface()
         subdir = tmp_path / "subdir"
 
-        # 1. Create a subdirectory
         interface.choices.append(0)
-        mkdir_req = CommandTool(command=f"mkdir {subdir.name}", comment="Create subdir")
-        mkdir_result = await mkdir_req.solve(DEFAULT_CONFIG, interface)
-        assert mkdir_result.success
+        mkdir_result = await command(
+            make_ctx(interface=interface), command=f"mkdir {subdir.name}"
+        )
+        assert mkdir_result.issues == []
 
-        # 2. CD into the new subdirectory
         interface.choices.append(0)
-        cd_req_2 = CommandTool(command=f"cd {subdir.name}", comment="Change to subdir")
-        cd_result_2 = await cd_req_2.solve(DEFAULT_CONFIG, interface)
-        assert cd_result_2.success
+        cd_result = await command(
+            make_ctx(interface=interface), command=f"cd {subdir.name}"
+        )
+        assert cd_result.issues == []
 
-        # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
-        pwd_req = CommandTool(command="pwd", comment="Print working directory")
-        pwd_result = await pwd_req.solve(DEFAULT_CONFIG, interface)
-        assert pwd_result.success
-        assert pwd_result.stdout == str(subdir)
+        pwd_result = await command(make_ctx(interface=interface), command="pwd")
+        assert pwd_result.content == f"stdout:\n{subdir}"
 
     async def test_shell_state_persistence(self, sandboxed_shell, tmp_path: Path):
-        """Test that shell CWD state persists between command executions."""
         interface = MockInterface()
 
-        # The sandboxed_shell fixture already put us in tmp_path.
-
-        # 1. Create a subdirectory
         interface.choices.append(0)
-        mkdir_req = CommandTool(command="mkdir test_dir", comment="Create subdir")
-        mkdir_result = await mkdir_req.solve(DEFAULT_CONFIG, interface)
-        assert mkdir_result.success
+        mkdir_result = await command(
+            make_ctx(interface=interface), command="mkdir test_dir"
+        )
+        assert mkdir_result.issues == []
         assert (tmp_path / "test_dir").is_dir()
 
-        # 2. CD into the new subdirectory
         interface.choices.append(0)
-        cd_req_2 = CommandTool(command="cd test_dir", comment="Change to subdir")
-        cd_result_2 = await cd_req_2.solve(DEFAULT_CONFIG, interface)
-        assert cd_result_2.success
+        cd_result = await command(make_ctx(interface=interface), command="cd test_dir")
+        assert cd_result.issues == []
 
-        # 3. Run `pwd` and verify we are in the new subdirectory
         interface.choices.append(0)
-        pwd_req = CommandTool(command="pwd", comment="Print working directory")
-        pwd_result = await pwd_req.solve(DEFAULT_CONFIG, interface)
-        assert pwd_result.success
-        assert pwd_result.stdout == str(tmp_path / "test_dir")
+        pwd_result = await command(make_ctx(interface=interface), command="pwd")
+        assert pwd_result.content == f"stdout:\n{tmp_path / 'test_dir'}"

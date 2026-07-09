@@ -1,598 +1,414 @@
-"""Comprehensive integration tests for WriteRequirement."""
+"""Integration tests for the `write` tool function.
+
+`write` is a plain `async def write(ctx, path, is_directory, content=None) ->
+ToolResult` now - no `WriteTool` Pydantic model, no `.solve()`/
+`.display_header()`/`.create_error_result()`/`.get_description()`. Called
+directly through `ctx`.
+
+`ToolResult` has no `accepted`/`error`/`path` fields. `write()`'s
+`result.content` on success is `f"{'Updated'|'Created'} {abs_path}"` - which
+conveniently doubles as the path-resolution check the old tests did via
+`result.path` (tilde/traversal expand into that string). Declines are the
+literal string `"User declined the write."`; failures land in
+`result.issues`, not `.error`.
+
+Confirmed unchanged from before: `validate_write_access()` still rejects
+"updating" an existing directory with `IsADirectoryError` before the user is
+even asked - `Filesystem.create_directory()`'s own `exist_ok=True` never
+gets a chance to matter here, since validation runs first.
+"""
 
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
 
-from solveig.schema.tool import WriteTool
+from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.schema.tools.core.write import write
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
-# Mark all tests in this module to skip file mocking
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
+def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
+    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+
+
 class TestWriteValidation:
-    """Test WriteRequirement validation and basic behavior."""
+    async def test_empty_path_raises(self):
+        with pytest.raises(ValueError, match="Empty path"):
+            await write(make_ctx(), path="", is_directory=False)
 
-    async def test_path_validation_patterns(self):
-        """Test path validation for empty, whitespace, and valid paths."""
-        extra_kwargs = {"is_directory": False, "comment": "test"}
+    async def test_whitespace_path_raises(self):
+        with pytest.raises(ValueError, match="Empty path"):
+            await write(make_ctx(), path="   \t\n   ", is_directory=False)
 
-        # Empty path should fail
-        with pytest.raises(ValidationError) as exc_info:
-            WriteTool(path="", **extra_kwargs)
-        error_msg = str(exc_info.value.errors()[0]["msg"])
-        assert "Empty path" in error_msg or "Field required" in error_msg
+    async def test_header_shows_group_for_file(self, tmp_path):
+        test_file = tmp_path / "file.txt"
+        interface = MockInterface(choices=[0])
 
-        # Whitespace path should fail
-        with pytest.raises(ValidationError):
-            WriteTool(path="   \t\n   ", **extra_kwargs)
-
-        # Valid path should strip whitespace
-        req = WriteTool(path="  /valid/path  ", **extra_kwargs)
-        assert req.path == "/valid/path"
-
-    async def test_get_description(self):
-        """Test WriteRequirement description method."""
-        description = WriteTool.get_description()
-        assert "write(comment, path, is_directory, content=null)" in description
-
-    async def test_display_header_file(self):
-        """Test WriteRequirement display header for files."""
-        req = WriteTool(
-            path="/test/file.txt",
+        await write(
+            make_ctx(interface=interface),
+            path=str(test_file),
             is_directory=False,
-            content="test content",
-            comment="Create test file",
+            content="hi",
         )
-        interface = MockInterface()
-        await req.display_header(interface)
 
         output = interface.get_all_output()
-        assert "Create test file" in output
-        assert "/test/file.txt" in output
-        assert "file" in output.lower()
+        assert f"Write: {test_file}" in output
 
-    async def test_display_header_directory(self):
-        """Test WriteRequirement display header for directories."""
-        req = WriteTool(
-            path="/test/dir", is_directory=True, comment="Create test directory"
+    async def test_header_shows_group_for_directory(self, tmp_path):
+        test_dir = tmp_path / "dir"
+        interface = MockInterface(choices=[0])
+
+        await write(
+            make_ctx(interface=interface), path=str(test_dir), is_directory=True
         )
-        interface = MockInterface()
-        await req.display_header(interface)
 
         output = interface.get_all_output()
-        assert "Create test directory" in output
-        assert "/test/dir" in output
-        assert "directory" in output.lower()
+        assert f"Write: {test_dir}" in output
 
 
 class TestFileOperations:
-    """Test WriteRequirement file creation and modification."""
-
     async def test_create_new_file_accept(self, tmp_path):
-        """Test creating new file with user acceptance."""
         test_file = tmp_path / "new_file.txt"
         test_content = "Hello, new file!"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept creation
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
             content=test_content,
-            comment="Create new file",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert test_file.exists()
         assert test_file.read_text() == test_content
 
     async def test_create_new_file_decline(self, tmp_path):
-        """Test creating new file with user decline."""
         test_file = tmp_path / "declined_file.txt"
+        interface = MockInterface(choices=[1])
 
-        interface = MockInterface()
-        interface.choices.append(1)  # Decline creation
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
             content="Should not be created",
-            comment="Declined file",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert not result.accepted
+        assert result.content == "User declined the write."
         assert not test_file.exists()
 
     async def test_create_empty_file(self, tmp_path):
-        """Test creating file with no content."""
         test_file = tmp_path / "empty_file.txt"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept creation
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
-            content=None,  # No content
-            comment="Create empty file",
+            content=None,
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert test_file.exists()
-        assert test_file.read_text() == ""  # Empty content
+        assert test_file.read_text() == ""
 
     async def test_update_existing_file_accept(self, tmp_path):
-        """Test updating existing file with user acceptance."""
         test_file = tmp_path / "existing_file.txt"
-        original_content = "Original content"
-        new_content = "Updated content"
+        test_file.write_text("Original content")
+        interface = MockInterface(choices=[0])
 
-        # Create original file
-        test_file.write_text(original_content)
-
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept update
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
-            content=new_content,
-            comment="Update existing file",
+            content="Updated content",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
-        assert test_file.read_text() == new_content
-
-        # Verify overwrite message appeared
-        output = interface.get_all_output()
-        assert "updating" in output.lower()
+        assert result.issues == []
+        assert test_file.read_text() == "Updated content"
+        assert "updating" in interface.get_all_output().lower()
 
     async def test_update_existing_file_decline(self, tmp_path):
-        """Test updating existing file with user decline."""
         test_file = tmp_path / "existing_file.txt"
         original_content = "Original content"
-
-        # Create original file
         test_file.write_text(original_content)
+        interface = MockInterface(choices=[1])
 
-        interface = MockInterface()
-        interface.choices.append(1)  # Decline update
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
             content="Should not overwrite",
-            comment="Declined update",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert not result.accepted
-        assert test_file.read_text() == original_content  # Unchanged
+        assert result.content == "User declined the write."
+        assert test_file.read_text() == original_content
 
 
 class TestDirectoryOperations:
-    """Test WriteRequirement directory creation."""
-
     async def test_create_new_directory_accept(self, tmp_path):
-        """Test creating new directory with user acceptance."""
         test_dir = tmp_path / "new_directory"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept creation
-
-        req = WriteTool(
-            path=str(test_dir), is_directory=True, comment="Create new directory"
+        result = await write(
+            make_ctx(interface=interface), path=str(test_dir), is_directory=True
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert test_dir.exists()
         assert test_dir.is_dir()
 
     async def test_create_nested_directory_structure(self, tmp_path):
-        """Test creating nested directory structure."""
         nested_dir = tmp_path / "level1" / "level2" / "level3"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept creation
-
-        req = WriteTool(
-            path=str(nested_dir),
-            is_directory=True,
-            comment="Create nested directories",
+        result = await write(
+            make_ctx(interface=interface), path=str(nested_dir), is_directory=True
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert nested_dir.exists()
-        assert nested_dir.is_dir()
-        # Verify parent directories were created
         assert nested_dir.parent.exists()
         assert nested_dir.parent.parent.exists()
 
     async def test_create_directory_decline(self, tmp_path):
-        """Test creating directory with user decline."""
         test_dir = tmp_path / "declined_directory"
+        interface = MockInterface(choices=[1])
 
-        interface = MockInterface()
-        interface.choices.append(1)  # Decline creation
-
-        req = WriteTool(
-            path=str(test_dir), is_directory=True, comment="Declined directory"
+        result = await write(
+            make_ctx(interface=interface), path=str(test_dir), is_directory=True
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert not result.accepted
+        assert result.content == "User declined the write."
         assert not test_dir.exists()
 
-    async def test_update_existing_directory(self, tmp_path):
-        """Test 'updating' existing directory (should still succeed)."""
+    async def test_update_existing_directory_rejected_at_validation(self, tmp_path):
+        """validate_write_access() rejects overwriting an existing directory
+        before the user is even asked - create_directory()'s own exist_ok=True
+        never gets a chance to run."""
         test_dir = tmp_path / "existing_dir"
-        test_dir.mkdir()  # Create directory
-
+        test_dir.mkdir()
         interface = MockInterface()
-        interface.choices.append(0)  # Accept update
 
-        req = WriteTool(
-            path=str(test_dir),
-            is_directory=True,
-            comment="Update existing directory",
+        result = await write(
+            make_ctx(interface=interface), path=str(test_dir), is_directory=True
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert not result.accepted
-        assert test_dir.exists()
-        assert test_dir.is_dir()
-
-        # Verify update message appeared
-        output = interface.get_all_output()
-        assert any(
-            sig in output.lower()
-            for sig in {"existing directory", "error", "cannot overwrite"}
-        )
+        assert len(result.issues) == 1
+        assert "cannot overwrite existing directory" in str(result.issues[0]).lower()
+        assert len(interface.questions) == 0
 
 
 class TestAutoAllowedPaths:
-    """Test auto-allowed paths behavior."""
-
     async def test_auto_allowed_file_creation(self, tmp_path):
-        """Test file creation with auto-allowed paths bypasses choices."""
         test_file = tmp_path / "auto_file.txt"
-
-        # Create config with auto-allowed path pattern
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
-
         interface = MockInterface()
-        # No user inputs needed - should auto-approve
 
-        req = WriteTool(
+        result = await write(
+            make_ctx(config, interface),
             path=str(test_file),
             is_directory=False,
             content="Auto-allowed content",
-            comment="Auto-allowed file",
         )
 
-        result = await req.solve(config, interface)
-
-        assert result.accepted
-        assert test_file.exists()
+        assert result.issues == []
         assert test_file.read_text() == "Auto-allowed content"
-
-        # Verify no choices were asked
         assert len(interface.questions) == 0
-
-        # Verify auto-allow message appeared
-        output = interface.get_all_output()
-        assert "auto_allowed_paths" in output
+        assert "auto_allowed_paths" in interface.get_all_output()
 
     async def test_auto_allowed_directory_creation(self, tmp_path):
-        """Test directory creation with auto-allowed paths bypasses choices."""
         test_dir = tmp_path / "auto_directory"
-
-        # Create config with auto-allowed path pattern
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
-
         interface = MockInterface()
-        # No user inputs needed - should auto-approve
 
-        req = WriteTool(
-            path=str(test_dir), is_directory=True, comment="Auto-allowed directory"
+        result = await write(
+            make_ctx(config, interface), path=str(test_dir), is_directory=True
         )
 
-        result = await req.solve(config, interface)
-
-        assert result.accepted
-        assert test_dir.exists()
+        assert result.issues == []
         assert test_dir.is_dir()
-
-        # Verify no choices were asked
         assert len(interface.questions) == 0
 
     async def test_auto_allowed_file_update(self, tmp_path):
-        """Test file update with auto-allowed paths shows correct message."""
         test_file = tmp_path / "existing_auto.txt"
         test_file.write_text("Original content")
-
-        # Create config with auto-allowed path pattern
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
-
         interface = MockInterface()
 
-        req = WriteTool(
+        result = await write(
+            make_ctx(config, interface),
             path=str(test_file),
             is_directory=False,
             content="Updated auto content",
-            comment="Auto-allowed update",
         )
 
-        result = await req.solve(config, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert test_file.read_text() == "Updated auto content"
-
-        # Verify update message appeared
         output = interface.get_all_output()
         assert "updating" in output.lower()
         assert "auto_allowed_paths" in output
 
 
 class TestErrorHandling:
-    """Test WriteRequirement error scenarios."""
-
-    async def test_error_result_creation(self):
-        """Test create_error_result method."""
-        req = WriteTool(path="/test.txt", is_directory=False, comment="Test")
-        error_result = req.create_error_result("Test error", accepted=False)
-
-        assert error_result.tool == req
-        assert error_result.accepted is False
-        assert error_result.error == "Test error"
-        assert "/test.txt" in str(error_result.path)
-
     async def test_write_permission_error(self, tmp_path):
-        """Test handling write permission errors."""
         restricted_dir = tmp_path / "restricted"
         restricted_dir.mkdir()
-
-        # Make directory read-only
         restricted_dir.chmod(0o444)
-
         test_file = restricted_dir / "cannot_write.txt"
-
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept (but will fail)
+        interface = MockInterface(choices=[0])
 
         try:
-            req = WriteTool(
+            result = await write(
+                make_ctx(interface=interface),
                 path=str(test_file),
                 is_directory=False,
                 content="Cannot write this",
-                comment="Permission denied test",
             )
-
-            result = await req.solve(DEFAULT_CONFIG, interface)
-
-            assert not result.accepted
-            assert result.error is not None
-            assert any(
-                sig in result.error.lower() for sig in {"error", "permission denied"}
-            )
-
+            assert len(result.issues) == 1
         finally:
-            # Restore permissions for cleanup
             restricted_dir.chmod(0o755)
 
     async def test_write_encoding_error(self, tmp_path):
-        """Test handling encoding errors during file write."""
         test_file = tmp_path / "encoding_error.txt"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept
-
-        # Mock Filesystem.write_file to simulate encoding error
         with patch("solveig.utils.file.Filesystem.write_file_text") as mock_write:
             mock_write.side_effect = UnicodeEncodeError(
                 "utf-8", "", 0, 1, "encoding test error"
             )
 
-            req = WriteTool(
+            result = await write(
+                make_ctx(interface=interface),
                 path=str(test_file),
                 is_directory=False,
                 content="Test content",
-                comment="Encoding error test",
             )
 
-            result = await req.solve(DEFAULT_CONFIG, interface)
-
-            assert not result.accepted
-            assert result.error is not None
-            assert "encoding error" in result.error.lower()
+            assert len(result.issues) == 1
+            assert "encoding test error" in str(result.issues[0]).lower()
 
     async def test_disk_space_validation(self, tmp_path):
-        """Test disk space validation during write."""
         test_file = tmp_path / "disk_space_test.txt"
-
-        # Create config with high disk space requirement
-        config = DEFAULT_CONFIG.with_(
-            min_disk_space_left="999TB"
-        )  # Impossible requirement
-
+        config = DEFAULT_CONFIG.with_(min_disk_space_left="999TB")
         interface = MockInterface()
 
-        req = WriteTool(
+        result = await write(
+            make_ctx(config, interface),
             path=str(test_file),
             is_directory=False,
             content="Test content",
-            comment="Disk space test",
         )
 
-        # Should fail during validation, before asking user
-        result = await req.solve(config, interface)
-
-        assert not result.accepted
-        assert result.error is not None
-        assert "disk space" in result.error.lower()
+        assert len(result.issues) == 1
+        assert "disk space" in str(result.issues[0]).lower()
+        assert len(interface.questions) == 0
 
 
 class TestPathSecurity:
-    """Test WriteRequirement path security and resolution."""
-
     async def test_tilde_expansion(self):
-        """Test tilde path expansion in write operations."""
         temp_file_path = Path.home() / ".solveig_test_write.txt"
         try:
-            # Use tilde path
-            tilde_path = "~/.solveig_test_write.txt"
+            interface = MockInterface(choices=[0])
 
-            interface = MockInterface()
-            interface.choices.append(0)  # Accept
-
-            req = WriteTool(
-                path=tilde_path,
+            result = await write(
+                make_ctx(interface=interface),
+                path="~/.solveig_test_write.txt",
                 is_directory=False,
                 content="Tilde expansion test",
-                comment="Tilde test",
             )
 
-            result = await req.solve(DEFAULT_CONFIG, interface)
-
-            assert result.accepted
-            assert "~" not in str(result.path)  # Tilde expanded
-            assert str(Path.home()) in str(result.path)
+            assert result.issues == []
+            assert "~" not in result.content
+            assert str(Path.home()) in result.content
             assert temp_file_path.read_text() == "Tilde expansion test"
-
         finally:
             temp_file_path.unlink()
 
     async def test_path_traversal_resolution(self, tmp_path):
-        """Test path traversal resolution in write operations."""
-        # Create nested structure
         subdir = tmp_path / "public" / "subdir"
         subdir.mkdir(parents=True)
-
-        # Use path traversal to write to parent
         traversal_path = str(subdir / ".." / ".." / "traversal_test.txt")
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=traversal_path,
             is_directory=False,
             content="Path traversal test",
-            comment="Traversal test",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
+        assert result.issues == []
+        assert ".." not in result.content
 
-        assert result.accepted
-        assert ".." not in str(result.path)  # Path resolved
-
-        # Verify file was created at resolved location
         resolved_path = Path(traversal_path).resolve()
         assert resolved_path.exists()
         assert resolved_path.read_text() == "Path traversal test"
 
 
 class TestIntegrationScenarios:
-    """Test complex integration scenarios."""
-
     async def test_file_with_complex_content(self, tmp_path):
-        """Test writing file with complex content (unicode, special chars)."""
         test_file = tmp_path / "complex_content.txt"
-        complex_content = 'Unicode: 🌟 Special chars: \n\t"\'\\/ JSON: {"key": "value"}'
+        complex_content = (
+            'Unicode: \U0001f31f Special chars: \n\t"\'\\/ JSON: {"key": "value"}'
+        )
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_file),
             is_directory=False,
             content=complex_content,
-            comment="Complex content test",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
+        assert result.issues == []
         assert test_file.read_text() == complex_content
 
     async def test_create_vs_update_distinction(self, tmp_path):
-        """Test that create vs update messages are correct."""
         test_file = tmp_path / "distinction_test.txt"
 
-        # Test creation
-        interface1 = MockInterface()
-        interface1.choices.append(0)  # Accept
-
-        req1 = WriteTool(
+        interface1 = MockInterface(choices=[0])
+        result1 = await write(
+            make_ctx(interface=interface1),
             path=str(test_file),
             is_directory=False,
             content="Initial content",
-            comment="Create test",
         )
-
-        result1 = await req1.solve(DEFAULT_CONFIG, interface1)
-        assert result1.accepted
-
+        assert result1.issues == []
         output1 = interface1.get_all_output()
         assert "creating" in output1.lower()
-        assert "Created" in output1  # Success message
+        assert "Created" in output1
 
-        # Test update
-        interface2 = MockInterface()
-        interface2.choices.append(0)  # Accept
-
-        req2 = WriteTool(
+        interface2 = MockInterface(choices=[0])
+        result2 = await write(
+            make_ctx(interface=interface2),
             path=str(test_file),
             is_directory=False,
             content="Updated content",
-            comment="Update test",
         )
-
-        result2 = await req2.solve(DEFAULT_CONFIG, interface2)
-        assert result2.accepted
-
+        assert result2.issues == []
         output2 = interface2.get_all_output()
         assert "updating" in output2.lower()
-        assert "Updated" in output2  # Success message
+        assert "Updated" in output2
 
     async def test_directory_content_ignored(self, tmp_path):
-        """Test that content field is ignored for directories."""
         test_dir = tmp_path / "content_ignored"
+        interface = MockInterface(choices=[0])
 
-        interface = MockInterface()
-        interface.choices.append(0)  # Accept
-
-        req = WriteTool(
+        result = await write(
+            make_ctx(interface=interface),
             path=str(test_dir),
             is_directory=True,
-            content="This content should be ignored",  # Should be ignored
-            comment="Directory with content",
+            content="This content should be ignored",
         )
 
-        result = await req.solve(DEFAULT_CONFIG, interface)
-
-        assert result.accepted
-        assert test_dir.exists()
+        assert result.issues == []
         assert test_dir.is_dir()
-        # No content file should be created
         assert not (test_dir / "content").exists()
