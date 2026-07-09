@@ -1,40 +1,54 @@
-"""Integration tests for HttpTool.actually_solve()."""
+"""Integration tests for the `http` tool function.
 
-from unittest.mock import AsyncMock, MagicMock, patch
+`http` is a plain `async def http(ctx, url, method="GET", headers=None,
+body=None, follow_redirects=True, output_file=None) -> ToolResult` now - no
+`HttpTool` Pydantic model, no `.solve()`. Called directly through `ctx`.
+
+Exercises a real `httpx.AsyncClient` against a real, loopback-only aiohttp
+server (`local_http_server` fixture in `tests/conftest.py`) instead of
+mocking `httpx.AsyncClient` - the same "real thing, sandboxed" pattern the
+other tool test files use for the filesystem/shell. Never touches the real
+network: bound to 127.0.0.1, an ephemeral port, torn down after the test.
+Network-error paths (timeout, connection refused) are produced for real too
+- a slow handler for timeout, an unbound port for connection-refused - no
+mocking anywhere in this file.
+
+`ToolResult` has no `accepted`/`error`/`status_code`/`body`/`truncated`
+fields. A successful response's `result.content` is the raw response body
+text, with `status_code`/`truncated` in `result.metadata`. Declines are
+human-readable strings ("User declined to send the request."/"Status
+{code}. User declined to send the response."); network failures land in
+`result.issues` as the raw `httpx` exception.
+"""
+
+import asyncio
 
 import httpx
 import pytest
+from aiohttp import web
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.usage import RunUsage
 
-from solveig.schema.tool.http import HttpTool
+from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.schema.tools.core.http import http
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
 
-def _mock_response(status_code: int = 200, text: str = "hello") -> MagicMock:
-    r = MagicMock()
-    r.status_code = status_code
-    r.headers = {"content-type": "text/plain"}
-    r.text = text
-    r.content = text.encode()
-    return r
+def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
+    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
 
-def _mock_client(response: MagicMock | None = None, raise_exc: Exception | None = None):
-    """Return a patched httpx.AsyncClient context manager."""
-    client = AsyncMock()
-    if raise_exc is not None:
-        client.request.side_effect = raise_exc
-    else:
-        client.request.return_value = response
-    cm = MagicMock()
-    cm.__aenter__ = AsyncMock(return_value=client)
-    cm.__aexit__ = AsyncMock(return_value=False)
-    return cm
+def _app_with_response(status: int = 200, text: str = "hello") -> web.Application:
+    async def handler(request: web.Request) -> web.Response:
+        return web.Response(text=text, status=status)
 
-
-def _tool(**kwargs) -> HttpTool:
-    return HttpTool(url="https://example.com", comment="Test", **kwargs)
+    app = web.Application()
+    app.router.add_get("/", handler)
+    return app
 
 
 # ---------------------------------------------------------------------------
@@ -42,12 +56,15 @@ def _tool(**kwargs) -> HttpTool:
 # ---------------------------------------------------------------------------
 
 
-async def test_declined_returns_non_accepted_result():
-    """User choosing 'Don't send' at the first prompt returns accepted=False."""
-    result = await _tool().solve(DEFAULT_CONFIG, MockInterface(choices=[1]))
+async def test_declined_returns_decline_message(local_http_server):
+    """User choosing 'Don't send' at the first prompt never even reaches the server."""
+    server = await local_http_server(_app_with_response())
+    interface = MockInterface(choices=[1])
 
-    assert not result.accepted
-    assert result.error is None
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+
+    assert result.content == "User declined to send the request."
+    assert result.issues == []
 
 
 # ---------------------------------------------------------------------------
@@ -55,20 +72,15 @@ async def test_declined_returns_non_accepted_result():
 # ---------------------------------------------------------------------------
 
 
-async def test_happy_path_200_returns_body():
-    """200 response with user accepting returns accepted=True with body."""
-    response = _mock_response(200, "response body text")
+async def test_happy_path_200_returns_body(local_http_server):
+    server = await local_http_server(_app_with_response(200, "response body text"))
+    interface = MockInterface(choices=[0, 0])  # send request, then send to assistant
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[0, 0]),  # send request, then send to assistant
-        )
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
 
-    assert result.accepted
-    assert result.status_code == 200
-    assert result.body == "response body text"
-    assert not result.truncated
+    assert result.content == "response body text"
+    assert result.metadata["status_code"] == 200
+    assert result.metadata["truncated"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -76,19 +88,16 @@ async def test_happy_path_200_returns_body():
 # ---------------------------------------------------------------------------
 
 
-async def test_non_200_response_still_accepted():
-    """A 404 response is a valid result — HTTP errors are not tool errors."""
-    response = _mock_response(404, "not found")
+async def test_non_200_response_still_accepted(local_http_server):
+    """A 404 response is a valid result - HTTP errors are not tool errors."""
+    server = await local_http_server(_app_with_response(404, "not found"))
+    interface = MockInterface(choices=[0, 0])
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[0, 0]),  # send request, then send to assistant
-        )
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
 
-    assert result.accepted
-    assert result.status_code == 404
-    assert result.body == "not found"
+    assert result.issues == []
+    assert result.metadata["status_code"] == 404
+    assert result.content == "not found"
 
 
 # ---------------------------------------------------------------------------
@@ -96,21 +105,16 @@ async def test_non_200_response_still_accepted():
 # ---------------------------------------------------------------------------
 
 
-async def test_response_truncated_when_body_exceeds_limit():
-    """Response body is truncated when it exceeds http_max_response_bytes."""
+async def test_response_truncated_when_body_exceeds_limit(local_http_server):
     long_body = "x" * 100
-    response = _mock_response(200, long_body)
+    server = await local_http_server(_app_with_response(200, long_body))
     config = DEFAULT_CONFIG.with_(http_max_response_bytes=10)
+    interface = MockInterface(choices=[0, 0])
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            config,
-            MockInterface(choices=[0, 0]),
-        )
+    result = await http(make_ctx(config, interface), url=str(server.make_url("/")))
 
-    assert result.accepted
-    assert result.truncated
-    assert len(result.body) == 10
+    assert result.metadata["truncated"] is True
+    assert len(result.content) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -118,68 +122,104 @@ async def test_response_truncated_when_body_exceeds_limit():
 # ---------------------------------------------------------------------------
 
 
-async def test_inspect_first_then_send():
-    """User inspects the response body, then chooses to send it."""
-    response = _mock_response(200, "body text")
+async def test_inspect_first_then_send(local_http_server):
+    server = await local_http_server(_app_with_response(200, "body text"))
+    interface = MockInterface(
+        choices=[0, 1, 0]
+    )  # send, inspect, then send to assistant
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[0, 1, 0]),  # send, inspect, then send to assistant
-        )
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
 
-    assert result.accepted
-    assert result.body == "body text"
+    assert result.content == "body text"
 
 
-async def test_inspect_first_then_decline():
-    """User inspects the response body, then chooses not to send it."""
-    response = _mock_response(200, "body text")
+async def test_inspect_first_then_decline(local_http_server):
+    server = await local_http_server(_app_with_response(200, "body text"))
+    interface = MockInterface(choices=[0, 1, 1])  # send, inspect, then don't send
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[0, 1, 1]),  # send, inspect, then don't send
-        )
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
 
-    assert not result.accepted
+    assert result.content == "Status 200. User declined to send the response."
 
 
-async def test_dont_send_without_inspecting():
-    """User chooses 'Don't send' at the send-response prompt (choice 2)."""
-    response = _mock_response(200, "body text")
+async def test_dont_send_without_inspecting(local_http_server):
+    server = await local_http_server(_app_with_response(200, "body text"))
+    interface = MockInterface(choices=[0, 2])  # send request, don't send response
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(response)):
-        result = await _tool().solve(
-            DEFAULT_CONFIG,
-            MockInterface(choices=[0, 2]),  # send request, don't send response
-        )
+    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
 
-    assert not result.accepted
+    assert result.content == "Status 200. User declined to send the response."
 
 
 # ---------------------------------------------------------------------------
-# Network error paths
+# Network error paths - produced for real, no mocking
 # ---------------------------------------------------------------------------
 
 
-async def test_timeout_error_returns_accepted_error_result():
-    """A timeout returns accepted=True with a timeout error message."""
-    exc = httpx.TimeoutException("timed out")
+async def test_timeout_returns_issue(local_http_server):
+    async def slow_handler(request: web.Request) -> web.Response:
+        await asyncio.sleep(1.0)
+        return web.Response(text="too slow")
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(raise_exc=exc)):
-        result = await _tool().solve(DEFAULT_CONFIG, MockInterface(choices=[0]))
+    app = web.Application()
+    app.router.add_get("/", slow_handler)
+    server = await local_http_server(app)
+    config = DEFAULT_CONFIG.with_(http_timeout=0.05)
+    interface = MockInterface(choices=[0])
 
-    assert result.accepted
-    assert "timeout" in result.error.lower()
+    result = await http(make_ctx(config, interface), url=str(server.make_url("/")))
+
+    assert len(result.issues) == 1
+    assert isinstance(result.issues[0], httpx.TimeoutException)
 
 
-async def test_request_error_returns_accepted_error_result():
-    """A connection error returns accepted=True with an error message."""
-    exc = httpx.ConnectError("connection refused")
+async def test_connection_refused_returns_issue(free_tcp_port):
+    """Nothing is listening on this port - a real connection failure, no mocking."""
+    interface = MockInterface(choices=[0])
 
-    with patch("httpx.AsyncClient", return_value=_mock_client(raise_exc=exc)):
-        result = await _tool().solve(DEFAULT_CONFIG, MockInterface(choices=[0]))
+    result = await http(
+        make_ctx(interface=interface), url=f"http://127.0.0.1:{free_tcp_port}/"
+    )
 
-    assert result.accepted
-    assert "request error" in result.error.lower()
+    assert len(result.issues) == 1
+    assert isinstance(result.issues[0], httpx.RequestError)
+
+
+# ---------------------------------------------------------------------------
+# output_file - downloads the response body to disk instead of returning it.
+# Real filesystem writes, hence @pytest.mark.no_file_mocking.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.no_file_mocking
+async def test_output_file_accept_writes_response_to_disk(local_http_server, tmp_path):
+    server = await local_http_server(_app_with_response(200, "downloaded content"))
+    output_path = tmp_path / "response.txt"
+    interface = MockInterface(choices=[0, 0])  # send request, write to file
+
+    result = await http(
+        make_ctx(interface=interface),
+        url=str(server.make_url("/")),
+        output_file=str(output_path),
+    )
+
+    assert result.issues == []
+    assert output_path.read_text() == "downloaded content"
+    assert result.metadata["output_file"] == str(output_path)
+
+
+@pytest.mark.no_file_mocking
+async def test_output_file_decline_leaves_no_file(local_http_server, tmp_path):
+    server = await local_http_server(_app_with_response(200, "downloaded content"))
+    output_path = tmp_path / "response.txt"
+    interface = MockInterface(choices=[0, 1])  # send request, decline writing
+
+    result = await http(
+        make_ctx(interface=interface),
+        url=str(server.make_url("/")),
+        output_file=str(output_path),
+    )
+
+    assert result.issues == []
+    assert "declined to write" in result.content.lower()
+    assert not output_path.exists()

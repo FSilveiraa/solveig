@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 
 from solveig.config import SolveigConfig
 from solveig.plugins import clear_plugins, initialize_plugins
@@ -26,6 +28,33 @@ async def sandboxed_shell(tmp_path: Path):
         pass
     # The shell's CWD is now the temp path
     return shell
+
+
+@pytest.fixture
+async def local_http_server():
+    """Factory: start a throwaway aiohttp server for real HTTP round trips in
+    tests - bound to 127.0.0.1 (loopback only, never touches the real
+    network), an OS-assigned ephemeral port, torn down after the test. Each
+    test builds its own `aiohttp.web.Application` with exactly the
+    routes/behavior it needs (status, headers, body, an artificial delay for
+    timeout tests, ...) - no shared dispatcher abstraction to learn.
+
+    Usage:
+        server = await local_http_server(app)
+        url = str(server.make_url("/path"))
+    """
+    servers: list[TestServer] = []
+
+    async def _start(app: web.Application) -> TestServer:
+        server = TestServer(app, host="127.0.0.1")
+        await server.start_server()
+        servers.append(server)
+        return server
+
+    yield _start
+
+    for server in servers:
+        await server.close()
 
 
 @pytest.fixture(autouse=True)

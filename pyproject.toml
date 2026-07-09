@@ -52,6 +52,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "fastmcp>=3.2.0",
+    "aiohttp>=3.10.0",
 ]
 anthropic = ["anthropic>=0.68.0"]
 google = ["google-genai>=1.0.0"]
