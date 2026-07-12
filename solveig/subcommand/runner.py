@@ -501,9 +501,9 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             return
         lines = []
         for conn in MCP_CONNECTIONS.values():
-            tool_names = [getattr(t, "tool_name", str(t)) for t in conn.tools]
             lines.append(
-                f"**{conn.display_name}** ({conn.url}) — {len(conn.tools)} tools: {', '.join(tool_names)}"
+                f"**{conn.display_name}** ({conn.url}) — "
+                f"{len(conn.tool_names)} tools: {', '.join(conn.tool_names)}"
             )
         await interface.display_text_box("\n".join(lines), title="MCP Connections")
 
@@ -513,10 +513,9 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         if not args:
             await interface.display_error("Usage: /mcp connect <url>")
             return
-        try:
-            await connect(MCPServerConfig(url=args[0]), self.config, interface)
-        except Exception:
-            pass  # error already displayed by connect()
+        # connect() returns None (and displays its own error) on failure -
+        # it doesn't raise, so there's nothing to catch here.
+        await connect(MCPServerConfig(url=args[0]), self.config, interface)
 
     async def _mcp_disconnect_cmd(
         self, interface: SolveigInterface, *args, **kwargs

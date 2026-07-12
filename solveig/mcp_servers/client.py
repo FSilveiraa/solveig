@@ -1,108 +1,84 @@
-"""MCP connection lifecycle management."""
+"""MCP connection lifecycle management.
+
+Built on pydantic-ai's `MCPToolset` (itself built on FastMCP's `Client`),
+which owns the real connection lifecycle - Solveig no longer hand-rolls a
+background task holding a session open. `MCPToolset.__aenter__`/`__aexit__`
+are reference-counted and reentrant: holding one external `__aenter__()`
+here (in `connect()`) keeps the connection open for the whole session even
+though `agent.run()` also enters/exits the same toolset once per turn - each
+of those becomes a no-op nested increment/decrement as long as this
+module's own hold is still outstanding.
+
+`MCP_CONNECTIONS` (not `tools/available.py`) is the single source of truth
+for connected servers, for the same reason `PLUGIN_TOOLS` lives in
+`plugins/tools/__init__.py`: the registry belongs next to the domain code
+that mutates it, not the assembly code that reads it. `AVAILABLE_TOOLS.rebuild()`
+derives the toolset list it needs (`[c.toolset for c in MCP_CONNECTIONS.values()]`)
+from this dict directly rather than a second list kept in sync by hand.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import shlex
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamable_http_client
+from fastmcp.client.transports import StdioTransport
+from pydantic_ai.mcp import MCPToolset
+from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig
+from solveig.context import get_throwaway_context
 from solveig.interface import SolveigInterface
-from solveig.tools.available import AVAILABLE_TOOLS, MCP_TOOLS
+from solveig.tools.available import AVAILABLE_TOOLS
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
 
 
+@dataclass
 class MCPConnection:
-    """A persistent connection to a single MCP server.
+    """A connected MCP server: its config plus the toolset used to reach it."""
 
-    A background task holds the nested async context managers open.
-    Callers await open() to establish the connection and call close() to tear it down.
-    """
+    server_config: MCPServerConfig
+    toolset: AbstractToolset
+    """The filtered+prefixed toolset - entered/exited and placed in the
+    combined agent toolset."""
+    server_name: str | None = None
+    """Server-reported name, captured once at connect time (server_info is
+    only populated after __aenter__, and isn't worth keeping the raw
+    MCPToolset around just to re-read later)."""
+    tool_names: list[str] = field(default_factory=list)
+    """Snapshot of (post-filter, post-prefix) tool names from connect time."""
 
-    def __init__(self, server_config: MCPServerConfig) -> None:
-        self.server_config = server_config
-        self.url = server_config.url
-        self._server_name: str | None = None
-        self.tools: list[Any] = []
-        self._session: ClientSession | None = None
-        self._task: asyncio.Task | None = None
-        self._ready: asyncio.Event = asyncio.Event()
-        self._done: asyncio.Event = asyncio.Event()
-        self._error: BaseException | None = None
+    @property
+    def url(self) -> str:
+        return self.server_config.url
 
     @property
     def display_name(self) -> str:
         """User-configured name > server-reported name > URL."""
-        return self.server_config.name or self._server_name or self.url
+        return self.server_config.name or self.server_name or self.url
 
-    @contextlib.asynccontextmanager
-    async def _transport(self):  # type: ignore[return]
-        """Yield (read, write) streams for the appropriate transport."""
-        if self.url.startswith("stdio://"):
-            parts = shlex.split(self.url[len("stdio://") :])
-            params = StdioServerParameters(command=parts[0], args=parts[1:])
-            async with stdio_client(params) as (read, write):
-                yield read, write
-        else:
-            kwargs = {}
-            if self.server_config.headers:
-                kwargs["headers"] = self.server_config.headers
-            async with streamable_http_client(self.url, **kwargs) as (read, write, _):
-                yield read, write
 
-    async def load_tools(self):
-        available_tools = await self._session.list_tools()
-        if available_tools.tools:
-            raise NotImplementedError(
-                "MCP tool adapter is not yet ported to pydantic-ai native tool-calling"
-            )
-        self.tools = []
+def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
+    """Build the raw MCPToolset for a server config.
 
-    async def _actually_open(self) -> None:
-        """Background task: holds the transport + session context managers open."""
-        try:
-            async with self._transport() as (read, write):
-                async with ClientSession(read, write) as session:
-                    # initialize() is where streamable_http_client makes its first
-                    # real TCP connection — do it here so failures are caught below.
-                    init_result = await session.initialize()
-                    self._server_name = init_result.serverInfo.name
-                    self._session = session
-                    await self.load_tools()
-                    self._ready.set()
-                    await self._done.wait()
-        except BaseException as e:
-            # Unwrap single-exception BaseExceptionGroups produced by anyio task
-            # groups so callers see a plain, identifiable exception rather than a
-            # BaseExceptionGroup that bypasses `except Exception` handlers.
-            error: BaseException = e
-            while isinstance(error, BaseExceptionGroup) and len(error.exceptions) == 1:
-                error = error.exceptions[0]
-            self._error = error
-            self._ready.set()
-            # Do NOT re-raise: "Task exception was never retrieved" warning if GC'd.
-
-    async def open(self) -> None:
-        self._task = asyncio.create_task(self._actually_open())
-        await self._ready.wait()
-        if self._error:
-            raise self._error
-        assert self._session is not None
-
-    async def close(self) -> None:
-        self._done.set()
-        if self._task:
-            with contextlib.suppress(BaseException):
-                await self._task
-        self._session = None
-        self.tools = []
+    FastMCP's own transport inference only recognizes bare `.py`/`.js`
+    script paths and `http(s)://` URLs - not Solveig's `stdio://<command>`
+    convention - so stdio needs an explicit StdioTransport built by hand.
+    """
+    url = server_config.url
+    if url.startswith("stdio://"):
+        parts = shlex.split(url[len("stdio://") :])
+        transport = StdioTransport(command=parts[0], args=parts[1:])
+        return MCPToolset(transport, init_timeout=server_config.timeout)
+    return MCPToolset(
+        url,
+        headers=server_config.headers or None,
+        init_timeout=server_config.timeout,
+    )
 
 
 # Module-level registry: URL → connection
@@ -124,54 +100,71 @@ async def connect(
     config: SolveigConfig,
     interface: SolveigInterface,
 ) -> MCPConnection | None:
-    """Connect to an MCP server, register its tools, and rebuild the tools union.
+    """Connect to an MCP server, register its tools, and rebuild the toolset.
 
-    Displays success or error directly. Re-raises on failure so callers that
-    need to react programmatically can, but callers that don't can suppress.
+    Displays success or error directly. Returns None on failure/cancellation
+    rather than raising, since callers don't need to react programmatically.
     """
-    conn = MCPConnection(server_config)
+    prefix = server_config.name or server_config.url
+    mcp_toolset = _build_mcp_toolset(server_config)
+
+    toolset: AbstractToolset = mcp_toolset
+    if server_config.allowed_tools or server_config.blocked_tools:
+        toolset = toolset.filtered(
+            lambda ctx, tool_def: server_config.is_tool_allowed(tool_def.name)
+        )
+    toolset = toolset.prefixed(prefix)
+
+    conn = MCPConnection(server_config=server_config, toolset=toolset)
+
     try:
         async with interface.with_cancellable(
-            conn.open(), status=f"MCP connecting to {conn.display_name}"
+            toolset.__aenter__(), status=f"MCP connecting to {prefix}"
         ) as task:
             await task
     except asyncio.CancelledError:
-        await interface.display_info(f"MCP connection to {conn.display_name} cancelled")
+        await interface.display_info(f"MCP connection to {prefix} cancelled")
         return None
     except Exception as err:
-        await interface.display_error(f"MCP '{conn.display_name}': {err}")
+        await interface.display_error(f"MCP '{prefix}': {err}")
         return None
+
+    conn.server_name = mcp_toolset.server_info.name
+
+    try:
+        tools = await toolset.get_tools(get_throwaway_context())
+    except Exception as err:
+        await toolset.__aexit__(None, None, None)
+        await interface.display_error(f"MCP '{prefix}': failed to list tools: {err}")
+        return None
+
+    conn.tool_names = list(tools.keys())
 
     # Only reached on success — replace any existing connection at this URL
     if server_config.url in MCP_CONNECTIONS:
         await disconnect(server_config.url, config, interface)
 
-    # Map the config URL to the connection, add the MCP tools
     MCP_CONNECTIONS[server_config.url] = conn
-    MCP_TOOLS.extend(conn.tools)
     AVAILABLE_TOOLS.rebuild(config)
-    tool_names = [getattr(t, "tool_name", str(t)) for t in conn.tools]
-    # Display connection details and update MCP stats
+
     await interface.display_success(
-        f"MCP '{conn.display_name}': connected ({len(conn.tools)} tools: {', '.join(tool_names)})"
+        f"MCP '{conn.display_name}': connected "
+        f"({len(conn.tool_names)} tools: {', '.join(conn.tool_names)})"
     )
     await interface.update_stats(
         mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
     )
-    return conn  # Already mapped, but still return
+    return conn
 
 
 async def disconnect(
     url: str, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
-    """Disconnect from an MCP server by URL and rebuild the tools union."""
+    """Disconnect from an MCP server by URL and rebuild the toolset."""
     conn = MCP_CONNECTIONS.pop(url, None)
     if conn is None:
         return
-    for tool in conn.tools:
-        if tool in MCP_TOOLS:
-            MCP_TOOLS.remove(tool)
-    await conn.close()
+    await conn.toolset.__aexit__(None, None, None)
     AVAILABLE_TOOLS.rebuild(config)
     await interface.update_stats(
         mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
@@ -179,6 +172,10 @@ async def disconnect(
 
 
 async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> None:
-    """Connect to all servers listed in config.mcp_servers at startup."""
-    for server_config in config.mcp_servers.values():
-        await connect(server_config, config, interface)
+    """Connect to all servers listed in config.mcp_servers, concurrently."""
+    await asyncio.gather(
+        *(
+            connect(server_config, config, interface)
+            for server_config in config.mcp_servers.values()
+        )
+    )

@@ -13,17 +13,16 @@ what it's for.
 
 """
 
+from typing import Any
+
 from pydantic_ai import FunctionToolset, RunContext, ToolDefinition
+from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.tools import CORE_TOOLS, command
 from solveig.tools.hook_runner import HookRunner
 from solveig.tools.result import Finalizer
-
-# MCP tools are appended here when an MCP server connects, removed on disconnect.
-# Call AVAILABLE_TOOLS.rebuild(config) after mutating.
-MCP_TOOLS: list = []
 
 
 class AvailableTools:
@@ -34,20 +33,29 @@ class AvailableTools:
 
     def rebuild(self, config: SolveigConfig) -> None:
         """Recompute the base toolset from CORE_TOOLS, every discovered plugin
-        tool, and MCP_TOOLS. Only needed after tool *membership* actually
-        changes - see the module docstring for why `no_commands`/`config.plugins`
-        toggling doesn't need this."""
-        # Local import: solveig.plugins.tools -> solveig.plugins (package init)
-        # -> solveig.plugins.tools again during that same init - a module-level
-        # import here would be circular.
+        tool, and every connected MCP server's toolset. Only needed after tool
+        *membership* actually changes - see the module docstring for why
+        `no_commands`/`config.plugins` toggling doesn't need this."""
+        # Local imports: solveig.plugins.tools -> solveig.plugins (package
+        # init) -> solveig.plugins.tools again during that same init, and
+        # solveig.mcp_servers.client -> solveig.tools.available (for
+        # AVAILABLE_TOOLS) -> back here - both circular as module-level imports.
+        from solveig.mcp_servers.client import MCP_CONNECTIONS
         from solveig.plugins.tools import PLUGIN_TOOLS
+
+        mcp_toolsets = [conn.toolset for conn in MCP_CONNECTIONS.values()]
 
         # Every discovered plugin tool is included here, not just the ones
         # config.plugins currently enables - the filter below decides
         # visibility live, per step, from config.
-        all_tools = [*CORE_TOOLS, *PLUGIN_TOOLS.all.values(), *MCP_TOOLS]
+        # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS.all's specific callable
+        # types don't unify into anything FunctionToolset's constructor (or
+        # the .filtered() predicate's deps type below) accepts precisely -
+        # same class of "no way to express a dynamic tool union to mypy"
+        # noted elsewhere in this codebase.
+        function_tools: list[Any] = [*CORE_TOOLS, *PLUGIN_TOOLS.all.values()]
 
-        if not all_tools:
+        if not function_tools and not mcp_toolsets:
             raise ValueError("No tools available: the tool list is empty.")
 
         def is_tool_active(
@@ -61,8 +69,9 @@ class AvailableTools:
                 return False
             return True
 
-        base = FunctionToolset(all_tools).filtered(is_tool_active)
-        self._toolset = Finalizer(HookRunner(base))
+        base = FunctionToolset(function_tools).filtered(is_tool_active)
+        combined: AbstractToolset = CombinedToolset([base, *mcp_toolsets])
+        self._toolset = Finalizer(HookRunner(combined))
 
     @property
     def toolset(self) -> Finalizer:

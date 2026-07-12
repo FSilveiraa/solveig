@@ -38,32 +38,17 @@ class MCPServerConfig:
     headers: dict[str, str] = field(default_factory=dict)
     timeout: float = 30.0
 
-    def filter_tools(self, tools: list[Any]) -> list[Any]:
-        """Apply allowed_tools and blocked_tools filters to a list of tool functions."""
-
-        def name(tool: Any) -> str:
-            return getattr(tool, "tool_name", str(tool))
-
-        result = tools
-        if self.allowed_tools:
-            result = [
-                _tool
-                for _tool in result
-                if any(
-                    fnmatch.fnmatchcase(name(_tool), allowed)
-                    for allowed in self.allowed_tools
-                )
-            ]
-        if self.blocked_tools:
-            result = [
-                _tool
-                for _tool in result
-                if not any(
-                    fnmatch.fnmatchcase(name(_tool), blocked)
-                    for blocked in self.blocked_tools
-                )
-            ]
-        return result
+    def is_tool_allowed(self, tool_name: str) -> bool:
+        """Check a real tool name against allowed_tools/blocked_tools."""
+        if self.allowed_tools and not any(
+            fnmatch.fnmatchcase(tool_name, pattern) for pattern in self.allowed_tools
+        ):
+            return False
+        if self.blocked_tools and any(
+            fnmatch.fnmatchcase(tool_name, pattern) for pattern in self.blocked_tools
+        ):
+            return False
+        return True
 
 
 DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
