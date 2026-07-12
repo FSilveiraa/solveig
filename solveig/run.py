@@ -14,15 +14,15 @@ import traceback
 from solveig import system_prompt
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
+from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.llm.request_manager import RequestManager
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import initialize_plugins
-from solveig.schema.conversation import Conversation
-from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
+from solveig.tools.available import AVAILABLE_TOOLS
 
 
 async def setup_loop(
@@ -55,10 +55,7 @@ async def setup_loop(
         try:
             session_data = await session_manager.load(name)
             conversation.messages = session_data["messages"]
-            conversation.total_tokens_sent = session_data.get("total_tokens_sent", 0)
-            conversation.total_tokens_received = session_data.get(
-                "total_tokens_received", 0
-            )
+            conversation.usage = session_data["usage"]
             await session_manager.display_loaded_session(conversation, interface)
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
@@ -101,8 +98,8 @@ async def main_loop(
     all driven internally by pydantic-ai and the loop capability (autonomy
     gate, live display, comment interleaving). There is no `need_user_input`
     bookkeeping here anymore: autonomy is entirely a mid-run concern now
-    (see `schema/loop_capability.py`), so the outer loop's only job is to
-    wait for the next prompt and hand it off.
+    (see `agent.py`'s `build_loop_capability`), so the outer loop's only job
+    is to wait for the next prompt and hand it off.
     """
     session_manager = SessionManager(config=config)
 
@@ -143,8 +140,8 @@ async def main_loop(
 
         conversation.apply(result)
         await interface.update_stats(
-            sent_tokens=conversation.total_tokens_sent,
-            received_tokens=conversation.total_tokens_received,
+            sent_tokens=conversation.usage.input_tokens,
+            received_tokens=conversation.usage.output_tokens,
         )
         if session_manager and config.auto_save_session:
             await session_manager.store(conversation)

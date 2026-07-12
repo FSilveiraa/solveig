@@ -2,11 +2,32 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
+from dataclasses import fields, is_dataclass
+from os import PathLike
 from typing import Any
+
+import anyio
+from pydantic import BaseModel
 
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
-from solveig.schema.base import BaseSolveigModel
+
+
+def _dump_field(obj: Any) -> Any:
+    """Recursively convert a value (dataclass, pydantic model, path, list,
+    dict) into something JSON-serializable, for test-display purposes only."""
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return {f.name: _dump_field(getattr(obj, f.name)) for f in fields(obj)}
+    elif isinstance(obj, BaseModel):
+        return obj.model_dump()
+    elif isinstance(obj, PathLike | anyio.Path):
+        return str(obj)
+    elif isinstance(obj, list):
+        return [_dump_field(v) for v in obj]
+    elif isinstance(obj, dict):
+        return {_dump_field(k): _dump_field(v) for k, v in obj.items()}
+    else:
+        return obj
 
 
 class MockInterface(TerminalInterface):
@@ -131,7 +152,7 @@ class MockInterface(TerminalInterface):
 
         # Correctly serialize using the project's two-step standard:
         # 1. Convert complex objects to a JSON-serializable dict.
-        serializable_dict = BaseSolveigModel._dump_pydantic_field(metadata)
+        serializable_dict = _dump_field(metadata)
         # 2. Dump the dict to a JSON string.
         self.outputs.append(
             json.dumps(serializable_dict, default=utils.misc.default_json_serialize)

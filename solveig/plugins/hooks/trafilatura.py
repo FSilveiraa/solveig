@@ -3,7 +3,7 @@
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import after
-from solveig.schema.tools import ToolResult, http
+from solveig.tools import ToolResult, http
 
 try:
     import trafilatura as _trafilatura

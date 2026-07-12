@@ -15,6 +15,7 @@ from solveig.config.editor import (
     fetch_and_apply_model_info,
     prompt_for_field,
 )
+from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.llm import ProviderRef
 from solveig.mcp_servers.client import (
@@ -23,7 +24,6 @@ from solveig.mcp_servers.client import (
     disconnect,
     find_connection,
 )
-from solveig.schema.conversation import Conversation
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
 from solveig.utils.misc import convert_size_to_human_readable, format_age
@@ -612,9 +612,6 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             await interface.display_error(str(e))
             return
         self.conversation.messages = session_data["messages"]
-        self.conversation.total_tokens_sent = session_data.get("total_tokens_sent", 0)
-        self.conversation.total_tokens_received = session_data.get(
-            "total_tokens_received", 0
-        )
+        self.conversation.usage = session_data["usage"]
         await self.session_manager.display_loaded_session(self.conversation, interface)
         await interface.display_success("Session loaded. Continue your conversation.")

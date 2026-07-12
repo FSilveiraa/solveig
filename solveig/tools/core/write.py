@@ -1,13 +1,15 @@
 """Write tool - creates or updates files and directories."""
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from pydantic_ai import RunContext
+
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
 async def write(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     path: str,
     is_directory: bool,
     content: str | None = None,

@@ -3,14 +3,16 @@
 import asyncio
 import re
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from pydantic_ai import RunContext
+
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 
 async def command(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     command: str,
     timeout: float = 10.0,
 ) -> ToolResult:

@@ -1,12 +1,14 @@
 """Delete tool - permanently deletes files and directories."""
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from pydantic_ai import RunContext
+
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
-async def delete(ctx: SolveigContext, path: str) -> ToolResult:
+async def delete(ctx: RunContext[SolveigContext], path: str) -> ToolResult:
     """Permanently delete a file or directory.
 
     Args:

@@ -30,9 +30,9 @@ from solveig.plugins.hooks import (
     plugin_name,
 )
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous, shellcheck
-from solveig.schema.deps import SolveigContext, SolveigDeps
-from solveig.schema.tools.core.command import command
-from solveig.schema.toolset import HookRunner
+from solveig.context import SolveigContext
+from solveig.tools.core.command import command
+from solveig.tools.hook_runner import HookRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -41,7 +41,7 @@ SHELLCHECK_CONFIG = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    deps = SolveigContext(config=config, interface=interface or MockInterface())
     return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
 
@@ -180,8 +180,8 @@ class TestShellcheckBlocksCommandThroughHookRunner:
     async def test_read_is_never_gated_by_shellcheck(self, tmp_path):
         """shellcheck only registered on `command` - a `read` call never
         even consults it, regardless of what's in the registry."""
-        from solveig.schema.tools.core.read import read
-        from solveig.schema.tools.result import ToolResult
+        from solveig.tools.core.read import read
+        from solveig.tools.result import ToolResult
 
         await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
         toolset = HookRunner(FunctionToolset([read]))

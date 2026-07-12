@@ -1,12 +1,12 @@
 """Hook plugin registry - the `@before`/`@after` decorators and the state
 they register into.
 
-Lives here, not in `schema/toolset.py`, so a hook plugin author imports the
-decorators from their own package (`from solveig.plugins.hooks import
-before, after`, or `from solveig.plugins import before, after`) instead of
-reaching into schema internals - mirroring `PLUGIN_TOOLS`/`tool` in
-`plugins/tools/__init__.py`. `schema/toolset.py`'s `HookRunner` is the sole
-consumer on the schema side: it reads `BEFORE_HOOKS`/`AFTER_HOOKS` at call
+Lives here, not in `solveig/tools/hook_runner.py`, so a hook plugin author
+imports the decorators from their own package (`from solveig.plugins.hooks
+import before, after`, or `from solveig.plugins import before, after`)
+instead of reaching into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
+`plugins/tools/__init__.py`. `hook_runner.py`'s `HookRunner` is the sole
+consumer on the tools side: it reads `BEFORE_HOOKS`/`AFTER_HOOKS` at call
 time to run registered hooks around a tool call, but doesn't own the
 registry - the same relationship `AvailableTools.rebuild()` already has with
 `PLUGIN_TOOLS`.
@@ -25,7 +25,7 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
-from solveig.schema.tools.result import ToolResult
+from solveig.tools.result import ToolResult
 
 BeforeHook = Callable[
     [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]

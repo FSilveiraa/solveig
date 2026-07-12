@@ -13,11 +13,12 @@ from datetime import datetime
 
 from anyio import Path
 from pydantic_ai.messages import ModelMessagesTypeAdapter
+from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
 from solveig.config import SolveigConfig
+from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
-from solveig.schema.conversation import Conversation
 from solveig.utils.file import Filesystem
 
 
@@ -85,8 +86,8 @@ class SessionManager:
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
         blob = {
-            "total_tokens_sent": conversation.total_tokens_sent,
-            "total_tokens_received": conversation.total_tokens_received,
+            "total_tokens_sent": conversation.usage.input_tokens,
+            "total_tokens_received": conversation.usage.output_tokens,
             "messages": to_jsonable_python(conversation.messages),
         }
         await Filesystem.write_file_text(
@@ -110,8 +111,10 @@ class SessionManager:
         return {
             "id": session_id,
             "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
-            "total_tokens_sent": blob.get("total_tokens_sent", 0),
-            "total_tokens_received": blob.get("total_tokens_received", 0),
+            "usage": RunUsage(
+                input_tokens=blob.get("total_tokens_sent", 0),
+                output_tokens=blob.get("total_tokens_received", 0),
+            ),
         }
 
     async def list_sessions(self) -> list[dict]:
@@ -155,7 +158,7 @@ class SessionManager:
         header = (
             f"**Messages:** {len(conversation.messages)}  \n"
             f"**Tokens sent / received:** "
-            f"{conversation.total_tokens_sent} / {conversation.total_tokens_received}"
+            f"{conversation.usage.input_tokens} / {conversation.usage.output_tokens}"
         )
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"

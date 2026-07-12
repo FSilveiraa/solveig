@@ -1,15 +1,17 @@
 """Tree plugin tool - generates directory tree listings."""
 
+from pydantic_ai import RunContext
+
+from solveig.context import SolveigContext
 from solveig.plugins.tools import tool
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools import ToolResult
+from solveig.tools import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
 @tool
 async def tree(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     path: str,
     max_depth: int = -1,
 ) -> ToolResult:

@@ -30,15 +30,15 @@ from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
-from solveig.schema.deps import SolveigContext, SolveigDeps
-from solveig.schema.tools.core.http import http
+from solveig.context import SolveigContext
+from solveig.tools.core.http import http
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigDeps(config=config, interface=interface or MockInterface())
+    deps = SolveigContext(config=config, interface=interface or MockInterface())
     return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
 

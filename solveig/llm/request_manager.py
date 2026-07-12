@@ -12,10 +12,10 @@ from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 
 from solveig.agent import build_agent
+from solveig.context import SolveigContext
+from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.llm.api import ProviderRef, get_provider
-from solveig.schema.conversation import Conversation
-from solveig.schema.deps import SolveigDeps
 
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
@@ -76,7 +76,8 @@ class RequestManager:
             run_coro = agent.run(
                 prompt,
                 message_history=conversation.messages,
-                deps=SolveigDeps(config=config, interface=interface),
+                usage=conversation.usage,
+                deps=SolveigContext(config=config, interface=interface),
             )
             if config.timeout and config.timeout > 0:
                 run_coro = asyncio.wait_for(run_coro, timeout=config.timeout)

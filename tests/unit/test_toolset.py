@@ -29,9 +29,9 @@ from pydantic_ai.usage import RunUsage
 
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
-from solveig.schema.deps import SolveigContext, SolveigDeps
-from solveig.schema.tools.result import Finalizer, ToolResult
-from solveig.schema.toolset import HookRunner
+from solveig.context import SolveigContext
+from solveig.tools.result import Finalizer, ToolResult
+from solveig.tools.hook_runner import HookRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -43,13 +43,13 @@ async def dummy_tool(ctx: SolveigContext, value: str) -> ToolResult:
 
 
 def make_ctx(config=DEFAULT_CONFIG) -> SolveigContext:
-    deps = SolveigDeps(config=config, interface=MockInterface())
+    deps = SolveigContext(config=config, interface=MockInterface())
     return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
 
 
 async def call_through(
-    toolset: AbstractToolset[SolveigDeps],
-    ctx: SolveigContext,
+    toolset: AbstractToolset[SolveigContext],
+    ctx: RunContext[SolveigContext],
     name: str = "dummy_tool",
     args: dict | None = None,
 ):

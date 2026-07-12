@@ -1,15 +1,15 @@
 """The tool result contract - what a tool function hands back, and how it
 becomes the `ToolReturn` pydantic-ai actually sends to the model.
 
-Tool functions take `ctx: SolveigContext` directly, like any pydantic-ai
-tool - no decorator or signature adaptation involved. The
-convention each tool follows (see `solveig/schema/tools/core/read.py` etc.) is to
+Tool functions take `ctx: RunContext[SolveigContext]` directly, like any
+pydantic-ai tool - no decorator or signature adaptation involved. The
+convention each tool follows (see `solveig/tools/core/read.py` etc.) is to
 destructure `config, interface = ctx.deps.config, ctx.deps.interface` as the
 first line of the body, so the rest of the function reads exactly like
 before pydantic-ai was introduced, while `ctx` itself stays available for
 anything that needs it (`ctx.enqueue()`, `ctx.tool_call_id`, retries, ...).
 
-Tool functions and `@before`/`@after` hooks (`solveig/schema/toolset.py`)
+Tool functions and `@before`/`@after` hooks (`solveig/tools/hook_runner.py`)
 all deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn`
 directly. A `Finalizer` (always the outermost toolset wrapper) is the only
 place a `ToolResult` gets converted into a `ToolReturn`.
@@ -18,11 +18,12 @@ place a `ToolResult` gets converted into a `ToolReturn`.
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_ai.toolsets.abstract import ToolsetTool
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from solveig.schema.deps import SolveigContext, SolveigDeps
+from solveig.context import SolveigContext
 
 
 @dataclass
@@ -84,7 +85,7 @@ def to_assistant_text(result: ToolResult) -> Any:
     return "\n---\n".join(sections)
 
 
-class Finalizer(WrapperToolset[SolveigDeps]):
+class Finalizer(WrapperToolset[SolveigContext]):
     """Always the outermost toolset wrapper - the only place a `ToolResult`
     becomes a `ToolReturn`. Everything inside (the tool itself, every
     `@before`/`@after` hook) works with the raw `ToolResult`, never this."""
@@ -93,8 +94,8 @@ class Finalizer(WrapperToolset[SolveigDeps]):
         self,
         name: str,
         tool_args: dict[str, Any],
-        ctx: SolveigContext,
-        tool: ToolsetTool[SolveigDeps],
+        ctx: RunContext[SolveigContext],
+        tool: ToolsetTool[SolveigContext],
     ) -> Any:
         result = await super().call_tool(name, tool_args, ctx, tool)
         if not isinstance(result, ToolResult):

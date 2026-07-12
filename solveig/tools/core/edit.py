@@ -1,13 +1,15 @@
 """Edit tool - edits files using exact string replacement."""
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from pydantic_ai import RunContext
+
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
 async def edit(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     path: str,
     old_string: str,
     new_string: str,

@@ -1,15 +1,13 @@
 import os
 import platform
-from typing import cast
 
 from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
 from solveig.config import SolveigConfig
-from solveig.schema.deps import SolveigContext
-from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.system_prompt.examples import long
+from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.utils.file import Filesystem
 
 try:
@@ -63,12 +61,10 @@ async def get_available_tools() -> str:
     """Generate the tool listing from pydantic-ai's own generated tool schemas -
     the same descriptions/parameter docs the model receives via native
     tool-calling, not a second hand-parsed pass over each docstring."""
-    # No real SolveigDeps needed - schema introspection never touches ctx.deps.
-    ctx = cast(
-        SolveigContext,
-        RunContext(deps=None, model=TestModel(), usage=RunUsage(), max_retries=1),
+    # Schema introspection has no real SolveigContext to hand over as deps.
+    tools = await AVAILABLE_TOOLS.toolset.get_tools(
+        RunContext(deps=None, model=TestModel(), usage=RunUsage(), max_retries=1)
     )
-    tools = await AVAILABLE_TOOLS.toolset.get_tools(ctx)
 
     lines = ["Available tools:"]
     for name, tool in sorted(tools.items()):

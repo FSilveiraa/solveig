@@ -12,9 +12,9 @@ from typing import Any
 
 from solveig.interface import SolveigInterface, themes
 from solveig.llm.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
-from solveig.schema.toolset import AVAILABLE_TOOLS
 from solveig.utils.misc import parse_human_readable_size
 
+from ..tools.available import AVAILABLE_TOOLS
 from .config import SolveigConfig
 
 # ---------------------------------------------------------------------------

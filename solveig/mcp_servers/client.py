@@ -13,7 +13,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from solveig.config import MCPServerConfig
 from solveig.interface import SolveigInterface
-from solveig.schema.toolset import AVAILABLE_TOOLS, MCP_TOOLS
+from solveig.tools.available import AVAILABLE_TOOLS, MCP_TOOLS
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig

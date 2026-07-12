@@ -1,10 +1,11 @@
 """Read tool - reads files and directories."""
 
 from anyio import Path
+from pydantic_ai import RunContext
 
+from solveig.context import SolveigContext
 from solveig.interface import SolveigInterface
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
@@ -138,7 +139,7 @@ async def _read_content(
 
 
 async def read(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     path: str,
     metadata_only: bool,
     line_ranges: list[list[int]] | None = None,

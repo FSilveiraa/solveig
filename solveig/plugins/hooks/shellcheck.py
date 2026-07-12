@@ -10,7 +10,7 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import before
-from solveig.schema.tools import command
+from solveig.tools import command
 
 DANGEROUS_PATTERNS = [
     "rm -rf",

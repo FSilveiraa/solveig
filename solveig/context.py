@@ -2,18 +2,11 @@
 
 from dataclasses import dataclass
 
-from pydantic_ai import RunContext
-
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 
 
 @dataclass
-class SolveigDeps:
+class SolveigContext:
     config: SolveigConfig
     interface: SolveigInterface
-
-
-# Every tool/hook/capability in Solveig is typed against this one RunContext
-# shape - `SolveigContext` is just a shorter name for it.
-SolveigContext = RunContext[SolveigDeps]

@@ -9,9 +9,10 @@ show/update one - same shape as every other tool.
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic_ai import RunContext
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 
 TASK_STATUS_MAP = {
     "pending": "⚪",
@@ -33,7 +34,7 @@ class Task(BaseModel):
 
 
 async def update_tasks(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     tasks: list[Task],
 ) -> ToolResult:
     """Display the current task plan, replacing whatever was shown before.

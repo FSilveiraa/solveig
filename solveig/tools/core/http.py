@@ -4,9 +4,10 @@ import asyncio
 import json
 
 import httpx
+from pydantic_ai import RunContext
 
-from solveig.schema.deps import SolveigContext
-from solveig.schema.tools.result import ToolResult
+from solveig.context import SolveigContext
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
@@ -25,7 +26,7 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
 
 
 async def http(
-    ctx: SolveigContext,
+    ctx: RunContext[SolveigContext],
     url: str,
     method: str = "GET",
     headers: dict[str, str] | None = None,
