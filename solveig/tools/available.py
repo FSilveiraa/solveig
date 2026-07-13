@@ -27,8 +27,9 @@ from solveig.tools.base import BaseTool
 
 def _as_callable(tool: Any) -> Any:
     """Normalize a tool source to a plain pydantic-ai callable. `BaseTool`
-    subclasses (all 9 core tools) are bridged via `.as_tool()`; a plain tool
-    function (a not-yet-converted plugin tool, e.g. `tree`) passes through."""
+    subclasses (all 9 core tools plus every current plugin tool, e.g. `tree`)
+    are bridged via `.as_tool()`; a plain tool function passes through
+    unchanged - kept for any future plugin author who writes one that way."""
     if isinstance(tool, type) and issubclass(tool, BaseTool):
         return tool.as_tool()
     return tool
@@ -105,9 +106,9 @@ def tool_classes() -> dict[str, type[BaseTool]]:
 
     Used by session replay to reconstruct a stored call's typed instance from
     its persisted args (`cls.model_validate(call.args_as_dict())`) - the only
-    other place besides `rebuild()` that needs a full tool listing. A
-    not-yet-converted plugin tool (a plain function) has no entry here; replay
-    falls back to a generic render for those.
+    other place besides `rebuild()` that needs a full tool listing. A plain
+    tool function (should a plugin author write one that way) has no entry
+    here; replay falls back to a generic render for those.
     """
     from solveig.plugins.tools import PLUGIN_TOOLS
 

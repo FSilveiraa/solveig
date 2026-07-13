@@ -24,8 +24,19 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
+from solveig.tools.base import BaseTool
 
-PluginTool = Callable[..., Awaitable[Any]]
+PluginTool = Callable[..., Awaitable[Any]] | type[BaseTool]
+
+
+def _tool_name(fn: PluginTool) -> str:
+    """The actual name a call is dispatched under: `.tool_name()` for a
+    `BaseTool` subclass (e.g. `TreeTool` -> `"tree"`), `__name__` for a plain
+    tool function - registry keys must match this, not a Python identifier
+    (the same distinction `_tool_key` makes in `plugins/hooks/__init__.py`)."""
+    if isinstance(fn, type) and issubclass(fn, BaseTool):
+        return fn.tool_name()
+    return fn.__name__
 
 
 def _plugin_name(fn: PluginTool) -> str:
@@ -33,7 +44,7 @@ def _plugin_name(fn: PluginTool) -> str:
     module = fn.__module__
     if ".tools." in module:
         return module.split(".tools.")[-1]
-    return fn.__name__
+    return _tool_name(fn)
 
 
 @dataclass
@@ -48,9 +59,10 @@ class ToolRegistry:
         self.owners.clear()
 
     def register(self, fn: PluginTool) -> PluginTool:
-        """Register a plugin tool, indexed by tool (function) name."""
-        self.all[fn.__name__] = fn
-        self.owners[fn.__name__] = _plugin_name(fn)
+        """Register a plugin tool, indexed by its actual tool name."""
+        name = _tool_name(fn)
+        self.all[name] = fn
+        self.owners[name] = _plugin_name(fn)
         return fn
 
 

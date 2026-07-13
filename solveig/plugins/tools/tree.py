@@ -1,33 +1,39 @@
 """Tree plugin tool - generates directory tree listings."""
 
+from pydantic import Field, field_validator
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
 from solveig.plugins.tools import tool
-from solveig.tools import ToolResult
+from solveig.tools import BaseTool, ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 
 @tool
-async def tree(
-    ctx: RunContext[SolveigContext],
-    path: str,
-    max_depth: int = -1,
-) -> ToolResult:
-    """Generate a directory tree listing showing file structure.
+class TreeTool(BaseTool):
+    """Generate a directory tree listing showing file structure."""
 
-    Args:
-        path: Directory path to generate tree for (supports ~ for home directory).
-        max_depth: Maximum depth to explore (-1 for full tree).
-    """
-    config, interface = ctx.deps.config, ctx.deps.interface
-    path = validate_non_empty_path(path)
-    abs_path = Filesystem.get_absolute_path(path)
+    path: str = Field(
+        description="Directory path to generate tree for (supports ~ for home directory)."
+    )
+    max_depth: int = Field(
+        default=-1, description="Maximum depth to explore (-1 for full tree)."
+    )
 
-    async with interface.with_group(
-        f"Tree: {path}", auto_collapse=config.auto_collapse_tools
-    ):
+    @field_validator("path")
+    @classmethod
+    def _strip_path(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    @property
+    def title(self) -> str:
+        return f"Tree: {self.path}"
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        config, interface = ctx.deps.config, ctx.deps.interface
+        abs_path = Filesystem.get_absolute_path(self.path)
+
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
@@ -51,7 +57,9 @@ async def tree(
             await interface.display_warning("Rejected")
             return ToolResult(content="User declined to read the tree.")
 
-        metadata = await Filesystem.read_metadata(abs_path, descend_level=max_depth)
+        metadata = await Filesystem.read_metadata(
+            abs_path, descend_level=self.max_depth
+        )
         await interface.display_tree(
             metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
         )
