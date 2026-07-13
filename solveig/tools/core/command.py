@@ -2,50 +2,68 @@
 
 import asyncio
 import re
+from typing import TYPE_CHECKING
 
+from pydantic import Field, field_validator
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
-async def command(
-    ctx: RunContext[SolveigContext],
-    command: str,
-    timeout: float = 10.0,
-) -> ToolResult:
+
+class CommandTool(BaseTool):
     """Execute a shell command and inspect its output.
 
     Changing cwd path persists between commands.
-
-    Args:
-        command: Shell command to execute (e.g. 'ls -la', 'cat file.txt').
-        timeout: Maximum timeout for command completion in seconds (default=10). Set
-            timeout<=0 to launch a detached process (non-blocking, like '&' in a shell,
-            does not capture stdout/stderr, useful for long-running or GUI processes).
     """
-    config, interface = ctx.deps.config, ctx.deps.interface
-    command = command.strip()
-    if not command:
-        raise ValueError("Empty command")
 
-    is_detached = timeout <= 0
-    run = False
-    inspect = False
+    command: str = Field(
+        description="Shell command to execute (e.g. 'ls -la', 'cat file.txt')."
+    )
+    timeout: float = Field(
+        default=10.0,
+        description=(
+            "Maximum timeout for command completion in seconds (default=10). Set "
+            "timeout<=0 to launch a detached process (non-blocking, like '&' in a shell, "
+            "does not capture stdout/stderr, useful for long-running or GUI processes)."
+        ),
+    )
 
-    async with interface.with_group(
-        f"Command: {command}", auto_collapse=config.auto_collapse_tools
-    ):
+    @field_validator("command")
+    @classmethod
+    def _strip_command(cls, command: str) -> str:
+        command = command.strip()
+        if not command:
+            raise ValueError("Empty command")
+        return command
+
+    @property
+    def title(self) -> str:
+        return f"Command: {self.command}"
+
+    async def display_header(self, interface: "SolveigInterface") -> None:
         await interface.display_text(
-            f"{timeout}s" if timeout > 0.0 else "None (detached process)",
+            f"{self.timeout}s" if self.timeout > 0.0 else "None (detached process)",
             prefix="Timeout:",
         )
-        await interface.display_text_box(command, title="Command")
+        await interface.display_text_box(self.command, title="Command")
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        config, interface = ctx.deps.config, ctx.deps.interface
+        is_detached = self.timeout <= 0
+        run = False
+        inspect = False
+
+        await self.display_header(interface)
 
         for pattern in config.auto_execute_commands:
-            if re.match(pattern, command):
+            if re.match(pattern, self.command):
                 run = True
                 await interface.display_info(
                     "Running command and sending output since it matches config.auto_execute_commands"
@@ -81,7 +99,7 @@ async def command(
         async def _execute() -> tuple[str, str]:
             box = None
             lines: list[str] = []
-            execution: ShellExecution = shell.run(command, timeout=timeout)
+            execution: ShellExecution = shell.run(self.command, timeout=self.timeout)
             async for line in execution:
                 lines.append(line)
                 if box is None and line.strip():
@@ -92,10 +110,10 @@ async def command(
 
         try:
             if is_detached:
-                await shell.run_detached(command)
+                await shell.run_detached(self.command)
             else:
                 async with interface.with_cancellable(
-                    _execute(), status="Executing", timeout=timeout or None
+                    _execute(), status="Executing", timeout=self.timeout or None
                 ) as task:
                     try:
                         output, error = await task

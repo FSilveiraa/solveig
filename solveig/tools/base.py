@@ -41,7 +41,7 @@ class BaseTool(BaseModel, ABC):
     re-shown on replay, and `display()` is the replay entrypoint."""
 
     # Optional explicit tool name; when None it's derived from the class name
-    # (`EditTool` -> `edit`, `UpdateTasksTool` -> `update_tasks`).
+    # (`EditTool` -> `edit`, `TasksTool` -> `tasks`).
     tool_name_override: ClassVar[str | None] = None
 
     @classmethod

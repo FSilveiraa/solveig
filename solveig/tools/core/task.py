@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 
 TASK_STATUS_MAP = {
@@ -33,23 +34,26 @@ class Task(BaseModel):
     )
 
 
-async def update_tasks(
-    ctx: RunContext[SolveigContext],
-    tasks: list[Task],
-) -> ToolResult:
-    """Display the current task plan, replacing whatever was shown before.
+class TasksTool(BaseTool):
+    """Display the current task plan, replacing whatever was shown before."""
 
-    Args:
-        tasks: The full current list of tasks, in order, each with its status.
-            Always send the complete list, not just what changed.
-    """
-    interface = ctx.deps.interface
-    async with interface.with_group("Tasks"):
-        for i, task in enumerate(tasks, 1):
+    tasks: list[Task] = Field(
+        description=(
+            "The full current list of tasks, in order, each with its status. "
+            "Always send the complete list, not just what changed."
+        )
+    )
+
+    @property
+    def title(self) -> str:
+        return "Tasks"
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        interface = ctx.deps.interface
+        for i, task in enumerate(self.tasks, 1):
             status_emoji = TASK_STATUS_MAP[task.status]
             arrow = "→" if task.status == "ongoing" else " "
             await interface.display_text(
                 f"{arrow}  {status_emoji} {i}. {task.description}"
             )
-
-    return ToolResult(content=f"Displayed {len(tasks)} task(s).")
+        return ToolResult(content=f"Displayed {len(self.tasks)} task(s).")

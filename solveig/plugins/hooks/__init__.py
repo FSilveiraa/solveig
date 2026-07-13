@@ -26,6 +26,7 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 
 BeforeHook = Callable[
@@ -39,8 +40,17 @@ BEFORE_HOOKS: dict[str, list[BeforeHook]] = defaultdict(list)
 AFTER_HOOKS: dict[str, list[AfterHook]] = defaultdict(list)
 
 
-def _tool_key(target: str | Callable[..., Any]) -> str:
-    return target if isinstance(target, str) else target.__name__
+def _tool_key(target: "str | type[BaseTool] | Callable[..., Any]") -> str:
+    """The registry key for a hook target: the actual tool name a call is
+    dispatched under (`call.tool_name`), not a Python identifier. A `BaseTool`
+    subclass keys by `.tool_name()` (e.g. `CommandTool` -> `"command"`); a
+    plain tool function (not-yet-converted plugin tools) keys by `__name__`,
+    same as the string it's registered under."""
+    if isinstance(target, str):
+        return target
+    if isinstance(target, type) and issubclass(target, BaseTool):
+        return target.tool_name()
+    return target.__name__
 
 
 def plugin_name(fn: Callable[..., Any]) -> str:
@@ -65,7 +75,7 @@ def clear_hooks() -> None:
 
 
 def before(
-    tools: tuple[str | Callable[..., Any], ...],
+    tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
 ) -> Callable[[BeforeHook], BeforeHook]:
     def register(fn: BeforeHook) -> BeforeHook:
         for target in tools:
@@ -76,7 +86,7 @@ def before(
 
 
 def after(
-    tools: tuple[str | Callable[..., Any], ...],
+    tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
 ) -> Callable[[AfterHook], AfterHook]:
     def register(fn: AfterHook) -> AfterHook:
         for target in tools:

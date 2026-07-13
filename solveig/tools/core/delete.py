@@ -1,26 +1,44 @@
 """Delete tool - permanently deletes files and directories."""
 
+from typing import TYPE_CHECKING
+
+from pydantic import Field, field_validator
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
-async def delete(ctx: RunContext[SolveigContext], path: str) -> ToolResult:
-    """Permanently delete a file or directory.
 
-    Args:
-        path: Path of file/directory to permanently delete (supports ~ for home directory).
-    """
-    config, interface = ctx.deps.config, ctx.deps.interface
-    path = validate_non_empty_path(path)
-    abs_path = Filesystem.get_absolute_path(path)
+class DeleteTool(BaseTool):
+    """Permanently delete a file or directory."""
 
-    async with interface.with_group(
-        f"Delete: {path}", auto_collapse=config.auto_collapse_tools
-    ):
+    path: str = Field(
+        description="Path of file/directory to permanently delete (supports ~ for home directory)."
+    )
+
+    @field_validator("path")
+    @classmethod
+    def _strip_path(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    @property
+    def title(self) -> str:
+        return f"Delete {self.path}"
+
+    async def display_header(self, interface: "SolveigInterface") -> None:
+        await self.display_path_info(interface, self.path)
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        config, interface = ctx.deps.config, ctx.deps.interface
+        abs_path = Filesystem.get_absolute_path(self.path)
+        await self.display_header(interface)
+
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
@@ -36,18 +54,12 @@ async def delete(ctx: RunContext[SolveigContext], path: str) -> ToolResult:
             "This operation is permanent and cannot be undone!"
         )
 
-        auto_delete = Filesystem.path_matches_patterns(
-            abs_path, config.auto_allowed_paths
-        )
-        if auto_delete:
+        noun = "directory" if is_directory else "file"
+        if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
             await interface.display_info(
-                f"Deleting {'directory' if is_directory else 'file'} since it matches config.auto_allowed_paths"
+                f"Deleting {noun} since it matches config.auto_allowed_paths"
             )
-        elif (
-            await interface.ask_choice(
-                f"Delete {'directory' if is_directory else 'file'}?", ["Yes", "No"]
-            )
-        ) != 0:
+        elif (await interface.ask_choice(f"Delete {noun}?", ["Yes", "No"])) != 0:
             await interface.display_warning("Rejected")
             return ToolResult(content="User declined the delete.")
 

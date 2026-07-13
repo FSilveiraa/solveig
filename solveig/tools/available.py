@@ -21,14 +21,14 @@ from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
-from solveig.tools import CORE_TOOLS, command
+from solveig.tools import CORE_TOOLS, CommandTool
 from solveig.tools.base import BaseTool
 
 
 def _as_callable(tool: Any) -> Any:
     """Normalize a tool source to a plain pydantic-ai callable. `BaseTool`
-    subclasses are bridged via `.as_tool()`; plain tool functions pass through.
-    (During the Phase 5 class conversion `CORE_TOOLS` holds a mix of both.)"""
+    subclasses (all 9 core tools) are bridged via `.as_tool()`; a plain tool
+    function (a not-yet-converted plugin tool, e.g. `tree`) passes through."""
     if isinstance(tool, type) and issubclass(tool, BaseTool):
         return tool.as_tool()
     return tool
@@ -41,7 +41,7 @@ class AvailableTools:
     *mcp])` - no `ToolResult`-rendering or hook-running wrappers. Rendering
     (`ToolResult` -> `ToolReturn`) and the `@before`/`@after` plugin hooks are
     handled by the native tool-execute `Hooks` capability built in
-    `solveig/tools/hooks.py` and attached to the `Agent`, not by wrapping the
+    `solveig/agent.py` and attached to the `Agent`, not by wrapping the
     toolset.
     """
 
@@ -81,7 +81,7 @@ class AvailableTools:
             ctx: RunContext[SolveigContext], tool_def: ToolDefinition
         ) -> bool:
             active_config = ctx.deps.config
-            if tool_def.name == command.__name__ and active_config.no_commands:
+            if tool_def.name == CommandTool.tool_name() and active_config.no_commands:
                 return False
             owning_plugin = PLUGIN_TOOLS.owners.get(tool_def.name)
             if owning_plugin is not None and owning_plugin not in active_config.plugins:

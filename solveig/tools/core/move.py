@@ -1,34 +1,53 @@
 """Move tool - moves files and directories."""
 
+from typing import TYPE_CHECKING
+
+from pydantic import Field, field_validator
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
-async def move(
-    ctx: RunContext[SolveigContext],
-    source_path: str,
-    destination_path: str,
-) -> ToolResult:
-    """Move a file or directory.
 
-    Args:
-        source_path: Current path of file/directory to move (supports ~ for home directory).
-        destination_path: New path where file/directory should be moved to.
-    """
-    config, interface = ctx.deps.config, ctx.deps.interface
-    source_path = validate_non_empty_path(source_path)
-    destination_path = validate_non_empty_path(destination_path)
-    abs_source_path = Filesystem.get_absolute_path(source_path)
-    abs_destination_path = Filesystem.get_absolute_path(destination_path)
+class MoveTool(BaseTool):
+    """Move a file or directory."""
 
-    async with interface.with_group(
-        f"Move: {source_path} -> {destination_path}",
-        auto_collapse=config.auto_collapse_tools,
-    ):
+    source_path: str = Field(
+        description="Current path of file/directory to move (supports ~ for home directory)."
+    )
+    destination_path: str = Field(
+        description="New path where file/directory should be moved to."
+    )
+
+    @field_validator("source_path", "destination_path")
+    @classmethod
+    def _strip_path(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    @property
+    def title(self) -> str:
+        return f"Move {self.source_path} -> {self.destination_path}"
+
+    async def display_header(self, interface: "SolveigInterface") -> None:
+        await interface.display_text(
+            str(Filesystem.get_absolute_path(self.source_path)), prefix="Source:"
+        )
+        await interface.display_text(
+            str(Filesystem.get_absolute_path(self.destination_path)),
+            prefix="Destination:",
+        )
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        config, interface = ctx.deps.config, ctx.deps.interface
+        abs_source_path = Filesystem.get_absolute_path(self.source_path)
+        abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
+
         for blocked in (abs_source_path, abs_destination_path):
             if Filesystem.path_matches_patterns(blocked, config.ignore_paths):
                 await interface.display_error(
@@ -46,8 +65,7 @@ async def move(
             )
             return ToolResult(issues=[e])
 
-        await interface.display_text(str(abs_source_path), prefix="Source:")
-        await interface.display_text(str(abs_destination_path), prefix="Destination:")
+        await self.display_header(interface)
 
         auto_move = Filesystem.path_matches_patterns(
             abs_source_path, config.auto_allowed_paths
@@ -62,15 +80,12 @@ async def move(
             await interface.display_diff(old_content=old, new_content=new)
             await interface.display_warning("Overwriting existing file")
 
+        noun = "directory" if is_dir else "file"
         if auto_move:
             await interface.display_info(
-                f"Moving {'directory' if is_dir else 'file'} since both paths match config.auto_allowed_paths"
+                f"Moving {noun} since both paths match config.auto_allowed_paths"
             )
-        elif (
-            await interface.ask_choice(
-                f"Allow moving {'directory' if is_dir else 'file'}?", ["Yes", "No"]
-            )
-        ) != 0:
+        elif (await interface.ask_choice(f"Allow moving {noun}?", ["Yes", "No"])) != 0:
             await interface.display_warning("Rejected")
             return ToolResult(content="User declined the move.")
 

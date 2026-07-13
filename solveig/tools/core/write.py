@@ -1,33 +1,53 @@
 """Write tool - creates or updates files and directories."""
 
+from typing import TYPE_CHECKING
+
+from pydantic import Field, field_validator
 from pydantic_ai import RunContext
 
 from solveig.context import SolveigContext
+from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
-async def write(
-    ctx: RunContext[SolveigContext],
-    path: str,
-    is_directory: bool,
-    content: str | None = None,
-) -> ToolResult:
-    """Create a new file or directory, or update an existing file.
 
-    Args:
-        path: File or directory path to create/update (supports ~ for home directory).
-        is_directory: If true, create a directory; if false, create a file.
-        content: File content to write (only used when is_directory=false).
-    """
-    config, interface = ctx.deps.config, ctx.deps.interface
-    path = validate_non_empty_path(path)
-    abs_path = Filesystem.get_absolute_path(path)
+class WriteTool(BaseTool):
+    """Create a new file or directory, or update an existing file."""
 
-    async with interface.with_group(
-        f"Write: {path}", auto_collapse=config.auto_collapse_tools
-    ):
+    path: str = Field(
+        description="File or directory path to create/update (supports ~ for home directory)."
+    )
+    is_directory: bool = Field(
+        description="If true, create a directory; if false, create a file."
+    )
+    content: str | None = Field(
+        default=None,
+        description="File content to write (only used when is_directory=false).",
+    )
+
+    @field_validator("path")
+    @classmethod
+    def _strip_path(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    @property
+    def title(self) -> str:
+        return f"Write {self.path}"
+
+    async def display_header(self, interface: "SolveigInterface") -> None:
+        await self.display_path_info(
+            interface, self.path, is_directory=self.is_directory
+        )
+
+    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+        config, interface = ctx.deps.config, ctx.deps.interface
+        abs_path = Filesystem.get_absolute_path(self.path)
+        await self.display_header(interface)
+
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
@@ -35,7 +55,7 @@ async def write(
         try:
             await Filesystem.validate_write_access(
                 path=abs_path,
-                content=content,
+                content=self.content,
                 min_disk_size_left=config.min_disk_space_left,
             )
         except (OSError, PermissionError, IsADirectoryError) as e:
@@ -44,37 +64,34 @@ async def write(
 
         already_exists = await Filesystem.exists(abs_path)
 
-        if not is_directory and content:
+        if not self.is_directory and self.content:
             if already_exists:
                 old = (await Filesystem.read_file(abs_path)).content.strip()
-                await interface.display_diff(old_content=old, new_content=content)
+                await interface.display_diff(old_content=old, new_content=self.content)
             else:
                 await interface.display_text_box(
-                    content, language=abs_path.suffix.lstrip("."), title="Content"
+                    self.content, language=abs_path.suffix.lstrip("."), title="Content"
                 )
 
-        auto_write = Filesystem.path_matches_patterns(
-            abs_path, config.auto_allowed_paths
-        )
-        if auto_write:
+        noun = "directory" if self.is_directory else "file"
+        if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
             await interface.display_text(
                 f"{'Updating' if already_exists else 'Creating'} "
-                f"{'directory' if is_directory else 'file'} since it matches config.auto_allowed_paths"
+                f"{noun} since it matches config.auto_allowed_paths"
             )
         else:
             question = (
-                f"Allow {'creating' if not already_exists else 'updating'} "
-                f"{'directory' if is_directory else 'file'}?"
+                f"Allow {'creating' if not already_exists else 'updating'} {noun}?"
             )
             if (await interface.ask_choice(question, ["Yes", "No"])) != 0:
                 await interface.display_warning("Rejected")
                 return ToolResult(content="User declined the write.")
 
         try:
-            if is_directory:
+            if self.is_directory:
                 await Filesystem.create_directory(abs_path)
             else:
-                await Filesystem.write_file_text(abs_path, content=content or "")
+                await Filesystem.write_file_text(abs_path, content=self.content or "")
             await interface.display_success("Updated" if already_exists else "Created")
             return ToolResult(
                 content=f"{'Updated' if already_exists else 'Created'} {abs_path}"
