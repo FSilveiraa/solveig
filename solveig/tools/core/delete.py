@@ -37,7 +37,6 @@ class DeleteTool(BaseTool):
     async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
         config, interface = ctx.deps.config, ctx.deps.interface
         abs_path = Filesystem.get_absolute_path(self.path)
-        await self.display_header(interface)
 
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
             await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")

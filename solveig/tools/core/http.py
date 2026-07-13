@@ -86,7 +86,6 @@ class HttpTool(BaseTool):
 
     async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
         config, interface = ctx.deps.config, ctx.deps.interface
-        await self.display_header(interface)
 
         if (
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])

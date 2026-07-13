@@ -194,6 +194,17 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
 
         async def dispatch() -> Any:
             tool_args = _flat_tool_args(args, instance)
+            # Show the tool's own intent (the file header, the command text, the
+            # URL) *before* any @before hook can prompt - so e.g. shellcheck's
+            # "run anyway?" question appears with the command already visible
+            # above it. This is the orchestration layer's job, exactly as the
+            # pre-migration BaseTool.solve() called display_header before its
+            # before-hooks: the group scope lives out here, and display_header is
+            # the tool's intent, not part of its execution body. `execute()` no
+            # longer calls it itself.
+            if instance is not None:
+                await instance.display_header(interface)
+
             # A plugin hook raising `PluginException` (a before hook blocking the
             # call, an after hook failing to process) becomes a `ModelRetry` so
             # the model sees the reason and can react - pydantic-ai's native way
@@ -220,8 +231,9 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
             return result.to_tool_return()
 
         # Class tools get their group opened here (the same group replay uses).
-        # Plain-function tools (mid-migration) still open their own group, so
-        # don't double-wrap them - the gate disappears once all tools are classes.
+        # A plain-function tool (should a plugin author write one) has no
+        # instance/title/display_header, so it's run without an outer group -
+        # it's responsible for its own display, as before.
         if instance is None:
             return await dispatch()
         async with interface.with_group(

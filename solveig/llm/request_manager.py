@@ -8,6 +8,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
+from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 
@@ -83,10 +84,22 @@ class RequestManager:
                 run_coro = asyncio.wait_for(run_coro, timeout=config.timeout)
 
             try:
-                async with interface.with_cancellable(
-                    run_coro, status="Thinking", timeout=config.timeout
-                ) as task:
-                    return await task
+                # Solveig's consent flow (ask_choice/with_group) is single-flight -
+                # built for one tool executing at a time, matching the old manual
+                # loop. pydantic-ai's Agent runs multiple tool calls from one model
+                # turn concurrently (asyncio tasks) by default, which two
+                # consent-requiring tools racing on the same interface state does
+                # not tolerate (crashes, misattributed output). Force sequential
+                # execution until UI elements can be tied to individual tool calls
+                # (see ignore/project-logs/2026-07-13-23-54-tool-call-ui-binding.md)
+                # - this `with` must wrap task creation itself (`ensure_future` inside
+                # `with_cancellable`), since the ContextVar it sets is captured at
+                # that point, not at `await`.
+                with Agent.parallel_tool_call_execution_mode("sequential"):
+                    async with interface.with_cancellable(
+                        run_coro, status="Thinking", timeout=config.timeout
+                    ) as task:
+                        return await task
             except asyncio.CancelledError:
                 await interface.display_info("Request cancelled")
                 return None

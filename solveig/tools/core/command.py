@@ -60,8 +60,6 @@ class CommandTool(BaseTool):
         run = False
         inspect = False
 
-        await self.display_header(interface)
-
         for pattern in config.auto_execute_commands:
             if re.match(pattern, self.command):
                 run = True

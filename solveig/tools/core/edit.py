@@ -63,7 +63,6 @@ class EditTool(BaseTool):
             raise ValueError("old_string cannot be empty")
 
         abs_path = Filesystem.get_absolute_path(self.path)
-        await self.display_header(interface)
 
         access_error = await self._validate_access(interface, config, abs_path)
         if access_error is not None:

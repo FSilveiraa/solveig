@@ -65,8 +65,6 @@ class CopyTool(BaseTool):
             )
             return ToolResult(issues=[e])
 
-        await self.display_header(interface)
-
         auto_copy = Filesystem.path_matches_patterns(
             abs_source_path, config.auto_allowed_paths
         ) and Filesystem.path_matches_patterns(

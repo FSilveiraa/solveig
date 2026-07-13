@@ -93,8 +93,6 @@ class ReadTool(BaseTool):
         )
         metadata = await Filesystem.read_metadata(abs_path)
 
-        await self.display_header(interface)
-
         if metadata.is_directory or self.metadata_only:
             return await self._read_metadata_only(interface, path_matches, metadata)
 

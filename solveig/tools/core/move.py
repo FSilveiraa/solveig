@@ -65,8 +65,6 @@ class MoveTool(BaseTool):
             )
             return ToolResult(issues=[e])
 
-        await self.display_header(interface)
-
         auto_move = Filesystem.path_matches_patterns(
             abs_source_path, config.auto_allowed_paths
         ) and Filesystem.path_matches_patterns(
