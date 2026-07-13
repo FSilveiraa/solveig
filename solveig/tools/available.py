@@ -1,16 +1,17 @@
-"""Assembles the active tools
-`AVAILABLE_TOOLS.rebuild(config)` only needs to be called after a genuine
-change in tool *membership*: plugin modules (re)scanned (new tools may now
-exist that didn't before) or an MCP server connecting/disconnecting (whole
-new toolsets of previously-unknown tools appearing/disappearing). It does
-NOT need to be called for `config.no_commands` or `config.plugins`
-toggling - visibility for those is decided live, per step, by the
-`FilteredToolset` wrapped around the base `FunctionToolset`, using whatever
-`ctx.deps.config` says *right now*. This is deliberately built on
-pydantic-ai's own `FilteredToolset` rather than a hand-rolled visibility
-check, since "hide some already-known tools based on live config" is exactly
-what it's for.
+"""Assembles the active toolset.
 
+`AVAILABLE_TOOLS` holds a plain `CombinedToolset([FilteredToolset(FunctionToolset),
+*mcp])` - no wrappers. `rebuild(config)` is only needed after a genuine change in
+tool *membership* (plugin rescan, MCP connect/disconnect);
+`config.no_commands`/`config.plugins` toggling is decided live per step by the
+`FilteredToolset`, using whatever `ctx.deps.config` says right now, so it needs no
+rebuild. Built on pydantic-ai's own `FilteredToolset` rather than a hand-rolled
+visibility check.
+
+The other half of tool execution - running the plugin `@before`/`@after` hooks
+and rendering each `ToolResult` into a `ToolReturn` - is the `Hooks` capability
+`build_tool_execution_capability()` in `solveig/agent.py`, attached to the
+`Agent` alongside the toolset (not wrapped around it).
 """
 
 from typing import Any
@@ -21,15 +22,31 @@ from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.tools import CORE_TOOLS, command
-from solveig.tools.hook_runner import HookRunner
-from solveig.tools.result import Finalizer
+from solveig.tools.base import BaseTool
+
+
+def _as_callable(tool: Any) -> Any:
+    """Normalize a tool source to a plain pydantic-ai callable. `BaseTool`
+    subclasses are bridged via `.as_tool()`; plain tool functions pass through.
+    (During the Phase 5 class conversion `CORE_TOOLS` holds a mix of both.)"""
+    if isinstance(tool, type) and issubclass(tool, BaseTool):
+        return tool.as_tool()
+    return tool
 
 
 class AvailableTools:
-    """Holds the currently active toolset, rebuilt from the current tool sources."""
+    """Holds the currently active toolset, rebuilt from the current tool sources.
+
+    The toolset is a plain `CombinedToolset([FilteredToolset(FunctionToolset),
+    *mcp])` - no `ToolResult`-rendering or hook-running wrappers. Rendering
+    (`ToolResult` -> `ToolReturn`) and the `@before`/`@after` plugin hooks are
+    handled by the native tool-execute `Hooks` capability built in
+    `solveig/tools/hooks.py` and attached to the `Agent`, not by wrapping the
+    toolset.
+    """
 
     def __init__(self) -> None:
-        self._toolset: Finalizer | None = None
+        self._toolset: AbstractToolset | None = None
 
     def rebuild(self, config: SolveigConfig) -> None:
         """Recompute the base toolset from CORE_TOOLS, every discovered plugin
@@ -53,7 +70,9 @@ class AvailableTools:
         # the .filtered() predicate's deps type below) accepts precisely -
         # same class of "no way to express a dynamic tool union to mypy"
         # noted elsewhere in this codebase.
-        function_tools: list[Any] = [*CORE_TOOLS, *PLUGIN_TOOLS.all.values()]
+        function_tools: list[Any] = [
+            _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS.all.values())
+        ]
 
         if not function_tools and not mcp_toolsets:
             raise ValueError("No tools available: the tool list is empty.")
@@ -70,11 +89,10 @@ class AvailableTools:
             return True
 
         base = FunctionToolset(function_tools).filtered(is_tool_active)
-        combined: AbstractToolset = CombinedToolset([base, *mcp_toolsets])
-        self._toolset = Finalizer(HookRunner(combined))
+        self._toolset = CombinedToolset([base, *mcp_toolsets])
 
     @property
-    def toolset(self) -> Finalizer:
+    def toolset(self) -> AbstractToolset:
         assert self._toolset is not None, "Call rebuild() before accessing toolset"
         return self._toolset
 

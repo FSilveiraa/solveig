@@ -1,29 +1,25 @@
-"""The tool result contract - what a tool function hands back, and how it
-becomes the `ToolReturn` pydantic-ai actually sends to the model.
+"""The tool result contract - what a tool hands back, and how it renders itself
+into the `ToolReturn` pydantic-ai sends to the model.
 
-Tool functions take `ctx: RunContext[SolveigContext]` directly, like any
-pydantic-ai tool - no decorator or signature adaptation involved. The
-convention each tool follows (see `solveig/tools/core/read.py` etc.) is to
-destructure `config, interface = ctx.deps.config, ctx.deps.interface` as the
-first line of the body, so the rest of the function reads exactly like
-before pydantic-ai was introduced, while `ctx` itself stays available for
-anything that needs it (`ctx.enqueue()`, `ctx.tool_call_id`, retries, ...).
-
-Tool functions and `@before`/`@after` hooks (`solveig/tools/hook_runner.py`)
-all deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn`
-directly. A `Finalizer` (always the outermost toolset wrapper) is the only
-place a `ToolResult` gets converted into a `ToolReturn`.
+A tool's `execute()` returns a `ToolResult`; `@before`/`@after` plugin hooks
+(dispatched by the tool-execution capability in `solveig/tools/available.py`)
+also deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn` directly.
+The `ToolResult` renders *itself* into a `ToolReturn` via `to_tool_return()`;
+that call happens exactly once, as the terminal step of the
+`after_tool_execute` hook, after every plugin `@after` hook has had its chance
+to transform the structured result.
 """
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
-from pydantic_ai.toolsets.abstract import ToolsetTool
-from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from solveig.context import SolveigContext
+
+def _issue_line(issue: Exception | str) -> str:
+    if isinstance(issue, Exception):
+        return f"{issue.__class__.__name__}: {issue}"
+    return str(issue)
 
 
 @dataclass
@@ -35,7 +31,7 @@ class ToolResult:
     ever set on a genuine success path. It's `Any`, not `str`: a tool can
     hand back a raw typed object (e.g. a `FileMetadata` instance for a
     metadata-only read) so hooks downstream can operate on the real object;
-    stringification happens exactly once, in the finalizer.
+    stringification happens exactly once, in `to_assistant_text()`.
 
     `metadata` is unconditionally serialized into the assistant-visible text
     if non-empty - no opt-out mechanism. If a tool or a hook writes something
@@ -49,6 +45,8 @@ class ToolResult:
     needs to pass to *other* hooks (or preserve for session-replay/
     introspection) without it being assistant-visible noise - e.g. `http`'s
     raw response headers, which `trafilatura` needs but the assistant doesn't.
+    It becomes `ToolReturn.metadata`: kept in the message history (and so in
+    the session file, available to replay) but never sent to the model.
     """
 
     content: Any = None
@@ -56,50 +54,32 @@ class ToolResult:
     issues: list[Exception | str] = field(default_factory=list)
     private: dict[str, Any] = field(default_factory=dict)
 
+    def to_assistant_text(self) -> Any:
+        """Build what the assistant actually reads from this result.
 
-def _issue_line(issue: Exception | str) -> str:
-    if isinstance(issue, Exception):
-        return f"{issue.__class__.__name__}: {issue}"
-    return str(issue)
+        `content` passes through untouched - even as a raw non-str object -
+        when there's no metadata or issues to splice in, preserving the
+        raw-object passthrough tools like `read`'s metadata-only path rely on.
+        Otherwise content, metadata and issues are rendered into one sectioned
+        string (`---`-separated, since tool output is often itself multi-line).
+        """
+        if not self.metadata and not self.issues:
+            return self.content
 
+        sections = []
+        if self.content:
+            sections.append(str(self.content))
+        if self.metadata:
+            lines = "\n".join(f"- {k}: {v}" for k, v in self.metadata.items())
+            sections.append(f"Metadata:\n{lines}")
+        if self.issues:
+            lines = "\n".join(f"- {_issue_line(issue)}" for issue in self.issues)
+            sections.append(f"Issues:\n{lines}")
+        return "\n---\n".join(sections)
 
-def to_assistant_text(result: ToolResult) -> Any:
-    """Build what the assistant actually reads from a `ToolResult`.
-
-    `content` passes through untouched - even as a raw non-str object - when
-    there's no metadata or issues to splice in, preserving the raw-object
-    passthrough tools like `read`'s metadata-only path rely on.
-    """
-    if not result.metadata and not result.issues:
-        return result.content
-
-    sections = []
-    if result.content:
-        sections.append(str(result.content))
-    if result.metadata:
-        lines = "\n".join(f"- {k}: {v}" for k, v in result.metadata.items())
-        sections.append(f"Metadata:\n{lines}")
-    if result.issues:
-        lines = "\n".join(f"- {_issue_line(issue)}" for issue in result.issues)
-        sections.append(f"Issues:\n{lines}")
-    return "\n---\n".join(sections)
-
-
-class Finalizer(WrapperToolset[SolveigContext]):
-    """Always the outermost toolset wrapper - the only place a `ToolResult`
-    becomes a `ToolReturn`. Everything inside (the tool itself, every
-    `@before`/`@after` hook) works with the raw `ToolResult`, never this."""
-
-    async def call_tool(
-        self,
-        name: str,
-        tool_args: dict[str, Any],
-        ctx: RunContext[SolveigContext],
-        tool: ToolsetTool[SolveigContext],
-    ) -> Any:
-        result = await super().call_tool(name, tool_args, ctx, tool)
-        if not isinstance(result, ToolResult):
-            return result
-        return ToolReturn(
-            return_value=to_assistant_text(result), metadata=result.private
-        )
+    def to_tool_return(self) -> ToolReturn:
+        """Render into the `ToolReturn` pydantic-ai sends to the model: the
+        assistant text as `return_value`, `private` as `metadata` (persisted in
+        the message history but never shown to the model). The single place a
+        `ToolResult` crosses over into pydantic-ai's message layer."""
+        return ToolReturn(return_value=self.to_assistant_text(), metadata=self.private)

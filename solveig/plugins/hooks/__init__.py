@@ -1,15 +1,16 @@
 """Hook plugin registry - the `@before`/`@after` decorators and the state
 they register into.
 
-Lives here, not in `solveig/tools/hook_runner.py`, so a hook plugin author
-imports the decorators from their own package (`from solveig.plugins.hooks
-import before, after`, or `from solveig.plugins import before, after`)
-instead of reaching into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
-`plugins/tools/__init__.py`. `hook_runner.py`'s `HookRunner` is the sole
-consumer on the tools side: it reads `BEFORE_HOOKS`/`AFTER_HOOKS` at call
-time to run registered hooks around a tool call, but doesn't own the
-registry - the same relationship `AvailableTools.rebuild()` already has with
-`PLUGIN_TOOLS`.
+Lives here, in the plugins package, so a hook plugin author imports the
+decorators from their own package (`from solveig.plugins.hooks import before,
+after`, or `from solveig.plugins import before, after`) instead of reaching
+into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
+`plugins/tools/__init__.py`. The consumer on the tools side is
+`build_tool_execution_capability()` (`solveig/tools/available.py`): it reads
+`BEFORE_HOOKS`/`AFTER_HOOKS` at call time to run the registered hooks around a
+tool call via pydantic-ai's native tool-execute hook points, but doesn't own
+the registry - the same relationship `AvailableTools.rebuild()` already has
+with `PLUGIN_TOOLS`.
 
 Keyed by the *tool being hooked* (name or function), appended to a list -
 unlike `PLUGIN_TOOLS.all`, a collision here isn't possible, since nothing is
@@ -88,9 +89,10 @@ def after(
 async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
     """Discover hook plugin modules and report which are active per `config.plugins`.
 
-    Hooks register themselves via `@before`/`@after` at import time;
-    `HookRunner` gates each hook on `config.plugins` at call time, so there's
-    nothing to enable/disable here beyond discovery and user-facing status.
+    Hooks register themselves via `@before`/`@after` at import time; the
+    tool-execution capability gates each hook on `config.plugins` at call time,
+    so there's nothing to enable/disable here beyond discovery and user-facing
+    status.
     """
     clear_hooks()
 
