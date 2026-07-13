@@ -1,12 +1,17 @@
 # Run `just --list` to see all available recipes.
 
+# Paths to lint/format: the package plus the mock test infra. The rest of
+# tests/ is deliberately excluded (deferred test-restoration debt would
+# otherwise fail the suite); typecheck stays solveig/-only below.
+src := "solveig/ tests/mocks/"
+
 # Auto-format code (pass extra flags, e.g. `just format --check`)
 format *flags:
-    ruff format . {{flags}}
+    ruff format {{src}} {{flags}}
 
 # Lint code (pass extra flags, e.g. `just lint --fix`)
 lint *flags:
-    ruff check . {{flags}}
+    ruff check {{src}} {{flags}}
 
 # Static type checking (pass extra flags/paths)
 typecheck *flags:
