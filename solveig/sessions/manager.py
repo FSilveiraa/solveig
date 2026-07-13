@@ -1,24 +1,36 @@
 """Session persistence.
 
-Deliberately minimal for this phase - stores/restores `Conversation` as a
-single JSON blob per session file (whole-list `ModelMessagesTypeAdapter`
-dump, not the old per-tool-result rich replay). Phase 4 owns the real
-JSONL-per-message rework, matching pydantic-ai's `ModelMessage` shape and
-rebuilding the rich visual replay (diffs, tool output boxes, etc.) that the
-old `AssistantMessage`/`UserMessage` classes used to provide.
+Stores/restores `Conversation` as a single JSON blob per session file
+(whole-list `ModelMessagesTypeAdapter` dump) - pydantic-ai's own sanctioned
+serialize/restore pair, not a bespoke format.
+
+Replay (`display_loaded_session`) reconstructs each tool call's typed
+`BaseTool` instance from its persisted args and calls its `replay()` method,
+so a resumed session looks like the live run did - see the module docstring
+on `solveig.tools.base.BaseTool` for the live/replay split.
 """
 
 import json
 from datetime import datetime
 
 from anyio import Path
-from pydantic_ai.messages import ModelMessagesTypeAdapter
+from pydantic import ValidationError
+from pydantic_ai.messages import (
+    ModelMessagesTypeAdapter,
+    ModelRequest,
+    ModelResponse,
+    ToolCallPart,
+    ToolReturnPart,
+)
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
+from solveig.tools.available import tool_classes
+from solveig.tools.base import BaseTool
+from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 
 
@@ -154,7 +166,7 @@ class SessionManager:
         conversation: Conversation,
         interface: SolveigInterface,
     ) -> None:
-        """Announce a resumed session. Full rich replay is Phase 4 scope."""
+        """Announce a resumed session, then replay every tool call in order."""
         header = (
             f"**Messages:** {len(conversation.messages)}  \n"
             f"**Tokens sent / received:** "
@@ -163,3 +175,62 @@ class SessionManager:
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"
         )
+
+        # Single forward pass building tool_call_id -> ToolReturnPart first,
+        # so pairing each call is O(1) rather than an O(n^2) nested scan over a
+        # long session.
+        returns: dict[str, ToolReturnPart] = {}
+        for message in conversation.messages:
+            if isinstance(message, ModelRequest):
+                for request_part in message.parts:
+                    if isinstance(request_part, ToolReturnPart):
+                        returns[request_part.tool_call_id] = request_part
+
+        classes = tool_classes()
+        for message in conversation.messages:
+            if not isinstance(message, ModelResponse):
+                continue
+            for response_part in message.parts:
+                if not isinstance(response_part, ToolCallPart):
+                    continue
+                return_part = returns.get(response_part.tool_call_id)
+                if return_part is None:
+                    # No persisted result - the call was denied/retried with
+                    # nothing to show, or the run was interrupted mid-call.
+                    continue
+                await self._replay_tool_call(
+                    interface, classes, response_part, return_part
+                )
+
+    @staticmethod
+    async def _replay_tool_call(
+        interface: SolveigInterface,
+        classes: dict[str, type[BaseTool]],
+        call: ToolCallPart,
+        return_part: ToolReturnPart,
+    ) -> None:
+        """Reconstruct one call's `ToolResult` from its persisted return, and
+        replay it through the matching `BaseTool` class - or a generic render
+        if the tool isn't a `BaseTool` (a not-yet-converted plugin function) or
+        its stored args no longer validate against the tool's current schema
+        (renamed/removed field since the session was recorded)."""
+        result = ToolResult(
+            content=return_part.content, private=return_part.metadata or {}
+        )
+        tool_cls = classes.get(call.tool_name)
+
+        if tool_cls is not None:
+            try:
+                instance = tool_cls.model_validate(call.args_as_dict())
+            except ValidationError:
+                tool_cls = None
+
+        if tool_cls is None:
+            async with interface.with_group(call.tool_name):
+                text = result.to_assistant_text()
+                if text:
+                    await interface.display_text(str(text), prefix="Result:")
+            return
+
+        async with interface.with_group(instance.title):
+            await instance.replay(interface, result)

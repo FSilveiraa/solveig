@@ -98,3 +98,21 @@ class AvailableTools:
 
 
 AVAILABLE_TOOLS = AvailableTools()
+
+
+def tool_classes() -> dict[str, type[BaseTool]]:
+    """Tool name -> class, for every `BaseTool`-based tool (core + plugin).
+
+    Used by session replay to reconstruct a stored call's typed instance from
+    its persisted args (`cls.model_validate(call.args_as_dict())`) - the only
+    other place besides `rebuild()` that needs a full tool listing. A
+    not-yet-converted plugin tool (a plain function) has no entry here; replay
+    falls back to a generic render for those.
+    """
+    from solveig.plugins.tools import PLUGIN_TOOLS
+
+    classes: dict[str, type[BaseTool]] = {cls.tool_name(): cls for cls in CORE_TOOLS}
+    for tool in PLUGIN_TOOLS.all.values():
+        if isinstance(tool, type) and issubclass(tool, BaseTool):
+            classes[tool.tool_name()] = tool
+    return classes
