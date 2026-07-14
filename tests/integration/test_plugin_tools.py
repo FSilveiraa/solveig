@@ -6,6 +6,7 @@ import pytest
 
 from solveig.config import SolveigConfig
 from solveig.plugins.tools import PLUGIN_TOOLS, load_and_filter_tools
+from solveig.plugins.tools.tree import TreeTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -71,10 +72,15 @@ class TestToolPluginFiltering:
         )
         await load_and_filter_tools(config=config, interface=MockInterface())
 
-        # `tree` is a plain @tool-decorated function now (no TreeTool class),
-        # so it's the real function object once loaded - not just a name match.
+        # `tree` is a @tool-decorated BaseTool subclass (TreeTool) now, keyed
+        # by its dispatch name (`TreeTool.tool_name()` -> "tree"), not by the
+        # Python class name. rescan_and_load_plugins re-imports the module, so
+        # the loaded class is a distinct (but equivalent) object from this
+        # module's own TreeTool import - compare by name/class name, not `is`.
         assert "tree" in PLUGIN_TOOLS.active
-        assert PLUGIN_TOOLS.active["tree"].__name__ == "tree"
+        loaded = PLUGIN_TOOLS.active["tree"]
+        assert loaded.__name__ == TreeTool.__name__
+        assert loaded.tool_name() == "tree"
 
 
 # `tree`'s own behavior (declined/accepted/inspect flows, metadata listing
