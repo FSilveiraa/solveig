@@ -8,6 +8,7 @@ layer on purpose - they're the early-warning system for a framework change
 that breaks the bridge.
 """
 
+import asyncio
 import warnings
 
 import pytest
@@ -19,12 +20,13 @@ from pydantic_ai.messages import (
     TextPart,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.abstract import AbstractToolset
 from pydantic_ai.toolsets.function import FunctionToolset
 
-from solveig.agent import build_tool_execution_capability
+from solveig.agent import build_loop_capability, build_tool_execution_capability
 from solveig.context import SolveigContext, build_run_context
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
@@ -249,3 +251,83 @@ async def test_filtered_toolset_hides_command_live_without_rebuild():
 
     assert "command" in tools_on
     assert "command" not in tools_off
+
+
+# ---------------------------------------------------------------------------
+# build_loop_capability: autonomy gate + comment interleaving
+# ---------------------------------------------------------------------------
+
+
+def _user_prompts(result) -> list[str]:
+    return [
+        str(part.content)
+        for message in result.all_messages()
+        for part in getattr(message, "parts", [])
+        if isinstance(part, UserPromptPart)
+    ]
+
+
+def _two_round_agent(config, interface):
+    """An agent whose model calls `echo` once, then replies with text - so there
+    is exactly one CallToolsNode->next boundary for the loop capability to act
+    on. Both real capabilities are wired."""
+    model = create_mock_model(
+        ModelResponse(parts=[_echo_call()]),
+        ModelResponse(parts=[TextPart(content="done")]),
+    )
+    agent = Agent(
+        model,
+        deps_type=SolveigContext,
+        toolsets=[FunctionToolset([EchoTool.as_tool()])],
+        capabilities=[
+            build_loop_capability(config, interface),
+            build_tool_execution_capability(),
+        ],
+    )
+    return agent, model
+
+
+async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
+    """With `disable_autonomy`, the run blocks at the tool-round boundary until
+    `pending_queue` is fed; the fed comment is then injected into the run as a
+    `UserPromptPart` and the run resumes."""
+    config = DEFAULT_CONFIG.with_(disable_autonomy=True)
+    interface = MockInterface()
+    agent, model = _two_round_agent(config, interface)
+
+    task = asyncio.create_task(
+        agent.run("go", deps=SolveigContext(config=config, interface=interface))
+    )
+    # let it get through round 1 (the tool call) and reach the gate
+    for _ in range(500):
+        await asyncio.sleep(0)
+        if model.get_call_count() >= 1:
+            break
+    await asyncio.sleep(0.02)
+
+    # Blocked: round 2 can't happen until the queue is fed (empty queue -> the
+    # gate's `await queue.get()` suspends the whole run).
+    assert not task.done()
+    assert model.get_call_count() == 1
+
+    interface.pending_queue.put_nowait("go ahead")
+    result = await asyncio.wait_for(task, timeout=2)
+
+    assert model.get_call_count() == 2  # resumed
+    assert any("go ahead" in p for p in _user_prompts(result))
+
+
+async def test_comment_interleaving_drains_queue_without_blocking():
+    """With autonomy on, the gate never blocks, but anything already queued is
+    still drained into the run (injected as a `UserPromptPart`) at the next
+    tool-round boundary."""
+    config = DEFAULT_CONFIG  # disable_autonomy=False
+    interface = MockInterface()
+    interface.pending_queue.put_nowait("mid-run note")
+    agent, _ = _two_round_agent(config, interface)
+
+    result = await agent.run(
+        "go", deps=SolveigContext(config=config, interface=interface)
+    )
+
+    assert any("mid-run note" in p for p in _user_prompts(result))
