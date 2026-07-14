@@ -25,10 +25,10 @@ from pydantic_ai.toolsets.abstract import AbstractToolset
 from pydantic_ai.toolsets.function import FunctionToolset
 
 from solveig.agent import build_tool_execution_capability
-from solveig.context import SolveigContext
+from solveig.context import SolveigContext, build_run_context
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
-from solveig.tools.available import tool_classes
+from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
 from solveig.tools.result import ToolResult
@@ -227,3 +227,25 @@ async def test_before_hook_plugin_exception_becomes_model_retry():
     assert "blocked by guard" in str(retries[0].content)
     # body never produced a result
     assert _tool_returns(result) == []
+
+
+# ---------------------------------------------------------------------------
+# FilteredToolset: live no_commands / plugin gating without a rebuild
+# ---------------------------------------------------------------------------
+
+
+async def test_filtered_toolset_hides_command_live_without_rebuild():
+    """`no_commands` gating is evaluated live, per step, against
+    `ctx.deps.config` - the same built toolset must expose `command` with
+    commands on and hide it with them off, with NO `rebuild()` in between."""
+    AVAILABLE_TOOLS.rebuild(DEFAULT_CONFIG)  # membership built once
+    toolset = AVAILABLE_TOOLS.toolset
+
+    on = build_run_context(DEFAULT_CONFIG.with_(no_commands=False), MockInterface())
+    off = build_run_context(DEFAULT_CONFIG.with_(no_commands=True), MockInterface())
+
+    tools_on = await toolset.get_tools(on)
+    tools_off = await toolset.get_tools(off)  # same toolset object, no rebuild
+
+    assert "command" in tools_on
+    assert "command" not in tools_off
