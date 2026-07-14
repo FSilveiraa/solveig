@@ -1,11 +1,8 @@
-"""Integration tests for the `command` tool function.
+"""Integration tests for the `CommandTool` tool.
 
-`command` is a plain `async def command(ctx: SolveigContext, command: str,
-timeout: float = 10.0) -> ToolResult` now - no `CommandTool` Pydantic model,
-no `.solve()`/`.display_header()`/`.create_error_result()`/`.get_description()`.
-Called directly (`await command(ctx, command=..., timeout=...)`), same as
-production code does through the toolset - there's no separate
-"validate-then-execute" split to test, `command`'s own body does both.
+`CommandTool(command=..., timeout=10.0)` is constructed (field validators run
+on construction), then run via `await tool.execute(ctx)`. There's no separate
+"validate-then-execute" split to test - `execute()`'s own body does both.
 
 `ToolResult` has no `accepted`/`success`/`stdout`/`error` fields - just
 `content`/`metadata`/`issues`/`private`. Mapped from the old assertions:
@@ -15,17 +12,18 @@ production code does through the toolset - there's no separate
   `"\\nstderr:\\n{error}"` appended - checked via substring, not a separate
   `.stdout` field.
 - execution failures/cancellation land in `result.issues`, not `.error`.
+
+`display_header` (timeout line + command box) is rendered by the
+orchestration wrapper, not `execute()`, so header assertions target it
+directly.
 """
 
 from pathlib import Path
 
 import pytest
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
-from solveig.context import SolveigContext
-from solveig.tools.core.command import command
+from solveig.context import build_run_context
+from solveig.tools.core.command import CommandTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [
@@ -35,47 +33,44 @@ pytestmark = [
 ]
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 class TestCommandValidation:
     async def test_empty_command_raises(self):
         with pytest.raises(ValueError, match="Empty command"):
-            await command(make_ctx(), command="")
+            CommandTool(command="")
 
     async def test_whitespace_command_raises(self):
         with pytest.raises(ValueError, match="Empty command"):
-            await command(make_ctx(), command="   \t\n   ")
+            CommandTool(command="   \t\n   ")
 
     async def test_command_strips_whitespace(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
-        result = await command(make_ctx(interface=interface), command="  echo hello  ")
+        result = await CommandTool(command="  echo hello  ").execute(
+            make_ctx(interface=interface)
+        )
         assert "hello" in result.content
 
-    async def test_default_timeout(self, sandboxed_shell):
-        interface = MockInterface(choices=[2])  # don't run, just inspect the header
-        await command(make_ctx(interface=interface), command="echo test")
+    async def test_default_timeout(self):
+        interface = MockInterface()
+        await CommandTool(command="echo test").display_header(interface)
         assert "10.0s" in interface.get_all_output()
 
-    async def test_header_shows_blocking_timeout(self, sandboxed_shell):
-        interface = MockInterface(choices=[2])
-        await command(
-            make_ctx(interface=interface),
-            command="echo 'Hello World'",
-            timeout=5.0,
+    async def test_header_shows_blocking_timeout(self):
+        interface = MockInterface()
+        await CommandTool(command="echo 'Hello World'", timeout=5.0).display_header(
+            interface
         )
         output = interface.get_all_output()
         assert "echo 'Hello World'" in output
         assert "Timeout:" in output and "5.0s" in output
 
-    async def test_header_shows_detached_marker(self, sandboxed_shell):
-        interface = MockInterface(choices=[0])
-        await command(
-            make_ctx(interface=interface),
-            command="nohup long_process",
-            timeout=0,
+    async def test_header_shows_detached_marker(self):
+        interface = MockInterface()
+        await CommandTool(command="nohup long_process", timeout=0).display_header(
+            interface
         )
         output = interface.get_all_output()
         assert "nohup long_process" in output
@@ -87,8 +82,8 @@ class TestCommandChoices:
         """Choice 0: run and send output, real sandboxed shell."""
         interface = MockInterface(choices=[0])
 
-        result = await command(
-            make_ctx(interface=interface), command="echo 'hello world'"
+        result = await CommandTool(command="echo 'hello world'").execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -98,8 +93,8 @@ class TestCommandChoices:
         """Choice 1: inspect first, then send, real shell."""
         interface = MockInterface(choices=[1, 0])
 
-        result = await command(
-            make_ctx(interface=interface), command="echo 'hostname.local'"
+        result = await CommandTool(command="echo 'hostname.local'").execute(
+            make_ctx(interface=interface)
         )
 
         assert "hostname.local" in result.content
@@ -113,8 +108,8 @@ class TestCommandChoices:
         secret_file.write_text("secret data")
         interface = MockInterface(choices=[1, 1])
 
-        result = await command(
-            make_ctx(interface=interface), command=f"cat {secret_file.name}"
+        result = await CommandTool(command=f"cat {secret_file.name}").execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -124,8 +119,8 @@ class TestCommandChoices:
         """Choice 2: don't run."""
         interface = MockInterface(choices=[2])
 
-        result = await command(
-            make_ctx(interface=interface), command="rm important_file.txt"
+        result = await CommandTool(command="rm important_file.txt").execute(
+            make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to run the command."
@@ -134,10 +129,9 @@ class TestCommandChoices:
     async def test_command_with_error_output(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
 
-        result = await command(
-            make_ctx(interface=interface),
-            command="ls /nonexistent_directory_for_test",
-        )
+        result = await CommandTool(
+            command="ls /nonexistent_directory_for_test"
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert "stdout:\n" in result.content
@@ -147,8 +141,8 @@ class TestCommandChoices:
         test_file = tmp_path / "newfile"
         interface = MockInterface(choices=[0])
 
-        result = await command(
-            make_ctx(interface=interface), command=f"touch {test_file.name}"
+        result = await CommandTool(command=f"touch {test_file.name}").execute(
+            make_ctx(interface=interface)
         )
 
         assert result.content == "stdout:\n"
@@ -163,7 +157,7 @@ class TestAutoExecuteCommands:
         interface = MockInterface()
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
-        result = await command(make_ctx(config, interface), command="ls")
+        result = await CommandTool(command="ls").execute(make_ctx(config, interface))
 
         assert "file1.txt" in result.content
         assert "file2.txt" in result.content
@@ -174,7 +168,9 @@ class TestAutoExecuteCommands:
         interface = MockInterface(choices=[0])
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
-        result = await command(make_ctx(config, interface), command="echo hello")
+        result = await CommandTool(command="echo hello").execute(
+            make_ctx(config, interface)
+        )
 
         assert "hello" in result.content
         assert len(interface.questions) == 1
@@ -199,7 +195,9 @@ class TestAutoExecuteCommands:
             if not should_auto_execute:
                 interface.choices.append(2)
 
-            result = await command(make_ctx(config, interface), command=command_str)
+            result = await CommandTool(command=command_str).execute(
+                make_ctx(config, interface)
+            )
 
             if should_auto_execute:
                 assert "file.txt" in result.content, (
@@ -215,10 +213,8 @@ class TestDetachedCommands:
     async def test_detached_command_execution(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
 
-        result = await command(
-            make_ctx(interface=interface),
-            command='echo "background" &',
-            timeout=0,
+        result = await CommandTool(command='echo "background" &', timeout=0).execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -229,14 +225,14 @@ class TestDetachedCommands:
     async def test_detached_vs_blocking_timeout_handling(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
 
-        result1 = await command(
-            make_ctx(interface=interface), command="echo blocking", timeout=5.0
+        result1 = await CommandTool(command="echo blocking", timeout=5.0).execute(
+            make_ctx(interface=interface)
         )
         assert "blocking" in result1.content
 
         interface.choices.append(0)
-        result2 = await command(
-            make_ctx(interface=interface), command="echo detached &", timeout=-1
+        result2 = await CommandTool(command="echo detached &", timeout=-1).execute(
+            make_ctx(interface=interface)
         )
         assert result2.content == "stdout:\n"
 
@@ -249,8 +245,8 @@ class TestWorkingDirectoryTracking:
         subdir = tmp_path / "new_dir"
         subdir.mkdir()
 
-        result = await command(
-            make_ctx(interface=interface), command=f"cd {subdir.name}"
+        result = await CommandTool(command=f"cd {subdir.name}").execute(
+            make_ctx(interface=interface)
         )
         assert result.issues == []
 
@@ -261,10 +257,8 @@ class TestWorkingDirectoryTracking:
     async def test_detached_command_no_stats_update(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
 
-        result = await command(
-            make_ctx(interface=interface),
-            command="echo background &",
-            timeout=0,
+        result = await CommandTool(command="echo background &", timeout=0).execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -277,35 +271,41 @@ class TestShellIntegration:
         subdir = tmp_path / "subdir"
 
         interface.choices.append(0)
-        mkdir_result = await command(
-            make_ctx(interface=interface), command=f"mkdir {subdir.name}"
+        mkdir_result = await CommandTool(command=f"mkdir {subdir.name}").execute(
+            make_ctx(interface=interface)
         )
         assert mkdir_result.issues == []
 
         interface.choices.append(0)
-        cd_result = await command(
-            make_ctx(interface=interface), command=f"cd {subdir.name}"
+        cd_result = await CommandTool(command=f"cd {subdir.name}").execute(
+            make_ctx(interface=interface)
         )
         assert cd_result.issues == []
 
         interface.choices.append(0)
-        pwd_result = await command(make_ctx(interface=interface), command="pwd")
+        pwd_result = await CommandTool(command="pwd").execute(
+            make_ctx(interface=interface)
+        )
         assert pwd_result.content == f"stdout:\n{subdir}"
 
     async def test_shell_state_persistence(self, sandboxed_shell, tmp_path: Path):
         interface = MockInterface()
 
         interface.choices.append(0)
-        mkdir_result = await command(
-            make_ctx(interface=interface), command="mkdir test_dir"
+        mkdir_result = await CommandTool(command="mkdir test_dir").execute(
+            make_ctx(interface=interface)
         )
         assert mkdir_result.issues == []
         assert (tmp_path / "test_dir").is_dir()
 
         interface.choices.append(0)
-        cd_result = await command(make_ctx(interface=interface), command="cd test_dir")
+        cd_result = await CommandTool(command="cd test_dir").execute(
+            make_ctx(interface=interface)
+        )
         assert cd_result.issues == []
 
         interface.choices.append(0)
-        pwd_result = await command(make_ctx(interface=interface), command="pwd")
+        pwd_result = await CommandTool(command="pwd").execute(
+            make_ctx(interface=interface)
+        )
         assert pwd_result.content == f"stdout:\n{tmp_path / 'test_dir'}"

@@ -58,6 +58,21 @@ async def local_http_server():
         await server.close()
 
 
+@pytest.fixture
+def free_tcp_port() -> int:
+    """An OS-assigned TCP port on 127.0.0.1 that's free at fixture setup.
+
+    Binds then immediately closes a socket to claim a real ephemeral port
+    number, then releases it - so a test can point a client at
+    `127.0.0.1:<port>` and get a real "connection refused" (nothing is
+    listening), without mocking `httpx` or guessing at an unused port."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
 @pytest.fixture(autouse=True)
 async def clean_shell_state():
     """Ensure a clean shell state for each test by stopping the singleton."""

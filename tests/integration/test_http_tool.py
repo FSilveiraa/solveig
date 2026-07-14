@@ -1,8 +1,8 @@
-"""Integration tests for the `http` tool function.
+"""Integration tests for the `HttpTool` tool.
 
-`http` is a plain `async def http(ctx, url, method="GET", headers=None,
-body=None, follow_redirects=True, output_file=None) -> ToolResult` now - no
-`HttpTool` Pydantic model, no `.solve()`. Called directly through `ctx`.
+`HttpTool(url=..., method="GET", headers=None, body=None,
+follow_redirects=True, output_file=None)` is constructed (field validators run
+on construction), then run via `await tool.execute(ctx)`.
 
 Exercises a real `httpx.AsyncClient` against a real, loopback-only aiohttp
 server (`local_http_server` fixture in `tests/conftest.py`) instead of
@@ -10,8 +10,8 @@ mocking `httpx.AsyncClient` - the same "real thing, sandboxed" pattern the
 other tool test files use for the filesystem/shell. Never touches the real
 network: bound to 127.0.0.1, an ephemeral port, torn down after the test.
 Network-error paths (timeout, connection refused) are produced for real too
-- a slow handler for timeout, an unbound port for connection-refused - no
-mocking anywhere in this file.
+- a slow handler for timeout, an unbound port (`free_tcp_port` fixture) for
+connection-refused - no mocking anywhere in this file.
 
 `ToolResult` has no `accepted`/`error`/`status_code`/`body`/`truncated`
 fields. A successful response's `result.content` is the raw response body
@@ -26,20 +26,16 @@ import asyncio
 import httpx
 import pytest
 from aiohttp import web
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
-from solveig.context import SolveigContext
-from solveig.tools.core.http import http
+from solveig.context import build_run_context
+from solveig.tools.core.http import HttpTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 def _app_with_response(status: int = 200, text: str = "hello") -> web.Application:
@@ -61,7 +57,9 @@ async def test_declined_returns_decline_message(local_http_server):
     server = await local_http_server(_app_with_response())
     interface = MockInterface(choices=[1])
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.content == "User declined to send the request."
     assert result.issues == []
@@ -76,7 +74,9 @@ async def test_happy_path_200_returns_body(local_http_server):
     server = await local_http_server(_app_with_response(200, "response body text"))
     interface = MockInterface(choices=[0, 0])  # send request, then send to assistant
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.content == "response body text"
     assert result.metadata["status_code"] == 200
@@ -93,7 +93,9 @@ async def test_non_200_response_still_accepted(local_http_server):
     server = await local_http_server(_app_with_response(404, "not found"))
     interface = MockInterface(choices=[0, 0])
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.issues == []
     assert result.metadata["status_code"] == 404
@@ -111,7 +113,9 @@ async def test_response_truncated_when_body_exceeds_limit(local_http_server):
     config = DEFAULT_CONFIG.with_(http_max_response_bytes=10)
     interface = MockInterface(choices=[0, 0])
 
-    result = await http(make_ctx(config, interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(config, interface)
+    )
 
     assert result.metadata["truncated"] is True
     assert len(result.content) == 10
@@ -128,7 +132,9 @@ async def test_inspect_first_then_send(local_http_server):
         choices=[0, 1, 0]
     )  # send, inspect, then send to assistant
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.content == "body text"
 
@@ -137,7 +143,9 @@ async def test_inspect_first_then_decline(local_http_server):
     server = await local_http_server(_app_with_response(200, "body text"))
     interface = MockInterface(choices=[0, 1, 1])  # send, inspect, then don't send
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.content == "Status 200. User declined to send the response."
 
@@ -146,7 +154,9 @@ async def test_dont_send_without_inspecting(local_http_server):
     server = await local_http_server(_app_with_response(200, "body text"))
     interface = MockInterface(choices=[0, 2])  # send request, don't send response
 
-    result = await http(make_ctx(interface=interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(interface=interface)
+    )
 
     assert result.content == "Status 200. User declined to send the response."
 
@@ -167,7 +177,9 @@ async def test_timeout_returns_issue(local_http_server):
     config = DEFAULT_CONFIG.with_(http_timeout=0.05)
     interface = MockInterface(choices=[0])
 
-    result = await http(make_ctx(config, interface), url=str(server.make_url("/")))
+    result = await HttpTool(url=str(server.make_url("/"))).execute(
+        make_ctx(config, interface)
+    )
 
     assert len(result.issues) == 1
     assert isinstance(result.issues[0], httpx.TimeoutException)
@@ -177,8 +189,8 @@ async def test_connection_refused_returns_issue(free_tcp_port):
     """Nothing is listening on this port - a real connection failure, no mocking."""
     interface = MockInterface(choices=[0])
 
-    result = await http(
-        make_ctx(interface=interface), url=f"http://127.0.0.1:{free_tcp_port}/"
+    result = await HttpTool(url=f"http://127.0.0.1:{free_tcp_port}/").execute(
+        make_ctx(interface=interface)
     )
 
     assert len(result.issues) == 1
@@ -197,11 +209,9 @@ async def test_output_file_accept_writes_response_to_disk(local_http_server, tmp
     output_path = tmp_path / "response.txt"
     interface = MockInterface(choices=[0, 0])  # send request, write to file
 
-    result = await http(
-        make_ctx(interface=interface),
-        url=str(server.make_url("/")),
-        output_file=str(output_path),
-    )
+    result = await HttpTool(
+        url=str(server.make_url("/")), output_file=str(output_path)
+    ).execute(make_ctx(interface=interface))
 
     assert result.issues == []
     assert output_path.read_text() == "downloaded content"
@@ -214,11 +224,9 @@ async def test_output_file_decline_leaves_no_file(local_http_server, tmp_path):
     output_path = tmp_path / "response.txt"
     interface = MockInterface(choices=[0, 1])  # send request, decline writing
 
-    result = await http(
-        make_ctx(interface=interface),
-        url=str(server.make_url("/")),
-        output_file=str(output_path),
-    )
+    result = await HttpTool(
+        url=str(server.make_url("/")), output_file=str(output_path)
+    ).execute(make_ctx(interface=interface))
 
     assert result.issues == []
     assert "declined to write" in result.content.lower()
