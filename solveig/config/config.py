@@ -79,7 +79,6 @@ class SolveigConfig:
     api_type: type[APIType.BaseAPI] = APIType.OPENAI
     api_key: str = ""  # Local/custom OpenAI-compatible endpoints often don't need one
     model: str | None = None
-    encoder: str | None = None
     temperature: float = 0
     max_context: int = -1  # -1 means no limit
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
@@ -114,7 +113,6 @@ class SolveigConfig:
         if self.api_type and isinstance(self.api_type, str):
             self.api_type = parse_api_type(self.api_type)
 
-        self.encoder = self.encoder or self.model
         if self.auto_allowed_paths:
             self.auto_allowed_paths = [
                 Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
@@ -207,12 +205,6 @@ class SolveigConfig:
             "-m",
             type=str,
             help="Model name or path (ex: gpt-4.1, moonshotai/kimi-k2:free)",
-        )
-        parser.add_argument(
-            "--encoder",
-            "-e",
-            type=str,
-            help="Model encoder user for token counting (ex: gpt-4.1, moonshotai/kimi-k2:free, if not provided will use 'model' or API Type default)",
         )
         parser.add_argument(
             "--temperature",

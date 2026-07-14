@@ -48,11 +48,7 @@ class TestConversationFlow:
                 ]
             ),
             ModelResponse(
-                parts=[
-                    TextPart(
-                        content="You're in some directory with some files"
-                    )
-                ]
+                parts=[TextPart(content="You're in some directory with some files")]
             ),
         )
         interface = MockInterface(
@@ -94,9 +90,7 @@ class TestConversationFlow:
                             "help you organize them"
                         )
                     ),
-                    _tool_call(
-                        "read", "c1", path=str(tmp_path), metadata_only=False
-                    ),
+                    _tool_call("read", "c1", path=str(tmp_path), metadata_only=False),
                     _tool_call(
                         "command",
                         "c2",
@@ -177,7 +171,10 @@ class TestConversationFlow:
                         "tasks",
                         "c1",
                         tasks=[
-                            {"description": "Check current directory", "status": "ongoing"},
+                            {
+                                "description": "Check current directory",
+                                "status": "ongoing",
+                            },
                             {"description": "List files", "status": "pending"},
                         ],
                     ),

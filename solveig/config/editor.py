@@ -24,7 +24,6 @@ from .config import SolveigConfig
 CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Model / API connection
     "model": "LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
-    "encoder": "Token encoder for counting (defaults to model if unset)",
     "url": "LLM API endpoint URL",
     "api_type": "API provider type (openai, anthropic, gemini)",
     "api_key": "API authentication key",
@@ -177,7 +176,7 @@ async def fetch_and_apply_model_info(
 
     Updates: config.model (if it was None, resolved to first available),
              config.model_info, config.max_context (if model reports a tighter
-             limit), message_history.max_context (if provided), stats bar.
+             limit), stats bar.
 
     Always animates while the request is in-flight.
     Returns True on success, False on failure (error already displayed).

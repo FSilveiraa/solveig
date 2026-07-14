@@ -8,7 +8,6 @@ DEFAULT_CONFIG = SolveigConfig(
     api_key="test-key",
     url="test-url",
     model="test-model",
-    encoder="cl100k_base",
     temperature=0.0,
     verbose=False,
     min_disk_space_left="1gb",

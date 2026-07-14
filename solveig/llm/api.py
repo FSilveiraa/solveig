@@ -1,7 +1,6 @@
 import contextlib
 from dataclasses import dataclass
 
-import tiktoken
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
@@ -28,24 +27,6 @@ class APIType:
         default_url = ""
         name = ""
 
-        try:
-            default_encoder = tiktoken.get_encoding("cl100k_base")
-        except Exception:
-            default_encoder = None
-
-        @classmethod
-        def count_tokens(
-            cls,
-            text: str | dict,
-            *,
-            model: str | None = None,
-            encoder: str | None = None,
-        ) -> int:
-            if isinstance(text, dict):
-                text = str(text.get("content", "") + text.get("role", ""))
-            enc = cls.default_encoder
-            return len(enc.encode(text)) if enc else len(text) // 4
-
         @staticmethod
         def get_provider(
             url: str | None = default_url,
@@ -68,34 +49,6 @@ class APIType:
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
         name = "openai"
-
-        _encoder_cache: dict[str, tiktoken.Encoding] = {}
-
-        @classmethod
-        def count_tokens(
-            cls,
-            text: str | dict,
-            *,
-            model: str | None = None,
-            encoder: str | None = None,
-        ) -> int:
-            if isinstance(text, dict):
-                text = str(text.get("content", "") + text.get("role", ""))
-            if encoder is not None:
-                try:
-                    if encoder not in cls._encoder_cache:
-                        cls._encoder_cache[encoder] = tiktoken.get_encoding(encoder)
-                    return len(cls._encoder_cache[encoder].encode(text))
-                except Exception:
-                    pass
-            if model is not None:
-                try:
-                    if model not in cls._encoder_cache:
-                        cls._encoder_cache[model] = tiktoken.encoding_for_model(model)
-                    return len(cls._encoder_cache[model].encode(text))
-                except Exception:
-                    pass
-            return super().count_tokens(text)
 
         @classmethod
         def get_provider(

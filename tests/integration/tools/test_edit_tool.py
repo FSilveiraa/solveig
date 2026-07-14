@@ -42,9 +42,9 @@ class TestEditValidation:
 
     async def test_old_string_cannot_be_empty(self):
         with pytest.raises(ValueError, match="old_string cannot be empty"):
-            await EditTool(
-                path="/tmp/file.txt", old_string="", new_string="y"
-            ).execute(make_ctx())
+            await EditTool(path="/tmp/file.txt", old_string="", new_string="y").execute(
+                make_ctx()
+            )
 
     async def test_new_string_can_be_empty(self, tmp_path):
         test_file = tmp_path / "file.txt"

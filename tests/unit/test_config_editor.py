@@ -142,14 +142,6 @@ class TestApplyConfigField:
         await apply_config_field("verbose", True, cfg, provider_ref, interface)
         assert cfg.verbose is True
 
-    async def test_hook_called_for_encoder(self):
-        """Changing encoder has no registered hook - just sets the field."""
-        cfg = DEFAULT_CONFIG.with_(encoder="cl100k_base")
-        interface = MockInterface()
-        provider_ref = ProviderRef(provider=MagicMock())
-        await apply_config_field("encoder", "gpt2", cfg, provider_ref, interface)
-        assert cfg.encoder == "gpt2"
-
     async def test_hook_called_for_max_context(self):
         """Changing max_context should update the stats bar via hook."""
         cfg = DEFAULT_CONFIG.with_(max_context=4096)
