@@ -1,17 +1,12 @@
-import json
 import re
 from datetime import UTC, datetime
 from os import PathLike
-from pathlib import PurePath
 from typing import TYPE_CHECKING
 
 import pyperclip
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from anyio import Path
-
-YES = {"y", "yes"}
 
 
 def format_age(mtime: int) -> str:
@@ -28,9 +23,6 @@ def format_age(mtime: int) -> str:
     d = delta // 86400
     return f"{d} day{'s' if d != 1 else ''} ago"
 
-
-TRUNCATE_JOIN = " (...) "
-INPUT_PROMPT = "Reply:\n > "
 
 SIZE_NOTATIONS = {
     "kib": 1024,
@@ -115,10 +107,6 @@ def parse_human_readable_size(size_notation: int | str) -> int:
     return 0  # to be on the safe size, since this is used when checking if a write operation can proceed, assume None = 0
 
 
-def serialize_response_model(model: type[BaseModel]) -> str:
-    return json.dumps(model.model_json_schema(), default=default_json_serialize)
-
-
 def format_path_info(
     path: str | PathLike,
     abs_path: "Path",
@@ -135,55 +123,6 @@ def format_path_info(
     if line_count is not None:
         path_info += f"  |  ☰ {line_count} lines"
     return path_info
-
-
-class TEXT_BOX:
-    H = "─"
-    V = "│"
-    TL = "┌"
-    TR = "┐"
-    BL = "└"
-    BR = "┘"
-    VL = "┤"
-    VR = "├"
-    HB = "┬"
-    HT = "┴"
-    X = "┼"
-
-
-# Currently unused, was previously used to generate a tree directory, now textual handles it
-def get_tree_display(
-    metadata, display_metadata: bool = False, indent="  "
-) -> list[str]:
-    line = f"{'🗁 ' if metadata.is_directory else '🗎'} {PurePath(metadata.path).name}"
-    if display_metadata:
-        if not metadata.is_directory:
-            size_str = convert_size_to_human_readable(metadata.size)
-            line = f"{line}  |  size: {size_str}"
-        modified_time = datetime.fromtimestamp(
-            float(metadata.modified_time)
-        ).isoformat()
-        line = f"{line}  |  modified: {modified_time}"
-    lines = [line]
-
-    if metadata.is_directory and metadata.listing:
-        for index, (_sub_path, sub_metadata) in enumerate(
-            sorted(metadata.listing.items())
-        ):
-            is_last = index == len(metadata.listing) - 1
-            entry_lines = get_tree_display(sub_metadata, display_metadata, indent)
-
-            # ├─🗁 d1
-            lines.append(
-                f"{indent}{TEXT_BOX.BL if is_last else TEXT_BOX.VR}{TEXT_BOX.H}{entry_lines[0]}"
-            )
-
-            # │  ├─🗁 sub-d1
-            # │  └─🗎 sub-f1
-            for sub_entry in entry_lines[1:]:
-                lines.append(f"{indent}{'' if is_last else TEXT_BOX.V}{sub_entry}")
-
-    return lines
 
 
 FILE_EXTENSION_TO_LANGUAGE = {
