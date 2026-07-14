@@ -3,6 +3,7 @@ pytest configuration and fixtures for Solveig tests.
 Provides automatic mocking of all file I/O operations.
 """
 
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,7 +14,7 @@ from aiohttp.test_utils import TestServer
 from solveig.config import SolveigConfig
 from solveig.plugins import clear_plugins, initialize_plugins
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
-from tests.mocks import MockInterface
+from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 
 @pytest.fixture
@@ -65,27 +66,96 @@ async def clean_shell_state():
     await stop_persistent_shell()
 
 
+# Every real filesystem entry point `Filesystem` (solveig/utils/file.py) reaches
+# for. Patching only `builtins.open` was toothless: `Filesystem` routes almost
+# everything through `anyio.Path` (`.read_text`/`.write_text`/`.open`/...) and
+# `shutil`, so unmarked tests silently hit the real disk. Blocking all of these
+# makes `@pytest.mark.no_file_mocking` mean what it says - an unmarked test that
+# touches the disk fails loudly instead of leaking real I/O.
+_FS_BLOCKED_TARGETS = (
+    "builtins.open",
+    "anyio.Path.read_text",
+    "anyio.Path.write_text",
+    "anyio.Path.read_bytes",
+    "anyio.Path.write_bytes",
+    "anyio.Path.open",
+    "anyio.Path.unlink",
+    "anyio.Path.mkdir",
+    "anyio.Path.iterdir",
+    "shutil.copy2",
+    "shutil.copytree",
+    "shutil.move",
+    "shutil.rmtree",
+)
+
+
 @pytest.fixture(autouse=True, scope="function")
 def mock_filesystem(request):
-    """
-    To skip this fixture for integration tests, use:
+    """Block real filesystem access unless a test opts out.
+
+    To use real file operations (integration tests), mark the test:
         @pytest.mark.no_file_mocking
         def test_real_file_operations():
-            # This test will use real file operations
+            ...
+
+    Otherwise every real I/O entry point `Filesystem` uses (`anyio.Path`
+    read/write/open, `shutil` copy/move/delete, and bare `builtins.open`)
+    raises `OSError`, so an unmarked test that touches the disk fails loudly.
     """
     # Skip mocking for tests marked with @pytest.mark.no_file_mocking
     if request.node.get_closest_marker("no_file_mocking"):
         yield None
         return
 
-    # Use the mock filesystem's context manager to handle all patching
-    with patch(
-        "builtins.open",
-        side_effect=OSError(
-            "Cannot use file I/O in tests - use utils.file.Filesystem or mark with @pytest.mark.no_file_mocking"
-        ),
-    ) as mock_open:
-        yield mock_open
+    error = OSError(
+        "Cannot use real file I/O in tests - mark with "
+        "@pytest.mark.no_file_mocking (+ tmp_path) or mock Filesystem"
+    )
+    with contextlib.ExitStack() as stack:
+        # {target string -> the Mock that replaced it}. Yielded whole so a test
+        # that opts in (`def test(mock_filesystem): ...`) can assert on any
+        # blocked call, e.g. `mock_filesystem["anyio.Path.write_text"]`.
+        mocks = {
+            target: stack.enter_context(patch(target, side_effect=error))
+            for target in _FS_BLOCKED_TARGETS
+        }
+        yield mocks
+
+
+@pytest.fixture(autouse=True)
+def default_config_file():
+    """Serve `DEFAULT_CONFIG` as the on-disk config for *every* test, without
+    touching disk.
+
+    `parse_config_and_prompt` reads `DEFAULT_CONFIG_PATH` when no `--config` is
+    given. Left alone that reads the developer's real `~/.config/solveig.json`;
+    and pointing it at a missing path would make every test exercise the
+    config-absent branch. Instead we mock the load *seam* (`parse_from_file`,
+    which just returns the file layer as a dict) to hand back
+    `DEFAULT_CONFIG.to_dict()` for the default path - no file, no I/O, no
+    filesystem-guard conflict.
+
+    Keyed on the *real* default path captured here at setup, so a test that
+    patches `DEFAULT_CONFIG_PATH` to something else (e.g. the missing-config
+    warning test) falls through to the real reader and still exercises its
+    branch. An explicit `--config <path>` likewise reads for real (those tests
+    are marked `no_file_mocking`)."""
+    from solveig.config import config as config_module
+
+    real_parse_from_file = config_module.SolveigConfig.parse_from_file.__func__
+    real_default_path = config_module.DEFAULT_CONFIG_PATH
+
+    async def fake_parse_from_file(cls, config_path):
+        if config_path == real_default_path:
+            return DEFAULT_CONFIG.to_dict()
+        return await real_parse_from_file(cls, config_path)
+
+    with patch.object(
+        config_module.SolveigConfig,
+        "parse_from_file",
+        classmethod(fake_parse_from_file),
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True, scope="function")
