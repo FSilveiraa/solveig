@@ -1,16 +1,18 @@
-"""Integration tests for the `write` tool function.
+"""Integration tests for the `WriteTool` tool.
 
-`write` is a plain `async def write(ctx, path, is_directory, content=None) ->
-ToolResult` now - no `WriteTool` Pydantic model, no `.solve()`/
-`.display_header()`/`.create_error_result()`/`.get_description()`. Called
-directly through `ctx`.
-
-`ToolResult` has no `accepted`/`error`/`path` fields. `write()`'s
+`WriteTool(path=..., is_directory=..., content=None)` is constructed (field
+validators run on construction), then run via `await tool.execute(ctx)`.
+`ToolResult` has no `accepted`/`error`/`path` fields. `execute()`'s
 `result.content` on success is `f"{'Updated'|'Created'} {abs_path}"` - which
 conveniently doubles as the path-resolution check the old tests did via
 `result.path` (tilde/traversal expand into that string). Declines are the
 literal string `"User declined the write."`; failures land in
 `result.issues`, not `.error`.
+
+`display_header` (the path/metadata line) is rendered by the orchestration
+wrapper, not `execute()`, so the header tests call it directly - it shows the
+path line, not the "Write: <path>" group title (that's the wrapper's, not
+`display_header`'s).
 
 Confirmed unchanged from before: `validate_write_access()` still rejects
 "updating" an existing directory with `IsADirectoryError` before the user is
@@ -22,55 +24,44 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
-from solveig.context import SolveigContext
-from solveig.tools.core.write import write
+from solveig.context import build_run_context
+from solveig.tools.core.write import WriteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 class TestWriteValidation:
     async def test_empty_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await write(make_ctx(), path="", is_directory=False)
+            WriteTool(path="", is_directory=False)
 
     async def test_whitespace_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await write(make_ctx(), path="   \t\n   ", is_directory=False)
+            WriteTool(path="   \t\n   ", is_directory=False)
 
-    async def test_header_shows_group_for_file(self, tmp_path):
+    async def test_header_shows_path_for_file(self, tmp_path):
         test_file = tmp_path / "file.txt"
-        interface = MockInterface(choices=[0])
+        interface = MockInterface()
 
-        await write(
-            make_ctx(interface=interface),
-            path=str(test_file),
-            is_directory=False,
-            content="hi",
-        )
+        await WriteTool(
+            path=str(test_file), is_directory=False, content="hi"
+        ).display_header(interface)
 
-        output = interface.get_all_output()
-        assert f"Write: {test_file}" in output
+        assert str(test_file) in interface.get_all_output()
 
-    async def test_header_shows_group_for_directory(self, tmp_path):
+    async def test_header_shows_path_for_directory(self, tmp_path):
         test_dir = tmp_path / "dir"
-        interface = MockInterface(choices=[0])
+        interface = MockInterface()
 
-        await write(
-            make_ctx(interface=interface), path=str(test_dir), is_directory=True
-        )
+        await WriteTool(path=str(test_dir), is_directory=True).display_header(interface)
 
-        output = interface.get_all_output()
-        assert f"Write: {test_dir}" in output
+        assert str(test_dir) in interface.get_all_output()
 
 
 class TestFileOperations:
@@ -79,12 +70,9 @@ class TestFileOperations:
         test_content = "Hello, new file!"
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
-            path=str(test_file),
-            is_directory=False,
-            content=test_content,
-        )
+        result = await WriteTool(
+            path=str(test_file), is_directory=False, content=test_content
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.exists()
@@ -94,12 +82,11 @@ class TestFileOperations:
         test_file = tmp_path / "declined_file.txt"
         interface = MockInterface(choices=[1])
 
-        result = await write(
-            make_ctx(interface=interface),
+        result = await WriteTool(
             path=str(test_file),
             is_directory=False,
             content="Should not be created",
-        )
+        ).execute(make_ctx(interface=interface))
 
         assert result.content == "User declined the write."
         assert not test_file.exists()
@@ -108,12 +95,9 @@ class TestFileOperations:
         test_file = tmp_path / "empty_file.txt"
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
-            path=str(test_file),
-            is_directory=False,
-            content=None,
-        )
+        result = await WriteTool(
+            path=str(test_file), is_directory=False, content=None
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.exists()
@@ -124,12 +108,9 @@ class TestFileOperations:
         test_file.write_text("Original content")
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
-            path=str(test_file),
-            is_directory=False,
-            content="Updated content",
-        )
+        result = await WriteTool(
+            path=str(test_file), is_directory=False, content="Updated content"
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Updated content"
@@ -141,12 +122,11 @@ class TestFileOperations:
         test_file.write_text(original_content)
         interface = MockInterface(choices=[1])
 
-        result = await write(
-            make_ctx(interface=interface),
+        result = await WriteTool(
             path=str(test_file),
             is_directory=False,
             content="Should not overwrite",
-        )
+        ).execute(make_ctx(interface=interface))
 
         assert result.content == "User declined the write."
         assert test_file.read_text() == original_content
@@ -157,8 +137,8 @@ class TestDirectoryOperations:
         test_dir = tmp_path / "new_directory"
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface), path=str(test_dir), is_directory=True
+        result = await WriteTool(path=str(test_dir), is_directory=True).execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -169,8 +149,8 @@ class TestDirectoryOperations:
         nested_dir = tmp_path / "level1" / "level2" / "level3"
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface), path=str(nested_dir), is_directory=True
+        result = await WriteTool(path=str(nested_dir), is_directory=True).execute(
+            make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -182,8 +162,8 @@ class TestDirectoryOperations:
         test_dir = tmp_path / "declined_directory"
         interface = MockInterface(choices=[1])
 
-        result = await write(
-            make_ctx(interface=interface), path=str(test_dir), is_directory=True
+        result = await WriteTool(path=str(test_dir), is_directory=True).execute(
+            make_ctx(interface=interface)
         )
 
         assert result.content == "User declined the write."
@@ -197,8 +177,8 @@ class TestDirectoryOperations:
         test_dir.mkdir()
         interface = MockInterface()
 
-        result = await write(
-            make_ctx(interface=interface), path=str(test_dir), is_directory=True
+        result = await WriteTool(path=str(test_dir), is_directory=True).execute(
+            make_ctx(interface=interface)
         )
 
         assert len(result.issues) == 1
@@ -212,12 +192,11 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await write(
-            make_ctx(config, interface),
+        result = await WriteTool(
             path=str(test_file),
             is_directory=False,
             content="Auto-allowed content",
-        )
+        ).execute(make_ctx(config, interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Auto-allowed content"
@@ -229,8 +208,8 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await write(
-            make_ctx(config, interface), path=str(test_dir), is_directory=True
+        result = await WriteTool(path=str(test_dir), is_directory=True).execute(
+            make_ctx(config, interface)
         )
 
         assert result.issues == []
@@ -243,12 +222,11 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await write(
-            make_ctx(config, interface),
+        result = await WriteTool(
             path=str(test_file),
             is_directory=False,
             content="Updated auto content",
-        )
+        ).execute(make_ctx(config, interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Updated auto content"
@@ -266,12 +244,11 @@ class TestErrorHandling:
         interface = MockInterface(choices=[0])
 
         try:
-            result = await write(
-                make_ctx(interface=interface),
+            result = await WriteTool(
                 path=str(test_file),
                 is_directory=False,
                 content="Cannot write this",
-            )
+            ).execute(make_ctx(interface=interface))
             assert len(result.issues) == 1
         finally:
             restricted_dir.chmod(0o755)
@@ -285,12 +262,9 @@ class TestErrorHandling:
                 "utf-8", "", 0, 1, "encoding test error"
             )
 
-            result = await write(
-                make_ctx(interface=interface),
-                path=str(test_file),
-                is_directory=False,
-                content="Test content",
-            )
+            result = await WriteTool(
+                path=str(test_file), is_directory=False, content="Test content"
+            ).execute(make_ctx(interface=interface))
 
             assert len(result.issues) == 1
             assert "encoding test error" in str(result.issues[0]).lower()
@@ -300,12 +274,9 @@ class TestErrorHandling:
         config = DEFAULT_CONFIG.with_(min_disk_space_left="999TB")
         interface = MockInterface()
 
-        result = await write(
-            make_ctx(config, interface),
-            path=str(test_file),
-            is_directory=False,
-            content="Test content",
-        )
+        result = await WriteTool(
+            path=str(test_file), is_directory=False, content="Test content"
+        ).execute(make_ctx(config, interface))
 
         assert len(result.issues) == 1
         assert "disk space" in str(result.issues[0]).lower()
@@ -318,12 +289,11 @@ class TestPathSecurity:
         try:
             interface = MockInterface(choices=[0])
 
-            result = await write(
-                make_ctx(interface=interface),
+            result = await WriteTool(
                 path="~/.solveig_test_write.txt",
                 is_directory=False,
                 content="Tilde expansion test",
-            )
+            ).execute(make_ctx(interface=interface))
 
             assert result.issues == []
             assert "~" not in result.content
@@ -338,12 +308,9 @@ class TestPathSecurity:
         traversal_path = str(subdir / ".." / ".." / "traversal_test.txt")
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
-            path=traversal_path,
-            is_directory=False,
-            content="Path traversal test",
-        )
+        result = await WriteTool(
+            path=traversal_path, is_directory=False, content="Path traversal test"
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert ".." not in result.content
@@ -361,12 +328,9 @@ class TestIntegrationScenarios:
         )
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
-            path=str(test_file),
-            is_directory=False,
-            content=complex_content,
-        )
+        result = await WriteTool(
+            path=str(test_file), is_directory=False, content=complex_content
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == complex_content
@@ -375,24 +339,18 @@ class TestIntegrationScenarios:
         test_file = tmp_path / "distinction_test.txt"
 
         interface1 = MockInterface(choices=[0])
-        result1 = await write(
-            make_ctx(interface=interface1),
-            path=str(test_file),
-            is_directory=False,
-            content="Initial content",
-        )
+        result1 = await WriteTool(
+            path=str(test_file), is_directory=False, content="Initial content"
+        ).execute(make_ctx(interface=interface1))
         assert result1.issues == []
         output1 = interface1.get_all_output()
         assert "creating" in output1.lower()
         assert "Created" in output1
 
         interface2 = MockInterface(choices=[0])
-        result2 = await write(
-            make_ctx(interface=interface2),
-            path=str(test_file),
-            is_directory=False,
-            content="Updated content",
-        )
+        result2 = await WriteTool(
+            path=str(test_file), is_directory=False, content="Updated content"
+        ).execute(make_ctx(interface=interface2))
         assert result2.issues == []
         output2 = interface2.get_all_output()
         assert "updating" in output2.lower()
@@ -402,12 +360,11 @@ class TestIntegrationScenarios:
         test_dir = tmp_path / "content_ignored"
         interface = MockInterface(choices=[0])
 
-        result = await write(
-            make_ctx(interface=interface),
+        result = await WriteTool(
             path=str(test_dir),
             is_directory=True,
             content="This content should be ignored",
-        )
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_dir.is_dir()
