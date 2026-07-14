@@ -1,27 +1,25 @@
 """Tests for the shellcheck hook plugin (`solveig/plugins/hooks/shellcheck.py`).
 
-`shellcheck` is a plain `@before(tools=(command,))`-decorated function now -
-no `PLUGIN_HOOKS.before` list, no `CommandTool`/`ReadTool` Pydantic models.
-Raising from it (`SecurityError`/`ValidationError`) blocks the call, per
-`HookRunner`'s contract (`schema/toolset.py`) - there's no result object to
-inspect for "was this blocked", just `pytest.raises(...)`.
+`shellcheck` is a plain `@before(tools=(CommandTool,))`-decorated function -
+registered under `CommandTool.tool_name()` ("command") in the `BEFORE_HOOKS`
+registry (`solveig/plugins/hooks/__init__.py`). Raising from it
+(`SecurityError`/`ValidationError`) blocks the call - there's no result
+object to inspect for "was this blocked", just `pytest.raises(...)`.
 
-Three layers of coverage, matching the split established in
-`test_plugin_hooks.py`/`test_toolset.py`: calling the hook function
-directly (business logic - dangerous-pattern detection, shellcheck output
-parsing), registry/discovery (does it register on `command` and nowhere
-else), and one full-stack test through the real `HookRunner` proving it
-actually blocks a real `command()` call end to end.
+Three layers of coverage: calling the hook function directly (business
+logic - dangerous-pattern detection, shellcheck output parsing), registry/
+discovery (does it register on `command` and nowhere else), and one
+full-stack test through the real `run_tool_and_hooks` (the shared
+orchestration seam both the Agent path and the `/tool` subcommand path run
+through - see `tools/orchestration.py`), proving shellcheck actually blocks
+a real `CommandTool` call end to end, not just the hook function in isolation.
 """
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.toolsets.function import FunctionToolset
-from pydantic_ai.usage import RunUsage
 
+from solveig.context import build_run_context
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import (
     BEFORE_HOOKS,
@@ -30,9 +28,8 @@ from solveig.plugins.hooks import (
     plugin_name,
 )
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous, shellcheck
-from solveig.context import SolveigContext
-from solveig.tools.core.command import command
-from solveig.tools.hook_runner import HookRunner
+from solveig.tools.core.command import CommandTool
+from solveig.tools.orchestration import run_tool_and_hooks
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -40,9 +37,8 @@ pytestmark = pytest.mark.anyio
 SHELLCHECK_CONFIG = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 class TestDangerousPatternDetection:
@@ -153,10 +149,11 @@ class TestShellcheckDiscoveryAndRegistration:
                 assert not any(plugin_name(hook) == "shellcheck" for hook in hooks)
 
 
-class TestShellcheckBlocksCommandThroughHookRunner:
-    """Full stack: real registry + real `HookRunner`, proving shellcheck
-    actually blocks a real `command()` call when wired in - not just the
-    hook function in isolation."""
+class TestShellcheckBlocksCommandThroughOrchestration:
+    """Full stack: real registry + the real `run_tool_and_hooks` seam, proving
+    shellcheck actually blocks a real `CommandTool` call when wired in - not
+    just the hook function in isolation. This is the same seam both the
+    LLM tool-call path and the `/tool` subcommand path run through."""
 
     @pytest.fixture(autouse=True)
     def clean_hooks(self):
@@ -167,34 +164,33 @@ class TestShellcheckBlocksCommandThroughHookRunner:
     @pytest.mark.no_subprocess_mocking
     async def test_dangerous_command_blocked(self):
         await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
-        toolset = HookRunner(FunctionToolset([command]))
-        ctx = make_ctx(SHELLCHECK_CONFIG, MockInterface())
+        interface = MockInterface()
+        instance = CommandTool(command="rm -rf /")
 
-        tools = await toolset.get_tools(ctx)
         with pytest.raises(SecurityError):
-            await toolset.call_tool(
-                "command", {"command": "rm -rf /"}, ctx, tools["command"]
+            await run_tool_and_hooks(
+                instance,
+                SHELLCHECK_CONFIG,
+                interface,
+                lambda: instance.execute(make_ctx(SHELLCHECK_CONFIG, interface)),
             )
 
     @pytest.mark.no_subprocess_mocking
+    @pytest.mark.no_file_mocking
     async def test_read_is_never_gated_by_shellcheck(self, tmp_path):
         """shellcheck only registered on `command` - a `read` call never
         even consults it, regardless of what's in the registry."""
-        from solveig.tools.core.read import read
-        from solveig.tools.result import ToolResult
+        from solveig.tools.core.read import ReadTool
 
         await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
-        toolset = HookRunner(FunctionToolset([read]))
         interface = MockInterface(choices=[1])  # decline to send metadata
-        ctx = make_ctx(SHELLCHECK_CONFIG, interface)
+        instance = ReadTool(path=str(tmp_path), metadata_only=True)
 
-        tools = await toolset.get_tools(ctx)
-        result = await toolset.call_tool(
-            "read",
-            {"path": str(tmp_path), "metadata_only": True},
-            ctx,
-            tools["read"],
+        result = await run_tool_and_hooks(
+            instance,
+            SHELLCHECK_CONFIG,
+            interface,
+            lambda: instance.execute(make_ctx(SHELLCHECK_CONFIG, interface)),
         )
 
-        assert isinstance(result, ToolResult)
         assert result.content == "User declined to send metadata."
