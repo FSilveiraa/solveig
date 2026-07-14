@@ -1,12 +1,14 @@
 """Edit tool - edits files using exact string replacement."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field, field_validator
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -29,11 +31,15 @@ class EditTool(BaseTool):
     Errors if multiple occurrences are found and replace_all=false.
     """
 
-    path: str = Field(description="File path to edit (supports ~ for home directory).")
-    old_string: str = Field(
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/edit"])
+
+    path: CliPositionalArg[str] = Field(
+        description="File path to edit (supports ~ for home directory)."
+    )
+    old_string: CliPositionalArg[str] = Field(
         description="Exact string to find (including whitespace and indentation)."
     )
-    new_string: str = Field(
+    new_string: CliPositionalArg[str] = Field(
         description="String to replace with (can be empty for deletion)."
     )
     replace_all: bool = Field(

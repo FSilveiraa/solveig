@@ -14,25 +14,44 @@ This is a first-class pydantic-ai mechanism (`_function_schema._build_schema`'s
 `is_model_like` branch), not an accident - see the migration log.
 """
 
-import re
+import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from pydantic import BaseModel
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg, CliSettingsSource
 
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
-from solveig.utils.misc import format_path_info
+from solveig.utils.misc import _camel_to_snake, format_path_info
 
 if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
 
+# The private marker `CliPositionalArg[T]` injects into a field's Annotated
+# metadata. Pulled out via `get_args` so positional-field detection doesn't
+# import the private `pydantic_settings.sources.types._CliPositionalArg` path.
+_CLI_POSITIONAL_MARKER = typing.get_args(CliPositionalArg)[1]
 
-def _camel_to_snake(name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+# Options handed to `CliSettingsSource` when parsing a `/tool` line. Source-only
+# (no env/dotenv/secrets layering - those would let a stray env var override a
+# tool arg, see the migration log). `cli_exit_on_error=False` turns parse
+# failures into a catchable `SettingsError` instead of `SystemExit`;
+# `cli_implicit_flags` gives `--flag/--no-flag` bools; `cli_kebab_case=False`
+# keeps snake_case field names as flags; `cli_enforce_required=False` lets a
+# missing optional flag simply be absent (positionals stay required at the
+# argparse level regardless) so `_cli_defaults` / pydantic fill the rest.
+CLI_PARSE_OPTS: dict[str, Any] = {
+    "cli_exit_on_error": False,
+    "cli_implicit_flags": True,
+    "cli_kebab_case": False,
+    "case_sensitive": True,
+    "cli_enforce_required": False,
+}
 
 
 class BaseTool(BaseModel, ABC):
@@ -42,13 +61,101 @@ class BaseTool(BaseModel, ABC):
 
     # Optional explicit tool name; when None it's derived from the class name
     # (`EditTool` -> `edit`, `TasksTool` -> `tasks`).
-    tool_name_override: ClassVar[str | None] = None
+    name: ClassVar[str | None] = None
+
+    # Declare a `Subcommand` to opt this tool in to a user-invokable `/tool`
+    # command (e.g. `/read <path>`). `description`/`usage`/`raw_tokens` are
+    # filled by `__init_subclass__`; the runner completes `handler`. Tools
+    # whose args don't map cleanly to a CLI line (e.g. `tasks`, `write`) leave
+    # this None.
+    subcommand: ClassVar[Subcommand | None] = None
+
+    # Per-tool default values merged in *under* the CLI-parsed ones in
+    # `from_cli_tokens`. For a field that's required in the LLM contract but
+    # shouldn't be mandatory when typed by a user (e.g. `read.metadata_only`),
+    # so the tool contract stays unchanged while `/read foo` still works.
+    cli_defaults: ClassVar[dict[str, Any]] = {}
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        # Runs *after* pydantic has populated `model_fields` (unlike
+        # `__init_subclass__`, where they're not yet available) - so
+        # `_generate_usage()` can see the fields.
+        super().__pydantic_init_subclass__(**kwargs)
+        own = cls.__dict__.get("subcommand")
+        if not isinstance(own, Subcommand):
+            return
+        # A tool-backed Subcommand always takes the raw token line so
+        # CliSettingsSource sees exactly what the user typed.
+        own.raw_tokens = True
+        if not own.description:
+            own.description = cls._subcommand_description()
+        if not own.usage:
+            own.usage = cls._generate_usage()
 
     @classmethod
     def tool_name(cls) -> str:
-        if cls.tool_name_override is not None:
-            return cls.tool_name_override
+        if cls.name is not None:
+            return cls.name
         return _camel_to_snake(cls.__name__.removesuffix("Tool"))
+
+    # ------------------------------------------------------------------
+    # `/tool` subcommand support (see the migration log's "Subcommand
+    # revival" design section)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _positional_fields(cls) -> list[str]:
+        """Field names annotated `CliPositionalArg[...]`, in declaration order
+        (which is the order argparse consumes them positionally)."""
+        return [
+            name
+            for name, info in cls.model_fields.items()
+            if _CLI_POSITIONAL_MARKER in info.metadata
+        ]
+
+    @classmethod
+    def _subcommand_description(cls) -> str:
+        """First line of the class docstring - the `/help` blurb."""
+        doc = (cls.__doc__ or "").strip()
+        return doc.splitlines()[0] if doc else ""
+
+    @classmethod
+    def _generate_usage(cls) -> str:
+        """A short, readable usage string for `/help` - positional fields as
+        ``<name>``, everything else as ``[--name]``. Only the display string is
+        hand-built; the actual parsing is delegated to `CliSettingsSource`."""
+        positional = cls._positional_fields()
+        parts = [f"<{name}>" for name in positional]
+        for name, info in cls.model_fields.items():
+            if name in positional:
+                continue
+            # `cli_defaults` supplies a value for a field that's required in the
+            # LLM contract, making it optional at the `/tool` line.
+            optional = not info.is_required() or name in cls.cli_defaults
+            parts.append(f"[--{name}]" if optional else f"--{name} <{name}>")
+        return " ".join(parts)
+
+    @classmethod
+    def from_cli_tokens(cls, tokens: list[str]) -> Self:
+        """Build an instance from the raw `/tool` token list.
+
+        Parsing (positionals, `--flags`, type coercion) is delegated to
+        `pydantic-settings`' `CliSettingsSource` (source-only - no env layer);
+        `cli_defaults` fills any LLM-required-but-CLI-optional field, then
+        `model_validate` runs the tool's own field validators. Raises
+        `SettingsError` on bad CLI syntax / `ValidationError` on bad values -
+        the caller renders those to the user."""
+        # CliSettingsSource is typed for `type[BaseSettings]`, but it accepts a
+        # plain BaseModel at runtime (it wraps it in a temp CliAppBaseSettings
+        # subclass) - the documented, supported path. No way to express that to
+        # mypy, same class of hack as the dynamic-tool-union ignores elsewhere.
+        parsed = CliSettingsSource(
+            cls,  # type: ignore[arg-type]
+            cli_parse_args=list(tokens),
+            **CLI_PARSE_OPTS,
+        )()
+        return cls.model_validate({**cls.cli_defaults, **parsed})
 
     @abstractmethod
     async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:

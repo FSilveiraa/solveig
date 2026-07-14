@@ -59,6 +59,13 @@ class Subcommand:
                      tool model fields when empty.
         is_detail:   If ``True``, shown indented under its section in ``/help``
                      (e.g. ``/config list``, ``/model set``).
+        raw_tokens:  If ``True``, ``__call__`` hands the token list to the
+                     handler untouched instead of splitting ``key=value``
+                     tokens into kwargs.  Tool subcommands set this so the
+                     raw line reaches ``BaseTool.from_cli_tokens`` /
+                     ``CliSettingsSource`` verbatim (a bare ``KEY=val`` in a
+                     shell command or ordered positional must not be pulled
+                     out as a kwarg).  Built-ins leave it ``False``.
     """
 
     commands: list[str]
@@ -66,6 +73,7 @@ class Subcommand:
     description: str = ""
     usage: str = ""
     is_detail: bool = False
+    raw_tokens: bool = False
 
     def help_line(self) -> str:
         """Format the single ``/help`` line for this subcommand.
@@ -87,13 +95,16 @@ class Subcommand:
     async def __call__(self, *tokens: str, interface: SolveigInterface) -> Any:
         """Parse *tokens* and invoke the handler.
 
-        Tokens matching ``key=value`` are separated into kwargs; the rest are
-        passed as positional arguments.  ``interface`` is always the handler's
-        first positional argument.
+        Unless ``raw_tokens`` is set, tokens matching ``key=value`` are
+        separated into kwargs and the rest are passed as positional arguments.
+        When ``raw_tokens`` is set the token list is forwarded untouched.
+        ``interface`` is always the handler's first positional argument.
         """
         assert self.handler is not None, (
             f"Subcommand {self.commands} has no handler — "
             "it is likely still a ClassVar template that was never registered."
         )
+        if self.raw_tokens:
+            return await self.handler(interface, *tokens)
         positional, kwargs = _parse_cli_args(list(tokens))
         return await self.handler(interface, *positional, **kwargs)

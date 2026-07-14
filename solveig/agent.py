@@ -41,6 +41,7 @@ from solveig.interface import SolveigInterface
 from solveig.llm.api import ProviderRef, get_model
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
+from solveig.tools.orchestration import run_tool_and_hooks
 from solveig.tools.result import ToolResult
 
 
@@ -145,39 +146,29 @@ def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
     return None
 
 
-def _flat_tool_args(args: dict[str, Any], instance: BaseTool | None) -> dict[str, Any]:
-    """The flat field dict a `@before` hook expects (e.g. shellcheck reads
-    `tool_args["command"]`). Class tools arrive wrapped, so unwrap via the
-    instance; plain-function tools already arrive flat."""
-    return instance.model_dump() if instance is not None else args
-
-
 def build_tool_execution_capability() -> Hooks[SolveigContext]:
     """Per-tool-call capability: opens each call's collapsible group, runs the
     plugin `@before`/`@after` hooks, and renders the `ToolResult` into a
     `ToolReturn`. Replaces the old `HookRunner`/`Finalizer` `WrapperToolset`
     stack with pydantic-ai's native `wrap_tool_execute` hook.
 
-    Everything runs inside one `wrap_tool_execute` so a single group wraps the
-    whole call - before-hooks, the tool body, after-hooks - matching the old
-    `solve()` structure:
+    The group + hook flow itself lives in `run_tool_and_hooks`
+    (`solveig/tools/orchestration.py`), shared with the `/tool` subcommand path
+    so a manually-typed `/command` runs the same shellcheck a model call does.
+    This capability supplies the LLM-specific parts: the body is pydantic-ai's
+    own `handler(args)`, a blocking `PluginException` becomes a `ModelRetry`
+    (the model's cue to react), and the terminal `ToolResult.to_tool_return()`
+    renders the value the model sees. Non-`ToolResult` returns (MCP tools) pass
+    through untouched.
 
-        group[ before hooks -> tool.execute() -> ToolResult -> after hooks ] -> render
+    A plain-function tool (should a plugin author write one) has no `BaseTool`
+    instance, so it can't be group-wrapped or hooked here - it runs bare via
+    `handler`, responsible for its own display, as before.
 
-    `@before` hooks (shellcheck on `command`) may raise to block the call;
-    `@after` hooks (trafilatura on `http`) transform the *structured*
-    `ToolResult` before it's flattened to text; the render
-    (`ToolResult.to_tool_return()`) is the terminal step. Non-`ToolResult`
-    returns (MCP tools) pass through untouched.
-
-    Stateless: `config`/`interface` come from `ctx.deps` and the
-    `BEFORE_HOOKS`/`AFTER_HOOKS` registries are read live at call time, so a
-    plugin rescan or `config.plugins` toggle takes effect on the next call.
+    Stateless: `config`/`interface` come from `ctx.deps` and the hook
+    registries are read live at call time, so a plugin rescan or
+    `config.plugins` toggle takes effect on the next call.
     """
-    # Local import mirrors AvailableTools.rebuild()'s deferred `PLUGIN_TOOLS`
-    # import - the plugins package init is import-order-sensitive.
-    from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, plugin_name
-
     hooks: Hooks[SolveigContext] = Hooks()
 
     @hooks.on.tool_execute
@@ -192,53 +183,18 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         config, interface = ctx.deps.config, ctx.deps.interface
         instance = _tool_instance(args)
 
-        async def dispatch() -> Any:
-            tool_args = _flat_tool_args(args, instance)
-            # Show the tool's own intent (the file header, the command text, the
-            # URL) *before* any @before hook can prompt - so e.g. shellcheck's
-            # "run anyway?" question appears with the command already visible
-            # above it. This is the orchestration layer's job, exactly as the
-            # pre-migration BaseTool.solve() called display_header before its
-            # before-hooks: the group scope lives out here, and display_header is
-            # the tool's intent, not part of its execution body. `execute()` no
-            # longer calls it itself.
-            if instance is not None:
-                await instance.display_header(interface)
-
-            # A plugin hook raising `PluginException` (a before hook blocking the
-            # call, an after hook failing to process) becomes a `ModelRetry` so
-            # the model sees the reason and can react - pydantic-ai's native way
-            # to reject a tool call. `UserCancel` is not a `PluginException`, so
-            # it propagates and cancels the run as intended.
-            try:
-                for before_hook in BEFORE_HOOKS.get(call.tool_name, ()):
-                    if plugin_name(before_hook) in config.plugins:
-                        await before_hook(tool_args, config, interface)
-            except PluginException as e:
-                raise ModelRetry(str(e)) from e
-
-            result = await handler(args)
-            # MCP (and any other non-ToolResult) tools return their value as-is.
-            if not isinstance(result, ToolResult):
-                return result
-
-            try:
-                for after_hook in AFTER_HOOKS.get(call.tool_name, ()):
-                    if plugin_name(after_hook) in config.plugins:
-                        result = await after_hook(result, config, interface)
-            except PluginException as e:
-                raise ModelRetry(str(e)) from e
-            return result.to_tool_return()
-
-        # Class tools get their group opened here (the same group replay uses).
-        # A plain-function tool (should a plugin author write one) has no
-        # instance/title/display_header, so it's run without an outer group -
-        # it's responsible for its own display, as before.
         if instance is None:
-            return await dispatch()
-        async with interface.with_group(
-            instance.title, auto_collapse=config.auto_collapse_tools
-        ):
-            return await dispatch()
+            return await handler(args)
+
+        try:
+            result = await run_tool_and_hooks(
+                instance, config, interface, lambda: handler(args)
+            )
+        except PluginException as e:
+            raise ModelRetry(str(e)) from e
+
+        if isinstance(result, ToolResult):
+            return result.to_tool_return()
+        return result
 
     return hooks

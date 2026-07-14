@@ -17,6 +17,22 @@ class SolveigContext:
     interface: SolveigInterface
 
 
+def build_run_context(
+    config: SolveigConfig, interface: SolveigInterface
+) -> RunContext[SolveigContext]:
+    """A `RunContext` with real deps, for running a tool outside an agent run
+    (a user-typed `/tool` subcommand). `execute()` only ever reads
+    `ctx.deps.config`/`ctx.deps.interface`, so the `model`/`usage` are inert
+    placeholders. Unlike `get_throwaway_context()` (deps=None, safe only for
+    toolset introspection), this is safe to hand to `execute()`."""
+    return RunContext(
+        deps=SolveigContext(config=config, interface=interface),
+        model=TestModel(),
+        usage=RunUsage(),
+        max_retries=1,
+    )
+
+
 def get_throwaway_context() -> RunContext[SolveigContext]:
     """A RunContext for toolset introspection outside a real agent run.
 

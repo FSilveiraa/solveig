@@ -2,12 +2,14 @@
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from pydantic import Field, field_validator
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg
 
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -23,7 +25,9 @@ class CommandTool(BaseTool):
     Changing cwd path persists between commands.
     """
 
-    command: str = Field(
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/command", "/cmd"])
+
+    command: CliPositionalArg[str] = Field(
         description="Shell command to execute (e.g. 'ls -la', 'cat file.txt')."
     )
     timeout: float = Field(
@@ -42,6 +46,15 @@ class CommandTool(BaseTool):
         if not command:
             raise ValueError("Empty command")
         return command
+
+    @classmethod
+    def from_cli_tokens(cls, tokens: list[str]) -> Self:
+        """The command is the whole rest of the line, so `/command echo hi`
+        works without quoting. Overrides the generic `CliSettingsSource`
+        parsing (which would reject the extra tokens as unexpected
+        positionals); `--timeout` isn't settable via the subcommand as a
+        result - it stays at its default."""
+        return cls.model_validate({"command": " ".join(tokens)})
 
     @property
     def title(self) -> str:

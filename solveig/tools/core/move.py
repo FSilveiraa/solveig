@@ -1,11 +1,13 @@
 """Move tool - moves files and directories."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field, field_validator
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg
 
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -18,10 +20,12 @@ if TYPE_CHECKING:
 class MoveTool(BaseTool):
     """Move a file or directory."""
 
-    source_path: str = Field(
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/move"])
+
+    source_path: CliPositionalArg[str] = Field(
         description="Current path of file/directory to move (supports ~ for home directory)."
     )
-    destination_path: str = Field(
+    destination_path: CliPositionalArg[str] = Field(
         description="New path where file/directory should be moved to."
     )
 

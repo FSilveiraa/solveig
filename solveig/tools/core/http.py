@@ -2,14 +2,16 @@
 
 import asyncio
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import httpx
 from pydantic import Field, field_validator
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -38,7 +40,9 @@ class HttpTool(BaseTool):
     Use output_file to download binary content to disk.
     """
 
-    url: str = Field(description="URL to send the request to.")
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/http"])
+
+    url: CliPositionalArg[str] = Field(description="URL to send the request to.")
     method: str = Field(
         default="GET", description="HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD)."
     )

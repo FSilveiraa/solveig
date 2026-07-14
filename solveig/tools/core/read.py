@@ -1,11 +1,13 @@
 """Read tool - reads files and directories."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field, field_validator
 from pydantic_ai import RunContext
+from pydantic_settings import CliPositionalArg
 
 from solveig.context import SolveigContext
+from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
@@ -23,7 +25,12 @@ class ReadTool(BaseTool):
     Files can be read for metadata only, full contents, or specific line ranges.
     """
 
-    path: str = Field(
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/read"])
+    # metadata_only is required in the LLM contract; default it for the CLI so
+    # `/read <path>` reads content without forcing an explicit --metadata_only.
+    cli_defaults: ClassVar[dict] = {"metadata_only": False}
+
+    path: CliPositionalArg[str] = Field(
         description="File or directory path to read (supports ~ for home directory)."
     )
     metadata_only: bool = Field(

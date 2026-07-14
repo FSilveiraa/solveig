@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import shlex
 import typing
 from collections.abc import Callable
+
+from pydantic import ValidationError
+from pydantic_settings.exceptions import SettingsError
 
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.config.editor import (
@@ -15,7 +19,9 @@ from solveig.config.editor import (
     fetch_and_apply_model_info,
     prompt_for_field,
 )
+from solveig.context import build_run_context
 from solveig.conversation import Conversation
+from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
 from solveig.llm import ProviderRef
 from solveig.mcp_servers.client import (
@@ -26,6 +32,10 @@ from solveig.mcp_servers.client import (
 )
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
+from solveig.tools import CommandTool
+from solveig.tools.available import tool_classes
+from solveig.tools.base import BaseTool
+from solveig.tools.orchestration import run_tool_and_hooks
 from solveig.utils.misc import convert_size_to_human_readable, format_age
 
 
@@ -48,12 +58,14 @@ class SubcommandRunner:
         self._model: dict[str, Subcommand] = {}
         self._session: dict[str, Subcommand] = {}
         self._mcp: dict[str, Subcommand] = {}  # MCP subcommands
+        self._tools: dict[str, Subcommand] = {}  # per-tool subcommands
 
         # Flat registry for O(1) lookup in __call__
         self._registry: dict[str, Subcommand] = {}
 
         self._register_builtins()
         self._register_mcp_subcommands()
+        self._register_tool_subcommands()
 
     # ------------------------------------------------------------------
     # Registration helpers
@@ -270,12 +282,63 @@ class SubcommandRunner:
             ),
         )
 
-    # NOTE: per-tool subcommands (`/read <path>`, `/write <path> ...`, etc.)
-    # are not re-implemented yet. They depended on `BaseTool.from_cli_args`,
-    # which no longer exists now that tools are plain pydantic-ai tool
-    # functions rather than `BaseModel` subclasses. Re-introducing CLI-arg
-    # parsing for plain functions is Phase 5 (safety-policy/tool UX) scope,
-    # not this loop-handover phase.
+    def _register_tool_subcommands(self) -> None:
+        """Register a `/tool` subcommand for every tool (core or plugin) that
+        declares a `subcommand` ClassVar. Plugins are already initialized by
+        the time the runner is built, so this init-time scan covers them too.
+
+        The tool's class-level `Subcommand` is a shared template (its
+        `description`/`usage`/`raw_tokens` were filled by
+        `BaseTool.__pydantic_init_subclass__`); it's *copied* per runner so
+        binding a handler doesn't mutate that shared object.
+        """
+        for cls in tool_classes().values():
+            template = cls.subcommand
+            if not isinstance(template, Subcommand):
+                continue
+            sub = dataclasses.replace(template, handler=self._make_tool_handler(cls))
+            self._reg(self._tools, sub)
+
+    def _make_tool_handler(self, cls: type[BaseTool]) -> Callable:
+        """Build the handler that parses a `/tool` line into an instance and
+        runs it through the shared group+hooks orchestration."""
+
+        async def handler(interface: SolveigInterface, *tokens: str) -> None:
+            primary = cls.subcommand.commands[0]  # type: ignore[union-attr]
+            usage_line = f"Usage: {primary} {cls.subcommand.usage}".strip()  # type: ignore[union-attr]
+
+            # Our own help - never forward `-h`/`--help` to argparse, which
+            # prints to stdout and raises SystemExit regardless of
+            # cli_exit_on_error.
+            if any(tok in ("-h", "--help") for tok in tokens):
+                await interface.display_info(usage_line)
+                return
+
+            if cls is CommandTool and self.config.no_commands:
+                await interface.display_error(
+                    "Command execution is disabled (--no-commands)."
+                )
+                return
+
+            try:
+                instance = cls.from_cli_tokens(list(tokens))
+            except (SettingsError, ValidationError) as e:
+                await interface.display_error(str(e))
+                await interface.display_info(usage_line)
+                return
+
+            ctx = build_run_context(self.config, interface)
+            try:
+                await run_tool_and_hooks(
+                    instance,
+                    self.config,
+                    interface,
+                    lambda: instance.execute(ctx),
+                )
+            except PluginException as e:
+                await interface.display_error(str(e))
+
+        return handler
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -476,6 +539,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             ("Model sub-commands", self._model),
             ("Session sub-commands", self._session),
             ("MCP sub-commands", self._mcp),
+            ("Tool sub-commands", self._tools),
         ]
         for section_title, registry in sections:
             top = [(cmd, e) for cmd, e in registry.items() if not e.is_detail]
