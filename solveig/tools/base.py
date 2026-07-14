@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from pydantic import BaseModel
 from pydantic_ai import RunContext
+from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
 from solveig.context import SolveigContext
@@ -264,7 +265,16 @@ class BaseTool(BaseModel, ABC):
         flattens the model's fields to top-level tool arguments and hands the
         body a validated `cls` instance. Annotations are bound as real objects
         (not strings) so they resolve regardless of `from __future__ import
-        annotations` in the defining module."""
+        annotations` in the defining module.
+
+        The `return` annotation is `ToolReturn` - the type the model actually
+        ends up receiving after the tool-execution capability calls
+        `ToolResult.to_tool_return()`. It is deliberately NOT `ToolResult` (the
+        dataclass `run` literally returns): pydantic-ai tries to build a return
+        schema from this annotation, and a plain dataclass makes it emit a
+        `UserWarning` and fall back to an unconstrained schema, once per tool
+        per toolset build. `ToolReturn` is both accurate downstream and
+        schema-clean."""
 
         async def run(ctx, params):  # type: ignore[no-untyped-def]
             return await params.execute(ctx)
@@ -272,7 +282,7 @@ class BaseTool(BaseModel, ABC):
         run.__annotations__ = {
             "ctx": RunContext[SolveigContext],
             "params": cls,
-            "return": ToolResult,
+            "return": ToolReturn,
         }
         run.__name__ = cls.tool_name()
         run.__doc__ = cls.__doc__
