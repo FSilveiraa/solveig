@@ -113,7 +113,8 @@ async def main_loop(
     )
 
     while True:
-        await interface.update_stats(status="Awaiting input")
+        if interface.pending_queue.empty():
+            await interface.update_stats(status="Awaiting input")
         prompt = await interface.pending_queue.get()
         await interface.notify_pending_queue_changed()
         await interface.update_stats(status=None)

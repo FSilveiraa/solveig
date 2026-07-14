@@ -1,53 +1,59 @@
-"""Modern end-to-end tests for complete conversation loops with async architecture."""
+"""End-to-end tests for complete conversation loops through the real pydantic-ai
+Agent, driven by `run_async` + a `FunctionModel`-scripted response sequence.
+
+Scripting a tool call means emitting a `ModelResponse` with a `ToolCallPart`
+(`tool_name`, `args`) - not the old `AssistantMessage(tools=[...])` schema
+field, which no longer exists. `Task`/`TasksTool` is a tool call now too (per
+the migration log's Phase-2 reframing: "no single JSON blob to hang a `tasks`
+field off of" under native tool-calling), so a task-plan update is scripted as
+its own `TasksTool` `ToolCallPart`, not a `tasks=` kwarg alongside the comment.
+
+`run_async`/`setup_loop` already calls `initialize_plugins()` internally, so
+these tests set `config.plugins` and let it load them - no manual
+`load_plugins` fixture call (that fixture is for tests that need plugins
+loaded without a full run, and calling both would double-initialize).
+"""
 
 import pytest
 from anyio import Path
+from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
-from solveig.schema.message.assistant import Task
+from solveig.llm.request_manager import RequestManager
+from solveig.run import run_async
+from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 
-# Mark all tests in this module to skip file mocking and subprocess mocking (for real e2e testing)
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.no_file_mocking,
     pytest.mark.no_subprocess_mocking,
 ]
 
-from solveig.run import run_async
-from solveig.schema.message import AssistantMessage
-from solveig.schema.tool import CommandTool, ReadTool
-from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_client
+
+def _tool_call(tool_name: str, call_id: str, **args) -> ToolCallPart:
+    return ToolCallPart(tool_name=tool_name, args=args, tool_call_id=call_id)
 
 
 class TestConversationFlow:
-    """Test complete conversation flows using mock LLM client with async architecture."""
+    """Test complete conversation flows through a real Agent run."""
 
-    async def test_command_execution_flow(self, load_plugins):
-        """Test end-to-end flow: user request → LLM suggests commands → user approves → execution."""
-        # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG.with_()
-        await load_plugins(config)
-
-        # LLM suggests safe diagnostic commands
-        assistant_messages = [
-            AssistantMessage(
-                comment="Of course! Let me show re-center you",
-                tasks=[
-                    Task(status="pending", description="Check current directory path"),
-                    Task(status="pending", description="List files"),
-                ],
-                tools=[
-                    CommandTool(command="pwd", comment="Check current directory"),
-                    CommandTool(command="ls -la", comment="List files with details"),
-                ],
+    async def test_command_execution_flow(self):
+        """user request -> LLM calls two commands -> user approves -> execution."""
+        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+        model = create_mock_model(
+            ModelResponse(
+                parts=[
+                    TextPart(content="Of course! Let me show re-center you"),
+                    _tool_call("command", "c1", command="pwd"),
+                    _tool_call("command", "c2", command="ls -la"),
+                ]
             ),
-            AssistantMessage(
-                # don't use the actual pwd, to ensure it's only there if the command works
-                comment="You're in some directory with some files",
+            ModelResponse(
+                parts=[
+                    TextPart(
+                        content="You're in some directory with some files"
+                    )
+                ]
             ),
-        ]
-
-        mock_client = create_mock_client(
-            *assistant_messages, sleep_seconds=0, sleep_delta=0
         )
         interface = MockInterface(
             choices=[
@@ -56,144 +62,139 @@ class TestConversationFlow:
                 0,  # Send ls output (after inspection)
             ],
         )
+        request_manager = RequestManager(config=config, model=model)
 
-        # Execute conversation, and capture the returned message_history
-        message_history = await run_async(
+        conversation = await run_async(
             config=config,
             interface=interface,
-            llm_client=mock_client,
+            request_manager=request_manager,
             user_prompt="Hey I'm lost in a shell",
         )
 
-        # Verify LLM response was displayed and commands were processed
         output = interface.get_all_output()
-        assert assistant_messages[0].comment in output
+        assert "Of course! Let me show re-center you" in output
         assert str(await Path(".").resolve()) in output
+        assert conversation is not None
+        assert len(conversation.messages) > 0
 
-        # Verify the system prompt schema registers all expected tool types
-        assert message_history is not None
-        system_prompt_content = message_history.messages[0].system_prompt
-        assert "command(" in system_prompt_content
-        assert "read(" in system_prompt_content
-        assert "write(" in system_prompt_content
-        assert "copy(" in system_prompt_content
-        assert "delete(" in system_prompt_content
-        assert "move(" in system_prompt_content
-
-        # Verify subprocess communication was called for both commands
-        # assert mock_subprocess.communicate.call_count == 2
-
-    async def test_file_operations_flow(self, load_plugins, tmp_path):
-        """Test file operations flow with mixed accept/decline responses."""
-        # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG.with_()
-        await load_plugins(config)
+    async def test_file_operations_flow(self, tmp_path):
+        """File operations flow with mixed accept/decline responses."""
+        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
 
         temp_dir_path = Path(str(tmp_path))
-        temp_dir = str(tmp_path)
         temp_file_path = temp_dir_path / "new_file.txt"
         await temp_file_path.write_text("Lorem ipsum dolor sit amet")
 
-        assistant_messages = [
-            AssistantMessage(
-                comment="I'll investigate your directory contents and help you organize them",
-                tasks=[
-                    Task(status="ongoing", description="Examine directory contents"),
-                    Task(
-                        status="pending",
-                        description="Find text files anywhere inside the current directory",
+        model = create_mock_model(
+            ModelResponse(
+                parts=[
+                    TextPart(
+                        content=(
+                            "I'll investigate your directory contents and "
+                            "help you organize them"
+                        )
                     ),
-                    Task(
-                        status="pending",
-                        description="Update plan to organize files",
+                    _tool_call(
+                        "read", "c1", path=str(tmp_path), metadata_only=False
                     ),
-                ],
-                tools=[
-                    ReadTool(
-                        path=temp_dir,
-                        metadata_only=False,
-                        comment="Examine directory contents",
-                    ),
-                    CommandTool(
+                    _tool_call(
+                        "command",
+                        "c2",
                         command=f"find {temp_dir_path} -name '*.txt'",
-                        comment="Find text files",
                     ),
-                ],
+                ]
             ),
-            AssistantMessage(
-                comment="Your files are already organized, there's a single Lorem Ipsum text file",
-                tasks=[
-                    Task(status="completed", description="Examine directory contents"),
-                    Task(
-                        status="completed",
-                        description="Find text files anywhere inside the current directory",
-                    ),
-                    Task(
-                        status="completed",
-                        description="Summarizing directory contents",
-                    ),
-                ],
+            ModelResponse(
+                parts=[
+                    TextPart(
+                        content=(
+                            "Your files are already organized, there's a "
+                            "single Lorem Ipsum text file"
+                        )
+                    )
+                ]
             ),
-        ]
-
-        mock_client = create_mock_client(
-            *assistant_messages, sleep_seconds=0, sleep_delta=0
         )
         interface = MockInterface(
             choices=[
-                0,  # Accept read operation
+                0,  # Accept read operation (read and send)
                 2,  # Decline find command
             ],
         )
+        request_manager = RequestManager(config=config, model=model)
 
         await run_async(
             config=config,
             user_prompt=f"Help me organize files in {temp_dir_path}",
             interface=interface,
-            llm_client=mock_client,
+            request_manager=request_manager,
         )
 
-        # Verify mixed responses were handled
         output = interface.get_all_output()
-        assert "Examine directory contents" in output
         assert "new_file.txt" in output
-        assert "Summarizing directory contents" in output
+        assert "Your files are already organized" in output
 
-    async def test_command_error_handling(self, load_plugins):
-        """Test error handling in command execution flow."""
-        # E2E tests should have all plugins loaded
-        config = DEFAULT_CONFIG.with_()
-        await load_plugins(config)
-
-        assistant_messages = [
-            AssistantMessage(
-                comment="Here's a failed command",
-                tools=[
-                    CommandTool(
-                        command="nonexistent_command", comment="This will fail"
-                    ),
-                ],
+    async def test_command_error_handling(self):
+        """Error handling in command execution flow."""
+        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+        model = create_mock_model(
+            ModelResponse(
+                parts=[
+                    TextPart(content="Here's a failed command"),
+                    _tool_call("command", "c1", command="nonexistent_command"),
+                ]
             ),
-            AssistantMessage(
-                comment="Damn, sorry",
-            ),
-        ]
-
-        mock_client = create_mock_client(*assistant_messages)
+            ModelResponse(parts=[TextPart(content="Damn, sorry")]),
+        )
         interface = MockInterface(
             choices=[
                 0,  # Accept command and send error output
             ],
         )
+        request_manager = RequestManager(config=config, model=model)
+
         await run_async(
             config=config,
             user_prompt="Run a diagnostic",
             interface=interface,
-            llm_client=mock_client,
+            request_manager=request_manager,
         )
 
-        # Verify error was handled gracefully
         output = interface.get_all_output()
-        assert "This will fail" in output
+        assert "Here's a failed command" in output
         assert "not found" in output  # different shells output different errors
         assert "nonexistent_command" in output
+
+    async def test_task_plan_displayed_via_tool_call(self):
+        """A TasksTool call renders the task plan - tasks are a tool call now,
+        not an AssistantMessage field."""
+        config = DEFAULT_CONFIG
+        model = create_mock_model(
+            ModelResponse(
+                parts=[
+                    TextPart(content="Let me track this work"),
+                    _tool_call(
+                        "tasks",
+                        "c1",
+                        tasks=[
+                            {"description": "Check current directory", "status": "ongoing"},
+                            {"description": "List files", "status": "pending"},
+                        ],
+                    ),
+                ]
+            ),
+            ModelResponse(parts=[TextPart(content="Done tracking")]),
+        )
+        interface = MockInterface()
+        request_manager = RequestManager(config=config, model=model)
+
+        await run_async(
+            config=config,
+            user_prompt="Track this for me",
+            interface=interface,
+            request_manager=request_manager,
+        )
+
+        output = interface.get_all_output()
+        assert "Check current directory" in output
+        assert "List files" in output
