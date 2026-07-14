@@ -11,9 +11,14 @@ to transform the structured result.
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic_ai.messages import ToolReturn
+
+from solveig.utils.file import FileMetadata
+
+if TYPE_CHECKING:
+    from solveig.interface import SolveigInterface
 
 
 def _issue_line(issue: Exception | str) -> str:
@@ -83,3 +88,26 @@ class ToolResult:
         the message history but never shown to the model). The single place a
         `ToolResult` crosses over into pydantic-ai's message layer."""
         return ToolReturn(return_value=self.to_assistant_text(), metadata=self.private)
+
+    async def display_content(self, interface: "SolveigInterface") -> None:
+        """Render this result's body on session replay - the result-centric
+        counterpart to a tool's `display_header`, and the post-migration home
+        for what pre-migration's per-type `ToolResult._display_content` did.
+
+        Reproduces how the value was shown live: a directory/tree `FileMetadata`
+        (which survives persistence as a plain dict) as a tree, multi-line
+        output in a box, and anything else as a single prefixed line. Shared by
+        `BaseTool.replay` and the tool-not-found fallback in session replay, so
+        the two paths render identically."""
+        metadata = FileMetadata.from_result_content(self.content)
+        if metadata is not None and not self.issues and not self.metadata:
+            await interface.display_tree(metadata=metadata)
+            return
+        text = self.to_assistant_text()
+        if not text:
+            return
+        text = str(text)
+        if "\n" in text:
+            await interface.display_text_box(text, title="Result")
+        else:
+            await interface.display_text(text, prefix="Result:")

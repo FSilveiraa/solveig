@@ -194,21 +194,19 @@ class BaseTool(BaseModel, ABC):
         return None
 
     async def replay(self, interface: "SolveigInterface", result: ToolResult) -> None:
-        """Re-render this call when a stored session is replayed. Default:
-        the intent header (`display_header`) plus the stored result text - so a
-        replay reads like the live run did. Takes the one `ToolResult` type,
-        reconstructed from the persisted `ToolReturnPart` (`content` = the
-        rendered assistant text, `private` = the stored metadata), so there's no
-        separate replay-only result shape.
+        """Re-render this call when a stored session is replayed: the intent
+        header (`display_header`, from this call's args) plus the result's own
+        body (`ToolResult.display_content`) - so a replay reads like the live
+        run did. The two halves are split deliberately: the *header* is the
+        tool's (its arguments), the *content* is the result's (a tree, a box, a
+        line - `display_content` owns that shape choice), reconstructed from the
+        persisted `ToolReturnPart`.
 
         Most tools override `display_header` and leave this alone. Override
-        `replay` itself only when a tool's replay genuinely differs from
-        `header + result text` (e.g. re-rendering a persisted output box from
-        `result.private`, or a tool with no header at all)."""
+        `replay` itself only when a tool's whole replay genuinely differs from
+        `header + content`."""
         await self.display_header(interface)
-        text = result.to_assistant_text()
-        if text:
-            await interface.display_text(str(text), prefix="Result:")
+        await result.display_content(interface)
 
     async def display_path_info(
         self,

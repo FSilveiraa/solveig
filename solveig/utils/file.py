@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
-from typing import Literal
+from typing import ClassVar, Literal
 
 from anyio import Path
 from pydantic import Field
@@ -33,6 +33,58 @@ class FileMetadata:
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[str, "FileMetadata"] | None = None
     line_count: int | None = None
+
+    # The required (non-defaulted) fields - their presence identifies a plain
+    # dict as a serialized FileMetadata (see from_result_content).
+    _REQUIRED_KEYS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "owner_name",
+            "group_name",
+            "path",
+            "size",
+            "is_directory",
+            "is_readable",
+            "is_writable",
+            "modified_time",
+        }
+    )
+
+    @classmethod
+    def from_jsonable(cls, data: dict) -> "FileMetadata":
+        """Rebuild a FileMetadata (recursively, incl. nested `listing`) from the
+        plain dict produced by `to_jsonable_python` - e.g. when a stored session
+        is replayed and a metadata result comes back as a dict."""
+        listing = data.get("listing")
+        return cls(
+            owner_name=data["owner_name"],
+            group_name=data["group_name"],
+            path=data["path"],
+            size=data["size"],
+            is_directory=data["is_directory"],
+            is_readable=data["is_readable"],
+            is_writable=data["is_writable"],
+            modified_time=data["modified_time"],
+            encoding=data.get("encoding"),
+            listing=(
+                {k: cls.from_jsonable(v) for k, v in listing.items()}
+                if listing
+                else None
+            ),
+            line_count=data.get("line_count"),
+        )
+
+    @classmethod
+    def from_result_content(cls, content: object) -> "FileMetadata | None":
+        """Recognize a tool result's `content` as file metadata, or return None.
+
+        Handles both a live `FileMetadata` (used directly) and the plain dict a
+        persisted metadata result deserializes into. Anything else (a content
+        string, None, an unrelated dict) yields None."""
+        if isinstance(content, cls):
+            return content
+        if isinstance(content, dict) and cls._REQUIRED_KEYS <= content.keys():
+            return cls.from_jsonable(content)
+        return None
 
 
 @dataclass

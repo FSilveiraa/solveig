@@ -226,10 +226,11 @@ class SessionManager:
                 tool_cls = None
 
         if tool_cls is None:
+            # Not-yet-converted plugin function, or stored args that no longer
+            # validate: no tool instance to render a header, but the result can
+            # still render its own body (same renderer the BaseTool path uses).
             async with interface.with_group(call.tool_name):
-                text = result.to_assistant_text()
-                if text:
-                    await interface.display_text(str(text), prefix="Result:")
+                await result.display_content(interface)
             return
 
         async with interface.with_group(instance.title):
