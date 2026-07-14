@@ -1,60 +1,53 @@
-"""Integration tests for the `move` tool function.
+"""Integration tests for the `MoveTool` tool.
 
-`move` is a plain `async def move(ctx, source_path, destination_path) ->
-ToolResult` now - no `MoveTool` Pydantic model, no `.solve()`/
-`.display_header()`/`.create_error_result()`/`.get_description()`. Called
-directly through `ctx`.
-
+`MoveTool(source_path=..., destination_path=...)` is constructed (field
+validators run on construction), then run via `await tool.execute(ctx)`.
 `ToolResult` has no `accepted`/`error`/`source_path`/`destination_path`
-fields. A successful move's `result.content` is
-`f"Moved {abs_source_path} to {abs_destination_path}"` - which doubles as
-the path-resolution check the old tests did via `result.source_path`/
-`.destination_path`. Declines are the literal string `"User declined the
-move."`; failures land in `result.issues`, not `.error`.
+fields: a successful move's `result.content` is
+`f"Moved {abs_source} to {abs_destination}"` (which doubles as the
+path-resolution check the old tests did via `.source_path`/`.destination_path`),
+a decline is the literal `"User declined the move."`, and failures land in
+`result.issues`.
+
+`display_header` (the `Source:`/`Destination:` lines) is rendered by the
+orchestration wrapper, not `execute()`, so the header test calls it directly.
 """
 
 from pathlib import Path
 
 import pytest
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
-from solveig.context import SolveigContext
-from solveig.tools.core.move import move
+from solveig.context import build_run_context
+from solveig.tools.core.move import MoveTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 class TestMoveValidation:
     async def test_empty_source_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await move(make_ctx(), source_path="", destination_path="/valid")
+            MoveTool(source_path="", destination_path="/valid")
 
     async def test_empty_destination_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await move(make_ctx(), source_path="/valid", destination_path="")
+            MoveTool(source_path="/valid", destination_path="")
 
     async def test_header_shows_source_and_destination(self, tmp_path):
         source_file = tmp_path / "test.txt"
         dest_file = tmp_path / "dest.txt"
         source_file.write_text("hi")
-        interface = MockInterface(choices=[1])
+        interface = MockInterface()
 
-        await move(
-            make_ctx(interface=interface),
-            source_path=str(source_file),
-            destination_path=str(dest_file),
-        )
+        await MoveTool(
+            source_path=str(source_file), destination_path=str(dest_file)
+        ).display_header(interface)
 
         output = interface.get_all_output()
-        assert f"Move: {source_file} -> {dest_file}" in output
         assert str(source_file) in output
         assert str(dest_file) in output
 
@@ -66,11 +59,9 @@ class TestFileOperations:
         source_file.write_text("This file will be moved")
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_file),
-            destination_path=str(dest_file),
-        )
+        result = await MoveTool(
+            source_path=str(source_file), destination_path=str(dest_file)
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert not source_file.exists()
@@ -82,11 +73,9 @@ class TestFileOperations:
         source_file.write_text("This file should not be moved")
         interface = MockInterface(choices=[1])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_file),
-            destination_path=str(dest_file),
-        )
+        result = await MoveTool(
+            source_path=str(source_file), destination_path=str(dest_file)
+        ).execute(make_ctx(interface=interface))
 
         assert result.content == "User declined the move."
         assert source_file.exists()
@@ -102,11 +91,9 @@ class TestFileOperations:
         (subdir / "nested.txt").write_text("Nested content")
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir),
-        )
+        result = await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir)
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert not source_dir.exists()
@@ -120,11 +107,9 @@ class TestFileOperations:
         (source_dir / "important.txt").write_text("Important data")
         interface = MockInterface(choices=[1])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir),
-        )
+        result = await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir)
+        ).execute(make_ctx(interface=interface))
 
         assert result.content == "User declined the move."
         assert source_dir.exists()
@@ -139,11 +124,9 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await move(
-            make_ctx(config, interface),
-            source_path=str(source_file),
-            destination_path=str(dest_file),
-        )
+        result = await MoveTool(
+            source_path=str(source_file), destination_path=str(dest_file)
+        ).execute(make_ctx(config, interface))
 
         assert result.issues == []
         assert not source_file.exists()
@@ -159,11 +142,9 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await move(
-            make_ctx(config, interface),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir),
-        )
+        result = await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir)
+        ).execute(make_ctx(config, interface))
 
         assert result.issues == []
         assert not source_dir.exists()
@@ -179,11 +160,9 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(config, interface),
-            source_path=str(auto_file),
-            destination_path=str(manual_file),
-        )
+        result = await MoveTool(
+            source_path=str(auto_file), destination_path=str(manual_file)
+        ).execute(make_ctx(config, interface))
 
         assert result.issues == []
         assert not auto_file.exists()
@@ -197,11 +176,9 @@ class TestErrorHandling:
         dest_file = tmp_path / "dest.txt"
         interface = MockInterface()
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(nonexistent_file),
-            destination_path=str(dest_file),
-        )
+        result = await MoveTool(
+            source_path=str(nonexistent_file), destination_path=str(dest_file)
+        ).execute(make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert any(
@@ -219,11 +196,9 @@ class TestErrorHandling:
         interface = MockInterface()
 
         try:
-            result = await move(
-                make_ctx(interface=interface),
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-            )
+            result = await MoveTool(
+                source_path=str(source_file), destination_path=str(dest_file)
+            ).execute(make_ctx(interface=interface))
             assert len(result.issues) == 1
         finally:
             source_file.chmod(0o644)
@@ -238,11 +213,9 @@ class TestErrorHandling:
         interface = MockInterface()
 
         try:
-            result = await move(
-                make_ctx(interface=interface),
-                source_path=str(source_file),
-                destination_path=str(dest_file),
-            )
+            result = await MoveTool(
+                source_path=str(source_file), destination_path=str(dest_file)
+            ).execute(make_ctx(interface=interface))
             assert len(result.issues) == 1
             assert "permission" in str(result.issues[0]).lower()
         finally:
@@ -258,11 +231,10 @@ class TestPathSecurity:
         try:
             interface = MockInterface(choices=[0])
 
-            result = await move(
-                make_ctx(interface=interface),
+            result = await MoveTool(
                 source_path="~/.solveig_test_move_source.txt",
                 destination_path="~/.solveig_test_move_dest.txt",
-            )
+            ).execute(make_ctx(interface=interface))
 
             assert result.issues == []
             assert "~" not in result.content
@@ -284,11 +256,9 @@ class TestPathSecurity:
         dest_file = str(subdir / "dest.txt")
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=traversal_source,
-            destination_path=dest_file,
-        )
+        result = await MoveTool(
+            source_path=traversal_source, destination_path=dest_file
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert ".." not in result.content
@@ -310,11 +280,9 @@ class TestIntegrationScenarios:
                 (subdir / f"nested_{j}.txt").write_text(f"Nested content {i}-{j}")
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir),
-        )
+        result = await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir)
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert not source_dir.exists()
@@ -338,11 +306,9 @@ class TestIntegrationScenarios:
             (source_dir / filename).write_text(f"Content of {filename}")
         interface = MockInterface(choices=[0])
 
-        result = await move(
-            make_ctx(interface=interface),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir / "moved"),
-        )
+        result = await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir / "moved")
+        ).execute(make_ctx(interface=interface))
 
         assert result.issues == []
         assert not source_dir.exists()
@@ -359,21 +325,17 @@ class TestIntegrationScenarios:
         dest_dir = tmp_path / "dest_directory"
 
         interface1 = MockInterface(choices=[1])
-        await move(
-            make_ctx(interface=interface1),
-            source_path=str(source_file),
-            destination_path=str(dest_file),
-        )
+        await MoveTool(
+            source_path=str(source_file), destination_path=str(dest_file)
+        ).execute(make_ctx(interface=interface1))
         questions1 = " ".join(interface1.questions).lower()
         assert "moving file" in questions1
         assert "directory" not in questions1
 
         interface2 = MockInterface(choices=[1])
-        await move(
-            make_ctx(interface=interface2),
-            source_path=str(source_dir),
-            destination_path=str(dest_dir),
-        )
+        await MoveTool(
+            source_path=str(source_dir), destination_path=str(dest_dir)
+        ).execute(make_ctx(interface=interface2))
         questions2 = " ".join(interface2.questions).lower()
         assert "moving directory" in questions2
         assert "file" not in questions2.replace("moving", "")

@@ -1,53 +1,58 @@
-"""Integration tests for the `delete` tool function.
+"""Integration tests for the `DeleteTool` tool.
 
-`delete` is a plain `async def delete(ctx, path) -> ToolResult` now - no
-`DeleteTool` Pydantic model, no `.solve()`/`.display_header()`/
-`.create_error_result()`/`.get_description()`. Called directly through `ctx`.
+`DeleteTool(path=...)` is constructed (field validators run on construction),
+then run via `await tool.execute(ctx)`. `ToolResult` has no
+`accepted`/`error`/`path` fields: a successful delete's `result.content` is
+`f"Deleted {abs_path}"` (which doubles as the path-resolution check the old
+tests did via `.path`), a decline is the literal `"User declined the
+delete."`, and failures land in `result.issues`.
 
-`ToolResult` has no `accepted`/`error`/`path` fields. A successful delete's
-`result.content` is `f"Deleted {abs_path}"` - which doubles as the
-path-resolution check the old tests did via `result.path`. Declines are the
-literal string `"User declined the delete."`; failures land in
-`result.issues`, not `.error`.
+`display_header` (via `display_path_info`) is rendered by the orchestration
+wrapper, not `execute()`, so the header test calls it directly. It shows the
+path line, not a "Delete:" label (that's the group title, not the header).
 """
 
 from pathlib import Path
 
 import pytest
-from pydantic_ai import RunContext
-from pydantic_ai.models.test import TestModel
-from pydantic_ai.usage import RunUsage
 
-from solveig.context import SolveigContext
-from solveig.tools.core.delete import delete
+from solveig.context import build_run_context
+from solveig.tools.core.delete import DeleteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> SolveigContext:
-    deps = SolveigContext(config=config, interface=interface or MockInterface())
-    return RunContext(deps=deps, model=TestModel(), usage=RunUsage(), max_retries=1)
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return build_run_context(config, interface or MockInterface())
 
 
 class TestDeleteValidation:
     async def test_empty_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await delete(make_ctx(), path="")
+            DeleteTool(path="")
 
     async def test_whitespace_path_raises(self):
         with pytest.raises(ValueError, match="Empty path"):
-            await delete(make_ctx(), path="   \t\n   ")
+            DeleteTool(path="   \t\n   ")
 
-    async def test_header_shows_permanence_warning(self, tmp_path):
+    async def test_header_shows_path(self, tmp_path):
+        test_file = tmp_path / "delete_me.txt"
+        test_file.write_text("x")
+        interface = MockInterface()
+
+        await DeleteTool(path=str(test_file)).display_header(interface)
+
+        assert str(test_file) in interface.get_all_output()
+
+    async def test_execute_shows_permanence_warning(self, tmp_path):
         test_file = tmp_path / "delete_me.txt"
         test_file.write_text("x")
         interface = MockInterface(choices=[1])
 
-        await delete(make_ctx(interface=interface), path=str(test_file))
+        await DeleteTool(path=str(test_file)).execute(make_ctx(interface=interface))
 
         output = interface.get_all_output()
-        assert f"Delete: {test_file}" in output
         assert "permanent" in output.lower()
         assert "cannot be undone" in output.lower()
 
@@ -58,7 +63,9 @@ class TestFileOperations:
         test_file.write_text("This file will be deleted")
         interface = MockInterface(choices=[0])
 
-        result = await delete(make_ctx(interface=interface), path=str(test_file))
+        result = await DeleteTool(path=str(test_file)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.issues == []
         assert not test_file.exists()
@@ -68,7 +75,9 @@ class TestFileOperations:
         test_file.write_text("This file should be preserved")
         interface = MockInterface(choices=[1])
 
-        result = await delete(make_ctx(interface=interface), path=str(test_file))
+        result = await DeleteTool(path=str(test_file)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.content == "User declined the delete."
         assert test_file.exists()
@@ -84,7 +93,9 @@ class TestFileOperations:
         (subdir / "nested.txt").write_text("Nested content")
         interface = MockInterface(choices=[0])
 
-        result = await delete(make_ctx(interface=interface), path=str(test_dir))
+        result = await DeleteTool(path=str(test_dir)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.issues == []
         assert not test_dir.exists()
@@ -95,7 +106,9 @@ class TestFileOperations:
         (test_dir / "important.txt").write_text("Important data")
         interface = MockInterface(choices=[1])
 
-        result = await delete(make_ctx(interface=interface), path=str(test_dir))
+        result = await DeleteTool(path=str(test_dir)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.content == "User declined the delete."
         assert test_dir.exists()
@@ -106,7 +119,9 @@ class TestFileOperations:
         empty_dir.mkdir()
         interface = MockInterface(choices=[0])
 
-        result = await delete(make_ctx(interface=interface), path=str(empty_dir))
+        result = await DeleteTool(path=str(empty_dir)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.issues == []
         assert not empty_dir.exists()
@@ -119,7 +134,9 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await delete(make_ctx(config, interface), path=str(test_file))
+        result = await DeleteTool(path=str(test_file)).execute(
+            make_ctx(config, interface)
+        )
 
         assert result.issues == []
         assert not test_file.exists()
@@ -133,7 +150,9 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
-        result = await delete(make_ctx(config, interface), path=str(test_dir))
+        result = await DeleteTool(path=str(test_dir)).execute(
+            make_ctx(config, interface)
+        )
 
         assert result.issues == []
         assert not test_dir.exists()
@@ -151,13 +170,17 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
 
         interface1 = MockInterface()
-        result1 = await delete(make_ctx(config, interface1), path=str(auto_file))
+        result1 = await DeleteTool(path=str(auto_file)).execute(
+            make_ctx(config, interface1)
+        )
         assert result1.issues == []
         assert not auto_file.exists()
         assert len(interface1.questions) == 0
 
         interface2 = MockInterface(choices=[0])
-        result2 = await delete(make_ctx(config, interface2), path=str(manual_file))
+        result2 = await DeleteTool(path=str(manual_file)).execute(
+            make_ctx(config, interface2)
+        )
         assert result2.issues == []
         assert not manual_file.exists()
         assert len(interface2.questions) == 1
@@ -167,8 +190,8 @@ class TestErrorHandling:
     async def test_delete_nonexistent_file(self):
         interface = MockInterface()
 
-        result = await delete(
-            make_ctx(interface=interface), path="/nonexistent/file.txt"
+        result = await DeleteTool(path="/nonexistent/file.txt").execute(
+            make_ctx(interface=interface)
         )
 
         assert len(result.issues) == 1
@@ -186,7 +209,9 @@ class TestErrorHandling:
         interface = MockInterface()
 
         try:
-            result = await delete(make_ctx(interface=interface), path=str(test_file))
+            result = await DeleteTool(path=str(test_file)).execute(
+                make_ctx(interface=interface)
+            )
             assert len(result.issues) == 1
             assert "permission" in str(result.issues[0]).lower()
         finally:
@@ -200,8 +225,8 @@ class TestPathSecurity:
         try:
             interface = MockInterface(choices=[0])
 
-            result = await delete(
-                make_ctx(interface=interface), path=f"~/{temp_file_path.name}"
+            result = await DeleteTool(path=f"~/{temp_file_path.name}").execute(
+                make_ctx(interface=interface)
             )
 
             assert result.issues == []
@@ -220,7 +245,9 @@ class TestPathSecurity:
         traversal_path = str(subdir / ".." / ".." / "target.txt")
         interface = MockInterface(choices=[0])
 
-        result = await delete(make_ctx(interface=interface), path=traversal_path)
+        result = await DeleteTool(path=traversal_path).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.issues == []
         assert ".." not in result.content
@@ -240,7 +267,9 @@ class TestIntegrationScenarios:
                 (subdir / f"nested_{j}.txt").write_text(f"Nested content {i}-{j}")
         interface = MockInterface(choices=[0])
 
-        result = await delete(make_ctx(interface=interface), path=str(large_dir))
+        result = await DeleteTool(path=str(large_dir)).execute(
+            make_ctx(interface=interface)
+        )
 
         assert result.issues == []
         assert not large_dir.exists()
@@ -259,7 +288,9 @@ class TestIntegrationScenarios:
 
         for filename in special_files:
             file_path = tmp_path / filename
-            result = await delete(make_ctx(interface=interface), path=str(file_path))
+            result = await DeleteTool(path=str(file_path)).execute(
+                make_ctx(interface=interface)
+            )
             assert result.issues == []
             assert not file_path.exists()
 
@@ -270,12 +301,12 @@ class TestIntegrationScenarios:
         test_dir.mkdir()
 
         interface1 = MockInterface(choices=[1])
-        await delete(make_ctx(interface=interface1), path=str(test_file))
+        await DeleteTool(path=str(test_file)).execute(make_ctx(interface=interface1))
         questions1 = " ".join(interface1.questions).lower()
         assert "delete file" in questions1
         assert "directory" not in questions1
 
         interface2 = MockInterface(choices=[1])
-        await delete(make_ctx(interface=interface2), path=str(test_dir))
+        await DeleteTool(path=str(test_dir)).execute(make_ctx(interface=interface2))
         questions2 = " ".join(interface2.questions).lower()
         assert "delete directory" in questions2
