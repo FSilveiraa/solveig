@@ -3,8 +3,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from solveig.schema.message.history import MessageHistory
 
+from solveig.conversation import Conversation
 from solveig.llm import ProviderRef
 from solveig.subcommand.runner import SubcommandRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -19,15 +19,15 @@ pytestmark = pytest.mark.anyio
 
 def make_runner(config=None, session_manager=None):
     cfg = config if config is not None else DEFAULT_CONFIG.with_()
-    history = MessageHistory(system_prompt="test", config=cfg)
+    conversation = Conversation()
     provider_ref = ProviderRef(provider=MagicMock())
     runner = SubcommandRunner(
         config=cfg,
-        message_history=history,
+        conversation=conversation,
         provider_ref=provider_ref,
         session_manager=session_manager,
     )
-    return runner, history, cfg
+    return runner, conversation, cfg
 
 
 # ---------------------------------------------------------------------------
@@ -303,11 +303,10 @@ class TestSessionCommandsWithManager:
         manager.list_sessions = AsyncMock(return_value=[])
         manager.store = AsyncMock(return_value="2024-01-01_mysession.json")
         manager.load = AsyncMock(
-            return_value={"id": "test", "metadata": {}, "messages": []}
+            return_value={"id": "test", "messages": [], "usage": MagicMock()}
         )
         manager.delete = AsyncMock(return_value="test.json")
         manager._fuzzy_find = AsyncMock(return_value="/some/path/test.json")
-        manager.reconstruct_messages = MagicMock(return_value=[])
         manager.display_loaded_session = AsyncMock()
         return manager
 
@@ -325,7 +324,7 @@ class TestSessionCommandsWithManager:
                 {
                     "id": "my-session",
                     "_mtime": 1700000000,
-                    "metadata": {"message_count": 5},
+                    "message_count": 5,
                 }
             ]
         )
