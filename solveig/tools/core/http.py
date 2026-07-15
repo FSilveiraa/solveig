@@ -6,11 +6,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 import httpx
 from pydantic import Field, field_validator
-from pydantic_ai import RunContext
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
-from solveig.context import SolveigContext
 from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
@@ -88,9 +86,9 @@ class HttpTool(BaseTool):
         if self.output_file:
             await interface.display_text(self.output_file, prefix="Output file:")
 
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
-        config, interface = ctx.deps.config, ctx.deps.interface
-
+    async def execute(
+        self, config: SolveigConfig, interface: "SolveigInterface"
+    ) -> ToolResult:
         if (
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])
         ) != 0:

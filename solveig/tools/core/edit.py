@@ -3,11 +3,9 @@
 from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field, field_validator
-from pydantic_ai import RunContext
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
-from solveig.context import SolveigContext
 from solveig.subcommand.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
@@ -63,8 +61,9 @@ class EditTool(BaseTool):
         if self.replace_all:
             await interface.display_text("(all occurrences)", prefix="Mode:")
 
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
-        config, interface = ctx.deps.config, ctx.deps.interface
+    async def execute(
+        self, config: SolveigConfig, interface: "SolveigInterface"
+    ) -> ToolResult:
         if not self.old_string:
             raise ValueError("old_string cannot be empty")
 

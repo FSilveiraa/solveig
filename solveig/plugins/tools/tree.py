@@ -1,13 +1,17 @@
 """Tree plugin tool - generates directory tree listings."""
 
-from pydantic import Field, field_validator
-from pydantic_ai import RunContext
+from typing import TYPE_CHECKING
 
-from solveig.context import SolveigContext
+from pydantic import Field, field_validator
+
 from solveig.plugins.tools import tool
 from solveig.tools import BaseTool, ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
+
+if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
+    from solveig.interface import SolveigInterface
 
 
 @tool
@@ -30,8 +34,9 @@ class TreeTool(BaseTool):
     def title(self) -> str:
         return f"Tree: {self.path}"
 
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
-        config, interface = ctx.deps.config, ctx.deps.interface
+    async def execute(
+        self, config: "SolveigConfig", interface: "SolveigInterface"
+    ) -> ToolResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):

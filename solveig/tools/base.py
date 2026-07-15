@@ -31,6 +31,7 @@ from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import _camel_to_snake, format_path_info
 
 if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
     from solveig.interface import SolveigInterface
 
 # The private marker `CliPositionalArg[T]` injects into a field's Annotated
@@ -159,7 +160,9 @@ class BaseTool(BaseModel, ABC):
         return cls.model_validate({**cls.cli_defaults, **parsed})
 
     @abstractmethod
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
+    async def execute(
+        self, config: "SolveigConfig", interface: "SolveigInterface"
+    ) -> ToolResult:
         """Run the tool live: header, previews, consent, side effects, banners.
         Owns the whole interactive flow (consent often depends on values
         computed mid-body, e.g. a diff), and returns the `ToolResult` the model
@@ -277,7 +280,7 @@ class BaseTool(BaseModel, ABC):
         schema-clean."""
 
         async def run(ctx, params):  # type: ignore[no-untyped-def]
-            return await params.execute(ctx)
+            return await params.execute(ctx.deps.config, ctx.deps.interface)
 
         run.__annotations__ = {
             "ctx": RunContext[SolveigContext],

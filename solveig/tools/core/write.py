@@ -3,15 +3,14 @@
 from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator
-from pydantic_ai import RunContext
 
-from solveig.context import SolveigContext
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
     from solveig.interface import SolveigInterface
 
 
@@ -43,8 +42,9 @@ class WriteTool(BaseTool):
             interface, self.path, is_directory=self.is_directory
         )
 
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
-        config, interface = ctx.deps.config, ctx.deps.interface
+    async def execute(
+        self, config: "SolveigConfig", interface: "SolveigInterface"
+    ) -> ToolResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
         if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):

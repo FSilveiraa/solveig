@@ -6,14 +6,16 @@ task plan is just another tool the assistant calls whenever it wants to
 show/update one - same shape as every other tool.
 """
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
-from pydantic_ai import RunContext
 
-from solveig.context import SolveigContext
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
+
+if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
+    from solveig.interface import SolveigInterface
 
 TASK_STATUS_MAP = {
     "pending": "⚪",
@@ -48,8 +50,9 @@ class TasksTool(BaseTool):
     def title(self) -> str:
         return "Tasks"
 
-    async def execute(self, ctx: RunContext[SolveigContext]) -> ToolResult:
-        interface = ctx.deps.interface
+    async def execute(
+        self, config: "SolveigConfig", interface: "SolveigInterface"
+    ) -> ToolResult:
         for i, task in enumerate(self.tasks, 1):
             status_emoji = TASK_STATUS_MAP[task.status]
             arrow = "→" if task.status == "ongoing" else " "
