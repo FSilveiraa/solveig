@@ -1,6 +1,8 @@
 """Tests for SolveigInterface's global/local method split - pure ABC-level
 behavior, no Textual widgets involved."""
 
+import asyncio
+
 import pytest
 
 from solveig.interface.base import MutableTextBox, SolveigInterface
@@ -157,3 +159,34 @@ class TestRootDelegation:
         root = _StubInterface()
         await root.display_text("hello")
         assert ("display_text", "hello") in root.calls
+
+
+class _SlowChoiceInterface(_StubInterface):
+    """Delays inside _ask_choice so two concurrent callers can be observed
+    overlapping (or not)."""
+
+    async def _ask_choice(self, question, choices, add_cancel=False) -> int:
+        self.calls.append(("_ask_choice_start", question))
+        await asyncio.sleep(0.05)
+        self.calls.append(("_ask_choice_end", question))
+        return 0
+
+
+@pytest.mark.anyio
+async def test_concurrent_ask_choice_calls_are_serialized():
+    root = _SlowChoiceInterface()
+    scoped_a = _StubInterface(root=root)
+    scoped_b = _StubInterface(root=root)
+
+    await asyncio.gather(
+        scoped_a.ask_choice("A?", ["yes"]),
+        scoped_b.ask_choice("B?", ["yes"]),
+    )
+
+    # If they were NOT serialized, both "_start" events would appear before
+    # either "_end" event. Serialized, each call's start/end pair is
+    # contiguous.
+    starts_and_ends = [c for c in root.calls if c[0].startswith("_ask_choice")]
+    first_pair = starts_and_ends[0:2]
+    assert first_pair[0][0] == "_ask_choice_start"
+    assert first_pair[1][0] == "_ask_choice_end"
