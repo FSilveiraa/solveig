@@ -1,10 +1,12 @@
 """Tree plugin tool - generates directory tree listings."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field, field_validator
+from pydantic_settings import CliPositionalArg
 
 from solveig.plugins.tools import tool
+from solveig.subcommand.base import Subcommand
 from solveig.tools import BaseTool, ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -18,8 +20,11 @@ if TYPE_CHECKING:
 class TreeTool(BaseTool):
     """Generate a directory tree listing showing file structure."""
 
-    path: str = Field(
-        description="Directory path to generate tree for (supports ~ for home directory)."
+    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/tree"])
+
+    path: CliPositionalArg[str] = Field(
+        default=".",
+        description="Directory path to generate tree for (supports ~ for home directory).",
     )
     max_depth: int = Field(
         default=-1, description="Maximum depth to explore (-1 for full tree)."
