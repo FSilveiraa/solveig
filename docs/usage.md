@@ -384,7 +384,7 @@ trying to test Solveig without access to a model. It accepts all normal options,
 won't apply.
 
 ```bash
-python -m tests.mocks.run_mock -c ~/.config/solveig.json -v --no-commands --theme solarized-dark
+python -m tests.mocks.demo -c ~/.config/solveig.json -v --no-commands --theme solarized-dark
 ```
 
 ## Safety Guidelines

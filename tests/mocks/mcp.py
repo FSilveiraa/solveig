@@ -1,7 +1,7 @@
 """Minimal MCP server for local testing and integration tests.
 
 Run directly to start the server:
-    python tests/mocks/mock_mcp.py
+    python tests/mocks/mcp.py
 
 Then connect from Solveig:
     /mcp connect http://127.0.0.1:8000/mcp

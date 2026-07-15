@@ -26,8 +26,8 @@ ci: format check test
 
 # Run the interactive Textual demo with a mock LLM client (optionally replaying a stored session)
 mock session="":
-    python -m tests.mocks.run_mock {{session}}
+    python -m tests.mocks.demo {{session}}
 
 # Start the local mock MCP server for manual /mcp connect testing
 mcp:
-    python tests/mocks/mock_mcp.py
+    python tests/mocks/mcp.py

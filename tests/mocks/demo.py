@@ -22,7 +22,7 @@ from solveig.llm.request_manager import RequestManager
 from solveig.run import run_async
 from solveig.sessions.manager import SessionManager
 from solveig.utils.file import Filesystem
-from tests.mocks.llm_client import create_mock_model
+from tests.mocks.client import create_mock_model
 
 
 async def cleanup():
@@ -144,154 +144,19 @@ async def run_async_mock(
     user_messages: list[tuple[float, str]] | None = None,
 ):
     """Entry point for the async textual CLI."""
-
-    # user_messages: list[tuple[float, str]] = [
-    #     (0.5, "Review the project tree and the readme"),
-    #     (0.5, "/mcp connect http://localhost:8001/mcp"),
-    #     (0.5, "Now search"),
-    #     (0.5, "Read ~/Sync/README.md and show me a tree of ~/Sync"),
-    # ]
-
     if mock_messages is None:
-        mock_messages = [
-            _turn(
-                comment=(
-                    "I'll help you investigate the contents of ~/Sync, edit your "
-                    "README and write a Fibonacci sequence solver"
-                ),
-                reasoning=(
-                    "The user wants me to review the contents of ~/Sync, edit "
-                    "README.md, then write an algorithm to solve the Fibonacci "
-                    "sequence. I should first get a tree structure, write a "
-                    "Python script, then investigate individual files that "
-                    "stand out"
-                ),
-                tools=[
-                    (
-                        "tasks",
-                        {
-                            "tasks": [
-                                {
-                                    "description": "Read the contents of ~/Sync",
-                                    "status": "ongoing",
-                                },
-                                {"description": "Edit README", "status": "pending"},
-                                {
-                                    "description": "Write a Fibonacci solver",
-                                    "status": "pending",
-                                },
-                                {
-                                    "description": "Provide a summary of contents, focused on safety and functionality",
-                                    "status": "pending",
-                                },
-                            ]
-                        },
-                    ),
-                    (
-                        "edit",
-                        {
-                            "path": "~/Sync/README.md",
-                            "old_string": """
-### Docker Compose
-```bash
-# Run continuous monitoring with compose
-docker-compose up --build
-```
-                    """.strip(),
-                            "new_string": """
-### Podman Compose
-```bash
-# Run continuous mode with podman-compose
-podman-compose up --build -d
-```
-                    """,
-                        },
-                    ),
-                    (
-                        "read",
-                        {
-                            "path": "~/Sync/README.md",
-                            "metadata_only": False,
-                            "line_ranges": [[1, 10], [13, 17], [225, -1]],
-                        },
-                    ),
-                    ("tree", {"path": "~/Sync"}),
-                    (
-                        "write",
-                        {
-                            "path": "/home/francisco/Sync/fibonacci.py",
-                            "is_directory": False,
-                            "content": """
-import math
-import sys
+        from solveig.system_prompt import load_story
 
-def fibonacci_binet(n):
-    phi = (1 + math.sqrt(5)) / 2
-    return round((phi ** n - (1 - phi) ** n) / math.sqrt(5))
-
-if __name__ == "__main__":
-    n = sys.argv[1]
-    result = fibonacci_binet(int(n))
-    print(f"The Fibonacci Number of {n}th term is {result}")
-""".strip(),
-                        },
-                    ),
-                    (
-                        "copy",
-                        {
-                            "source_path": "~/Sync/test.py",
-                            "destination_path": "~/Sync/test.2.py",
-                        },
-                    ),
-                    (
-                        "move",
-                        {
-                            "source_path": "~/Sync/test.2.py",
-                            "destination_path": "~/Sync/hello.py",
-                        },
-                    ),
-                    ("delete", {"path": "~/Sync/test.py"}),
-                ],
-            ),
-        ]
-
-        mock_messages = [
-            _turn(
-                comment="I'll review the project documentation.",
-                tools=[
-                    (
-                        "tasks",
-                        {
-                            "tasks": [
-                                {
-                                    "description": "Review documentation",
-                                    "status": "ongoing",
-                                }
-                            ]
-                        },
-                    ),
-                    (
-                        "read",
-                        {"path": "~/Sync/README.md", "metadata_only": False},
-                    ),
-                    (
-                        "command",
-                        {
-                            "command": "for i in $(seq 1 10); do sleep 1 && echo $i; done",
-                            "timeout": 30,
-                        },
-                    ),
-                    (
-                        "read",
-                        {"path": "~/Sync/certs/", "metadata_only": True},
-                    ),
-                ],
-            ),
-            _turn(
-                comment="I'm sorry about that command. Here's a tree request instead",
-                tools=[("tree", {"path": "~/Sync"})],
-            ),
-        ]
+        story = await load_story("sync_review")
+        mock_messages = [m for m in story if isinstance(m, ModelResponse)]
+        if user_messages is None:
+            user_messages = [
+                (0.5, part.content)
+                for m in story
+                if isinstance(m, ModelRequest)
+                for part in m.parts
+                if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+            ]
 
     mock_model = create_mock_model(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()

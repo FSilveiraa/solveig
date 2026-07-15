@@ -1,8 +1,8 @@
 from solveig import APIType, SolveigConfig
 from solveig.utils.misc import parse_human_readable_size
 
+from .client import create_mock_model
 from .interface import MockInterface
-from .llm_client import create_mock_model
 
 DEFAULT_CONFIG = SolveigConfig(
     api_type=APIType.OPENAI,
