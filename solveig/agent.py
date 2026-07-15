@@ -187,9 +187,7 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
             return await handler(args)
 
         try:
-            result = await run_tool_and_hooks(
-                instance, config, interface, lambda: handler(args)
-            )
+            result = await run_tool_and_hooks(instance, config, interface)
         except PluginException as e:
             raise ModelRetry(str(e)) from e
 

@@ -19,7 +19,6 @@ from solveig.config.editor import (
     fetch_and_apply_model_info,
     prompt_for_field,
 )
-from solveig.context import build_run_context
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
@@ -327,14 +326,8 @@ class SubcommandRunner:
                 await interface.display_info(usage_line)
                 return
 
-            ctx = build_run_context(self.config, interface)
             try:
-                await run_tool_and_hooks(
-                    instance,
-                    self.config,
-                    interface,
-                    lambda: instance.execute(ctx),
-                )
+                await run_tool_and_hooks(instance, self.config, interface)
             except PluginException as e:
                 await interface.display_error(str(e))
 
