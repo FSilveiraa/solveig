@@ -67,6 +67,9 @@ solveig = "solveig.run:main"
 [tool.setuptools.packages.find]
 include = ["solveig*"]
 
+[tool.setuptools.package-data]
+solveig = ["system_prompt/stories/*.jsonl"]
+
 # Development tool configurations for future use
 [tool.pytest.ini_options]
 testpaths = ["tests"]
