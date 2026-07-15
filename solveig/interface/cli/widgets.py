@@ -158,16 +158,19 @@ class SectionHeader(Static):
         Event-driven recalculation is the most Textual-native approach for this pattern.
         Performance impact is negligible - resize events are infrequent and calculation is cheap.
         """
-        # Get parent width, fallback to 80
-        try:
-            width = self.parent.size.width if self.parent else 80
-        except AttributeError:
-            width = 80
+        # Use this widget's own rendered width, not the parent's - the parent
+        # doesn't account for this widget's margin or a reserved scrollbar
+        # gutter, both of which shrink the space actually available here.
+        width = self.size.width or 80
 
-        header = f"━━━━ {self._title}"
-        remaining = max(0, width - len(header) - 2)
-        line = "━" * remaining
-        self.update(f"{header} {line}")
+        header = f"━━━━ {self._title} "
+        # Over-fill rather than compute an exact count and let CSS
+        # text-overflow: clip trim the excess - the run of "━" has no
+        # spaces, so Rich would otherwise treat it as one unbreakable word
+        # and wrap the whole thing to a new row if the count is ever off by
+        # even one character.
+        line = "━" * width
+        self.update(f"{header}{line}")
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
@@ -176,6 +179,8 @@ class SectionHeader(Static):
         SectionHeader {{
             color: {theme.section};
             text-style: bold;
-            margin: 2 0 1 0;
+            margin: 0;
+            text-wrap: nowrap;
+            text-overflow: clip;
         }}
         """

@@ -1,4 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+def _blend(hex_a: str, hex_b: str, t: float) -> str:
+    """Linearly blend two hex colors."""
+    a = tuple(int(hex_a.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
+    b = tuple(int(hex_b.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
+    mixed = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    return "#" + "".join(f"{c:02X}" for c in mixed)
 
 
 @dataclass
@@ -18,6 +26,15 @@ class Palette:
     info: str
     warning: str
     error: str
+
+    # Color of a group's "still open" end cap, shown until the group resolves.
+    # Left unset (None), it's derived from `group` blended toward `background`;
+    # set explicitly per-theme to override.
+    group_pending: str | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        if self.group_pending is None:
+            self.group_pending = _blend(self.group, self.background, 0.5)
 
 
 # no_theme = Palette(

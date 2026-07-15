@@ -25,6 +25,7 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.tools.base import BaseTool
+from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
 
 
@@ -48,7 +49,9 @@ async def run_tool_and_hooks(
 
     tool_name = instance.tool_name()
     async with interface.with_group(
-        instance.title, auto_collapse=config.auto_collapse_tools
+        instance.title,
+        auto_collapse=config.auto_collapse_tools
+        and not isinstance(instance, TasksTool),
     ):
         # Intent first (file header, command text, URL) so a @before hook's
         # prompt appears with the operation already visible above it.

@@ -2,7 +2,8 @@
 
 from rich.syntax import Syntax
 from textual import events
-from textual.containers import ScrollableContainer
+from textual.color import Color
+from textual.containers import ScrollableContainer, Vertical
 from textual.dom import DOMNode
 from textual.widgets import Collapsible, Markdown, Static
 
@@ -15,6 +16,12 @@ from .collapsible_widgets import (
 )
 from .tree_display import TreeDisplay
 from .widgets import Comment, SectionHeader
+
+# Bottom marker for a group that hasn't resolved yet: the border-left
+# appears to keep extending down, fading out row by row, until exit_group()
+# swaps it for the real "┗━━━" closed cap.
+GROUP_PENDING_CHAR = "┃"
+GROUP_PENDING_OPACITIES = (0.5,)
 
 BANNER = """
                               888                                  d8b
@@ -38,6 +45,7 @@ class ConversationArea(ScrollableContainer):
         super().__init__(**kwargs)
         self._group_stack: list[CustomCollapsible] = []
         self._hovered_group: CustomCollapsible | None = None
+        self._current_section_container: Vertical | None = None
 
     @staticmethod
     def _nearest_group(widget: DOMNode | None) -> CustomCollapsible | None:
@@ -64,7 +72,8 @@ class ConversationArea(ScrollableContainer):
         """Clicking a group's border/cap (not nested content) toggles its collapse."""
         widget = event.widget
         is_structural = isinstance(widget, Collapsible.Contents) or (
-            isinstance(widget, Static) and widget.has_class("group_end")
+            isinstance(widget, Static)
+            and (widget.has_class("group_end") or widget.has_class("group_pending"))
         )
         if is_structural:
             group = self._nearest_group(widget)
@@ -73,12 +82,12 @@ class ConversationArea(ScrollableContainer):
 
     @property
     def _mount_target(self):
-        """The widget to mount new elements into: innermost group's Contents, or self."""
-        return (
-            self._group_stack[-1].query_one(Collapsible.Contents)
-            if self._group_stack
-            else self
-        )
+        """Innermost group's Contents, else the current section container, else self."""
+        if self._group_stack:
+            return self._group_stack[-1].query_one(Collapsible.Contents)
+        if self._current_section_container is not None:
+            return self._current_section_container
+        return self
 
     async def _add_element(self, element):
         """Add element to the scrollable container."""
@@ -114,8 +123,12 @@ class ConversationArea(ScrollableContainer):
         return box
 
     async def add_section_header(self, title: str):
-        """Add a section header."""
+        """Add a section header, then start a new tinted container for its content."""
+        self._current_section_container = None
         await self._add_element(SectionHeader(title))
+        container = Vertical(classes=f"section-{title.lower()}")
+        await self._add_element(container)
+        self._current_section_container = container
 
     async def add_tree_display(
         self,
@@ -145,6 +158,10 @@ class ConversationArea(ScrollableContainer):
             classes="group",
         )
         await self._mount_target.mount(group)
+        for opacity in GROUP_PENDING_OPACITIES:
+            marker = Static(GROUP_PENDING_CHAR, classes="group_pending")
+            marker.styles.opacity = opacity
+            await group.mount(marker)
         self._group_stack.append(group)
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
@@ -154,6 +171,8 @@ class ConversationArea(ScrollableContainer):
         """Exit the current group, optionally collapsing it."""
         if self._group_stack:
             group = self._group_stack.pop()
+            for pending in group.query(".group_pending"):
+                await pending.remove()
             await group.mount(Static("┗━━━", classes="group_end"))
             if auto_collapse:
                 group.collapsed = True
@@ -163,6 +182,12 @@ class ConversationArea(ScrollableContainer):
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         """Generate CSS for conversation area and group-related widgets."""
+        background = Color.parse(theme.background)
+        user_background = (
+            background.darken(0.08)
+            if background.brightness >= 0.5
+            else background.lighten(0.08)
+        )
         return f"""
         ConversationArea {{
             height: 1fr;
@@ -174,7 +199,16 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background: {theme.background};
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
-            padding: 0 0 1 1;
+            padding: 0 0 1 0;
+        }}
+
+        .section-user, .section-assistant {{
+            height: auto;
+            padding: 1 0 2 1;
+        }}
+
+        .section-user {{
+            background: {user_background.hex};
         }}
 
         .group {{
@@ -194,6 +228,10 @@ class ConversationArea(ScrollableContainer):
             color: {theme.group};
         }}
 
+        .group_pending {{
+            color: {theme.group_pending};
+        }}
+
         .group DividedCollapsibleTitleBar {{
             color: {theme.group};
             text-style: bold;
@@ -209,6 +247,10 @@ class ConversationArea(ScrollableContainer):
         }}
 
         .group.-hovering > .group_end {{
+            color: {theme.section};
+        }}
+
+        .group.-hovering > .group_pending {{
             color: {theme.section};
         }}
 
