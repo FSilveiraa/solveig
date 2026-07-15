@@ -1,4 +1,5 @@
 from solveig import APIType, SolveigConfig
+from solveig.utils.misc import parse_human_readable_size
 
 from .interface import MockInterface
 from .llm_client import create_mock_model
@@ -10,7 +11,7 @@ DEFAULT_CONFIG = SolveigConfig(
     model="test-model",
     temperature=0.0,
     verbose=False,
-    min_disk_space_left="1gb",
+    min_disk_space_left=parse_human_readable_size("1gb"),
     auto_save_session=False,
 )
 

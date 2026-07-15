@@ -66,16 +66,15 @@ class MockInterface(TerminalInterface):
         **kwargs,
     ) -> None:
         # Do not call super().__init__() since that would init() the Textual App
-        self.outputs = []
+        self.outputs: list[str] = []
         self.user_inputs = user_inputs or []
         self.choices = choices or []
-        self.questions = []
-        self.sections = []
-        self.stats_updates = []
-        self.groups = []
+        self.questions: list[str] = []
+        self.sections: list[str] = []
+        self.stats_updates: list[dict[str, Any]] = []
+        self.groups: list[str] = []
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
-        self._timeout_task = None
         self.pending_queue = asyncio.Queue()
 
     # Core async display methods
@@ -95,10 +94,6 @@ class MockInterface(TerminalInterface):
                     "If this is a test, you need to add a final ModelResponse "
                     "with no ToolCallPart to create_mock_model(...)"
                 ) from e
-        finally:
-            # Cancel timeout task if it's still running
-            if self._timeout_task and not self._timeout_task.done():
-                self._timeout_task.cancel()
 
     async def wait_until_ready(self):
         self.outputs.append("INTERFACE_READY")
@@ -242,23 +237,47 @@ class MockInterface(TerminalInterface):
             await self.update_stats(status=final_status)
 
     # Status and lifecycle
-    async def update_stats(self, **stats: Any) -> None:
+    async def update_stats(
+        self,
+        status: str | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
+        model: str | None = None,
+        url: str | None = None,
+        path: str | PathLike | None = None,
+        max_context: int | None = None,
+        used_context: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
+        duration: float | None = None,
+    ) -> None:
+        all_stats = {
+            "status": status,
+            "sent_tokens": sent_tokens,
+            "received_tokens": received_tokens,
+            "model": model,
+            "url": url,
+            "path": path,
+            "max_context": max_context,
+            "used_context": used_context,
+            "input_price": input_price,
+            "output_price": output_price,
+            "mcp_servers": mcp_servers,
+            "duration": duration,
+        }
+        stats = {k: v for k, v in all_stats.items() if v is not None}
         self.stats_updates.append(stats)
-        try:
-            status_update = stats["status"]
-        except KeyError:
-            pass  # no status update
-        else:
+        if status and "awaiting input" in status.lower():
             # app is awaiting user input, insert it by calling the callback for user input
-            if status_update and "awaiting input" in status_update.lower():
-                try:
-                    user_input = self.user_inputs.pop(0)
-                except IndexError:
-                    user_input = None
-                if user_input is None or user_input == "/exit":
-                    await self.stop()
-                else:
-                    await self._handle_input(user_input)
+            try:
+                user_input = self.user_inputs.pop(0)
+            except IndexError:
+                user_input = None
+            if user_input is None or user_input == "/exit":
+                await self.stop()
+            else:
+                await self._handle_input(user_input)
 
     # Test helper methods
     def get_all_output(self) -> str:
@@ -283,10 +302,3 @@ class MockInterface(TerminalInterface):
         self.sections.clear()
         self.stats_updates.clear()
         self.groups.clear()
-
-    async def _auto_exit_after_timeout(self) -> None:
-        """Automatically trigger exit after timeout period."""
-        await asyncio.sleep(self._timeout_seconds)
-        self.outputs.append(f"AUTO_EXIT_AFTER_{self._timeout_seconds}s")
-        if not self._stop_event.is_set():
-            await self.stop()
