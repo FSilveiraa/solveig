@@ -208,7 +208,7 @@ class ConversationArea(ScrollableContainer):
 
         .section-user, .section-assistant {{
             height: auto;
-            padding: 1 0 2 1;
+            padding: 1 0 1 1;
         }}
 
         .section-user {{
