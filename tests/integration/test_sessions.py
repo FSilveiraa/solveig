@@ -37,6 +37,49 @@ def make_manager(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# parse_conversation_blob
+# ---------------------------------------------------------------------------
+
+
+class TestParseConversationBlob:
+    def test_parses_messages_and_token_counts(self):
+        from pydantic_ai.messages import ModelRequest, UserPromptPart
+        from pydantic_core import to_jsonable_python
+
+        from solveig.sessions.manager import parse_conversation_blob
+
+        messages = [ModelRequest(parts=[UserPromptPart(content="hi")])]
+        blob_text = json.dumps(
+            {
+                "total_tokens_sent": 10,
+                "total_tokens_received": 5,
+                "messages": to_jsonable_python(messages),
+            }
+        )
+
+        result = parse_conversation_blob(blob_text)
+
+        assert len(result["messages"]) == 1
+        assert isinstance(result["messages"][0], ModelRequest)
+        assert result["messages"][0].parts[0].content == "hi"
+        assert result["total_tokens_sent"] == 10
+        assert result["total_tokens_received"] == 5
+
+    def test_defaults_missing_token_counts_to_zero(self):
+        from pydantic_core import to_jsonable_python
+
+        from solveig.sessions.manager import parse_conversation_blob
+
+        blob_text = json.dumps({"messages": to_jsonable_python([])})
+
+        result = parse_conversation_blob(blob_text)
+
+        assert result["messages"] == []
+        assert result["total_tokens_sent"] == 0
+        assert result["total_tokens_received"] == 0
+
+
+# ---------------------------------------------------------------------------
 # _fuzzy_find
 # ---------------------------------------------------------------------------
 

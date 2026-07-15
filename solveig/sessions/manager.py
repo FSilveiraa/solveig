@@ -34,6 +34,22 @@ from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 
 
+def parse_conversation_blob(text: str) -> dict:
+    """Parse a stored conversation blob's raw JSON text into its parts.
+
+    Same shape used for both session files and story files under
+    system_prompt/stories/ - a session is just a story with token counts.
+    Token count fields are optional and default to 0, so a story file that
+    never had them (or a session file with them stripped) still parses.
+    """
+    blob = json.loads(text)
+    return {
+        "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
+        "total_tokens_sent": blob.get("total_tokens_sent", 0),
+        "total_tokens_received": blob.get("total_tokens_received", 0),
+    }
+
+
 class SessionManager:
     def __init__(self, config: SolveigConfig):
         self.config = config
@@ -118,14 +134,14 @@ class SessionManager:
             path_str = sessions[0][0]
         self.current_path = Path(path_str)
         file_content = await Filesystem.read_file(self.current_path)
-        blob = json.loads(file_content.content)
+        parsed = parse_conversation_blob(file_content.content)
         session_id = self.current_path.name.removesuffix(".jsonl")
         return {
             "id": session_id,
-            "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
+            "messages": parsed["messages"],
             "usage": RunUsage(
-                input_tokens=blob.get("total_tokens_sent", 0),
-                output_tokens=blob.get("total_tokens_received", 0),
+                input_tokens=parsed["total_tokens_sent"],
+                output_tokens=parsed["total_tokens_received"],
             ),
         }
 
