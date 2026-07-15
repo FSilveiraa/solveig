@@ -121,14 +121,14 @@ async def shellcheck(
             output = json.loads(stdout.decode("utf-8"))
 
             if output:
-                async with interface.with_group("Shellcheck Issues"):
+                async with interface.with_group("Shellcheck Issues") as group:
                     for item in output:
                         level = item.get("level", "warning")
                         message = f"[{level}] {item.get('message', 'Unknown issue')}"
                         if level == "error":
-                            await interface.display_error(message)
+                            await group.display_error(message)
                         else:
-                            await interface.display_warning(message)
+                            await group.display_warning(message)
 
                 # Ask the user if they want to proceed
                 if plugin_config.get("ask_to_execute", True):

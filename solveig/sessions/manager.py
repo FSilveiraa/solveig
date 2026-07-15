@@ -229,9 +229,9 @@ class SessionManager:
             # Not-yet-converted plugin function, or stored args that no longer
             # validate: no tool instance to render a header, but the result can
             # still render its own body (same renderer the BaseTool path uses).
-            async with interface.with_group(call.tool_name):
-                await result.display_content(interface)
+            async with interface.with_group(call.tool_name) as group:
+                await result.display_content(group)
             return
 
-        async with interface.with_group(instance.title):
-            await instance.replay(interface, result)
+        async with interface.with_group(instance.title) as group:
+            await instance.replay(group, result)
