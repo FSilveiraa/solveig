@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import (
     BEFORE_HOOKS,
@@ -35,10 +34,6 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface
 pytestmark = pytest.mark.anyio
 
 SHELLCHECK_CONFIG = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
-
-
-def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
 
 
 class TestDangerousPatternDetection:
@@ -172,7 +167,6 @@ class TestShellcheckBlocksCommandThroughOrchestration:
                 instance,
                 SHELLCHECK_CONFIG,
                 interface,
-                lambda: instance.execute(make_ctx(SHELLCHECK_CONFIG, interface)),
             )
 
     @pytest.mark.no_subprocess_mocking
@@ -190,7 +184,6 @@ class TestShellcheckBlocksCommandThroughOrchestration:
             instance,
             SHELLCHECK_CONFIG,
             interface,
-            lambda: instance.execute(make_ctx(SHELLCHECK_CONFIG, interface)),
         )
 
         assert result.content == "User declined to send metadata."

@@ -13,7 +13,7 @@ import warnings
 
 import pytest
 from pydantic import Field
-from pydantic_ai import Agent
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import (
     ModelResponse,
     RetryPromptPart,
@@ -25,9 +25,10 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.abstract import AbstractToolset
 from pydantic_ai.toolsets.function import FunctionToolset
+from pydantic_ai.usage import RunUsage
 
 from solveig.agent import build_loop_capability, build_tool_execution_capability
-from solveig.context import SolveigContext, build_run_context
+from solveig.context import SolveigContext
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
@@ -75,6 +76,18 @@ async def drive_tool_call(
     )
 
 
+def _run_context(config, interface) -> RunContext[SolveigContext]:
+    """A real `RunContext` carrying live `SolveigContext` deps, for driving
+    `toolset.get_tools(ctx)` directly (pydantic-ai's own toolset introspection
+    API) without going through a full `Agent.run()`."""
+    return RunContext(
+        deps=SolveigContext(config=config, interface=interface),
+        model=TestModel(),
+        usage=RunUsage(),
+        max_retries=1,
+    )
+
+
 def _tool_returns(result) -> list[ToolReturnPart]:
     return [
         part
@@ -98,7 +111,7 @@ class EchoTool(BaseTool):
 
     value: str = Field(description="text to echo")
 
-    async def execute(self, ctx) -> ToolResult:  # type: ignore[no-untyped-def]
+    async def execute(self, config, interface) -> ToolResult:  # type: ignore[no-untyped-def]
         return ToolResult(
             content=f"echoed: {self.value}", private={"secret": self.value}
         )
@@ -243,8 +256,8 @@ async def test_filtered_toolset_hides_command_live_without_rebuild():
     AVAILABLE_TOOLS.rebuild(DEFAULT_CONFIG)  # membership built once
     toolset = AVAILABLE_TOOLS.toolset
 
-    on = build_run_context(DEFAULT_CONFIG.with_(no_commands=False), MockInterface())
-    off = build_run_context(DEFAULT_CONFIG.with_(no_commands=True), MockInterface())
+    on = _run_context(DEFAULT_CONFIG.with_(no_commands=False), MockInterface())
+    off = _run_context(DEFAULT_CONFIG.with_(no_commands=True), MockInterface())
 
     tools_on = await toolset.get_tools(on)
     tools_off = await toolset.get_tools(off)  # same toolset object, no rebuild

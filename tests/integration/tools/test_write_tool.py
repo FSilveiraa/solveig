@@ -1,7 +1,7 @@
 """Integration tests for the `WriteTool` tool.
 
 `WriteTool(path=..., is_directory=..., content=None)` is constructed (field
-validators run on construction), then run via `await tool.execute(ctx)`.
+validators run on construction), then run via `await tool.execute(config, interface)`.
 `ToolResult` has no `accepted`/`error`/`path` fields. `execute()`'s
 `result.content` on success is `f"{'Updated'|'Created'} {abs_path}"` - which
 conveniently doubles as the path-resolution check the old tests did via
@@ -25,7 +25,6 @@ from unittest.mock import patch
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.tools.core.write import WriteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -33,7 +32,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestWriteValidation:
@@ -72,7 +71,7 @@ class TestFileOperations:
 
         result = await WriteTool(
             path=str(test_file), is_directory=False, content=test_content
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.exists()
@@ -86,7 +85,7 @@ class TestFileOperations:
             path=str(test_file),
             is_directory=False,
             content="Should not be created",
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "User declined the write."
         assert not test_file.exists()
@@ -97,7 +96,7 @@ class TestFileOperations:
 
         result = await WriteTool(
             path=str(test_file), is_directory=False, content=None
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.exists()
@@ -110,7 +109,7 @@ class TestFileOperations:
 
         result = await WriteTool(
             path=str(test_file), is_directory=False, content="Updated content"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Updated content"
@@ -126,7 +125,7 @@ class TestFileOperations:
             path=str(test_file),
             is_directory=False,
             content="Should not overwrite",
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "User declined the write."
         assert test_file.read_text() == original_content
@@ -138,7 +137,7 @@ class TestDirectoryOperations:
         interface = MockInterface(choices=[0])
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -150,7 +149,7 @@ class TestDirectoryOperations:
         interface = MockInterface(choices=[0])
 
         result = await WriteTool(path=str(nested_dir), is_directory=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -163,7 +162,7 @@ class TestDirectoryOperations:
         interface = MockInterface(choices=[1])
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined the write."
@@ -178,7 +177,7 @@ class TestDirectoryOperations:
         interface = MockInterface()
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert len(result.issues) == 1
@@ -196,7 +195,7 @@ class TestAutoAllowedPaths:
             path=str(test_file),
             is_directory=False,
             content="Auto-allowed content",
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Auto-allowed content"
@@ -209,7 +208,7 @@ class TestAutoAllowedPaths:
         interface = MockInterface()
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert result.issues == []
@@ -226,7 +225,7 @@ class TestAutoAllowedPaths:
             path=str(test_file),
             is_directory=False,
             content="Updated auto content",
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert test_file.read_text() == "Updated auto content"
@@ -248,7 +247,7 @@ class TestErrorHandling:
                 path=str(test_file),
                 is_directory=False,
                 content="Cannot write this",
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
             assert len(result.issues) == 1
         finally:
             restricted_dir.chmod(0o755)
@@ -264,7 +263,7 @@ class TestErrorHandling:
 
             result = await WriteTool(
                 path=str(test_file), is_directory=False, content="Test content"
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
 
             assert len(result.issues) == 1
             assert "encoding test error" in str(result.issues[0]).lower()
@@ -276,7 +275,7 @@ class TestErrorHandling:
 
         result = await WriteTool(
             path=str(test_file), is_directory=False, content="Test content"
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert len(result.issues) == 1
         assert "disk space" in str(result.issues[0]).lower()
@@ -293,7 +292,7 @@ class TestPathSecurity:
                 path="~/.solveig_test_write.txt",
                 is_directory=False,
                 content="Tilde expansion test",
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
 
             assert result.issues == []
             assert "~" not in result.content
@@ -310,7 +309,7 @@ class TestPathSecurity:
 
         result = await WriteTool(
             path=traversal_path, is_directory=False, content="Path traversal test"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert ".." not in result.content
@@ -330,7 +329,7 @@ class TestIntegrationScenarios:
 
         result = await WriteTool(
             path=str(test_file), is_directory=False, content=complex_content
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == complex_content
@@ -341,7 +340,7 @@ class TestIntegrationScenarios:
         interface1 = MockInterface(choices=[0])
         result1 = await WriteTool(
             path=str(test_file), is_directory=False, content="Initial content"
-        ).execute(make_ctx(interface=interface1))
+        ).execute(*make_ctx(interface=interface1))
         assert result1.issues == []
         output1 = interface1.get_all_output()
         assert "creating" in output1.lower()
@@ -350,7 +349,7 @@ class TestIntegrationScenarios:
         interface2 = MockInterface(choices=[0])
         result2 = await WriteTool(
             path=str(test_file), is_directory=False, content="Updated content"
-        ).execute(make_ctx(interface=interface2))
+        ).execute(*make_ctx(interface=interface2))
         assert result2.issues == []
         output2 = interface2.get_all_output()
         assert "updating" in output2.lower()
@@ -364,7 +363,7 @@ class TestIntegrationScenarios:
             path=str(test_dir),
             is_directory=True,
             content="This content should be ignored",
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_dir.is_dir()

@@ -1,7 +1,7 @@
 """Integration tests for the `DeleteTool` tool.
 
 `DeleteTool(path=...)` is constructed (field validators run on construction),
-then run via `await tool.execute(ctx)`. `ToolResult` has no
+then run via `await tool.execute(config, interface)`. `ToolResult` has no
 `accepted`/`error`/`path` fields: a successful delete's `result.content` is
 `f"Deleted {abs_path}"` (which doubles as the path-resolution check the old
 tests did via `.path`), a decline is the literal `"User declined the
@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.tools.core.delete import DeleteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -24,7 +23,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestDeleteValidation:
@@ -50,7 +49,7 @@ class TestDeleteValidation:
         test_file.write_text("x")
         interface = MockInterface(choices=[1])
 
-        await DeleteTool(path=str(test_file)).execute(make_ctx(interface=interface))
+        await DeleteTool(path=str(test_file)).execute(*make_ctx(interface=interface))
 
         output = interface.get_all_output()
         assert "permanent" in output.lower()
@@ -64,7 +63,7 @@ class TestFileOperations:
         interface = MockInterface(choices=[0])
 
         result = await DeleteTool(path=str(test_file)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -76,7 +75,7 @@ class TestFileOperations:
         interface = MockInterface(choices=[1])
 
         result = await DeleteTool(path=str(test_file)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined the delete."
@@ -94,7 +93,7 @@ class TestFileOperations:
         interface = MockInterface(choices=[0])
 
         result = await DeleteTool(path=str(test_dir)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -107,7 +106,7 @@ class TestFileOperations:
         interface = MockInterface(choices=[1])
 
         result = await DeleteTool(path=str(test_dir)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined the delete."
@@ -120,7 +119,7 @@ class TestFileOperations:
         interface = MockInterface(choices=[0])
 
         result = await DeleteTool(path=str(empty_dir)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -135,7 +134,7 @@ class TestAutoAllowedPaths:
         interface = MockInterface()
 
         result = await DeleteTool(path=str(test_file)).execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert result.issues == []
@@ -151,7 +150,7 @@ class TestAutoAllowedPaths:
         interface = MockInterface()
 
         result = await DeleteTool(path=str(test_dir)).execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert result.issues == []
@@ -171,7 +170,7 @@ class TestAutoAllowedPaths:
 
         interface1 = MockInterface()
         result1 = await DeleteTool(path=str(auto_file)).execute(
-            make_ctx(config, interface1)
+            *make_ctx(config, interface1)
         )
         assert result1.issues == []
         assert not auto_file.exists()
@@ -179,7 +178,7 @@ class TestAutoAllowedPaths:
 
         interface2 = MockInterface(choices=[0])
         result2 = await DeleteTool(path=str(manual_file)).execute(
-            make_ctx(config, interface2)
+            *make_ctx(config, interface2)
         )
         assert result2.issues == []
         assert not manual_file.exists()
@@ -191,7 +190,7 @@ class TestErrorHandling:
         interface = MockInterface()
 
         result = await DeleteTool(path="/nonexistent/file.txt").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert len(result.issues) == 1
@@ -210,7 +209,7 @@ class TestErrorHandling:
 
         try:
             result = await DeleteTool(path=str(test_file)).execute(
-                make_ctx(interface=interface)
+                *make_ctx(interface=interface)
             )
             assert len(result.issues) == 1
             assert "permission" in str(result.issues[0]).lower()
@@ -226,7 +225,7 @@ class TestPathSecurity:
             interface = MockInterface(choices=[0])
 
             result = await DeleteTool(path=f"~/{temp_file_path.name}").execute(
-                make_ctx(interface=interface)
+                *make_ctx(interface=interface)
             )
 
             assert result.issues == []
@@ -246,7 +245,7 @@ class TestPathSecurity:
         interface = MockInterface(choices=[0])
 
         result = await DeleteTool(path=traversal_path).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -268,7 +267,7 @@ class TestIntegrationScenarios:
         interface = MockInterface(choices=[0])
 
         result = await DeleteTool(path=str(large_dir)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -289,7 +288,7 @@ class TestIntegrationScenarios:
         for filename in special_files:
             file_path = tmp_path / filename
             result = await DeleteTool(path=str(file_path)).execute(
-                make_ctx(interface=interface)
+                *make_ctx(interface=interface)
             )
             assert result.issues == []
             assert not file_path.exists()
@@ -301,12 +300,12 @@ class TestIntegrationScenarios:
         test_dir.mkdir()
 
         interface1 = MockInterface(choices=[1])
-        await DeleteTool(path=str(test_file)).execute(make_ctx(interface=interface1))
+        await DeleteTool(path=str(test_file)).execute(*make_ctx(interface=interface1))
         questions1 = " ".join(interface1.questions).lower()
         assert "delete file" in questions1
         assert "directory" not in questions1
 
         interface2 = MockInterface(choices=[1])
-        await DeleteTool(path=str(test_dir)).execute(make_ctx(interface=interface2))
+        await DeleteTool(path=str(test_dir)).execute(*make_ctx(interface=interface2))
         questions2 = " ".join(interface2.questions).lower()
         assert "delete directory" in questions2

@@ -1,7 +1,7 @@
 """Integration tests for the `CopyTool` tool.
 
 `CopyTool(source_path=..., destination_path=...)` is constructed (field
-validators run on construction), then run via `await tool.execute(ctx)`.
+validators run on construction), then run via `await tool.execute(config, interface)`.
 `ToolResult` has no `accepted`/`error`/`source_path`/`destination_path`
 fields: a successful copy's `result.content` is
 `f"Copied {abs_source} to {abs_destination}"` (which doubles as the
@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.tools.core.copy import CopyTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -25,7 +24,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestCopyValidation:
@@ -61,7 +60,7 @@ class TestFileOperations:
 
         result = await CopyTool(
             source_path=str(source_file), destination_path=str(dest_file)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert source_file.exists()
@@ -75,7 +74,7 @@ class TestFileOperations:
 
         result = await CopyTool(
             source_path=str(source_file), destination_path=str(dest_file)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "User declined the copy."
         assert source_file.exists()
@@ -93,7 +92,7 @@ class TestFileOperations:
 
         result = await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert source_dir.exists()
@@ -109,7 +108,7 @@ class TestFileOperations:
 
         result = await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "User declined the copy."
         assert source_dir.exists()
@@ -126,7 +125,7 @@ class TestAutoAllowedPaths:
 
         result = await CopyTool(
             source_path=str(source_file), destination_path=str(dest_file)
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert dest_file.read_text() == "Auto-copy content"
@@ -143,7 +142,7 @@ class TestAutoAllowedPaths:
 
         result = await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir)
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert (dest_dir / "content.txt").read_text() == "Directory content"
@@ -160,7 +159,7 @@ class TestAutoAllowedPaths:
 
         result = await CopyTool(
             source_path=str(auto_file), destination_path=str(manual_file)
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert manual_file.exists()
@@ -175,7 +174,7 @@ class TestErrorHandling:
 
         result = await CopyTool(
             source_path=str(nonexistent_file), destination_path=str(dest_file)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert any(
@@ -195,7 +194,7 @@ class TestErrorHandling:
         try:
             result = await CopyTool(
                 source_path=str(source_file), destination_path=str(dest_file)
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
             assert len(result.issues) == 1
         finally:
             source_file.chmod(0o644)
@@ -212,7 +211,7 @@ class TestErrorHandling:
         try:
             result = await CopyTool(
                 source_path=str(source_file), destination_path=str(dest_file)
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
             assert len(result.issues) == 1
             assert "permission" in str(result.issues[0]).lower()
         finally:
@@ -231,7 +230,7 @@ class TestPathSecurity:
             result = await CopyTool(
                 source_path="~/.solveig_test_copy_source.txt",
                 destination_path="~/.solveig_test_copy_dest.txt",
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
 
             assert result.issues == []
             assert "~" not in result.content
@@ -254,7 +253,7 @@ class TestPathSecurity:
 
         result = await CopyTool(
             source_path=traversal_source, destination_path=dest_file
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert ".." not in result.content
@@ -277,7 +276,7 @@ class TestIntegrationScenarios:
 
         result = await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir)
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert source_dir.exists()
@@ -303,7 +302,7 @@ class TestIntegrationScenarios:
 
         result = await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir / "copied")
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         for filename in special_files:
@@ -321,7 +320,7 @@ class TestIntegrationScenarios:
         interface1 = MockInterface(choices=[1])
         await CopyTool(
             source_path=str(source_file), destination_path=str(dest_file)
-        ).execute(make_ctx(interface=interface1))
+        ).execute(*make_ctx(interface=interface1))
         questions1 = " ".join(interface1.questions).lower()
         assert "copying file" in questions1
         assert "directory" not in questions1
@@ -329,7 +328,7 @@ class TestIntegrationScenarios:
         interface2 = MockInterface(choices=[1])
         await CopyTool(
             source_path=str(source_dir), destination_path=str(dest_dir)
-        ).execute(make_ctx(interface=interface2))
+        ).execute(*make_ctx(interface=interface2))
         questions2 = " ".join(interface2.questions).lower()
         assert "copying directory" in questions2
         assert "file" not in questions2.replace("copying", "")

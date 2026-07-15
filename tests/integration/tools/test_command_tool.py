@@ -1,7 +1,7 @@
 """Integration tests for the `CommandTool` tool.
 
 `CommandTool(command=..., timeout=10.0)` is constructed (field validators run
-on construction), then run via `await tool.execute(ctx)`. There's no separate
+on construction), then run via `await tool.execute(config, interface)`. There's no separate
 "validate-then-execute" split to test - `execute()`'s own body does both.
 
 `ToolResult` has no `accepted`/`success`/`stdout`/`error` fields - just
@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.tools.core.command import CommandTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -34,7 +33,7 @@ pytestmark = [
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestCommandValidation:
@@ -49,7 +48,7 @@ class TestCommandValidation:
     async def test_command_strips_whitespace(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
         result = await CommandTool(command="  echo hello  ").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert "hello" in result.content
 
@@ -83,7 +82,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[0])
 
         result = await CommandTool(command="echo 'hello world'").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -94,7 +93,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[1, 0])
 
         result = await CommandTool(command="echo 'hostname.local'").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert "hostname.local" in result.content
@@ -109,7 +108,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[1, 1])
 
         result = await CommandTool(command=f"cat {secret_file.name}").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -120,7 +119,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[2])
 
         result = await CommandTool(command="rm important_file.txt").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to run the command."
@@ -131,7 +130,7 @@ class TestCommandChoices:
 
         result = await CommandTool(
             command="ls /nonexistent_directory_for_test"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert "stdout:\n" in result.content
@@ -142,7 +141,7 @@ class TestCommandChoices:
         interface = MockInterface(choices=[0])
 
         result = await CommandTool(command=f"touch {test_file.name}").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "stdout:\n"
@@ -157,7 +156,7 @@ class TestAutoExecuteCommands:
         interface = MockInterface()
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
-        result = await CommandTool(command="ls").execute(make_ctx(config, interface))
+        result = await CommandTool(command="ls").execute(*make_ctx(config, interface))
 
         assert "file1.txt" in result.content
         assert "file2.txt" in result.content
@@ -169,7 +168,7 @@ class TestAutoExecuteCommands:
         config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
 
         result = await CommandTool(command="echo hello").execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert "hello" in result.content
@@ -196,7 +195,7 @@ class TestAutoExecuteCommands:
                 interface.choices.append(2)
 
             result = await CommandTool(command=command_str).execute(
-                make_ctx(config, interface)
+                *make_ctx(config, interface)
             )
 
             if should_auto_execute:
@@ -214,7 +213,7 @@ class TestDetachedCommands:
         interface = MockInterface(choices=[0])
 
         result = await CommandTool(command='echo "background" &', timeout=0).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -226,13 +225,13 @@ class TestDetachedCommands:
         interface = MockInterface(choices=[0])
 
         result1 = await CommandTool(command="echo blocking", timeout=5.0).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert "blocking" in result1.content
 
         interface.choices.append(0)
         result2 = await CommandTool(command="echo detached &", timeout=-1).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert result2.content == "stdout:\n"
 
@@ -246,7 +245,7 @@ class TestWorkingDirectoryTracking:
         subdir.mkdir()
 
         result = await CommandTool(command=f"cd {subdir.name}").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert result.issues == []
 
@@ -258,7 +257,7 @@ class TestWorkingDirectoryTracking:
         interface = MockInterface(choices=[0])
 
         result = await CommandTool(command="echo background &", timeout=0).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.issues == []
@@ -272,19 +271,19 @@ class TestShellIntegration:
 
         interface.choices.append(0)
         mkdir_result = await CommandTool(command=f"mkdir {subdir.name}").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert mkdir_result.issues == []
 
         interface.choices.append(0)
         cd_result = await CommandTool(command=f"cd {subdir.name}").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert cd_result.issues == []
 
         interface.choices.append(0)
         pwd_result = await CommandTool(command="pwd").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert pwd_result.content == f"stdout:\n{subdir}"
 
@@ -293,19 +292,19 @@ class TestShellIntegration:
 
         interface.choices.append(0)
         mkdir_result = await CommandTool(command="mkdir test_dir").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert mkdir_result.issues == []
         assert (tmp_path / "test_dir").is_dir()
 
         interface.choices.append(0)
         cd_result = await CommandTool(command="cd test_dir").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert cd_result.issues == []
 
         interface.choices.append(0)
         pwd_result = await CommandTool(command="pwd").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
         assert pwd_result.content == f"stdout:\n{tmp_path / 'test_dir'}"

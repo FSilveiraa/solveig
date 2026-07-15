@@ -2,7 +2,7 @@
 
 `HttpTool(url=..., method="GET", headers=None, body=None,
 follow_redirects=True, output_file=None)` is constructed (field validators run
-on construction), then run via `await tool.execute(ctx)`.
+on construction), then run via `await tool.execute(config, interface)`.
 
 Exercises a real `httpx.AsyncClient` against a real, loopback-only aiohttp
 server (`local_http_server` fixture in `tests/conftest.py`) instead of
@@ -27,7 +27,6 @@ import httpx
 import pytest
 from aiohttp import web
 
-from solveig.context import build_run_context
 from solveig.tools.core.http import HttpTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -35,7 +34,7 @@ pytestmark = pytest.mark.anyio
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 def _app_with_response(status: int = 200, text: str = "hello") -> web.Application:
@@ -58,7 +57,7 @@ async def test_declined_returns_decline_message(local_http_server):
     interface = MockInterface(choices=[1])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.content == "User declined to send the request."
@@ -75,7 +74,7 @@ async def test_happy_path_200_returns_body(local_http_server):
     interface = MockInterface(choices=[0, 0])  # send request, then send to assistant
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.content == "response body text"
@@ -94,7 +93,7 @@ async def test_non_200_response_still_accepted(local_http_server):
     interface = MockInterface(choices=[0, 0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.issues == []
@@ -114,7 +113,7 @@ async def test_response_truncated_when_body_exceeds_limit(local_http_server):
     interface = MockInterface(choices=[0, 0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(config, interface)
+        *make_ctx(config, interface)
     )
 
     assert result.metadata["truncated"] is True
@@ -133,7 +132,7 @@ async def test_inspect_first_then_send(local_http_server):
     )  # send, inspect, then send to assistant
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.content == "body text"
@@ -144,7 +143,7 @@ async def test_inspect_first_then_decline(local_http_server):
     interface = MockInterface(choices=[0, 1, 1])  # send, inspect, then don't send
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.content == "Status 200. User declined to send the response."
@@ -155,7 +154,7 @@ async def test_dont_send_without_inspecting(local_http_server):
     interface = MockInterface(choices=[0, 2])  # send request, don't send response
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert result.content == "Status 200. User declined to send the response."
@@ -178,7 +177,7 @@ async def test_timeout_returns_issue(local_http_server):
     interface = MockInterface(choices=[0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
-        make_ctx(config, interface)
+        *make_ctx(config, interface)
     )
 
     assert len(result.issues) == 1
@@ -190,7 +189,7 @@ async def test_connection_refused_returns_issue(free_tcp_port):
     interface = MockInterface(choices=[0])
 
     result = await HttpTool(url=f"http://127.0.0.1:{free_tcp_port}/").execute(
-        make_ctx(interface=interface)
+        *make_ctx(interface=interface)
     )
 
     assert len(result.issues) == 1
@@ -211,7 +210,7 @@ async def test_output_file_accept_writes_response_to_disk(local_http_server, tmp
 
     result = await HttpTool(
         url=str(server.make_url("/")), output_file=str(output_path)
-    ).execute(make_ctx(interface=interface))
+    ).execute(*make_ctx(interface=interface))
 
     assert result.issues == []
     assert output_path.read_text() == "downloaded content"
@@ -226,7 +225,7 @@ async def test_output_file_decline_leaves_no_file(local_http_server, tmp_path):
 
     result = await HttpTool(
         url=str(server.make_url("/")), output_file=str(output_path)
-    ).execute(make_ctx(interface=interface))
+    ).execute(*make_ctx(interface=interface))
 
     assert result.issues == []
     assert "declined to write" in result.content.lower()

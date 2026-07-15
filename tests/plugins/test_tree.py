@@ -2,7 +2,8 @@
 
 `TreeTool(path=..., max_depth=-1)` is a `@tool`-decorated `BaseTool` subclass
 now, constructed (field validators run on construction) then run via
-`await tool.execute(ctx)` - same pattern as the core tool test files.
+`await tool.execute(config, interface)` - same pattern as the core tool test
+files.
 
 `ToolResult` has no `accepted`/`error`/`metadata`/`path` fields. A
 successful "send tree" returns the `FileMetadata` instance directly as
@@ -20,7 +21,6 @@ from pathlib import PurePath
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.plugins.tools.tree import TreeTool
 from solveig.utils.file import FileMetadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestTreeValidation:
@@ -47,7 +47,7 @@ class TestTreeChoices:
         interface = MockInterface(choices=[2])  # Don't read anything
 
         result = await TreeTool(path=str(tmp_path)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to read the tree."
@@ -59,7 +59,7 @@ class TestTreeChoices:
         interface = MockInterface(choices=[0])  # Read and send tree
 
         result = await TreeTool(path=str(tmp_path)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -70,7 +70,7 @@ class TestTreeChoices:
         interface = MockInterface(choices=[1, 0])  # inspect, then Yes
 
         result = await TreeTool(path=str(tmp_path)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -79,7 +79,7 @@ class TestTreeChoices:
         interface = MockInterface(choices=[1, 1])  # inspect, then No
 
         result = await TreeTool(path=str(tmp_path)).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to send the tree."
@@ -90,7 +90,7 @@ class TestTreeAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface(choices=[1])  # still asked whether to read at all
 
-        result = await TreeTool(path=str(tmp_path)).execute(make_ctx(config, interface))
+        result = await TreeTool(path=str(tmp_path)).execute(*make_ctx(config, interface))
 
         assert isinstance(result.content, FileMetadata)
         assert len(interface.questions) == 1
@@ -101,7 +101,7 @@ class TestTreeErrorHandling:
         interface = MockInterface()
 
         result = await TreeTool(path="/nonexistent/dir").execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert len(result.issues) == 1
@@ -119,7 +119,7 @@ class TestTreeDepthLimiting:
         interface = MockInterface(choices=[0])
 
         result = await TreeTool(path=str(tmp_path), max_depth=2).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         listing = result.content.listing

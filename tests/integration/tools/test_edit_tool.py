@@ -2,8 +2,7 @@
 
 A tool is a `BaseTool` subclass now: `EditTool(path=..., old_string=...,
 new_string=..., replace_all=False)` is constructed (its field validators run
-on construction), then run via `await tool.execute(ctx)`, where `ctx` is a
-`RunContext` carrying the `SolveigContext` deps (config + interface).
+on construction), then run via `await tool.execute(config, interface)`.
 
 `ToolResult` has no `accepted`/`error`/`occurrences_found`/
 `occurrences_replaced` fields. A successful edit's `result.content` is
@@ -18,17 +17,15 @@ tests call `display_header` directly - that's the unit actually under test.
 """
 
 import pytest
-from pydantic_ai import RunContext
 
-from solveig.context import build_run_context
 from solveig.tools.core.edit import EditTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
-def make_ctx(config=DEFAULT_CONFIG, interface=None) -> RunContext:
-    return build_run_context(config, interface or MockInterface())
+def make_ctx(config=DEFAULT_CONFIG, interface=None):
+    return config, interface or MockInterface()
 
 
 class TestEditValidation:
@@ -43,7 +40,7 @@ class TestEditValidation:
     async def test_old_string_cannot_be_empty(self):
         with pytest.raises(ValueError, match="old_string cannot be empty"):
             await EditTool(path="/tmp/file.txt", old_string="", new_string="y").execute(
-                make_ctx()
+                *make_ctx()
             )
 
     async def test_new_string_can_be_empty(self, tmp_path):
@@ -53,7 +50,7 @@ class TestEditValidation:
 
         result = await EditTool(
             path=str(test_file), old_string="delete me ", new_string=""
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == "please"
@@ -67,7 +64,7 @@ class TestEditStringReplace:
 
         result = await EditTool(
             path=str(test_file), old_string="old_func", new_string="new_func"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert "1 replacement(s)" in result.content
@@ -80,7 +77,7 @@ class TestEditStringReplace:
 
         result = await EditTool(
             path=str(test_file), old_string="x", new_string="val", replace_all=False
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert "3 times" in str(result.issues[0])
@@ -93,7 +90,7 @@ class TestEditStringReplace:
 
         result = await EditTool(
             path=str(test_file), old_string="x", new_string="val", replace_all=True
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert "3 replacement(s)" in result.content
@@ -106,7 +103,7 @@ class TestEditStringReplace:
 
         result = await EditTool(
             path=str(test_file), old_string="nonexistent", new_string="replacement"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert "not found" in str(result.issues[0]).lower()
@@ -118,7 +115,7 @@ class TestEditStringReplace:
 
         result = await EditTool(
             path=str(test_file), old_string="# TODO: remove this\n", new_string=""
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert test_file.read_text() == "code here"
@@ -135,7 +132,7 @@ class TestEditStringReplace:
             path=str(test_file),
             old_string='"""Old docstring."""',
             new_string='"""New improved docstring."""',
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.issues == []
         assert '"""New improved docstring."""' in test_file.read_text()
@@ -150,7 +147,7 @@ class TestEditUserApproval:
 
         result = await EditTool(
             path=str(test_file), old_string="original", new_string="modified"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "User declined the edit."
         assert test_file.read_text() == original_content
@@ -163,7 +160,7 @@ class TestEditUserApproval:
 
         result = await EditTool(
             path=str(test_file), old_string="auto", new_string="automatic"
-        ).execute(make_ctx(config, interface))
+        ).execute(*make_ctx(config, interface))
 
         assert result.issues == []
         assert len(interface.questions) == 0
@@ -176,7 +173,7 @@ class TestEditErrorHandling:
 
         result = await EditTool(
             path="/nonexistent/file.txt", old_string="x", new_string="y"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
 
@@ -185,7 +182,7 @@ class TestEditErrorHandling:
 
         result = await EditTool(
             path=str(tmp_path), old_string="x", new_string="y"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert "directory" in str(result.issues[0]).lower()
@@ -197,7 +194,7 @@ class TestEditErrorHandling:
 
         result = await EditTool(
             path=str(binary_file), old_string="x", new_string="y"
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert "binary" in str(result.issues[0]).lower()

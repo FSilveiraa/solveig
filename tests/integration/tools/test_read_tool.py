@@ -1,7 +1,7 @@
 """Integration tests for the `ReadTool` tool.
 
 `ReadTool(path=..., metadata_only=..., line_ranges=None)` is constructed
-(field validators run on construction), then run via `await tool.execute(ctx)`.
+(field validators run on construction), then run via `await tool.execute(config, interface)`.
 `ToolResult` has no `accepted`/`metadata`/`path` fields. `execute()` puts
 exactly one thing in `result.content` depending on what was actually sent:
 a `FileMetadata` instance (metadata sends, including every directory read),
@@ -17,7 +17,6 @@ not `execute()`, so header assertions target it directly rather than the
 
 import pytest
 
-from solveig.context import build_run_context
 from solveig.tools.core.read import ReadTool
 from solveig.utils.file import FileMetadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -26,7 +25,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_ctx(config=DEFAULT_CONFIG, interface=None):
-    return build_run_context(config, interface or MockInterface())
+    return config, interface or MockInterface()
 
 
 class TestReadValidation:
@@ -44,7 +43,7 @@ class TestReadValidation:
         interface = MockInterface(choices=[0])
 
         result = await ReadTool(path=f"  {test_file}  ", metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "hi"
@@ -65,7 +64,7 @@ class TestReadValidation:
         interface = MockInterface(choices=[0])
 
         await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert "Content and metadata" in interface.get_all_output()
@@ -79,7 +78,7 @@ class TestDirectoryOperations:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -89,7 +88,7 @@ class TestDirectoryOperations:
     async def test_directory_read_decline(self, tmp_path):
         interface = MockInterface(choices=[1])
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to send metadata."
@@ -103,7 +102,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == test_content
@@ -115,7 +114,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[1, 0])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == test_content
@@ -126,7 +125,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[1, 1])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -137,7 +136,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[1, 2])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to send anything."
@@ -148,7 +147,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[2])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -159,7 +158,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[3])
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "User declined to send anything."
@@ -170,7 +169,7 @@ class TestFileContentFlow:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(test_file), metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -181,10 +180,10 @@ class TestFileContentFlow:
         test_file.write_text(test_content)
 
         result1 = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=MockInterface(choices=[0]))
+            *make_ctx(interface=MockInterface(choices=[0]))
         )
         result2 = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(interface=MockInterface(choices=[1, 0]))
+            *make_ctx(interface=MockInterface(choices=[1, 0]))
         )
 
         assert result1.content == result2.content == test_content
@@ -199,7 +198,7 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert result.content == test_content
@@ -211,7 +210,7 @@ class TestAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface()
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
-            make_ctx(config, interface)
+            *make_ctx(config, interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -224,7 +223,7 @@ class TestErrorHandling:
         interface = MockInterface()
         result = await ReadTool(
             path="/nonexistent/file.txt", metadata_only=False
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert len(result.issues) == 1
         assert "does not exist" in str(result.issues[0]).lower()
@@ -238,7 +237,7 @@ class TestErrorHandling:
         try:
             result = await ReadTool(
                 path=str(restricted_file), metadata_only=False
-            ).execute(make_ctx(interface=interface))
+            ).execute(*make_ctx(interface=interface))
             assert len(result.issues) == 1
         finally:
             restricted_file.chmod(0o644)
@@ -250,7 +249,7 @@ class TestErrorHandling:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(binary_file), metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == "(binary content)"
@@ -266,7 +265,7 @@ class TestPathSecurity:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path="~/tilde_test.txt", metadata_only=False).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content == test_content
@@ -284,7 +283,7 @@ class TestPathSecurity:
         traversal_path = str(public_dir / ".." / ".." / "secret" / "data.txt")
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=traversal_path, metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
@@ -320,7 +319,7 @@ class TestLineRanges:
         interface = MockInterface(choices=[0])
         result = await ReadTool(
             path=str(test_file), metadata_only=False, line_ranges=[[2, 4]]
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "line2\nline3\nline4"
 
@@ -331,7 +330,7 @@ class TestLineRanges:
         interface = MockInterface(choices=[0])
         result = await ReadTool(
             path=str(test_file), metadata_only=False, line_ranges=[[3, -1]]
-        ).execute(make_ctx(interface=interface))
+        ).execute(*make_ctx(interface=interface))
 
         assert result.content == "line3\nline4\nline5"
 
@@ -345,7 +344,7 @@ class TestIntegrationScenarios:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert result.content.is_directory
@@ -357,7 +356,7 @@ class TestIntegrationScenarios:
 
         interface = MockInterface(choices=[0])
         result = await ReadTool(path=str(test_file), metadata_only=True).execute(
-            make_ctx(interface=interface)
+            *make_ctx(interface=interface)
         )
 
         assert isinstance(result.content, FileMetadata)
