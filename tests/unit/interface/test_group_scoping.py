@@ -56,7 +56,7 @@ class _StubInterface(SolveigInterface):
         self.calls.append(("_ask_question", question))
         return "answer"
 
-    async def _ask_choice(self, question, choices, add_cancel=False) -> int:
+    async def _ask_choice(self, question, choices, add_cancel=True) -> int:
         self.calls.append(("_ask_choice", question))
         return 0
 

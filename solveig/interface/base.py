@@ -215,7 +215,7 @@ class SolveigInterface(ABC):
         raise NotImplementedError("Subclass must implement _ask_question")
 
     async def ask_choice(
-        self, question: str, choices: Iterable[str], add_cancel: bool = False
+        self, question: str, choices: Iterable[str], add_cancel: bool = True
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected
         option (starting at 0). Delegates to the root interface and
@@ -224,7 +224,7 @@ class SolveigInterface(ABC):
             return await self._root._ask_choice(question, choices, add_cancel)
 
     async def _ask_choice(
-        self, question: str, choices: Iterable[str], add_cancel: bool = False
+        self, question: str, choices: Iterable[str], add_cancel: bool = True
     ) -> int:
         raise NotImplementedError("Subclass must implement _ask_choice")
 
