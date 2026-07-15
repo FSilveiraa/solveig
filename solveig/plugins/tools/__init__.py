@@ -50,12 +50,10 @@ def _plugin_name(fn: PluginTool) -> str:
 @dataclass
 class ToolRegistry:
     all: dict[str, PluginTool] = field(default_factory=dict)
-    active: dict[str, PluginTool] = field(default_factory=dict)
     owners: dict[str, str] = field(default_factory=dict)
 
     def clear(self) -> None:
         self.all.clear()
-        self.active.clear()
         self.owners.clear()
 
     def register(self, fn: PluginTool) -> PluginTool:
@@ -83,10 +81,9 @@ async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterfa
     )
 
     reported_plugins: set[str] = set()
-    for tool_name, plugin_fn in PLUGIN_TOOLS.all.items():
+    for tool_name, _plugin_fn in PLUGIN_TOOLS.all.items():
         plugin_name = PLUGIN_TOOLS.owners[tool_name]
         if config.plugins and plugin_name in config.plugins:
-            PLUGIN_TOOLS.active[tool_name] = plugin_fn
             if plugin_name not in reported_plugins:
                 await interface.display_success(f"'{plugin_name}': Loaded")
         else:

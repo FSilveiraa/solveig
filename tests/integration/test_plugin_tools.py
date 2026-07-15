@@ -18,12 +18,18 @@ pytestmark = pytest.mark.anyio
 
 
 class TestToolPluginFiltering:
+    """`load_and_filter_tools` just discovers + reports; live visibility is
+    decided per-step by `is_tool_active` (`tools/available.py`), which reads
+    `PLUGIN_TOOLS.owners` against `ctx.deps.config.plugins` directly - there's
+    no separate "active" set to keep in sync. These tests assert the same
+    membership check `is_tool_active` performs."""
+
     @pytest.fixture(autouse=True)
     def clean_tools(self):
         PLUGIN_TOOLS.clear()
 
-    async def test_tool_enabled_when_in_config(self):
-        """Tools in config.plugins are moved into active after loading."""
+    async def test_tool_discovered_and_enabled_when_in_config(self):
+        """A tool discovered by the rescan is registered and its plugin is enabled in config."""
         mock_tool_cls = MagicMock(__name__="my_tool")
 
         async def fake_rescan(**_):
@@ -35,10 +41,11 @@ class TestToolPluginFiltering:
         ):
             await load_and_filter_tools(config, MockInterface())
 
-        assert PLUGIN_TOOLS.active["my_tool"] is mock_tool_cls
+        assert PLUGIN_TOOLS.all["my_tool"] is mock_tool_cls
+        assert PLUGIN_TOOLS.owners["my_tool"] in config.plugins
 
-    async def test_tool_disabled_when_not_in_config(self):
-        """Tools absent from config.plugins are not moved into active."""
+    async def test_tool_discovered_but_disabled_when_not_in_config(self):
+        """A tool discovered by the rescan is still registered even if its plugin is absent from config."""
         mock_tool_cls = MagicMock(__name__="my_tool")
 
         async def fake_rescan(**_):
@@ -50,10 +57,11 @@ class TestToolPluginFiltering:
         ):
             await load_and_filter_tools(config, MockInterface())
 
-        assert "my_tool" not in PLUGIN_TOOLS.active
+        assert "my_tool" in PLUGIN_TOOLS.all
+        assert PLUGIN_TOOLS.owners["my_tool"] not in config.plugins
 
     async def test_tree_plugin_skipped_when_not_in_config(self):
-        """The real tree plugin is not activated when absent from config.plugins."""
+        """The real tree plugin's owner is absent from config.plugins."""
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",
@@ -61,10 +69,10 @@ class TestToolPluginFiltering:
         )
         await load_and_filter_tools(config=config, interface=MockInterface())
 
-        assert "tree" not in PLUGIN_TOOLS.active
+        assert PLUGIN_TOOLS.owners["tree"] not in config.plugins
 
     async def test_tree_plugin_loaded_when_in_config(self):
-        """The real tree plugin is activated when listed in config.plugins."""
+        """The real tree plugin is discovered and its owner is enabled in config.plugins."""
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",
@@ -77,8 +85,9 @@ class TestToolPluginFiltering:
         # Python class name. rescan_and_load_plugins re-imports the module, so
         # the loaded class is a distinct (but equivalent) object from this
         # module's own TreeTool import - compare by name/class name, not `is`.
-        assert "tree" in PLUGIN_TOOLS.active
-        loaded = PLUGIN_TOOLS.active["tree"]
+        assert "tree" in PLUGIN_TOOLS.all
+        assert PLUGIN_TOOLS.owners["tree"] in config.plugins
+        loaded = PLUGIN_TOOLS.all["tree"]
         assert loaded.__name__ == TreeTool.__name__
         assert loaded.tool_name() == "tree"
 

@@ -1,24 +1,26 @@
 """Tests for the hook plugin registry (`solveig/plugins/hooks/__init__.py`).
 
 Replaces the old exception-based `PLUGIN_HOOKS.before`/`.after` list tests
-(`ValidationError`/`SecurityError`/`ProcessingError` stopping a `BaseTool.solve()`
-call) - that whole exception-translation layer is gone. Scope is split from
+(`ValidationError`/`SecurityError` stopping a `BaseTool.solve()` call) - that
+whole exception-translation layer is gone. Scope is split from
 `tests/unit/test_toolset.py`, mirroring the tools-side split between
 `test_plugin_tools.py` (registry/discovery) and whatever exercises
 `AvailableTools.rebuild()`'s `FilteredToolset`: this file owns registry
 mechanics (`before`/`after` registration, `plugin_name` derivation,
 `clear_hooks`) and real plugin discovery (`load_and_filter_hooks` finding
-`shellcheck`/`trafilatura`); `test_toolset.py` already owns `HookRunner`'s
-call-time orchestration (gating, blocking, chaining) using a synthetic tool,
-so that isn't retested here against real hooks.
+`shellcheck`/`trafilatura`); `test_toolset.py` already owns
+`run_tool_and_hooks`'s call-time orchestration (gating, blocking, chaining)
+using a synthetic tool, so that isn't retested here against real hooks.
 
-One architectural note worth keeping visible: unlike `PLUGIN_TOOLS.active`,
-`BEFORE_HOOKS`/`AFTER_HOOKS` are never filtered by `config.plugins` at load
-time - `load_and_filter_hooks()` discovers and registers everything
-unconditionally (hooks self-register via the decorator at import time), and
-`config.plugins` gating happens live, per call, inside `HookRunner`. So
-"skipped" here only ever means "not reported as active" (an interface
-message), never "absent from the registry".
+One architectural note worth keeping visible: like plugin tools
+(`PLUGIN_TOOLS`, `tools/available.py`'s `is_tool_active`), `BEFORE_HOOKS`/
+`AFTER_HOOKS` are never filtered by `config.plugins` at load time -
+`load_and_filter_hooks()` discovers and registers everything unconditionally
+(hooks self-register via the decorator at import time), and `config.plugins`
+gating happens live, per call, inside `run_tool_and_hooks`
+(`tools/orchestration.py`). So "skipped" here only ever means "not reported
+as active" (an interface message), never "absent from the registry" - the
+same live-filter-over-a-static-registry shape both plugin systems share.
 """
 
 from unittest.mock import patch
