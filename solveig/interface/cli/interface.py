@@ -76,11 +76,11 @@ class TerminalInterface(SolveigInterface):
         return self.app._stats_dashboard
 
     # SolveigInterface implementation
-    async def start(self) -> None:
+    async def _start(self) -> None:
         """Start the interface."""
         await self.app.run_async()
 
-    async def stop(self) -> None:
+    async def _stop(self) -> None:
         """Stop the interface explicitly."""
         self.app.exit()
 
@@ -225,11 +225,11 @@ class TerminalInterface(SolveigInterface):
             to_display, title=title or "Diff"
         )
 
-    async def ask_question(self, question: str) -> str:
+    async def _ask_question(self, question: str) -> str:
         """Ask for specific input, preserving any current typing."""
         return await self.app.ask_user(question)
 
-    async def ask_choice(
+    async def _ask_choice(
         self, question: str, choices: Iterable[str], add_cancel: bool = True
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
@@ -246,7 +246,7 @@ class TerminalInterface(SolveigInterface):
             raise UserCancel()
         return choice_index
 
-    async def update_stats(
+    async def _update_stats(
         self,
         status: str | None = None,
         sent_tokens: int | None = None,
@@ -287,11 +287,11 @@ class TerminalInterface(SolveigInterface):
             async def _restore_status() -> None:
                 # Only restore if nothing else has changed the status in the meantime
                 if self.app._stats_dashboard._status == status:
-                    await self.update_stats(status=previous_status)
+                    await self._update_stats(status=previous_status)
 
             self.app.set_timer(duration, _restore_status)
 
-    async def wait_until_ready(self):
+    async def _wait_until_ready(self):
         await self.app.is_ready.wait()
         # HACK - Set active_app context since the interface was started from a separate asyncio task
         from textual._context import active_app
@@ -300,7 +300,7 @@ class TerminalInterface(SolveigInterface):
         # Print banner
         await self.display_text(BANNER)
 
-    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
+    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
         """Display a section header with line extending to the right."""
         if even_if_repeated or self._section_title != title:
             self._section_title = title
@@ -318,7 +318,7 @@ class TerminalInterface(SolveigInterface):
             await self.app._conversation_area.exit_group(auto_collapse=auto_collapse)
 
     @asynccontextmanager
-    async def with_animation(
+    async def _with_animation(
         self,
         status: str = "Processing",
         final_status: str | None = None,
@@ -331,7 +331,7 @@ class TerminalInterface(SolveigInterface):
             if final_status is not None
             else self.app._stats_dashboard._status
         )
-        await self.update_stats(status)
+        await self._update_stats(status)
         await asyncio.sleep(0)
 
         spinner_name = random.choice(list(self.spinners.keys()))
@@ -348,4 +348,4 @@ class TerminalInterface(SolveigInterface):
             self.stats.clear_spinner()
             self.stats.stop_animation_timer()
             self.stats.set_status_suffix(None)
-            await self.update_stats(final_status)
+            await self._update_stats(final_status)

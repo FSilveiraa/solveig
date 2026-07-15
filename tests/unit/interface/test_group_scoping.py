@@ -1,0 +1,159 @@
+"""Tests for SolveigInterface's global/local method split - pure ABC-level
+behavior, no Textual widgets involved."""
+
+import pytest
+
+from solveig.interface.base import MutableTextBox, SolveigInterface
+
+
+class _StubInterface(SolveigInterface):
+    """Minimal concrete SolveigInterface for testing the ABC's own
+    delegation logic, independent of any real backend (CLI/web/etc)."""
+
+    def __init__(self, root: SolveigInterface | None = None):
+        self.pending_queue = None  # not exercised by these tests
+        self._root_ref = root
+        self.calls: list[tuple] = []
+
+    async def _start(self) -> None:
+        self.calls.append(("_start",))
+
+    async def _stop(self) -> None:
+        self.calls.append(("_stop",))
+
+    async def _wait_until_ready(self):
+        self.calls.append(("_wait_until_ready",))
+
+    async def display_text(self, text: str, prefix: str | None = None) -> None:
+        self.calls.append(("display_text", text))
+
+    async def display_error(self, error) -> None:
+        self.calls.append(("display_error", error))
+
+    async def display_warning(self, warning: str) -> None:
+        self.calls.append(("display_warning", warning))
+
+    async def display_success(self, message: str) -> None:
+        self.calls.append(("display_success", message))
+
+    async def display_info(self, message: str) -> None:
+        self.calls.append(("display_info", message))
+
+    async def display_comment(self, message: str) -> None:
+        self.calls.append(("display_comment", message))
+
+    async def display_tree(self, metadata, title=None, display_metadata=False, expand_root=True) -> None:
+        self.calls.append(("display_tree", title))
+
+    async def display_text_box(self, text, title=None, language=None, italic=False, collapsed=False) -> MutableTextBox:
+        self.calls.append(("display_text_box", title))
+        return MutableTextBox()
+
+    async def display_diff(self, old_content, new_content, title=None, context_lines=3) -> None:
+        self.calls.append(("display_diff", title))
+
+    async def _ask_question(self, question: str) -> str:
+        self.calls.append(("_ask_question", question))
+        return "answer"
+
+    async def _ask_choice(self, question, choices, add_cancel=False) -> int:
+        self.calls.append(("_ask_choice", question))
+        return 0
+
+    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
+        self.calls.append(("_display_section", title))
+
+    async def _update_stats(
+        self,
+        status: str | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
+        model: str | None = None,
+        url: str | None = None,
+        path=None,
+        max_context: int | None = None,
+        used_context: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
+        duration: float | None = None,
+    ) -> None:
+        # Record only the non-None kwargs for testing
+        kwargs = {}
+        if status is not None:
+            kwargs['status'] = status
+        if sent_tokens is not None:
+            kwargs['sent_tokens'] = sent_tokens
+        if received_tokens is not None:
+            kwargs['received_tokens'] = received_tokens
+        if model is not None:
+            kwargs['model'] = model
+        if url is not None:
+            kwargs['url'] = url
+        if path is not None:
+            kwargs['path'] = path
+        if max_context is not None:
+            kwargs['max_context'] = max_context
+        if used_context is not None:
+            kwargs['used_context'] = used_context
+        if input_price is not None:
+            kwargs['input_price'] = input_price
+        if output_price is not None:
+            kwargs['output_price'] = output_price
+        if mcp_servers is not None:
+            kwargs['mcp_servers'] = mcp_servers
+        if duration is not None:
+            kwargs['duration'] = duration
+        self.calls.append(("_update_stats", kwargs))
+
+
+@pytest.mark.anyio
+class TestRootDelegation:
+    async def test_root_interface_is_its_own_root(self):
+        root = _StubInterface()
+        assert root._root is root
+
+    async def test_scoped_interface_reports_the_real_root(self):
+        root = _StubInterface()
+        scoped = _StubInterface(root=root)
+        assert scoped._root is root
+
+    async def test_ask_choice_from_scoped_interface_calls_root_backend(self):
+        root = _StubInterface()
+        scoped = _StubInterface(root=root)
+
+        result = await scoped.ask_choice("Proceed?", ["Yes", "No"])
+
+        assert result == 0
+        assert ("_ask_choice", "Proceed?") in root.calls
+        assert scoped.calls == []  # never dispatched on the scoped instance itself
+
+    async def test_ask_question_from_scoped_interface_calls_root_backend(self):
+        root = _StubInterface()
+        scoped = _StubInterface(root=root)
+
+        result = await scoped.ask_question("Path?")
+
+        assert result == "answer"
+        assert ("_ask_question", "Path?") in root.calls
+
+    async def test_update_stats_from_scoped_interface_calls_root_backend(self):
+        root = _StubInterface()
+        scoped = _StubInterface(root=root)
+
+        await scoped.update_stats(status="Working")
+
+        assert ("_update_stats", {"status": "Working"}) in root.calls
+
+    async def test_display_section_from_scoped_interface_calls_root_backend(self):
+        root = _StubInterface()
+        scoped = _StubInterface(root=root)
+
+        await scoped.display_section("User")
+
+        assert ("_display_section", "User") in root.calls
+
+    async def test_local_display_call_on_root_does_not_touch_a_root_ref(self):
+        root = _StubInterface()
+        await root.display_text("hello")
+        assert ("display_text", "hello") in root.calls

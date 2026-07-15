@@ -41,6 +41,22 @@ class SolveigInterface(ABC):
     subcommand_executor: SubcommandRunner | None = None
     pending_queue: asyncio.Queue
     _request_task: asyncio.Task | None = None
+    _root_ref: "SolveigInterface | None" = None
+    _choice_lock_ref: asyncio.Lock | None = None
+
+    @property
+    def _root(self) -> "SolveigInterface":
+        """The top-level interface backing this scope - itself, unless this
+        is a scoped child (e.g. a GroupInterface) returned by with_group()."""
+        return self._root_ref if self._root_ref is not None else self
+
+    @property
+    def _choice_lock(self) -> asyncio.Lock:
+        """Lazily-created, shared across every scope rooted at this
+        interface (accessed only via self._root._choice_lock)."""
+        if self._choice_lock_ref is None:
+            self._choice_lock_ref = asyncio.Lock()
+        return self._choice_lock_ref
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
@@ -97,20 +113,27 @@ class SolveigInterface(ABC):
         """Check if there's an active network request running."""
         return self._request_task is not None and not self._request_task.done()
 
-    @abstractmethod
     async def start(self) -> None:
-        """Start the interface."""
-        ...
+        """Start the interface. Delegates to the root - only the root
+        interface is ever actually started."""
+        await self._root._start()
 
-    @abstractmethod
+    async def _start(self) -> None:
+        raise NotImplementedError("Subclass must implement _start")
+
     async def stop(self) -> None:
-        """Stop the interface explicitly."""
-        ...
+        """Stop the interface explicitly. Delegates to the root."""
+        await self._root._stop()
 
-    @abstractmethod
+    async def _stop(self) -> None:
+        raise NotImplementedError("Subclass must implement _stop")
+
     async def wait_until_ready(self):
-        """Wait until the interface is ready to be used."""
-        ...
+        """Wait until the interface is ready to be used. Delegates to the root."""
+        return await self._root._wait_until_ready()
+
+    async def _wait_until_ready(self):
+        raise NotImplementedError("Subclass must implement _wait_until_ready")
 
     # Core display methods
     @abstractmethod
@@ -178,29 +201,49 @@ class SolveigInterface(ABC):
         ...
 
     # Input methods
-    @abstractmethod
     async def ask_question(self, question: str) -> str:
-        """Ask for specific input, preserving any current typing."""
-        ...
+        """Ask for specific input, preserving any current typing.
 
-    @abstractmethod
+        Delegates to the root interface and serializes against any other
+        concurrently-pending ask_question/ask_choice call - a terminal (or
+        any single-user UI) can only show one prompt at a time, regardless
+        of how many groups are concurrently asking."""
+        async with self._root._choice_lock:
+            return await self._root._ask_question(question)
+
+    async def _ask_question(self, question: str) -> str:
+        raise NotImplementedError("Subclass must implement _ask_question")
+
     async def ask_choice(
         self, question: str, choices: Iterable[str], add_cancel: bool = False
     ) -> int:
-        """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
-        ...
+        """Ask a multiple-choice question, returns the index for the selected
+        option (starting at 0). Delegates to the root interface and
+        serializes against other concurrent prompts - see ask_question."""
+        async with self._root._choice_lock:
+            return await self._root._ask_choice(question, choices, add_cancel)
+
+    async def _ask_choice(
+        self, question: str, choices: Iterable[str], add_cancel: bool = False
+    ) -> int:
+        raise NotImplementedError("Subclass must implement _ask_choice")
 
     # Additional methods for compatibility
-    @abstractmethod
     async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
-        """Display a section header."""
-        ...
+        """Display a section header. Delegates to the root interface."""
+        await self._root._display_section(title, even_if_repeated)
+
+    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
+        raise NotImplementedError("Subclass must implement _display_section")
 
     @asynccontextmanager
     async def with_group(
         self, title: str, auto_collapse: bool = False
-    ) -> AsyncGenerator[None, Any]:
-        """Context manager for grouping related output."""
+    ) -> AsyncGenerator["SolveigInterface", Any]:
+        """Context manager for grouping related output. Yields a
+        SolveigInterface scoped to this group - local display calls made on
+        it land inside the group; global calls (ask_choice, update_stats,
+        etc.) transparently affect the root."""
         raise NotImplementedError("Subclass must implement with_group")
         yield  # This line will never execute but makes it a valid generator
 
@@ -212,11 +255,22 @@ class SolveigInterface(ABC):
         timeout: float | None = None,
         suffix: str | None = None,
     ) -> AsyncGenerator[None]:
-        """Context manager for displaying animation during async operations."""
-        raise NotImplementedError("Subclass must implement with_animation")
-        yield  # This line will never execute but makes it a valid generator
+        """Context manager for displaying animation during async operations.
+        Delegates to the root interface - there is only one status bar."""
+        async with self._root._with_animation(status, final_status, timeout, suffix) as value:
+            yield value
 
-    @abstractmethod
+    @asynccontextmanager
+    async def _with_animation(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
+    ) -> AsyncGenerator[None]:
+        raise NotImplementedError("Subclass must implement _with_animation")
+        yield  # pragma: no cover - unreachable, makes this a valid generator
+
     async def update_stats(
         self,
         status: str | None = None,
@@ -232,10 +286,41 @@ class SolveigInterface(ABC):
         mcp_servers: list[str] | None = None,
         duration: float | None = None,
     ) -> None:
-        """Update status bar with multiple pieces of information.
+        """Update status bar with multiple pieces of information. Delegates
+        to the root interface - there is only one status bar.
 
         Pass `duration` to show `status` as a flash message: it reverts to whatever
         status was set before this call once `duration` seconds pass, unless something
         else has changed the status in the meantime.
         """
-        ...
+        await self._root._update_stats(
+            status=status,
+            sent_tokens=sent_tokens,
+            received_tokens=received_tokens,
+            model=model,
+            url=url,
+            path=path,
+            max_context=max_context,
+            used_context=used_context,
+            input_price=input_price,
+            output_price=output_price,
+            mcp_servers=mcp_servers,
+            duration=duration,
+        )
+
+    async def _update_stats(
+        self,
+        status: str | None = None,
+        sent_tokens: int | None = None,
+        received_tokens: int | None = None,
+        model: str | None = None,
+        url: str | None = None,
+        path: str | PathLike | None = None,
+        max_context: int | None = None,
+        used_context: int | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
+        mcp_servers: list[str] | None = None,
+        duration: float | None = None,
+    ) -> None:
+        raise NotImplementedError("Subclass must implement _update_stats")
