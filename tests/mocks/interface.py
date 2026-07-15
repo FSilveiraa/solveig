@@ -222,7 +222,7 @@ class MockInterface(TerminalInterface):
         self.groups.append(f"START: {title}")
         self.outputs.append(f"┏━ {title}")
         try:
-            yield
+            yield self
         finally:
             self.groups.append(f"END: {title}")
             self.outputs.append("┗━━")

@@ -1,28 +1,22 @@
 """Main TerminalInterface implementation."""
 
 import asyncio
-import difflib
 import random
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import Any
 
 from rich.spinner import Spinner
-from rich.syntax import Syntax
-from textual.widgets import Markdown
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import MutableTextBox, SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
-from solveig.interface.cli.widgets import Comment
+from solveig.interface.cli.display_mixin import _ConversationDisplayMixin
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-from solveig.utils.file import FileMetadata
-from solveig.utils.misc import get_language
 
 
-class TerminalInterface(SolveigInterface):
+class TerminalInterface(_ConversationDisplayMixin, SolveigInterface):
     """
     CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
     """
@@ -108,121 +102,11 @@ class TerminalInterface(SolveigInterface):
     async def notify_pending_queue_changed(self) -> None:
         self.app.update_queued_display()
 
-    async def _display_text(
-        self, text: str, style: str = "text", prefix: str | None = None
-    ) -> None:
-        """Display text with optional styling."""
-        to_display = text
-        if prefix:
-            to_display = f"[{self.theme.info}]{prefix}[/]  {to_display}"
-        await self.app.add_text(to_display, style, markup=prefix is not None)
-
-    async def display_text(self, text: str, prefix: str | None = None) -> None:
-        await self._display_text(text, style="text", prefix=prefix)
-
-    async def display_error(self, error: str | Exception) -> None:
-        """Display an error message with standard formatting."""
-        await self._display_text(f"🗙 Error: {error}", style="error")
-
-    async def display_warning(self, warning: str) -> None:
-        """Display a warning message with standard formatting."""
-        await self._display_text(f"⚠  Warning: {warning}", style="warning")
-
-    async def display_success(self, message: str) -> None:
-        """Display a success message with standard formatting."""
-        await self.display_info(f"✓ {message}")
-
-    async def display_info(self, message: str) -> None:
-        """Display a system message."""
-        await self._display_text(message, style="info")
-
-    async def display_comment(self, message: str) -> None:
-        """Display a comment message."""
-        # HACK: the string below contains a magic character that lets it render with proper spacing
-        # TODO: move this to a dedicated method in TextualApp
-        await self.app._conversation_area._add_element(Comment(message))
-        # await self.app._conversation_area._add_element(
-        #     comment:=Markdown(f"🗩 ⠀{message}", classes="text_message")
-        # )
-        # await self.app._conversation_area._add_element(
-        #     CopyButton(message)
-        # )
-
-    async def display_tree(
-        self,
-        metadata: FileMetadata,
-        title: str | None = None,
-        display_metadata: bool = False,
-        expand_root=True,
-    ) -> None:
-        """Display an interactive tree structure of a directory."""
-        await self.app._conversation_area.add_tree_display(
-            metadata,
-            title=title or str(metadata.path),
-            display_metadata=display_metadata,
-            expand_root=expand_root,
-        )
-
-    async def display_text_box(
-        self,
-        text: str,
-        title: str | None = None,
-        language: str | None = None,
-        italic: bool = False,
-        collapsed: bool = False,
-    ) -> MutableTextBox:
-        """Display a text block with optional title. Returns the TextBox for live updates."""
-        to_display: str | Syntax | Markdown = text
-        if language:
-            language_name = get_language(language.lstrip("."))
-            if language_name == "markdown":
-                to_display = Markdown(text)
-            elif language_name:
-                to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
-
-        return await self.app._conversation_area.add_text_box(
-            to_display,
-            title=title,
-            collapsed=collapsed,
-            italic=italic,
-        )
-
-    async def display_diff(
-        self,
-        old_content: str,
-        new_content: str,
-        title: str | None = None,
-        context_lines: int = 3,
-    ) -> None:
-        """Display a unified diff view with syntax highlighting."""
-        # Hack! difflib expects each lines to end in \n, and the final one might now
-        # so we either rstrip() the entire text, OR we rstrip() every line after splitting
-        old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
-        new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
-
-        diff_lines = list(
-            difflib.unified_diff(
-                old_lines,
-                new_lines,
-                fromfile="original",
-                tofile="modified",
-                n=context_lines,
-            )
-        )
-
-        # Convert to string and apply diff syntax highlighting
-        diff_text = "".join(diff_lines)
-
-        # Rich has built-in diff highlighting
-        to_display: str | Syntax = diff_text
-        if diff_text.strip():  # Only if there are actual changes
-            # Use 'diff' lexer for syntax highlighting
-            to_display = Syntax(diff_text, lexer="diff", theme=self.code_theme)
-        else:
-            # TODO: add color hightlighting here
-            to_display = "(Same content)"
-        await self.app._conversation_area.add_text_box(
-            to_display, title=title or "Diff"
+    @property
+    def _container(self):
+        return (
+            self.app._conversation_area._current_section_container
+            or self.app._conversation_area
         )
 
     async def _ask_question(self, question: str) -> str:
@@ -300,22 +184,13 @@ class TerminalInterface(SolveigInterface):
         # Print banner
         await self.display_text(BANNER)
 
-    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
+    async def _display_section(
+        self, title: str, even_if_repeated: bool = False
+    ) -> None:
         """Display a section header with line extending to the right."""
         if even_if_repeated or self._section_title != title:
             self._section_title = title
             await self.app._conversation_area.add_section_header(title)
-
-    @asynccontextmanager
-    async def with_group(
-        self, title: str, auto_collapse: bool = False
-    ) -> AsyncGenerator[None, Any]:
-        """Context manager for grouping related output."""
-        await self.app._conversation_area.enter_group(title)
-        try:
-            yield
-        finally:
-            await self.app._conversation_area.exit_group(auto_collapse=auto_collapse)
 
     @asynccontextmanager
     async def _with_animation(

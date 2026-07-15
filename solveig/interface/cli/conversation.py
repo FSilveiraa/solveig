@@ -98,7 +98,9 @@ class ConversationArea(ScrollableContainer):
     ):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "text" else style
-        await self._add_element(Static(text, classes=style_class, markup=markup), container)
+        await self._add_element(
+            Static(text, classes=style_class, markup=markup), container
+        )
 
     async def add_text_box(
         self,
@@ -164,7 +166,9 @@ class ConversationArea(ScrollableContainer):
         self.call_after_refresh(self.scroll_end)
         return group
 
-    async def exit_group(self, group: CustomCollapsible, *, auto_collapse: bool = False) -> None:
+    async def exit_group(
+        self, group: CustomCollapsible, *, auto_collapse: bool = False
+    ) -> None:
         """Close a group returned by enter_group(): swap its pending marker
         for the closed cap, optionally collapsing it."""
         # Only remove markers that are direct children of this group,

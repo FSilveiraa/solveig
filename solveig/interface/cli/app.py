@@ -155,9 +155,3 @@ class SolveigTextualApp(TextualApp):
     async def ask_choice(self, question: str, choices) -> int:
         """Ask a multiple-choice question using Select widget."""
         return await self._input_widget.ask_choice(question, choices)
-
-    async def add_text(
-        self, text: str, style: str = "text", markup: bool = False
-    ) -> None:
-        """Internal method to add text to the UI."""
-        await self._conversation_area.add_text(text, style, markup=markup)

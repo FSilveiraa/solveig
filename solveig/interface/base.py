@@ -41,11 +41,11 @@ class SolveigInterface(ABC):
     subcommand_executor: SubcommandRunner | None = None
     pending_queue: asyncio.Queue
     _request_task: asyncio.Task | None = None
-    _root_ref: "SolveigInterface | None" = None
+    _root_ref: SolveigInterface | None = None
     _choice_lock_ref: asyncio.Lock | None = None
 
     @property
-    def _root(self) -> "SolveigInterface":
+    def _root(self) -> SolveigInterface:
         """The top-level interface backing this scope - itself, unless this
         is a scoped child (e.g. a GroupInterface) returned by with_group()."""
         return self._root_ref if self._root_ref is not None else self
@@ -233,13 +233,15 @@ class SolveigInterface(ABC):
         """Display a section header. Delegates to the root interface."""
         await self._root._display_section(title, even_if_repeated)
 
-    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
+    async def _display_section(
+        self, title: str, even_if_repeated: bool = False
+    ) -> None:
         raise NotImplementedError("Subclass must implement _display_section")
 
     @asynccontextmanager
     async def with_group(
         self, title: str, auto_collapse: bool = False
-    ) -> AsyncGenerator["SolveigInterface", Any]:
+    ) -> AsyncGenerator[SolveigInterface, Any]:
         """Context manager for grouping related output. Yields a
         SolveigInterface scoped to this group - local display calls made on
         it land inside the group; global calls (ask_choice, update_stats,
@@ -257,7 +259,9 @@ class SolveigInterface(ABC):
     ) -> AsyncGenerator[None]:
         """Context manager for displaying animation during async operations.
         Delegates to the root interface - there is only one status bar."""
-        async with self._root._with_animation(status, final_status, timeout, suffix) as value:
+        async with self._root._with_animation(
+            status, final_status, timeout, suffix
+        ) as value:
             yield value
 
     @asynccontextmanager
