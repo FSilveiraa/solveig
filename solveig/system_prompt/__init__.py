@@ -64,19 +64,19 @@ def render_as_example(messages: list[ModelMessage]) -> str:
     lines: list[str] = []
     for message in messages:
         if isinstance(message, ModelRequest):
-            for part in message.parts:
-                if isinstance(part, UserPromptPart) and isinstance(
-                    part.content, str
+            for request_part in message.parts:
+                if isinstance(request_part, UserPromptPart) and isinstance(
+                    request_part.content, str
                 ):
-                    lines.append(f"user: {part.content}")
+                    lines.append(f"user: {request_part.content}")
         elif isinstance(message, ModelResponse):
-            for part in message.parts:
-                if isinstance(part, TextPart):
-                    lines.append(f"assistant: {part.content}")
-                elif isinstance(part, ToolCallPart):
-                    args = part.args_as_dict()
+            for response_part in message.parts:
+                if isinstance(response_part, TextPart):
+                    lines.append(f"assistant: {response_part.content}")
+                elif isinstance(response_part, ToolCallPart):
+                    args = response_part.args_as_dict()
                     args_str = ", ".join(f"{k}={v!r}" for k, v in args.items())
-                    lines.append(f"  [calls {part.tool_name}({args_str})]")
+                    lines.append(f"  [calls {response_part.tool_name}({args_str})]")
     return "\n".join(lines)
 
 
