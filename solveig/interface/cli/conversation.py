@@ -43,7 +43,6 @@ class ConversationArea(ScrollableContainer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._group_stack: list[CustomCollapsible] = []
         self._hovered_group: CustomCollapsible | None = None
         self._current_section_container: Vertical | None = None
 
@@ -80,18 +79,9 @@ class ConversationArea(ScrollableContainer):
             if group is not None:
                 group.collapsed = not group.collapsed
 
-    @property
-    def _mount_target(self):
-        """Innermost group's Contents, else the current section container, else self."""
-        if self._group_stack:
-            return self._group_stack[-1].query_one(Collapsible.Contents)
-        if self._current_section_container is not None:
-            return self._current_section_container
-        return self
-
-    async def _add_element(self, element):
-        """Add element to the scrollable container."""
-        await self._mount_target.mount(element)
+    async def _add_element(self, element, container) -> None:
+        """Mount element into the given container."""
+        await container.mount(element)
 
         # Defer layout refresh so child widgets finish composing first, then
         # force a layout pass with their correct sizes (fixes height: auto on
@@ -103,10 +93,12 @@ class ConversationArea(ScrollableContainer):
 
         self.call_after_refresh(_after_mount)
 
-    async def add_text(self, text: str, style: str = "text", markup: bool = False):
+    async def add_text(
+        self, text: str, style: str = "text", markup: bool = False, *, container
+    ):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "text" else style
-        await self._add_element(Static(text, classes=style_class, markup=markup))
+        await self._add_element(Static(text, classes=style_class, markup=markup), container)
 
     async def add_text_box(
         self,
@@ -114,20 +106,22 @@ class ConversationArea(ScrollableContainer):
         title: str | None = None,
         collapsed: bool = False,
         italic: bool = False,
+        *,
+        container,
     ):
         """Add a collapsible text block (for reasoning, verbose output, etc.)."""
         box = CollapsibleTextBox(
             content, title=title, italic=italic, collapsed=collapsed
         )
-        await self._add_element(box)
+        await self._add_element(box, container)
         return box
 
     async def add_section_header(self, title: str):
         """Add a section header, then start a new tinted container for its content."""
         self._current_section_container = None
-        await self._add_element(SectionHeader(title))
+        await self._add_element(SectionHeader(title), self)
         container = Vertical(classes=f"section-{title.lower()}")
-        await self._add_element(container)
+        await self._add_element(container, self)
         self._current_section_container = container
 
     async def add_tree_display(
@@ -136,6 +130,8 @@ class ConversationArea(ScrollableContainer):
         title: str | None = None,
         display_metadata: bool = False,
         expand_root=True,
+        *,
+        container,
     ):
         """Add an interactive tree display widget."""
         tree_widget = TreeDisplay(
@@ -145,10 +141,12 @@ class ConversationArea(ScrollableContainer):
         )
         if title:
             tree_widget.border_title = title
-        await self._add_element(tree_widget)
+        await self._add_element(tree_widget, container)
 
-    async def enter_group(self, title: str) -> CustomCollapsible:
-        """Enter a new collapsible group. Returns the group widget."""
+    async def enter_group(self, title: str, *, container) -> CustomCollapsible:
+        """Mount a new collapsible group into container. Returns the group
+        widget - the caller is responsible for handing it back to
+        exit_group()."""
         group = CustomCollapsible(
             left_collapsed=title,
             left_expanded=title,
@@ -157,27 +155,29 @@ class ConversationArea(ScrollableContainer):
             start_collapsed=False,
             classes="group",
         )
-        await self._mount_target.mount(group)
+        await container.mount(group)
         for opacity in GROUP_PENDING_OPACITIES:
             marker = Static(GROUP_PENDING_CHAR, classes="group_pending")
             marker.styles.opacity = opacity
             await group.mount(marker)
-        self._group_stack.append(group)
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
         return group
 
-    async def exit_group(self, auto_collapse: bool = False) -> None:
-        """Exit the current group, optionally collapsing it."""
-        if self._group_stack:
-            group = self._group_stack.pop()
-            for pending in group.query(".group_pending"):
+    async def exit_group(self, group: CustomCollapsible, *, auto_collapse: bool = False) -> None:
+        """Close a group returned by enter_group(): swap its pending marker
+        for the closed cap, optionally collapsing it."""
+        # Only remove markers that are direct children of this group,
+        # not markers from nested groups (which would also match .group_pending query).
+        for pending in group.query(".group_pending"):
+            # Only remove if parent is this group, not nested
+            if pending.parent == group:
                 await pending.remove()
-            await group.mount(Static("┗━━━", classes="group_end"))
-            if auto_collapse:
-                group.collapsed = True
-            self.scroll_end()
-            self.call_after_refresh(self.scroll_end)
+        await group.mount(Static("┗━━━", classes="group_end"))
+        if auto_collapse:
+            group.collapsed = True
+        self.scroll_end()
+        self.call_after_refresh(self.scroll_end)
 
     @classmethod
     def get_css(cls, theme: Palette) -> str:
