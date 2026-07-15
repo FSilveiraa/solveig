@@ -18,6 +18,15 @@ this file only covers the session-level announcement.
 import json
 
 import pytest
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 from solveig.conversation import Conversation
 from solveig.sessions.manager import SessionManager
@@ -295,3 +304,46 @@ class TestDisplayLoadedSession:
         output = interface.get_all_output()
         assert "12" in output
         assert "34" in output
+
+    async def test_replays_user_prompt_and_assistant_reasoning_and_text(
+        self, tmp_path
+    ):
+        """A resumed session must replay the full turn - not just tool calls:
+        the user's prompt, the assistant's reasoning, and its final comment
+        all need to show up, mirroring what `run.py`/`agent._display_response`
+        render live. Regression test for a session where only the tool call
+        was replayed and the surrounding conversation was silently dropped."""
+        manager, _ = make_manager(tmp_path)
+        interface = MockInterface()
+        conversation = Conversation()
+        conversation.messages = [
+            ModelRequest(parts=[UserPromptPart(content="Review test.py")]),
+            ModelResponse(
+                parts=[
+                    ThinkingPart(content="I should read the file first."),
+                    ToolCallPart(
+                        tool_name="not_a_real_tool",
+                        args={"path": "test.py"},
+                        tool_call_id="call_1",
+                    ),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    ToolReturnPart(
+                        tool_name="not_a_real_tool",
+                        content="file contents",
+                        tool_call_id="call_1",
+                    )
+                ]
+            ),
+            ModelResponse(parts=[TextPart(content="It's safe to run.")]),
+        ]
+
+        await manager.display_loaded_session(conversation, interface)
+
+        output = interface.get_all_output()
+        assert "Review test.py" in output
+        assert "I should read the file first." in output
+        assert "It's safe to run." in output
+        assert interface.get_all_sections() == ["User", "Assistant"]

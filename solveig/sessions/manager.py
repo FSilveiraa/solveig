@@ -19,8 +19,11 @@ from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
+    TextPart,
+    ThinkingPart,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
@@ -204,19 +207,35 @@ class SessionManager:
 
         classes = tool_classes()
         for message in conversation.messages:
-            if not isinstance(message, ModelResponse):
-                continue
-            for response_part in message.parts:
-                if not isinstance(response_part, ToolCallPart):
-                    continue
-                return_part = returns.get(response_part.tool_call_id)
-                if return_part is None:
-                    # No persisted result - the call was denied/retried with
-                    # nothing to show, or the run was interrupted mid-call.
-                    continue
-                await self._replay_tool_call(
-                    interface, classes, response_part, return_part
-                )
+            if isinstance(message, ModelRequest):
+                for request_part in message.parts:
+                    if isinstance(request_part, UserPromptPart) and isinstance(
+                        request_part.content, str
+                    ):
+                        await interface.display_section("User")
+                        await interface.display_comment(request_part.content)
+            elif isinstance(message, ModelResponse):
+                for response_part in message.parts:
+                    if isinstance(response_part, ThinkingPart) and response_part.content:
+                        await interface.display_text_box(
+                            response_part.content,
+                            title="Reasoning",
+                            collapsed=True,
+                            italic=True,
+                        )
+                    elif isinstance(response_part, TextPart) and response_part.content:
+                        await interface.display_section("Assistant")
+                        await interface.display_comment(response_part.content)
+                    elif isinstance(response_part, ToolCallPart):
+                        return_part = returns.get(response_part.tool_call_id)
+                        if return_part is None:
+                            # No persisted result - the call was denied/retried
+                            # with nothing to show, or the run was interrupted
+                            # mid-call.
+                            continue
+                        await self._replay_tool_call(
+                            interface, classes, response_part, return_part
+                        )
 
     @staticmethod
     async def _replay_tool_call(
