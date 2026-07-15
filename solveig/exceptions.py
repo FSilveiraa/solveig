@@ -28,15 +28,6 @@ class ValidationError(PluginException):
     pass
 
 
-class ProcessingError(PluginException):
-    """
-    Raised when post-processing operation fails.
-    Used by after hooks to indicate result processing failed.
-    """
-
-    pass
-
-
 class SecurityError(ValidationError):
     """
     Raised when a security issue is detected.

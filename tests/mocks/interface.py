@@ -92,7 +92,8 @@ class MockInterface(TerminalInterface):
             if self._timeout_seconds is None:
                 raise TimeoutError(
                     "Interface timed out waiting for stop event. "
-                    "If this is a test, you need to add a final AssistantMessage with no tools"
+                    "If this is a test, you need to add a final ModelResponse "
+                    "with no ToolCallPart to create_mock_model(...)"
                 ) from e
         finally:
             # Cancel timeout task if it's still running
