@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
 
+from solveig.exceptions import UserCancel
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
@@ -218,14 +219,23 @@ class SolveigInterface(ABC):
         self, question: str, choices: Iterable[str], add_cancel: bool = True
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected
-        option (starting at 0). Delegates to the root interface and
-        serializes against other concurrent prompts - see ask_question."""
-        async with self._root._choice_lock:
-            return await self._root._ask_choice(question, choices, add_cancel)
+        option (starting at 0). The prompt itself delegates to the root
+        interface and serializes against other concurrent prompts - see
+        ask_question - but the answer is echoed via `self.display_text`, so
+        it lands in the caller's own scope (e.g. inside a tool's group)
+        rather than always at the root."""
+        choices_list = list(choices)
+        if add_cancel:
+            choices_list.append("Cancel processing")
 
-    async def _ask_choice(
-        self, question: str, choices: Iterable[str], add_cancel: bool = True
-    ) -> int:
+        async with self._root._choice_lock:
+            choice_index = await self._root._ask_choice(question, choices_list)
+        await self.display_text(choices_list[choice_index], prefix=question)
+        if add_cancel and choice_index == len(choices_list) - 1:
+            raise UserCancel()
+        return choice_index
+
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
         raise NotImplementedError("Subclass must implement _ask_choice")
 
     # Additional methods for compatibility

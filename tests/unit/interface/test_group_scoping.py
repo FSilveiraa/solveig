@@ -58,7 +58,7 @@ class _StubInterface(SolveigInterface):
         self.calls.append(("_ask_question", question))
         return "answer"
 
-    async def _ask_choice(self, question, choices, add_cancel=True) -> int:
+    async def _ask_choice(self, question, choices) -> int:
         self.calls.append(("_ask_choice", question))
         return 0
 
@@ -127,8 +127,12 @@ class TestRootDelegation:
         result = await scoped.ask_choice("Proceed?", ["Yes", "No"])
 
         assert result == 0
+        # The raw prompt is dispatched on the root - there's only one input widget.
         assert ("_ask_choice", "Proceed?") in root.calls
-        assert scoped.calls == []  # never dispatched on the scoped instance itself
+        # But the answer is echoed on the scoped instance, so it lands in
+        # the caller's own group rather than always at the root.
+        assert ("display_text", "Yes") in scoped.calls
+        assert ("display_text", "Yes") not in root.calls
 
     async def test_ask_question_from_scoped_interface_calls_root_backend(self):
         root = _StubInterface()
@@ -165,7 +169,7 @@ class _SlowChoiceInterface(_StubInterface):
     """Delays inside _ask_choice so two concurrent callers can be observed
     overlapping (or not)."""
 
-    async def _ask_choice(self, question, choices, add_cancel=False) -> int:
+    async def _ask_choice(self, question, choices) -> int:
         self.calls.append(("_ask_choice_start", question))
         await asyncio.sleep(0.05)
         self.calls.append(("_ask_choice_end", question))
