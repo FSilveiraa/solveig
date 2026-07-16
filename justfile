@@ -30,4 +30,4 @@ mock session="":
 
 # Start the local mock MCP server for manual /mcp connect testing
 mcp:
-    python tests/mocks/mcp.py
+    python tests/mocks/mcp_server.py
