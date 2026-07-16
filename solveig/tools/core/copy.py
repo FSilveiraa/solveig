@@ -35,7 +35,7 @@ class CopyTool(BaseTool):
 
     @property
     def title(self) -> str:
-        return f"Copy {self.source_path} -> {self.destination_path}"
+        return f"Copy {self.source_path} → {self.destination_path}"
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         await interface.display_text(

@@ -194,7 +194,20 @@ class SessionManager:
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"
         )
+        await self._display_messages(conversation, interface)
 
+    async def redraw(
+        self, conversation: Conversation, interface: SolveigInterface
+    ) -> None:
+        """Replay the (possibly just-truncated) conversation from scratch.
+        Caller is responsible for clearing the display first."""
+        await self._display_messages(conversation, interface)
+
+    async def _display_messages(
+        self,
+        conversation: Conversation,
+        interface: SolveigInterface,
+    ) -> None:
         # Single forward pass building tool_call_id -> ToolReturnPart first,
         # so pairing each call is O(1) rather than an O(n^2) nested scan over a
         # long session.
@@ -206,26 +219,53 @@ class SessionManager:
                         returns[request_part.tool_call_id] = request_part
 
         classes = tool_classes()
-        for message in conversation.messages:
+        for msg_index, message in enumerate(conversation.messages):
             if isinstance(message, ModelRequest):
-                for request_part in message.parts:
-                    if isinstance(request_part, UserPromptPart) and isinstance(
-                        request_part.content, str
+                for part_index, request_part in enumerate(message.parts):
+                    if (
+                        isinstance(request_part, UserPromptPart)
+                        and isinstance(request_part.content, str)
+                        and request_part.content.strip()
                     ):
                         await interface.display_section("User")
-                        await interface.display_comment(request_part.content)
+                        await interface.display_comment(
+                            "user",
+                            request_part.content,
+                            conversation=conversation,
+                            session_manager=self,
+                            msg_index=msg_index,
+                            part_index=part_index,
+                        )
             elif isinstance(message, ModelResponse):
-                for response_part in message.parts:
-                    if isinstance(response_part, ThinkingPart) and response_part.content:
+                if any(
+                    isinstance(p, ThinkingPart | TextPart) and p.content.strip()
+                    for p in message.parts
+                ):
+                    await interface.display_section("Assistant")
+
+                for part_index, response_part in enumerate(message.parts):
+                    if (
+                        isinstance(response_part, ThinkingPart)
+                        and response_part.content.strip()
+                    ):
                         await interface.display_text_box(
                             response_part.content,
                             title="Reasoning",
                             collapsed=True,
                             italic=True,
                         )
-                    elif isinstance(response_part, TextPart) and response_part.content:
-                        await interface.display_section("Assistant")
-                        await interface.display_comment(response_part.content)
+                    elif (
+                        isinstance(response_part, TextPart)
+                        and response_part.content.strip()
+                    ):
+                        await interface.display_comment(
+                            "assistant",
+                            response_part.content,
+                            conversation=conversation,
+                            session_manager=self,
+                            msg_index=msg_index,
+                            part_index=part_index,
+                        )
                     elif isinstance(response_part, ToolCallPart):
                         return_part = returns.get(response_part.tool_call_id)
                         if return_part is None:

@@ -123,8 +123,20 @@ class MockInterface(TerminalInterface):
     async def display_info(self, message: str) -> None:
         self.outputs.append(f"ℹ️  Info: {message}")
 
-    async def display_comment(self, message: str) -> None:
+    async def display_comment(
+        self,
+        role,
+        message: str,
+        *,
+        conversation=None,
+        session_manager=None,
+        msg_index=None,
+        part_index=None,
+    ) -> None:
         self.outputs.append(f"🗩  {message}")
+
+    async def clear_conversation(self) -> None:
+        self.outputs.append("CONVERSATION_CLEARED")
 
     async def display_diff(
         self,
@@ -177,11 +189,14 @@ class MockInterface(TerminalInterface):
         return _Box()
 
     async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
-        self.sections.append(title)
-        self.outputs.append(f"=== {title} ===")
+        # Mirrors TerminalInterface._display_section's de-dup: a section header
+        # only actually renders when the title changes (or even_if_repeated).
+        if even_if_repeated or self.sections[-1:] != [title]:
+            self.sections.append(title)
+            self.outputs.append(f"=== {title} ===")
 
     # Input methods
-    async def ask_question(self, question: str) -> str:
+    async def ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing."""
         self.questions.append(question)
         if not self.user_inputs:

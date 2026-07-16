@@ -1,6 +1,8 @@
 """Basic UI widgets for the Textual CLI interface."""
 
+import asyncio
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Literal
 
 from rich.syntax import Syntax
 from textual.containers import ScrollableContainer
@@ -8,8 +10,17 @@ from textual.events import Click
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
+from solveig.exceptions import UserCancel
+from solveig.interface.base import EditableMessage
 from solveig.interface.themes import Palette
 from solveig.utils.misc import copy_to_clipboard
+
+from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
+
+if TYPE_CHECKING:
+    from solveig.conversation import Conversation
+    from solveig.interface.base import SolveigInterface
+    from solveig.sessions.manager import SessionManager
 
 
 class Comment(Static):
@@ -38,6 +49,82 @@ class Comment(Static):
             margin-bottom: 0;
         }}
         """
+
+
+class EditableComment(Comment, EditableMessage):
+    """A Comment tied to a specific `conversation.messages[msg_index].parts[part_index]`,
+    with Edit/Retry/Delete/Branch action buttons. Retry only makes sense for
+    user turns - regenerating an assistant response is Edit+Retry on the
+    preceding user message instead."""
+
+    def __init__(
+        self,
+        comment: str,
+        *,
+        conversation: "Conversation",
+        session_manager: "SessionManager",
+        interface: "SolveigInterface",
+        msg_index: int,
+        part_index: int,
+        role: Literal["user", "assistant"],
+    ):
+        super().__init__(comment)
+        self.conversation = conversation
+        self.session_manager = session_manager
+        self.interface = interface
+        self.msg_index = msg_index
+        self.part_index = part_index
+        self.role = role
+
+    def compose(self):
+        yield Markdown(f"🗩 ⠀{self.comment}")
+        yield CopyButton(self.comment)
+        yield EditButton(self)
+        if self.role == "user":
+            yield RetryButton(self)
+        yield DeleteButton(self)
+        yield BranchButton(self)
+
+    async def begin_edit(self) -> None:
+        try:
+            new_text = await self.interface.ask_question(
+                "Edit message:", default=self.comment
+            )
+        except UserCancel:
+            return
+        self.conversation.edit_part(self.msg_index, self.part_index, new_text)
+        self.comment = new_text
+        await self.query_one(Markdown).update(f"🗩 ⠀{self.comment}")
+
+    async def retry(self) -> None:
+        text = self.comment
+        self.conversation.delete_from(self.msg_index)
+        self._schedule_redraw()
+        await self.interface.pending_queue.put(text)
+        await self.interface.notify_pending_queue_changed()
+
+    async def delete_from_here(self) -> None:
+        self.conversation.delete_from(self.msg_index)
+        self._schedule_redraw()
+
+    async def branch_from_here(self) -> None:
+        await self.session_manager.store(self.conversation)
+        self.conversation.delete_from(self.msg_index)
+        self._schedule_redraw()
+
+    def _schedule_redraw(self) -> None:
+        """Clear and replay the conversation as a separate task.
+
+        This is called from a click handler on a widget that's about to be
+        removed (self is a descendant of the conversation area being
+        cleared) - awaiting the removal inline, in that same call stack,
+        deadlocks Textual's message pump. Scheduling it as an independent
+        task lets the current click handler return first."""
+        asyncio.create_task(self._redraw())
+
+    async def _redraw(self) -> None:
+        await self.interface.clear_conversation()
+        await self.session_manager.redraw(self.conversation, self.interface)
 
 
 class CopyButton(Static):

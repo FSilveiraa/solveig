@@ -36,9 +36,11 @@ from pydantic_graph import End
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
+from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
 from solveig.llm.api import ProviderRef, get_model
+from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
@@ -50,6 +52,8 @@ def build_agent(
     provider_ref: ProviderRef,
     interface: SolveigInterface,
     system_prompt: str,
+    conversation: Conversation,
+    session_manager: SessionManager,
     model: Model | None = None,
 ) -> Agent[SolveigContext, str]:
     """Build the per-turn Agent.
@@ -68,23 +72,49 @@ def build_agent(
         deps_type=SolveigContext,
         instructions=system_prompt,
         toolsets=[AVAILABLE_TOOLS.toolset],
+        # Bounds each individual model request at the provider client level -
+        # not the whole run.py loop below, which also covers tool execution
+        # and interactive ask_choice waits that have nothing to do with
+        # network communication and shouldn't be timed out.
+        model_settings={"timeout": config.timeout} if config.timeout else None,
         capabilities=[
-            build_loop_capability(config, interface),
+            build_loop_capability(config, interface, conversation, session_manager),
             build_tool_execution_capability(),
         ],
     )
 
 
 def build_loop_capability(
-    config: SolveigConfig, interface: SolveigInterface
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    conversation: Conversation,
+    session_manager: SessionManager,
 ) -> Hooks[SolveigContext]:
     """Build the per-agent capability driving live display, interleaving, and autonomy."""
     hooks: Hooks[SolveigContext] = Hooks()
 
+    @hooks.on.model_request
+    async def show_thinking_animation(ctx: RunContext[SolveigContext], *, request_context, handler):
+        # Scoped to just this network round trip - tool execution (including
+        # interactive ask_choice approval waits) happens outside this hook, so
+        # Ctrl+C/Esc here cancels exactly the model call in flight, not
+        # whatever else the run is doing, and the "Thinking" status/countdown
+        # doesn't sit stuck on screen once the call returns.
+        async with interface.with_cancellable(
+            handler(request_context), status="Thinking", timeout=config.timeout
+        ) as task:
+            return await task
+
     @hooks.on.before_node_run
     async def display_new_response(ctx: RunContext[SolveigContext], node):
         if Agent.is_call_tools_node(node):
-            await _display_response(interface, node.model_response)
+            # pydantic-ai has already appended this response to
+            # ctx.state.message_history (the same list object conversation.messages
+            # becomes) by the time this hook fires, so its index is stable.
+            msg_index = len(ctx.messages) - 1
+            await _display_response(
+                interface, node.model_response, conversation, session_manager, msg_index
+            )
         return node
 
     @hooks.on.after_node_run
@@ -123,16 +153,33 @@ def build_loop_capability(
 
 
 async def _display_response(
-    interface: SolveigInterface, model_response: ModelResponse
+    interface: SolveigInterface,
+    model_response: ModelResponse,
+    conversation: Conversation,
+    session_manager: SessionManager,
+    msg_index: int,
 ) -> None:
-    for part in model_response.parts:
-        if isinstance(part, ThinkingPart) and part.content:
+    renders_something = any(
+        (isinstance(part, ThinkingPart | TextPart) and part.content.strip())
+        for part in model_response.parts
+    )
+    if renders_something:
+        await interface.display_section("Assistant")
+
+    for part_index, part in enumerate(model_response.parts):
+        if isinstance(part, ThinkingPart) and part.content.strip():
             await interface.display_text_box(
                 part.content, title="Reasoning", collapsed=True, italic=True
             )
-        elif isinstance(part, TextPart) and part.content:
-            await interface.display_section("Assistant")
-            await interface.display_comment(part.content)
+        elif isinstance(part, TextPart) and part.content.strip():
+            await interface.display_comment(
+                "assistant",
+                part.content,
+                conversation=conversation,
+                session_manager=session_manager,
+                msg_index=msg_index,
+                part_index=part_index,
+            )
 
 
 def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
@@ -187,7 +234,13 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
             return await handler(args)
 
         try:
-            result = await run_tool_and_hooks(instance, config, interface)
+            # Cancellable like the model-request phase above, but no timeout -
+            # a tool (including any interactive approval wait inside it) isn't
+            # something that can time out, only something the user can cancel.
+            async with interface.with_cancellable(
+                run_tool_and_hooks(instance, config, interface), status="Executing"
+            ) as task:
+                result = await task
         except PluginException as e:
             raise ModelRetry(str(e)) from e
 

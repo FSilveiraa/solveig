@@ -11,12 +11,14 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from solveig.exceptions import UserCancel
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
+    from solveig.conversation import Conversation
+    from solveig.sessions.manager import SessionManager
     from solveig.subcommand.runner import SubcommandRunner
 
 
@@ -26,6 +28,25 @@ class MutableTextBox:
 
     def reset(self, text: str) -> None:
         """Reset the box content."""
+
+
+class EditableMessage:
+    """What a message widget must implement to host action buttons
+    (Edit/Retry/Delete/Branch)."""
+
+    async def begin_edit(self) -> None:
+        """Prompt for replacement text and overwrite this message in place."""
+
+    async def retry(self) -> None:
+        """Drop this message and everything after it, then resubmit its
+        text as a fresh prompt."""
+
+    async def delete_from_here(self) -> None:
+        """Drop this message and everything after it."""
+
+    async def branch_from_here(self) -> None:
+        """Store the current conversation as a checkpoint, then drop this
+        message and everything after it."""
 
 
 class SolveigInterface(ABC):
@@ -41,7 +62,7 @@ class SolveigInterface(ABC):
 
     subcommand_executor: SubcommandRunner | None = None
     pending_queue: asyncio.Queue
-    _request_task: asyncio.Task | None = None
+    _request_task_stack_ref: list[asyncio.Task] | None = None
     _root_ref: SolveigInterface | None = None
     _choice_lock_ref: asyncio.Lock | None = None
 
@@ -58,6 +79,23 @@ class SolveigInterface(ABC):
         if self._choice_lock_ref is None:
             self._choice_lock_ref = asyncio.Lock()
         return self._choice_lock_ref
+
+    @property
+    def _request_tasks(self) -> list[asyncio.Task]:
+        """Stack of in-flight cancellable tasks, lazily created and shared
+        across every scope rooted at this interface (accessed only via
+        self._root._request_tasks) - unrelated to group nesting; a tool's own
+        with_cancellable (e.g. CommandTool's shell run) pushes onto the same
+        stack as the outer per-tool-call one even though it runs against a
+        scoped GroupInterface, not the root, so cancel_request() (always
+        called on the root) can still see and target it. The top of the
+        stack is always the innermost currently-active cancellable, so
+        Ctrl+C/Esc cancels exactly that one - e.g. hitting cancel while a
+        command is running triggers CommandTool's own cancellation handling
+        instead of the generic outer one."""
+        if self._request_task_stack_ref is None:
+            self._request_task_stack_ref = []
+        return self._request_task_stack_ref
 
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
@@ -83,7 +121,8 @@ class SolveigInterface(ABC):
         Pass timeout to display elapsed/max seconds in the animation.
         """
         task = asyncio.ensure_future(coro)
-        self._request_task = task
+        stack = self._root._request_tasks
+        stack.append(task)
         try:
             if status is not None:
                 async with self.with_animation(
@@ -96,23 +135,25 @@ class SolveigInterface(ABC):
             else:
                 yield task
         finally:
-            self._request_task = None
+            stack.remove(task)
 
     def cancel_request(self) -> bool:
-        """Cancel the current network request task.
+        """Cancel the innermost active cancellable task (top of the stack).
 
         Returns True if there was an active request to cancel,
         False otherwise.
         """
-        if self._request_task is not None and not self._request_task.done():
-            self._request_task.cancel()
+        stack = self._root._request_tasks
+        if stack and not stack[-1].done():
+            stack[-1].cancel()
             return True
         return False
 
     @property
     def has_active_request(self) -> bool:
-        """Check if there's an active network request running."""
-        return self._request_task is not None and not self._request_task.done()
+        """Check if there's an active cancellable task running."""
+        stack = self._root._request_tasks
+        return bool(stack) and not stack[-1].done()
 
     async def start(self) -> None:
         """Start the interface. Delegates to the root - only the root
@@ -163,8 +204,25 @@ class SolveigInterface(ABC):
         ...
 
     @abstractmethod
-    async def display_comment(self, message: str) -> None:
-        """Display a comment message."""
+    async def display_comment(
+        self,
+        role: Literal["user", "assistant"],
+        message: str,
+        *,
+        conversation: Conversation,
+        session_manager: SessionManager,
+        msg_index: int,
+        part_index: int,
+    ) -> None:
+        """Display a user/assistant text message wired to
+        `conversation.messages[msg_index].parts[part_index]`, with
+        Edit/Retry/Delete/Branch action buttons attached."""
+        ...
+
+    @abstractmethod
+    async def clear_conversation(self) -> None:
+        """Remove all currently displayed conversation content, in
+        preparation for a full redraw after a delete/retry/branch."""
         ...
 
     @abstractmethod
@@ -202,7 +260,7 @@ class SolveigInterface(ABC):
         ...
 
     # Input methods
-    async def ask_question(self, question: str) -> str:
+    async def ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing.
 
         Delegates to the root interface and serializes against any other
@@ -210,9 +268,9 @@ class SolveigInterface(ABC):
         any single-user UI) can only show one prompt at a time, regardless
         of how many groups are concurrently asking."""
         async with self._root._choice_lock:
-            return await self._root._ask_question(question)
+            return await self._root._ask_question(question, default)
 
-    async def _ask_question(self, question: str) -> str:
+    async def _ask_question(self, question: str, default: str = "") -> str:
         raise NotImplementedError("Subclass must implement _ask_question")
 
     async def ask_choice(

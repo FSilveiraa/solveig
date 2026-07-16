@@ -137,7 +137,7 @@ class QueuedMessagesDisplay(Vertical):
         QueuedMessagesDisplay CollapsibleTitle {{
             background: {theme.background};
             color: {theme.info};
-            padding: 0;
+            padding: 0 1;
             margin: 0;
             height: 1;
         }}

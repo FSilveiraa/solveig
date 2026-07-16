@@ -29,8 +29,10 @@ from pydantic_ai.usage import RunUsage
 
 from solveig.agent import build_loop_capability, build_tool_execution_capability
 from solveig.context import SolveigContext
+from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
+from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
@@ -293,7 +295,9 @@ def _two_round_agent(config, interface):
         deps_type=SolveigContext,
         toolsets=[FunctionToolset([EchoTool.as_tool()])],
         capabilities=[
-            build_loop_capability(config, interface),
+            build_loop_capability(
+                config, interface, Conversation(), SessionManager(config=config)
+            ),
             build_tool_execution_capability(),
         ],
     )

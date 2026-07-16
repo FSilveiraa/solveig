@@ -120,7 +120,14 @@ async def main_loop(
         await interface.update_stats(status=None)
 
         await interface.display_section("User")
-        await interface.display_comment(prompt)
+        await interface.display_comment(
+            "user",
+            prompt,
+            conversation=conversation,
+            session_manager=session_manager,
+            msg_index=len(conversation.messages),
+            part_index=0,
+        )
 
         if config.model is None:
             await interface.display_error(
@@ -133,6 +140,7 @@ async def main_loop(
             config=config,
             interface=interface,
             conversation=conversation,
+            session_manager=session_manager,
             system_prompt=system_prompt_text,
             prompt=prompt,
         )

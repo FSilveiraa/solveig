@@ -148,9 +148,9 @@ class SolveigTextualApp(TextualApp):
         """Store a reference to the interface for cancellation checks."""
         self._interface_ref = interface
 
-    async def ask_user(self, question: str) -> str:
+    async def ask_user(self, question: str, default: str = "") -> str:
         """Ask for any kind of input with a prompt."""
-        return await self._input_widget.ask_question(question)
+        return await self._input_widget.ask_question(question, default)
 
     async def ask_choice(self, question: str, choices) -> int:
         """Ask a multiple-choice question using Select widget."""

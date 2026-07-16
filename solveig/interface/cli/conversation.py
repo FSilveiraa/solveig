@@ -10,6 +10,7 @@ from textual.widgets import Collapsible, Markdown, Static
 from solveig.interface.themes import Palette
 from solveig.utils.file import FileMetadata
 
+from .buttons import MessageButton
 from .collapsible_widgets import (
     CollapsibleTextBox,
     CustomCollapsible,
@@ -78,6 +79,11 @@ class ConversationArea(ScrollableContainer):
             group = self._nearest_group(widget)
             if group is not None:
                 group.collapsed = not group.collapsed
+
+    async def clear(self) -> None:
+        """Remove all mounted content, in preparation for a full redraw."""
+        self._current_section_container = None
+        await self.remove_children()
 
     async def _add_element(self, element, container) -> None:
         """Mount element into the given container."""
@@ -259,6 +265,7 @@ class ConversationArea(ScrollableContainer):
         }}
 
         {Comment.get_css(theme)}
+        {MessageButton.get_css(theme)}
         {CustomCollapsible.get_css(theme)}
         {CollapsibleTextBox.get_css(theme)}
         {SectionHeader.get_css(theme)}

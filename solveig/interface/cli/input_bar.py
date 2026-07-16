@@ -220,14 +220,14 @@ class InputBar(Container):
         """Apply question input styling."""
         self._text_input.styles.border = ("solid", self._theme.warning)
 
-    async def ask_question(self, question: str) -> str:
+    async def ask_question(self, question: str, default: str = "") -> str:
         """Switch to question mode and wait for response."""
         self._saved_text = self._text_input.text
 
         self._mode = InputMode.QUESTION
         self._question_future = asyncio.Future()
 
-        self._text_input.text = ""
+        self._text_input.text = default
         self._text_input.placeholder = question
         self._apply_question_style()
         self._text_input.focus()

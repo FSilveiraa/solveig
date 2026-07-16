@@ -41,20 +41,38 @@ class _StubInterface(SolveigInterface):
     async def display_info(self, message: str) -> None:
         self.calls.append(("display_info", message))
 
-    async def display_comment(self, message: str) -> None:
+    async def display_comment(
+        self,
+        role,
+        message: str,
+        *,
+        conversation=None,
+        session_manager=None,
+        msg_index=None,
+        part_index=None,
+    ) -> None:
         self.calls.append(("display_comment", message))
 
-    async def display_tree(self, metadata, title=None, display_metadata=False, expand_root=True) -> None:
+    async def clear_conversation(self) -> None:
+        self.calls.append(("clear_conversation",))
+
+    async def display_tree(
+        self, metadata, title=None, display_metadata=False, expand_root=True
+    ) -> None:
         self.calls.append(("display_tree", title))
 
-    async def display_text_box(self, text, title=None, language=None, italic=False, collapsed=False) -> MutableTextBox:
+    async def display_text_box(
+        self, text, title=None, language=None, italic=False, collapsed=False
+    ) -> MutableTextBox:
         self.calls.append(("display_text_box", title))
         return MutableTextBox()
 
-    async def display_diff(self, old_content, new_content, title=None, context_lines=3) -> None:
+    async def display_diff(
+        self, old_content, new_content, title=None, context_lines=3
+    ) -> None:
         self.calls.append(("display_diff", title))
 
-    async def _ask_question(self, question: str) -> str:
+    async def _ask_question(self, question: str, default: str = "") -> str:
         self.calls.append(("_ask_question", question))
         return "answer"
 
@@ -62,7 +80,9 @@ class _StubInterface(SolveigInterface):
         self.calls.append(("_ask_choice", question))
         return 0
 
-    async def _display_section(self, title: str, even_if_repeated: bool = False) -> None:
+    async def _display_section(
+        self, title: str, even_if_repeated: bool = False
+    ) -> None:
         self.calls.append(("_display_section", title))
 
     async def _update_stats(
@@ -83,29 +103,29 @@ class _StubInterface(SolveigInterface):
         # Record only the non-None kwargs for testing
         kwargs = {}
         if status is not None:
-            kwargs['status'] = status
+            kwargs["status"] = status
         if sent_tokens is not None:
-            kwargs['sent_tokens'] = sent_tokens
+            kwargs["sent_tokens"] = sent_tokens
         if received_tokens is not None:
-            kwargs['received_tokens'] = received_tokens
+            kwargs["received_tokens"] = received_tokens
         if model is not None:
-            kwargs['model'] = model
+            kwargs["model"] = model
         if url is not None:
-            kwargs['url'] = url
+            kwargs["url"] = url
         if path is not None:
-            kwargs['path'] = path
+            kwargs["path"] = path
         if max_context is not None:
-            kwargs['max_context'] = max_context
+            kwargs["max_context"] = max_context
         if used_context is not None:
-            kwargs['used_context'] = used_context
+            kwargs["used_context"] = used_context
         if input_price is not None:
-            kwargs['input_price'] = input_price
+            kwargs["input_price"] = input_price
         if output_price is not None:
-            kwargs['output_price'] = output_price
+            kwargs["output_price"] = output_price
         if mcp_servers is not None:
-            kwargs['mcp_servers'] = mcp_servers
+            kwargs["mcp_servers"] = mcp_servers
         if duration is not None:
-            kwargs['duration'] = duration
+            kwargs["duration"] = duration
         self.calls.append(("_update_stats", kwargs))
 
 

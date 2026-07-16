@@ -24,3 +24,13 @@ class Conversation:
         in place, since the same `usage` instance is passed into every
         `agent.run()` call."""
         self.messages = result.all_messages()
+
+    def edit_part(self, msg_index: int, part_index: int, new_text: str) -> None:
+        """Overwrite the text content of a single part in place - a
+        `UserPromptPart`, `TextPart`, or `ThinkingPart`. No truncation."""
+        part = self.messages[msg_index].parts[part_index]
+        part.content = new_text  # type: ignore[union-attr]
+
+    def delete_from(self, msg_index: int) -> None:
+        """Drop `messages[msg_index]` and everything after it."""
+        self.messages = self.messages[:msg_index]

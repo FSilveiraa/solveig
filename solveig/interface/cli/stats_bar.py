@@ -70,14 +70,9 @@ class StatsBar(Widget):
             frame = self._spinner.render(time.time())
             spinner_char = frame.plain if hasattr(frame, "plain") else str(frame)
             status_text = f"{spinner_char} {status_text}"
-        if self._animation_start is not None:
+        if self._animation_start is not None and self._animation_timeout:
             elapsed = int(time.time() - self._animation_start)
-            timer = (
-                f"{elapsed}/{int(self._animation_timeout)}s"
-                if self._animation_timeout
-                else f"{elapsed}s"
-            )
-            status_text = f"{status_text} for {timer}..."
+            status_text = f"{status_text} for {elapsed}/{int(self._animation_timeout)}s..."
         if self._status_suffix:
             status_text = f"{status_text} {self._status_suffix}"
         return f"[{self._theme.info}]{status_text}[/]" if status_text else ""

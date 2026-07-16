@@ -57,7 +57,7 @@ class CommandTool(BaseTool):
 
     @property
     def title(self) -> str:
-        return f"Command: {self.command}"
+        return f"Command {self.command}"
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         await interface.display_text(

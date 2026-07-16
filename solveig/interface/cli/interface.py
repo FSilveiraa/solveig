@@ -5,7 +5,7 @@ import random
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
@@ -15,10 +15,14 @@ from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
-from solveig.interface.cli.widgets import Comment
+from solveig.interface.cli.widgets import EditableComment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
+
+if TYPE_CHECKING:
+    from solveig.conversation import Conversation
+    from solveig.sessions.manager import SessionManager
 
 
 class TerminalInterface(SolveigInterface):
@@ -147,10 +151,31 @@ class TerminalInterface(SolveigInterface):
     async def display_info(self, message: str) -> None:
         await self._display_text(message, style="info")
 
-    async def display_comment(self, message: str) -> None:
+    async def display_comment(
+        self,
+        role: Literal["user", "assistant"],
+        message: str,
+        *,
+        conversation: "Conversation",
+        session_manager: "SessionManager",
+        msg_index: int,
+        part_index: int,
+    ) -> None:
         await self.app._conversation_area._add_element(
-            Comment(message), self._container
+            EditableComment(
+                message,
+                conversation=conversation,
+                session_manager=session_manager,
+                interface=self,
+                msg_index=msg_index,
+                part_index=part_index,
+                role=role,
+            ),
+            self._container,
         )
+
+    async def clear_conversation(self) -> None:
+        await self.app._conversation_area.clear()
 
     async def display_tree(
         self,
@@ -242,9 +267,9 @@ class TerminalInterface(SolveigInterface):
                 group_widget, auto_collapse=auto_collapse
             )
 
-    async def _ask_question(self, question: str) -> str:
+    async def _ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing."""
-        return await self.app.ask_user(question)
+        return await self.app.ask_user(question, default)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
         """Prompt with the given choices (already final - "Cancel processing"

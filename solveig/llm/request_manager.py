@@ -15,6 +15,7 @@ from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 from solveig.agent import build_agent
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
+from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.llm.api import ProviderRef, get_provider
 
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
     from solveig.config import SolveigConfig
+    from solveig.sessions.manager import SessionManager
 
 
 class RequestManager:
@@ -57,6 +59,7 @@ class RequestManager:
         config: SolveigConfig,
         interface: SolveigInterface,
         conversation: Conversation,
+        session_manager: SessionManager,
         system_prompt: str,
         prompt: str,
     ) -> AgentRunResult | None:
@@ -72,7 +75,13 @@ class RequestManager:
             await asyncio.sleep(0)
 
             agent = build_agent(
-                config, self._provider_ref, interface, system_prompt, model=self._model
+                config,
+                self._provider_ref,
+                interface,
+                system_prompt,
+                conversation,
+                session_manager,
+                model=self._model,
             )
             run_coro = agent.run(
                 prompt,
@@ -80,8 +89,6 @@ class RequestManager:
                 usage=conversation.usage,
                 deps=SolveigContext(config=config, interface=interface),
             )
-            if config.timeout and config.timeout > 0:
-                run_coro = asyncio.wait_for(run_coro, timeout=config.timeout)
 
             try:
                 # Solveig's consent flow (ask_choice/with_group) is single-flight -
@@ -92,27 +99,31 @@ class RequestManager:
                 # not tolerate (crashes, misattributed output). Force sequential
                 # execution until UI elements can be tied to individual tool calls
                 # (see ignore/project-logs/2026-07-13-23-54-tool-call-ui-binding.md)
-                # - this `with` must wrap task creation itself (`ensure_future` inside
-                # `with_cancellable`), since the ContextVar it sets is captured at
-                # that point, not at `await`.
+                # - the model_request/tool_execute hooks in agent.py each wrap
+                # their own coroutine in with_cancellable (their own
+                # ensure_future/task), so this ContextVar just needs to be
+                # active in the ambient context around the plain `await`
+                # below, which it is.
+                #
+                # Cancellability itself is no longer wrapped here - each phase
+                # (model request, tool execution) owns its own cancellable
+                # task with its own status in agent.py, so Ctrl+C/Esc cancels
+                # precisely what's running instead of the whole multi-round
+                # run as one undifferentiated span.
                 with Agent.parallel_tool_call_execution_mode("sequential"):
-                    async with interface.with_cancellable(
-                        run_coro, status="Thinking", timeout=config.timeout
-                    ) as task:
-                        return await task
-            except asyncio.CancelledError:
+                    return await run_coro
+            except (asyncio.CancelledError, UserCancel):
                 await interface.display_info("Request cancelled")
                 return None
-            except TimeoutError:
-                await interface.display_error(
-                    f"Request timed out after {config.timeout}s"
-                )
             except (UnexpectedModelBehavior, UserError, ValidationError) as e:
                 await interface.display_error(str(e))
             except Exception as e:
                 await interface.display_error(f"{e.__class__.__name__}: {e}")
 
-            if not await self._ask_retry(interface):
+            try:
+                if not await self._ask_retry(interface):
+                    return None
+            except UserCancel:
                 return None
 
     @staticmethod
