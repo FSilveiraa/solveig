@@ -18,6 +18,7 @@ below), both fresh each turn so live `config`/`interface` are captured:
   This replaces the old `HookRunner`/`Finalizer` `WrapperToolset` stack.
 """
 
+import json
 from typing import Any
 
 from pydantic_ai import (
@@ -193,6 +194,71 @@ def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
     return None
 
 
+async def _run_mcp_tool(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    call: ToolCallPart,
+    args: dict[str, Any],
+    handler: Any,
+) -> Any:
+    """Group + approve + display an MCP (or other untyped/plain-function)
+    tool call - the same visibility and consent posture as a `BaseTool`, even
+    though there's no typed schema here to build a proper header/decline
+    `ToolResult` from. `call.tool_name` is already the sanitized, prefixed
+    name (e.g. `search_parallel_ai_web_search`), good enough for a header on
+    its own.
+
+    Mirrors `ReadTool`'s negotiation shape (run+send / run+inspect-then-decide
+    / don't run) rather than a flat yes/no - there's no "metadata only" middle
+    ground here (no typed schema to split on), but the same idea of letting
+    the user see the result before committing to sending it applies just as
+    much to an arbitrary MCP call as to a file read. `handler`'s return value
+    is passed through completely untouched when sent - only the *display* and
+    *whether it's sent* are new here, nothing about the value itself changes.
+    """
+    async with interface.with_group(
+        f"MCP: {call.tool_name}", auto_collapse=config.auto_collapse_tools
+    ) as group:
+        await group.display_text_box(
+            json.dumps(args, indent=2, default=str), title="Args", language="json"
+        )
+
+        choice = await group.ask_choice(
+            "Allow this MCP tool call?",
+            [
+                "Run and send result",
+                "Run and inspect result first",
+                "Don't run",
+            ],
+        )
+
+        if choice == 2:
+            await group.display_warning("Rejected")
+            return "User declined to run this tool."
+
+        async with group.with_cancellable(handler(args), status="Executing") as task:
+            result = await task
+
+        await group.display_text_box(
+            str(result), title="Result", collapsed=choice == 0
+        )
+
+        if choice == 0:
+            await group.display_success("Accepted")
+            return result
+
+        # choice == 1: ran and displayed the result above, now decide whether
+        # to actually send it on.
+        if (
+            await group.ask_choice("Send this result to the assistant?", ["Yes", "No"])
+        ) == 0:
+            await group.display_success("Accepted")
+            return result
+
+        await group.display_warning("Rejected")
+        return "User inspected the result and declined to send it to the assistant."
+
+
 def build_tool_execution_capability() -> Hooks[SolveigContext]:
     """Per-tool-call capability: opens each call's collapsible group, runs the
     plugin `@before`/`@after` hooks, and renders the `ToolResult` into a
@@ -205,12 +271,13 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
     This capability supplies the LLM-specific parts: the body is pydantic-ai's
     own `handler(args)`, a blocking `PluginException` becomes a `ModelRetry`
     (the model's cue to react), and the terminal `ToolResult.to_tool_return()`
-    renders the value the model sees. Non-`ToolResult` returns (MCP tools) pass
-    through untouched.
+    renders the value the model sees.
 
-    A plain-function tool (should a plugin author write one) has no `BaseTool`
-    instance, so it can't be group-wrapped or hooked here - it runs bare via
-    `handler`, responsible for its own display, as before.
+    A plain-function tool (e.g. an MCP tool, or one a plugin author writes
+    that way) has no `BaseTool` instance, so it can't go through
+    `run_tool_and_hooks` - `_run_mcp_tool` gives it the same group/approve/
+    display treatment generically, since there's no typed schema to build a
+    tool-specific header or decline message from.
 
     Stateless: `config`/`interface` come from `ctx.deps` and the hook
     registries are read live at call time, so a plugin rescan or
@@ -231,7 +298,7 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         instance = _tool_instance(args)
 
         if instance is None:
-            return await handler(args)
+            return await _run_mcp_tool(config, interface, call, args, handler)
 
         try:
             # Cancellable like the model-request phase above, but no timeout -

@@ -167,6 +167,108 @@ async def test_as_tool_flattens_model_fields():
 # ---------------------------------------------------------------------------
 
 
+async def test_mcp_style_tool_is_grouped_approved_and_displayed():
+    """A plain-function tool (the shape an MCP tool call actually has - no
+    `BaseTool` instance) must get the same group/approve/display treatment as
+    a typed tool, not run invisibly and unapproved. Regression test for a gap
+    where MCP tool calls executed with zero group, zero display, and zero
+    `ask_choice` at all."""
+
+    async def search(objective: str) -> dict:
+        return {"results": ["a", "b"]}
+
+    interface = MockInterface(choices=[0])  # approve
+    result = await drive_tool_call(
+        FunctionToolset([search]),
+        ToolCallPart(
+            tool_name="search", args={"objective": "find stuff"}, tool_call_id="c1"
+        ),
+        interface=interface,
+        capabilities=[build_tool_execution_capability()],
+    )
+
+    assert any(g.startswith("START: MCP: search") for g in interface.groups)
+    assert any(g.startswith("END: MCP: search") for g in interface.groups)
+    assert any("Allow this MCP tool call?" in q for q in interface.questions)
+    returns = _tool_returns(result)
+    assert len(returns) == 1
+    assert returns[0].content == {"results": ["a", "b"]}
+
+
+async def test_mcp_style_tool_decline_skips_the_call_entirely():
+    """Declining ("Don't run") must not invoke the underlying tool at all,
+    and the model must see a clear decline message, not a real result."""
+    called = False
+
+    async def search(objective: str) -> dict:
+        nonlocal called
+        called = True
+        return {"results": ["a", "b"]}
+
+    interface = MockInterface(choices=[2])  # "Don't run"
+    result = await drive_tool_call(
+        FunctionToolset([search]),
+        ToolCallPart(
+            tool_name="search", args={"objective": "find stuff"}, tool_call_id="c1"
+        ),
+        interface=interface,
+        capabilities=[build_tool_execution_capability()],
+    )
+
+    assert called is False
+    returns = _tool_returns(result)
+    assert len(returns) == 1
+    assert "declined" in returns[0].content
+
+
+async def test_mcp_style_tool_inspect_first_then_send():
+    """"Run and inspect result first" actually runs the tool and shows the
+    result before asking again - if the user then says yes, the real result
+    reaches the model."""
+    async def search(objective: str) -> dict:
+        return {"results": ["a", "b"]}
+
+    interface = MockInterface(choices=[1, 0])  # inspect first, then send
+    result = await drive_tool_call(
+        FunctionToolset([search]),
+        ToolCallPart(
+            tool_name="search", args={"objective": "find stuff"}, tool_call_id="c1"
+        ),
+        interface=interface,
+        capabilities=[build_tool_execution_capability()],
+    )
+
+    assert any("Send this result to the assistant?" in q for q in interface.questions)
+    returns = _tool_returns(result)
+    assert returns[0].content == {"results": ["a", "b"]}
+
+
+async def test_mcp_style_tool_inspect_first_then_withhold():
+    """"Run and inspect result first" still runs the tool (so the user can
+    see the output) but must not send it to the model if the user then says
+    no - the model must see a decline message instead of the real result."""
+    called = False
+
+    async def search(objective: str) -> dict:
+        nonlocal called
+        called = True
+        return {"results": ["a", "b"]}
+
+    interface = MockInterface(choices=[1, 1])  # inspect first, then withhold
+    result = await drive_tool_call(
+        FunctionToolset([search]),
+        ToolCallPart(
+            tool_name="search", args={"objective": "find stuff"}, tool_call_id="c1"
+        ),
+        interface=interface,
+        capabilities=[build_tool_execution_capability()],
+    )
+
+    assert called is True  # it did run, just wasn't sent
+    returns = _tool_returns(result)
+    assert "declined to send it" in returns[0].content
+
+
 async def test_capability_renders_tool_result_to_tool_return():
     """`content` (assistant text) -> `return_value`, and `private` -> `metadata`
     (kept in history, never shown to the model). Drives the real capability."""

@@ -20,9 +20,11 @@ from this dict directly rather than a second list kept in sync by hand.
 from __future__ import annotations
 
 import asyncio
+import re
 import shlex
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from fastmcp.client.transports import StdioTransport
 from pydantic_ai.mcp import MCPToolset
@@ -60,6 +62,27 @@ class MCPConnection:
     def display_name(self) -> str:
         """User-configured name > server-reported name > URL."""
         return self.server_config.name or self.server_name or self.url
+
+
+def _default_tool_prefix(url: str) -> str:
+    """A model-friendly tool-name prefix derived from a server URL, used
+    when the config gives no explicit `name`.
+
+    `PrefixedToolset` joins this directly onto each tool name as
+    `f'{prefix}_{name}'` - using the raw URL (e.g.
+    `https://search.parallel.ai/mcp`) produces tool names like
+    `https://search.parallel.ai/mcp_web_search`, which models reliably
+    misparse (the `://` and `/` read as some kind of namespace syntax,
+    observed causing a model to repeatedly guess at how to call the tool
+    instead of just calling it). Derive a plain identifier instead: the
+    URL's hostname for network transports, the command name for `stdio://`.
+    """
+    if url.startswith("stdio://"):
+        command = shlex.split(url[len("stdio://") :])[0]
+        base = command.rsplit("/", 1)[-1]
+    else:
+        base = urlparse(url).hostname or url
+    return re.sub(r"[^a-zA-Z0-9_]+", "_", base).strip("_") or "mcp"
 
 
 def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
@@ -105,7 +128,11 @@ async def connect(
     Displays success or error directly. Returns None on failure/cancellation
     rather than raising, since callers don't need to react programmatically.
     """
-    prefix = server_config.name or server_config.url
+    # display_prefix is for human-facing messages below (readable name/URL);
+    # tool_prefix is what actually gets joined onto each tool's name, so it
+    # must be a plain identifier, not a URL - see _default_tool_prefix.
+    display_prefix = server_config.name or server_config.url
+    tool_prefix = server_config.name or _default_tool_prefix(server_config.url)
     mcp_toolset = _build_mcp_toolset(server_config)
 
     toolset: AbstractToolset = mcp_toolset
@@ -113,20 +140,20 @@ async def connect(
         toolset = toolset.filtered(
             lambda ctx, tool_def: server_config.is_tool_allowed(tool_def.name)
         )
-    toolset = toolset.prefixed(prefix)
+    toolset = toolset.prefixed(tool_prefix)
 
     conn = MCPConnection(server_config=server_config, toolset=toolset)
 
     try:
         async with interface.with_cancellable(
-            toolset.__aenter__(), status=f"MCP connecting to {prefix}"
+            toolset.__aenter__(), status=f"MCP connecting to {display_prefix}"
         ) as task:
             await task
     except asyncio.CancelledError:
-        await interface.display_info(f"MCP connection to {prefix} cancelled")
+        await interface.display_info(f"MCP connection to {display_prefix} cancelled")
         return None
     except Exception as err:
-        await interface.display_error(f"MCP '{prefix}': {err}")
+        await interface.display_error(f"MCP '{display_prefix}': {err}")
         return None
 
     conn.server_name = mcp_toolset.server_info.name
@@ -135,7 +162,9 @@ async def connect(
         tools = await toolset.get_tools(get_throwaway_context())
     except Exception as err:
         await toolset.__aexit__(None, None, None)
-        await interface.display_error(f"MCP '{prefix}': failed to list tools: {err}")
+        await interface.display_error(
+            f"MCP '{display_prefix}': failed to list tools: {err}"
+        )
         return None
 
     conn.tool_names = list(tools.keys())

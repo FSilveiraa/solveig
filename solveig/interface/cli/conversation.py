@@ -242,7 +242,7 @@ class ConversationArea(ScrollableContainer):
             color: {theme.group_pending};
         }}
 
-        .group DividedCollapsibleTitleBar {{
+        .group > DividedCollapsibleTitleBar {{
             color: {theme.group};
             text-style: bold;
             padding: 0;
