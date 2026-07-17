@@ -20,8 +20,8 @@ class _StubSessionManager:
     async def store(self, conversation, name=None) -> str:
         return "stub-session.jsonl"
 
-    async def redraw(self, conversation, interface) -> None:
-        pass
+    async def checkpoint(self, conversation, name=None) -> str:
+        return "stub-checkpoint.jsonl"
 
 
 class _StubInterface:
@@ -37,9 +37,6 @@ class _StubInterface:
     async def ask_question(self, question, default="") -> str:
         self.asked.append((question, default))
         return default
-
-    async def clear_conversation(self) -> None:
-        pass
 
     async def notify_pending_queue_changed(self) -> None:
         pass
@@ -58,26 +55,33 @@ class _HarnessApp(App):
         yield self._comment
 
 
-def _conversation() -> Conversation:
-    return Conversation(
-        messages=[
-            ModelRequest(parts=[UserPromptPart(content="hi")]),
-            ModelResponse(parts=[TextPart(content="hello")]),
-        ]
+async def _conversation() -> tuple[Conversation, str, str]:
+    """A two-message conversation; returns it plus the (user_id, assistant_id)."""
+    conv = Conversation()
+    user_id = await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
+    assistant_id = await conv.append(
+        ModelResponse(parts=[TextPart(content="hello")])
+    )
+    return conv, user_id, assistant_id
+
+
+def _comment(conv, message_id, *, role, interface=None, session_manager=None):
+    text = "hi" if role == "user" else "hello"
+    return EditableComment(
+        text,
+        conversation=conv,
+        session_manager=session_manager or _StubSessionManager(),
+        interface=interface or _StubInterface(),
+        message_id=message_id,
+        part_index=0,
+        role=role,
     )
 
 
 @pytest.mark.anyio
 async def test_user_message_mounts_all_four_buttons():
-    comment = EditableComment(
-        "hi",
-        conversation=_conversation(),
-        session_manager=_StubSessionManager(),
-        interface=_StubInterface(),
-        msg_index=0,
-        part_index=0,
-        role="user",
-    )
+    conv, user_id, _ = await _conversation()
+    comment = _comment(conv, user_id, role="user")
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert comment.query_one(RetryButton)
@@ -87,15 +91,8 @@ async def test_user_message_mounts_all_four_buttons():
 
 @pytest.mark.anyio
 async def test_assistant_message_has_no_retry_button():
-    comment = EditableComment(
-        "hello",
-        conversation=_conversation(),
-        session_manager=_StubSessionManager(),
-        interface=_StubInterface(),
-        msg_index=1,
-        part_index=0,
-        role="assistant",
-    )
+    conv, _, assistant_id = await _conversation()
+    comment = _comment(conv, assistant_id, role="assistant")
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert comment.query_one(DeleteButton)
@@ -105,38 +102,22 @@ async def test_assistant_message_has_no_retry_button():
 
 @pytest.mark.anyio
 async def test_begin_edit_updates_conversation_and_display():
-    conversation = _conversation()
-    comment = EditableComment(
-        "hi",
-        conversation=conversation,
-        session_manager=_StubSessionManager(),
-        interface=_StubInterface(),
-        msg_index=0,
-        part_index=0,
-        role="user",
-    )
+    conv, user_id, _ = await _conversation()
+    comment = _comment(conv, user_id, role="user")
     async with _HarnessApp(comment).run_test():
         # ask_question is stubbed to echo back the default (current text) -
-        # simulates a no-op edit round-trip through the real widget path.
+        # a no-op edit round-trip through the real widget path.
         await comment.begin_edit()
-        assert conversation.messages[0].parts[0].content == "hi"
+        assert conv.get(user_id).parts[0].content == "hi"
 
 
 @pytest.mark.anyio
 async def test_delete_from_here_truncates_conversation():
-    conversation = _conversation()
-    comment = EditableComment(
-        "hi",
-        conversation=conversation,
-        session_manager=_StubSessionManager(),
-        interface=_StubInterface(),
-        msg_index=1,
-        part_index=0,
-        role="assistant",
-    )
+    conv, _, assistant_id = await _conversation()
+    comment = _comment(conv, assistant_id, role="assistant")
     async with _HarnessApp(comment).run_test():
         await comment.delete_from_here()
-        assert len(conversation.messages) == 1
+        assert len(conv.messages) == 1
 
 
 class _CancellingInterface(_StubInterface):
@@ -149,35 +130,13 @@ class _CancellingInterface(_StubInterface):
 
 @pytest.mark.anyio
 async def test_begin_edit_cancel_does_not_crash_or_mutate():
-    """Regression test: cancelling the Edit prompt used to propagate
-    UserCancel unhandled up through the button's on_click, crashing the
-    app - every other ask_question call site catches it."""
-    conversation = _conversation()
-    comment = EditableComment(
-        "hi",
-        conversation=conversation,
-        session_manager=_StubSessionManager(),
-        interface=_CancellingInterface(),
-        msg_index=0,
-        part_index=0,
-        role="user",
-    )
+    """Regression: cancelling the Edit prompt used to propagate UserCancel
+    unhandled up through the button's on_click, crashing the app."""
+    conv, user_id, _ = await _conversation()
+    comment = _comment(conv, user_id, role="user", interface=_CancellingInterface())
     async with _HarnessApp(comment).run_test():
         await comment.begin_edit()  # must not raise
-        assert conversation.messages[0].parts[0].content == "hi"
-
-
-class _RealClearInterface(_StubInterface):
-    """Unlike _StubInterface, actually clears the mounted ConversationArea -
-    needed to reproduce the deadlock where clicking a button removes an
-    ancestor of the widget whose click handler is still running."""
-
-    def __init__(self, app: App):
-        super().__init__()
-        self.app = app
-
-    async def clear_conversation(self) -> None:
-        await self.app.query_one(ConversationArea).clear()
+        assert conv.get(user_id).parts[0].content == "hi"
 
 
 class _SectionHarnessApp(App):
@@ -186,68 +145,40 @@ class _SectionHarnessApp(App):
 
 
 @pytest.mark.anyio
-async def test_delete_click_on_nested_message_does_not_deadlock_app():
-    """Regression test: clicking Delete on a message that's nested inside a
-    section container (as every real display_comment call produces) used to
-    hang forever - clear_conversation() removed the button's own ancestor
-    chain from inside that same click handler's call stack, deadlocking
-    Textual's message pump. If this regresses, the test times out instead
-    of hanging the suite."""
-    conversation = _conversation()
+async def test_delete_click_on_nested_message_mutates_conversation():
+    """Clicking Delete on a message nested inside a section container must
+    truncate the conversation (the reactive transcript reconciles the widgets
+    in place - no clear-from-inside-the-click-handler deadlock)."""
+    conv, user_id, assistant_id = await _conversation()
     app = _SectionHarnessApp()
     async with app.run_test() as pilot:
         area = app.query_one(ConversationArea)
-        interface = _RealClearInterface(app)
         session_manager = _StubSessionManager()
 
         await area.add_section_header("User")
         await area._add_element(
-            EditableComment(
-                "hi",
-                conversation=conversation,
-                session_manager=session_manager,
-                interface=interface,
-                msg_index=0,
-                part_index=0,
-                role="user",
-            ),
+            _comment(conv, user_id, role="user", session_manager=session_manager),
             area._current_section_container,
         )
         await area.add_section_header("Assistant")
-        last = EditableComment(
-            "hello",
-            conversation=conversation,
-            session_manager=session_manager,
-            interface=interface,
-            msg_index=1,
-            part_index=0,
-            role="assistant",
+        last = _comment(
+            conv, assistant_id, role="assistant", session_manager=session_manager
         )
         await area._add_element(last, area._current_section_container)
         await pilot.pause()
 
         await asyncio.wait_for(pilot.click(last.query_one(DeleteButton)), timeout=5)
-        # The app must still be responsive after the click - this would
-        # hang forever before the fix.
         await asyncio.wait_for(pilot.pause(), timeout=5)
-        assert len(conversation.messages) == 1
+        assert len(conv.messages) == 1
 
 
 @pytest.mark.anyio
 async def test_retry_truncates_and_requeues_prompt():
-    conversation = _conversation()
+    conv, user_id, _ = await _conversation()
     interface = _StubInterface()
     interface.pending_queue = asyncio.Queue()
-    comment = EditableComment(
-        "hi",
-        conversation=conversation,
-        session_manager=_StubSessionManager(),
-        interface=interface,
-        msg_index=0,
-        part_index=0,
-        role="user",
-    )
+    comment = _comment(conv, user_id, role="user", interface=interface)
     async with _HarnessApp(comment).run_test():
         await comment.retry()
-        assert len(conversation.messages) == 0
+        assert len(conv.messages) == 0
         assert interface.pending_queue.get_nowait() == "hi"

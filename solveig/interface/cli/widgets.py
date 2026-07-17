@@ -1,6 +1,5 @@
 """Basic UI widgets for the Textual CLI interface."""
 
-import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
@@ -49,10 +48,13 @@ class Comment(Static):
 
 
 class EditableComment(Comment, EditableMessage):
-    """A Comment tied to a specific `conversation.messages[msg_index].parts[part_index]`,
-    with Edit/Retry/Delete/Branch action buttons. Retry only makes sense for
-    user turns - regenerating an assistant response is Edit+Retry on the
-    preceding user message instead."""
+    """A Comment tied to a conversation message by its stable `message_id`
+    (and the `part_index` within it), with Edit/Retry/Delete/Branch action
+    buttons. Mutations go through the Conversation by id; the reactive
+    transcript reconciles the displayed widgets in place - the widget never
+    redraws the conversation itself. Retry only makes sense for user turns -
+    regenerating an assistant response is Edit+Retry on the preceding user
+    message instead."""
 
     def __init__(
         self,
@@ -61,7 +63,7 @@ class EditableComment(Comment, EditableMessage):
         conversation: "Conversation",
         session_manager: "SessionManager",
         interface: "SolveigInterface",
-        msg_index: int,
+        message_id: str,
         part_index: int,
         role: Literal["user", "assistant"],
     ):
@@ -69,7 +71,7 @@ class EditableComment(Comment, EditableMessage):
         self.conversation = conversation
         self.session_manager = session_manager
         self.interface = interface
-        self.msg_index = msg_index
+        self.message_id = message_id
         self.part_index = part_index
         self.role = role
 
@@ -83,10 +85,10 @@ class EditableComment(Comment, EditableMessage):
         yield BranchButton(self)
 
     async def _flash_finish_run_first(self) -> None:
-        """Explain why a click was ignored: history mutations mid-run are
-        silently reverted when conversation.apply(result) reassigns the full
-        message list at run end (and a mid-run retry would be drained into
-        the running turn as an interjection instead of starting fresh)."""
+        """Explain why a click was ignored: a history mutation mid-run is
+        reconciled away when adopt() re-syncs the conversation at run end, and
+        a mid-run retry would be drained into the running turn as an
+        interjection instead of starting fresh."""
         await self.interface.update_stats(
             status="Finish or cancel the current run first", duration=3
         )
@@ -101,47 +103,29 @@ class EditableComment(Comment, EditableMessage):
             )
         except UserCancel:
             return
-        self.conversation.edit_part(self.msg_index, self.part_index, new_text)
         self.comment = new_text
-        await self.query_one(Markdown).update(f"🗩 ⠀{self.comment}")
+        await self.conversation.edit(self.message_id, self.part_index, new_text)
 
     async def retry(self) -> None:
         if self.interface.has_active_request:
             await self._flash_finish_run_first()
             return
         text = self.comment
-        self.conversation.delete_from(self.msg_index)
-        self._schedule_redraw()
+        await self.conversation.truncate_from(self.message_id)
         await self.interface.enqueue_pending(text)
 
     async def delete_from_here(self) -> None:
         if self.interface.has_active_request:
             await self._flash_finish_run_first()
             return
-        self.conversation.delete_from(self.msg_index)
-        self._schedule_redraw()
+        await self.conversation.truncate_from(self.message_id)
 
     async def branch_from_here(self) -> None:
         if self.interface.has_active_request:
             await self._flash_finish_run_first()
             return
         await self.session_manager.checkpoint(self.conversation)
-        self.conversation.delete_from(self.msg_index)
-        self._schedule_redraw()
-
-    def _schedule_redraw(self) -> None:
-        """Clear and replay the conversation as a separate task.
-
-        This is called from a click handler on a widget that's about to be
-        removed (self is a descendant of the conversation area being
-        cleared) - awaiting the removal inline, in that same call stack,
-        deadlocks Textual's message pump. Scheduling it as an independent
-        task lets the current click handler return first."""
-        asyncio.create_task(self._redraw())
-
-    async def _redraw(self) -> None:
-        await self.interface.clear_conversation()
-        await self.session_manager.redraw(self.conversation, self.interface)
+        await self.conversation.truncate_from(self.message_id)
 
 
 class CopyButton(Static):
