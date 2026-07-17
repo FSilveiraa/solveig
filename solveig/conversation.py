@@ -1,38 +1,57 @@
-"""Conversation - the running message history + cumulative usage passed to
-every `agent.run()` call.
+"""Conversation - the reactive single source of truth for the message history.
 
-`Agent.run(usage=...)` accumulates request/token counts into the given
-`RunUsage` in place across calls ("useful for resuming a conversation" per
-its own docstring) - so there's no manual `+=` bookkeeping here, unlike the
-old `MessageHistory`.
+One insertion-ordered `dict[MessageId, ModelMessage]` IS both the ordered list
+(`.values()`, handed to pydantic-ai as message_history) and the id-index
+(`d[id]`, O(1) lookup/edit/address). There is no separate list+map to keep in
+sync, so drift and leaks are structurally impossible. Every mutation is an
+async method that updates the dict and then awaits registered observers.
 """
 
-from dataclasses import dataclass, field
+from __future__ import annotations
 
-from pydantic_ai.agent import AgentRunResult
-from pydantic_ai.messages import ModelMessage, TextPart, ThinkingPart, UserPromptPart
+import uuid
+from dataclasses import dataclass, field
+from typing import Protocol
+
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.usage import RunUsage
+
+MessageId = str
+
+
+class ConversationObserver(Protocol):
+    """Reactive subscriber. Core notifies; the observer reflects the change
+    however it likes (a UI schedules a throttled redraw)."""
+
+    async def message_added(self, message_id: MessageId) -> None: ...
+    async def message_updated(self, message_id: MessageId) -> None: ...
+    async def truncated_from(self, message_id: MessageId) -> None: ...
 
 
 @dataclass
 class Conversation:
-    messages: list[ModelMessage] = field(default_factory=list)
     usage: RunUsage = field(default_factory=RunUsage)
+    _entries: dict[MessageId, ModelMessage] = field(default_factory=dict)
+    _observers: list[ConversationObserver] = field(default_factory=list)
 
-    def apply(self, result: AgentRunResult) -> None:
-        """Absorb a completed run's messages. Usage is already accumulated
-        in place, since the same `usage` instance is passed into every
-        `agent.run()` call."""
-        self.messages = result.all_messages()
+    def subscribe(self, observer: ConversationObserver) -> None:
+        self._observers.append(observer)
 
-    def edit_part(self, msg_index: int, part_index: int, new_text: str) -> None:
-        """Overwrite the text content of a single part in place - a
-        `UserPromptPart`, `TextPart`, or `ThinkingPart`. No truncation."""
-        part = self.messages[msg_index].parts[part_index]
-        if not isinstance(part, UserPromptPart | TextPart | ThinkingPart):
-            raise ValueError(f"{type(part).__name__} is not an editable part type")
-        part.content = new_text
+    @property
+    def messages(self) -> tuple[ModelMessage, ...]:
+        """Ordered, immutable view - safe to hand to pydantic-ai or iterate."""
+        return tuple(self._entries.values())
 
-    def delete_from(self, msg_index: int) -> None:
-        """Drop `messages[msg_index]` and everything after it."""
-        self.messages = self.messages[:msg_index]
+    @property
+    def ids(self) -> tuple[MessageId, ...]:
+        return tuple(self._entries.keys())
+
+    def get(self, message_id: MessageId) -> ModelMessage | None:
+        return self._entries.get(message_id)
+
+    async def append(self, message: ModelMessage) -> MessageId:
+        message_id = str(uuid.uuid4())
+        self._entries[message_id] = message
+        for observer in self._observers:
+            await observer.message_added(message_id)
+        return message_id
