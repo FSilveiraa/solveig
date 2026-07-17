@@ -138,7 +138,18 @@ async def run_turn(
     ) as run:
         try:
             async for node in run:
-                await conversation.adopt(run.all_messages())
+                if deps.config.stream and Agent.is_model_request_node(node):
+                    # Stream this response token-by-token into a live entry.
+                    # Inside node.stream(), the user/tool-return request is
+                    # already in all_messages(), so adopting here orders it
+                    # BEFORE the streamed response entry.
+                    async with node.stream(run.ctx) as stream:
+                        await conversation.adopt(run.all_messages())
+                        await conversation.begin_stream(stream.response)
+                        async for _event in stream:
+                            await conversation.stream_updated()
+                    continue
+
                 # A CallToolsNode is the tool-round boundary. `run.next_node`
                 # gives no lookahead in this loop (it mirrors the current node),
                 # but a node that actually ran tool calls is *always* followed by
@@ -146,11 +157,14 @@ async def run_turn(
                 # End - so the response's tool calls tell us "more is coming"
                 # without a peek.
                 if Agent.is_call_tools_node(node):
+                    # Swap the streamed (throwaway) object for pydantic-ai's
+                    # canonical response under the same id, so adopt won't
+                    # re-append it. No-op when streaming is off.
+                    await conversation.finalize_stream(node.model_response)
+                    await conversation.adopt(run.all_messages())
                     # A CallToolsNode is yielded BEFORE its tools run, so
                     # displaying its response here keeps the old order
-                    # (assistant text/reasoning, then the tool groups). adopt
-                    # above already appended this response, so it is the last
-                    # conversation entry.
+                    # (assistant text/reasoning, then the tool groups).
                     await _display_response(
                         deps.interface,
                         node.model_response,
@@ -163,6 +177,9 @@ async def run_turn(
                         run,
                         tools_ran=_response_has_tool_calls(node.model_response),
                     )
+                    continue
+
+                await conversation.adopt(run.all_messages())
         finally:
             await conversation.adopt(run.all_messages())
 

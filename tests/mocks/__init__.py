@@ -13,6 +13,11 @@ DEFAULT_CONFIG = SolveigConfig(
     verbose=False,
     min_disk_space_left=parse_human_readable_size("1gb"),
     auto_save_session=False,
+    # The default mock model (create_mock_model) is a function-only
+    # FunctionModel that can't stream; streaming tests opt in with
+    # .with_(stream=True) + a stream-capable model (FunctionModel with a
+    # stream_function, or TestModel).
+    stream=False,
 )
 
 VERBOSE_CONFIG = DEFAULT_CONFIG.with_(verbose=True)
