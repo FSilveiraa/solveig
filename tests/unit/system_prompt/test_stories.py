@@ -42,9 +42,7 @@ class TestRenderAsExample:
         result = render_as_example(messages)
 
         assert result == (
-            "user: read it\n"
-            "assistant: On it\n"
-            "  [calls read(path='~/Sync/hello.py')]"
+            "user: read it\nassistant: On it\n  [calls read(path='~/Sync/hello.py')]"
         )
 
     def test_multiple_consecutive_assistant_turns(self):

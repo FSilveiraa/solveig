@@ -50,6 +50,18 @@ def _clean_hooks():
     clear_hooks()
 
 
+def _context(config, interface) -> SolveigContext:
+    """A `SolveigContext` with a fresh `Conversation`/`SessionManager` -
+    plumbing tests below don't assert on those, they just need real objects
+    since capabilities now read them from `ctx.deps` instead of closures."""
+    return SolveigContext(
+        config=config,
+        interface=interface,
+        conversation=Conversation(),
+        session_manager=SessionManager(config=config),
+    )
+
+
 async def drive_tool_call(
     toolset: AbstractToolset,
     call: ToolCallPart,
@@ -73,9 +85,7 @@ async def drive_tool_call(
         toolsets=[toolset],
         capabilities=capabilities or [],
     )
-    return await agent.run(
-        "go", deps=SolveigContext(config=config, interface=interface)
-    )
+    return await agent.run("go", deps=_context(config, interface))
 
 
 def _run_context(config, interface) -> RunContext[SolveigContext]:
@@ -83,7 +93,7 @@ def _run_context(config, interface) -> RunContext[SolveigContext]:
     `toolset.get_tools(ctx)` directly (pydantic-ai's own toolset introspection
     API) without going through a full `Agent.run()`."""
     return RunContext(
-        deps=SolveigContext(config=config, interface=interface),
+        deps=_context(config, interface),
         model=TestModel(),
         usage=RunUsage(),
         max_retries=1,
@@ -153,7 +163,12 @@ async def test_as_tool_flattens_model_fields():
     model = TestModel(call_tools=[])  # returns text, never calls the tool
     agent = Agent(model, deps_type=SolveigContext, toolsets=[toolset])
 
-    await agent.run("hi", deps=SolveigContext(config=None, interface=None))  # type: ignore[arg-type]
+    await agent.run(
+        "hi",
+        deps=SolveigContext(  # type: ignore[arg-type]
+            config=None, interface=None, conversation=None, session_manager=None
+        ),
+    )
 
     tool_defs = model.last_model_request_parameters.function_tools
     edit_def = next(t for t in tool_defs if t.name == "edit")
@@ -222,9 +237,10 @@ async def test_mcp_style_tool_decline_skips_the_call_entirely():
 
 
 async def test_mcp_style_tool_inspect_first_then_send():
-    """"Run and inspect result first" actually runs the tool and shows the
+    """ "Run and inspect result first" actually runs the tool and shows the
     result before asking again - if the user then says yes, the real result
     reaches the model."""
+
     async def search(objective: str) -> dict:
         return {"results": ["a", "b"]}
 
@@ -244,7 +260,7 @@ async def test_mcp_style_tool_inspect_first_then_send():
 
 
 async def test_mcp_style_tool_inspect_first_then_withhold():
-    """"Run and inspect result first" still runs the tool (so the user can
+    """ "Run and inspect result first" still runs the tool (so the user can
     see the output) but must not send it to the model if the user then says
     no - the model must see a decline message instead of the real result."""
     called = False
@@ -397,9 +413,7 @@ def _two_round_agent(config, interface):
         deps_type=SolveigContext,
         toolsets=[FunctionToolset([EchoTool.as_tool()])],
         capabilities=[
-            build_loop_capability(
-                config, interface, Conversation(), SessionManager(config=config)
-            ),
+            build_loop_capability(),
             build_tool_execution_capability(),
         ],
     )
@@ -414,9 +428,7 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
     interface = MockInterface()
     agent, model = _two_round_agent(config, interface)
 
-    task = asyncio.create_task(
-        agent.run("go", deps=SolveigContext(config=config, interface=interface))
-    )
+    task = asyncio.create_task(agent.run("go", deps=_context(config, interface)))
     # let it get through round 1 (the tool call) and reach the gate
     for _ in range(500):
         await asyncio.sleep(0)
@@ -445,8 +457,6 @@ async def test_comment_interleaving_drains_queue_without_blocking():
     interface.pending_queue.put_nowait("mid-run note")
     agent, _ = _two_round_agent(config, interface)
 
-    result = await agent.run(
-        "go", deps=SolveigContext(config=config, interface=interface)
-    )
+    result = await agent.run("go", deps=_context(config, interface))
 
     assert any("mid-run note" in p for p in _user_prompts(result))

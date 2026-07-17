@@ -271,5 +271,3 @@ class ConversationArea(ScrollableContainer):
         {SectionHeader.get_css(theme)}
         {TreeDisplay.get_css(theme)}
         """
-
-        # {TextBox.get_css(theme)}

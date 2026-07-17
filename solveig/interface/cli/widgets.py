@@ -4,10 +4,7 @@ import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
-from rich.syntax import Syntax
-from textual.containers import ScrollableContainer
 from textual.events import Click
-from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
@@ -78,14 +75,26 @@ class EditableComment(Comment, EditableMessage):
 
     def compose(self):
         yield Markdown(f"🗩 ⠀{self.comment}")
-        yield CopyButton(self.comment)
+        yield CopyButton(lambda: self.comment)
         yield EditButton(self)
         if self.role == "user":
             yield RetryButton(self)
         yield DeleteButton(self)
         yield BranchButton(self)
 
+    async def _flash_finish_run_first(self) -> None:
+        """Explain why a click was ignored: history mutations mid-run are
+        silently reverted when conversation.apply(result) reassigns the full
+        message list at run end (and a mid-run retry would be drained into
+        the running turn as an interjection instead of starting fresh)."""
+        await self.interface.update_stats(
+            status="Finish or cancel the current run first", duration=3
+        )
+
     async def begin_edit(self) -> None:
+        if self.interface.has_active_request:
+            await self._flash_finish_run_first()
+            return
         try:
             new_text = await self.interface.ask_question(
                 "Edit message:", default=self.comment
@@ -97,18 +106,26 @@ class EditableComment(Comment, EditableMessage):
         await self.query_one(Markdown).update(f"🗩 ⠀{self.comment}")
 
     async def retry(self) -> None:
+        if self.interface.has_active_request:
+            await self._flash_finish_run_first()
+            return
         text = self.comment
         self.conversation.delete_from(self.msg_index)
         self._schedule_redraw()
-        await self.interface.pending_queue.put(text)
-        await self.interface.notify_pending_queue_changed()
+        await self.interface.enqueue_pending(text)
 
     async def delete_from_here(self) -> None:
+        if self.interface.has_active_request:
+            await self._flash_finish_run_first()
+            return
         self.conversation.delete_from(self.msg_index)
         self._schedule_redraw()
 
     async def branch_from_here(self) -> None:
-        await self.session_manager.store(self.conversation)
+        if self.interface.has_active_request:
+            await self._flash_finish_run_first()
+            return
+        await self.session_manager.checkpoint(self.conversation)
         self.conversation.delete_from(self.msg_index)
         self._schedule_redraw()
 
@@ -164,58 +181,6 @@ class CopyButton(Static):
         CopyButton:hover {{
             color: {theme.section};
         }}
-        """
-
-
-class TextBox(Widget):
-    """A text block widget with optional title and border."""
-
-    def __init__(self, content: str | Syntax, title: str | None = None, **kwargs):
-        super().__init__(**kwargs)
-        self._content = content
-        if title:
-            self.border_title = title
-        self.add_class("text_block")
-        # self._scroll_end = scroll_end
-
-    def compose(self):
-        raw = self._content if isinstance(self._content, str) else self._content.code
-        yield Static(self._content, markup=False)
-        yield CopyButton(raw)
-
-    def append(self, line: str) -> None:
-        """Append a line to the box, refresh the display, and scroll the parent to end."""
-        if isinstance(self._content, str):
-            self._content += line
-        else:
-            self._content = line
-        try:
-            self.query_one(Static).update(self._content)
-            self.query_one(CopyButton)._copy_content = self._content
-        except Exception:
-            pass
-        self.refresh(layout=True)
-        parent = self.parent
-        while parent is not None:
-            if isinstance(parent, ScrollableContainer):
-                parent.scroll_end(animate=False)
-                parent.call_after_refresh(parent.scroll_end)
-            if parent.id == "conversation":
-                break
-            parent = parent.parent
-
-    @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        """Generate CSS for TextBox."""
-        return f"""
-        TextBox {{
-            border: solid {theme.box};
-            margin: 1;
-            padding: 0 1;
-            height: auto;
-        }}
-
-        {CopyButton.get_css(theme)}
         """
 
 

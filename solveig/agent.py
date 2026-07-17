@@ -7,7 +7,8 @@ wrapper (model + toolset + capabilities) is rebuilt, so runtime config changes
 without restarting anything.
 
 The `Agent` is given two per-turn `Hooks` capabilities (`build_*_capability`
-below), both fresh each turn so live `config`/`interface` are captured:
+below); both read live `config`/`interface`/`conversation`/`session_manager`
+from `ctx.deps` (`SolveigContext`) at call time rather than closing over them:
 
 - `build_loop_capability` - loop-level concerns via node hooks: live display of
   each model response (thinking/text), the autonomy gate (block between rounds
@@ -51,10 +52,7 @@ from solveig.tools.result import ToolResult
 def build_agent(
     config: SolveigConfig,
     provider_ref: ProviderRef,
-    interface: SolveigInterface,
     system_prompt: str,
-    conversation: Conversation,
-    session_manager: SessionManager,
     model: Model | None = None,
 ) -> Agent[SolveigContext, str]:
     """Build the per-turn Agent.
@@ -62,6 +60,11 @@ def build_agent(
     `model` lets callers (tests, the mock demo) inject a pydantic-ai `Model`
     directly (e.g. `FunctionModel`/`TestModel`), bypassing `provider_ref`'s
     Provider/API-key resolution entirely.
+
+    Capabilities read everything they need (`interface`, `conversation`,
+    `session_manager`, `config`) from `ctx.deps` (`SolveigContext`) at call
+    time rather than closing over them here, so the same live values are
+    available on both the loop-level and tool-execution hooks below.
     """
     if model is not None:
         resolved_model = model
@@ -79,30 +82,28 @@ def build_agent(
         # network communication and shouldn't be timed out.
         model_settings={"timeout": config.timeout} if config.timeout else None,
         capabilities=[
-            build_loop_capability(config, interface, conversation, session_manager),
+            build_loop_capability(),
             build_tool_execution_capability(),
         ],
     )
 
 
-def build_loop_capability(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    conversation: Conversation,
-    session_manager: SessionManager,
-) -> Hooks[SolveigContext]:
+def build_loop_capability() -> Hooks[SolveigContext]:
     """Build the per-agent capability driving live display, interleaving, and autonomy."""
     hooks: Hooks[SolveigContext] = Hooks()
 
     @hooks.on.model_request
-    async def show_thinking_animation(ctx: RunContext[SolveigContext], *, request_context, handler):
+    async def show_thinking_animation(
+        ctx: RunContext[SolveigContext], *, request_context, handler
+    ):
         # Scoped to just this network round trip - tool execution (including
         # interactive ask_choice approval waits) happens outside this hook, so
         # Ctrl+C/Esc here cancels exactly the model call in flight, not
         # whatever else the run is doing, and the "Thinking" status/countdown
         # doesn't sit stuck on screen once the call returns.
+        interface = ctx.deps.interface
         async with interface.with_cancellable(
-            handler(request_context), status="Thinking", timeout=config.timeout
+            handler(request_context), status="Thinking", timeout=ctx.deps.config.timeout
         ) as task:
             return await task
 
@@ -114,7 +115,11 @@ def build_loop_capability(
             # becomes) by the time this hook fires, so its index is stable.
             msg_index = len(ctx.messages) - 1
             await _display_response(
-                interface, node.model_response, conversation, session_manager, msg_index
+                ctx.deps.interface,
+                node.model_response,
+                ctx.deps.conversation,
+                ctx.deps.session_manager,
+                msg_index,
             )
         return node
 
@@ -128,15 +133,14 @@ def build_loop_capability(
         if not Agent.is_call_tools_node(node):
             return result
 
-        queue = interface.pending_queue
+        interface = ctx.deps.interface
 
         # Autonomy gate first, so it consumes exactly the go-ahead it's
         # waiting for - draining the queue before this point would let the
         # always-on drain below steal it and leave the gate blocked forever.
-        if config.disable_autonomy and not isinstance(result, End):
+        if ctx.deps.config.disable_autonomy and not isinstance(result, End):
             await interface.update_stats(status="Awaiting confirmation to continue")
-            comment = await queue.get()
-            await interface.notify_pending_queue_changed()
+            comment = await interface.dequeue_pending()
             await interface.update_stats(status=None)
             ctx.enqueue(comment, priority="asap")
 
@@ -144,9 +148,8 @@ def build_loop_capability(
         # was executing, or freshly arrived while the gate above was blocked
         # - gets delivered at the next opportunity too, regardless of
         # autonomy mode.
-        while not queue.empty():
-            ctx.enqueue(queue.get_nowait(), priority="asap")
-            await interface.notify_pending_queue_changed()
+        while (next_comment := await interface.try_dequeue_pending()) is not None:
+            ctx.enqueue(next_comment, priority="asap")
 
         return result
 
@@ -239,9 +242,7 @@ async def _run_mcp_tool(
         async with group.with_cancellable(handler(args), status="Executing") as task:
             result = await task
 
-        await group.display_text_box(
-            str(result), title="Result", collapsed=choice == 0
-        )
+        await group.display_text_box(str(result), title="Result", collapsed=choice == 0)
 
         if choice == 0:
             await group.display_success("Accepted")

@@ -23,12 +23,8 @@ from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
 from solveig.llm import ProviderRef
-from solveig.mcp_servers.client import (
-    MCP_CONNECTIONS,
-    connect,
-    disconnect,
-    find_connection,
-)
+from solveig.mcp_servers.client import connect, disconnect, find_connection
+from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
 from solveig.tools import CommandTool
@@ -295,16 +291,20 @@ class SubcommandRunner:
             template = cls.subcommand
             if not isinstance(template, Subcommand):
                 continue
-            sub = dataclasses.replace(template, handler=self._make_tool_handler(cls))
+            sub = dataclasses.replace(
+                template, handler=self._make_tool_handler(cls, template)
+            )
             self._reg(self._tools, sub)
 
-    def _make_tool_handler(self, cls: type[BaseTool]) -> Callable:
+    def _make_tool_handler(
+        self, cls: type[BaseTool], subcommand: Subcommand
+    ) -> Callable:
         """Build the handler that parses a `/tool` line into an instance and
         runs it through the shared group+hooks orchestration."""
 
         async def handler(interface: SolveigInterface, *tokens: str) -> None:
-            primary = cls.subcommand.commands[0]  # type: ignore[union-attr]
-            usage_line = f"Usage: {primary} {cls.subcommand.usage}".strip()  # type: ignore[union-attr]
+            primary = subcommand.commands[0]
+            usage_line = f"Usage: {primary} {subcommand.usage}".strip()
 
             # Our own help - never forward `-h`/`--help` to argparse, which
             # prints to stdout and raises SystemExit regardless of
@@ -422,17 +422,44 @@ class SubcommandRunner:
             )
             return
 
+        if value_str is None:
+            await self.edit_config_field(field_name, interface)
+            return
+
         try:
-            if value_str is not None:
-                hints = typing.get_type_hints(self.config.__class__)
-                raw_type = _unwrap_optional(hints[field_name])
-                new_value = _parse_field_value(field_name, raw_type, value_str)
-            else:
-                new_value = await prompt_for_field(field_name, self.config, interface)
+            hints = typing.get_type_hints(self.config.__class__)
+            raw_type = _unwrap_optional(hints[field_name])
+            new_value = _parse_field_value(field_name, raw_type, value_str)
         except (ValueError, KeyError) as e:
             await interface.display_error(f"Invalid value for '{field_name}': {e}")
             return
 
+        await self._apply_and_confirm(field_name, new_value, interface)
+
+    async def edit_config_field(
+        self, field_name: str, interface: SolveigInterface
+    ) -> None:
+        """Interactively prompt for a config field's new value and apply it.
+
+        Typed entry point for UI surfaces (e.g. StatsBar click-to-edit) so
+        they don't have to synthesize a "/config set <field>" string.
+        """
+        if field_name not in CONFIG_EDITABLE_FIELDS:
+            await interface.display_error(
+                f"Unknown or non-editable field: '{field_name}'. "
+                "Use /config list to see all options."
+            )
+            return
+        try:
+            new_value = await prompt_for_field(field_name, self.config, interface)
+        except (ValueError, KeyError) as e:
+            await interface.display_error(f"Invalid value for '{field_name}': {e}")
+            return
+        await self._apply_and_confirm(field_name, new_value, interface)
+
+    async def _apply_and_confirm(
+        self, field_name: str, new_value: object, interface: SolveigInterface
+    ) -> None:
         old_value = getattr(self.config, field_name)
         await apply_config_field(
             field_name,

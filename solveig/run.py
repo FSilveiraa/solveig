@@ -9,7 +9,9 @@ awaits interface.start(). When the interface exits, the Task is cancelled.
 
 import asyncio
 import contextlib
+import sys
 import traceback
+import warnings
 
 from solveig import system_prompt
 from solveig.config import SolveigConfig
@@ -32,11 +34,16 @@ async def setup_loop(
     conversation: Conversation,
     session_manager: SessionManager | None,
     resume_session: str | None,
+    startup_warnings: tuple[str, ...] = (),
 ) -> str:
     """One-time setup that runs after the interface is ready. Returns the system prompt."""
     await interface.wait_until_ready()
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
+
+    # Config-parse warnings captured before the interface existed (run_async)
+    for warning in startup_warnings:
+        await interface.display_warning(warning)
 
     # Initialize plugins and MCP servers, then rebuild the tools union.
     await initialize_plugins(config=config, interface=interface)
@@ -90,6 +97,7 @@ async def main_loop(
     request_manager: RequestManager,
     conversation: Conversation,
     resume_session: str | None = None,
+    startup_warnings: tuple[str, ...] = (),
 ) -> None:
     """Main async conversation loop.
 
@@ -110,13 +118,13 @@ async def main_loop(
         conversation=conversation,
         session_manager=session_manager,
         resume_session=resume_session,
+        startup_warnings=startup_warnings,
     )
 
     while True:
         if interface.pending_queue.empty():
             await interface.update_stats(status="Awaiting input")
-        prompt = await interface.pending_queue.get()
-        await interface.notify_pending_queue_changed()
+        prompt = await interface.dequeue_pending()
         await interface.update_stats(status=None)
 
         await interface.display_section("User")
@@ -167,12 +175,21 @@ async def run_async(
     Initializes dependencies, spawns the main loop as a background task, and
     runs the interface in the foreground. Accepts injected mocks for testing.
     """
+    startup_warnings: tuple[str, ...] = ()
     if not config:
-        (
-            config,
-            user_prompt,
-            resume_session,
-        ) = await SolveigConfig.parse_config_and_prompt()
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                (
+                    config,
+                    user_prompt,
+                    resume_session,
+                ) = await SolveigConfig.parse_config_and_prompt()
+            startup_warnings = tuple(str(w.message) for w in caught)
+        except Exception as e:
+            # The interface doesn't exist yet - print and cancel startup
+            print(f"Error: {e}", file=sys.stderr)
+            raise SystemExit(1) from e
 
     # Interface and conversation are created before spawning the loop task so
     # that user_prompt can be queued immediately. By the time the loop calls
@@ -186,8 +203,7 @@ async def run_async(
     conversation = Conversation()
 
     if user_prompt:
-        await interface.pending_queue.put(user_prompt)
-        await interface.notify_pending_queue_changed()
+        await interface.enqueue_pending(user_prompt)
 
     request_manager = request_manager or RequestManager(config=config)
 
@@ -200,6 +216,7 @@ async def run_async(
                 request_manager=request_manager,
                 conversation=conversation,
                 resume_session=resume_session,
+                startup_warnings=startup_warnings,
             )
         )
         await interface.start()

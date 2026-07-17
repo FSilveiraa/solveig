@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from pygments.styles import STYLE_MAP
+
 
 def _blend(hex_a: str, hex_b: str, t: float) -> str:
     """Linearly blend two hex colors."""
@@ -184,8 +186,6 @@ THEMES = {
         monochrome,
     ]
 }
-
-from pygments.styles import STYLE_MAP
 
 DEFAULT_CODE_THEME = "coffee"
 CODE_THEMES = set(STYLE_MAP.keys())

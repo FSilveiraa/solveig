@@ -10,7 +10,7 @@ old `MessageHistory`.
 from dataclasses import dataclass, field
 
 from pydantic_ai.agent import AgentRunResult
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai.messages import ModelMessage, TextPart, ThinkingPart, UserPromptPart
 from pydantic_ai.usage import RunUsage
 
 
@@ -29,7 +29,9 @@ class Conversation:
         """Overwrite the text content of a single part in place - a
         `UserPromptPart`, `TextPart`, or `ThinkingPart`. No truncation."""
         part = self.messages[msg_index].parts[part_index]
-        part.content = new_text  # type: ignore[union-attr]
+        if not isinstance(part, UserPromptPart | TextPart | ThinkingPart):
+            raise ValueError(f"{type(part).__name__} is not an editable part type")
+        part.content = new_text
 
     def delete_from(self, msg_index: int) -> None:
         """Drop `messages[msg_index]` and everything after it."""

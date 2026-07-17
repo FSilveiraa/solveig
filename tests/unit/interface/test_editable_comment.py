@@ -28,6 +28,12 @@ class _StubInterface:
     def __init__(self):
         self.asked = []
 
+    @property
+    def has_active_request(self) -> bool:
+        # No run in flight in these tests, so the buttons' run-in-flight
+        # gate always lets the action through.
+        return False
+
     async def ask_question(self, question, default="") -> str:
         self.asked.append((question, default))
         return default
@@ -37,6 +43,10 @@ class _StubInterface:
 
     async def notify_pending_queue_changed(self) -> None:
         pass
+
+    async def enqueue_pending(self, text: str) -> None:
+        await self.pending_queue.put(text)
+        await self.notify_pending_queue_changed()
 
 
 class _HarnessApp(App):

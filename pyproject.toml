@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Code Generators", 
+    "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Security",
     "Topic :: Terminals",
@@ -30,7 +30,6 @@ keywords = ["ai", "automation", "security", "llm", "assistant"]
 requires-python = ">=3.13"
 dependencies = [
     "distro>=1.9.0",
-    "aiofiles>=25.1.0",
     "openai>=1.108.0",
     "pydantic>=2.11.0",
     "pydantic-ai>=2.5.0",
@@ -70,10 +69,8 @@ include = ["solveig*"]
 [tool.setuptools.package-data]
 solveig = ["system_prompt/stories/*.jsonl"]
 
-# Development tool configurations for future use
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--cov=solveig", "--cov-report=term-missing"]
 
 [tool.coverage.run]
 omit = ["solveig/interface/cli/*"]
@@ -87,7 +84,11 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "E402"]  # E501: line too long, E402: module level import not at top (intentional plugin loading)
+ignore = ["E501"]  # E501: line too long
 
-[tool.ruff.lint.per-file-ignores]
-"solveig/system_prompt.py" = ["F403", "F405"]  # Star imports used intentionally for examples
+[tool.mypy]
+# `just typecheck` also passes --ignore-missing-imports; kept here so a bare
+# `mypy solveig/` behaves the same. warn_unused_ignores keeps `# type: ignore`
+# comments honest - a stale one (its underlying issue since fixed) becomes an error.
+ignore_missing_imports = true
+warn_unused_ignores = true

@@ -77,17 +77,19 @@ class RequestManager:
             agent = build_agent(
                 config,
                 self._provider_ref,
-                interface,
                 system_prompt,
-                conversation,
-                session_manager,
                 model=self._model,
             )
             run_coro = agent.run(
                 prompt,
                 message_history=conversation.messages,
                 usage=conversation.usage,
-                deps=SolveigContext(config=config, interface=interface),
+                deps=SolveigContext(
+                    config=config,
+                    interface=interface,
+                    conversation=conversation,
+                    session_manager=session_manager,
+                ),
             )
 
             try:

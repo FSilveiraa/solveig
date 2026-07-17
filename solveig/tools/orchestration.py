@@ -23,6 +23,7 @@ from typing import Any
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
+from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, plugin_name
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
@@ -40,10 +41,6 @@ async def run_tool_and_hooks(
     `PluginException` propagates out for the caller to translate; `UserCancel`
     (not a `PluginException`) propagates as a real cancellation.
     """
-    # Deferred import: the plugins package init is import-order sensitive, the
-    # same reason AvailableTools.rebuild()/agent.py defer their plugin imports.
-    from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, plugin_name
-
     tool_name = instance.tool_name()
     async with interface.with_group(
         instance.title,

@@ -9,10 +9,12 @@ though `agent.run()` also enters/exits the same toolset once per turn - each
 of those becomes a no-op nested increment/decrement as long as this
 module's own hold is still outstanding.
 
-`MCP_CONNECTIONS` (not `tools/available.py`) is the single source of truth
-for connected servers, for the same reason `PLUGIN_TOOLS` lives in
-`plugins/tools/__init__.py`: the registry belongs next to the domain code
-that mutates it, not the assembly code that reads it. `AVAILABLE_TOOLS.rebuild()`
+`MCP_CONNECTIONS` is the single source of truth for connected servers. The
+dict itself lives in `mcp_servers/connections.py` - a dependency-free module,
+because this module imports `AVAILABLE_TOOLS` (to trigger rebuilds on
+connect/disconnect) while `tools/available.py` needs the same dict during
+`rebuild()`: importing it from here at module level would cycle. Both sides
+import it from `connections.py` at top level. `AVAILABLE_TOOLS.rebuild()`
 derives the toolset list it needs (`[c.toolset for c in MCP_CONNECTIONS.values()]`)
 from this dict directly rather than a second list kept in sync by hand.
 """
@@ -31,8 +33,11 @@ from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig
-from solveig.context import get_throwaway_context
+from solveig.context import SolveigContext, get_introspection_context
+from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
+from solveig.mcp_servers.connections import MCP_CONNECTIONS
+from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 
 if TYPE_CHECKING:
@@ -104,10 +109,6 @@ def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
     )
 
 
-# Module-level registry: URL → connection
-MCP_CONNECTIONS: dict[str, MCPConnection] = {}
-
-
 def find_connection(identifier: str) -> MCPConnection | None:
     """Look up a connection by URL (exact) or display_name (fallback)."""
     if identifier in MCP_CONNECTIONS:
@@ -159,7 +160,13 @@ async def connect(
     conn.server_name = mcp_toolset.server_info.name
 
     try:
-        tools = await toolset.get_tools(get_throwaway_context())
+        deps = SolveigContext(
+            config=config,
+            interface=interface,
+            conversation=Conversation(),
+            session_manager=SessionManager(config=config),
+        )
+        tools = await toolset.get_tools(get_introspection_context(deps))
     except Exception as err:
         await toolset.__aexit__(None, None, None)
         await interface.display_error(

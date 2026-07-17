@@ -26,8 +26,8 @@ class MutableTextBox:
     def append(self, text: str) -> None:
         """Append text to the end of the box."""
 
-    def reset(self, text: str) -> None:
-        """Reset the box content."""
+    def clear(self) -> None:
+        """Empty the box content."""
 
 
 class EditableMessage:
@@ -100,12 +100,43 @@ class SolveigInterface(ABC):
     def set_subcommand_executor(self, subcommand_executor: SubcommandRunner):
         self.subcommand_executor = subcommand_executor
 
-    async def notify_pending_queue_changed(self) -> None:  # noqa: B027
+    async def notify_pending_queue_changed(self) -> None:
         """Called after an item is put onto or taken off `pending_queue`.
 
         Default no-op; concrete interfaces that display a live queued-message
         indicator (e.g. `TerminalInterface`) override this to refresh it.
+        Prefer `enqueue_pending`/`dequeue_pending`/`try_dequeue_pending`
+        below over touching `pending_queue` directly - they call this for
+        you, so there's no "remember to notify after every mutation" to get
+        wrong at a new call site.
         """
+        root = self._root
+        if root is not self:
+            await root.notify_pending_queue_changed()
+
+    async def enqueue_pending(self, text: str) -> None:
+        """Put `text` onto the ROOT's `pending_queue` and refresh the display.
+
+        Root-global like `ask_choice`/`start`: scoped interfaces (groups)
+        don't own a queue - the one consumer is the root's main loop.
+        """
+        await self._root.pending_queue.put(text)
+        await self.notify_pending_queue_changed()
+
+    async def dequeue_pending(self) -> str:
+        """Wait for and remove the next queued prompt, refreshing the display."""
+        text = await self._root.pending_queue.get()
+        await self.notify_pending_queue_changed()
+        return text
+
+    async def try_dequeue_pending(self) -> str | None:
+        """Remove the next queued prompt without waiting, or `None` if empty -
+        refreshing the display only when something was actually taken."""
+        if self._root.pending_queue.empty():
+            return None
+        text = self._root.pending_queue.get_nowait()
+        await self.notify_pending_queue_changed()
+        return text
 
     @asynccontextmanager
     async def with_cancellable(

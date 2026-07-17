@@ -279,7 +279,7 @@ class BaseTool(BaseModel, ABC):
         per toolset build. `ToolReturn` is both accurate downstream and
         schema-clean."""
 
-        async def run(ctx, params):  # type: ignore[no-untyped-def]
+        async def run(ctx, params):
             return await params.execute(ctx.deps.config, ctx.deps.interface)
 
         run.__annotations__ = {

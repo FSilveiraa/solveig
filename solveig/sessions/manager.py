@@ -116,15 +116,29 @@ class SessionManager:
         sessions_dir = await self._ensure_dir()
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
+        await self._write(conversation, self.current_path)
+        return self.current_path.name
+
+    async def checkpoint(self, conversation: Conversation) -> str:
+        """Write a snapshot to a NEW timestamped file, leaving current_path alone.
+
+        Unlike store(), this never overwrites the live session file, so the
+        snapshot survives future auto-saves - used by the Branch button, which
+        must preserve the pre-truncation conversation while the live session
+        continues past the branch point.
+        """
+        sessions_dir = await self._ensure_dir()
+        path = Path(f"{sessions_dir}/{self._session_filename('branch')}")
+        await self._write(conversation, path)
+        return path.name
+
+    async def _write(self, conversation: Conversation, path: Path) -> None:
         blob = {
             "total_tokens_sent": conversation.usage.input_tokens,
             "total_tokens_received": conversation.usage.output_tokens,
             "messages": to_jsonable_python(conversation.messages),
         }
-        await Filesystem.write_file_text(
-            self.current_path, json.dumps(blob) + "\n", append=False
-        )
-        return self.current_path.name
+        await Filesystem.write_file_text(path, json.dumps(blob) + "\n", append=False)
 
     async def load(self, name: str | None = None) -> dict:
         """Load session data by name (fuzzy match) or the most recent session."""

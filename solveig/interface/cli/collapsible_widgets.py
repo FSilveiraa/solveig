@@ -249,15 +249,16 @@ class CollapsibleTextBox(Widget, MutableTextBox):
             yield self._text_container
 
     # Note: by coincidence, both Markdown and Static have an update(str) method, so the interface doesn't break
-    # and we don't need `isintance()` checks in append/reset
+    # and we don't need `isintance()` checks in append/clear
 
     def append(self, line: str) -> None:
         """Append a line to the content and scroll the conversation to the end."""
         self._text_container.update(f"{self.content}\n{line.rstrip('\n')}")
         self._on_content_changed()
 
-    def reset(self, content: str = "") -> None:
-        self._text_container.update(content)
+    def clear(self) -> None:
+        """Empty the box content."""
+        self._text_container.update("")
         self._on_content_changed()
 
     def _on_content_changed(self):

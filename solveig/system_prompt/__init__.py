@@ -1,6 +1,7 @@
 import os
 import platform
 
+import distro
 from anyio import Path
 from pydantic_ai.messages import (
     ModelMessage,
@@ -14,11 +15,6 @@ from pydantic_ai.messages import (
 from solveig.config import SolveigConfig
 from solveig.sessions.manager import parse_conversation_blob
 from solveig.utils.file import Filesystem
-
-try:
-    import distro  # optional, only needed for Linux distros
-except ImportError:
-    distro = None  # type: ignore
 
 _STORIES_DIR = Path(__file__).parent / "stories"
 
@@ -35,7 +31,7 @@ def get_basic_os_info():
     except OSError:
         info["username"] = os.environ.get("USER") or os.environ.get("LOGNAME")
     info["home_dir"] = os.path.expanduser("~")
-    if info["os_name"] == "Linux" and distro:
+    if info["os_name"] == "Linux":
         info["linux_distribution"] = distro.name(pretty=True)
     return "System information:" + "".join(
         [f"\n- {name}: {value}" for name, value in info.items()]

@@ -1,6 +1,7 @@
 """Main TerminalInterface implementation."""
 
 import asyncio
+import difflib
 import random
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -25,107 +26,37 @@ if TYPE_CHECKING:
     from solveig.sessions.manager import SessionManager
 
 
-class TerminalInterface(SolveigInterface):
-    """
-    CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
+class LocalDisplay(SolveigInterface):
+    """The "local display" half of a Textual `SolveigInterface`: implements
+    every display_*/with_group method - everything that only needs
+    `app`/`theme`/`code_theme` and a `_container` to mount into. Shared,
+    unchanged, by both `TerminalInterface` (the root, whose `_container` is
+    the top-level conversation area) and `GroupInterface` (a scope whose
+    `_container` is its own group's contents) - the two differ only in what
+    they pass to `__init__` and how they implement `_container`, not in any
+    of the display logic itself.
 
-    Also supplies the concrete "local display" implementation (display_text,
-    display_text_box, with_group, etc.) that GroupInterface (see
-    group_interface.py) inherits and reuses unchanged - a GroupInterface only
-    overrides `_container` to point at its own group's contents instead of
-    the top-level conversation area.
+    `TerminalInterface`/`GroupInterface` each subclass this directly and add
+    the root-delegating global methods (`_ask_question`, `_update_stats`,
+    ...) that `SolveigInterface` still leaves unimplemented.
     """
 
     def __init__(
         self,
-        pending_queue: asyncio.Queue | None = None,
-        theme: Palette = DEFAULT_THEME,
-        code_theme: str = DEFAULT_CODE_THEME,
-        base_indent: int = 2,
-        **kwargs,
+        app: SolveigTextualApp,
+        theme: Palette,
+        code_theme: str,
+        root_ref: "SolveigInterface | None" = None,
     ):
-        self.pending_queue = pending_queue or asyncio.Queue()
+        self.app = app
         self.theme = theme
-        self.app = SolveigTextualApp(
-            theme=theme,
-            pending_queue=self.pending_queue,
-            input_callback=self._handle_input,
-            **kwargs,
-        )
-        # Store reference to interface for cancellation checks
-        self.app.set_interface_ref(self)
-        self.base_indent = base_indent
         self.code_theme = code_theme
-        # Section title for tracking
-        self._section_title: str = ""
-
-        # Rich's implementation forces us to create custom spinners by
-        # starting from an existing spinner and altering it
-        growing_spinner = Spinner("dots", speed=1.0)
-        growing_spinner.frames = ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
-        growing_spinner.interval = 150
-
-        cool_spinner = Spinner("dots", speed=1.0)
-        cool_spinner.frames = ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
-        cool_spinner.interval = 120
-
-        # Available spinner options (built-in + custom)
-        self.spinners = {
-            "star": Spinner("star", speed=1.0),
-            "dots3": Spinner("dots3", speed=1.0),
-            "dots10": Spinner("dots10", speed=1.0),
-            "balloon": Spinner("balloon", speed=1.0),
-            # Add custom spinners by creating them manually
-            "growing": growing_spinner,
-            "cool": cool_spinner,
-        }
-
-    @property
-    def stats(self):
-        return self.app._stats_dashboard
-
-    # SolveigInterface implementation
-    async def _start(self) -> None:
-        """Start the interface."""
-        await self.app.run_async()
-
-    async def _stop(self) -> None:
-        """Stop the interface explicitly."""
-        self.app.exit()
-
-    async def _handle_input(self, user_input: str):
-        """Handle input from the textual app by putting it in the message history event queue."""
-        # Check if it's a command
-        is_subcommand = False
-        if self.subcommand_executor is not None:
-            try:
-                is_subcommand = await self.subcommand_executor(
-                    subcommand=user_input, interface=self
-                )
-            except UserCancel:
-                is_subcommand = True
-            except Exception as e:
-                is_subcommand = True
-                await self.display_error(
-                    f"Found error when executing '{user_input}' sub-command: {e}"
-                )
-
-        if not is_subcommand and self.pending_queue is not None:
-            await self.pending_queue.put(user_input)
-            await self.notify_pending_queue_changed()
-
-    async def notify_pending_queue_changed(self) -> None:
-        self.app.update_queued_display()
+        self._root_ref = root_ref
 
     @property
     def _container(self):
-        return (
-            self.app._conversation_area._current_section_container
-            or self.app._conversation_area
-        )
+        raise NotImplementedError("Subclass must implement _container")
 
-    # Local display methods - land in self._container. GroupInterface
-    # inherits all of these unchanged; only `_container` differs.
     async def _display_text(
         self, text: str, style: str = "text", prefix: str | None = None
     ) -> None:
@@ -223,8 +154,6 @@ class TerminalInterface(SolveigInterface):
         title: str | None = None,
         context_lines: int = 3,
     ) -> None:
-        import difflib
-
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
         new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
 
@@ -258,14 +187,114 @@ class TerminalInterface(SolveigInterface):
             title, container=self._container
         )
         try:
-            # self._root is always a TerminalInterface here - this method is
-            # only ever reached via a TerminalInterface or GroupInterface.
-            assert isinstance(self._root, TerminalInterface)
-            yield GroupInterface(root=self._root, group_widget=group_widget)
+            # root is always a TerminalInterface here - this method is only
+            # ever reached via a TerminalInterface or GroupInterface, and
+            # _root_ref (set by GroupInterface.__init__) always points back
+            # to the TerminalInterface that ultimately owns this scope.
+            root = self._root_ref if self._root_ref is not None else self
+            assert isinstance(root, TerminalInterface)
+            yield GroupInterface(root=root, group_widget=group_widget)
         finally:
             await self.app._conversation_area.exit_group(
                 group_widget, auto_collapse=auto_collapse
             )
+
+
+class TerminalInterface(LocalDisplay):
+    """
+    CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
+
+    The root of the interface tree: owns the `SolveigTextualApp`,
+    `pending_queue`, and spinners. `LocalDisplay` supplies the "local
+    display" implementation (display_text, display_text_box, with_group,
+    etc.), shared unchanged with `GroupInterface` (see group_interface.py) -
+    only `_container` differs between the two.
+    """
+
+    def __init__(
+        self,
+        pending_queue: asyncio.Queue | None = None,
+        theme: Palette = DEFAULT_THEME,
+        code_theme: str = DEFAULT_CODE_THEME,
+        base_indent: int = 2,
+        **kwargs,
+    ):
+        self.pending_queue = pending_queue or asyncio.Queue()
+        app = SolveigTextualApp(
+            theme=theme,
+            pending_queue=self.pending_queue,
+            input_callback=self._handle_input,
+            interface_ref=self,
+            **kwargs,
+        )
+        super().__init__(app=app, theme=theme, code_theme=code_theme)
+        self.base_indent = base_indent
+        # Section title for tracking
+        self._section_title: str = ""
+
+        # Rich's implementation forces us to create custom spinners by
+        # starting from an existing spinner and altering it
+        growing_spinner = Spinner("dots", speed=1.0)
+        growing_spinner.frames = ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
+        growing_spinner.interval = 150
+
+        cool_spinner = Spinner("dots", speed=1.0)
+        cool_spinner.frames = ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
+        cool_spinner.interval = 120
+
+        # Available spinner options (built-in + custom)
+        self.spinners = {
+            "star": Spinner("star", speed=1.0),
+            "dots3": Spinner("dots3", speed=1.0),
+            "dots10": Spinner("dots10", speed=1.0),
+            "balloon": Spinner("balloon", speed=1.0),
+            # Add custom spinners by creating them manually
+            "growing": growing_spinner,
+            "cool": cool_spinner,
+        }
+
+    @property
+    def stats(self):
+        return self.app._stats_dashboard
+
+    # SolveigInterface implementation
+    async def _start(self) -> None:
+        """Start the interface."""
+        await self.app.run_async()
+
+    async def _stop(self) -> None:
+        """Stop the interface explicitly."""
+        self.app.exit()
+
+    async def _handle_input(self, user_input: str):
+        """Handle input from the textual app by putting it in the message history event queue."""
+        # Check if it's a command
+        is_subcommand = False
+        if self.subcommand_executor is not None:
+            try:
+                is_subcommand = await self.subcommand_executor(
+                    subcommand=user_input, interface=self
+                )
+            except UserCancel:
+                is_subcommand = True
+            except Exception as e:
+                is_subcommand = True
+                await self.display_error(
+                    f"Found error when executing '{user_input}' sub-command: {e}"
+                )
+
+        if not is_subcommand and self.pending_queue is not None:
+            await self.enqueue_pending(user_input)
+
+    async def notify_pending_queue_changed(self) -> None:
+        self.app.update_queued_display()
+
+    @property
+    def _container(self):
+        return (
+            self.app._conversation_area._current_section_container
+            or self.app._conversation_area
+        )
 
     async def _ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing."""
@@ -357,18 +386,10 @@ class TerminalInterface(SolveigInterface):
         await self._update_stats(status)
         await asyncio.sleep(0)
 
-        spinner_name = random.choice(list(self.spinners.keys()))
-        self.stats.set_spinner(self.spinners[spinner_name])
-        self.stats.start_animation_timer(timeout)
-        self.stats.set_status_suffix(suffix)
-        self.stats._timer = self.app.set_interval(0.1, self.stats._refresh_title)
+        spinner = random.choice(list(self.spinners.values()))
+        self.stats.start_status_animation(spinner, timeout=timeout, suffix=suffix)
         try:
             yield
         finally:
-            if self.stats._timer:
-                self.stats._timer.stop()
-                self.stats._timer = None
-            self.stats.clear_spinner()
-            self.stats.stop_animation_timer()
-            self.stats.set_status_suffix(None)
+            self.stats.stop_status_animation()
             await self._update_stats(final_status)

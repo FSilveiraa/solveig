@@ -8,7 +8,7 @@ import pytest
 
 from solveig.config import SolveigConfig
 from solveig.llm import APIType
-from tests.mocks import DEFAULT_CONFIG, MockInterface
+from tests.mocks import DEFAULT_CONFIG
 
 pytestmark = pytest.mark.anyio
 
@@ -123,9 +123,7 @@ class TestCLIIntegration:
     async def test_parse_config_returns_config_and_prompt(self):
         """Test CLI parsing returns config and prompt."""
         args = ["--api-type", "openai", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
-            cli_args=args, interface=MockInterface()
-        )
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
         assert isinstance(config, SolveigConfig)
         assert config.api_type == APIType.OPENAI
         assert prompt == "test prompt"
@@ -133,9 +131,7 @@ class TestCLIIntegration:
     async def test_cli_overrides_work(self):
         """Test CLI arguments override defaults."""
         args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
-            cli_args=args, interface=MockInterface()
-        )
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
         assert config.temperature == 0.8
         assert config.verbose is True
         assert config.api_type == APIType.OPENAI
@@ -154,40 +150,54 @@ class TestCLIIntegration:
         assert config.api_type == APIType.GEMINI
         assert config.temperature == 0.5  # CLI override
 
-    async def test_default_config_missing_shows_warning(self):
-        """Test warning shown when default config file doesn't exist."""
+    async def test_default_config_missing_is_silent(self):
+        """A missing default config file is the normal first-run state, not an error."""
+        import warnings
         from unittest.mock import patch
 
-        # Mock default config to non-existent path
         with patch(
             "solveig.config.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
         ):
-            args = ["--api-type", "openai", "test prompt"]  # Must provide required args
-            interface = MockInterface()
+            args = ["--api-type", "openai", "test prompt"]
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                await SolveigConfig.parse_config_and_prompt(cli_args=args)
+            assert not caught
 
-            config, _, __ = await SolveigConfig.parse_config_and_prompt(
-                cli_args=args, interface=interface
-            )
+    async def test_permissive_patterns_warn(self):
+        """Auto-approving everything triggers warnings."""
+        args = [
+            "--api-type",
+            "openai",
+            "--auto-execute-commands",
+            ".*",
+            "--auto-allowed-paths",
+            "/",
+            "test prompt",
+        ]
+        with pytest.warns(UserWarning, match="Very permissive"):
+            await SolveigConfig.parse_config_and_prompt(cli_args=args)
 
-            # Should succeed and show warning about missing default config
-            assert any(
-                "Failed to parse config file" in output for output in interface.outputs
-            )
+    @pytest.mark.no_file_mocking
+    async def test_unknown_config_field_warns(self, tmp_path):
+        """Unknown fields in the config file warn and are ignored."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"api_type": "openai", "bogus_field": 1}))
+        args = ["--config", str(config_file), "test prompt"]
+        with pytest.warns(UserWarning, match="Unknown config field 'bogus_field'"):
+            config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
+        assert not hasattr(config, "bogus_field")
 
     async def test_no_commands_flag_sets_no_commands_true(self):
         """Test --no-commands CLI flag sets allow_commands to False."""
         args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
-            cli_args=args, interface=MockInterface()
-        )
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
         assert config.no_commands is True
         assert prompt == "test prompt"
 
     async def test_allow_commands_defaults_to_true(self):
         """Test allow_commands defaults to True when not specified."""
         args = ["-a", "openai", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(
-            cli_args=args, interface=MockInterface()
-        )
+        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
         assert config.no_commands is False
         assert prompt == "test prompt"

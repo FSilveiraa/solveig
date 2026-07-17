@@ -6,6 +6,7 @@ from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
+from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_THEME, Palette
 from solveig.utils.misc import copy_to_clipboard
 
@@ -28,6 +29,7 @@ class SolveigTextualApp(TextualApp):
         input_callback=None,
         pending_queue: asyncio.Queue | None = None,
         auto_copy_selection: bool = True,
+        interface_ref: SolveigInterface | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -35,6 +37,9 @@ class SolveigTextualApp(TextualApp):
         self._theme = theme
         self._pending_queue = pending_queue
         self._auto_copy_selection = auto_copy_selection
+        # Back-reference to the SolveigInterface that owns this app, for
+        # cancellation checks (on_key/on_event) and stat-cell click handling.
+        self._interface_ref = interface_ref
 
         # Set CSS as class attribute for Textual
         SolveigTextualApp.CSS = f"""
@@ -84,6 +89,7 @@ class SolveigTextualApp(TextualApp):
         yield StatsBar(
             id="stats",
             theme=self._theme,
+            interface_ref=self._interface_ref,
         )
 
     def on_mount(self) -> None:
@@ -122,7 +128,7 @@ class SolveigTextualApp(TextualApp):
         """
         if event.key == "ctrl+c":
             # Check if there's an active network request via the interface
-            interface = getattr(self, "_interface_ref", None)
+            interface = self._interface_ref
             if interface is not None and interface.has_active_request:
                 event.stop()
                 interface.cancel_request()
@@ -137,16 +143,11 @@ class SolveigTextualApp(TextualApp):
             if selected_text:
                 copy_to_clipboard(selected_text)
                 self.screen.clear_selection()
-                interface = getattr(self, "_interface_ref", None)
-                if interface is not None:
-                    await interface.update_stats(
+                if self._interface_ref is not None:
+                    await self._interface_ref.update_stats(
                         status=f"Copied {len(selected_text)} characters to clipboard",
                         duration=2,
                     )
-
-    def set_interface_ref(self, interface) -> None:
-        """Store a reference to the interface for cancellation checks."""
-        self._interface_ref = interface
 
     async def ask_user(self, question: str, default: str = "") -> str:
         """Ask for any kind of input with a prompt."""

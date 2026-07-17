@@ -4,31 +4,30 @@ can't tell it apart from the root), but its local display calls mount into
 its own group's container instead of wherever the root currently mounts
 content.
 
-Inherits TerminalInterface's local display method bodies as-is (they only
-ever read self._container/self.app/self.theme/self.code_theme) and
-deliberately skips TerminalInterface.__init__ - a group never owns its own
-SolveigTextualApp, spinners, or pending_queue, it just borrows the root's.
+Combines `LocalDisplay` (the local display method bodies, shared unchanged
+with `TerminalInterface`) with `SolveigInterface` (the root-delegating
+global methods) exactly like `TerminalInterface` does - a group never owns
+its own `SolveigTextualApp`, spinners, or `pending_queue`, it just borrows
+the root's, which `LocalDisplay.__init__` takes directly instead of
+constructing them.
 """
 
 from typing import TYPE_CHECKING
 
 from textual.widgets import Collapsible
 
-from solveig.interface.cli.interface import TerminalInterface
+from solveig.interface.cli.interface import LocalDisplay, TerminalInterface
 
 if TYPE_CHECKING:
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 
 
-class GroupInterface(TerminalInterface):
+class GroupInterface(LocalDisplay):
     def __init__(self, root: "TerminalInterface", group_widget: "CustomCollapsible"):
-        # Deliberately not calling super().__init__() - see module docstring.
-        self._root_ref = root
-        self.app = root.app
-        self.theme = root.theme
-        self.code_theme = root.code_theme
-        self._group_widget = group_widget
         self._group_container = group_widget.query_one(Collapsible.Contents)
+        super().__init__(
+            app=root.app, theme=root.theme, code_theme=root.code_theme, root_ref=root
+        )
 
     @property
     def _container(self):

@@ -2,6 +2,7 @@ import argparse
 import fnmatch
 import json
 import re
+import warnings
 from dataclasses import asdict, dataclass, field, fields, replace
 from importlib.metadata import version
 from typing import Any
@@ -9,7 +10,6 @@ from typing import Any
 from anyio import Path
 
 import solveig.interface.themes as themes
-from solveig.interface import SolveigInterface
 from solveig.llm import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
@@ -166,17 +166,20 @@ class SolveigConfig:
             raise e
 
     @classmethod
-    async def parse_config_and_prompt(
-        cls, interface: SolveigInterface | None = None, cli_args=None
-    ):
+    async def parse_config_and_prompt(cls, cli_args=None):
         """Parse configuration from CLI arguments and config file.
 
+        Warnings (permissive auto-approve patterns, unknown config fields)
+        are emitted via the stdlib `warnings` module - the caller decides how
+        to display them (run.py replays them through the interface once it
+        exists; uncaught, they still print to stderr). Errors raise, and the
+        caller is expected to print and exit.
+
         Args:
-            interface: Optional interface for displaying warnings/errors
             cli_args: CLI arguments list for testing (uses sys.argv if None)
 
         Returns:
-            tuple: (SolveigConfig instance, user_prompt string)
+            tuple: (SolveigConfig instance, user_prompt, resume_session)
         """
         parser = argparse.ArgumentParser()
         parser.add_argument(
@@ -364,13 +367,7 @@ class SolveigConfig:
         user_prompt = args_dict.pop("prompt")
         resume_session = args_dict.pop("resume_session", None)
 
-        file_config = await cls.parse_from_file(args_dict.pop("config"))
-        if not file_config:
-            file_config = {}
-            if interface:
-                await interface.display_error(
-                    "Failed to parse config file, falling back to defaults"
-                )
+        file_config = await cls.parse_from_file(args_dict.pop("config")) or {}
 
         # Merge config from file and CLI
         cli_mcp_urls: list[str] = args_dict.pop("mcp_servers") or []
@@ -388,30 +385,31 @@ class SolveigConfig:
                     file_mcp[url] = {}
             merged_config["mcp_servers"] = file_mcp
 
-        # Display a warning if ".*" is in allowed_commands or / is in allowed_paths
+        # Warn if ".*" is in allowed_commands or / is in allowed_paths
         # I know this looks bad, but it's so much easier than designing a regex to capture
         # other regexes
-        if interface:
-            concerning_command_patterns = {".*", "^.*", ".*$", "^.*$"}
-            for pattern in merged_config.get("auto_execute_commands", []):
-                if pattern in concerning_command_patterns:
-                    await interface.display_warning(
-                        f"Warning: Very permissive command pattern '{pattern}' is auto-allowed to execute"
-                    )
+        concerning_command_patterns = {".*", "^.*", ".*$", "^.*$"}
+        for pattern in merged_config.get("auto_execute_commands", []):
+            if pattern in concerning_command_patterns:
+                warnings.warn(
+                    f"Very permissive command pattern '{pattern}' is auto-allowed to execute",
+                    stacklevel=2,
+                )
 
-            concerning_path_patterns = {
-                "/",
-                "/**",
-                "/etc",
-                "/boot",
-                "/proc",
-                "/sys",
-            }
-            for pattern in merged_config.get("auto_allowed_paths", []):
-                if any(pattern.startswith(sig) for sig in concerning_path_patterns):
-                    await interface.display_warning(
-                        f"Warning: Very permissive path '{pattern}' is auto-allowed for file operations"
-                    )
+        concerning_path_patterns = {
+            "/",
+            "/**",
+            "/etc",
+            "/boot",
+            "/proc",
+            "/sys",
+        }
+        for pattern in merged_config.get("auto_allowed_paths", []):
+            if any(pattern.startswith(sig) for sig in concerning_path_patterns):
+                warnings.warn(
+                    f"Very permissive path '{pattern}' is auto-allowed for file operations",
+                    stacklevel=2,
+                )
 
         # Validate and apply smart defaults for URL/API type
         user_provided_url = "url" in merged_config and merged_config["url"]
@@ -443,11 +441,10 @@ class SolveigConfig:
         # Strip unknown keys (e.g. removed fields still present in old config files)
         valid_fields = {f.name for f in fields(cls)}
         unknown_keys = [k for k in merged_config if k not in valid_fields]
-        if unknown_keys and interface:
-            for k in unknown_keys:
-                await interface.display_warning(
-                    f"Unknown config field '{k}' ignored (removed or renamed)"
-                )
+        for k in unknown_keys:
+            warnings.warn(
+                f"Unknown config field '{k}' ignored (removed or renamed)", stacklevel=2
+            )
         merged_config = {k: v for k, v in merged_config.items() if k in valid_fields}
 
         return (cls(**merged_config), user_prompt.strip(), resume_session)

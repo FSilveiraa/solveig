@@ -1,30 +1,13 @@
-"""
-Modern interface layer for Solveig.
+"""Async interface layer for Solveig.
 
-Provides clean, async-first interfaces for user interaction:
+`SolveigInterface` (`base.py`) is the abstract contract every UI implements:
+async display methods (`display_text`/`display_error`/`display_comment`/...),
+input (`ask_question`/`ask_choice`), scoped output (`with_group`), a
+cancellable-task stack, and the pending-message queue. The terminal
+implementation lives under `cli/` (`TerminalInterface` + its Textual app);
+tests supply a `MockInterface`.
 
-- TextualCLI: Modern terminal interface using Textual
-- SolveigInterface: Protocol for implementing new interface types
-- AsyncSolveigInterface: Base class for async interfaces
-
-Example usage:
-```python
-from solveig.interface import TextualCLI
-
-# Create and start interface
-cli = TextualCLI()
-cli.set_input_callback(handle_user_input)
-await cli.start()
-
-# Display messages
-cli.display_text("Hello!")
-cli.display_success("Operation completed")
-cli.display_error("Something went wrong")
-
-# Get specific input
-name = await cli.ask_prompt("What's your name?")
-confirm = (await cli.ask_choice("Continue?", choices=["Yes", "No"]) == 0
-```
+Themes (`Palette`, `DEFAULT_THEME`, `DEFAULT_CODE_THEME`) come from `themes.py`.
 """
 
 from solveig.interface.base import SolveigInterface

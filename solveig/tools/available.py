@@ -21,6 +21,8 @@ from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
+from solveig.mcp_servers.connections import MCP_CONNECTIONS
+from solveig.plugins.tools import PLUGIN_TOOLS
 from solveig.tools import CORE_TOOLS, CommandTool
 from solveig.tools.base import BaseTool
 
@@ -54,13 +56,6 @@ class AvailableTools:
         tool, and every connected MCP server's toolset. Only needed after tool
         *membership* actually changes - see the module docstring for why
         `no_commands`/`config.plugins` toggling doesn't need this."""
-        # Local imports: solveig.plugins.tools -> solveig.plugins (package
-        # init) -> solveig.plugins.tools again during that same init, and
-        # solveig.mcp_servers.client -> solveig.tools.available (for
-        # AVAILABLE_TOOLS) -> back here - both circular as module-level imports.
-        from solveig.mcp_servers.client import MCP_CONNECTIONS
-        from solveig.plugins.tools import PLUGIN_TOOLS
-
         mcp_toolsets = [conn.toolset for conn in MCP_CONNECTIONS.values()]
 
         # Every discovered plugin tool is included here, not just the ones
@@ -110,8 +105,6 @@ def tool_classes() -> dict[str, type[BaseTool]]:
     tool function (should a plugin author write one that way) has no entry
     here; replay falls back to a generic render for those.
     """
-    from solveig.plugins.tools import PLUGIN_TOOLS
-
     classes: dict[str, type[BaseTool]] = {cls.tool_name(): cls for cls in CORE_TOOLS}
     for tool in PLUGIN_TOOLS.all.values():
         if isinstance(tool, type) and issubclass(tool, BaseTool):

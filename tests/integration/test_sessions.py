@@ -286,6 +286,33 @@ class TestStore:
         assert all(json.loads(line) for line in lines)
 
 
+class TestCheckpoint:
+    async def test_checkpoint_creates_new_file_without_touching_current_path(
+        self, tmp_path
+    ):
+        manager, _ = make_manager(tmp_path)
+        await manager.store(Conversation())
+        live_path = manager.current_path
+        checkpoint_name = await manager.checkpoint(Conversation())
+        assert manager.current_path == live_path
+        assert checkpoint_name != live_path.name
+        assert (tmp_path / "sessions" / checkpoint_name).exists()
+
+    async def test_checkpoint_survives_later_store(self, tmp_path):
+        """Branch-button regression: the checkpoint must keep the pre-truncation
+        state after the live session auto-saves past the branch point."""
+        manager, _ = make_manager(tmp_path)
+        full = Conversation(
+            messages=[ModelRequest(parts=[UserPromptPart(content="before-branch")])]
+        )
+        await manager.store(Conversation())
+        checkpoint_name = await manager.checkpoint(full)
+        await manager.store(Conversation())  # auto-save past the branch point
+        loaded = await manager.load(checkpoint_name.removesuffix(".jsonl"))
+        assert len(loaded["messages"]) == 1
+        assert loaded["messages"][0].parts[0].content == "before-branch"
+
+
 # ---------------------------------------------------------------------------
 # display_loaded_session
 # ---------------------------------------------------------------------------
@@ -305,9 +332,7 @@ class TestDisplayLoadedSession:
         assert "12" in output
         assert "34" in output
 
-    async def test_replays_user_prompt_and_assistant_reasoning_and_text(
-        self, tmp_path
-    ):
+    async def test_replays_user_prompt_and_assistant_reasoning_and_text(self, tmp_path):
         """A resumed session must replay the full turn - not just tool calls:
         the user's prompt, the assistant's reasoning, and its final comment
         all need to show up, mirroring what `run.py`/`agent._display_response`

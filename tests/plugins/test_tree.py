@@ -90,7 +90,9 @@ class TestTreeAutoAllowedPaths:
         config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface(choices=[1])  # still asked whether to read at all
 
-        result = await TreeTool(path=str(tmp_path)).execute(*make_ctx(config, interface))
+        result = await TreeTool(path=str(tmp_path)).execute(
+            *make_ctx(config, interface)
+        )
 
         assert isinstance(result.content, FileMetadata)
         assert len(interface.questions) == 1

@@ -9,16 +9,31 @@ from textual.widget import Widget
 from textual.widgets import DataTable
 
 from solveig.exceptions import UserCancel
+from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 from solveig.interface.themes import Palette
 from solveig.utils.file import Filesystem
 
 
+class StatsTable(DataTable):
+    """A DataTable carrying the config field each row edits on click (None = read-only)."""
+
+    def __init__(self, *args, row_fields: list[str | None], **kwargs):
+        super().__init__(*args, **kwargs)
+        self.row_fields = row_fields
+
+
 class StatsBar(Widget):
     """Stats bar with collapsible table content."""
 
-    def __init__(self, theme: Palette, **kwargs):
+    def __init__(
+        self,
+        theme: Palette,
+        interface_ref: SolveigInterface | None = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
+        self._interface_ref = interface_ref
         self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
@@ -72,7 +87,9 @@ class StatsBar(Widget):
             status_text = f"{spinner_char} {status_text}"
         if self._animation_start is not None and self._animation_timeout:
             elapsed = int(time.time() - self._animation_start)
-            status_text = f"{status_text} for {elapsed}/{int(self._animation_timeout)}s..."
+            status_text = (
+                f"{status_text} for {elapsed}/{int(self._animation_timeout)}s..."
+            )
         if self._status_suffix:
             status_text = f"{status_text} {self._status_suffix}"
         return f"[{self._theme.info}]{status_text}[/]" if status_text else ""
@@ -88,25 +105,31 @@ class StatsBar(Widget):
         )
 
         with self._collapsible:
-            self._table1 = DataTable(
-                show_header=False, zebra_stripes=False, classes="stats-table"
+            # Row -> SolveigConfig field edited on click; None = read-only/computed.
+            self._table1 = StatsTable(
+                show_header=False,
+                zebra_stripes=False,
+                classes="stats-table",
+                row_fields=["url", None],
             )
             self._table1.add_column("stats1", width=None)
-            # Row -> SolveigConfig field edited on click; None = read-only/computed.
-            self._table1.row_fields: list[str | None] = ["url", None]
 
-            self._table2 = DataTable(
-                show_header=False, zebra_stripes=False, classes="stats-table"
+            self._table2 = StatsTable(
+                show_header=False,
+                zebra_stripes=False,
+                classes="stats-table",
+                row_fields=["model", "max_context"],
             )
             self._table2.add_column("stats2", width=None)
-            self._table2.row_fields: list[str | None] = ["model", "max_context"]
 
             # The 3rd table gets a different CSS class to prevent the separator bar
-            self._table3 = DataTable(
-                show_header=False, zebra_stripes=False, classes="stats-table-final"
+            self._table3 = StatsTable(
+                show_header=False,
+                zebra_stripes=False,
+                classes="stats-table-final",
+                row_fields=[None, None],
             )
             self._table3.add_column("stats3", width=None)
-            self._table3.row_fields: list[str | None] = [None, None]
 
             yield Horizontal(
                 self._table1,
@@ -121,11 +144,12 @@ class StatsBar(Widget):
         self._refresh_stats()
 
     async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-        """Clicking a stat cell opens the equivalent `/config set` prompt, if editable."""
-        row_fields = getattr(event.data_table, "row_fields", None)
-        field_name = row_fields[event.coordinate.row] if row_fields else None
+        """Clicking an editable stat cell opens its config prompt."""
+        if not isinstance(event.data_table, StatsTable):
+            return
+        field_name = event.data_table.row_fields[event.coordinate.row]
 
-        interface = getattr(self.app, "_interface_ref", None)
+        interface = self._interface_ref
         if interface is None or interface.subcommand_executor is None:
             return
 
@@ -134,9 +158,7 @@ class StatsBar(Widget):
             return
 
         try:
-            await interface.subcommand_executor(
-                subcommand=f"/config set {field_name}", interface=interface
-            )
+            await interface.subcommand_executor.edit_config_field(field_name, interface)
         except UserCancel:
             pass
 
@@ -209,26 +231,29 @@ class StatsBar(Widget):
         if updated_stats:
             self._refresh_stats()
 
-    def set_spinner(self, spinner):
-        """Set spinner for status animation."""
+    def start_status_animation(
+        self, spinner, timeout: float | None = None, suffix: str | None = None
+    ) -> None:
+        """Start showing `spinner` in the status line, refreshing it 10x/sec
+        so the animation actually moves. Owns its own timer end to end - the
+        caller doesn't need to hold or manage it."""
         self._spinner = spinner
-        self._refresh_title()
-
-    def clear_spinner(self):
-        """Clear spinner from status display."""
-        self._spinner = None
-        self._refresh_title()
-
-    def start_animation_timer(self, timeout: float | None = None) -> None:
         self._animation_start = time.time()
         self._animation_timeout = timeout
+        self._status_suffix = suffix
+        self._refresh_title()
+        self._timer = self.set_interval(0.1, self._refresh_title)
 
-    def stop_animation_timer(self) -> None:
+    def stop_status_animation(self) -> None:
+        """Stop any running animation and clear the status line back to plain text."""
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
+        self._spinner = None
         self._animation_start = None
         self._animation_timeout = None
-
-    def set_status_suffix(self, suffix: str | None) -> None:
-        self._status_suffix = suffix
+        self._status_suffix = None
+        self._refresh_title()
 
     def _refresh_title(self):
         """Update only the collapsible title (lightweight, for frequent spinner updates)."""

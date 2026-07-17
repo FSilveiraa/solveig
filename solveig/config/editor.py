@@ -14,7 +14,6 @@ from solveig.interface import SolveigInterface, themes
 from solveig.llm.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.utils.misc import parse_human_readable_size
 
-from ..tools.available import AVAILABLE_TOOLS
 from .config import SolveigConfig
 
 # ---------------------------------------------------------------------------
@@ -247,14 +246,6 @@ async def _hook_max_context_changed(
     await interface.update_stats(max_context=config.max_context)
 
 
-async def _hook_no_commands_changed(
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> None:
-    AVAILABLE_TOOLS.rebuild(config)
-
-
 # ---------------------------------------------------------------------------
 # Hook registry
 # ---------------------------------------------------------------------------
@@ -264,7 +255,9 @@ _HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "max_context": _hook_max_context_changed,
-    "no_commands": _hook_no_commands_changed,
+    # no_commands needs no hook - the FilteredToolset's is_tool_active reads
+    # ctx.deps.config live per step, so toggling it takes effect on the next
+    # step with no rebuild (rebuild is for membership changes only).
     # briefing needs no hook - run.py recomputes the system prompt fresh
     # every turn, so a changed briefing path just takes effect next request.
     # Layer 2+: add_examples, add_os_info, system_prompt,

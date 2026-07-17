@@ -26,7 +26,9 @@ class _EchoTool(BaseTool):
 @pytest.mark.anyio
 async def test_run_tool_and_hooks_opens_a_group_and_calls_execute():
     interface = MockInterface()
-    result = await run_tool_and_hooks(_EchoTool(message="hi"), DEFAULT_CONFIG, interface)
+    result = await run_tool_and_hooks(
+        _EchoTool(message="hi"), DEFAULT_CONFIG, interface
+    )
 
     assert isinstance(result, ToolResult)
     assert result.content == "hi"
