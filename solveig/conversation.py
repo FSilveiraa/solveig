@@ -13,10 +13,17 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai.messages import (
+    ModelMessage,
+    TextPart,
+    ThinkingPart,
+    UserPromptPart,
+)
 from pydantic_ai.usage import RunUsage
 
 MessageId = str
+
+_EDITABLE_PARTS = (UserPromptPart, TextPart, ThinkingPart)
 
 
 class ConversationObserver(Protocol):
@@ -55,3 +62,15 @@ class Conversation:
         for observer in self._observers:
             await observer.message_added(message_id)
         return message_id
+
+    async def edit(self, message_id: MessageId, part_index: int, new_text: str) -> None:
+        """Overwrite an editable text part's content in place, then notify.
+        Caller (a UI) supplies the (message_id, part_index) it captured at
+        render - both stable, since messages are id-keyed and parts are
+        append-only within a message."""
+        part = self._entries[message_id].parts[part_index]
+        if not isinstance(part, _EDITABLE_PARTS):
+            raise ValueError(f"{type(part).__name__} is not an editable part")
+        part.content = new_text
+        for observer in self._observers:
+            await observer.message_updated(message_id)
