@@ -41,6 +41,7 @@ class Conversation:
     usage: RunUsage = field(default_factory=RunUsage)
     _entries: dict[MessageId, ModelMessage] = field(default_factory=dict)
     _observers: list[ConversationObserver] = field(default_factory=list)
+    _inflight_id: MessageId | None = None
 
     def subscribe(self, observer: ConversationObserver) -> None:
         self._observers.append(observer)
@@ -110,3 +111,30 @@ class Conversation:
         self.usage = usage
         for message in messages:
             await self.append(message)
+
+    async def begin_stream(self, response: ModelMessage) -> MessageId:
+        """Start streaming a model response: append it as a live entry whose
+        content the provider mutates in place as tokens arrive. Held by
+        _inflight_id until finalize_stream swaps in the canonical object."""
+        message_id = await self.append(response)
+        self._inflight_id = message_id
+        return message_id
+
+    async def stream_updated(self) -> None:
+        """A streamed token landed (the in-flight response mutated in place) -
+        re-render it. No-op when not streaming."""
+        if self._inflight_id is not None:
+            for observer in self._observers:
+                await observer.message_updated(self._inflight_id)
+
+    async def finalize_stream(self, response: ModelMessage) -> None:
+        """Replace the in-flight streamed object with pydantic-ai's canonical
+        finalized response under the same id, so a later adopt() sees it as
+        already present (no duplicate) and the entry's id stays stable. No-op
+        when not streaming."""
+        if self._inflight_id is None:
+            return
+        self._entries[self._inflight_id] = response
+        for observer in self._observers:
+            await observer.message_updated(self._inflight_id)
+        self._inflight_id = None

@@ -146,3 +146,41 @@ async def test_load_replaces_and_replays():
     # old content dropped, both new messages mounted (replay)
     assert any(kind == "truncated" for kind, _ in spy.events)
     assert sum(1 for kind, _ in spy.events if kind == "added") == 2
+
+
+async def test_streaming_lifecycle_updates_then_finalizes_without_duplicate():
+    conv = Conversation()
+    spy = SpyObserver()
+    conv.subscribe(spy)
+
+    # provider's live, in-place-mutated response object
+    live = ModelResponse(parts=[TextPart(content="Hel")])
+    sid = await conv.begin_stream(live)
+    assert spy.events == [("added", sid)]
+
+    live.parts[0].content = "Hello"
+    await conv.stream_updated()
+    live.parts[0].content = "Hello world"
+    await conv.stream_updated()
+    assert spy.events == [("added", sid), ("updated", sid), ("updated", sid)]
+
+    # finalize with the canonical (different) object of equal content
+    final = ModelResponse(parts=[TextPart(content="Hello world")])
+    await conv.finalize_stream(final)
+    assert conv.get(sid) is final
+    assert conv._inflight_id is None
+
+    # adopt over the authoritative list must NOT re-append the finalized response
+    await conv.adopt([final])
+    assert conv.messages == (final,)
+    assert len(conv.ids) == 1
+
+
+async def test_stream_updated_and_finalize_are_noops_when_not_streaming():
+    conv = Conversation()
+    spy = SpyObserver()
+    conv.subscribe(spy)
+    await conv.stream_updated()  # no inflight
+    await conv.finalize_stream(ModelResponse(parts=[]))
+    assert spy.events == []
+    assert conv.messages == ()

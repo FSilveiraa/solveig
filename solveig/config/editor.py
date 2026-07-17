@@ -43,6 +43,7 @@ CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     "no_commands": "Disable shell command execution entirely",
     # Behaviour
     "disable_autonomy": "Require user approval between agentic steps",
+    "stream": "Stream assistant output token-by-token as it's generated",
     "auto_collapse_tools": "Auto-collapse tool groups after approval",
     "auto_copy_selection": "Auto-copy click-drag selected text to clipboard on mouse release",
     "verbose": "Show debug output (API payloads, response models)",

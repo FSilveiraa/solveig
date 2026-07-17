@@ -96,6 +96,7 @@ class SolveigConfig:
     auto_copy_selection: bool = True
     sessions_dir: str = ".solveig/sessions"
     auto_save_session: bool = True
+    stream: bool = True
 
     http_timeout: float = 10.0
     http_max_response_bytes: int = 50_000
@@ -310,6 +311,13 @@ class SolveigConfig:
             dest="auto_save_session",
             default=None,
             help="Disable automatic session saving after each assistant turn",
+        )
+        parser.add_argument(
+            "--no-stream",
+            action="store_false",
+            dest="stream",
+            default=None,
+            help="Disable token-by-token streaming of assistant output",
         )
         parser.add_argument(
             "--resume",
