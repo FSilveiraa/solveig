@@ -61,8 +61,7 @@ async def setup_loop(
         name = None if resume_session == "__latest__" else resume_session
         try:
             session_data = await session_manager.load(name)
-            conversation.messages = session_data["messages"]
-            conversation.usage = session_data["usage"]
+            await conversation.load(session_data["messages"], session_data["usage"])
             await session_manager.display_loaded_session(conversation, interface)
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
@@ -144,7 +143,7 @@ async def main_loop(
             continue
 
         system_prompt_text = await system_prompt.get_system_prompt(config)
-        result = await request_manager.send_with_retry(
+        ok = await request_manager.send_with_retry(
             config=config,
             interface=interface,
             conversation=conversation,
@@ -152,10 +151,9 @@ async def main_loop(
             system_prompt=system_prompt_text,
             prompt=prompt,
         )
-        if result is None:
+        if not ok:
             continue
 
-        conversation.apply(result)
         await interface.update_stats(
             sent_tokens=conversation.usage.input_tokens,
             received_tokens=conversation.usage.output_tokens,

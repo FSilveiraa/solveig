@@ -9,10 +9,9 @@ from pydantic_ai.messages import (
     ToolCallPart,
     UserPromptPart,
 )
-
 from pydantic_ai.usage import RunUsage
 
-from solveig.conversation import Conversation, ConversationObserver
+from solveig.conversation import Conversation
 
 pytestmark = pytest.mark.anyio
 

@@ -189,9 +189,8 @@ class TestStoreLoad:
         from pydantic_ai.messages import ModelRequest, UserPromptPart
 
         manager, _ = make_manager(tmp_path)
-        conversation = Conversation(
-            messages=[ModelRequest(parts=[UserPromptPart(content="hello")])]
-        )
+        conversation = Conversation()
+        await conversation.append(ModelRequest(parts=[UserPromptPart(content="hello")]))
         conversation.usage.input_tokens = 42
         conversation.usage.output_tokens = 7
 
@@ -302,9 +301,8 @@ class TestCheckpoint:
         """Branch-button regression: the checkpoint must keep the pre-truncation
         state after the live session auto-saves past the branch point."""
         manager, _ = make_manager(tmp_path)
-        full = Conversation(
-            messages=[ModelRequest(parts=[UserPromptPart(content="before-branch")])]
-        )
+        full = Conversation()
+        await full.append(ModelRequest(parts=[UserPromptPart(content="before-branch")]))
         await manager.store(Conversation())
         checkpoint_name = await manager.checkpoint(full)
         await manager.store(Conversation())  # auto-save past the branch point
@@ -341,7 +339,7 @@ class TestDisplayLoadedSession:
         manager, _ = make_manager(tmp_path)
         interface = MockInterface()
         conversation = Conversation()
-        conversation.messages = [
+        for message in [
             ModelRequest(parts=[UserPromptPart(content="Review test.py")]),
             ModelResponse(
                 parts=[
@@ -363,7 +361,8 @@ class TestDisplayLoadedSession:
                 ]
             ),
             ModelResponse(parts=[TextPart(content="It's safe to run.")]),
-        ]
+        ]:
+            await conversation.append(message)
 
         await manager.display_loaded_session(conversation, interface)
 

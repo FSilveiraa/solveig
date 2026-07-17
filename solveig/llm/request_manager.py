@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 from pydantic_ai import Agent
-from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 
-from solveig.agent import build_agent
+from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import UserCancel
@@ -62,13 +61,14 @@ class RequestManager:
         session_manager: SessionManager,
         system_prompt: str,
         prompt: str,
-    ) -> AgentRunResult | None:
+    ) -> bool | None:
         """
         Send a user prompt to the LLM, driving the full agent run - which may
-        include any number of tool-call rounds, all handled internally by the
-        Agent and the loop capability - with retry logic.
+        include any number of tool-call rounds, all handled internally by
+        `run_turn` (which reconciles messages into `conversation` itself) - with
+        retry logic.
 
-        Returns the completed AgentRunResult, or None if the request was
+        Returns True once the turn completes, or None if the request was
         cancelled or the user chose not to retry after a failure.
         """
         while True:
@@ -80,40 +80,34 @@ class RequestManager:
                 system_prompt,
                 model=self._model,
             )
-            run_coro = agent.run(
-                prompt,
-                message_history=conversation.messages,
-                usage=conversation.usage,
-                deps=SolveigContext(
-                    config=config,
-                    interface=interface,
-                    conversation=conversation,
-                    session_manager=session_manager,
-                ),
+            deps = SolveigContext(
+                config=config,
+                interface=interface,
+                conversation=conversation,
+                session_manager=session_manager,
             )
 
             try:
                 # Solveig's consent flow (ask_choice/with_group) is single-flight -
-                # built for one tool executing at a time, matching the old manual
-                # loop. pydantic-ai's Agent runs multiple tool calls from one model
-                # turn concurrently (asyncio tasks) by default, which two
-                # consent-requiring tools racing on the same interface state does
-                # not tolerate (crashes, misattributed output). Force sequential
-                # execution until UI elements can be tied to individual tool calls
-                # (see ignore/project-logs/2026-07-13-23-54-tool-call-ui-binding.md)
-                # - the model_request/tool_execute hooks in agent.py each wrap
-                # their own coroutine in with_cancellable (their own
-                # ensure_future/task), so this ContextVar just needs to be
-                # active in the ambient context around the plain `await`
-                # below, which it is.
+                # built for one tool executing at a time. pydantic-ai's Agent runs
+                # multiple tool calls from one model turn concurrently (asyncio
+                # tasks) by default, which two consent-requiring tools racing on the
+                # same interface state does not tolerate (crashes, misattributed
+                # output). Force sequential execution until UI elements can be tied
+                # to individual tool calls (see
+                # ignore/project-logs/2026-07-13-23-54-tool-call-ui-binding.md) -
+                # the model_request/tool_execute hooks in agent.py each wrap their
+                # own coroutine in with_cancellable (their own ensure_future/task),
+                # so this ContextVar just needs to be active in the ambient context
+                # around the `run_turn` await below, which it is.
                 #
-                # Cancellability itself is no longer wrapped here - each phase
-                # (model request, tool execution) owns its own cancellable
-                # task with its own status in agent.py, so Ctrl+C/Esc cancels
-                # precisely what's running instead of the whole multi-round
-                # run as one undifferentiated span.
+                # Cancellability itself is not wrapped here - each phase (model
+                # request, tool execution) owns its own cancellable task with its
+                # own status in agent.py, so Ctrl+C/Esc cancels precisely what's
+                # running instead of the whole multi-round run as one span.
                 with Agent.parallel_tool_call_execution_mode("sequential"):
-                    return await run_coro
+                    await run_turn(agent, conversation, deps, prompt)
+                return True
             except (asyncio.CancelledError, UserCancel):
                 await interface.display_info("Request cancelled")
                 return None

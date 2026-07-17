@@ -27,7 +27,11 @@ from pydantic_ai.toolsets.abstract import AbstractToolset
 from pydantic_ai.toolsets.function import FunctionToolset
 from pydantic_ai.usage import RunUsage
 
-from solveig.agent import build_loop_capability, build_tool_execution_capability
+from solveig.agent import (
+    build_loop_capability,
+    build_tool_execution_capability,
+    run_turn,
+)
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
@@ -387,14 +391,15 @@ async def test_filtered_toolset_hides_command_live_without_rebuild():
 
 
 # ---------------------------------------------------------------------------
-# build_loop_capability: autonomy gate + comment interleaving
+# run_turn: autonomy gate + comment interleaving (moved from a node hook into
+# the core-owned loop)
 # ---------------------------------------------------------------------------
 
 
-def _user_prompts(result) -> list[str]:
+def _user_prompts(messages) -> list[str]:
     return [
         str(part.content)
-        for message in result.all_messages()
+        for message in messages
         for part in getattr(message, "parts", [])
         if isinstance(part, UserPromptPart)
     ]
@@ -421,14 +426,21 @@ def _two_round_agent(config, interface):
 
 
 async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
-    """With `disable_autonomy`, the run blocks at the tool-round boundary until
-    `pending_queue` is fed; the fed comment is then injected into the run as a
-    `UserPromptPart` and the run resumes."""
+    """With `disable_autonomy`, `run_turn` blocks at the tool-round boundary
+    until `pending_queue` is fed; the fed comment is then injected into the run
+    as a `UserPromptPart` and the run resumes."""
     config = DEFAULT_CONFIG.with_(disable_autonomy=True)
     interface = MockInterface()
     agent, model = _two_round_agent(config, interface)
+    conv = Conversation()
+    deps = SolveigContext(
+        config=config,
+        interface=interface,
+        conversation=conv,
+        session_manager=SessionManager(config=config),
+    )
 
-    task = asyncio.create_task(agent.run("go", deps=_context(config, interface)))
+    task = asyncio.create_task(run_turn(agent, conv, deps, "go"))
     # let it get through round 1 (the tool call) and reach the gate
     for _ in range(500):
         await asyncio.sleep(0)
@@ -437,15 +449,15 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
     await asyncio.sleep(0.02)
 
     # Blocked: round 2 can't happen until the queue is fed (empty queue -> the
-    # gate's `await queue.get()` suspends the whole run).
+    # gate's `await dequeue_pending()` suspends the whole run).
     assert not task.done()
     assert model.get_call_count() == 1
 
     interface.pending_queue.put_nowait("go ahead")
-    result = await asyncio.wait_for(task, timeout=2)
+    await asyncio.wait_for(task, timeout=2)
 
     assert model.get_call_count() == 2  # resumed
-    assert any("go ahead" in p for p in _user_prompts(result))
+    assert any("go ahead" in p for p in _user_prompts(conv.messages))
 
 
 async def test_comment_interleaving_drains_queue_without_blocking():
@@ -456,7 +468,14 @@ async def test_comment_interleaving_drains_queue_without_blocking():
     interface = MockInterface()
     interface.pending_queue.put_nowait("mid-run note")
     agent, _ = _two_round_agent(config, interface)
+    conv = Conversation()
+    deps = SolveigContext(
+        config=config,
+        interface=interface,
+        conversation=conv,
+        session_manager=SessionManager(config=config),
+    )
 
-    result = await agent.run("go", deps=_context(config, interface))
+    await run_turn(agent, conv, deps, "go")
 
-    assert any("mid-run note" in p for p in _user_prompts(result))
+    assert any("mid-run note" in p for p in _user_prompts(conv.messages))

@@ -34,7 +34,6 @@ from pydantic_ai.capabilities import Hooks
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
-from pydantic_graph import End
 
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
@@ -89,7 +88,13 @@ def build_agent(
 
 
 def build_loop_capability() -> Hooks[SolveigContext]:
-    """Build the per-agent capability driving live display, interleaving, and autonomy."""
+    """Build the per-agent capability driving the model-request animation.
+
+    Only `model_request` (and the tool-execute capability's `tool_execute`)
+    survive under `agent.iter()` - the graph node-lifecycle hooks
+    (`before_node_run`/`after_node_run`) do NOT fire in iter mode, so response
+    display and the autonomy/interleave logic live in `run_turn`'s explicit
+    loop instead, not here."""
     hooks: Hooks[SolveigContext] = Hooks()
 
     @hooks.on.model_request
@@ -107,53 +112,85 @@ def build_loop_capability() -> Hooks[SolveigContext]:
         ) as task:
             return await task
 
-    @hooks.on.before_node_run
-    async def display_new_response(ctx: RunContext[SolveigContext], node):
-        if Agent.is_call_tools_node(node):
-            # pydantic-ai has already appended this response to
-            # ctx.state.message_history (the same list object conversation.messages
-            # becomes) by the time this hook fires, so its index is stable.
-            msg_index = len(ctx.messages) - 1
-            await _display_response(
-                ctx.deps.interface,
-                node.model_response,
-                ctx.deps.conversation,
-                ctx.deps.session_manager,
-                msg_index,
-            )
-        return node
-
-    @hooks.on.after_node_run
-    async def gate_and_interleave(ctx: RunContext[SolveigContext], node, result):
-        # Both concerns only apply at the CallToolsNode -> next-node boundary
-        # - the point where tool execution for this round has just finished.
-        # Draining after every node (e.g. right after UserPromptNode, before
-        # any tool has even run) would steal a pre-typed comment before the
-        # autonomy gate below ever gets a chance to consume it.
-        if not Agent.is_call_tools_node(node):
-            return result
-
-        interface = ctx.deps.interface
-
-        # Autonomy gate first, so it consumes exactly the go-ahead it's
-        # waiting for - draining the queue before this point would let the
-        # always-on drain below steal it and leave the gate blocked forever.
-        if ctx.deps.config.disable_autonomy and not isinstance(result, End):
-            await interface.update_stats(status="Awaiting confirmation to continue")
-            comment = await interface.dequeue_pending()
-            await interface.update_stats(status=None)
-            ctx.enqueue(comment, priority="asap")
-
-        # Always-on drain: anything else typed - while this round of tools
-        # was executing, or freshly arrived while the gate above was blocked
-        # - gets delivered at the next opportunity too, regardless of
-        # autonomy mode.
-        while (next_comment := await interface.try_dequeue_pending()) is not None:
-            ctx.enqueue(next_comment, priority="asap")
-
-        return result
-
     return hooks
+
+
+async def run_turn(
+    agent: Agent[SolveigContext, str],
+    conversation: Conversation,
+    deps: SolveigContext,
+    prompt: str,
+) -> None:
+    """Core-owned per-turn loop. pydantic-ai remains the engine (model I/O,
+    tool schemas + execution, consent via the tool_execute capability); this
+    loop owns reconciliation into the reactive Conversation and the autonomy
+    pause / interjection as plain lines.
+
+    Adopts by object identity after every node so each new message mounts
+    exactly once (pydantic-ai preserves the identity of the history we hand
+    in, and all_messages() grows monotonically). A finally adopts once more so
+    a mid-run cancel commits whatever completed (spec §8)."""
+    async with agent.iter(
+        prompt,
+        message_history=list(conversation.messages),
+        usage=conversation.usage,
+        deps=deps,
+    ) as run:
+        try:
+            async for node in run:
+                await conversation.adopt(run.all_messages())
+                # A CallToolsNode is the tool-round boundary. `run.next_node`
+                # gives no lookahead in this loop (it mirrors the current node),
+                # but a node that actually ran tool calls is *always* followed by
+                # another model request, and a no-tool-call one goes straight to
+                # End - so the response's tool calls tell us "more is coming"
+                # without a peek.
+                if Agent.is_call_tools_node(node):
+                    # A CallToolsNode is yielded BEFORE its tools run, so
+                    # displaying its response here keeps the old order
+                    # (assistant text/reasoning, then the tool groups). adopt
+                    # above already appended this response, so it is the last
+                    # conversation entry.
+                    await _display_response(
+                        deps.interface,
+                        node.model_response,
+                        conversation,
+                        deps.session_manager,
+                        len(conversation.messages) - 1,
+                    )
+                    await _gate_and_interleave(
+                        deps,
+                        run,
+                        tools_ran=_response_has_tool_calls(node.model_response),
+                    )
+        finally:
+            await conversation.adopt(run.all_messages())
+
+
+def _response_has_tool_calls(response: ModelResponse) -> bool:
+    return any(isinstance(part, ToolCallPart) for part in response.parts)
+
+
+async def _gate_and_interleave(
+    deps: SolveigContext, run: Any, *, tools_ran: bool
+) -> None:
+    interface = deps.interface
+    # Autonomy pause only mid-work: gate a round that actually ran tools (more
+    # is coming), never the terminal no-tools node (the run is ending, nothing
+    # to confirm). Gate before the drain so it consumes exactly the go-ahead it
+    # waits for - draining first would let the always-on drain steal it and
+    # leave the gate blocked forever.
+    if deps.config.disable_autonomy and tools_ran:
+        await interface.update_stats(status="Awaiting confirmation to continue")
+        comment = await interface.dequeue_pending()
+        await interface.update_stats(status=None)
+        run.enqueue(comment, priority="asap")
+    # Always-on drain: anything typed while tools ran (or while the gate was
+    # blocked) is delivered at the next opportunity, in any autonomy mode -
+    # including a comment that turns a would-be-terminating run into one more
+    # round (priority='asap').
+    while (queued := await interface.try_dequeue_pending()) is not None:
+        run.enqueue(queued, priority="asap")
 
 
 async def _display_response(
