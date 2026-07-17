@@ -10,6 +10,8 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from pydantic_ai.usage import RunUsage
+
 from solveig.conversation import Conversation, ConversationObserver
 
 pytestmark = pytest.mark.anyio
@@ -101,3 +103,47 @@ async def test_truncate_from_absent_id_is_noop_without_notify():
 
     assert conv.ids == (a,)
     assert spy.events == []
+
+
+async def test_adopt_appends_only_new_messages_by_identity():
+    conv = Conversation()
+    spy = SpyObserver()
+    conv.subscribe(spy)
+
+    a = ModelRequest(parts=[UserPromptPart(content="a")])
+    a_id = await conv.append(a)
+
+    b = ModelResponse(parts=[TextPart(content="b")])
+    c = ModelResponse(parts=[TextPart(content="c")])
+    # a is already present (same object) -> kept; b, c are new -> appended
+    await conv.adopt([a, b, c])
+
+    assert conv.messages == (a, b, c)
+    assert conv.get(a_id) is a  # id preserved, not re-appended
+    assert spy.events.count(("added", a_id)) == 1  # a mounted once, at append
+    assert len(conv.ids) == 3
+
+    # adopting the same list again is a no-op (idempotent)
+    before = tuple(conv.ids)
+    await conv.adopt([a, b, c])
+    assert tuple(conv.ids) == before
+
+
+async def test_load_replaces_and_replays():
+    conv = Conversation()
+    await conv.append(ModelRequest(parts=[UserPromptPart(content="old")]))
+    spy = SpyObserver()
+    conv.subscribe(spy)
+
+    msgs = [
+        ModelRequest(parts=[UserPromptPart(content="one")]),
+        ModelResponse(parts=[TextPart(content="two")]),
+    ]
+    usage = RunUsage(input_tokens=5, output_tokens=7)
+    await conv.load(msgs, usage)
+
+    assert conv.messages == tuple(msgs)
+    assert conv.usage is usage
+    # old content dropped, both new messages mounted (replay)
+    assert any(kind == "truncated" for kind, _ in spy.events)
+    assert sum(1 for kind, _ in spy.events if kind == "added") == 2

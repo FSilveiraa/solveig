@@ -10,6 +10,7 @@ async method that updates the dict and then awaits registered observers.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -86,3 +87,26 @@ class Conversation:
             del self._entries[key]
         for observer in self._observers:
             await observer.truncated_from(message_id)
+
+    async def adopt(self, messages: Sequence[ModelMessage]) -> None:
+        """Reconcile to pydantic-ai's authoritative message list. A message
+        already held (by object identity) keeps its id; any genuinely-new
+        message object is appended (new id + message_added). Nothing is
+        removed. Idempotent - adopting the same list twice mounts nothing new.
+        Identity, not index/content: pydantic-ai preserves the object identity
+        of the history we pass into agent.iter(), so id() is the reliable key."""
+        held = {id(message) for message in self._entries.values()}
+        for message in messages:
+            if id(message) not in held:
+                await self.append(message)
+
+    async def load(self, messages: Sequence[ModelMessage], usage: RunUsage) -> None:
+        """Replace the whole conversation (session resume / replay). Drops any
+        current entries (notifying), then appends each message so every one
+        fires message_added - replay is just append-all, the same reactive
+        path as a live turn."""
+        if self._entries:
+            await self.truncate_from(next(iter(self._entries)))
+        self.usage = usage
+        for message in messages:
+            await self.append(message)
