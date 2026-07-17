@@ -2,30 +2,10 @@ import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from solveig.conversation import Conversation
-from solveig.interface.reactive import ReactiveTranscript
 from solveig.interface.render import Markdown, Text
+from tests.mocks.reactive import RecordingTranscript
 
 pytestmark = pytest.mark.anyio
-
-
-class RecordingTranscript(ReactiveTranscript):
-    def __init__(self, conversation):
-        self.mounted = {}  # id -> nodes  (insertion order preserved)
-        self.events = []  # ('mount'|'rerender'|'remove', payload)
-        super().__init__(conversation)
-
-    async def mount(self, message_id, nodes):
-        self.mounted[message_id] = nodes
-        self.events.append(("mount", message_id))
-
-    async def rerender(self, message_id, nodes):
-        self.mounted[message_id] = nodes
-        self.events.append(("rerender", message_id))
-
-    async def remove(self, message_ids):
-        for mid in message_ids:
-            self.mounted.pop(mid, None)
-        self.events.append(("remove", tuple(message_ids)))
 
 
 async def test_append_mounts_presented_nodes():
