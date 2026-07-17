@@ -74,3 +74,15 @@ class Conversation:
         part.content = new_text
         for observer in self._observers:
             await observer.message_updated(message_id)
+
+    async def truncate_from(self, message_id: MessageId) -> None:
+        """Drop `message_id` and every entry after it (by insertion order).
+        No-op + no notify if the id isn't present."""
+        if message_id not in self._entries:
+            return
+        keys = list(self._entries.keys())
+        cut = keys.index(message_id)
+        for key in keys[cut:]:
+            del self._entries[key]
+        for observer in self._observers:
+            await observer.truncated_from(message_id)

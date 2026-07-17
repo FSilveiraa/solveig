@@ -74,3 +74,30 @@ async def test_edit_rejects_non_editable_part():
     mid = await conv.append(ModelResponse(parts=[ToolCallPart(tool_name="x", args={})]))
     with pytest.raises(ValueError, match="not an editable part"):
         await conv.edit(mid, 0, "nope")
+
+
+async def test_truncate_from_drops_target_and_following_and_notifies():
+    conv = Conversation()
+    a = await conv.append(ModelRequest(parts=[UserPromptPart(content="a")]))
+    b = await conv.append(ModelResponse(parts=[TextPart(content="b")]))
+    c = await conv.append(ModelRequest(parts=[UserPromptPart(content="c")]))
+    spy = SpyObserver()
+    conv.subscribe(spy)
+
+    await conv.truncate_from(b)
+
+    assert conv.ids == (a,)
+    assert conv.get(b) is None and conv.get(c) is None
+    assert spy.events == [("truncated", b)]
+
+
+async def test_truncate_from_absent_id_is_noop_without_notify():
+    conv = Conversation()
+    a = await conv.append(ModelRequest(parts=[UserPromptPart(content="a")]))
+    spy = SpyObserver()
+    conv.subscribe(spy)
+
+    await conv.truncate_from("does-not-exist")
+
+    assert conv.ids == (a,)
+    assert spy.events == []
