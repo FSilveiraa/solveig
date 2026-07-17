@@ -101,16 +101,26 @@ class Conversation:
             if id(message) not in held:
                 await self.append(message)
 
-    async def load(self, messages: Sequence[ModelMessage], usage: RunUsage) -> None:
-        """Replace the whole conversation (session resume / replay). Drops any
-        current entries (notifying), then appends each message so every one
-        fires message_added - replay is just append-all, the same reactive
-        path as a live turn."""
-        if self._entries:
-            await self.truncate_from(next(iter(self._entries)))
+    async def load(
+        self, messages: Sequence[ModelMessage], usage: RunUsage, notify: bool = True
+    ) -> None:
+        """Replace the whole conversation (session resume / replay). With
+        `notify` (the default), drops current entries and appends each message
+        so every one fires its observer events - the reactive append-all path.
+
+        Resume passes `notify=False`: it repopulates state silently because the
+        session is rendered by the imperative `display_loaded_session` replay
+        instead, and firing observer events here would double-render it onto an
+        already-subscribed transcript."""
+        if notify:
+            if self._entries:
+                await self.truncate_from(next(iter(self._entries)))
+            for message in messages:
+                await self.append(message)
+        else:
+            self._entries = {str(uuid.uuid4()): message for message in messages}
+            self._inflight_id = None
         self.usage = usage
-        for message in messages:
-            await self.append(message)
 
     async def begin_stream(self, response: ModelMessage) -> MessageId:
         """Start streaming a model response: append it as a live entry whose

@@ -233,7 +233,9 @@ class SessionManager:
                         returns[request_part.tool_call_id] = request_part
 
         classes = tool_classes()
+        ids = conversation.ids
         for msg_index, message in enumerate(conversation.messages):
+            message_id = ids[msg_index]
             if isinstance(message, ModelRequest):
                 for part_index, request_part in enumerate(message.parts):
                     if (
@@ -247,7 +249,7 @@ class SessionManager:
                             request_part.content,
                             conversation=conversation,
                             session_manager=self,
-                            msg_index=msg_index,
+                            message_id=message_id,
                             part_index=part_index,
                         )
             elif isinstance(message, ModelResponse):
@@ -277,7 +279,7 @@ class SessionManager:
                             response_part.content,
                             conversation=conversation,
                             session_manager=self,
-                            msg_index=msg_index,
+                            message_id=message_id,
                             part_index=part_index,
                         )
                     elif isinstance(response_part, ToolCallPart):

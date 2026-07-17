@@ -33,6 +33,22 @@ def _tool_call(tool_name: str, call_id: str, **args) -> ToolCallPart:
     return ToolCallPart(tool_name=tool_name, args=args, tool_call_id=call_id)
 
 
+def _conversation_text(conversation) -> str:
+    """All assistant/user TextPart+UserPromptPart content in the conversation -
+    the real state to assert on now that conversational text renders reactively
+    (through the transcript) instead of via captured imperative display."""
+    from pydantic_ai.messages import TextPart, UserPromptPart
+
+    chunks = []
+    for message in conversation.messages:
+        for part in message.parts:
+            if isinstance(part, TextPart | UserPromptPart) and isinstance(
+                part.content, str
+            ):
+                chunks.append(part.content)
+    return "\n".join(chunks)
+
+
 class TestConversationFlow:
     """Test complete conversation flows through a real Agent run."""
 
@@ -68,7 +84,11 @@ class TestConversationFlow:
         )
 
         output = interface.get_all_output()
-        assert "Of course! Let me show re-center you" in output
+        # assistant text: real state (renders reactively, not into outputs)
+        assert "Of course! Let me show re-center you" in _conversation_text(
+            conversation
+        )
+        # command output: still imperative tool display, captured in outputs
         assert str(await Path(".").resolve()) in output
         assert conversation is not None
         assert len(conversation.messages) > 0
@@ -117,7 +137,7 @@ class TestConversationFlow:
         )
         request_manager = RequestManager(config=config, model=model)
 
-        await run_async(
+        conversation = await run_async(
             config=config,
             user_prompt=f"Help me organize files in {temp_dir_path}",
             interface=interface,
@@ -125,8 +145,8 @@ class TestConversationFlow:
         )
 
         output = interface.get_all_output()
-        assert "new_file.txt" in output
-        assert "Your files are already organized" in output
+        assert "new_file.txt" in output  # tool/tree output, imperative
+        assert "Your files are already organized" in _conversation_text(conversation)
 
     async def test_command_error_handling(self):
         """Error handling in command execution flow."""
@@ -147,7 +167,7 @@ class TestConversationFlow:
         )
         request_manager = RequestManager(config=config, model=model)
 
-        await run_async(
+        conversation = await run_async(
             config=config,
             user_prompt="Run a diagnostic",
             interface=interface,
@@ -155,8 +175,8 @@ class TestConversationFlow:
         )
 
         output = interface.get_all_output()
-        assert "Here's a failed command" in output
-        assert "not found" in output  # different shells output different errors
+        assert "Here's a failed command" in _conversation_text(conversation)
+        assert "not found" in output  # command error output, imperative
         assert "nonexistent_command" in output
 
     async def test_task_plan_displayed_via_tool_call(self):

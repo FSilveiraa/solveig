@@ -41,6 +41,11 @@ async def setup_loop(
     # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
+    # Subscribe the interface's reactive transcript now that both the
+    # conversation and the (ready) interface exist - live turns render through it.
+    if session_manager is not None:
+        await interface.attach_conversation(conversation, session_manager)
+
     # Config-parse warnings captured before the interface existed (run_async)
     for warning in startup_warnings:
         await interface.display_warning(warning)
@@ -61,7 +66,9 @@ async def setup_loop(
         name = None if resume_session == "__latest__" else resume_session
         try:
             session_data = await session_manager.load(name)
-            await conversation.load(session_data["messages"], session_data["usage"])
+            await conversation.load(
+                session_data["messages"], session_data["usage"], notify=False
+            )
             await session_manager.display_loaded_session(conversation, interface)
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
@@ -126,15 +133,8 @@ async def main_loop(
         prompt = await interface.dequeue_pending()
         await interface.update_stats(status=None)
 
-        await interface.display_section("User")
-        await interface.display_comment(
-            "user",
-            prompt,
-            conversation=conversation,
-            session_manager=session_manager,
-            msg_index=len(conversation.messages),
-            part_index=0,
-        )
+        # The user prompt renders reactively through the transcript once
+        # run_turn adopts it into the conversation - no predicted display here.
 
         if config.model is None:
             await interface.display_error(

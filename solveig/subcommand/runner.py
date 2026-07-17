@@ -694,6 +694,8 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return
-        await self.conversation.load(session_data["messages"], session_data["usage"])
+        await self.conversation.load(
+            session_data["messages"], session_data["usage"], notify=False
+        )
         await self.session_manager.display_loaded_session(self.conversation, interface)
         await interface.display_success("Session loaded. Continue your conversation.")

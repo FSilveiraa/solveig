@@ -89,7 +89,7 @@ class LocalDisplay(SolveigInterface):
         *,
         conversation: "Conversation",
         session_manager: "SessionManager",
-        msg_index: int,
+        message_id: str,
         part_index: int,
     ) -> None:
         await self.app._conversation_area._add_element(
@@ -98,7 +98,7 @@ class LocalDisplay(SolveigInterface):
                 conversation=conversation,
                 session_manager=session_manager,
                 interface=self,
-                msg_index=msg_index,
+                message_id=message_id,
                 part_index=part_index,
                 role=role,
             ),
@@ -256,6 +256,17 @@ class TerminalInterface(LocalDisplay):
     @property
     def stats(self):
         return self.app._stats_dashboard
+
+    async def attach_conversation(
+        self, conversation: "Conversation", session_manager: "SessionManager"
+    ) -> None:
+        """Mount a TextualTranscript so live conversation changes render
+        reactively (streaming, edits, truncation) into the ConversationArea."""
+        from .transcript import TextualTranscript
+
+        self._transcript = TextualTranscript(
+            conversation, self.app._conversation_area, self, session_manager
+        )
 
     # SolveigInterface implementation
     async def _start(self) -> None:

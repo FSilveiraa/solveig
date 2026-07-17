@@ -59,9 +59,7 @@ async def _conversation() -> tuple[Conversation, str, str]:
     """A two-message conversation; returns it plus the (user_id, assistant_id)."""
     conv = Conversation()
     user_id = await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
-    assistant_id = await conv.append(
-        ModelResponse(parts=[TextPart(content="hello")])
-    )
+    assistant_id = await conv.append(ModelResponse(parts=[TextPart(content="hello")]))
     return conv, user_id, assistant_id
 
 

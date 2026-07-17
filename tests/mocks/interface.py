@@ -98,6 +98,13 @@ class MockInterface(TerminalInterface):
     async def wait_until_ready(self):
         self.outputs.append("INTERFACE_READY")
 
+    async def attach_conversation(self, conversation, session_manager) -> None:
+        # No reactive transcript here: conversation TEXT no longer flows through
+        # the imperative display, so e2e tests assert real state
+        # (conversation.messages) rather than captured output strings. Tool
+        # display stays imperative and is still captured in `outputs`.
+        pass
+
     async def notify_pending_queue_changed(self) -> None:
         pass  # no live "queued messages" widget to refresh outside the real Textual app
 
@@ -130,7 +137,7 @@ class MockInterface(TerminalInterface):
         *,
         conversation=None,
         session_manager=None,
-        msg_index=None,
+        message_id=None,
         part_index=None,
     ) -> None:
         self.outputs.append(f"🗩  {message}")

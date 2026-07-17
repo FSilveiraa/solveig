@@ -234,6 +234,15 @@ class SolveigInterface(ABC):
         """Display a system message."""
         ...
 
+    async def attach_conversation(
+        self, conversation: Conversation, session_manager: SessionManager
+    ) -> None:
+        """Subscribe this interface's reactive transcript to `conversation`
+        once both exist. Interface-agnostic: the Textual interface mounts a
+        `TextualTranscript`; a future web frontend would mount its own observer;
+        a headless mock may no-op. Called once, after the interface is ready."""
+        return None
+
     @abstractmethod
     async def display_comment(
         self,
@@ -242,12 +251,13 @@ class SolveigInterface(ABC):
         *,
         conversation: Conversation,
         session_manager: SessionManager,
-        msg_index: int,
+        message_id: str,
         part_index: int,
     ) -> None:
-        """Display a user/assistant text message wired to
-        `conversation.messages[msg_index].parts[part_index]`, with
-        Edit/Retry/Delete/Branch action buttons attached."""
+        """Display a user/assistant text message wired to the conversation
+        entry `message_id` (part `part_index`), with Edit/Retry/Delete/Branch
+        action buttons. Used by session replay; live turns render reactively
+        through the transcript instead."""
         ...
 
     @abstractmethod

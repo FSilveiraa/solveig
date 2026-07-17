@@ -10,13 +10,15 @@ The `Agent` is given two per-turn `Hooks` capabilities (`build_*_capability`
 below); both read live `config`/`interface`/`conversation`/`session_manager`
 from `ctx.deps` (`SolveigContext`) at call time rather than closing over them:
 
-- `build_loop_capability` - loop-level concerns via node hooks: live display of
-  each model response (thinking/text), the autonomy gate (block between rounds
-  when `disable_autonomy`), and comment interleaving (`ctx.enqueue`).
-- `build_tool_execution_capability` - per-tool-call concerns via tool-execute
-  hooks: opens the tool's collapsible group, runs the plugin `@before`/`@after`
-  hooks, and renders each `ToolResult` into the `ToolReturn` the model sees.
-  This replaces the old `HookRunner`/`Finalizer` `WrapperToolset` stack.
+- `build_loop_capability` - just the "Thinking" animation around each model
+  request (`model_request` hook). The node-lifecycle hooks don't fire under
+  `agent.iter()`, so response display is reactive (the transcript renders each
+  adopted message) and the autonomy gate / comment interleaving are plain lines
+  in `run_turn`'s loop, not hooks here.
+- `build_tool_execution_capability` - per-tool-call concerns via the
+  `tool_execute` hook: opens the tool's collapsible group, runs the plugin
+  `@before`/`@after` hooks, and renders each `ToolResult` into the `ToolReturn`
+  the model sees.
 """
 
 import json
@@ -27,8 +29,6 @@ from pydantic_ai import (
     ModelResponse,
     ModelRetry,
     RunContext,
-    TextPart,
-    ThinkingPart,
 )
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.messages import ToolCallPart
@@ -41,7 +41,6 @@ from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
 from solveig.llm.api import ProviderRef, get_model
-from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
@@ -159,19 +158,12 @@ async def run_turn(
                 if Agent.is_call_tools_node(node):
                     # Swap the streamed (throwaway) object for pydantic-ai's
                     # canonical response under the same id, so adopt won't
-                    # re-append it. No-op when streaming is off.
+                    # re-append it. No-op when streaming is off. The reactive
+                    # transcript renders this response (text/reasoning) itself
+                    # when adopt appends it - no imperative display here; the
+                    # tool groups then render live inside the tool_execute hook.
                     await conversation.finalize_stream(node.model_response)
                     await conversation.adopt(run.all_messages())
-                    # A CallToolsNode is yielded BEFORE its tools run, so
-                    # displaying its response here keeps the old order
-                    # (assistant text/reasoning, then the tool groups).
-                    await _display_response(
-                        deps.interface,
-                        node.model_response,
-                        conversation,
-                        deps.session_manager,
-                        len(conversation.messages) - 1,
-                    )
                     await _gate_and_interleave(
                         deps,
                         run,
@@ -208,36 +200,6 @@ async def _gate_and_interleave(
     # round (priority='asap').
     while (queued := await interface.try_dequeue_pending()) is not None:
         run.enqueue(queued, priority="asap")
-
-
-async def _display_response(
-    interface: SolveigInterface,
-    model_response: ModelResponse,
-    conversation: Conversation,
-    session_manager: SessionManager,
-    msg_index: int,
-) -> None:
-    renders_something = any(
-        (isinstance(part, ThinkingPart | TextPart) and part.content.strip())
-        for part in model_response.parts
-    )
-    if renders_something:
-        await interface.display_section("Assistant")
-
-    for part_index, part in enumerate(model_response.parts):
-        if isinstance(part, ThinkingPart) and part.content.strip():
-            await interface.display_text_box(
-                part.content, title="Reasoning", collapsed=True, italic=True
-            )
-        elif isinstance(part, TextPart) and part.content.strip():
-            await interface.display_comment(
-                "assistant",
-                part.content,
-                conversation=conversation,
-                session_manager=session_manager,
-                msg_index=msg_index,
-                part_index=part_index,
-            )
 
 
 def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
