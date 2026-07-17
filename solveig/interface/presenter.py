@@ -8,6 +8,7 @@ parts are handled in the tool-group phase, not here.
 from __future__ import annotations
 
 from pydantic_ai.messages import (
+    ModelMessage,
     ModelRequestPart,
     ModelResponsePart,
     TextPart,
@@ -26,3 +27,12 @@ def present_part(part: ModelRequestPart | ModelResponsePart) -> RenderNode | Non
     if isinstance(part, ThinkingPart):
         return Reasoning(part.content) if part.content.strip() else None
     return None
+
+
+def present_message(message: ModelMessage) -> list[RenderNode]:
+    nodes: list[RenderNode] = []
+    for part in message.parts:
+        node = present_part(part)
+        if node is not None:
+            nodes.append(node)
+    return nodes
