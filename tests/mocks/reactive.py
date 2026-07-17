@@ -15,12 +15,12 @@ class RecordingTranscript(ReactiveTranscript):
         self.events: list[tuple] = []
         super().__init__(conversation)
 
-    async def mount(self, message_id: MessageId, nodes: list[RenderNode]) -> None:
-        self.mounted[message_id] = nodes
+    async def mount(self, message_id: MessageId) -> None:
+        self.mounted[message_id] = self.present(message_id)
         self.events.append(("mount", message_id))
 
-    async def rerender(self, message_id: MessageId, nodes: list[RenderNode]) -> None:
-        self.mounted[message_id] = nodes
+    async def rerender(self, message_id: MessageId) -> None:
+        self.mounted[message_id] = self.present(message_id)
         self.events.append(("rerender", message_id))
 
     async def remove(self, message_ids: list[MessageId]) -> None:

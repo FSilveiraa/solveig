@@ -28,16 +28,20 @@ class ReactiveTranscript(ABC):
         self._order: list[MessageId] = []
         conversation.subscribe(self)
 
-    def _present(self, message_id: MessageId) -> list[RenderNode]:
+    def present(self, message_id: MessageId) -> list[RenderNode]:
+        """The closed-content render nodes for a message (empty if it's gone).
+        A helper for simple impls; a richer impl (Textual) instead fetches
+        `conversation.get(message_id)` to also recover role + part indices,
+        which a flat node list can't carry."""
         message = self.conversation.get(message_id)
         return present_message(message) if message is not None else []
 
     async def message_added(self, message_id: MessageId) -> None:
         self._order.append(message_id)
-        await self.mount(message_id, self._present(message_id))
+        await self.mount(message_id)
 
     async def message_updated(self, message_id: MessageId) -> None:
-        await self.rerender(message_id, self._present(message_id))
+        await self.rerender(message_id)
 
     async def truncated_from(self, message_id: MessageId) -> None:
         if message_id not in self._order:
@@ -48,12 +52,10 @@ class ReactiveTranscript(ABC):
         await self.remove(removed)
 
     @abstractmethod
-    async def mount(self, message_id: MessageId, nodes: list[RenderNode]) -> None: ...
+    async def mount(self, message_id: MessageId) -> None: ...
 
     @abstractmethod
-    async def rerender(
-        self, message_id: MessageId, nodes: list[RenderNode]
-    ) -> None: ...
+    async def rerender(self, message_id: MessageId) -> None: ...
 
     @abstractmethod
     async def remove(self, message_ids: list[MessageId]) -> None: ...
