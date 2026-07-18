@@ -9,7 +9,7 @@ from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.interface.render import Markdown
 from solveig.sessions.manager import SessionManager
-from tests.mocks import DEFAULT_CONFIG, MockInterface
+from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 from tests.mocks.reactive import RecordingTranscript
 
 pytestmark = pytest.mark.anyio
@@ -63,3 +63,40 @@ async def test_multi_round_streaming_preserves_order_and_no_duplicates():
     # request -> response(tool call) -> tool-return request -> response(text)
     assert kinds == ["ModelRequest", "ModelResponse", "ModelRequest", "ModelResponse"]
     assert len(conv.messages) == 4  # nothing duplicated across rounds
+
+
+async def test_create_mock_model_streams_reasoning_and_text():
+    """The demo/mock model must be stream-capable (regression: config.stream
+    defaults on, and a function-only FunctionModel crashed run_turn's
+    node.stream). It reconstructs reasoning + text as stream deltas."""
+    from pydantic_ai.messages import ModelResponse, TextPart, ThinkingPart
+
+    conv = Conversation()
+    view = RecordingTranscript(conv)
+    model = create_mock_model(
+        ModelResponse(
+            parts=[
+                ThinkingPart(content="let me think"),
+                TextPart(content="streamed answer"),
+            ]
+        )
+    )
+    agent = Agent(model)
+
+    await run_turn(agent, conv, _deps(conv), "hi")
+
+    assert [type(m).__name__ for m in conv.messages] == [
+        "ModelRequest",
+        "ModelResponse",
+    ]
+    response = conv.messages[-1]
+    assert any(
+        isinstance(p, ThinkingPart) and p.content == "let me think"
+        for p in response.parts
+    )
+    assert any(
+        isinstance(p, TextPart) and p.content == "streamed answer"
+        for p in response.parts
+    )
+    # streamed in bursts, not one shot
+    assert sum(1 for k, _ in view.events if k == "rerender") >= 2
