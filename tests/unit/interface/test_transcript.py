@@ -1,5 +1,14 @@
 import pytest
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
+from pydantic_ai.usage import RunUsage
 from textual.app import App, ComposeResult
 
 from solveig.conversation import Conversation
@@ -7,6 +16,7 @@ from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
 from solveig.interface.cli.conversation import ConversationArea
 from solveig.interface.cli.transcript import TextualTranscript
 from solveig.interface.cli.widgets import EditableComment, SectionHeader
+from tests.mocks import MockInterface
 
 pytestmark = pytest.mark.anyio
 
@@ -107,3 +117,79 @@ async def test_reasoning_part_mounts_collapsible_box_not_comment():
         )
         assert len(app.query(CollapsibleTextBox)) == 1
         assert [c.comment for c in app.query(EditableComment)] == ["done"]
+
+
+async def test_load_replays_closed_content_and_tool_call():
+    """Resume flows through the transcript (replay isn't special): load() fires
+    message_added per message; closed content becomes transcript-owned widgets,
+    and a tool call whose result is present replays itself via the tool."""
+    conv = Conversation()
+    app = _App()
+    app._conv = conv
+    async with app.run_test():
+        area = app.query_one(ConversationArea)
+        interface = MockInterface()
+        TextualTranscript(conv, area, interface, _StubSessionManager())
+
+        await conv.load(
+            [
+                ModelRequest(parts=[UserPromptPart(content="Review test.py")]),
+                ModelResponse(
+                    parts=[
+                        ThinkingPart(content="I should read the file first."),
+                        ToolCallPart(
+                            tool_name="not_a_real_tool",
+                            args={"path": "test.py"},
+                            tool_call_id="call_1",
+                        ),
+                    ]
+                ),
+                ModelRequest(
+                    parts=[
+                        ToolReturnPart(
+                            tool_name="not_a_real_tool",
+                            content="file contents",
+                            tool_call_id="call_1",
+                        )
+                    ]
+                ),
+                ModelResponse(parts=[TextPart(content="It's safe to run.")]),
+            ],
+            RunUsage(),
+        )
+
+        # closed content: transcript-owned widgets (editable by id)
+        comments = [c.comment for c in app.query(EditableComment)]
+        assert "Review test.py" in comments
+        assert "It's safe to run." in comments
+        assert len(app.query(CollapsibleTextBox)) >= 1  # reasoning box
+        # the tool call replayed itself (result present) via the tool's replay
+        out = interface.get_all_output()
+        assert "not_a_real_tool" in out
+        assert "file contents" in out
+
+
+async def test_live_tool_call_not_replayed_while_result_absent():
+    """On a live run the tool-call message is adopted before execute() produces
+    its result, so the transcript must NOT replay it (execute shows it live) -
+    no double render."""
+    conv = Conversation()
+    app = _App()
+    app._conv = conv
+    async with app.run_test():
+        area = app.query_one(ConversationArea)
+        interface = MockInterface()
+        TextualTranscript(conv, area, interface, _StubSessionManager())
+
+        await conv.append(
+            ModelResponse(
+                parts=[
+                    TextPart(content="let me read"),
+                    ToolCallPart(
+                        tool_name="not_a_real_tool", args={}, tool_call_id="c1"
+                    ),
+                ]
+            )
+        )
+        assert [c.comment for c in app.query(EditableComment)] == ["let me read"]
+        assert "not_a_real_tool" not in interface.get_all_output()

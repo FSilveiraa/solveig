@@ -66,10 +66,8 @@ async def setup_loop(
         name = None if resume_session == "__latest__" else resume_session
         try:
             session_data = await session_manager.load(name)
-            await conversation.load(
-                session_data["messages"], session_data["usage"], notify=False
-            )
-            await session_manager.display_loaded_session(conversation, interface)
+            await session_manager.announce_resumed_session(session_data, interface)
+            await conversation.load(session_data["messages"], session_data["usage"])
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
 

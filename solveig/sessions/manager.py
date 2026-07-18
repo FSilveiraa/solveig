@@ -4,26 +4,20 @@ Stores/restores `Conversation` as a single JSON blob per session file
 (whole-list `ModelMessagesTypeAdapter` dump) - pydantic-ai's own sanctioned
 serialize/restore pair, not a bespoke format.
 
-Replay (`display_loaded_session`) reconstructs each tool call's typed
-`BaseTool` instance from its persisted args and calls its `replay()` method,
-so a resumed session looks like the live run did - see the module docstring
-on `solveig.tools.base.BaseTool` for the live/replay split.
+Replay is not a special path: `Conversation.load()` repopulates the messages
+and fires `message_added` per one, and the reactive transcript renders each -
+closed content via render nodes, tool calls via `solveig.sessions.replay`
+(the tool's own `replay()`). `announce_resumed_session()` just shows the
+banner. See the module docstring on `solveig.tools.base.BaseTool` for the
+live/replay split.
 """
 
 import json
 from datetime import datetime
 
 from anyio import Path
-from pydantic import ValidationError
 from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
-    ModelRequest,
-    ModelResponse,
-    TextPart,
-    ThinkingPart,
-    ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
 )
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
@@ -31,9 +25,6 @@ from pydantic_core import to_jsonable_python
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
-from solveig.tools.available import tool_classes
-from solveig.tools.base import BaseTool
-from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 
 
@@ -194,135 +185,22 @@ class SessionManager:
     # Display
     # ------------------------------------------------------------------
 
-    async def display_loaded_session(
+    async def announce_resumed_session(
         self,
-        conversation: Conversation,
+        session_data: dict,
         interface: SolveigInterface,
     ) -> None:
-        """Announce a resumed session, then replay every tool call in order."""
+        """Show the "Resumed session" banner (message + token counts). The
+        session's messages themselves render reactively: `conversation.load()`
+        fires `message_added` per message and the transcript replays each -
+        closed content via render nodes, tool calls via the tool's own
+        `replay()`. Replay isn't a special imperative path anymore."""
+        usage = session_data["usage"]
         header = (
-            f"**Messages:** {len(conversation.messages)}  \n"
+            f"**Messages:** {len(session_data['messages'])}  \n"
             f"**Tokens sent / received:** "
-            f"{conversation.usage.input_tokens} / {conversation.usage.output_tokens}"
+            f"{usage.input_tokens} / {usage.output_tokens}"
         )
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"
         )
-        await self._display_messages(conversation, interface)
-
-    async def redraw(
-        self, conversation: Conversation, interface: SolveigInterface
-    ) -> None:
-        """Replay the (possibly just-truncated) conversation from scratch.
-        Caller is responsible for clearing the display first."""
-        await self._display_messages(conversation, interface)
-
-    async def _display_messages(
-        self,
-        conversation: Conversation,
-        interface: SolveigInterface,
-    ) -> None:
-        # Single forward pass building tool_call_id -> ToolReturnPart first,
-        # so pairing each call is O(1) rather than an O(n^2) nested scan over a
-        # long session.
-        returns: dict[str, ToolReturnPart] = {}
-        for message in conversation.messages:
-            if isinstance(message, ModelRequest):
-                for request_part in message.parts:
-                    if isinstance(request_part, ToolReturnPart):
-                        returns[request_part.tool_call_id] = request_part
-
-        classes = tool_classes()
-        ids = conversation.ids
-        for msg_index, message in enumerate(conversation.messages):
-            message_id = ids[msg_index]
-            if isinstance(message, ModelRequest):
-                for part_index, request_part in enumerate(message.parts):
-                    if (
-                        isinstance(request_part, UserPromptPart)
-                        and isinstance(request_part.content, str)
-                        and request_part.content.strip()
-                    ):
-                        await interface.display_section("User")
-                        await interface.display_comment(
-                            "user",
-                            request_part.content,
-                            conversation=conversation,
-                            session_manager=self,
-                            message_id=message_id,
-                            part_index=part_index,
-                        )
-            elif isinstance(message, ModelResponse):
-                if any(
-                    isinstance(p, ThinkingPart | TextPart) and p.content.strip()
-                    for p in message.parts
-                ):
-                    await interface.display_section("Assistant")
-
-                for part_index, response_part in enumerate(message.parts):
-                    if (
-                        isinstance(response_part, ThinkingPart)
-                        and response_part.content.strip()
-                    ):
-                        await interface.display_text_box(
-                            response_part.content,
-                            title="Reasoning",
-                            collapsed=True,
-                            italic=True,
-                        )
-                    elif (
-                        isinstance(response_part, TextPart)
-                        and response_part.content.strip()
-                    ):
-                        await interface.display_comment(
-                            "assistant",
-                            response_part.content,
-                            conversation=conversation,
-                            session_manager=self,
-                            message_id=message_id,
-                            part_index=part_index,
-                        )
-                    elif isinstance(response_part, ToolCallPart):
-                        return_part = returns.get(response_part.tool_call_id)
-                        if return_part is None:
-                            # No persisted result - the call was denied/retried
-                            # with nothing to show, or the run was interrupted
-                            # mid-call.
-                            continue
-                        await self._replay_tool_call(
-                            interface, classes, response_part, return_part
-                        )
-
-    @staticmethod
-    async def _replay_tool_call(
-        interface: SolveigInterface,
-        classes: dict[str, type[BaseTool]],
-        call: ToolCallPart,
-        return_part: ToolReturnPart,
-    ) -> None:
-        """Reconstruct one call's `ToolResult` from its persisted return, and
-        replay it through the matching `BaseTool` class - or a generic render
-        if the tool isn't a `BaseTool` (a not-yet-converted plugin function) or
-        its stored args no longer validate against the tool's current schema
-        (renamed/removed field since the session was recorded)."""
-        result = ToolResult(
-            content=return_part.content, private=return_part.metadata or {}
-        )
-        tool_cls = classes.get(call.tool_name)
-
-        if tool_cls is not None:
-            try:
-                instance = tool_cls.model_validate(call.args_as_dict())
-            except ValidationError:
-                tool_cls = None
-
-        if tool_cls is None:
-            # Not-yet-converted plugin function, or stored args that no longer
-            # validate: no tool instance to render a header, but the result can
-            # still render its own body (same renderer the BaseTool path uses).
-            async with interface.with_group(call.tool_name) as group:
-                await result.display_content(group)
-            return
-
-        async with interface.with_group(instance.title) as group:
-            await instance.replay(group, result)

@@ -9,10 +9,10 @@ so there's nothing Solveig-specific left to unit test there; `load()`'s
 round-trip is exercised via `store()` + `load()` below instead of by hand-
 building request/response dicts.
 
-`display_loaded_session(conversation, interface)` announces a resumed session
-and replays each tool call - see `tests/plugins/test_shellcheck.py`/
-`tests/unit/test_toolset.py` for the tool-call replay/orchestration paths;
-this file only covers the session-level announcement.
+Resume is reactive: `Conversation.load()` repopulates the messages and the
+transcript replays each (see `tests/unit/interface/test_transcript.py`).
+`announce_resumed_session()` only shows the banner - this file covers that plus
+store/load round-tripping.
 """
 
 import json
@@ -20,13 +20,9 @@ import json
 import pytest
 from pydantic_ai.messages import (
     ModelRequest,
-    ModelResponse,
-    TextPart,
-    ThinkingPart,
-    ToolCallPart,
-    ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_ai.usage import RunUsage
 
 from solveig.conversation import Conversation
 from solveig.sessions.manager import SessionManager
@@ -312,62 +308,25 @@ class TestCheckpoint:
 
 
 # ---------------------------------------------------------------------------
-# display_loaded_session
+# announce_resumed_session
 # ---------------------------------------------------------------------------
 
 
-class TestDisplayLoadedSession:
-    async def test_display_shows_message_and_token_counts(self, tmp_path):
+class TestAnnounceResumedSession:
+    async def test_announce_shows_message_and_token_counts(self, tmp_path):
+        """The banner comes from the loaded session_data; the messages
+        themselves render reactively through the transcript (see
+        tests/unit/interface/test_transcript.py for the replay rendering)."""
         manager, _ = make_manager(tmp_path)
         interface = MockInterface()
-        conversation = Conversation()
-        conversation.usage.input_tokens = 12
-        conversation.usage.output_tokens = 34
+        session_data = {
+            "messages": [ModelRequest(parts=[UserPromptPart(content="hi")])],
+            "usage": RunUsage(input_tokens=12, output_tokens=34),
+        }
 
-        await manager.display_loaded_session(conversation, interface)
+        await manager.announce_resumed_session(session_data, interface)
 
         output = interface.get_all_output()
+        assert "1" in output  # message count
         assert "12" in output
         assert "34" in output
-
-    async def test_replays_user_prompt_and_assistant_reasoning_and_text(self, tmp_path):
-        """A resumed session must replay the full turn - not just tool calls:
-        the user's prompt, the assistant's reasoning, and its final comment
-        all need to show up, mirroring what `run.py`/`agent._display_response`
-        render live. Regression test for a session where only the tool call
-        was replayed and the surrounding conversation was silently dropped."""
-        manager, _ = make_manager(tmp_path)
-        interface = MockInterface()
-        conversation = Conversation()
-        for message in [
-            ModelRequest(parts=[UserPromptPart(content="Review test.py")]),
-            ModelResponse(
-                parts=[
-                    ThinkingPart(content="I should read the file first."),
-                    ToolCallPart(
-                        tool_name="not_a_real_tool",
-                        args={"path": "test.py"},
-                        tool_call_id="call_1",
-                    ),
-                ]
-            ),
-            ModelRequest(
-                parts=[
-                    ToolReturnPart(
-                        tool_name="not_a_real_tool",
-                        content="file contents",
-                        tool_call_id="call_1",
-                    )
-                ]
-            ),
-            ModelResponse(parts=[TextPart(content="It's safe to run.")]),
-        ]:
-            await conversation.append(message)
-
-        await manager.display_loaded_session(conversation, interface)
-
-        output = interface.get_all_output()
-        assert "Review test.py" in output
-        assert "I should read the file first." in output
-        assert "It's safe to run." in output
-        assert interface.get_all_sections() == ["User", "Assistant"]

@@ -307,7 +307,7 @@ class TestSessionCommandsWithManager:
         )
         manager.delete = AsyncMock(return_value="test.json")
         manager._fuzzy_find = AsyncMock(return_value="/some/path/test.json")
-        manager.display_loaded_session = AsyncMock()
+        manager.announce_resumed_session = AsyncMock()
         return manager
 
     async def test_session_list_empty(self):

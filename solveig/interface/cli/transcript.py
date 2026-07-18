@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    ToolCallPart,
+    UserPromptPart,
+)
 from textual.widget import Widget
 from textual.widgets import Markdown as MarkdownWidget
 
@@ -21,6 +26,7 @@ from solveig.conversation import Conversation, MessageId
 from solveig.interface.presenter import present_part
 from solveig.interface.reactive import ReactiveTranscript
 from solveig.interface.render import Markdown, Reasoning, RenderNode, Text
+from solveig.sessions.replay import build_returns_map, replay_tool_call
 
 from .collapsible_widgets import CollapsibleTextBox
 from .widgets import EditableComment, SectionHeader
@@ -74,12 +80,24 @@ class TextualTranscript(ReactiveTranscript):
             widgets.append(header)
             self._last_section_role = role
 
+        returns = None
         for part_index, part in enumerate(message.parts):
             node = present_part(part)
             widget = self._make_widget(node, message_id, part_index, role)
             if widget is not None:
                 await self._mount_widget(widget)
                 widgets.append(widget)
+            elif isinstance(part, ToolCallPart):
+                # A tool call renders itself (the tool's own replay: header +
+                # result) only once its result is present - which it is on
+                # replay (load populates the whole history first) but not on a
+                # live run (execute() shows the tool live before the result
+                # exists, so this is skipped and there's no double render).
+                if returns is None:
+                    returns = build_returns_map(self.conversation.messages)
+                return_part = returns.get(part.tool_call_id)
+                if return_part is not None:
+                    await replay_tool_call(self._interface, part, return_part)
 
         self._widgets[message_id] = widgets
 
