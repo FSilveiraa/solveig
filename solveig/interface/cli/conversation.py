@@ -209,28 +209,37 @@ class ConversationArea(ScrollableContainer):
             scrollbar-background: {theme.background};
             scrollbar-background-hover: {theme.background};
             scrollbar-background-active: {theme.background};
-            padding: 0 0 1 0;
+            /* Trailing space is the last child's own bottom margin (1); padding
+               here would add to it (padding never collapses) and give 2. */
+            padding: 0;
         }}
 
+        /* Imperative-path section containers only - the live/reactive transcript
+           mounts comments flat and spaces them via the role/box/group margins
+           below, not here. Kept for the tint; spacing lives on the children. */
         .section-user, .section-assistant {{
             height: auto;
-            padding: 1 0 1 1;
         }}
 
         .section-user {{
             background: {user_background.hex};
         }}
 
-        /* Reactive transcript mounts comments flat (no section container), so
-           the user-turn tint lives on the comment itself. */
-        .role-user {{
+        /* The user-turn tint lives on the comment TEXT only, not the action
+           buttons under it - so tint the Markdown child, not the whole
+           EditableComment. Horizontal inset comes from .text_comment's margin;
+           this padding is just breathing room for the text inside the tint. */
+        .role-user > Markdown {{
             background: {user_background.hex};
-            padding: 1 1 0 1;
+            padding: 0 1;
         }}
 
         .group {{
             height: auto;
-            margin: 1 0 0 0;
+            /* Section content: 1 on all four sides (fixes groups hugging the
+               left edge). Collapses with siblings; header top-2 wins between
+               sections. */
+            margin: 1;
             padding-bottom: 0;
         }}
 

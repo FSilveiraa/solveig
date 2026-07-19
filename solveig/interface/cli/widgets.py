@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
+from textual.containers import Horizontal
 from textual.events import Click
 from textual.widgets import Markdown, Static
 
@@ -33,7 +34,10 @@ class Comment(Static):
     def get_css(cls, theme: Palette) -> str:
         return f"""
         .text_comment {{
-            margin: 0 0 1 0;
+            /* Section content: 1 on all four sides. Vertically this collapses
+               (max) with neighbours - a section header's top-2 wins at a
+               section boundary, giving 2 between sections and 1 within. */
+            margin: 1;
         }}
 
         Markdown {{
@@ -43,6 +47,24 @@ class Comment(Static):
 
         MarkdownBlock:last-of-type {{
             margin-bottom: 0;
+        }}
+
+        /* Action buttons on one row, with a top border (in the box-border
+           colour) separating them from the message text above. width: 100% so
+           the separator spans the full comment; height: auto so the row is just
+           the 1-row buttons plus that border. */
+        .comment-actions {{
+            width: 100%;
+            height: auto;
+            border-top: solid {theme.box};
+        }}
+
+        /* Each button only as wide as its label, so they pack left-to-right
+           in the row. (MessageButton is action-row-only and set globally; the
+           shared CopyButton is scoped here so box/title-bar copies keep their
+           own right-alignment.) */
+        .comment-actions CopyButton {{
+            width: auto;
         }}
         """
 
@@ -80,12 +102,15 @@ class EditableComment(Comment, EditableMessage):
 
     def compose(self):
         yield Markdown(f"🗩 ⠀{self.comment}")
-        yield CopyButton(lambda: self.comment)
-        yield EditButton(self)
-        if self.role == "user":
-            yield RetryButton(self)
-        yield DeleteButton(self)
-        yield BranchButton(self)
+        # Action buttons share one horizontal row, separated from the message
+        # text above by a top border (see .comment-actions in Comment.get_css).
+        with Horizontal(classes="comment-actions"):
+            yield CopyButton(lambda: self.comment)
+            yield EditButton(self)
+            if self.role == "user":
+                yield RetryButton(self)
+            yield DeleteButton(self)
+            yield BranchButton(self)
 
     async def _flash_finish_run_first(self) -> None:
         """Explain why a click was ignored: a history mutation mid-run is
@@ -218,8 +243,17 @@ class SectionHeader(Static):
         SectionHeader {{
             color: {theme.section};
             text-style: bold;
-            margin: 0;
+            /* Spacing model: 2 rows above a section, 1 below. Textual collapses
+               adjacent sibling margins to the max, so this composes with the
+               1/1 margins on comments/boxes/groups to give "2 above sections,
+               1 everywhere else" without ever stacking. */
+            margin: 2 0 1 0;
             text-wrap: nowrap;
             text-overflow: clip;
+        }}
+
+        /* No leading gap at the very top of the scroll. */
+        SectionHeader:first-of-type {{
+            margin-top: 0;
         }}
         """

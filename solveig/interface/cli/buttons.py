@@ -24,7 +24,10 @@ class MessageButton(Static):
         return f"""
         MessageButton {{
             color: {theme.text};
-            text-align: right;
+            /* width: auto so each button is only as wide as its label - in the
+               horizontal action row they pack left-to-right instead of each
+               taking the full width (which pushed all but the first offscreen). */
+            width: auto;
             padding: 0 1;
             height: 1;
         }}
@@ -44,28 +47,35 @@ class EditButton(MessageButton):
         await self.owner.begin_edit()
 
 
+# Retry/Delete/Branch all truncate the conversation, which removes this button's
+# own owner widget (and thus the button) from the tree. Doing that synchronously
+# from within the button's own click handler is the "remove-during-own-event"
+# trap: Textual can't finish unmounting a widget while its message pump is still
+# running the handler, so the button is left stranded on screen (still showing
+# its hover highlight). call_after_refresh defers the mutation to a Screen-owned
+# callback that runs once the click has fully settled, so the removal is clean.
 class RetryButton(MessageButton):
     def __init__(self, owner: EditableMessage, **kwargs):
         super().__init__(owner, "↻ Retry", **kwargs)
 
-    async def on_click(self, event: Click) -> None:
+    def on_click(self, event: Click) -> None:
         event.stop()
-        await self.owner.retry()
+        self.call_after_refresh(self.owner.retry)
 
 
 class DeleteButton(MessageButton):
     def __init__(self, owner: EditableMessage, **kwargs):
         super().__init__(owner, "✕ Delete", **kwargs)
 
-    async def on_click(self, event: Click) -> None:
+    def on_click(self, event: Click) -> None:
         event.stop()
-        await self.owner.delete_from_here()
+        self.call_after_refresh(self.owner.delete_from_here)
 
 
 class BranchButton(MessageButton):
     def __init__(self, owner: EditableMessage, **kwargs):
         super().__init__(owner, "⑂ Branch", **kwargs)
 
-    async def on_click(self, event: Click) -> None:
+    def on_click(self, event: Click) -> None:
         event.stop()
-        await self.owner.branch_from_here()
+        self.call_after_refresh(self.owner.branch_from_here)

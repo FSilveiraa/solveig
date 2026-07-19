@@ -165,7 +165,27 @@ async def test_delete_click_on_nested_message_mutates_conversation():
         await area._add_element(last, area._current_section_container)
         await pilot.pause()
 
-        await asyncio.wait_for(pilot.click(last.query_one(DeleteButton)), timeout=5)
+        # Drive the button's own click handler directly (this harness doesn't
+        # load the app CSS, so pilot.click would hit-test against unstyled
+        # full-width buttons). on_click defers the delete via call_after_refresh;
+        # pausing lets that Screen-owned callback run the truncation.
+        from textual.events import Click
+
+        delete_btn = last.query_one(DeleteButton)
+        delete_btn.on_click(
+            Click(
+                widget=delete_btn,
+                x=0,
+                y=0,
+                delta_x=0,
+                delta_y=0,
+                button=1,
+                shift=False,
+                meta=False,
+                ctrl=False,
+            )
+        )
+        await asyncio.wait_for(pilot.pause(), timeout=5)
         await asyncio.wait_for(pilot.pause(), timeout=5)
         assert len(conv.messages) == 1
 

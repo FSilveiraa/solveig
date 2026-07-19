@@ -278,7 +278,8 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         """Generate CSS for CollapsibleTextBox."""
         return f"""
         CollapsibleTextBox {{
-            margin: 1 0 1 1;
+            /* Section content: 1 on all four sides (was missing the right). */
+            margin: 1;
             height: auto;
             padding: 0 0;
             border: solid {theme.box};
