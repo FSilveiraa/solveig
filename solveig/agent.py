@@ -109,7 +109,18 @@ def build_loop_capability() -> Hooks[SolveigContext]:
         # Ctrl+C/Esc here cancels exactly the model call in flight, not
         # whatever else the run is doing, and the "Thinking" status/countdown
         # doesn't sit stuck on screen once the call returns.
+        #
+        # Streaming is the exception: there the handler doesn't return after
+        # firing the request - it parks holding the open HTTP stream until the
+        # consumer drains it. Wrapping it in with_cancellable here would make
+        # Esc cancel that parked handler, tearing the stream out mid-read
+        # (ReadError) and leaving a stray partial that adopt() duplicates. So
+        # in streaming mode run_turn owns the cancellable+animation around the
+        # token-reading loop instead (it cancels the READER, letting the stream
+        # close in order), and this hook stays out of the way.
         interface = ctx.deps.interface
+        if ctx.deps.config.stream:
+            return await handler(request_context)
         async with interface.with_cancellable(
             handler(request_context), status="Thinking", timeout=ctx.deps.config.timeout
         ) as task:
@@ -160,12 +171,42 @@ async def run_turn(
         try:
             async for node in run:
                 if deps.config.stream and Agent.is_model_request_node(node):
-                    # Stream this response token-by-token into a live entry.
-                    async with node.stream(run.ctx) as stream:
-                        await sync()
-                        await conversation.begin_stream(stream.response)
-                        async for _event in stream:
-                            await conversation.stream_updated()
+                    # Stream this response token-by-token into a live entry. The
+                    # whole consumption runs inside ONE cancellable task (which
+                    # also drives the "Thinking" animation), so Esc/Ctrl+C stops
+                    # the READER first and lets node.stream()'s context close the
+                    # HTTP stream in order. Cancelling the request handler instead
+                    # (the default model_request hook) would tear the stream
+                    # mid-read - a provider ReadError plus a stray partial that
+                    # adopt() would mount as a duplicate. The handler-side hook
+                    # deliberately steps aside while streaming (see build_loop_
+                    # capability) so the animation isn't shown twice.
+                    async def stream_node(node: Any = node) -> None:
+                        async with node.stream(run.ctx) as stream:
+                            await sync()
+                            await conversation.begin_stream(stream.response)
+                            async for _event in stream:
+                                await conversation.stream_updated(stream.response)
+
+                    try:
+                        async with deps.interface.with_cancellable(
+                            stream_node(),
+                            status="Thinking",
+                            timeout=deps.config.timeout,
+                        ) as task:
+                            await task
+                    finally:
+                        # Reconcile the in-flight snapshot with pydantic-ai's own
+                        # response object under the same id, so neither the outer
+                        # finally: sync() nor the CallToolsNode branch mounts a
+                        # second copy. On a mid-stream cancel pydantic-ai has
+                        # already appended its (partial) response to all_messages
+                        # - fold it in by identity here; the no-op-when-absent
+                        # guard leaves the normal path to finalize at the tool
+                        # boundary as before.
+                        finished = run.all_messages()
+                        if finished and isinstance(finished[-1], ModelResponse):
+                            await conversation.finalize_stream(finished[-1])
                     continue
 
                 # A CallToolsNode is the tool-round boundary. `run.next_node`

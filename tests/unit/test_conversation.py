@@ -153,15 +153,15 @@ async def test_streaming_lifecycle_updates_then_finalizes_without_duplicate():
     spy = SpyObserver()
     conv.subscribe(spy)
 
-    # provider's live, in-place-mutated response object
-    live = ModelResponse(parts=[TextPart(content="Hel")])
-    sid = await conv.begin_stream(live)
+    # pydantic-ai hands a fresh immutable snapshot per token burst (stream.response
+    # never mutates in place), so each update swaps in a new object under the id.
+    sid = await conv.begin_stream(ModelResponse(parts=[TextPart(content="Hel")]))
     assert spy.events == [("added", sid)]
 
-    live.parts[0].content = "Hello"
-    await conv.stream_updated()
-    live.parts[0].content = "Hello world"
-    await conv.stream_updated()
+    await conv.stream_updated(ModelResponse(parts=[TextPart(content="Hello")]))
+    assert conv.get(sid).parts[0].content == "Hello"
+    await conv.stream_updated(ModelResponse(parts=[TextPart(content="Hello world")]))
+    assert conv.get(sid).parts[0].content == "Hello world"
     assert spy.events == [("added", sid), ("updated", sid), ("updated", sid)]
 
     # finalize with the canonical (different) object of equal content
@@ -180,7 +180,7 @@ async def test_stream_updated_and_finalize_are_noops_when_not_streaming():
     conv = Conversation()
     spy = SpyObserver()
     conv.subscribe(spy)
-    await conv.stream_updated()  # no inflight
+    await conv.stream_updated(ModelResponse(parts=[]))  # no inflight
     await conv.finalize_stream(ModelResponse(parts=[]))
     assert spy.events == []
     assert conv.messages == ()

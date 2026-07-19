@@ -67,13 +67,11 @@ async def test_streaming_rerender_updates_comment_content_in_place():
     async with app.run_test():
         area, transcript = await _mounted(app)
 
-        live = ModelResponse(parts=[TextPart(content="Hel")])
-        await conv.begin_stream(live)
+        await conv.begin_stream(ModelResponse(parts=[TextPart(content="Hel")]))
         comment = app.query_one(EditableComment)
         assert comment.comment == "Hel"
 
-        live.parts[0].content = "Hello world"
-        await conv.stream_updated()
+        await conv.stream_updated(ModelResponse(parts=[TextPart(content="Hello world")]))
         # same widget, updated content - not a second comment
         assert len(app.query(EditableComment)) == 1
         assert app.query_one(EditableComment).comment == "Hello world"
@@ -96,6 +94,49 @@ async def test_edit_rerenders_and_truncate_removes_widgets():
         await conv.truncate_from(b)
         remaining = list(app.query(EditableComment))
         assert [c.comment for c in remaining] == ["ONE"]
+
+
+async def test_delete_button_click_defers_removal_and_cleans_up():
+    """Clicking Delete truncates the conversation, which removes the clicked
+    button's own owner widget. The button must defer that (call_after_refresh)
+    rather than remove its own tree mid-click - otherwise the button is stranded
+    on screen. Here we assert the deferred path actually runs the async delete:
+    after the click settles, the comment (and its buttons) are gone cleanly."""
+    from solveig.interface.cli.buttons import DeleteButton
+
+    conv = Conversation()
+    app = _App()
+    app._conv = conv
+    async with app.run_test() as pilot:
+        area, transcript = await _mounted(app)
+
+        a = await conv.append(ModelResponse(parts=[TextPart(content="one")]))
+        b = await conv.append(ModelResponse(parts=[TextPart(content="two")]))
+
+        comment_b = next(c for c in app.query(EditableComment) if c.message_id == b)
+        delete_btn = comment_b.query_one(DeleteButton)
+
+        from textual.events import Click
+
+        click = Click(
+            widget=delete_btn,
+            x=0,
+            y=0,
+            delta_x=0,
+            delta_y=0,
+            button=1,
+            shift=False,
+            meta=False,
+            ctrl=False,
+        )
+        delete_btn.on_click(click)
+        await pilot.pause()  # let the deferred Screen callback run the delete
+        await pilot.pause()
+
+        # b (and everything after it) is gone; a remains; no stranded buttons.
+        assert [c.message_id for c in app.query(EditableComment)] == [a]
+        assert conv.messages == (conv.get(a),)
+        assert all(btn.owner.message_id == a for btn in app.query(DeleteButton))
 
 
 async def test_reasoning_part_mounts_collapsible_box_not_comment():

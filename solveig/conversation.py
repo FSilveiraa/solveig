@@ -127,17 +127,21 @@ class Conversation:
                 await observer.message_added(message_id)
 
     async def begin_stream(self, response: ModelMessage) -> MessageId:
-        """Start streaming a model response: append it as a live entry whose
-        content the provider mutates in place as tokens arrive. Held by
-        _inflight_id until finalize_stream swaps in the canonical object."""
+        """Start streaming a model response: append the current snapshot as a
+        live entry. Held by _inflight_id; each stream_updated swaps in a newer
+        snapshot until finalize_stream installs the canonical object."""
         message_id = await self.append(response)
         self._inflight_id = message_id
         return message_id
 
-    async def stream_updated(self) -> None:
-        """A streamed token landed (the in-flight response mutated in place) -
-        re-render it. No-op when not streaming."""
+    async def stream_updated(self, response: ModelMessage) -> None:
+        """A streamed token landed - install the latest snapshot and re-render.
+        pydantic-ai's `stream.response` builds a fresh immutable ModelResponse
+        per access (it never mutates in place), so the caller passes the current
+        snapshot and we swap it under the in-flight id. No-op when not
+        streaming."""
         if self._inflight_id is not None:
+            self._entries[self._inflight_id] = response
             for observer in self._observers:
                 await observer.message_updated(self._inflight_id)
 
