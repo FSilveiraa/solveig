@@ -18,7 +18,6 @@ import pytest
 from anyio import Path
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
-from solveig.llm.request_manager import RequestManager
 from solveig.run import run_async
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 
@@ -74,12 +73,11 @@ class TestConversationFlow:
                 0,  # Send ls output (after inspection)
             ],
         )
-        request_manager = RequestManager(config=config, model=model)
 
         conversation = await run_async(
             config=config,
             interface=interface,
-            request_manager=request_manager,
+            model=model,
             user_prompt="Hey I'm lost in a shell",
         )
 
@@ -135,13 +133,12 @@ class TestConversationFlow:
                 2,  # Decline find command
             ],
         )
-        request_manager = RequestManager(config=config, model=model)
 
         conversation = await run_async(
             config=config,
             user_prompt=f"Help me organize files in {temp_dir_path}",
             interface=interface,
-            request_manager=request_manager,
+            model=model,
         )
 
         output = interface.get_all_output()
@@ -165,13 +162,12 @@ class TestConversationFlow:
                 0,  # Accept command and send error output
             ],
         )
-        request_manager = RequestManager(config=config, model=model)
 
         conversation = await run_async(
             config=config,
             user_prompt="Run a diagnostic",
             interface=interface,
-            request_manager=request_manager,
+            model=model,
         )
 
         output = interface.get_all_output()
@@ -203,13 +199,12 @@ class TestConversationFlow:
             ModelResponse(parts=[TextPart(content="Done tracking")]),
         )
         interface = MockInterface()
-        request_manager = RequestManager(config=config, model=model)
 
         await run_async(
             config=config,
             user_prompt="Track this for me",
             interface=interface,
-            request_manager=request_manager,
+            model=model,
         )
 
         output = interface.get_all_output()

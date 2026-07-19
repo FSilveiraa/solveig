@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pydantic import ValidationError
 from pydantic_settings.exceptions import SettingsError
 
+from solveig.api import ProviderRef
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
@@ -22,7 +23,6 @@ from solveig.config.editor import (
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.interface import SolveigInterface
-from solveig.llm import ProviderRef
 from solveig.mcp_servers.client import connect, disconnect, find_connection
 from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.sessions.manager import SessionManager

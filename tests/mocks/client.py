@@ -3,7 +3,7 @@
 Replaces the old Instructor-based `MockLLMClient` (which returned
 `AssistantMessage` objects) with a `FunctionModel` that returns predefined
 `ModelResponse`s in sequence - the native pydantic-ai equivalent, injected
-via `RequestManager(config, model=...)`.
+via `run_async(model=...)`.
 
 The model supports BOTH non-streamed requests (`function`) and streamed ones
 (`stream_function`), so it works whether `config.stream` is on or off. The

@@ -11,8 +11,8 @@ __author__ = "Francisco"
 __license__ = "MIT"
 
 # Import main classes for easy access
+from .api import APIType, ModelInfo, ProviderRef, get_model, get_provider
 from .config import SolveigConfig
-from .llm import APIType, ModelInfo, ProviderRef, get_model, get_provider
 
 __all__ = [
     "SolveigConfig",

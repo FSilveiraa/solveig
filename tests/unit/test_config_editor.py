@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from solveig.api import ProviderRef
 from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
     _parse_field_value,
     _unwrap_optional,
     apply_config_field,
 )
-from solveig.llm import ProviderRef
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio

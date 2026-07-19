@@ -13,13 +13,16 @@ import sys
 import traceback
 import warnings
 
+from pydantic_ai.models import Model
+
 from solveig import system_prompt
+from solveig.agent import run_turn_with_retry
+from solveig.api import ProviderRef, get_provider
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
-from solveig.llm.request_manager import RequestManager
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import initialize_plugins
 from solveig.sessions.manager import SessionManager
@@ -30,7 +33,7 @@ from solveig.tools.available import AVAILABLE_TOOLS
 async def setup_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    request_manager: RequestManager,
+    provider_ref: ProviderRef,
     conversation: Conversation,
     session_manager: SessionManager | None,
     resume_session: str | None,
@@ -78,16 +81,14 @@ async def setup_loop(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
-        await fetch_and_apply_model_info(
-            config, request_manager.provider_ref, interface
-        )
+        await fetch_and_apply_model_info(config, provider_ref, interface)
 
     await interface.update_stats(url=config.url, model=config.model)
 
     subcommand_executor = SubcommandRunner(
         config=config,
         conversation=conversation,
-        provider_ref=request_manager.provider_ref,
+        provider_ref=provider_ref,
         session_manager=session_manager,
     )
     interface.set_subcommand_executor(subcommand_executor)
@@ -98,8 +99,9 @@ async def setup_loop(
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    request_manager: RequestManager,
+    provider_ref: ProviderRef,
     conversation: Conversation,
+    model: Model | None = None,
     resume_session: str | None = None,
     startup_warnings: tuple[str, ...] = (),
 ) -> None:
@@ -118,7 +120,7 @@ async def main_loop(
     system_prompt_text = await setup_loop(
         config=config,
         interface=interface,
-        request_manager=request_manager,
+        provider_ref=provider_ref,
         conversation=conversation,
         session_manager=session_manager,
         resume_session=resume_session,
@@ -141,13 +143,15 @@ async def main_loop(
             continue
 
         system_prompt_text = await system_prompt.get_system_prompt(config)
-        ok = await request_manager.send_with_retry(
+        ok = await run_turn_with_retry(
             config=config,
+            provider_ref=provider_ref,
             interface=interface,
             conversation=conversation,
             session_manager=session_manager,
             system_prompt=system_prompt_text,
             prompt=prompt,
+            model=model,
         )
         if not ok:
             continue
@@ -164,7 +168,8 @@ async def run_async(
     config: SolveigConfig | None = None,
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
-    request_manager: RequestManager | None = None,
+    provider_ref: ProviderRef | None = None,
+    model: Model | None = None,
     resume_session: str | None = None,
 ) -> Conversation:
     """
@@ -201,7 +206,9 @@ async def run_async(
     if user_prompt:
         await interface.enqueue_pending(user_prompt)
 
-    request_manager = request_manager or RequestManager(config=config)
+    provider_ref = provider_ref or ProviderRef(
+        provider=get_provider(config.api_type, api_key=config.api_key, url=config.url)
+    )
 
     loop_task = None
     try:
@@ -209,8 +216,9 @@ async def run_async(
             main_loop(
                 interface=interface,
                 config=config,
-                request_manager=request_manager,
+                provider_ref=provider_ref,
                 conversation=conversation,
+                model=model,
                 resume_session=resume_session,
                 startup_warnings=startup_warnings,
             )

@@ -10,7 +10,7 @@ from typing import Any
 from anyio import Path
 
 import solveig.interface.themes as themes
-from solveig.llm import APIType, ModelInfo, parse_api_type
+from solveig.api import APIType, ModelInfo, parse_api_type
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import default_json_serialize, parse_human_readable_size
 

@@ -21,9 +21,11 @@ from `ctx.deps` (`SolveigContext`) at call time rather than closing over them:
   the model sees.
 """
 
+import asyncio
 import json
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_ai import (
     Agent,
     ModelResponse,
@@ -31,16 +33,18 @@ from pydantic_ai import (
     RunContext,
 )
 from pydantic_ai.capabilities import Hooks
+from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
+from solveig.api import ProviderRef, get_model
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
-from solveig.exceptions import PluginException
+from solveig.exceptions import PluginException, UserCancel
 from solveig.interface import SolveigInterface
-from solveig.llm.api import ProviderRef, get_model
+from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
@@ -144,18 +148,21 @@ async def run_turn(
         deps=deps,
     ) as run:
 
-        def reconcile() -> None:
+        async def sync() -> None:
+            # Fold pydantic-ai's own request object for the prompt into the echo
+            # id (idempotent) so it isn't mounted twice, then reconcile the
+            # conversation to the run's authoritative messages.
             messages = run.all_messages()
             if len(messages) > anchor:
                 conversation.reidentify(echo_id, messages[anchor])
+            await conversation.adopt(messages)
 
         try:
             async for node in run:
                 if deps.config.stream and Agent.is_model_request_node(node):
                     # Stream this response token-by-token into a live entry.
                     async with node.stream(run.ctx) as stream:
-                        reconcile()
-                        await conversation.adopt(run.all_messages())
+                        await sync()
                         await conversation.begin_stream(stream.response)
                         async for _event in stream:
                             await conversation.stream_updated()
@@ -174,9 +181,8 @@ async def run_turn(
                     # transcript renders this response (text/reasoning) itself
                     # when adopt appends it - no imperative display here; the
                     # tool groups then render live inside the tool_execute hook.
-                    reconcile()
                     await conversation.finalize_stream(node.model_response)
-                    await conversation.adopt(run.all_messages())
+                    await sync()
                     await _gate_and_interleave(
                         deps,
                         run,
@@ -184,11 +190,9 @@ async def run_turn(
                     )
                     continue
 
-                reconcile()
-                await conversation.adopt(run.all_messages())
+                await sync()
         finally:
-            reconcile()
-            await conversation.adopt(run.all_messages())
+            await sync()
 
 
 def _response_has_tool_calls(response: ModelResponse) -> bool:
@@ -215,6 +219,76 @@ async def _gate_and_interleave(
     # round (priority='asap').
     while (queued := await interface.try_dequeue_pending()) is not None:
         run.enqueue(queued, priority="asap")
+
+
+async def run_turn_with_retry(
+    config: SolveigConfig,
+    provider_ref: ProviderRef,
+    interface: SolveigInterface,
+    conversation: Conversation,
+    session_manager: SessionManager,
+    system_prompt: str,
+    prompt: str,
+    model: Model | None = None,
+) -> bool:
+    """Drive one conversation turn (build the per-turn Agent + run_turn) with
+    retry on API failure. Returns True once the turn completes, False if it was
+    cancelled or the user declined to retry.
+
+    Sequential tool execution: Solveig's consent flow (ask_choice/with_group) is
+    single-flight, but pydantic-ai runs a turn's tool calls concurrently by
+    default, which two consent-requiring tools racing on the same interface
+    state cannot tolerate. `parallel_tool_call_execution_mode("sequential")`
+    just needs to be active in the ambient context around the run_turn await.
+    Cancellation is owned per-phase inside agent.py (model request / tool exec),
+    not wrapped here, so Ctrl+C/Esc cancels precisely what's running."""
+    baseline = len(conversation.messages)
+    while True:
+        await asyncio.sleep(0)
+
+        # On a retry, drop whatever the previous failed attempt added (the
+        # optimistic-echo prompt + any partial responses) so this attempt starts
+        # from the same clean state. A cancel returns below without looping, so a
+        # cancelled turn keeps its partial.
+        if len(conversation.messages) > baseline:
+            await conversation.truncate_from(conversation.ids[baseline])
+
+        agent = build_agent(config, provider_ref, system_prompt, model=model)
+        deps = SolveigContext(
+            config=config,
+            interface=interface,
+            conversation=conversation,
+            session_manager=session_manager,
+        )
+        try:
+            with Agent.parallel_tool_call_execution_mode("sequential"):
+                await run_turn(agent, conversation, deps, prompt)
+            return True
+        except (asyncio.CancelledError, UserCancel):
+            await interface.display_info("Request cancelled")
+            return False
+        except (UnexpectedModelBehavior, UserError, ValidationError) as e:
+            await interface.display_error(str(e))
+        except Exception as e:
+            await interface.display_error(f"{e.__class__.__name__}: {e}")
+
+        try:
+            if not await _ask_retry(interface):
+                return False
+        except UserCancel:
+            return False
+
+
+async def _ask_retry(interface: SolveigInterface) -> bool:
+    choice = await interface.ask_choice(
+        "The API call failed. Do you want to retry?",
+        choices=[
+            "Yes, send the same message",
+            "No, add a new message or run a sub-command",
+        ],
+        add_cancel=False,  # "No" already stops everything
+    )
+    return choice == 0
 
 
 def _tool_instance(args: dict[str, Any]) -> BaseTool | None:

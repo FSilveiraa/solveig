@@ -18,7 +18,6 @@ from pydantic_ai.messages import (
 from solveig import SolveigConfig
 from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
-from solveig.llm.request_manager import RequestManager
 from solveig.run import run_async
 from solveig.sessions.manager import SessionManager
 from solveig.utils.file import Filesystem
@@ -160,14 +159,13 @@ async def run_async_mock(
 
     mock_model = create_mock_model(*mock_messages, sleep_seconds=sleep_seconds)
     config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
-    # model="fake-model" is a display-only placeholder - RequestManager's
+    # model="fake-model" is a display-only placeholder - the injected mock model.s
     # injected `model=mock_model` bypasses real model resolution for the agent
     # itself, but config.model still drives the stats bar and setup_loop's
     # startup fetch_and_apply_model_info() call, so leaving the user's real
     # configured model name here would be misleading (and could trigger a real
     # API lookup against it).
     config = config.with_(plugins={**config.plugins, "tree": {}}, model="fake-model")
-    request_manager = RequestManager(config, model=mock_model)
     interface = DemoInterface(
         theme=config.theme,
         code_theme=config.code_theme,
@@ -179,7 +177,7 @@ async def run_async_mock(
             config=config,
             user_prompt=user_prompt,
             interface=interface,
-            request_manager=request_manager,
+            model=mock_model,
             resume_session=resume,
         )
     finally:

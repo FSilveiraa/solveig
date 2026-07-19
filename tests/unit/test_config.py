@@ -6,8 +6,8 @@ from pathlib import PurePath
 
 import pytest
 
+from solveig.api import APIType
 from solveig.config import SolveigConfig
-from solveig.llm import APIType
 from tests.mocks import DEFAULT_CONFIG
 
 pytestmark = pytest.mark.anyio

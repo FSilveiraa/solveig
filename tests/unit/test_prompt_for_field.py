@@ -2,9 +2,9 @@
 
 import pytest
 
+from solveig.api import API_TYPES
 from solveig.config.editor import prompt_for_field
 from solveig.interface import themes
-from solveig.llm import API_TYPES
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio

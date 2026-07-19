@@ -10,8 +10,8 @@ import typing
 from collections.abc import Callable
 from typing import Any
 
+from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.interface import SolveigInterface, themes
-from solveig.llm.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.utils.misc import parse_human_readable_size
 
 from .config import SolveigConfig

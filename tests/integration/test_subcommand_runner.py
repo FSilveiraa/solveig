@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from solveig.api import ProviderRef
 from solveig.conversation import Conversation
-from solveig.llm import ProviderRef
 from solveig.subcommand.runner import SubcommandRunner
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
