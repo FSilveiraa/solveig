@@ -221,6 +221,13 @@ class ConversationArea(ScrollableContainer):
             background: {user_background.hex};
         }}
 
+        /* Reactive transcript mounts comments flat (no section container), so
+           the user-turn tint lives on the comment itself. */
+        .role-user {{
+            background: {user_background.hex};
+            padding: 1 1 0 1;
+        }}
+
         .group {{
             height: auto;
             margin: 1 0 0 0;

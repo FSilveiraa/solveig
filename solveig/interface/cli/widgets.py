@@ -74,6 +74,9 @@ class EditableComment(Comment, EditableMessage):
         self.message_id = message_id
         self.part_index = part_index
         self.role = role
+        # Role class carries the section tint (user turns get a lighter band),
+        # now that comments mount flat rather than inside a tinted container.
+        self.add_class(f"role-{role}")
 
     def compose(self):
         yield Markdown(f"🗩 ⠀{self.comment}")
