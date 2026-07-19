@@ -71,8 +71,16 @@ class RequestManager:
         Returns True once the turn completes, or None if the request was
         cancelled or the user chose not to retry after a failure.
         """
+        baseline = len(conversation.messages)
         while True:
             await asyncio.sleep(0)
+
+            # On a retry, drop whatever the previous failed attempt added (the
+            # optimistic-echo prompt + any partial responses) so this attempt
+            # starts from the same clean state as the first. A cancel returns
+            # below without looping, so a cancelled turn keeps its partial.
+            if len(conversation.messages) > baseline:
+                await conversation.truncate_from(conversation.ids[baseline])
 
             agent = build_agent(
                 config,

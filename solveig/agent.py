@@ -31,7 +31,7 @@ from pydantic_ai import (
     RunContext,
 )
 from pydantic_ai.capabilities import Hooks
-from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
@@ -125,24 +125,36 @@ async def run_turn(
     loop owns reconciliation into the reactive Conversation and the autonomy
     pause / interjection as plain lines.
 
-    Adopts by object identity after every node so each new message mounts
-    exactly once (pydantic-ai preserves the identity of the history we hand
-    in, and all_messages() grows monotonically). A finally adopts once more so
-    a mid-run cancel commits whatever completed (spec §8)."""
+    The user's prompt is appended up front so it renders instantly (optimistic
+    echo) rather than only when the model run surfaces it. pydantic-ai creates
+    its own equal-content request object for the prompt during the run;
+    `reconcile()` folds that into the echo's id so `adopt` never mounts a
+    duplicate. Everything else adopts by object identity, and a finally adopts
+    once more so a mid-run cancel commits whatever completed (spec §8)."""
+    echo_id = await conversation.append(
+        ModelRequest(parts=[UserPromptPart(content=prompt)])
+    )
+    history = list(conversation.messages[:-1])  # everything before the echo
+    anchor = len(history)  # pydantic-ai's own copy of the prompt lands here
+
     async with agent.iter(
         prompt,
-        message_history=list(conversation.messages),
+        message_history=history,
         usage=conversation.usage,
         deps=deps,
     ) as run:
+
+        def reconcile() -> None:
+            messages = run.all_messages()
+            if len(messages) > anchor:
+                conversation.reidentify(echo_id, messages[anchor])
+
         try:
             async for node in run:
                 if deps.config.stream and Agent.is_model_request_node(node):
                     # Stream this response token-by-token into a live entry.
-                    # Inside node.stream(), the user/tool-return request is
-                    # already in all_messages(), so adopting here orders it
-                    # BEFORE the streamed response entry.
                     async with node.stream(run.ctx) as stream:
+                        reconcile()
                         await conversation.adopt(run.all_messages())
                         await conversation.begin_stream(stream.response)
                         async for _event in stream:
@@ -162,6 +174,7 @@ async def run_turn(
                     # transcript renders this response (text/reasoning) itself
                     # when adopt appends it - no imperative display here; the
                     # tool groups then render live inside the tool_execute hook.
+                    reconcile()
                     await conversation.finalize_stream(node.model_response)
                     await conversation.adopt(run.all_messages())
                     await _gate_and_interleave(
@@ -171,8 +184,10 @@ async def run_turn(
                     )
                     continue
 
+                reconcile()
                 await conversation.adopt(run.all_messages())
         finally:
+            reconcile()
             await conversation.adopt(run.all_messages())
 
 

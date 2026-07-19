@@ -89,6 +89,15 @@ class Conversation:
         for observer in self._observers:
             await observer.truncated_from(message_id)
 
+    def reidentify(self, message_id: MessageId, message: ModelMessage) -> None:
+        """Silently swap the object stored under an existing id (no observer
+        event). Used for optimistic echo: we mount the user's prompt instantly
+        under `message_id`, then fold pydantic-ai's own equal-content request
+        object into that same id so `adopt` sees it as already-present (no
+        duplicate) and the mounted widget stays put."""
+        if message_id in self._entries:
+            self._entries[message_id] = message
+
     async def adopt(self, messages: Sequence[ModelMessage]) -> None:
         """Reconcile to pydantic-ai's authoritative message list. A message
         already held (by object identity) keeps its id; any genuinely-new
