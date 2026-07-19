@@ -60,10 +60,13 @@ async def replay_tool_call(
         except ValidationError:
             tool_cls = None
 
+    # Replayed tool groups start collapsed: a resumed session is historical, so
+    # the result body is folded away by default (same as a live run finishing
+    # under the default auto_collapse_tools) - the user expands what they want.
     if tool_cls is None:
-        async with interface.with_group(call.tool_name) as group:
+        async with interface.with_group(call.tool_name, auto_collapse=True) as group:
             await result.display_content(group)
         return
 
-    async with interface.with_group(instance.title) as group:
+    async with interface.with_group(instance.title, auto_collapse=True) as group:
         await instance.replay(group, result)
