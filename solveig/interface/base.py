@@ -18,6 +18,7 @@ from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
+    from solveig.interface.themes import Palette
     from solveig.sessions.manager import SessionManager
     from solveig.subcommand.runner import SubcommandRunner
 
@@ -65,6 +66,12 @@ class SolveigInterface(ABC):
     _request_task_stack_ref: list[asyncio.Task] | None = None
     _root_ref: SolveigInterface | None = None
     _choice_lock_ref: asyncio.Lock | None = None
+
+    def set_theme(self, theme: Palette) -> None:
+        """Re-theme the live interface (the colours used for both CSS and Rich
+        markup). Concrete UIs override this; a headless interface leaves it as
+        the no-op default."""
+        return None
 
     @property
     def _root(self) -> SolveigInterface:

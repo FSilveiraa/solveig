@@ -282,38 +282,38 @@ class InputBar(Container):
             self._text_input.focus()
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for this widget container."""
-        return f"""
-        InputBar {{
+        return """
+        InputBar {
             height: auto;
             margin: 0;
-        }}
+        }
 
-        InputBar > GrowingInput {{
+        InputBar > GrowingInput {
             height: auto;
             min-height: 3;
-            color: {theme.text};
-            background: {theme.background};
-            border: solid {theme.input};
+            color: $foreground;
+            background: $background;
+            border: solid $input;
             margin: 0;
-        }}
+        }
 
-        InputBar > OptionList {{
+        InputBar > OptionList {
             height: auto;
-            color: {theme.text};
-            background: {theme.background};
-            border: solid {theme.box};
+            color: $foreground;
+            background: $background;
+            border: solid $box;
             margin: 0;
-        }}
+        }
 
-        InputBar > OptionList > *.option-list--option-highlighted {{
-            background: {theme.input};
-        }}
+        InputBar > OptionList > *.option-list--option-highlighted {
+            background: $input;
+        }
 
-        InputBar > Static {{
+        InputBar > Static {
             height: 1;
-            color: {theme.input};
+            color: $input;
             margin: 0;
-        }}
+        }
         """

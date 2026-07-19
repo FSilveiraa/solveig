@@ -247,6 +247,14 @@ async def _hook_max_context_changed(
     await interface.update_stats(max_context=config.max_context)
 
 
+async def _hook_theme_changed(
+    config: SolveigConfig,
+    provider_ref: ProviderRef,
+    interface: SolveigInterface,
+) -> None:
+    interface.set_theme(config.theme)
+
+
 # ---------------------------------------------------------------------------
 # Hook registry
 # ---------------------------------------------------------------------------
@@ -256,6 +264,7 @@ _HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "max_context": _hook_max_context_changed,
+    "theme": _hook_theme_changed,
     # NOTE: no_commands needs no hook - the FilteredToolset's is_tool_active reads
     # ctx.deps.config live per step, so toggling it takes effect on the next step
     # with no rebuild (rebuild is for membership changes only). briefing needs no

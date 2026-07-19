@@ -9,7 +9,6 @@ from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import EditableMessage
-from solveig.interface.themes import Palette
 from solveig.utils.misc import copy_to_clipboard
 
 from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
@@ -31,41 +30,41 @@ class Comment(Static):
         yield CopyButton(self.comment)
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        return f"""
-        .text_comment {{
+    def get_css(cls) -> str:
+        return """
+        .text_comment {
             /* Section content: 1 on all four sides. Vertically this collapses
                (max) with neighbours - a section header's top-2 wins at a
                section boundary, giving 2 between sections and 1 within. */
             margin: 1;
-        }}
+        }
 
-        Markdown {{
-            color: {theme.text};
+        Markdown {
+            color: $foreground;
             padding: 0;
-        }}
+        }
 
-        MarkdownBlock:last-of-type {{
+        MarkdownBlock:last-of-type {
             margin-bottom: 0;
-        }}
+        }
 
         /* Action buttons on one row, with a top border (in the box-border
-           colour) separating them from the message text above. width: 100% so
-           the separator spans the full comment; height: auto so the row is just
-           the 1-row buttons plus that border. */
-        .comment-actions {{
-            width: 100%;
+           colour) separating them from the message text above. width: auto so
+           the row - and its separator border - is only as wide as the buttons,
+           not the full comment; height: auto so it's just the 1-row buttons. */
+        .comment-actions {
+            width: auto;
             height: auto;
-            border-top: solid {theme.box};
-        }}
+            border-top: solid $box;
+        }
 
         /* Each button only as wide as its label, so they pack left-to-right
            in the row. (MessageButton is action-row-only and set globally; the
            shared CopyButton is scoped here so box/title-bar copies keep their
            own right-alignment.) */
-        .comment-actions CopyButton {{
+        .comment-actions CopyButton {
             width: auto;
-        }}
+        }
         """
 
 
@@ -181,18 +180,18 @@ class CopyButton(Static):
         self.set_timer(1.0, lambda: self.update(_content))
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        return f"""
-        CopyButton {{
-            color: {theme.text};
+    def get_css(cls) -> str:
+        return """
+        CopyButton {
+            color: $foreground;
             text-align: right;
             padding: 0 1;
             height: 1;
-        }}
+        }
 
-        CopyButton:hover {{
-            color: {theme.section};
-        }}
+        CopyButton:hover {
+            color: $section;
+        }
         """
 
 
@@ -233,11 +232,11 @@ class SectionHeader(Static):
         self.update(f"{header}{line}")
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for SectionHeader."""
-        return f"""
-        SectionHeader {{
-            color: {theme.section};
+        return """
+        SectionHeader {
+            color: $section;
             text-style: bold;
             /* Spacing model: 2 rows above a section, 1 below. Textual collapses
                adjacent sibling margins to the max, so this composes with the
@@ -246,10 +245,10 @@ class SectionHeader(Static):
             margin: 2 0 1 0;
             text-wrap: nowrap;
             text-overflow: clip;
-        }}
+        }
 
         /* No leading gap at the very top of the scroll. */
-        SectionHeader:first-of-type {{
+        SectionHeader:first-of-type {
             margin-top: 0;
-        }}
+        }
         """

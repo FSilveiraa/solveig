@@ -5,7 +5,6 @@ from pathlib import PurePath
 
 from textual.widgets import Tree
 
-from solveig.interface.themes import Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import convert_size_to_human_readable
 
@@ -79,23 +78,23 @@ class TreeDisplay(Tree):
                 parent_node.add_leaf(label)
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for tree display."""
-        return f"""
-        TreeDisplay {{
-            border: solid {theme.box};
-            background: {theme.background};
-            color: {theme.text};
+        return """
+        TreeDisplay {
+            border: solid $box;
+            background: $background;
+            color: $foreground;
             margin: 1;
             padding: 0 1;
             height: auto;
-        }}
+        }
 
-        TreeDisplay > .tree--guides {{
-            color: {theme.text};
-        }}
+        TreeDisplay > .tree--guides {
+            color: $foreground;
+        }
 
-        TreeDisplay > .tree--label {{
-            color: {theme.text};
-        }}
+        TreeDisplay > .tree--label {
+            color: $foreground;
+        }
         """

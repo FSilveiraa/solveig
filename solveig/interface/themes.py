@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 
 from pygments.styles import STYLE_MAP
+from textual.color import Color
+from textual.theme import Theme as TextualTheme
 
 
 def _blend(hex_a: str, hex_b: str, t: float) -> str:
@@ -173,6 +175,48 @@ THEMES = {
         monochrome,
     ]
 }
+
+
+def _user_turn_bg(background: str) -> str:
+    """The subtly-tinted background for a user turn: nudge the base background
+    darker (on a light theme) or lighter (on a dark one)."""
+    bg = Color.parse(background)
+    variant = bg.darken(0.08) if bg.brightness >= 0.5 else bg.lighten(0.08)
+    return variant.hex
+
+
+def to_textual_theme(palette: Palette) -> TextualTheme:
+    """A registered Textual `Theme` mirroring a `Palette`. The standard slots
+    (background/foreground/primary/warning/error) fill Textual's own chrome, and
+    every Solveig-specific colour is exposed as a CSS variable under its own name
+    so widget CSS can reference `$section`/`$box`/`$group`/`$input`/
+    `$group-pending`/`$user-turn-bg` (with `$background`/`$foreground`/`$primary`/
+    `$warning`/`$error` coming from the slots). Switching themes at runtime is
+    then just `app.theme = palette.name` - Textual re-resolves every `$var`."""
+    bg = Color.parse(palette.background)
+    return TextualTheme(
+        name=palette.name,
+        primary=palette.info,
+        secondary=palette.section,
+        accent=palette.section,
+        foreground=palette.text,
+        background=palette.background,
+        success=palette.info,
+        warning=palette.warning,
+        error=palette.error,
+        surface=palette.background,
+        panel=palette.background,
+        dark=bg.brightness < 0.5,
+        variables={
+            "section": palette.section,
+            "box": palette.box,
+            "group": palette.group,
+            "input": palette.input,
+            "group-pending": palette.group_pending or palette.group,
+            "user-turn-bg": _user_turn_bg(palette.background),
+        },
+    )
+
 
 DEFAULT_CODE_THEME = "coffee"
 CODE_THEMES = set(STYLE_MAP.keys())

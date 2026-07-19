@@ -7,7 +7,7 @@ from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
 from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import DEFAULT_THEME, Palette
+from solveig.interface.themes import DEFAULT_THEME, THEMES, Palette, to_textual_theme
 from solveig.utils.misc import copy_to_clipboard
 
 from .conversation import ConversationArea
@@ -22,6 +22,26 @@ class SolveigTextualApp(TextualApp):
     """
     Minimal TextualApp subclass with only essential Solveig customizations.
     """
+
+    # CSS is theme-independent (colours come from $variables resolved against the
+    # active Textual theme), so it's a static class attribute assembled once - no
+    # per-instance rebuild, and runtime theme changes are handled by `self.theme`.
+    CSS = (
+        """
+        Screen {
+            background: $background;
+            color: $foreground;
+        }
+
+        .info_message { color: $primary; }
+        .warning_message { color: $warning; }
+        .error_message { color: $error; }
+        """
+        + ConversationArea.get_css()
+        + InputBar.get_css()
+        + StatsBar.get_css()
+        + QueuedMessagesDisplay.get_css()
+    )
 
     def __init__(
         self,
@@ -41,22 +61,12 @@ class SolveigTextualApp(TextualApp):
         # cancellation checks (on_key/on_event) and stat-cell click handling.
         self._interface_ref = interface_ref
 
-        # Set CSS as class attribute for Textual
-        SolveigTextualApp.CSS = f"""
-        Screen {{
-            background: {theme.background};
-            color: {theme.text};
-        }}
-
-        .info_message {{ color: {theme.info}; }}
-        .warning_message {{ color: {theme.warning}; }}
-        .error_message {{ color: {theme.error}; }}
-
-        {ConversationArea.get_css(theme)}
-        {InputBar.get_css(theme)}
-        {StatsBar.get_css(theme)}
-        {QueuedMessagesDisplay.get_css(theme)}
-        """
+        # Register every palette as a Textual theme and select the configured
+        # one, so the widget CSS's $section/$box/$group/... variables resolve and
+        # switching themes at runtime is just `self.theme = name`.
+        for palette in THEMES.values():
+            self.register_theme(to_textual_theme(palette))
+        self.theme = theme.name
 
         # Cached widget references (set in on_mount)
         self._conversation_area: ConversationArea

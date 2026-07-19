@@ -2,12 +2,10 @@
 
 from rich.syntax import Syntax
 from textual import events
-from textual.color import Color
 from textual.containers import ScrollableContainer, Vertical
 from textual.dom import DOMNode
 from textual.widgets import Collapsible, Markdown, Static
 
-from solveig.interface.themes import Palette
 from solveig.utils.file import FileMetadata
 
 from .buttons import MessageButton
@@ -190,99 +188,95 @@ class ConversationArea(ScrollableContainer):
         self.call_after_refresh(self.scroll_end)
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        """Generate CSS for conversation area and group-related widgets."""
-        background = Color.parse(theme.background)
-        user_background = (
-            background.darken(0.08)
-            if background.brightness >= 0.5
-            else background.lighten(0.08)
-        )
-        return f"""
-        ConversationArea {{
+    def get_css(cls) -> str:
+        """CSS for the conversation area and group-related widgets. `$user-turn-bg`
+        (the tinted user background) is a theme variable computed per palette."""
+        return (
+            """
+        ConversationArea {
             height: 1fr;
             scrollbar-gutter: stable;
             scrollbar-size: 1 1;
-            scrollbar-color: {theme.box};
-            scrollbar-color-hover: {theme.section};
-            scrollbar-color-active: {theme.section};
-            scrollbar-background: {theme.background};
-            scrollbar-background-hover: {theme.background};
-            scrollbar-background-active: {theme.background};
+            scrollbar-color: $box;
+            scrollbar-color-hover: $section;
+            scrollbar-color-active: $section;
+            scrollbar-background: $background;
+            scrollbar-background-hover: $background;
+            scrollbar-background-active: $background;
             /* Trailing space is the last child's own bottom margin (1); padding
                here would add to it (padding never collapses) and give 2. */
             padding: 0;
-        }}
+        }
 
         /* Imperative-path section containers only - the live/reactive transcript
            mounts comments flat and spaces them via the role/box/group margins
            below, not here. Kept for the tint; spacing lives on the children. */
-        .section-user, .section-assistant {{
+        .section-user, .section-assistant {
             height: auto;
-        }}
+        }
 
-        .section-user {{
-            background: {user_background.hex};
-        }}
+        .section-user {
+            background: $user-turn-bg;
+        }
 
         /* The user-turn tint lives on the comment TEXT only, not the action
            buttons under it - so tint the Markdown child, not the whole
            EditableComment. Horizontal inset comes from .text_comment's margin;
            this padding is just breathing room for the text inside the tint. */
-        .role-user > Markdown {{
-            background: {user_background.hex};
+        .role-user > Markdown {
+            background: $user-turn-bg;
             padding: 0 1;
-        }}
+        }
 
-        .group {{
+        .group {
             height: auto;
             /* Section content: 1 on all four sides. Collapses with siblings;
                header top-2 wins between sections. */
             margin: 1;
             padding-bottom: 0;
-        }}
+        }
 
-        .group > Contents {{
+        .group > Contents {
             border: none;
-            border-left: heavy {theme.group};
+            border-left: heavy $group;
             padding: 0 0 0 1;
             height: auto;
-        }}
+        }
 
-        .group_end {{
-            color: {theme.group};
-        }}
+        .group_end {
+            color: $group;
+        }
 
-        .group_pending {{
-            color: {theme.group_pending};
-        }}
+        .group_pending {
+            color: $group-pending;
+        }
 
-        .group > DividedCollapsibleTitleBar {{
-            color: {theme.group};
+        .group > DividedCollapsibleTitleBar {
+            color: $group;
             text-style: bold;
             padding: 0;
-        }}
+        }
 
-        .group.-hovering > DividedCollapsibleTitleBar {{
-            color: {theme.section};
-        }}
+        .group.-hovering > DividedCollapsibleTitleBar {
+            color: $section;
+        }
 
-        .group.-hovering > Contents {{
-            border-left: heavy {theme.section};
-        }}
+        .group.-hovering > Contents {
+            border-left: heavy $section;
+        }
 
-        .group.-hovering > .group_end {{
-            color: {theme.section};
-        }}
+        .group.-hovering > .group_end {
+            color: $section;
+        }
 
-        .group.-hovering > .group_pending {{
-            color: {theme.section};
-        }}
-
-        {Comment.get_css(theme)}
-        {MessageButton.get_css(theme)}
-        {CustomCollapsible.get_css(theme)}
-        {CollapsibleTextBox.get_css(theme)}
-        {SectionHeader.get_css(theme)}
-        {TreeDisplay.get_css(theme)}
+        .group.-hovering > .group_pending {
+            color: $section;
+        }
         """
+            + Comment.get_css()
+            + MessageButton.get_css()
+            + CustomCollapsible.get_css()
+            + CollapsibleTextBox.get_css()
+            + SectionHeader.get_css()
+            + TreeDisplay.get_css()
+        )

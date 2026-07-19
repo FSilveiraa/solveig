@@ -115,51 +115,51 @@ class QueuedMessagesDisplay(Vertical):
             self._refresh_messages()
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for the queued messages widget."""
-        return f"""
-        QueuedMessagesDisplay {{
+        return """
+        QueuedMessagesDisplay {
             height: auto;
             margin: 1 0 0 0;
             padding: 0;
-            border-left: solid {theme.input};
-            border-top: solid {theme.input};
-            border-right: solid {theme.input};
-        }}
+            border-left: solid $input;
+            border-top: solid $input;
+            border-right: solid $input;
+        }
 
-        QueuedMessagesDisplay Collapsible {{
-            background: {theme.background};
+        QueuedMessagesDisplay Collapsible {
+            background: $background;
             border: none;
             margin: 0;
             padding: 0;
-        }}
+        }
 
-        QueuedMessagesDisplay CollapsibleTitle {{
-            background: {theme.background};
-            color: {theme.info};
+        QueuedMessagesDisplay CollapsibleTitle {
+            background: $background;
+            color: $primary;
             padding: 0 1;
             margin: 0;
             height: 1;
-        }}
+        }
 
-        QueuedMessagesDisplay CollapsibleTitle:hover {{
-            color: {theme.section};
-        }}
+        QueuedMessagesDisplay CollapsibleTitle:hover {
+            color: $section;
+        }
 
-        QueuedMessagesDisplay .queued-messages-content {{
+        QueuedMessagesDisplay .queued-messages-content {
             height: auto;
             margin: 0 0 0 1;
             padding: 0;
-        }}
+        }
 
-        QueuedMessagesDisplay .queued-message-item {{
+        QueuedMessagesDisplay .queued-message-item {
             height: 1;
             margin: 0;
             padding: 0;
-        }}
+        }
 
-        QueuedMessagesDisplay .queued-message-text {{
-            color: {theme.text};
+        QueuedMessagesDisplay .queued-message-text {
+            color: $foreground;
             text-style: dim;
-        }}
+        }
         """

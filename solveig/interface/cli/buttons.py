@@ -9,7 +9,6 @@ from textual.events import Click
 from textual.widgets import Static
 
 from solveig.interface.base import EditableMessage
-from solveig.interface.themes import Palette
 
 
 class MessageButton(Static):
@@ -20,20 +19,20 @@ class MessageButton(Static):
         self.owner = owner
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        return f"""
-        MessageButton {{
-            color: {theme.text};
+    def get_css(cls) -> str:
+        return """
+        MessageButton {
+            color: $foreground;
             /* width: auto so each button is only as wide as its label, packing
                left-to-right in the action row instead of each taking full width. */
             width: auto;
             padding: 0 1;
             height: 1;
-        }}
+        }
 
-        MessageButton:hover {{
-            color: {theme.section};
-        }}
+        MessageButton:hover {
+            color: $section;
+        }
         """
 
 

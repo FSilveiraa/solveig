@@ -14,8 +14,6 @@ from textual.widgets import Collapsible, Markdown, Static
 # private module (tracked in CLAUDE.md "Known Justified Type Hacks").
 from textual.widgets._collapsible import CollapsibleTitle
 
-from solveig.interface.themes import Palette
-
 from ..base import MutableTextBox
 from .widgets import CopyButton
 
@@ -50,34 +48,34 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
         )
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        return f"""
+    def get_css(cls) -> str:
+        return """
         /* Custom title bar responsive layout */
-        DividedCollapsibleTitleBar {{
+        DividedCollapsibleTitleBar {
             width: 100%;
             height: 1;
-            color: {theme.text};
-            background: {theme.background};
-        }}
+            color: $foreground;
+            background: $background;
+        }
 
-        .title-left {{
+        .title-left {
             text-align: left;
             width: 1fr;
-        }}
+        }
 
-        .title-left:hover {{
-            color: {theme.section};
-        }}
+        .title-left:hover {
+            color: $section;
+        }
 
-        .title-center {{
+        .title-center {
             text-align: center;
             width: auto;
-        }}
+        }
 
-        .title-right {{
+        .title-right {
             text-align: right;
             width: 1fr;
-        }}
+        }
         """
 
     @property
@@ -170,22 +168,20 @@ class CustomCollapsible(Collapsible):
         )
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
-        return f"""
-            CustomCollapsible {{
-                background: {theme.background};
+    def get_css(cls) -> str:
+        return """
+            CustomCollapsible {
+                background: $background;
                 border: none;
                 margin: 0;
                 padding: 0;
-            }}
+            }
 
-            CustomCollapsible > Contents {{
+            CustomCollapsible > Contents {
                 padding: 0 1 0 1;
-                border-top: solid {theme.box};
-            }}
-
-            {DividedCollapsibleTitleBar.get_css(theme)}
-            """
+                border-top: solid $box;
+            }
+            """ + DividedCollapsibleTitleBar.get_css()
 
     def update_title(
         self,
@@ -277,24 +273,25 @@ class CollapsibleTextBox(Widget, MutableTextBox):
             parent = parent.parent
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for CollapsibleTextBox."""
-        return f"""
-        CollapsibleTextBox {{
+        return (
+            """
+        CollapsibleTextBox {
             /* Section content: 1 on all four sides. */
             margin: 1;
             height: auto;
             padding: 0 0;
-            border: solid {theme.box};
+            border: solid $box;
             border-title-style: bold;
-            color: {theme.text};
-            background: {theme.background};
-        }}
+            color: $foreground;
+            background: $background;
+        }
 
-        .italic {{
+        .italic {
             text-style: italic;
-        }}
-
-        {CustomCollapsible.get_css(theme)}
-        {CopyButton.get_css(theme)}
+        }
         """
+            + CustomCollapsible.get_css()
+            + CopyButton.get_css()
+        )

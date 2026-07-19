@@ -58,6 +58,12 @@ class LocalDisplay(SolveigInterface):
     def _container(self):
         raise NotImplementedError("Subclass must implement _container")
 
+    def set_theme(self, theme: Palette) -> None:
+        # Palette drives Rich markup (info/error colours); app.theme re-resolves
+        # the CSS $variables against the newly-selected Textual theme.
+        self.theme = theme
+        self.app.theme = theme.name
+
     async def _display_text(
         self, text: str, style: str = "text", prefix: str | None = None
     ) -> None:

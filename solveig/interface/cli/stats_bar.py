@@ -273,40 +273,40 @@ class StatsBar(Widget):
         self._table3.add_row(f"Price: {self.price}")
 
     @classmethod
-    def get_css(cls, theme: Palette) -> str:
+    def get_css(cls) -> str:
         """Generate CSS for stats bar."""
-        return f"""
-        StatsBar {{
+        return """
+        StatsBar {
             dock: bottom;
             height: auto;
             max-height: 8;
-            background: {theme.background};
-            color: {theme.text};
-            border: solid {theme.box};
-        }}
+            background: $background;
+            color: $foreground;
+            border: solid $box;
+        }
 
         /* Stats container responsive layout */
-        .stats-container {{
+        .stats-container {
             width: 100%;
             height: auto;
-        }}
+        }
 
-        .stats-table, .stats-table-final {{
+        .stats-table, .stats-table-final {
             overflow: hidden;
-            background: {theme.background};
-            color: {theme.text};
-        }}
+            background: $background;
+            color: $foreground;
+        }
 
-        .stats-table {{
-            border-right: solid {theme.box}
-        }}
+        .stats-table {
+            border-right: solid $box
+        }
 
         /* Cursor/hover are required for click-to-edit to fire, but shouldn't
            look visually distinct from a normal cell - the cursor position
            (defaulting to row 0) carries no meaning here. */
         .stats-table > .datatable--hover, .stats-table-final > .datatable--hover,
-        .stats-table > .datatable--cursor, .stats-table-final > .datatable--cursor {{
-            background: {theme.background};
-            color: {theme.text};
-        }}
+        .stats-table > .datatable--cursor, .stats-table-final > .datatable--cursor {
+            background: $background;
+            color: $foreground;
+        }
         """
