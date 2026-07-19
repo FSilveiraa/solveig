@@ -1,12 +1,12 @@
 """Textual materialization of the reactive transcript (Surface-1).
 
-Observes the Conversation and mounts CLOSED-content render nodes (user/assistant
-text, reasoning) as widgets into the ConversationArea, keyed by message_id.
+Observes the Conversation and mounts CLOSED-content parts (user/assistant text,
+reasoning) as widgets into the ConversationArea, keyed by message_id.
 
 Tool call/return parts are deliberately NOT rendered here: a tool is not a
-1:1-presentable concept (its display is a flow, not one widget), so the Presenter
-returns nothing for it and the tool owns its own display via execute()/replay().
-Never teach this transcript (or the Presenter) about tools.
+1:1-presentable concept (its display is a flow, not one widget), so
+`_make_widget` returns None for it and the tool owns its own display via
+execute()/replay(). Never teach this transcript about tools.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
+    TextPart,
+    ThinkingPart,
     ToolCallPart,
     UserPromptPart,
 )
@@ -23,16 +25,18 @@ from textual.widget import Widget
 from textual.widgets import Markdown as MarkdownWidget
 
 from solveig.conversation import Conversation, MessageId
-from solveig.interface.presenter import present_part
 from solveig.interface.reactive import ReactiveTranscript
-from solveig.interface.render import Markdown, Reasoning, RenderNode, Text
 from solveig.sessions.replay import build_returns_map, replay_tool_call
 
 from .collapsible_widgets import CollapsibleTextBox
 from .widgets import EditableComment, SectionHeader
 
 if TYPE_CHECKING:
-    from pydantic_ai.messages import ModelMessage
+    from pydantic_ai.messages import (
+        ModelMessage,
+        ModelRequestPart,
+        ModelResponsePart,
+    )
 
     from solveig.interface.base import SolveigInterface
     from solveig.sessions.manager import SessionManager
@@ -40,15 +44,27 @@ if TYPE_CHECKING:
     from .conversation import ConversationArea
 
 
-def _role_of(message: ModelMessage) -> str | None:
+def _role_of(message: ModelMessage | None) -> str | None:
     """user / assistant for closed conversational turns; None for a message
-    that carries no closed content of its own (e.g. a tool-return request)."""
+    that carries no closed content of its own (e.g. a tool-return request), or
+    for a missing message."""
     if isinstance(message, ModelResponse):
         return "assistant"
     if isinstance(message, ModelRequest) and any(
         isinstance(part, UserPromptPart) for part in message.parts
     ):
         return "user"
+    return None
+
+
+def _renderable_content(part: ModelRequestPart | ModelResponsePart) -> str | None:
+    """The non-empty text a conversational part should show, or None if it
+    carries nothing to render (empty, or not a conversational part - e.g. a
+    tool call/return)."""
+    if isinstance(part, UserPromptPart) and isinstance(part.content, str):
+        return part.content if part.content.strip() else None
+    if isinstance(part, (TextPart, ThinkingPart)):
+        return part.content if part.content.strip() else None
     return None
 
 
@@ -82,8 +98,7 @@ class TextualTranscript(ReactiveTranscript):
 
         returns = None
         for part_index, part in enumerate(message.parts):
-            node = present_part(part)
-            widget = self._make_widget(node, message_id, part_index, role)
+            widget = self._make_widget(part, message_id, part_index, role)
             if widget is not None:
                 await self._mount_widget(widget)
                 widgets.append(widget)
@@ -115,13 +130,13 @@ class TextualTranscript(ReactiveTranscript):
 
         rendered = 0
         for part_index, part in enumerate(message.parts):
-            node = present_part(part)
-            if node is None:
+            content = _renderable_content(part)
+            if content is None:
                 continue
             if rendered < len(content_widgets):
-                await self._update_widget(content_widgets[rendered], node)
+                await self._update_widget(content_widgets[rendered], content)
             else:
-                widget = self._make_widget(node, message_id, part_index, role)
+                widget = self._make_widget(part, message_id, part_index, role)
                 if widget is not None:
                     await self._mount_widget(widget)
                     existing.append(widget)
@@ -141,29 +156,33 @@ class TextualTranscript(ReactiveTranscript):
 
     def _make_widget(
         self,
-        node: RenderNode | None,
+        part: ModelRequestPart | ModelResponsePart,
         message_id: MessageId,
         part_index: int,
         role: str | None,
     ) -> Widget | None:
-        if isinstance(node, Text | Markdown):
-            return EditableComment(
-                node.content,
-                conversation=self.conversation,
-                session_manager=self._session_manager,
-                interface=self._interface,
-                message_id=message_id,
-                part_index=part_index,
-                role="user" if role == "user" else "assistant",
-            )
-        if isinstance(node, Reasoning):
+        """The one widget a conversational part becomes, or None if it carries
+        no closed content to show (empty, or a tool call/return - a tool owns
+        its own display). Reasoning -> collapsed box; user/assistant text ->
+        editable comment."""
+        content = _renderable_content(part)
+        if content is None:
+            return None
+        if isinstance(part, ThinkingPart):
             return CollapsibleTextBox(
-                node.content, title="Reasoning", italic=True, collapsed=True
+                content, title="Reasoning", italic=True, collapsed=True
             )
-        return None
+        return EditableComment(
+            content,
+            conversation=self.conversation,
+            session_manager=self._session_manager,
+            interface=self._interface,
+            message_id=message_id,
+            part_index=part_index,
+            role="user" if role == "user" else "assistant",
+        )
 
-    async def _update_widget(self, widget: Widget, node: RenderNode) -> None:
-        content = getattr(node, "content", "")
+    async def _update_widget(self, widget: Widget, content: str) -> None:
         if isinstance(widget, EditableComment):
             widget.comment = content
             for markdown in widget.query(MarkdownWidget):
@@ -177,7 +196,7 @@ class TextualTranscript(ReactiveTranscript):
         """The role of the last still-mounted role-bearing message, so the next
         mount emits a section header only on a genuine role change."""
         for message_id in reversed(self.conversation.ids):
-            role = _role_of(self.conversation.get(message_id))  # type: ignore[arg-type]
+            role = _role_of(self.conversation.get(message_id))
             if role is not None:
                 return role
         return None

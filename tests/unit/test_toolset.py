@@ -36,7 +36,6 @@ from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
-from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
@@ -55,15 +54,9 @@ def _clean_hooks():
 
 
 def _context(config, interface) -> SolveigContext:
-    """A `SolveigContext` with a fresh `Conversation`/`SessionManager` -
-    plumbing tests below don't assert on those, they just need real objects
-    since capabilities now read them from `ctx.deps` instead of closures."""
-    return SolveigContext(
-        config=config,
-        interface=interface,
-        conversation=Conversation(),
-        session_manager=SessionManager(config=config),
-    )
+    """A `SolveigContext` carrying just config + interface - what capabilities
+    read from `ctx.deps`."""
+    return SolveigContext(config=config, interface=interface)
 
 
 async def drive_tool_call(
@@ -169,9 +162,7 @@ async def test_as_tool_flattens_model_fields():
 
     await agent.run(
         "hi",
-        deps=SolveigContext(  # type: ignore[arg-type]
-            config=None, interface=None, conversation=None, session_manager=None
-        ),
+        deps=SolveigContext(config=None, interface=None),  # type: ignore[arg-type]
     )
 
     tool_defs = model.last_model_request_parameters.function_tools
@@ -433,12 +424,7 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
     interface = MockInterface()
     agent, model = _two_round_agent(config, interface)
     conv = Conversation()
-    deps = SolveigContext(
-        config=config,
-        interface=interface,
-        conversation=conv,
-        session_manager=SessionManager(config=config),
-    )
+    deps = SolveigContext(config=config, interface=interface)
 
     task = asyncio.create_task(run_turn(agent, conv, deps, "go"))
     # let it get through round 1 (the tool call) and reach the gate
@@ -469,12 +455,7 @@ async def test_comment_interleaving_drains_queue_without_blocking():
     interface.pending_queue.put_nowait("mid-run note")
     agent, _ = _two_round_agent(config, interface)
     conv = Conversation()
-    deps = SolveigContext(
-        config=config,
-        interface=interface,
-        conversation=conv,
-        session_manager=SessionManager(config=config),
-    )
+    deps = SolveigContext(config=config, interface=interface)
 
     await run_turn(agent, conv, deps, "go")
 

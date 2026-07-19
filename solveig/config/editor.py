@@ -256,14 +256,11 @@ _HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
     "model": _hook_model_changed,
     "max_context": _hook_max_context_changed,
-    # no_commands needs no hook - the FilteredToolset's is_tool_active reads
-    # ctx.deps.config live per step, so toggling it takes effect on the next
-    # step with no rebuild (rebuild is for membership changes only).
-    # briefing needs no hook - run.py recomputes the system prompt fresh
-    # every turn, so a changed briefing path just takes effect next request.
-    # Layer 2+: add_examples, add_os_info, system_prompt,
-    #           auto_allowed_paths, auto_execute_commands, plugins,
-    #           url, api_type, api_key, theme, code_theme
+    # NOTE: no_commands needs no hook - the FilteredToolset's is_tool_active reads
+    # ctx.deps.config live per step, so toggling it takes effect on the next step
+    # with no rebuild (rebuild is for membership changes only). briefing needs no
+    # hook either - run.py recomputes the system prompt fresh every turn. All other
+    # editable fields currently need no post-set hook.
 }
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,9 @@ from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
+
+# HACK: CollapsibleTitle has no public export in Textual 6.1 - import from the
+# private module (tracked in CLAUDE.md "Known Justified Type Hacks").
 from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.themes import Palette
@@ -178,7 +181,7 @@ class CustomCollapsible(Collapsible):
 
             CustomCollapsible > Contents {{
                 padding: 0 1 0 1;
-                border-top: {theme.box};
+                border-top: solid {theme.box};
             }}
 
             {DividedCollapsibleTitleBar.get_css(theme)}
@@ -278,7 +281,7 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         """Generate CSS for CollapsibleTextBox."""
         return f"""
         CollapsibleTextBox {{
-            /* Section content: 1 on all four sides (was missing the right). */
+            /* Section content: 1 on all four sides. */
             margin: 1;
             height: auto;
             padding: 0 0;

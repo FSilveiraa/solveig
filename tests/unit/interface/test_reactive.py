@@ -2,7 +2,6 @@ import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from solveig.conversation import Conversation
-from solveig.interface.render import Markdown, Text
 from tests.mocks.reactive import RecordingTranscript
 
 pytestmark = pytest.mark.anyio
@@ -12,7 +11,7 @@ async def test_append_mounts_presented_nodes():
     conv = Conversation()
     view = RecordingTranscript(conv)
     mid = await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
-    assert view.mounted == {mid: [Text("hi")]}
+    assert view.mounted == {mid: ["hi"]}
     assert view.events == [("mount", mid)]
 
 
@@ -22,8 +21,8 @@ async def test_edit_rerenders_that_message_only():
     a = await conv.append(ModelResponse(parts=[TextPart(content="one")]))
     b = await conv.append(ModelResponse(parts=[TextPart(content="two")]))
     await conv.edit(a, 0, "ONE")
-    assert view.mounted[a] == [Markdown("ONE")]
-    assert view.mounted[b] == [Markdown("two")]
+    assert view.mounted[a] == ["ONE"]
+    assert view.mounted[b] == ["two"]
     assert view.events[-1] == ("rerender", a)
 
 

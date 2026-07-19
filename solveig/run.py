@@ -74,8 +74,7 @@ async def setup_loop(
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
 
-    # If there is no model set, just display a warning and await input. Once the user sets a model,
-    # it will run the
+    # No model set: warn and wait for the user to configure one.
     if config.model is None:
         await interface.display_warning(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
@@ -148,7 +147,6 @@ async def main_loop(
             provider_ref=provider_ref,
             interface=interface,
             conversation=conversation,
-            session_manager=session_manager,
             system_prompt=system_prompt_text,
             prompt=prompt,
             model=model,

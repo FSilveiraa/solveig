@@ -179,7 +179,6 @@ class PersistentShell:
 
     async def restart(self) -> None:
         """Kill and restart the shell, restoring current_cwd."""
-        # cwd = self.current_cwd
         if self.proc:
             try:
                 self.proc.kill()

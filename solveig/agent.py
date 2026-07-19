@@ -7,8 +7,8 @@ wrapper (model + toolset + capabilities) is rebuilt, so runtime config changes
 without restarting anything.
 
 The `Agent` is given two per-turn `Hooks` capabilities (`build_*_capability`
-below); both read live `config`/`interface`/`conversation`/`session_manager`
-from `ctx.deps` (`SolveigContext`) at call time rather than closing over them:
+below); both read live `config`/`interface` from `ctx.deps` (`SolveigContext`)
+at call time rather than closing over them:
 
 - `build_loop_capability` - just the "Thinking" animation around each model
   request (`model_request` hook). The node-lifecycle hooks don't fire under
@@ -22,7 +22,6 @@ from `ctx.deps` (`SolveigContext`) at call time rather than closing over them:
 """
 
 import asyncio
-import json
 from typing import Any
 
 from pydantic import ValidationError
@@ -44,10 +43,9 @@ from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, UserCancel
 from solveig.interface import SolveigInterface
-from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
-from solveig.tools.orchestration import run_tool_and_hooks
+from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
 from solveig.tools.result import ToolResult
 
 
@@ -63,10 +61,10 @@ def build_agent(
     directly (e.g. `FunctionModel`/`TestModel`), bypassing `provider_ref`'s
     Provider/API-key resolution entirely.
 
-    Capabilities read everything they need (`interface`, `conversation`,
-    `session_manager`, `config`) from `ctx.deps` (`SolveigContext`) at call
-    time rather than closing over them here, so the same live values are
-    available on both the loop-level and tool-execution hooks below.
+    Capabilities read everything they need (`config`, `interface`) from
+    `ctx.deps` (`SolveigContext`) at call time rather than closing over them
+    here, so the same live values are available on both the loop-level and
+    tool-execution hooks below.
     """
     if model is not None:
         resolved_model = model
@@ -90,8 +88,24 @@ def build_agent(
     )
 
 
+def _thinking(interface: SolveigInterface, awaitable: Any, timeout: float | None):
+    """The single 'Thinking' animation + cancellable policy (status text +
+    timeout), invoked from the two irreducible sites below.
+
+    Why two sites and not one: pydantic-ai's documented streaming pattern is
+    `async for node in run` with `node.stream()` inside. A NON-streamed model
+    request therefore executes inside the loop's `__anext__` - the `model_request`
+    hook is the only clean seam to wrap *that*. A STREAMED response, by contrast,
+    must cancel the READER (in run_turn), never the parked stream handler:
+    cancelling the handler would tear the open HTTP stream mid-read (ReadError)
+    and leave a stray partial that adopt() duplicates - so it can't go through the
+    hook. Same animation either way; kept here so the policy is single-sourced."""
+    return interface.with_cancellable(awaitable, status="Thinking", timeout=timeout)
+
+
 def build_loop_capability() -> Hooks[SolveigContext]:
-    """Build the per-agent capability driving the model-request animation.
+    """Build the per-agent capability driving the (non-stream) model-request
+    animation via the `model_request` hook.
 
     Only `model_request` (and the tool-execute capability's `tool_execute`)
     survive under `agent.iter()` - the graph node-lifecycle hooks
@@ -104,25 +118,13 @@ def build_loop_capability() -> Hooks[SolveigContext]:
     async def show_thinking_animation(
         ctx: RunContext[SolveigContext], *, request_context, handler
     ):
-        # Scoped to just this network round trip - tool execution (including
-        # interactive ask_choice approval waits) happens outside this hook, so
-        # Ctrl+C/Esc here cancels exactly the model call in flight, not
-        # whatever else the run is doing, and the "Thinking" status/countdown
-        # doesn't sit stuck on screen once the call returns.
-        #
-        # Streaming is the exception: there the handler doesn't return after
-        # firing the request - it parks holding the open HTTP stream until the
-        # consumer drains it. Wrapping it in with_cancellable here would make
-        # Esc cancel that parked handler, tearing the stream out mid-read
-        # (ReadError) and leaving a stray partial that adopt() duplicates. So
-        # in streaming mode run_turn owns the cancellable+animation around the
-        # token-reading loop instead (it cancels the READER, letting the stream
-        # close in order), and this hook stays out of the way.
-        interface = ctx.deps.interface
+        # Non-stream: wrap the network round trip so Esc/Ctrl+C cancels exactly
+        # the model call in flight. Streaming steps aside - run_turn owns the
+        # reader-side animation instead (see _thinking for the full why).
         if ctx.deps.config.stream:
             return await handler(request_context)
-        async with interface.with_cancellable(
-            handler(request_context), status="Thinking", timeout=ctx.deps.config.timeout
+        async with _thinking(
+            ctx.deps.interface, handler(request_context), ctx.deps.config.timeout
         ) as task:
             return await task
 
@@ -171,16 +173,11 @@ async def run_turn(
         try:
             async for node in run:
                 if deps.config.stream and Agent.is_model_request_node(node):
-                    # Stream this response token-by-token into a live entry. The
-                    # whole consumption runs inside ONE cancellable task (which
-                    # also drives the "Thinking" animation), so Esc/Ctrl+C stops
-                    # the READER first and lets node.stream()'s context close the
-                    # HTTP stream in order. Cancelling the request handler instead
-                    # (the default model_request hook) would tear the stream
-                    # mid-read - a provider ReadError plus a stray partial that
-                    # adopt() would mount as a duplicate. The handler-side hook
-                    # deliberately steps aside while streaming (see build_loop_
-                    # capability) so the animation isn't shown twice.
+                    # Stream this response token-by-token into a live entry, the
+                    # whole consumption inside ONE cancellable task so Esc/Ctrl+C
+                    # stops the READER and lets node.stream()'s context close the
+                    # HTTP stream in order (why the reader, not the handler:
+                    # see _thinking).
                     async def stream_node(node: Any = node) -> None:
                         async with node.stream(run.ctx) as stream:
                             await sync()
@@ -189,10 +186,8 @@ async def run_turn(
                                 await conversation.stream_updated(stream.response)
 
                     try:
-                        async with deps.interface.with_cancellable(
-                            stream_node(),
-                            status="Thinking",
-                            timeout=deps.config.timeout,
+                        async with _thinking(
+                            deps.interface, stream_node(), deps.config.timeout
                         ) as task:
                             await task
                     finally:
@@ -267,7 +262,6 @@ async def run_turn_with_retry(
     provider_ref: ProviderRef,
     interface: SolveigInterface,
     conversation: Conversation,
-    session_manager: SessionManager,
     system_prompt: str,
     prompt: str,
     model: Model | None = None,
@@ -295,12 +289,7 @@ async def run_turn_with_retry(
             await conversation.truncate_from(conversation.ids[baseline])
 
         agent = build_agent(config, provider_ref, system_prompt, model=model)
-        deps = SolveigContext(
-            config=config,
-            interface=interface,
-            conversation=conversation,
-            session_manager=session_manager,
-        )
+        deps = SolveigContext(config=config, interface=interface)
         try:
             with Agent.parallel_tool_call_execution_mode("sequential"):
                 await run_turn(agent, conversation, deps, prompt)
@@ -343,69 +332,6 @@ def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
     return None
 
 
-async def _run_mcp_tool(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    call: ToolCallPart,
-    args: dict[str, Any],
-    handler: Any,
-) -> Any:
-    """Group + approve + display an MCP (or other untyped/plain-function)
-    tool call - the same visibility and consent posture as a `BaseTool`, even
-    though there's no typed schema here to build a proper header/decline
-    `ToolResult` from. `call.tool_name` is already the sanitized, prefixed
-    name (e.g. `search_parallel_ai_web_search`), good enough for a header on
-    its own.
-
-    Mirrors `ReadTool`'s negotiation shape (run+send / run+inspect-then-decide
-    / don't run) rather than a flat yes/no - there's no "metadata only" middle
-    ground here (no typed schema to split on), but the same idea of letting
-    the user see the result before committing to sending it applies just as
-    much to an arbitrary MCP call as to a file read. `handler`'s return value
-    is passed through completely untouched when sent - only the *display* and
-    *whether it's sent* are new here, nothing about the value itself changes.
-    """
-    async with interface.with_group(
-        f"MCP: {call.tool_name}", auto_collapse=config.auto_collapse_tools
-    ) as group:
-        await group.display_text_box(
-            json.dumps(args, indent=2, default=str), title="Args", language="json"
-        )
-
-        choice = await group.ask_choice(
-            "Allow this MCP tool call?",
-            [
-                "Run and send result",
-                "Run and inspect result first",
-                "Don't run",
-            ],
-        )
-
-        if choice == 2:
-            await group.display_warning("Rejected")
-            return "User declined to run this tool."
-
-        async with group.with_cancellable(handler(args), status="Executing") as task:
-            result = await task
-
-        await group.display_text_box(str(result), title="Result", collapsed=choice == 0)
-
-        if choice == 0:
-            await group.display_success("Accepted")
-            return result
-
-        # choice == 1: ran and displayed the result above, now decide whether
-        # to actually send it on.
-        if (
-            await group.ask_choice("Send this result to the assistant?", ["Yes", "No"])
-        ) == 0:
-            await group.display_success("Accepted")
-            return result
-
-        await group.display_warning("Rejected")
-        return "User inspected the result and declined to send it to the assistant."
-
-
 def build_tool_execution_capability() -> Hooks[SolveigContext]:
     """Per-tool-call capability: opens each call's collapsible group, runs the
     plugin `@before`/`@after` hooks, and renders the `ToolResult` into a
@@ -422,9 +348,9 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
 
     A plain-function tool (e.g. an MCP tool, or one a plugin author writes
     that way) has no `BaseTool` instance, so it can't go through
-    `run_tool_and_hooks` - `_run_mcp_tool` gives it the same group/approve/
-    display treatment generically, since there's no typed schema to build a
-    tool-specific header or decline message from.
+    `run_tool_and_hooks` - `run_untyped_tool` (also in orchestration.py) gives
+    it the same group/approve/display treatment generically, since there's no
+    typed schema to build a tool-specific header or decline message from.
 
     Stateless: `config`/`interface` come from `ctx.deps` and the hook
     registries are read live at call time, so a plugin rescan or
@@ -445,7 +371,7 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         instance = _tool_instance(args)
 
         if instance is None:
-            return await _run_mcp_tool(config, interface, call, args, handler)
+            return await run_untyped_tool(config, interface, call, args, handler)
 
         try:
             # Cancellable like the model-request phase above, but no timeout -

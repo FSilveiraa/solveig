@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
-from textual.widgets import Markdown
+from textual.widgets import Collapsible, Markdown
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
@@ -23,6 +23,7 @@ from solveig.utils.misc import get_language
 
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
+    from solveig.interface.cli.collapsible_widgets import CustomCollapsible
     from solveig.sessions.manager import SessionManager
 
 
@@ -181,8 +182,6 @@ class LocalDisplay(SolveigInterface):
     async def with_group(
         self, title: str, auto_collapse: bool = False
     ) -> AsyncGenerator["SolveigInterface", Any]:
-        from solveig.interface.cli.group_interface import GroupInterface
-
         group_widget = await self.app._conversation_area.enter_group(
             title, container=self._container
         )
@@ -207,7 +206,7 @@ class TerminalInterface(LocalDisplay):
     The root of the interface tree: owns the `SolveigTextualApp`,
     `pending_queue`, and spinners. `LocalDisplay` supplies the "local
     display" implementation (display_text, display_text_box, with_group,
-    etc.), shared unchanged with `GroupInterface` (see group_interface.py) -
+    etc.), shared unchanged with `GroupInterface` (defined below) -
     only `_container` differs between the two.
     """
 
@@ -404,3 +403,25 @@ class TerminalInterface(LocalDisplay):
         finally:
             self.stats.stop_status_animation()
             await self._update_stats(final_status)
+
+
+class GroupInterface(LocalDisplay):
+    """The SolveigInterface returned by with_group(). Satisfies the full
+    contract (a tool body can't tell it apart from the root), but its local
+    display calls mount into its own group's container instead of wherever the
+    root currently mounts content.
+
+    A group never owns its own `SolveigTextualApp`, spinners, or
+    `pending_queue` - it borrows the root's, which `LocalDisplay.__init__`
+    takes directly instead of constructing them.
+    """
+
+    def __init__(self, root: "TerminalInterface", group_widget: "CustomCollapsible"):
+        self._group_container = group_widget.query_one(Collapsible.Contents)
+        super().__init__(
+            app=root.app, theme=root.theme, code_theme=root.code_theme, root_ref=root
+        )
+
+    @property
+    def _container(self):
+        return self._group_container

@@ -104,7 +104,10 @@ class Conversation:
         message object is appended (new id + message_added). Nothing is
         removed. Idempotent - adopting the same list twice mounts nothing new.
         Identity, not index/content: pydantic-ai preserves the object identity
-        of the history we pass into agent.iter(), so id() is the reliable key."""
+        of the history we pass into agent.iter(), so id() is the reliable key.
+        NOTE: that identity preservation is a load-bearing pydantic-ai invariant
+        (a version that deep-copied message_history would make this double-mount);
+        it's pinned by test_pydantic_ai_preserves_message_history_object_identity."""
         held = {id(message) for message in self._entries.values()}
         for message in messages:
             if id(message) not in held:

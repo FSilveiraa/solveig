@@ -34,10 +34,8 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig
 from solveig.context import SolveigContext, get_introspection_context
-from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.mcp_servers.connections import MCP_CONNECTIONS
-from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 
 if TYPE_CHECKING:
@@ -160,12 +158,7 @@ async def connect(
     conn.server_name = mcp_toolset.server_info.name
 
     try:
-        deps = SolveigContext(
-            config=config,
-            interface=interface,
-            conversation=Conversation(),
-            session_manager=SessionManager(config=config),
-        )
+        deps = SolveigContext(config=config, interface=interface)
         tools = await toolset.get_tools(get_introspection_context(deps))
     except Exception as err:
         await toolset.__aexit__(None, None, None)
@@ -183,9 +176,9 @@ async def connect(
     MCP_CONNECTIONS[server_config.url] = conn
     AVAILABLE_TOOLS.rebuild(config)
 
-    await interface.display_success(
-        f"MCP '{conn.display_name}': connected "
-        f"({len(conn.tool_names)} tools: {', '.join(conn.tool_names)})"
+    await interface.update_stats(
+        f"MCP connected to {conn.server_name}",
+        duration=2,
     )
     await interface.update_stats(
         mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
@@ -200,10 +193,15 @@ async def disconnect(
     conn = MCP_CONNECTIONS.pop(url, None)
     if conn is None:
         return
+    server_name = conn.server_name
     await conn.toolset.__aexit__(None, None, None)
     AVAILABLE_TOOLS.rebuild(config)
     await interface.update_stats(
         mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
+    )
+    await interface.update_stats(
+        f"MCP disconnected from {server_name}",
+        duration=2,
     )
 
 

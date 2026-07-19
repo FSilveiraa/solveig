@@ -24,9 +24,8 @@ class MessageButton(Static):
         return f"""
         MessageButton {{
             color: {theme.text};
-            /* width: auto so each button is only as wide as its label - in the
-               horizontal action row they pack left-to-right instead of each
-               taking the full width (which pushed all but the first offscreen). */
+            /* width: auto so each button is only as wide as its label, packing
+               left-to-right in the action row instead of each taking full width. */
             width: auto;
             padding: 0 1;
             height: 1;

@@ -214,13 +214,9 @@ class SectionHeader(Static):
     def _update_content(self):
         """Generate section line based on current width.
 
-        Note: This recalculates on every resize event. We explored alternatives:
-        - Textual's Rule widget (designed for separators, not inline decorative fills)
-        - CSS border-bottom (creates line below text, not alongside)
-        - Horizontal container with fill (can't dynamically fill with repeating characters)
-
-        Event-driven recalculation is the most Textual-native approach for this pattern.
-        Performance impact is negligible - resize events are infrequent and calculation is cheap.
+        NOTE: Recalculated on every resize (cheap; resize events are rare).
+        Rule/border-bottom/fill-container were all rejected - none does an inline
+        decorative fill alongside text.
         """
         # Use this widget's own rendered width, not the parent's - the parent
         # doesn't account for this widget's margin or a reserved scrollbar

@@ -216,9 +216,11 @@ class SolveigConfig:
             type=float,
             help="Temperature the model should use (default: 0.0)",
         )
-        # Don't add a shorthand flag for this one, it shouldn't be "easy" to do (plus unimplemented for now)
-        # parser.add_argument("--allowed-commands", action="store", nargs="*", help="(dangerous) Commands that can automatically be ran and have their output shared")
-        # parser.add_argument("--allowed-paths", "-p", type=str, nargs="*", dest="allowed_paths", help="A file or directory that Solveig can access")
+        # TODO: access-control whitelist (paths/commands Solveig may touch at all,
+        # distinct from the auto_* auto-approve lists). Unimplemented; when built,
+        # use singular long flags with no short flag, nargs="*", plural dest:
+        #   --allowed-command -> dest="allowed_commands"
+        #   --allowed-path    -> dest="allowed_paths"
         parser.add_argument(
             "--briefing",
             "-b",

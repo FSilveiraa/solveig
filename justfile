@@ -24,9 +24,13 @@ test *flags:
 # Run the full CI suite: format, static checks (lint + mypy), test
 ci: format check test
 
-# Run the interactive Textual demo with a mock LLM client (optionally replaying a stored session)
-mock session="":
-    python -m tests.mocks.demo {{session}}
+# Interactive Textual shell: you type, a mock LLM client replies with canned turns
+mock:
+    python -m tests.mocks.demo mock
+
+# Hands-free replay: auto-types a conversation's user messages (sync_review story, or a stored session)
+demo session="":
+    python -m tests.mocks.demo demo {{session}}
 
 # Start the local mock MCP server for manual /mcp connect testing
 mcp:

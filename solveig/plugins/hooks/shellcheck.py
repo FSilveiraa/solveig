@@ -44,21 +44,19 @@ async def shellcheck(
     """Lint the requested command with `shellcheck`, raising to block execution.
 
     Writes the requested command to a temporary file, then runs the
-    `shellcheck` linter to confirm whether it's correct BASH. No idea if this
-    works on Windows (tbh no idea if solveig itself works on anything besides
-    Linux).
+    `shellcheck` linter to confirm whether it's correct BASH.
+    NOTE: Windows/PowerShell support is untested.
     """
     command_str = tool_args["command"]
     plugin_config = config.plugins.get("shellcheck", {})
 
-    # Check for obviously dangerous patterns first
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")
 
     shell_name = detect_shell(plugin_config)
 
-    # we have to use delete=False and later os.remove(), instead of just delete=True,
-    # otherwise the file won't be available on disk for an external process to access
+    # NOTE: delete=False + explicit os.remove() (not delete=True) so the file stays
+    # on disk for the external shellcheck process to read.
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".sh", delete=False
     ) as temporary_script:
@@ -74,7 +72,6 @@ async def shellcheck(
             f"--shell={shell_name}",
         ]
 
-        # Add ignore codes if configured
         ignore_codes = plugin_config.get("ignore_codes", [])
         if ignore_codes:
             cmd.extend(["--exclude", ",".join(ignore_codes)])
@@ -95,7 +92,6 @@ async def shellcheck(
             )
             return
 
-        # Handle 'command not found' specifically
         if proc.returncode == 127 and b"command not found" in stderr.lower():
             await interface.display_warning(
                 "Shellcheck plugin is enabled, but the `shellcheck` command is not available."

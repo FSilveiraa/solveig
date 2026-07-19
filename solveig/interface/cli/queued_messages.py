@@ -122,9 +122,9 @@ class QueuedMessagesDisplay(Vertical):
             height: auto;
             margin: 1 0 0 0;
             padding: 0;
-            border-left: {theme.input};
-            border-top: {theme.input};
-            border-right: {theme.input};
+            border-left: solid {theme.input};
+            border-top: solid {theme.input};
+            border-right: solid {theme.input};
         }}
 
         QueuedMessagesDisplay Collapsible {{

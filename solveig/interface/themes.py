@@ -39,19 +39,6 @@ class Palette:
             self.group_pending = _blend(self.group, self.background, 0.5)
 
 
-# no_theme = Palette(
-#     name="none",
-#     background="auto",
-#     text="auto",  # light grey
-#     prompt="auto",  # powder blue
-#     box="auto",  # pink
-#     group="auto",  # light blue
-#     section="auto",  # powder blue
-#     warning="auto",  # orange
-#     error="auto",  # orange
-# )
-
-
 terracotta = Palette(
     # Info
     name="terracotta",

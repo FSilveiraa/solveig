@@ -9,8 +9,6 @@ from pydantic_ai.toolsets.function import FunctionToolset
 from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
-from solveig.interface.render import Markdown
-from solveig.sessions.manager import SessionManager
 from solveig.tools.available import AVAILABLE_TOOLS
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 from tests.mocks.reactive import RecordingTranscript
@@ -20,12 +18,7 @@ pytestmark = pytest.mark.anyio
 
 def _deps(conv, *, stream=True, interface=None):
     config = DEFAULT_CONFIG.with_(stream=stream)
-    return SolveigContext(
-        config=config,
-        interface=interface or MockInterface(),
-        conversation=conv,
-        session_manager=SessionManager(config=config),
-    )
+    return SolveigContext(config=config, interface=interface or MockInterface())
 
 
 async def _chunks(messages, info):
@@ -49,7 +42,7 @@ async def test_single_response_streams_then_finalizes_without_duplicate():
     rerenders = [i for k, i in view.events if k == "rerender" and i == resp_id]
     assert len(rerenders) >= 2
     # final materialized content is the assembled text
-    assert view.mounted[resp_id] == [Markdown("Hello world")]
+    assert view.mounted[resp_id] == ["Hello world"]
 
 
 async def test_rerenders_show_growing_partial_content():
@@ -65,8 +58,7 @@ async def test_rerenders_show_growing_partial_content():
 
         async def rerender(self, message_id):
             await super().rerender(message_id)
-            nodes = self.mounted[message_id]
-            text = "".join(getattr(n, "content", "") for n in nodes)
+            text = "".join(self.mounted[message_id])
             self.content_history.append(text)
 
     conv = Conversation()
@@ -154,7 +146,9 @@ async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
     interface = MockInterface()
     deps = _deps(conv, stream=True, interface=interface)
     AVAILABLE_TOOLS.rebuild(deps.config)
-    agent = build_agent(deps.config, None, "sys", model=FunctionModel(stream_function=_slow))
+    agent = build_agent(
+        deps.config, None, "sys", model=FunctionModel(stream_function=_slow)
+    )
 
     turn = asyncio.create_task(run_turn(agent, conv, deps, "hi"))
 
@@ -172,6 +166,9 @@ async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
     # Exactly one partial ModelResponse survives - no duplicate box.
     responses = [m for m in conv.messages if type(m).__name__ == "ModelResponse"]
     assert len(responses) == 1
-    assert responses[0].parts[0].content and responses[0].parts[0].content != "Reasoning more"
+    assert (
+        responses[0].parts[0].content
+        and responses[0].parts[0].content != "Reasoning more"
+    )
     # The animation ran while streaming.
     assert any(s.get("status") == "Thinking" for s in interface.stats_updates)

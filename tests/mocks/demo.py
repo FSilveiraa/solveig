@@ -141,8 +141,16 @@ async def run_async_mock(
     mock_messages: list[ModelResponse] | None = None,
     sleep_seconds: int = 3,
     user_messages: list[tuple[float, str]] | None = None,
+    auto_type: bool = True,
 ):
-    """Entry point for the async textual CLI."""
+    """Run the Textual app against the mock model.
+
+    `auto_type=True` (`just demo`) feeds the recorded user prompts to the
+    DemoInterface so it types and submits them itself - a hands-free replay.
+    `auto_type=False` (`just mock`) leaves the input to a human: the mock model
+    still plays its scripted replies in sequence as you send messages, so it's
+    an interactive shell for driving the real interface by hand.
+    """
     if mock_messages is None:
         from solveig.system_prompt import load_story
 
@@ -169,7 +177,7 @@ async def run_async_mock(
     interface = DemoInterface(
         theme=config.theme,
         code_theme=config.code_theme,
-        user_messages=user_messages or [],
+        user_messages=(user_messages or []) if auto_type else [],
     )
 
     try:
@@ -188,20 +196,33 @@ async def run_async_mock(
 
 
 def main():
+    """Dispatch `mock` (interactive) vs `demo` (auto-typed replay).
+
+    Usage: `python -m tests.mocks.demo <mock|demo> [session]`
+      mock            - interactive shell; a human types, mock client replies
+      demo            - hands-free replay of the built-in sync_review story
+      demo <session>  - hands-free replay of a stored session
+    """
     import sys
 
-    if len(sys.argv) > 1:
-        session_name = sys.argv.pop(1)
+    mode = sys.argv[1] if len(sys.argv) > 1 else "demo"
+    session = sys.argv[2] if len(sys.argv) > 2 else None
+
+    if mode == "mock":
+        asyncio.run(run_async_mock(auto_type=False))
+    elif session:
 
         async def _replay():
-            mock_messages, user_messages = await load_session_for_demo(session_name)
+            mock_messages, user_messages = await load_session_for_demo(session)
             await run_async_mock(
-                mock_messages=mock_messages, user_messages=user_messages
+                mock_messages=mock_messages,
+                user_messages=user_messages,
+                auto_type=True,
             )
 
         asyncio.run(_replay())
     else:
-        asyncio.run(run_async_mock())
+        asyncio.run(run_async_mock(auto_type=True))
 
 
 if __name__ == "__main__":

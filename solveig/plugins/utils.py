@@ -42,8 +42,6 @@ async def rescan_and_load_plugins(
     modules_to_unload = in_memory_modules - on_disk_modules
     for module_name in modules_to_unload:
         del sys.modules[module_name]
-        # Optionally, log this action.
-        # await interface.display_info(f"Unloaded deleted plugin: {module_name}")
 
     # 4. Load/Reload Plugins: Iterate through what's on disk and sync memory.
     for module_name in on_disk_modules:

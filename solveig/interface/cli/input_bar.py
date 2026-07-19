@@ -149,7 +149,6 @@ class InputBar(Container):
 
     def compose(self):
         """Create the layout with input widgets."""
-        # yield Horizontal(classes="separator")
         yield self._text_input
 
     def on_mount(self):
@@ -198,7 +197,9 @@ class InputBar(Container):
                 self._question_future.set_result(user_input)
         elif self._mode == InputMode.FREE_FORM and self._free_form_callback:
             if asyncio.iscoroutinefunction(self._free_form_callback):
-                asyncio.create_task(self._free_form_callback(user_input))
+                # run_worker (not a bare create_task) so Textual tracks it and
+                # auto-cancels on unmount instead of leaking a fire-and-forget task.
+                self.run_worker(self._free_form_callback(user_input))
             else:
                 self._free_form_callback(user_input)
 
@@ -283,13 +284,6 @@ class InputBar(Container):
     @classmethod
     def get_css(cls, theme: Palette) -> str:
         """Generate CSS for this widget container."""
-
-        # Divider bar above the input bar
-        # InputBar > .separator {{
-        #     height: 1;
-        #     border-top: solid {theme.box};
-        # }}
-
         return f"""
         InputBar {{
             height: auto;

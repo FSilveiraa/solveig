@@ -236,9 +236,8 @@ class ConversationArea(ScrollableContainer):
 
         .group {{
             height: auto;
-            /* Section content: 1 on all four sides (fixes groups hugging the
-               left edge). Collapses with siblings; header top-2 wins between
-               sections. */
+            /* Section content: 1 on all four sides. Collapses with siblings;
+               header top-2 wins between sections. */
             margin: 1;
             padding-bottom: 0;
         }}

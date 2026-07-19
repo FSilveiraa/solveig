@@ -43,7 +43,7 @@ class APIType:
         @staticmethod
         async def get_model_details(
             provider: Provider, model: str | None
-        ) -> "ModelInfo | None":
+        ) -> ModelInfo | None:
             raise NotImplementedError()
 
     class OPENAI(BaseAPI):
@@ -69,7 +69,7 @@ class APIType:
         @staticmethod
         async def get_model_details(
             provider: Provider, model: str | None
-        ) -> "ModelInfo | None":
+        ) -> ModelInfo | None:
             models_list = await provider.client.models.list()
             if model:
                 model_obj = next((m for m in models_list.data if m.id == model), None)
