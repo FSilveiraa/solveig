@@ -1,9 +1,5 @@
-from .config import (
-    DEFAULT_CONFIG_PATH,
-    DEFAULT_SYSTEM_PROMPT,
-    MCPServerConfig,
-    SolveigConfig,
-)
+from .config import DEFAULT_CONFIG_PATH, DEFAULT_SYSTEM_PROMPT, SolveigConfig
+from .models import MCPServerConfig
 
 __all__ = [
     "SolveigConfig",

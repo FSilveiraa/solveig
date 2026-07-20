@@ -1,203 +1,91 @@
-"""Tests for solveig.config module."""
-
-import json
-from json import JSONDecodeError
-from pathlib import PurePath
-
+import anyconfig
 import pytest
 
 from solveig.api import APIType
 from solveig.config import SolveigConfig
-from tests.mocks import DEFAULT_CONFIG
 
 pytestmark = pytest.mark.anyio
 
 
-class TestSolveigConfigCore:
-    """Test SolveigConfig core functionality and initialization."""
-
-    async def test_default_values(self):
-        """Test default configuration values."""
-        config = SolveigConfig()
-        assert config.api_type == APIType.OPENAI
-        assert config.api_key == ""
-        assert config.verbose is False
-        assert config.plugins == {}
-        assert config.auto_allowed_paths == []
-        assert config.no_commands is False
-
-    async def test_api_type_conversion_success(self):
-        """Test API type string to enum conversion."""
-        config = SolveigConfig(api_type="OPENAI")
-        assert config.api_type == APIType.OPENAI
-
-    async def test_api_type_conversion_failure(self):
-        """Test invalid API type string raises ValueError."""
-        with pytest.raises(ValueError):
-            SolveigConfig(api_type="INVALID_API_TYPE")
-
-    async def test_disk_space_parsing_success(self):
-        """Test disk space parsing works."""
-        config = SolveigConfig(min_disk_space_left="1.34GiB")
-        assert config.min_disk_space_left == int(1.34 * 1024**3)
-
-    async def test_disk_space_parsing_failure(self):
-        """Test invalid disk space format raises ValueError."""
-        with pytest.raises(ValueError):
-            SolveigConfig(min_disk_space_left="invalid")
-
-
-class TestConfigFileParsing:
-    """Test configuration file parsing functionality."""
-
-    @pytest.mark.parametrize(
-        "config_path",
-        ["", "/nonexistent/path.json"],  # invalid path  # inexistent path
+async def test_defaults_and_nesting_dotted_flags():
+    c, prompt, resume = await SolveigConfig.parse_config_and_prompt(
+        ["--api.url", "http://x", "hello world"]
     )
-    async def test_parse_from_file_invalid_path(self, config_path):
-        """Test parsing from invalid path returns empty dict."""
-        with pytest.raises(FileNotFoundError):
-            await SolveigConfig.parse_from_file(config_path)
-
-    async def test_parse_from_file_default_path_missing(self):
-        """Test parsing from missing default config path returns empty dict."""
-        from unittest.mock import patch
-
-        # Mock the DEFAULT_CONFIG_PATH to a non-existent path
-        with patch(
-            "solveig.config.config.DEFAULT_CONFIG_PATH",
-            "/tmp/nonexistent_solveig_config.json",
-        ):
-            result = await SolveigConfig.parse_from_file(
-                "/tmp/nonexistent_solveig_config.json"
-            )
-            assert result == {}
-
-    @pytest.mark.no_file_mocking
-    async def test_parse_from_file_success(self, tmp_path):
-        """Test successful config file parsing."""
-        config_file = tmp_path / "config.json"
-        config_file.write_text(DEFAULT_CONFIG.to_json())
-        result = SolveigConfig(
-            **(await SolveigConfig.parse_from_file(PurePath(str(config_file))))
-        )
-        assert result == DEFAULT_CONFIG
-
-    @pytest.mark.no_file_mocking
-    async def test_parse_from_file_malformed_json(self, tmp_path):
-        """Test malformed JSON raises JSONDecodeError."""
-        config_file = tmp_path / "config.json"
-        config_file.write_text("{invalid json")
-        with pytest.raises(JSONDecodeError):
-            await SolveigConfig.parse_from_file(str(config_file))
+    assert c.api.url == "http://x"
+    assert c.api.type is APIType.OPENAI  # inferred default
+    assert c.tools.command.enabled is True
+    assert c.tools.http.max_response_bytes == 50_000
+    assert c.session.dir == ".solveig/sessions"
+    assert prompt == "hello world"
+    assert resume is None
 
 
-class TestConfigSerialization:
-    """Test configuration serialization methods."""
-
-    async def test_to_dict_enum_conversion(self):
-        """Test to_dict converts api_type to strings."""
-        config = SolveigConfig(api_type=APIType.OPENAI)
-        result = config.to_dict()
-        assert result["api_type"] == "openai"
-
-    async def test_to_json_works(self):
-        """Test to_json produces valid JSON."""
-        config = SolveigConfig(api_type=APIType.GEMINI, verbose=True)
-        json_str = config.to_json()
-        parsed = json.loads(json_str)
-        assert parsed["verbose"] is True
-        assert parsed["api_type"] == "gemini"
-
-    async def test_serialization_round_trip(self):
-        """Test serialization preserves config data."""
-        original = SolveigConfig(api_type=APIType.OPENAI, temperature=0.8)
-        recreated = SolveigConfig(**original.to_dict())
-        assert recreated.api_type == APIType.OPENAI
-        assert recreated.temperature == 0.8
-
-
-class TestCLIIntegration:
-    """Test CLI argument parsing and integration."""
-
-    async def test_parse_config_returns_config_and_prompt(self):
-        """Test CLI parsing returns config and prompt."""
-        args = ["--api-type", "openai", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert isinstance(config, SolveigConfig)
-        assert config.api_type == APIType.OPENAI
-        assert prompt == "test prompt"
-
-    async def test_cli_overrides_work(self):
-        """Test CLI arguments override defaults."""
-        args = ["-a", "openai", "--temperature", "0.8", "--verbose", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert config.temperature == 0.8
-        assert config.verbose is True
-        assert config.api_type == APIType.OPENAI
-        assert prompt == "test prompt"
-
-    @pytest.mark.no_file_mocking
-    async def test_file_and_cli_merge(self, tmp_path):
-        """Test file config merges with CLI overrides."""
-        file_config = {"api_type": "gemini", "verbose": True, "temperature": 0.2}
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(file_config))
-
-        args = ["--config", str(config_file), "--temperature", "0.5", "test prompt"]
-        config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert config.verbose is True  # From file
-        assert config.api_type == APIType.GEMINI
-        assert config.temperature == 0.5  # CLI override
-
-    async def test_default_config_missing_is_silent(self):
-        """A missing default config file is the normal first-run state, not an error."""
-        import warnings
-        from unittest.mock import patch
-
-        with patch(
-            "solveig.config.config.DEFAULT_CONFIG_PATH", "/tmp/nonexistent_default.json"
-        ):
-            args = ["--api-type", "openai", "test prompt"]
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                await SolveigConfig.parse_config_and_prompt(cli_args=args)
-            assert not caught
-
-    async def test_permissive_patterns_warn(self):
-        """Auto-approving everything triggers warnings."""
-        args = [
+async def test_cli_shortcuts_long_aliases():
+    # cli_shortcuts give namespace-dropping LONG aliases (not -u short flags)
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+        [
+            "--url",
+            "http://y",
+            "--model",
+            "gpt-4.1",
+            "--key",
+            "sk",
             "--api-type",
-            "openai",
-            "--auto-execute-commands",
-            ".*",
-            "--auto-allowed-paths",
-            "/",
-            "test prompt",
+            "anthropic",
         ]
-        with pytest.warns(UserWarning, match="Very permissive"):
-            await SolveigConfig.parse_config_and_prompt(cli_args=args)
+    )
+    assert (c.api.url, c.api.model, c.api.key, c.api.type) == (
+        "http://y",
+        "gpt-4.1",
+        "sk",
+        APIType.ANTHROPIC,
+    )
 
-    @pytest.mark.no_file_mocking
-    async def test_unknown_config_field_warns(self, tmp_path):
-        """Unknown fields in the config file warn and are ignored."""
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({"api_type": "openai", "bogus_field": 1}))
-        args = ["--config", str(config_file), "test prompt"]
-        with pytest.warns(UserWarning, match="Unknown config field 'bogus_field'"):
-            config, _, __ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert not hasattr(config, "bogus_field")
 
-    async def test_no_commands_flag_sets_no_commands_true(self):
-        """Test --no-commands CLI flag sets allow_commands to False."""
-        args = ["--url", "http://localhost:5001/api/v1", "--no-commands", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert config.no_commands is True
-        assert prompt == "test prompt"
+async def test_no_verbose_no_with():
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    assert not hasattr(c, "verbose")
+    assert not hasattr(c, "with_")
 
-    async def test_allow_commands_defaults_to_true(self):
-        """Test allow_commands defaults to True when not specified."""
-        args = ["-a", "openai", "test prompt"]
-        config, prompt, _ = await SolveigConfig.parse_config_and_prompt(cli_args=args)
-        assert config.no_commands is False
-        assert prompt == "test prompt"
+
+@pytest.mark.no_file_mocking
+async def test_file_and_cli_deep_merge(tmp_path):
+    p = tmp_path / "c.json"
+    anyconfig.dump({"api": {"url": "FILE", "model": "m"}}, str(p))
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+        ["--config", str(p), "--url", "CLI"]
+    )
+    assert c.api.url == "CLI"  # CLI overlays file
+    assert c.api.model == "m"  # file value survives the overlay
+
+
+async def test_model_dump_excludes_cli_and_runtime_fields():
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+        ["--url", "http://x", "--api-type", "anthropic"]
+    )
+    d = c.to_dict()
+    assert d["api"]["type"] == "anthropic"
+    assert isinstance(d["interface"]["theme"], str)
+    # CLI-only + runtime fields never persist:
+    for k in ("model_info", "prompt", "config", "resume", "add_mcp"):
+        assert k not in d
+
+
+async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
+    # With no _PENDING_ARGV, SolveigConfig(...) must not read ambient files/CLI.
+    monkeypatch.setattr(
+        "solveig.config.sources.DEFAULT_CONFIG_SEARCH", [str(tmp_path / "nope")]
+    )
+    c = SolveigConfig(api={"url": "http://direct"})
+    assert c.api.url == "http://direct"
+    assert c.prompt == "" and c.config is None
+
+
+async def test_mcp_flag_appends_into_servers():
+    # NOTE: the repeatable startup flag is --mcp-server, not the historical bare
+    # --mcp: under nested pydantic-settings the `mcp` submodel owns the bare
+    # `--mcp` flag (whole-model JSON fallback), so a cli_shortcut can't reclaim it.
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+        ["--url", "http://x", "--mcp-server", "stdio://a", "--mcp-server", "stdio://b"]
+    )
+    assert set(c.mcp.servers) == {"stdio://a", "stdio://b"}

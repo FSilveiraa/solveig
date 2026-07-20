@@ -1,57 +1,35 @@
-import argparse
-import fnmatch
-import json
-import re
-import warnings
-from dataclasses import asdict, dataclass, field, fields, replace
-from importlib.metadata import version
+from __future__ import annotations
+
+import os
+import sys
+from contextvars import ContextVar
 from typing import Any
 
 from anyio import Path
+from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    CliPositionalArg,
+    CliSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
-import solveig.interface.themes as themes
-from solveig.api import APIType, ModelInfo, parse_api_type
-from solveig.utils.file import Filesystem
-from solveig.utils.misc import default_json_serialize, parse_human_readable_size
+from solveig.api import ModelInfo
+from solveig.config import sources
+from solveig.config.models import (
+    ApiConfig,
+    InterfaceConfig,
+    McpConfig,
+    MCPServerConfig,
+    PluginsConfig,
+    SessionConfig,
+    ToolsConfig,
+)
+from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
+from solveig.utils.misc import parse_human_readable_size
 
-
-@dataclass
-class MCPServerConfig:
-    """Per-server MCP configuration.
-
-    url is the server endpoint and also serves as the dict key in
-    SolveigConfig.mcp_servers. In the config file the key is the URL and the
-    value holds the remaining options; normalization injects the key as url.
-
-    allowed_tools: glob patterns for tools to include. Empty list (default) accepts all tools.
-    blocked_tools: glob patterns for tools to always exclude, applied after allowed_tools.
-    Patterns use fnmatch glob syntax (case-sensitive).
-
-    headers: HTTP headers sent with every request (e.g. {"Authorization": "Bearer ..."}).
-    timeout: per-server connection timeout in seconds. None uses a built-in default.
-    """
-
-    url: str
-    name: str | None = None
-    allowed_tools: list[str] = field(default_factory=list)
-    blocked_tools: list[str] = field(default_factory=list)
-    headers: dict[str, str] = field(default_factory=dict)
-    timeout: float = 30.0
-
-    def is_tool_allowed(self, tool_name: str) -> bool:
-        """Check a real tool name against allowed_tools/blocked_tools."""
-        if self.allowed_tools and not any(
-            fnmatch.fnmatchcase(tool_name, pattern) for pattern in self.allowed_tools
-        ):
-            return False
-        if self.blocked_tools and any(
-            fnmatch.fnmatchcase(tool_name, pattern) for pattern in self.blocked_tools
-        ):
-            return False
-        return True
-
-
-DEFAULT_CONFIG_PATH = Filesystem.get_absolute_path("~/.config/solveig.json")
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.solveig/config.json")
 
 DEFAULT_SYSTEM_PROMPT = """
 You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
@@ -72,418 +50,166 @@ Response format:
 - tools: Optional list of tools to use
 """
 
+DEFAULT_PLUGIN_PATHS = [
+    "./plugins",
+    "~/.solveig/plugins",
+]  # built-in dir prepended by loader (Task 8)
 
-@dataclass()
-class SolveigConfig:
-    url: str = ""
-    api_type: type[APIType.BaseAPI] = APIType.OPENAI
-    api_key: str = ""  # Local/custom OpenAI-compatible endpoints often don't need one
-    model: str | None = None
-    temperature: float = 0
-    max_context: int = -1  # -1 means no limit
+# CliSettingsSource options — mirrors tools/base.py CLI_PARSE_OPTS.
+# cli_avoid_json=True => nested fields become dotted flags (--api.url) not JSON blobs.
+_CLI_OPTS: dict[str, Any] = {
+    "cli_avoid_json": True,
+    "cli_exit_on_error": False,
+    "cli_kebab_case": False,
+    "cli_implicit_flags": True,
+    "cli_enforce_required": False,
+}
+# Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
+# Maps the CLI-only `add_mcp` append field to --mcp-server. NOTE: this cannot be
+# the historical bare --mcp — under nested pydantic-settings the `mcp` submodel
+# field itself owns the bare `--mcp` flag (a whole-model JSON fallback that a
+# cli_shortcut can't override), so the repeatable startup flag is spelled
+# --mcp-server <url> instead.
+_CLI_SHORTCUTS: dict[str, str] = {
+    "api.url": "url",
+    "api.model": "model",
+    "api.key": "key",
+    "api.type": "api-type",
+    "api.temperature": "temperature",
+    "api.max_context": "max-context",
+    "add_mcp": "mcp-server",
+}
+
+# The argv to parse during a parse_config_and_prompt() call. When None (default),
+# SolveigConfig(...) is a plain HERMETIC construction from explicit kwargs only —
+# no ambient CLI or config-file reads (important for tests + the ripple's direct
+# constructions). Set only for the duration of one parse.
+_PENDING_ARGV: ContextVar[list[str] | None] = ContextVar("_pending_argv", default=None)
+
+
+class AnyconfigSource(PydanticBaseSettingsSource):
+    """Config-file layer. Reads the `--config` value the CLI source already
+    parsed (via `current_state`) plus the default search paths, and loads+merges
+    them with anyconfig. Config I/O is deliberately delegated here (bypasses
+    Filesystem)."""
+
+    def get_field_value(self, field, field_name):  # whole-dict source
+        return None, "", False
+
+    def __call__(self) -> dict[str, Any]:
+        explicit = self.current_state.get("config")
+        return sources.load_paths(sources.resolve_config_files(explicit))
+
+
+class SolveigConfig(BaseSettings):
+    # NOTE: the _CLI_OPTS keys are inlined here (rather than **-expanded) so mypy
+    # can check them against the SettingsConfigDict TypedDict; the same dict is
+    # **-expanded into CliSettingsSource(...) below, where a plain dict is fine.
+    model_config = SettingsConfigDict(
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+        cli_avoid_json=True,
+        cli_exit_on_error=False,
+        cli_kebab_case=False,
+        cli_implicit_flags=True,
+        cli_enforce_required=False,
+    )
+
+    # --- persistent config ---
+    api: ApiConfig = Field(default_factory=ApiConfig)
+    plugins: PluginsConfig = Field(
+        default_factory=lambda: PluginsConfig(paths=list(DEFAULT_PLUGIN_PATHS))
+    )
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    session: SessionConfig = Field(default_factory=SessionConfig)
+    interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    briefing: list[str] = field(default_factory=lambda: ["AGENTS.md"])
+    briefing: list[str] = Field(default_factory=lambda: ["AGENTS.md"])
     add_examples: bool = False
     add_os_info: bool = False
     min_disk_space_left: int = parse_human_readable_size("1GiB")
-    verbose: bool = False
-    plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
-    auto_allowed_paths: list[Path] = field(default_factory=list)
-    ignore_paths: list[Path] = field(default_factory=list)
-    auto_execute_commands: list[str] = field(default_factory=list)
+    auto_allowed_paths: list[Path] = Field(default_factory=list)
+    ignore_paths: list[Path] = Field(default_factory=list)
     disable_autonomy: bool = False
-    auto_collapse_tools: bool = True
-    auto_copy_selection: bool = True
-    sessions_dir: str = ".solveig/sessions"
-    auto_save_session: bool = True
-    stream: bool = True
 
-    http_timeout: float = 10.0
-    http_max_response_bytes: int = 50_000
-    timeout: float = 60.0  # Timeout for LLM API requests in seconds
+    # --- CLI-only inputs (parsed from the command line, never persisted) ---
+    prompt: CliPositionalArg[str] = Field(default="", exclude=True)
+    config: str | None = Field(
+        default=None, exclude=True
+    )  # --config: which file to read
+    resume: str | None = Field(default=None, exclude=True)  # --resume [name]
+    add_mcp: list[str] = Field(
+        default_factory=list, exclude=True
+    )  # --mcp URL (repeatable)
 
-    no_commands: bool = False
-    mcp_servers: dict[str, MCPServerConfig] = field(default_factory=dict)
-    theme: themes.Palette = field(default_factory=lambda: themes.DEFAULT_THEME)
-    # Runtime state — not persisted or exposed as CLI arguments
-    model_info: ModelInfo | None = field(default=None)
-    code_theme: str = themes.DEFAULT_CODE_THEME
-
-    def __post_init__(self):
-        # convert API type string to class
-        if self.api_type and isinstance(self.api_type, str):
-            self.api_type = parse_api_type(self.api_type)
-
-        if self.auto_allowed_paths:
-            self.auto_allowed_paths = [
-                Filesystem.get_absolute_path(path) for path in self.auto_allowed_paths
-            ]
-        if self.ignore_paths:
-            self.ignore_paths = [
-                Filesystem.get_absolute_path(path) for path in self.ignore_paths
-            ]
-        if isinstance(self.theme, str):
-            self.theme = themes.THEMES[self.theme.strip().lower()]
-        self.min_disk_space_left = parse_human_readable_size(self.min_disk_space_left)
-
-        # Normalize mcp_servers: the key is the URL; inject it as url into the config
-        # object. Strip url from the raw dict first to avoid duplicate-keyword errors
-        # when re-loading a saved config that already has url in the value.
-        self.mcp_servers = {
-            url: MCPServerConfig(
-                url=url, **{k: v for k, v in cfg.items() if k != "url"}
-            )
-            if isinstance(cfg, dict)
-            else cfg
-            for url, cfg in self.mcp_servers.items()
-        }
-
-        # Validate regex patterns for auto_execute_commands
-        for pattern in self.auto_execute_commands:
-            try:
-                re.compile(pattern)
-            except re.error as e:
-                raise ValueError(
-                    f"Invalid regex pattern in auto_execute_commands: '{pattern}': {e}"
-                ) from e
-
-    def with_(self, **kwargs):
-        """Create a copy of this config with modified fields."""
-        return replace(self, **kwargs)
+    # --- runtime (not persisted) ---
+    model_info: ModelInfo | None = Field(default=None, exclude=True)
+    # provenance for /config save (highest-precedence loaded file = [0])
+    _loaded_paths: list[str] = PrivateAttr(default_factory=list)
 
     @classmethod
-    async def parse_from_file(cls, config_path: str) -> dict:
-        if not config_path:
-            raise FileNotFoundError("Config file not specified.")
-        abs_path = Filesystem.get_absolute_path(config_path)
-        try:
-            file_content = await Filesystem.read_file(abs_path)
-            content = file_content.content
-            return json.loads(content)
-        except FileNotFoundError as e:
-            # Throw an error if we tried to read any non-default config path
-            if config_path == DEFAULT_CONFIG_PATH:
-                return {}
-            raise e
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        argv = _PENDING_ARGV.get()
+        if argv is None:
+            # Direct construction from explicit kwargs — hermetic, no CLI/file reads.
+            return (init_settings,)
+        # CLI (highest precedence) then config files; pydantic deep-merges + validates.
+        cli = CliSettingsSource(
+            settings_cls,
+            cli_parse_args=argv,
+            cli_shortcuts=_CLI_SHORTCUTS,
+            **_CLI_OPTS,
+        )
+        return (init_settings, cli, AnyconfigSource(settings_cls))
+
+    @field_validator("min_disk_space_left", mode="before")
+    @classmethod
+    def _parse_size(cls, v: Any) -> Any:
+        return parse_human_readable_size(v)
+
+    @field_validator("auto_allowed_paths", "ignore_paths", mode="before")
+    @classmethod
+    def _abs_paths(cls, v: Any) -> Any:
+        return [Filesystem.get_absolute_path(p) for p in v] if v else []
+
+    @model_validator(mode="after")
+    def _default_api_url(self):
+        # api.type always has a default (OPENAI); when no url is given, derive it
+        # from the type's default endpoint. (This replaces the old "must specify
+        # --url or --api-type" gate: giving nothing now resolves to the OpenAI
+        # default endpoint rather than erroring — a deliberate simplification.)
+        if not self.api.url:
+            default = self.api.type.default_url
+            if not default:
+                raise ValueError(
+                    f"API type {self.api.type.name} has no default URL; pass --url."
+                )
+            self.api.url = default
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+    def to_json(self, indent: int | None = 2, **kw) -> str:
+        return self.model_dump_json(indent=indent, **kw)
 
     @classmethod
     async def parse_config_and_prompt(cls, cli_args=None):
-        """Parse configuration from CLI arguments and config file.
-
-        Warnings (permissive auto-approve patterns, unknown config fields)
-        are emitted via the stdlib `warnings` module - the caller decides how
-        to display them (run.py replays them through the interface once it
-        exists; uncaught, they still print to stderr). Errors raise, and the
-        caller is expected to print and exit.
-
-        Args:
-            cli_args: CLI arguments list for testing (uses sys.argv if None)
-
-        Returns:
-            tuple: (SolveigConfig instance, user_prompt, resume_session)
-        """
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--config",
-            "-c",
-            type=str,
-            default=DEFAULT_CONFIG_PATH,
-            help="Path to config file",
-        )
-        parser.add_argument(
-            "--url",
-            "-u",
-            type=str,
-            help="LLM API endpoint URL (assumes OpenAI-compatible if --api-type not specified)",
-        )
-        parser.add_argument(
-            "--api-type",
-            "-a",
-            type=str,
-            choices=["openai", "anthropic", "gemini"],
-            help="Type of API to use (uses API type's default URL if --url not specified)",
-        )
-        parser.add_argument("--api-key", "-k", type=str)
-        parser.add_argument(
-            "--model",
-            "-m",
-            type=str,
-            help="Model name or path (ex: gpt-4.1, moonshotai/kimi-k2:free)",
-        )
-        parser.add_argument(
-            "--temperature",
-            "-t",
-            type=float,
-            help="Temperature the model should use (default: 0.0)",
-        )
-        # TODO: access-control whitelist (paths/commands Solveig may touch at all,
-        # distinct from the auto_* auto-approve lists). Unimplemented; when built,
-        # use singular long flags with no short flag, nargs="*", plural dest:
-        #   --allowed-command -> dest="allowed_commands"
-        #   --allowed-path    -> dest="allowed_paths"
-        parser.add_argument(
-            "--briefing",
-            "-b",
-            type=str,
-            action="append",
-            dest="briefing",
-            default=None,
-            metavar="PATH",
-            help="Markdown file to append to the system prompt (can be passed multiple times; default: AGENTS.md).",
-        )
-        parser.add_argument(
-            "--add-examples",
-            "--ex",
-            action="store_true",
-            default=None,
-            help="Include chat examples in the system prompt to help the LLM understand the response format",
-        )
-        parser.add_argument(
-            "--add-os-info",
-            "--os",
-            action="store_true",
-            default=None,
-            help="Include helpful OS information in the system prompt",
-        )
-        parser.add_argument(
-            "--min-disk-space-left",
-            "-d",
-            type=str,
-            default="1GiB",
-            help='The minimum disk space allowed for the system to use, either in bytes or size notation (1024, "1.3 GB", etc)',
-        )
-        parser.add_argument(
-            "--max-context",
-            "-s",
-            type=int,
-            help="Maximum context size in tokens (-1 for no limit, default: -1)",
-        )
-        parser.add_argument("--verbose", "-v", action="store_true", default=None)
-        parser.add_argument(
-            "--auto-allowed-paths",
-            type=str,
-            nargs="*",
-            dest="auto_allowed_paths",
-            help="Glob patterns for paths where file operations are automatically allowed (e.g., '~/Documents/**/*.py') ! Use with caution !",
-        )
-        parser.add_argument(
-            "--ignore-paths",
-            type=str,
-            nargs="*",
-            dest="ignore_paths",
-            help="Glob patterns for paths that are fully blocked from all tool access (e.g., '~/.solveig/sessions/**')",
-        )
-        parser.add_argument(
-            "--auto-execute-commands",
-            type=str,
-            nargs="*",
-            dest="auto_execute_commands",
-            help="RegEx patterns for commands that are automatically allowed (e.g., '^ls\\s*$'). ! Use with extreme caution !",
-        )
-        parser.add_argument(
-            "--no-auto-collapse",
-            action="store_false",
-            dest="auto_collapse_tools",
-            default=None,
-            help="Disable automatic collapsing of tool groups after approval",
-        )
-        parser.add_argument(
-            "--no-auto-copy-selection",
-            action="store_false",
-            dest="auto_copy_selection",
-            default=None,
-            help="Disable automatically copying click-drag selected text to the clipboard on mouse release",
-        )
-        parser.add_argument(
-            "--disable-autonomy",
-            action="store_true",
-            dest="disable_autonomy",
-            default=False,
-            help="Disable autonomous mode. By default, Solveig will work autonomously run a loop asking for operations and  returning theirs results, until no new operations are requested. With this option, Solveig will require approval before sending results, by always expecting some user message to be included. ! This only affects whether we return results immediately or not, it does not influence usual operation choices (ex: reading a file will still follow patterns and require user approval) !",
-        )
-        parser.add_argument(
-            "--sessions-dir",
-            type=str,
-            dest="sessions_dir",
-            help="Directory to store session files (default: .solveig/sessions)",
-        )
-        parser.add_argument(
-            "--no-auto-save",
-            action="store_false",
-            dest="auto_save_session",
-            default=None,
-            help="Disable automatic session saving after each assistant turn",
-        )
-        parser.add_argument(
-            "--no-stream",
-            action="store_false",
-            dest="stream",
-            default=None,
-            help="Disable token-by-token streaming of assistant output",
-        )
-        parser.add_argument(
-            "--resume",
-            "-r",
-            nargs="?",
-            const="__latest__",
-            default=None,
-            metavar="NAME",
-            dest="resume_session",
-            help="Resume latest session on startup, or a named session if NAME is given",
-        )
-        parser.add_argument(
-            "--no-commands",
-            action="store_true",
-            dest="no_commands",
-            default=False,
-            help="Disable command execution (secure mode)",
-        )
-        parser.add_argument(
-            "--mcp",
-            action="append",
-            dest="mcp_servers",
-            default=None,
-            metavar="URL",
-            help="MCP server URL to connect at startup (can be passed multiple times)",
-        )
-        parser.add_argument(
-            "--timeout", type=int, help="LLM response timeout in seconds"
-        )
-        parser.add_argument(
-            "--theme",
-            default=None,
-            type=str,
-            choices=themes.THEMES.keys(),
-            help=f"Interface theme (default: {themes.DEFAULT_THEME.name})",
-        )
-        parser.add_argument(
-            "--code-theme",
-            default=None,
-            type=str,
-            choices=themes.CODE_THEMES,
-            help=f"Code theme for linting files (default: {themes.DEFAULT_CODE_THEME})",
-        )
-        parser.add_argument(
-            "--version",
-            action="version",
-            version=f"%(prog)s {version('solveig')}",
-        )
-        parser.add_argument(
-            "prompt", type=str, nargs="?", default="", help="User prompt"
-        )
-
-        args = parser.parse_args(cli_args)
-        args_dict = vars(args)
-        user_prompt = args_dict.pop("prompt")
-        resume_session = args_dict.pop("resume_session", None)
-
-        file_config = await cls.parse_from_file(args_dict.pop("config")) or {}
-
-        # Merge config from file and CLI
-        cli_mcp_urls: list[str] = args_dict.pop("mcp_servers") or []
-        merged_config: dict = {**file_config}
-        for k, v in args_dict.items():
-            if v is not None:
-                merged_config[k] = v
-
-        # --mcp URLs are merged into the mcp_servers dict (not replaced)
-        # Each URL is added as a minimal entry keyed by the URL itself
-        if cli_mcp_urls:
-            file_mcp: dict = merged_config.get("mcp_servers", {})
-            for url in cli_mcp_urls:
-                if url not in file_mcp:
-                    file_mcp[url] = {}
-            merged_config["mcp_servers"] = file_mcp
-
-        # Warn if ".*" is in allowed_commands or / is in allowed_paths
-        # I know this looks bad, but it's so much easier than designing a regex to capture
-        # other regexes
-        concerning_command_patterns = {".*", "^.*", ".*$", "^.*$"}
-        for pattern in merged_config.get("auto_execute_commands", []):
-            if pattern in concerning_command_patterns:
-                warnings.warn(
-                    f"Very permissive command pattern '{pattern}' is auto-allowed to execute",
-                    stacklevel=2,
-                )
-
-        concerning_path_patterns = {
-            "/",
-            "/**",
-            "/etc",
-            "/boot",
-            "/proc",
-            "/sys",
-        }
-        for pattern in merged_config.get("auto_allowed_paths", []):
-            if any(pattern.startswith(sig) for sig in concerning_path_patterns):
-                warnings.warn(
-                    f"Very permissive path '{pattern}' is auto-allowed for file operations",
-                    stacklevel=2,
-                )
-
-        # Validate and apply smart defaults for URL/API type
-        user_provided_url = "url" in merged_config and merged_config["url"]
-        user_provided_api_type = (
-            "api_type" in merged_config and merged_config["api_type"]
-        )
-
-        if not user_provided_url and not user_provided_api_type:
-            raise ValueError(
-                "Either --url (-u) or --api-type (-a) must be specified. "
-                "Use --help to see available options."
-            )
-
-        if not user_provided_api_type:
-            # If URL provided but no API type, assume OpenAI-compatible
-            merged_config["api_type"] = "openai"
-
-        if not user_provided_url:
-            # If API type provided but no URL, we'll use the API type's default URL
-            # We need to parse the API type first to get its default URL
-            api_type_class = parse_api_type(merged_config["api_type"])
-            if not api_type_class.default_url:
-                raise ValueError(
-                    f"No URL provided and API type {api_type_class.name} has no default URL. "
-                    "Please specify --url or -u."
-                )
-            merged_config["url"] = api_type_class.default_url
-
-        # Strip unknown keys (e.g. removed fields still present in old config files)
-        valid_fields = {f.name for f in fields(cls)}
-        unknown_keys = [k for k in merged_config if k not in valid_fields]
-        for k in unknown_keys:
-            warnings.warn(
-                f"Unknown config field '{k}' ignored (removed or renamed)", stacklevel=2
-            )
-        merged_config = {k: v for k, v in merged_config.items() if k in valid_fields}
-
-        return (cls(**merged_config), user_prompt.strip(), resume_session)
-
-    # Fields that are derived at runtime and should not be persisted
-    _RUNTIME_FIELDS = frozenset({"model_info"})
-
-    def to_dict(self) -> dict[str, Any]:
-        """Export config to a dictionary suitable for JSON serialization."""
-        config_dict = {}
-
-        for field_name, field_value in vars(self).items():
-            if field_name in self._RUNTIME_FIELDS:
-                continue
-            if field_name == "api_type" and hasattr(field_value, "name"):
-                config_dict[field_name] = field_value.name
-            elif field_name == "theme":
-                config_dict[field_name] = field_value.name
-            elif field_name == "mcp_servers":
-                config_dict[field_name] = {
-                    name: asdict(cfg) for name, cfg in field_value.items()
-                }
-            else:
-                config_dict[field_name] = field_value
-
-        return config_dict
-
-    def to_json(self, indent: int | None = 2, **kwargs) -> str:
-        """Export config to JSON string."""
-        return json.dumps(
-            self.to_dict(), default=default_json_serialize, indent=indent, **kwargs
-        )
+        argv = list(sys.argv[1:] if cli_args is None else cli_args)
+        token = _PENDING_ARGV.set(argv)
+        try:
+            cfg = cls()  # pydantic parses the whole CLI + files, then validates
+        finally:
+            _PENDING_ARGV.reset(token)
+        cfg._loaded_paths = sources.resolve_config_files(cfg.config)
+        for url in cfg.add_mcp:
+            cfg.mcp.servers.setdefault(url, MCPServerConfig(url=url))
+        return cfg, cfg.prompt.strip(), cfg.resume

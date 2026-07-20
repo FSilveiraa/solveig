@@ -14,7 +14,7 @@ from aiohttp.test_utils import TestServer
 from solveig.config import SolveigConfig
 from solveig.plugins import clear_plugins, initialize_plugins
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
-from tests.mocks import DEFAULT_CONFIG, MockInterface
+from tests.mocks import MockInterface
 
 
 @pytest.fixture
@@ -139,37 +139,19 @@ def mock_filesystem(request):
 
 @pytest.fixture(autouse=True)
 def default_config_file():
-    """Serve `DEFAULT_CONFIG` as the on-disk config for *every* test, without
-    touching disk.
+    """Keep `parse_config_and_prompt` hermetic against the developer's real
+    ambient config for *every* test, without touching disk.
 
-    `parse_config_and_prompt` reads `DEFAULT_CONFIG_PATH` when no `--config` is
-    given. Left alone that reads the developer's real `~/.config/solveig.json`;
-    and pointing it at a missing path would make every test exercise the
-    config-absent branch. Instead we mock the load *seam* (`parse_from_file`,
-    which just returns the file layer as a dict) to hand back
-    `DEFAULT_CONFIG.to_dict()` for the default path - no file, no I/O, no
-    filesystem-guard conflict.
+    With the nested pydantic-settings cutover, the file layer is loaded by
+    `AnyconfigSource`, which searches `sources.DEFAULT_CONFIG_SEARCH` when no
+    explicit `--config` is given. Left alone that reads the developer's real
+    `~/.config/solveig.json` (and would trip the legacy-flat-key guard). We
+    empty the default-search list for the test run so ambient config never
+    leaks in; an explicit `--config <path>` still short-circuits the search and
+    reads for real (those tests are marked `no_file_mocking`)."""
+    from solveig.config import sources
 
-    Keyed on the *real* default path captured here at setup, so a test that
-    patches `DEFAULT_CONFIG_PATH` to something else (e.g. the missing-config
-    warning test) falls through to the real reader and still exercises its
-    branch. An explicit `--config <path>` likewise reads for real (those tests
-    are marked `no_file_mocking`)."""
-    from solveig.config import config as config_module
-
-    real_parse_from_file = config_module.SolveigConfig.parse_from_file.__func__
-    real_default_path = config_module.DEFAULT_CONFIG_PATH
-
-    async def fake_parse_from_file(cls, config_path):
-        if config_path == real_default_path:
-            return DEFAULT_CONFIG.to_dict()
-        return await real_parse_from_file(cls, config_path)
-
-    with patch.object(
-        config_module.SolveigConfig,
-        "parse_from_file",
-        classmethod(fake_parse_from_file),
-    ):
+    with patch.object(sources, "DEFAULT_CONFIG_SEARCH", []):
         yield
 
 
