@@ -38,6 +38,9 @@ dependencies = [
     "httpx>=0.28.0",
     "fastmcp>=3.2.0",
     "pyperclip>=1.9.0",
+    "anyconfig>=0.15.0",
+    "pyyaml>=6.0",
+    "toml>=0.10",
 ]
 
 [project.optional-dependencies]
