@@ -18,40 +18,27 @@ from pydantic_settings import (
 from solveig.api import ModelInfo
 from solveig.config import sources
 from solveig.config.models import (
+    DEFAULT_SYSTEM_PROMPT,
     ApiConfig,
     InterfaceConfig,
     McpConfig,
     MCPServerConfig,
     PluginsConfig,
     SessionConfig,
+    SystemPromptConfig,
     ToolsConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
 from solveig.utils.misc import parse_human_readable_size
 
+# DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
+# for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
+__all__ = ["DEFAULT_CONFIG_PATH", "DEFAULT_SYSTEM_PROMPT", "SolveigConfig"]
+
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.solveig/config.json")
 
-DEFAULT_SYSTEM_PROMPT = """
-You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
-
-Guidelines:
-- The `comment` field is required for all communication with the user (supports Markdown formatting)
-- For multi-step work, include a tasks list in your response showing your plan
-- For simple requests, avoid plans and respond directly
-- Update task status (pending → ongoing → completed/failed) as you progress
-- Work autonomously - continue executing operations until the task is complete
-- Prefer file operations over shell commands when possible
-- Avoid unnecessary destructive actions (delete, overwrite)
-- If an operation fails, adapt your approach and continue
-
-Response format:
-- comment: Required field for all communication and explanations (use Markdown formatting)
-- tasks: Optional array of Task(description, status) objects
-- tools: Optional list of tools to use
-"""
-
 DEFAULT_PLUGIN_PATHS = [
-    "./plugins",
+    "./.solveig/plugins",
     "~/.solveig/plugins",
 ]  # built-in dir prepended by loader (Task 8)
 
@@ -77,14 +64,34 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "api.type": "api-type",
     "api.temperature": "temperature",
     "api.max_context": "max-context",
+    "system_prompt.add_examples": "add-examples",
+    "system_prompt.add_os_info": "add-os-info",
     "add_mcp": "mcp-server",
 }
+
+# Top-level CLI-only / runtime field names — parsed from argv or set at runtime but
+# never persisted, so they must not leak into `_declared` (the /config save set).
+_CLI_ONLY_FIELDS: frozenset[str] = frozenset({"prompt", "config", "resume", "add_mcp"})
 
 # The argv to parse during a parse_config_and_prompt() call. When None (default),
 # SolveigConfig(...) is a plain HERMETIC construction from explicit kwargs only —
 # no ambient CLI or config-file reads (important for tests + the ripple's direct
 # constructions). Set only for the duration of one parse.
 _PENDING_ARGV: ContextVar[list[str] | None] = ContextVar("_pending_argv", default=None)
+
+
+def _dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
+    """Flatten a nested provided-config dict into dotted leaf paths (`api.url`,
+    `tools.http.timeout`). Powers `_declared` — the set of explicitly-set fields
+    `/config save` persists."""
+    out: set[str] = set()
+    for key, value in (data or {}).items():
+        path = f"{prefix}{key}"
+        if isinstance(value, dict) and value:
+            out |= _dotted_leaves(value, f"{path}.")
+        else:
+            out.add(path)
+    return out
 
 
 class AnyconfigSource(PydanticBaseSettingsSource):
@@ -108,6 +115,8 @@ class SolveigConfig(BaseSettings):
     model_config = SettingsConfigDict(
         validate_assignment=True,
         arbitrary_types_allowed=True,
+        env_prefix="SOLVEIG_",
+        env_nested_delimiter="__",
         cli_avoid_json=True,
         cli_exit_on_error=False,
         cli_kebab_case=False,
@@ -124,10 +133,8 @@ class SolveigConfig(BaseSettings):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
-    system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    system_prompt: SystemPromptConfig = Field(default_factory=SystemPromptConfig)
     briefing: list[str] = Field(default_factory=lambda: ["AGENTS.md"])
-    add_examples: bool = False
-    add_os_info: bool = False
     min_disk_space_left: int = parse_human_readable_size("1GiB")
     auto_allowed_paths: list[Path] = Field(default_factory=list)
     ignore_paths: list[Path] = Field(default_factory=list)
@@ -141,12 +148,27 @@ class SolveigConfig(BaseSettings):
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     add_mcp: list[str] = Field(
         default_factory=list, exclude=True
-    )  # --mcp URL (repeatable)
+    )  # --mcp-server URL (repeatable)
+    # NOTE: command is not special — it's disabled the same uniform way as any core
+    # tool (`--tools.command.enabled false`), so there is no `--no-commands` sugar.
 
-    # --- runtime (not persisted) ---
-    model_info: ModelInfo | None = Field(default=None, exclude=True)
+    # --- runtime (not persisted; NOT a config field) ---
+    # model_info is API-reported model facts (context length, pricing) fetched at
+    # startup and cached for the stats bar — never user-set, so it's a PrivateAttr
+    # (kept off the CLI + out of model_dump) exposed via the model_info property.
+    _model_info: ModelInfo | None = PrivateAttr(default=None)
     # provenance for /config save (highest-precedence loaded file = [0])
     _loaded_paths: list[str] = PrivateAttr(default_factory=list)
+    # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
+    _declared: set[str] = PrivateAttr(default_factory=set)
+
+    @property
+    def model_info(self) -> ModelInfo | None:
+        return self._model_info
+
+    @model_info.setter
+    def model_info(self, value: ModelInfo | None) -> None:
+        self._model_info = value
 
     @classmethod
     def settings_customise_sources(
@@ -159,16 +181,17 @@ class SolveigConfig(BaseSettings):
     ):
         argv = _PENDING_ARGV.get()
         if argv is None:
-            # Direct construction from explicit kwargs — hermetic, no CLI/file reads.
+            # Direct construction from explicit kwargs — hermetic, no CLI/file/env reads.
             return (init_settings,)
-        # CLI (highest precedence) then config files; pydantic deep-merges + validates.
+        # Precedence high->low: CLI, env (SOLVEIG_*), then config files. pydantic
+        # deep-merges nested models across sources and validates.
         cli = CliSettingsSource(
             settings_cls,
             cli_parse_args=argv,
             cli_shortcuts=_CLI_SHORTCUTS,
             **_CLI_OPTS,
         )
-        return (init_settings, cli, AnyconfigSource(settings_cls))
+        return (init_settings, cli, env_settings, AnyconfigSource(settings_cls))
 
     @field_validator("min_disk_space_left", mode="before")
     @classmethod
@@ -201,15 +224,31 @@ class SolveigConfig(BaseSettings):
     def to_json(self, indent: int | None = 2, **kw) -> str:
         return self.model_dump_json(indent=indent, **kw)
 
+    def _record_declared(self, argv: list[str]) -> None:
+        """Populate `_declared` with the dotted paths explicitly provided by the
+        config file(s) and the command line — the fields `/config save` persists.
+        Env-provided values are transient and intentionally excluded."""
+        cli = CliSettingsSource(
+            type(self), cli_parse_args=argv, cli_shortcuts=_CLI_SHORTCUTS, **_CLI_OPTS
+        )
+        # Flatten each source to dotted leaves and union the sets — a shallow dict
+        # merge would let one source's `api` sub-dict clobber the other's.
+        declared = _dotted_leaves(sources.load_paths(self._loaded_paths))
+        declared |= _dotted_leaves(cli() or {})
+        self._declared = {
+            path for path in declared if path.split(".", 1)[0] not in _CLI_ONLY_FIELDS
+        }
+
     @classmethod
     async def parse_config_and_prompt(cls, cli_args=None):
         argv = list(sys.argv[1:] if cli_args is None else cli_args)
         token = _PENDING_ARGV.set(argv)
         try:
-            cfg = cls()  # pydantic parses the whole CLI + files, then validates
+            cfg = cls()  # pydantic parses the whole CLI + env + files, then validates
         finally:
             _PENDING_ARGV.reset(token)
         cfg._loaded_paths = sources.resolve_config_files(cfg.config)
+        cfg._record_declared(argv)
         for url in cfg.add_mcp:
             cfg.mcp.servers.setdefault(url, MCPServerConfig(url=url))
         return cfg, cfg.prompt.strip(), cfg.resume

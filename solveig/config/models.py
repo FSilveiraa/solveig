@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import builtins
 import fnmatch
 import re
-from typing import Any, Type
+import warnings
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
@@ -11,11 +13,30 @@ from solveig.api import APIType, parse_api_type
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
+DEFAULT_SYSTEM_PROMPT = """
+You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
+
+Guidelines:
+- The `comment` field is required for all communication with the user (supports Markdown formatting)
+- For multi-step work, include a tasks list in your response showing your plan
+- For simple requests, avoid plans and respond directly
+- Update task status (pending → ongoing → completed/failed) as you progress
+- Work autonomously - continue executing operations until the task is complete
+- Prefer file operations over shell commands when possible
+- Avoid unnecessary destructive actions (delete, overwrite)
+- If an operation fails, adapt your approach and continue
+
+Response format:
+- comment: Required field for all communication and explanations (use Markdown formatting)
+- tasks: Optional array of Task(description, status) objects
+- tools: Optional list of tools to use
+"""
+
 
 class ApiConfig(BaseModel):
     model_config = _MUTABLE
     url: str = ""
-    type: Type[APIType.BaseAPI] = APIType.OPENAI
+    type: builtins.type[APIType.BaseAPI] = APIType.OPENAI
     key: str = ""
     model: str | None = None
     temperature: float = 0.0
@@ -28,19 +49,25 @@ class ApiConfig(BaseModel):
         return parse_api_type(v) if isinstance(v, str) else v
 
     @field_serializer("type")
-    def _ser_type(self, v: Type[APIType.BaseAPI]) -> str:
+    def _ser_type(self, v: builtins.type[APIType.BaseAPI]) -> str:
         return v.name
 
 
-class HttpConfig(BaseModel):
+class ToolConfig(BaseModel):
+    """Base config every tool's config extends — carries the universal `enabled`
+    flag (enabled-by-default). This is the declaration seam Sub-project B reuses
+    for plugin tools/hooks; in A, the core tools below extend it statically."""
+
     model_config = _MUTABLE
+    enabled: bool = True
+
+
+class HttpConfig(ToolConfig):
     timeout: float = 10.0
     max_response_bytes: int = 50_000
 
 
-class CommandConfig(BaseModel):
-    model_config = _MUTABLE
-    enabled: bool = True
+class CommandConfig(ToolConfig):
     auto_execute: list[str] = Field(default_factory=list)
 
     @field_validator("auto_execute")
@@ -54,16 +81,47 @@ class CommandConfig(BaseModel):
         return patterns
 
 
-class ToolsConfig(BaseModel):
+# NOTE: the `copy` field below mirrors CopyTool's `tool_name()` and is required for
+# `tools.copy.enabled` to line up with the tool registry. It deliberately shadows the
+# deprecated `BaseModel.copy()` (we use `model_copy` everywhere), so we silence the
+# one-time "shadows an attribute in parent" UserWarning pydantic raises at class build.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore", message=r'Field name "copy".*shadows', category=UserWarning
+    )
+
+    class ToolsConfig(BaseModel):
+        """CORE tools only (static, known set). Every core tool has an entry so it
+        can be disabled uniformly via `tools.<name>.enabled`. `command`/`http` carry
+        extra fields; the rest are plain ToolConfig (just `enabled`)."""
+
+        model_config = _MUTABLE
+        command: CommandConfig = Field(default_factory=CommandConfig)
+        http: HttpConfig = Field(default_factory=HttpConfig)
+        read: ToolConfig = Field(default_factory=ToolConfig)
+        write: ToolConfig = Field(default_factory=ToolConfig)
+        edit: ToolConfig = Field(default_factory=ToolConfig)
+        delete: ToolConfig = Field(default_factory=ToolConfig)
+        copy: ToolConfig = Field(default_factory=ToolConfig)
+        move: ToolConfig = Field(default_factory=ToolConfig)
+        tasks: ToolConfig = Field(default_factory=ToolConfig)
+
+
+class SystemPromptConfig(BaseModel):
+    """The system-prompt category (distinct from top-level `briefing`)."""
+
     model_config = _MUTABLE
-    http: HttpConfig = Field(default_factory=HttpConfig)
-    command: CommandConfig = Field(default_factory=CommandConfig)
+    content: str = DEFAULT_SYSTEM_PROMPT
+    add_examples: bool = False
+    add_os_info: bool = False
 
 
 class PluginsConfig(BaseModel):
+    """In A: discovery dirs only. Plugins are discovered and on-by-default; per-plugin
+    config (`plugins.tools.*`/`plugins.hooks.*`) is Sub-project B."""
+
     model_config = _MUTABLE
     paths: list[str] = Field(default_factory=list)
-    enabled: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class MCPServerConfig(BaseModel):

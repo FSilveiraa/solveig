@@ -1,7 +1,16 @@
 import pytest
+
 from solveig.api import APIType
 from solveig.config.models import (
-    ApiConfig, CommandConfig, InterfaceConfig, McpConfig, MCPServerConfig, ToolsConfig,
+    ApiConfig,
+    CommandConfig,
+    HttpConfig,
+    InterfaceConfig,
+    McpConfig,
+    MCPServerConfig,
+    SystemPromptConfig,
+    ToolConfig,
+    ToolsConfig,
 )
 from solveig.interface import themes
 
@@ -49,3 +58,36 @@ def test_tools_nesting_defaults():
     t = ToolsConfig()
     assert t.http.max_response_bytes == 50_000
     assert t.command.enabled is True
+
+
+def test_every_core_tool_has_an_entry_and_is_enabled_by_default():
+    t = ToolsConfig()
+    for name in (
+        "command",
+        "http",
+        "read",
+        "write",
+        "edit",
+        "delete",
+        "copy",
+        "move",
+        "tasks",
+    ):
+        assert getattr(t, name).enabled is True
+
+
+def test_http_and_command_inherit_enabled_from_base():
+    # HttpConfig/CommandConfig extend ToolConfig; `enabled` is inherited, not redeclared.
+    assert issubclass(HttpConfig, ToolConfig)
+    assert issubclass(CommandConfig, ToolConfig)
+    assert HttpConfig().enabled is True
+    assert HttpConfig(enabled=False).enabled is False
+
+
+def test_system_prompt_defaults():
+    from solveig.config.models import DEFAULT_SYSTEM_PROMPT
+
+    sp = SystemPromptConfig()
+    assert sp.content == DEFAULT_SYSTEM_PROMPT
+    assert sp.add_examples is False
+    assert sp.add_os_info is False
