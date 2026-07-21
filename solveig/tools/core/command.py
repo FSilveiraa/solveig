@@ -1,7 +1,6 @@
 """Command tool - executes shell commands."""
 
 import asyncio
-import re
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from pydantic import Field, field_validator
@@ -74,7 +73,7 @@ class CommandTool(BaseTool):
         inspect = False
 
         for pattern in config.tools.command.auto_execute:
-            if re.match(pattern, self.command):
+            if pattern.match(self.command):
                 run = True
                 await interface.display_info(
                     "Running command and sending output since it matches config.tools.command.auto_execute"

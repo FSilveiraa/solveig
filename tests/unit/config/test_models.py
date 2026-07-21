@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from solveig.api import APIType
 from solveig.config.models import (
@@ -30,7 +31,10 @@ def test_theme_from_string_serializes_to_name():
 
 def test_command_enabled_default_true_and_regex_validated():
     assert CommandConfig().enabled is True
-    with pytest.raises(ValueError, match="Invalid regex"):
+    # strings are compiled to patterns; a bad regex is rejected declaratively
+    c = CommandConfig(auto_execute=["^ls "])
+    assert c.auto_execute[0].match("ls -la")
+    with pytest.raises(ValidationError):
         CommandConfig(auto_execute=["([unclosed"])
 
 

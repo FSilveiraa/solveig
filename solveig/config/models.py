@@ -81,17 +81,11 @@ class HttpConfig(ToolConfig):
 
 
 class CommandConfig(ToolConfig):
-    auto_execute: list[str] = Field(default_factory=list)
-
-    @field_validator("auto_execute")
-    @classmethod
-    def _validate_regex(cls, patterns: list[str]) -> list[str]:
-        for p in patterns:
-            try:
-                re.compile(p)
-            except re.error as e:
-                raise ValueError(f"Invalid regex in auto_execute: '{p}': {e}") from e
-        return patterns
+    # Compiled patterns: pydantic validates each string into a re.Pattern (compiled
+    # once, at parse time — invalid regexes are rejected declaratively) and
+    # serializes them back to their source strings for /config save. "It's a regex"
+    # is a property of the field, not something command.py re-derives per call.
+    auto_execute: list[re.Pattern] = Field(default_factory=list)
 
 
 # NOTE: the `copy` field below mirrors CopyTool's `tool_name()` and is required for

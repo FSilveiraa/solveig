@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 import shlex
 from collections.abc import Callable
 
@@ -480,8 +481,14 @@ class SubcommandRunner:
             return "***" if value.get_secret_value() else "(not set)"
         if isinstance(value, ByteSize):
             return value.human_readable()
+        if isinstance(value, re.Pattern):
+            return value.pattern
         if isinstance(value, list):
-            return ", ".join(str(v) for v in value) if value else "(empty)"
+            return (
+                ", ".join(SubcommandRunner._format_field_value(v) for v in value)
+                if value
+                else "(empty)"
+            )
         if hasattr(value, "name"):  # Palette, APIType subclass
             return value.name
         return repr(value)
