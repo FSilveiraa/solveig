@@ -1,8 +1,15 @@
 """
 Generic config editor for SolveigConfig.
 
-Provides type-aware prompting, field application, and post-set hooks so that
-any config field can be read or changed at runtime without restarting.
+Provides type-aware prompting, dotted-path field application, and post-set hooks
+so any config field can be read or changed at runtime without restarting.
+
+Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
+`tools.http.timeout`, `interface.theme`). `set_config_value` traverses to the
+leaf's owning sub-model and `setattr`s there, so pydantic's per-model
+`validate_assignment` fires on the model that actually owns the field — that's
+what re-parses e.g. `api.type` (string → APIType) or `interface.theme`
+(string → Palette) for free, without bespoke coercion here.
 """
 
 import asyncio
@@ -17,42 +24,82 @@ from solveig.utils.misc import parse_human_readable_size
 from .config import SolveigConfig
 
 # ---------------------------------------------------------------------------
-# Field registry — every field the user may change at runtime
+# Field registry — every field the user may change at runtime, by dotted path
 # ---------------------------------------------------------------------------
 
 CONFIG_EDITABLE_FIELDS: dict[str, str] = {
     # Model / API connection
-    "model": "LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
-    "url": "LLM API endpoint URL",
-    "api_type": "API provider type (openai, anthropic, gemini)",
-    "api_key": "API authentication key",
-    # Generation
-    "temperature": "Model temperature 0.0–2.0",
-    "max_context": "Max context window in tokens (-1 = model's limit)",
-    "timeout": "LLM API request timeout in seconds",
+    "api.model": "LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
+    "api.url": "LLM API endpoint URL",
+    "api.type": "API provider type (openai, anthropic, gemini)",
+    "api.key": "API authentication key",
+    "api.temperature": "Model temperature 0.0–2.0",
+    "api.max_context": "Max context window in tokens (-1 = model's limit)",
+    "api.timeout": "LLM API request timeout in seconds",
     # System prompt
-    "add_examples": "Include few-shot examples in system prompt",
-    "add_os_info": "Include OS info in system prompt",
-    "system_prompt": "Raw system prompt template",
+    "system_prompt.content": "Raw system prompt template",
+    "system_prompt.add_examples": "Include few-shot examples in system prompt",
+    "system_prompt.add_os_info": "Include OS info in system prompt",
     "briefing": "Markdown files appended to the system prompt in order (comma-separated paths)",
     # Safety & permissions
     "min_disk_space_left": "Minimum free disk space before blocking writes",
     "auto_allowed_paths": "Glob patterns for auto-approved file paths (comma-separated)",
     "ignore_paths": "Glob patterns for paths that are fully blocked from all tool access (comma-separated)",
-    "auto_execute_commands": "Regex patterns for auto-approved shell commands (comma-separated)",
-    "no_commands": "Disable shell command execution entirely",
+    # Tools (each core tool disables uniformly via tools.<name>.enabled)
+    "tools.command.enabled": "Enable the shell command tool",
+    "tools.command.auto_execute": "Regex patterns for auto-approved shell commands (comma-separated)",
+    "tools.http.enabled": "Enable the HTTP tool",
+    "tools.http.timeout": "HTTP request timeout in seconds",
+    "tools.http.max_response_bytes": "Truncate HTTP response bodies at this many bytes",
+    "tools.read.enabled": "Enable the file read tool",
+    "tools.write.enabled": "Enable the file write tool",
+    "tools.edit.enabled": "Enable the file edit tool",
+    "tools.delete.enabled": "Enable the file delete tool",
+    "tools.copy.enabled": "Enable the file copy tool",
+    "tools.move.enabled": "Enable the file move tool",
+    "tools.tasks.enabled": "Enable the task-planning tool",
     # Behaviour
     "disable_autonomy": "Require user approval between agentic steps",
-    "stream": "Stream assistant output token-by-token as it's generated",
-    "auto_collapse_tools": "Auto-collapse tool groups after approval",
-    "auto_copy_selection": "Auto-copy click-drag selected text to clipboard on mouse release",
-    "verbose": "Show debug output (API payloads, response models)",
+    "interface.stream": "Stream assistant output token-by-token as it's generated",
+    "interface.auto_collapse_tools": "Auto-collapse tool groups after approval",
+    "interface.auto_copy_selection": "Auto-copy click-drag selected text to clipboard on mouse release",
     # Plugins
-    "plugins": "Plugin configuration (JSON object)",
+    "plugins.paths": "Plugin discovery directories (comma-separated)",
+    # Session
+    "session.dir": "Directory for stored sessions",
+    "session.auto_save": "Auto-save the session after each response",
     # Interface
-    "theme": "UI color theme",
-    "code_theme": "Code syntax highlighting theme",
+    "interface.theme": "UI color theme",
+    "interface.code_theme": "Code syntax highlighting theme",
 }
+
+# ---------------------------------------------------------------------------
+# Dotted-path traversal
+# ---------------------------------------------------------------------------
+
+
+def _resolve(config: SolveigConfig, dotted: str) -> tuple[Any, str]:
+    """Walk a dotted path to its leaf, returning (owning_model, leaf_name).
+
+    get/set operate on the leaf's owning model so pydantic's per-model
+    `validate_assignment` fires on the sub-model that actually owns the field.
+    """
+    obj: Any = config
+    *parents, leaf = dotted.split(".")
+    for part in parents:
+        obj = getattr(obj, part)
+    return obj, leaf
+
+
+def get_config_value(config: SolveigConfig, dotted: str) -> Any:
+    obj, leaf = _resolve(config, dotted)
+    return getattr(obj, leaf)
+
+
+def set_config_value(config: SolveigConfig, dotted: str, value: Any) -> None:
+    obj, leaf = _resolve(config, dotted)
+    setattr(obj, leaf, value)  # validate_assignment re-validates on the leaf model
+
 
 # ---------------------------------------------------------------------------
 # Type utilities
@@ -69,9 +116,22 @@ def _unwrap_optional(tp: Any) -> Any:
     return tp
 
 
+def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
+    """The (optional-unwrapped) declared type of a dotted field's leaf, read from
+    the leaf's owning sub-model — not `SolveigConfig` itself."""
+    obj, leaf = _resolve(config, dotted)
+    hints = typing.get_type_hints(type(obj))
+    return _unwrap_optional(hints[leaf])
+
+
 def _parse_field_value(field_name: str, tp: Any, raw: str) -> Any:
     """
     Parse a raw string into the correct Python value for the given field type.
+
+    Only a coarse pre-parse: the subsequent `setattr` runs the leaf model's
+    `validate_assignment`, which does the real coercion/validation (string →
+    APIType, string → Palette, regex checks, …). So the fall-through here just
+    hands the raw string through for those richer-typed fields.
 
     NOTE: bool("false") is True in Python, so we handle bools explicitly here.
     """
@@ -87,8 +147,15 @@ def _parse_field_value(field_name: str, tp: Any, raw: str) -> Any:
         return [s.strip() for s in raw.split(",") if s.strip()]
     if tp is str:
         return raw
-    # str | None: empty string → None
+    # Richer-typed field (APIType, Palette, str | None): pass the raw string
+    # through and let validate_assignment coerce it; empty string → None.
     return raw or None
+
+
+def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
+    """Parse a raw `/config set <field> <value>` string into the leaf field's
+    Python type. The subsequent set_config_value/setattr validates it."""
+    return _parse_field_value(dotted, _leaf_type(config, dotted), raw)
 
 
 # ---------------------------------------------------------------------------
@@ -111,27 +178,26 @@ async def prompt_for_field(
     Returns the parsed Python value ready to be set on config.
     Raises ValueError if the raw input cannot be parsed.
     """
-    hints = typing.get_type_hints(config.__class__)
-    raw_type = _unwrap_optional(hints[field_name])
+    raw_type = _leaf_type(config, field_name)
     description = CONFIG_EDITABLE_FIELDS[field_name]
-    current = getattr(config, field_name)
+    current = get_config_value(config, field_name)
 
     # --- Constrained-choice fields ---
-    if field_name == "theme":
+    if field_name == "interface.theme":
         keys = list(themes.THEMES.keys())
         idx = await interface.ask_choice(
             f"{description} (current: {current.name})", keys, add_cancel=True
         )
         return list(themes.THEMES.values())[idx]
 
-    if field_name == "code_theme":
+    if field_name == "interface.code_theme":
         options = sorted(themes.CODE_THEMES)
         idx = await interface.ask_choice(
             f"{description} (current: {current})", options, add_cancel=True
         )
         return options[idx]
 
-    if field_name == "api_type":
+    if field_name == "api.type":
         keys = list(API_TYPES.keys())
         idx = await interface.ask_choice(
             f"{description} (current: {current.name})", keys, add_cancel=True
@@ -174,17 +240,17 @@ async def fetch_and_apply_model_info(
     """
     Fetch model details from the API and apply them to config.
 
-    Updates: config.model (if it was None, resolved to first available),
-             config.model_info, config.max_context (if model reports a tighter
-             limit), stats bar.
+    Updates: config.api.model (if it was None, resolved to first available),
+             config.model_info, config.api.max_context (if model reports a
+             tighter limit), stats bar.
 
     Always animates while the request is in-flight.
     Returns True on success, False on failure (error already displayed).
     """
     try:
         async with interface.with_cancellable(
-            config.api_type.get_model_details(
-                provider=provider_ref.provider, model=config.model
+            config.api.type.get_model_details(
+                provider=provider_ref.provider, model=config.api.model
             ),
             status="Connecting to assistant",
         ) as task:
@@ -194,8 +260,8 @@ async def fetch_and_apply_model_info(
         return False
     except NotImplementedError:
         # Provider doesn't support model detail fetching — set minimal info
-        if config.model:
-            config.model_info = ModelInfo(model=config.model)
+        if config.api.model:
+            config.model_info = ModelInfo(model=config.api.model)
         return True
     except ModelNotFound as e:
         await e.print(interface)
@@ -209,16 +275,19 @@ async def fetch_and_apply_model_info(
     if model_info is None:
         return False
 
-    config.model = model_info.model
+    config.api.model = model_info.model
     config.model_info = model_info
 
     if model_info.context_length is not None:
-        if config.max_context < 0 or config.max_context > model_info.context_length:
-            config.max_context = model_info.context_length
+        if (
+            config.api.max_context < 0
+            or config.api.max_context > model_info.context_length
+        ):
+            config.api.max_context = model_info.context_length
 
     await interface.update_stats(
-        model=config.model,
-        max_context=config.max_context,
+        model=config.api.model,
+        max_context=config.api.max_context,
         input_price=model_info.input_price,
         output_price=model_info.output_price,
     )
@@ -244,7 +313,7 @@ async def _hook_max_context_changed(
     provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
-    await interface.update_stats(max_context=config.max_context)
+    await interface.update_stats(max_context=config.api.max_context)
 
 
 async def _hook_theme_changed(
@@ -252,7 +321,7 @@ async def _hook_theme_changed(
     provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
-    interface.set_theme(config.theme)
+    interface.set_theme(config.interface.theme)
 
 
 # ---------------------------------------------------------------------------
@@ -262,14 +331,14 @@ async def _hook_theme_changed(
 _HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
 
 CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
-    "model": _hook_model_changed,
-    "max_context": _hook_max_context_changed,
-    "theme": _hook_theme_changed,
-    # NOTE: no_commands needs no hook - the FilteredToolset's is_tool_active reads
-    # ctx.deps.config live per step, so toggling it takes effect on the next step
-    # with no rebuild (rebuild is for membership changes only). briefing needs no
-    # hook either - run.py recomputes the system prompt fresh every turn. All other
-    # editable fields currently need no post-set hook.
+    "api.model": _hook_model_changed,
+    "api.max_context": _hook_max_context_changed,
+    "interface.theme": _hook_theme_changed,
+    # NOTE: tools.command.enabled needs no hook - the FilteredToolset's
+    # is_tool_active reads ctx.deps.config live per step, so toggling it takes
+    # effect on the next step with no rebuild (rebuild is for membership changes
+    # only). briefing needs no hook either - run.py recomputes the system prompt
+    # fresh every turn. All other editable fields currently need no post-set hook.
 }
 
 # ---------------------------------------------------------------------------
@@ -285,12 +354,15 @@ async def apply_config_field(
     interface: SolveigInterface,
 ) -> None:
     """
-    Set config.<field_name> = new_value and run any registered post-set hook.
-
-    The hook is responsible for all side effects (stats updates, client
+    Set config.<dotted field_name> = new_value and run any registered post-set
+    hook. The hook is responsible for all side effects (stats updates, client
     recreation, etc.).
+
+    A runtime `/config set` is explicit user intent, so the field is recorded in
+    `_declared` — that's the set `/config save` (Task 7) persists.
     """
-    setattr(config, field_name, new_value)
+    set_config_value(config, field_name, new_value)
+    config._declared.add(field_name)
     hook = CONFIG_POST_SET_HOOKS.get(field_name)
     if hook:
         await hook(config, provider_ref, interface)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import shlex
-import typing
 from collections.abc import Callable
 
 from pydantic import ValidationError
@@ -14,10 +13,10 @@ from solveig.api import ProviderRef
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
-    _parse_field_value,
-    _unwrap_optional,
     apply_config_field,
     fetch_and_apply_model_info,
+    get_config_value,
+    parse_config_value,
     prompt_for_field,
 )
 from solveig.conversation import Conversation
@@ -364,9 +363,9 @@ class SubcommandRunner:
         """List all editable config fields with their current values."""
         lines = []
         for field_name, _description in CONFIG_EDITABLE_FIELDS.items():
-            value = getattr(self.config, field_name)
+            value = get_config_value(self.config, field_name)
             display = self._format_field_value(field_name, value)
-            lines.append(f"{field_name:<26} = {display}")
+            lines.append(f"{field_name:<32} = {display}")
         await interface.display_text_box(
             "\n".join(lines), title="Config (editable fields)"
         )
@@ -382,7 +381,7 @@ class SubcommandRunner:
                 f"Unknown field: '{field_name}'. Use /config list to see all fields."
             )
             return
-        value = getattr(self.config, field_name)
+        value = get_config_value(self.config, field_name)
         display = self._format_field_value(field_name, value)
         description = CONFIG_EDITABLE_FIELDS[field_name]
         await interface.display_info(f"{field_name} = {display}  ({description})")
@@ -427,9 +426,7 @@ class SubcommandRunner:
             return
 
         try:
-            hints = typing.get_type_hints(self.config.__class__)
-            raw_type = _unwrap_optional(hints[field_name])
-            new_value = _parse_field_value(field_name, raw_type, value_str)
+            new_value = parse_config_value(self.config, field_name, value_str)
         except (ValueError, KeyError) as e:
             await interface.display_error(f"Invalid value for '{field_name}': {e}")
             return
@@ -460,7 +457,7 @@ class SubcommandRunner:
     async def _apply_and_confirm(
         self, field_name: str, new_value: object, interface: SolveigInterface
     ) -> None:
-        old_value = getattr(self.config, field_name)
+        old_value = get_config_value(self.config, field_name)
         await apply_config_field(
             field_name,
             new_value,
@@ -477,13 +474,14 @@ class SubcommandRunner:
     @staticmethod
     def _format_field_value(field_name: str, value: object) -> str:
         """Format a config value for display."""
-        if field_name == "api_key":
+        if field_name == "api.key":
             return "***" if value else "(not set)"
         if field_name == "min_disk_space_left" and isinstance(value, int):
             return convert_size_to_human_readable(value)
-        if field_name in ("auto_allowed_paths", "auto_execute_commands") and isinstance(
-            value, list
-        ):
+        if field_name in (
+            "auto_allowed_paths",
+            "tools.command.auto_execute",
+        ) and isinstance(value, list):
             return ", ".join(str(v) for v in value) if value else "(empty)"
         if hasattr(value, "name"):  # Palette, APIType subclass
             return value.name
