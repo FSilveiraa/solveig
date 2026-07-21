@@ -313,9 +313,9 @@ class SubcommandRunner:
                 await interface.display_info(usage_line)
                 return
 
-            if cls is CommandTool and self.config.no_commands:
+            if cls is CommandTool and not self.config.tools.command.enabled:
                 await interface.display_error(
-                    "Command execution is disabled (--no-commands)."
+                    "Command execution is disabled (tools.command.enabled=false)."
                 )
                 return
 
@@ -497,13 +497,13 @@ class SubcommandRunner:
         await self._config_set_cmd(interface, "model", *args)
 
     async def _model_info(self, interface: SolveigInterface, *args) -> None:
-        if not self.config.model:
+        if not self.config.api.model:
             await interface.display_warning(
                 "No model configured. Use /model set <name>."
             )
             return
         info = self.config.model_info
-        lines = [f"Model: {self.config.model}"]
+        lines = [f"Model: {self.config.api.model}"]
         if info:
             if info.context_length is not None:
                 lines.append(f"Context length: {info.context_length:,} tokens")
@@ -516,7 +516,7 @@ class SubcommandRunner:
         await interface.display_text_box("\n".join(lines), title="Model Info")
 
     async def _model_refresh(self, interface: SolveigInterface, *args) -> None:
-        if not self.config.model:
+        if not self.config.api.model:
             await interface.display_error("No model configured to refresh.")
             return
         self.config.model_info = None
@@ -548,7 +548,7 @@ class SubcommandRunner:
 
     async def draw_help(self, interface: SolveigInterface, *args, **kwargs) -> str:
         help_str = f"""
-You're using Solveig to interact with an AI assistant at {self.config.url}.
+You're using Solveig to interact with an AI assistant at {self.config.api.url}.
 This message was printed because you used the '/help' sub-command.
 You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 """.strip()

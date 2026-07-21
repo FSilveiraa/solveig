@@ -95,7 +95,7 @@ class HttpTool(BaseTool):
             await interface.display_warning("Rejected")
             return ToolResult(content="User declined to send the request.")
 
-        response = await self._send_request(interface, config.http_timeout)
+        response = await self._send_request(interface, config.tools.http.timeout)
         if isinstance(response, ToolResult):  # error
             return response
 
@@ -208,9 +208,9 @@ class HttpTool(BaseTool):
         response_headers: dict[str, str],
     ) -> ToolResult:
         raw = response.text
-        truncated = len(raw) > config.http_max_response_bytes
+        truncated = len(raw) > config.tools.http.max_response_bytes
         if truncated:
-            raw = raw[: config.http_max_response_bytes]
+            raw = raw[: config.tools.http.max_response_bytes]
 
         send_choice = await interface.ask_choice(
             "Send response to assistant?", ["Send", "Inspect first", "Don't send"]
@@ -229,7 +229,7 @@ class HttpTool(BaseTool):
             )
             if truncated:
                 await interface.display_warning(
-                    "Response body was truncated (see config.http_max_response_bytes)"
+                    "Response body was truncated (see config.tools.http.max_response_bytes)"
                 )
             if (
                 await interface.ask_choice("Send to assistant?", ["Send", "Don't send"])

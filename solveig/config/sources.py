@@ -62,7 +62,9 @@ def _plugin_paths_union(paths_low_to_high: list[str]) -> list[str]:
     discovery dir. All other lists keep anyconfig's default replace semantics."""
     union: list[str] = []
     for path in paths_low_to_high:
-        one = anyconfig.load(path) or {}
+        one = anyconfig.load(path)
+        if not isinstance(one, dict):  # a scalar/None config file has no plugins
+            continue
         for plugin_path in (one.get("plugins") or {}).get("paths") or []:
             if plugin_path not in union:
                 union.append(plugin_path)
@@ -76,7 +78,7 @@ def load_paths(paths_high_first: list[str]) -> dict:
         return {}
     low_to_high = list(reversed(paths_high_first))
     merged = anyconfig.load(low_to_high, ac_merge=anyconfig.MS_DICTS)
-    data = dict(merged) if merged else {}
+    data = dict(merged) if isinstance(merged, dict) else {}
     _check_legacy(data)
     union = _plugin_paths_union(low_to_high)
     if union:

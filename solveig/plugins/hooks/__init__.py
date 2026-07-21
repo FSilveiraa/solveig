@@ -15,8 +15,8 @@ with `PLUGIN_TOOLS`.
 Keyed by the *tool being hooked* (name or function), appended to a list -
 unlike `PLUGIN_TOOLS.all`, a collision here isn't possible, since nothing is
 indexed by a single plugin/file-derived key. Plugin name is only derived
-(from the hook function's module path) on demand, for the `config.plugins`
-enable/disable gate and load/skip reporting.
+(from the hook function's module path) on demand, for load reporting (and
+Sub-project B's per-hook config).
 """
 
 from collections import defaultdict
@@ -97,12 +97,12 @@ def after(
 
 
 async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
-    """Discover hook plugin modules and report which are active per `config.plugins`.
+    """Discover hook plugin modules and report which loaded.
 
-    Hooks register themselves via `@before`/`@after` at import time; the
-    tool-execution capability gates each hook on `config.plugins` at call time,
-    so there's nothing to enable/disable here beyond discovery and user-facing
-    status.
+    Hooks register themselves via `@before`/`@after` at import time and are
+    enabled-by-default (no `config.plugins` enable map); per-hook enable/disable
+    config is Sub-project B. `config` is kept on the signature for symmetry with
+    the tool loader and B's future gating.
     """
     clear_hooks()
 
@@ -112,10 +112,7 @@ async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterfa
     )
 
     for name in sorted(registered_plugin_names()):
-        if name in config.plugins:
-            await interface.display_success(f"'{name}': Loaded")
-        else:
-            await interface.display_warning(f"'{name}': Skipped (missing from config)")
+        await interface.display_success(f"'{name}': Loaded")
 
 
 __all__ = [

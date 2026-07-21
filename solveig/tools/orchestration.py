@@ -28,7 +28,7 @@ from pydantic_ai.messages import ToolCallPart
 
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
-from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, plugin_name
+from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
@@ -46,7 +46,7 @@ def open_tool_group(
     collapse). The single place the group + auto_collapse convention lives for
     both the typed and untyped execution paths below."""
     return interface.with_group(
-        title, auto_collapse=config.auto_collapse_tools and auto_collapse
+        title, auto_collapse=config.interface.auto_collapse_tools and auto_collapse
     )
 
 
@@ -73,17 +73,17 @@ async def run_tool_and_hooks(
         # prompt appears with the operation already visible above it.
         await instance.display_header(group)
 
+        # Hooks are enabled-by-default (per-hook enable/disable config is
+        # Sub-project B); every registered hook for this tool fires.
         for before_hook in BEFORE_HOOKS.get(tool_name, ()):
-            if plugin_name(before_hook) in config.plugins:
-                await before_hook(instance.model_dump(), config, group)
+            await before_hook(instance.model_dump(), config, group)
 
         result = await instance.execute(config, group)
         if not isinstance(result, ToolResult):
             return result
 
         for after_hook in AFTER_HOOKS.get(tool_name, ()):
-            if plugin_name(after_hook) in config.plugins:
-                result = await after_hook(result, config, group)
+            result = await after_hook(result, config, group)
         return result
 
 

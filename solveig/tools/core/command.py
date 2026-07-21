@@ -73,11 +73,11 @@ class CommandTool(BaseTool):
         run = False
         inspect = False
 
-        for pattern in config.auto_execute_commands:
+        for pattern in config.tools.command.auto_execute:
             if re.match(pattern, self.command):
                 run = True
                 await interface.display_info(
-                    "Running command and sending output since it matches config.auto_execute_commands"
+                    "Running command and sending output since it matches config.tools.command.auto_execute"
                 )
                 break
         else:

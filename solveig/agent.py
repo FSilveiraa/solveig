@@ -69,8 +69,12 @@ def build_agent(
     if model is not None:
         resolved_model = model
     else:
-        assert config.model is not None, "build_agent requires config.model to be set"
-        resolved_model = get_model(config.api_type, provider_ref.provider, config.model)
+        assert config.api.model is not None, (
+            "build_agent requires config.api.model to be set"
+        )
+        resolved_model = get_model(
+            config.api.type, provider_ref.provider, config.api.model
+        )
     return Agent(
         resolved_model,
         deps_type=SolveigContext,
@@ -80,7 +84,7 @@ def build_agent(
         # not the whole run.py loop below, which also covers tool execution
         # and interactive ask_choice waits that have nothing to do with
         # network communication and shouldn't be timed out.
-        model_settings={"timeout": config.timeout} if config.timeout else None,
+        model_settings={"timeout": config.api.timeout} if config.api.timeout else None,
         capabilities=[
             build_loop_capability(),
             build_tool_execution_capability(),
@@ -121,10 +125,10 @@ def build_loop_capability() -> Hooks[SolveigContext]:
         # Non-stream: wrap the network round trip so Esc/Ctrl+C cancels exactly
         # the model call in flight. Streaming steps aside - run_turn owns the
         # reader-side animation instead (see _thinking for the full why).
-        if ctx.deps.config.stream:
+        if ctx.deps.config.interface.stream:
             return await handler(request_context)
         async with _thinking(
-            ctx.deps.interface, handler(request_context), ctx.deps.config.timeout
+            ctx.deps.interface, handler(request_context), ctx.deps.config.api.timeout
         ) as task:
             return await task
 
@@ -172,7 +176,7 @@ async def run_turn(
 
         try:
             async for node in run:
-                if deps.config.stream and Agent.is_model_request_node(node):
+                if deps.config.interface.stream and Agent.is_model_request_node(node):
                     # Stream this response token-by-token into a live entry, the
                     # whole consumption inside ONE cancellable task so Esc/Ctrl+C
                     # stops the READER and lets node.stream()'s context close the
@@ -187,7 +191,7 @@ async def run_turn(
 
                     try:
                         async with _thinking(
-                            deps.interface, stream_node(), deps.config.timeout
+                            deps.interface, stream_node(), deps.config.api.timeout
                         ) as task:
                             await task
                     finally:
@@ -354,7 +358,7 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
 
     Stateless: `config`/`interface` come from `ctx.deps` and the hook
     registries are read live at call time, so a plugin rescan or
-    `config.plugins` toggle takes effect on the next call.
+    `tools.<name>.enabled` toggle takes effect on the next call.
     """
     hooks: Hooks[SolveigContext] = Hooks()
 

@@ -102,12 +102,12 @@ async def get_briefing_content(briefing_files: list[str]) -> str:
 
 
 async def get_system_prompt(config: SolveigConfig) -> str:
-    system_prompt = config.system_prompt.strip()
+    system_prompt = config.system_prompt.content.strip()
     if briefing_content := await get_briefing_content(config.briefing):
         system_prompt += "\n\n" + briefing_content
-    if config.add_os_info and (os_info := get_basic_os_info()):
+    if config.system_prompt.add_os_info and (os_info := get_basic_os_info()):
         system_prompt += "\n\n" + os_info
-    if config.add_examples:
+    if config.system_prompt.add_examples:
         story = await load_story("sync_review")
         system_prompt += "\n\n" + get_examples_info(story)
     return system_prompt.strip()

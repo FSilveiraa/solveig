@@ -12,8 +12,8 @@ requires tool names to be globally unique, so this is free uniqueness rather
 than an assumption. Keying by file name instead would silently collide
 whenever one plugin file exports more than one tool (only the last
 registration in that file would survive). `owners` tracks tool name -> plugin
-name separately, for `config.plugins` enable/disable and reporting - a file
-exporting several tools is one enable/disable unit, but each tool is its own
+name separately, for load reporting (and Sub-project B's per-plugin config) - a
+file exporting several tools is one reporting unit, but each tool is its own
 schema entry.
 """
 
@@ -72,7 +72,12 @@ clear_tools = PLUGIN_TOOLS.clear
 
 
 async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterface):
-    """Discover, load, and filter tool plugins, and update the UI."""
+    """Discover and load tool plugins, and report them in the UI.
+
+    Plugins are enabled-by-default now (no `config.plugins` enable map);
+    per-plugin config/gating is Sub-project B. `config` is kept on the
+    signature for symmetry with the hook loader and B's future filtering.
+    """
     PLUGIN_TOOLS.clear()
 
     await rescan_and_load_plugins(
@@ -81,17 +86,11 @@ async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterfa
     )
 
     reported_plugins: set[str] = set()
-    for tool_name, _plugin_fn in PLUGIN_TOOLS.all.items():
+    for tool_name in PLUGIN_TOOLS.all:
         plugin_name = PLUGIN_TOOLS.owners[tool_name]
-        if config.plugins and plugin_name in config.plugins:
-            if plugin_name not in reported_plugins:
-                await interface.display_success(f"'{plugin_name}': Loaded")
-        else:
-            if plugin_name not in reported_plugins:
-                await interface.display_warning(
-                    f"'{plugin_name}': Skipped (missing from config)"
-                )
-        reported_plugins.add(plugin_name)
+        if plugin_name not in reported_plugins:
+            await interface.display_success(f"'{plugin_name}': Loaded")
+            reported_plugins.add(plugin_name)
 
 
 __all__ = [

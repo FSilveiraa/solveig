@@ -206,10 +206,10 @@ async def disconnect(
 
 
 async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> None:
-    """Connect to all servers listed in config.mcp_servers, concurrently."""
+    """Connect to all servers listed in config.mcp.servers, concurrently."""
     await asyncio.gather(
         *(
             connect(server_config, config, interface)
-            for server_config in config.mcp_servers.values()
+            for server_config in config.mcp.servers.values()
         )
     )

@@ -228,7 +228,7 @@ class SolveigConfig(BaseSettings):
         """Populate `_declared` with the dotted paths explicitly provided by the
         config file(s) and the command line — the fields `/config save` persists.
         Env-provided values are transient and intentionally excluded."""
-        cli = CliSettingsSource(
+        cli: CliSettingsSource = CliSettingsSource(
             type(self), cli_parse_args=argv, cli_shortcuts=_CLI_SHORTCUTS, **_CLI_OPTS
         )
         # Flatten each source to dotted leaves and union the sets — a shallow dict

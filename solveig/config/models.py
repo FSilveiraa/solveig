@@ -102,7 +102,9 @@ with warnings.catch_warnings():
         write: ToolConfig = Field(default_factory=ToolConfig)
         edit: ToolConfig = Field(default_factory=ToolConfig)
         delete: ToolConfig = Field(default_factory=ToolConfig)
-        copy: ToolConfig = Field(default_factory=ToolConfig)
+        # `copy` deliberately shadows deprecated BaseModel.copy (see NOTE above);
+        # mypy sees the field/method type clash, hence the ignore.
+        copy: ToolConfig = Field(default_factory=ToolConfig)  # type: ignore[assignment]
         move: ToolConfig = Field(default_factory=ToolConfig)
         tasks: ToolConfig = Field(default_factory=ToolConfig)
 

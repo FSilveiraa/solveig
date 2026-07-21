@@ -48,7 +48,9 @@ async def shellcheck(
     NOTE: Windows/PowerShell support is untested.
     """
     command_str = tool_args["command"]
-    plugin_config = config.plugins.get("shellcheck", {})
+    # NOTE: per-hook config (plugins.hooks.<fnname>) lands in Sub-project B; until
+    # then the hook runs with defaults.
+    plugin_config: dict = {}
 
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")

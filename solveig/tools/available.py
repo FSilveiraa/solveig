@@ -2,11 +2,10 @@
 
 `AVAILABLE_TOOLS` holds a plain `CombinedToolset([FilteredToolset(FunctionToolset),
 *mcp])` - no wrappers. `rebuild(config)` is only needed after a genuine change in
-tool *membership* (plugin rescan, MCP connect/disconnect);
-`config.no_commands`/`config.plugins` toggling is decided live per step by the
-`FilteredToolset`, using whatever `ctx.deps.config` says right now, so it needs no
-rebuild. Built on pydantic-ai's own `FilteredToolset` rather than a hand-rolled
-visibility check.
+tool *membership* (plugin rescan, MCP connect/disconnect); `tools.<name>.enabled`
+toggling is decided live per step by the `FilteredToolset`, using whatever
+`ctx.deps.config` says right now, so it needs no rebuild. Built on pydantic-ai's own
+`FilteredToolset` rather than a hand-rolled visibility check.
 
 The other half of tool execution - running the plugin `@before`/`@after` hooks
 and rendering each `ToolResult` into a `ToolReturn` - is the `Hooks` capability
@@ -23,7 +22,7 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.plugins.tools import PLUGIN_TOOLS
-from solveig.tools import CORE_TOOLS, CommandTool
+from solveig.tools import CORE_TOOLS
 from solveig.tools.base import BaseTool
 
 
@@ -55,12 +54,12 @@ class AvailableTools:
         """Recompute the base toolset from CORE_TOOLS, every discovered plugin
         tool, and every connected MCP server's toolset. Only needed after tool
         *membership* actually changes - see the module docstring for why
-        `no_commands`/`config.plugins` toggling doesn't need this."""
+        `tools.<name>.enabled` toggling doesn't need this."""
         mcp_toolsets = [conn.toolset for conn in MCP_CONNECTIONS.values()]
 
-        # Every discovered plugin tool is included here, not just the ones
-        # config.plugins currently enables - the filter below decides
-        # visibility live, per step, from config.
+        # Every discovered plugin tool is included here; the FilteredToolset
+        # below decides core-tool visibility live from `tools.<name>.enabled`
+        # (plugin tools are enabled-by-default in the current schema).
         # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS.all's specific callable
         # types don't unify into anything FunctionToolset's constructor (or
         # the .filtered() predicate's deps type below) accepts precisely -
@@ -76,12 +75,12 @@ class AvailableTools:
         def is_tool_active(
             ctx: RunContext[SolveigContext], tool_def: ToolDefinition
         ) -> bool:
-            active_config = ctx.deps.config
-            if tool_def.name == CommandTool.tool_name() and active_config.no_commands:
-                return False
-            owning_plugin = PLUGIN_TOOLS.owners.get(tool_def.name)
-            if owning_plugin is not None and owning_plugin not in active_config.plugins:
-                return False
+            # A core tool is active iff its `tools.<name>.enabled` flag is set;
+            # plugin tools have no static entry and are enabled-by-default
+            # (per-plugin config lives in Sub-project B's plugins.tools/hooks).
+            tools_config = ctx.deps.config.tools
+            if tool_def.name in type(tools_config).model_fields:
+                return bool(getattr(tools_config, tool_def.name).enabled)
             return True
 
         base = FunctionToolset(function_tools).filtered(is_tool_active)

@@ -46,7 +46,9 @@ async def trafilatura(
     ) != 0:
         return result
 
-    plugin_config = config.plugins.get("trafilatura", {})
+    # NOTE: per-hook config (plugins.hooks.<fnname>) lands in Sub-project B; until
+    # then the hook runs with defaults.
+    plugin_config: dict = {}
     markdown = _trafilatura.extract(
         body,
         url=result.private.get("url"),

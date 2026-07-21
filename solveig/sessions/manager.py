@@ -52,7 +52,7 @@ class SessionManager:
     @property
     def sessions_dir(self) -> Path:
         """Resolved from config each time so runtime changes are reflected."""
-        return Filesystem.get_absolute_path(self.config.sessions_dir)
+        return Filesystem.get_absolute_path(self.config.session.dir)
 
     async def _ensure_dir(self) -> Path:
         path = self.sessions_dir

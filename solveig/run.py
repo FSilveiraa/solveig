@@ -75,14 +75,14 @@ async def setup_loop(
             await interface.display_error(f"Could not resume session: {e}")
 
     # No model set: warn and wait for the user to configure one.
-    if config.model is None:
+    if config.api.model is None:
         await interface.display_warning(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
         await fetch_and_apply_model_info(config, provider_ref, interface)
 
-    await interface.update_stats(url=config.url, model=config.model)
+    await interface.update_stats(url=config.api.url, model=config.api.model)
 
     subcommand_executor = SubcommandRunner(
         config=config,
@@ -135,7 +135,7 @@ async def main_loop(
         # The user prompt renders reactively through the transcript once
         # run_turn adopts it into the conversation - no predicted display here.
 
-        if config.model is None:
+        if config.api.model is None:
             await interface.display_error(
                 "No model set. Use /model set <name> or /config set model <name>."
             )
@@ -158,7 +158,7 @@ async def main_loop(
             sent_tokens=conversation.usage.input_tokens,
             received_tokens=conversation.usage.output_tokens,
         )
-        if session_manager and config.auto_save_session:
+        if session_manager and config.session.auto_save:
             await session_manager.store(conversation)
 
 
@@ -194,9 +194,9 @@ async def run_async(
     # that user_prompt can be queued immediately. By the time the loop calls
     # pending_queue.get(), the prompt is already there and won't block.
     interface = interface or TerminalInterface(
-        theme=config.theme,
-        code_theme=config.code_theme,
-        auto_copy_selection=config.auto_copy_selection,
+        theme=config.interface.theme,
+        code_theme=config.interface.code_theme,
+        auto_copy_selection=config.interface.auto_copy_selection,
     )
 
     conversation = Conversation()
@@ -205,7 +205,9 @@ async def run_async(
         await interface.enqueue_pending(user_prompt)
 
     provider_ref = provider_ref or ProviderRef(
-        provider=get_provider(config.api_type, api_key=config.api_key, url=config.url)
+        provider=get_provider(
+            config.api.type, api_key=config.api.key, url=config.api.url
+        )
     )
 
     loop_task = None
