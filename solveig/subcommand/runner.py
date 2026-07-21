@@ -6,7 +6,7 @@ import dataclasses
 import shlex
 from collections.abc import Callable
 
-from pydantic import ValidationError
+from pydantic import ByteSize, SecretStr, ValidationError
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.api import ProviderRef
@@ -30,7 +30,7 @@ from solveig.tools import CommandTool
 from solveig.tools.available import tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
-from solveig.utils.misc import convert_size_to_human_readable, format_age
+from solveig.utils.misc import format_age
 
 
 class SubcommandRunner:
@@ -364,7 +364,7 @@ class SubcommandRunner:
         lines = []
         for field_name, _description in CONFIG_EDITABLE_FIELDS.items():
             value = get_config_value(self.config, field_name)
-            display = self._format_field_value(field_name, value)
+            display = self._format_field_value(value)
             lines.append(f"{field_name:<32} = {display}")
         await interface.display_text_box(
             "\n".join(lines), title="Config (editable fields)"
@@ -382,7 +382,7 @@ class SubcommandRunner:
             )
             return
         value = get_config_value(self.config, field_name)
-        display = self._format_field_value(field_name, value)
+        display = self._format_field_value(value)
         description = CONFIG_EDITABLE_FIELDS[field_name]
         await interface.display_info(f"{field_name} = {display}  ({description})")
 
@@ -465,23 +465,22 @@ class SubcommandRunner:
             self.provider_ref,
             interface,
         )
-        old_display = self._format_field_value(field_name, old_value)
-        new_display = self._format_field_value(field_name, new_value)
+        old_display = self._format_field_value(old_value)
+        new_display = self._format_field_value(new_value)
         await interface.display_success(
             f"Changed config.{field_name}: {old_display} → {new_display}"
         )
 
     @staticmethod
-    def _format_field_value(field_name: str, value: object) -> str:
-        """Format a config value for display."""
-        if field_name == "api.key":
-            return "***" if value else "(not set)"
-        if field_name == "min_disk_space_left" and isinstance(value, int):
-            return convert_size_to_human_readable(value)
-        if field_name in (
-            "auto_allowed_paths",
-            "tools.command.auto_execute",
-        ) and isinstance(value, list):
+    def _format_field_value(value: object) -> str:
+        """Format a config value for display, driven entirely by the value's
+        type — never by field name. Field-specific presentation lives on the
+        field's type (SecretStr masks itself, ByteSize renders human-readable)."""
+        if isinstance(value, SecretStr):
+            return "***" if value.get_secret_value() else "(not set)"
+        if isinstance(value, ByteSize):
+            return value.human_readable()
+        if isinstance(value, list):
             return ", ".join(str(v) for v in value) if value else "(empty)"
         if hasattr(value, "name"):  # Palette, APIType subclass
             return value.name

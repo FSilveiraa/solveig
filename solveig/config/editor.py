@@ -19,7 +19,6 @@ from typing import Any
 
 from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.interface import SolveigInterface, themes
-from solveig.utils.misc import parse_human_readable_size
 
 from .config import SolveigConfig
 
@@ -124,22 +123,21 @@ def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
     return _unwrap_optional(hints[leaf])
 
 
-def _parse_field_value(field_name: str, tp: Any, raw: str) -> Any:
+def _parse_field_value(tp: Any, raw: str) -> Any:
     """
     Parse a raw string into the correct Python value for the given field type.
 
-    Only a coarse pre-parse: the subsequent `setattr` runs the leaf model's
-    `validate_assignment`, which does the real coercion/validation (string →
-    APIType, string → Palette, regex checks, …). So the fall-through here just
-    hands the raw string through for those richer-typed fields.
+    Only a coarse, purely type-driven pre-parse: the subsequent `setattr` runs
+    the leaf model's `validate_assignment`, which does the real coercion/
+    validation (string → APIType, string → Palette, string → ByteSize, regex
+    checks, …). So the fall-through here just hands the raw string through for
+    those richer-typed fields.
 
     NOTE: bool("false") is True in Python, so we handle bools explicitly here.
     """
     if tp is bool:
         return raw.strip().lower() in ("true", "yes", "1", "on")
     if tp is int:
-        if field_name == "min_disk_space_left":
-            return parse_human_readable_size(raw)
         return int(raw)
     if tp is float:
         return float(raw)
@@ -147,15 +145,15 @@ def _parse_field_value(field_name: str, tp: Any, raw: str) -> Any:
         return [s.strip() for s in raw.split(",") if s.strip()]
     if tp is str:
         return raw
-    # Richer-typed field (APIType, Palette, str | None): pass the raw string
-    # through and let validate_assignment coerce it; empty string → None.
+    # Richer-typed field (APIType, Palette, ByteSize, str | None): pass the raw
+    # string through and let validate_assignment coerce it; empty string → None.
     return raw or None
 
 
 def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
     """Parse a raw `/config set <field> <value>` string into the leaf field's
     Python type. The subsequent set_config_value/setattr validates it."""
-    return _parse_field_value(dotted, _leaf_type(config, dotted), raw)
+    return _parse_field_value(_leaf_type(config, dotted), raw)
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +221,7 @@ async def prompt_for_field(
 
     # --- Free-text fields (str, int, float, str | None) ---
     raw = await interface.ask_question(f"{description} (current: {current}):")
-    return _parse_field_value(field_name, raw_type, raw)
+    return _parse_field_value(raw_type, raw)
 
 
 # ---------------------------------------------------------------------------

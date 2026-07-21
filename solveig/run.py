@@ -206,7 +206,9 @@ async def run_async(
 
     provider_ref = provider_ref or ProviderRef(
         provider=get_provider(
-            config.api.type, api_key=config.api.key, url=config.api.url
+            config.api.type,
+            api_key=config.api.key.get_secret_value() or None,
+            url=config.api.url,
         )
     )
 

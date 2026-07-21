@@ -6,7 +6,7 @@ from contextvars import ContextVar
 from typing import Any
 
 from anyio import Path
-from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic import ByteSize, Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     CliPositionalArg,
@@ -29,7 +29,6 @@ from solveig.config.models import (
     ToolsConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
-from solveig.utils.misc import parse_human_readable_size
 
 # DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
 # for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
@@ -135,7 +134,9 @@ class SolveigConfig(BaseSettings):
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
     system_prompt: SystemPromptConfig = Field(default_factory=SystemPromptConfig)
     briefing: list[str] = Field(default_factory=lambda: ["AGENTS.md"])
-    min_disk_space_left: int = parse_human_readable_size("1GiB")
+    # ByteSize parses human strings ("1GiB") natively and gives .human_readable()
+    # for display — no bespoke parse validator or display special-case needed.
+    min_disk_space_left: ByteSize = ByteSize(1024**3)  # 1 GiB
     auto_allowed_paths: list[Path] = Field(default_factory=list)
     ignore_paths: list[Path] = Field(default_factory=list)
     disable_autonomy: bool = False
@@ -192,11 +193,6 @@ class SolveigConfig(BaseSettings):
             **_CLI_OPTS,
         )
         return (init_settings, cli, env_settings, AnyconfigSource(settings_cls))
-
-    @field_validator("min_disk_space_left", mode="before")
-    @classmethod
-    def _parse_size(cls, v: Any) -> Any:
-        return parse_human_readable_size(v)
 
     @field_validator("auto_allowed_paths", "ignore_paths", mode="before")
     @classmethod

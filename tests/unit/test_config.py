@@ -34,7 +34,7 @@ async def test_cli_shortcuts_long_aliases():
             "anthropic",
         ]
     )
-    assert (c.api.url, c.api.model, c.api.key, c.api.type) == (
+    assert (c.api.url, c.api.model, c.api.key.get_secret_value(), c.api.type) == (
         "http://y",
         "gpt-4.1",
         "sk",
@@ -149,7 +149,7 @@ async def test_env_layer_between_cli_and_file(monkeypatch):
     c, _, _ = await SolveigConfig.parse_config_and_prompt(
         ["--url", "http://x", "--model", "cli-model"]
     )
-    assert c.api.key == "from-env"  # env supplies what CLI omitted
+    assert c.api.key.get_secret_value() == "from-env"  # env supplies what CLI omitted
     assert c.api.model == "cli-model"  # CLI outranks env
 
 

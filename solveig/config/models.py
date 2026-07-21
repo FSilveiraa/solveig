@@ -6,7 +6,14 @@ import re
 import warnings
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_serializer,
+    field_validator,
+)
 
 import solveig.interface.themes as themes
 from solveig.api import APIType, parse_api_type
@@ -37,7 +44,9 @@ class ApiConfig(BaseModel):
     model_config = _MUTABLE
     url: str = ""
     type: builtins.type[APIType.BaseAPI] = APIType.OPENAI
-    key: str = ""
+    # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
+    # for /config save (secrecy is a property of the field, not of display code).
+    key: SecretStr = SecretStr("")
     model: str | None = None
     temperature: float = 0.0
     max_context: int = -1
@@ -51,6 +60,10 @@ class ApiConfig(BaseModel):
     @field_serializer("type")
     def _ser_type(self, v: builtins.type[APIType.BaseAPI]) -> str:
         return v.name
+
+    @field_serializer("key")
+    def _ser_key(self, v: SecretStr) -> str:
+        return v.get_secret_value()
 
 
 class ToolConfig(BaseModel):
