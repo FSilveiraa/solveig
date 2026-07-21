@@ -143,6 +143,35 @@ async def test_declared_tracks_file_and_cli_fields(tmp_path):
     assert "prompt" not in c._declared
 
 
+async def test_declared_config_saves_only_declared_serialized():
+    # /config save persists exactly the declared leaves, serialized: secret
+    # un-masked, api type as its name, byte size as int, command patterns as
+    # source strings — and nothing that wasn't explicitly set.
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+        [
+            "--url",
+            "http://x",
+            "--key",
+            "sk-secret",
+            "--api-type",
+            "anthropic",
+            "--tools.command.auto_execute",
+            "^ls",
+            "--min_disk_space_left",
+            "2GiB",
+        ]
+    )
+    saved = c.declared_config()
+    assert saved == {
+        "api": {"url": "http://x", "key": "sk-secret", "type": "anthropic"},
+        "tools": {"command": {"auto_execute": ["^ls"]}},
+        "min_disk_space_left": 2 * 1024**3,
+    }
+    # a field left at its default is not written
+    assert "session" not in saved
+    assert "model" not in saved.get("api", {})
+
+
 async def test_env_layer_between_cli_and_file(monkeypatch):
     monkeypatch.setenv("SOLVEIG_API__KEY", "from-env")
     monkeypatch.setenv("SOLVEIG_API__MODEL", "env-model")

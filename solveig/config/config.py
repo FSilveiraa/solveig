@@ -220,6 +220,28 @@ class SolveigConfig(BaseSettings):
     def to_json(self, indent: int | None = 2, **kw) -> str:
         return self.model_dump_json(indent=indent, **kw)
 
+    def declared_config(self) -> dict[str, Any]:
+        """The nested dict of only the explicitly-declared fields (file / CLI /
+        `/config set`, tracked in `_declared`) — what `/config save` persists.
+
+        `_declared` is the single source of truth for "was this set?"; each of its
+        dotted paths is by construction a real leaf of the serialized config, so we
+        just copy those leaves out of `model_dump(mode="json")` (which applies the
+        field serializers: key un-masked, enums → names, byte sizes → ints, command
+        patterns → source strings), walking source and destination in lockstep.
+        """
+        full = self.model_dump(mode="json")
+        out: dict[str, Any] = {}
+        for path in sorted(self._declared):
+            *parents, leaf = path.split(".")
+            src: Any = full
+            dest = out
+            for part in parents:
+                src = src[part]
+                dest = dest.setdefault(part, {})
+            dest[leaf] = src[leaf]
+        return out
+
     def _record_declared(self, argv: list[str]) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
         config file(s) and the command line — the fields `/config save` persists.

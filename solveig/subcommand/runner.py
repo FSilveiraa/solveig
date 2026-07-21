@@ -11,7 +11,7 @@ from pydantic import ByteSize, SecretStr, ValidationError
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.api import ProviderRef
-from solveig.config import MCPServerConfig, SolveigConfig
+from solveig.config import DEFAULT_CONFIG_PATH, MCPServerConfig, SolveigConfig, sources
 from solveig.config.editor import (
     CONFIG_EDITABLE_FIELDS,
     apply_config_field,
@@ -156,6 +156,16 @@ class SubcommandRunner:
                 self._config_set_cmd,
                 "Set a field (prompts if omitted)",
                 usage="<field> [value]",
+                is_detail=True,
+            ),
+        )
+        r(
+            self._config,
+            s(
+                "/config save",
+                self._config_save_cmd,
+                "Save changed fields to a config file",
+                usage="[path]",
                 is_detail=True,
             ),
         )
@@ -387,6 +397,25 @@ class SubcommandRunner:
         description = CONFIG_EDITABLE_FIELDS[field_name]
         await interface.display_info(f"{field_name} = {display}  ({description})")
 
+    async def _config_save_cmd(
+        self, interface: SolveigInterface, *args, **kwargs
+    ) -> None:
+        """Persist only the explicitly-declared config fields to a file.
+
+        No-arg target = the highest-precedence loaded config file, else the
+        default path. Writing just config._declared (not a full dump) keeps the
+        saved file minimal — only what the user actually set.
+        """
+        target = (
+            args[0] if args else (self.config._loaded_paths or [DEFAULT_CONFIG_PATH])[0]
+        )
+        try:
+            sources.save_config(self.config.declared_config(), target)
+        except OSError as e:
+            await interface.display_error(f"Could not save config: {e}")
+            return
+        await interface.display_success(f"Config saved to {target}")
+
     async def _config_set_cmd(
         self, interface: SolveigInterface, *args, **kwargs
     ) -> None:
@@ -498,7 +527,7 @@ class SubcommandRunner:
     # ------------------------------------------------------------------
 
     async def _model_set_cmd(self, interface: SolveigInterface, *args) -> None:
-        await self._config_set_cmd(interface, "model", *args)
+        await self._config_set_cmd(interface, "api.model", *args)
 
     async def _model_info(self, interface: SolveigInterface, *args) -> None:
         if not self.config.api.model:
