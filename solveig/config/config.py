@@ -20,13 +20,13 @@ from solveig.config import sources
 from solveig.config.models import (
     DEFAULT_SYSTEM_PROMPT,
     ApiConfig,
+    CoreToolsConfig,
     InterfaceConfig,
     McpConfig,
     MCPServerConfig,
     PluginsConfig,
     SessionConfig,
     SystemPromptConfig,
-    ToolsConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
 
@@ -129,7 +129,7 @@ class SolveigConfig(BaseSettings):
         default_factory=lambda: PluginsConfig(paths=list(DEFAULT_PLUGIN_PATHS))
     )
     mcp: McpConfig = Field(default_factory=McpConfig)
-    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    tools: CoreToolsConfig = Field(default_factory=CoreToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
     system_prompt: SystemPromptConfig = Field(default_factory=SystemPromptConfig)

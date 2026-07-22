@@ -5,13 +5,13 @@ from solveig.api import APIType
 from solveig.config.models import (
     ApiConfig,
     CommandConfig,
+    CoreToolsConfig,
     HttpConfig,
     InterfaceConfig,
     McpConfig,
     MCPServerConfig,
     SystemPromptConfig,
     ToolConfig,
-    ToolsConfig,
 )
 from solveig.interface import themes
 
@@ -59,13 +59,13 @@ def test_tool_allow_block():
 
 
 def test_tools_nesting_defaults():
-    t = ToolsConfig()
+    t = CoreToolsConfig()
     assert t.http.max_response_bytes == 50_000
     assert t.command.enabled is True
 
 
 def test_every_core_tool_has_an_entry_and_is_enabled_by_default():
-    t = ToolsConfig()
+    t = CoreToolsConfig()
     for name in (
         "command",
         "http",

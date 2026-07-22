@@ -97,10 +97,13 @@ with warnings.catch_warnings():
         "ignore", message=r'Field name "copy".*shadows', category=UserWarning
     )
 
-    class ToolsConfig(BaseModel):
-        """CORE tools only (static, known set). Every core tool has an entry so it
-        can be disabled uniformly via `tools.<name>.enabled`. `command`/`http` carry
-        extra fields; the rest are plain ToolConfig (just `enabled`)."""
+    class CoreToolsConfig(BaseModel):
+        """The `tools` section: CORE tools only (static, known set). Every core tool
+        has an entry so it can be disabled uniformly via `tools.<name>.enabled`.
+        `command`/`http` carry extra fields; the rest are plain ToolConfig (just
+        `enabled`). Named CoreToolsConfig (not ToolsConfig) so it doesn't read one
+        `s` away from the per-tool `ToolConfig` element it contains; plugin tool
+        config lives separately under `plugins.tools` in Sub-project B."""
 
         model_config = _MUTABLE
         command: CommandConfig = Field(default_factory=CommandConfig)
