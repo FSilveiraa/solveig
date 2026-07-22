@@ -289,7 +289,7 @@ class TerminalInterface(LocalDisplay):
         if self.subcommand_executor is not None:
             try:
                 is_subcommand = await self.subcommand_executor(
-                    subcommand=user_input, interface=self
+                    user_input, interface=self
                 )
             except UserCancel:
                 is_subcommand = True

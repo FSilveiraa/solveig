@@ -87,9 +87,9 @@ class BaseTool(BaseModel, ABC):
         own = cls.__dict__.get("subcommand")
         if not isinstance(own, Subcommand):
             return
-        # A tool-backed Subcommand always takes the raw token line so
-        # CliSettingsSource sees exactly what the user typed.
-        own.raw_tokens = True
+        # Every subcommand handler now consumes the raw token line (Subcommand no
+        # longer splits key=value), so CliSettingsSource sees exactly what the user
+        # typed — no per-subcommand flag needed.
         if not own.description:
             own.description = cls._subcommand_description()
         if not own.usage:

@@ -1,4 +1,12 @@
-"""SubcommandRunner — dispatches user-typed /commands to registered handlers."""
+"""SubcommandRunner — dispatches user-typed /commands to registered handlers.
+
+Two authoring paths, one registry. A **built-in** command is an `@subcommand`-
+marked method whose signature is its arg spec (discovered at init via
+`_discover_builtins`); a **tool** command comes from each tool's `Subcommand`
+ClassVar (`_register_tool_subcommands`). Both become `Subcommand` entries in one
+flat lookup and are dispatched identically — see `subcommand/base.py` for the
+one-concept/two-authors design.
+"""
 
 from __future__ import annotations
 
@@ -26,11 +34,28 @@ from solveig.interface import SolveigInterface
 from solveig.mcp_servers.client import connect, disconnect, find_connection
 from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.sessions.manager import SessionManager
-from solveig.subcommand.base import Subcommand
+from solveig.subcommand.base import (
+    Subcommand,
+    UsageError,
+    bind_tokens,
+    first_docline,
+    subcommand,
+    usage_of,
+)
 from solveig.tools.available import tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
 from solveig.utils.misc import format_age
+
+# /help sections in display order — (section key on Subcommand, section title).
+_SECTIONS: list[tuple[str, str]] = [
+    ("basic", "Basic sub-commands"),
+    ("config", "Config sub-commands"),
+    ("model", "Model sub-commands"),
+    ("session", "Session sub-commands"),
+    ("mcp", "MCP sub-commands"),
+    ("tools", "Tool sub-commands"),
+]
 
 
 class SubcommandRunner:
@@ -46,295 +71,101 @@ class SubcommandRunner:
         self.provider_ref = provider_ref
         self.session_manager = session_manager
 
-        # Sectioned registries — used by draw_help for structured output
-        self._basic: dict[str, Subcommand] = {}
-        self._config: dict[str, Subcommand] = {}
-        self._model: dict[str, Subcommand] = {}
-        self._session: dict[str, Subcommand] = {}
-        self._mcp: dict[str, Subcommand] = {}  # MCP subcommands
-        self._tools: dict[str, Subcommand] = {}  # per-tool subcommands
-
-        # Flat registry for O(1) lookup in __call__
+        # Flat lookup (every command + alias -> sub) drives dispatch; the ordered
+        # list (unique subs in registration order) drives /help.
         self._registry: dict[str, Subcommand] = {}
+        self._subcommands: list[Subcommand] = []
 
-        self._register_builtins()
-        self._register_mcp_subcommands()
+        self._discover_builtins()
         self._register_tool_subcommands()
 
     # ------------------------------------------------------------------
-    # Registration helpers
+    # Registration / discovery
     # ------------------------------------------------------------------
 
-    def _reg(self, section: dict[str, Subcommand], sub: Subcommand) -> Subcommand:
-        """Register *sub* in *section* and the flat lookup.
+    def _register(self, sub: Subcommand) -> None:
+        """Append to the ordered list and map each of the subcommand's commands
+        (canonical + aliases) into the flat lookup."""
+        self._subcommands.append(sub)
+        for command in sub.commands:
+            self._registry[command] = sub
 
-        All commands in ``sub.commands`` are added to the flat registry;
-        only the first (canonical) command is added to the section dict.
-        """
-        primary = sub.commands[0]
-        section[primary] = sub
-        self._registry[primary] = sub
-        for alias in sub.commands[1:]:
-            self._registry[alias] = sub
-        return sub
+    def _discover_builtins(self) -> None:
+        """Build a `Subcommand` for every `@subcommand`-marked method. `vars(cls)`
+        preserves definition order, so /help lists built-ins in source order within
+        each section — no sort hack, no hand-maintained registration block."""
+        for name, function in vars(type(self)).items():
+            mark = getattr(function, "_subcommand", None)
+            if mark is None:
+                continue
+            bound = getattr(self, name)
+            self._register(
+                Subcommand(
+                    commands=mark.commands,
+                    handler=self._make_builtin_handler(bound, mark.commands[0]),
+                    description=mark.description or first_docline(bound),
+                    usage=usage_of(bound),
+                    section=mark.section,
+                    is_detail=mark.is_detail,
+                )
+            )
 
-    def _reg_alias(self, name: str, source: Subcommand) -> None:
-        """Register an alias in the flat lookup only (never shown in /help)."""
-        self._registry[name] = source
+    def _make_builtin_handler(self, bound: Callable, name: str) -> Callable:
+        """Wrap a built-in method so it binds the raw tokens to its own signature
+        (`bind_tokens`), showing a signature-derived usage line on a bad arg count."""
 
-    def _sub(
-        self,
-        commands: str | list[str],
-        handler: Callable,
-        description: str = "",
-        usage: str = "",
-        is_detail: bool = False,
-    ) -> Subcommand:
-        """Convenience factory for built-in Subcommand instances."""
-        if isinstance(commands, str):
-            commands = [commands]
-        return Subcommand(
-            commands=commands,
-            handler=handler,
-            description=description,
-            usage=usage,
-            is_detail=is_detail,
-        )
+        async def handler(interface: SolveigInterface, *tokens: str) -> None:
+            try:
+                args = bind_tokens(bound, tokens)
+            except UsageError:
+                await interface.display_error(
+                    f"Usage: {name} {usage_of(bound)}".rstrip()
+                )
+                return
+            await bound(interface, *args)
 
-    def _register_builtins(self) -> None:
-        r, s = self._reg, self._sub
-
-        # Basic
-        r(self._basic, s("/help", self.draw_help, "Print this message"))
-        r(
-            self._basic,
-            s("/exit", self.stop_interface, "Exit the application (Ctrl+C also works)"),
-        )
-        r(
-            self._basic,
-            s("/store", self.session_store, "Store current session", usage="[name]"),
-        )
-        r(
-            self._basic,
-            s(
-                "/resume",
-                self.session_resume,
-                "Resume a session",
-                usage="[name or path]",
-            ),
-        )
-
-        # Config
-        r(
-            self._config,
-            s("/config", self._config_list_cmd, "List editable config fields"),
-        )
-        r(
-            self._config,
-            s(
-                "/config list",
-                self._config_list_cmd,
-                "Show all fields with current values",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._config,
-            s(
-                "/config get",
-                self._config_get_cmd,
-                "Show current value for a field",
-                usage="<field>",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._config,
-            s(
-                "/config set",
-                self._config_set_cmd,
-                "Set a field (prompts if omitted)",
-                usage="<field> [value]",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._config,
-            s(
-                "/config save",
-                self._config_save_cmd,
-                "Save changed fields to a config file",
-                usage="[path]",
-                is_detail=True,
-            ),
-        )
-
-        # Model
-        r(self._model, s("/model", self._model_info, "Show current model details"))
-        r(
-            self._model,
-            s(
-                "/model info",
-                self._model_info,
-                "Show current model details",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._model,
-            s(
-                "/model set",
-                self._model_set_cmd,
-                "Change the model",
-                usage="[name]",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._model,
-            s(
-                "/model refresh",
-                self._model_refresh,
-                "Re-fetch model info from API",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._model,
-            s(
-                "/model list",
-                self._model_list,
-                "List available models from API",
-                is_detail=True,
-            ),
-        )
-
-        # Session — /sessions is a dispatch-only alias block
-        r(self._session, s("/session", self.session_list, "Manage stored sessions"))
-        r(
-            self._session,
-            s(
-                "/session list",
-                self.session_list,
-                "List stored sessions",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._session,
-            s(
-                "/session store",
-                self.session_store,
-                "Store current session",
-                usage="[name]",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._session,
-            s(
-                "/session delete",
-                self.session_delete,
-                "Delete a session",
-                usage="<name or path>",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._session,
-            s(
-                "/session resume",
-                self.session_resume,
-                "Resume a session (latest if omitted)",
-                usage="[name or path]",
-                is_detail=True,
-            ),
-        )
-        for sub in ("", " list", " store", " delete", " resume"):
-            self._reg_alias(f"/sessions{sub}", self._registry[f"/session{sub}"])
-
-    def _register_mcp_subcommands(self) -> None:
-        r, s = self._reg, self._sub
-        r(self._mcp, s("/mcp", self._mcp_list_cmd, "Manage MCP server connections"))
-        r(
-            self._mcp,
-            s(
-                "/mcp list",
-                self._mcp_list_cmd,
-                "List connected MCP servers",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._mcp,
-            s(
-                "/mcp connect",
-                self._mcp_connect_cmd,
-                "Connect to an MCP server",
-                usage="<url>",
-                is_detail=True,
-            ),
-        )
-        r(
-            self._mcp,
-            s(
-                "/mcp disconnect",
-                self._mcp_disconnect_cmd,
-                "Disconnect from an MCP server",
-                usage="<name>",
-                is_detail=True,
-            ),
-        )
+        return handler
 
     def _register_tool_subcommands(self) -> None:
         """Register a `/tool` subcommand for every tool (core or plugin) that
-        declares a `subcommand` ClassVar. Plugins are already initialized by
-        the time the runner is built, so this init-time scan covers them too.
+        declares a `subcommand` ClassVar. Plugins are already initialized by the
+        time the runner is built, so this init-time scan covers them too.
 
-        The tool's class-level `Subcommand` is a shared template (its
-        `description`/`usage`/`raw_tokens` were filled by
-        `BaseTool.__pydantic_init_subclass__`); it's *copied* per runner so
-        binding a handler doesn't mutate that shared object.
+        The tool's class-level `Subcommand` is a shared template (description/usage
+        filled by `BaseTool.__pydantic_init_subclass__`); it's *copied* per runner
+        with the handler + `section="tools"` + `tool_name` so binding doesn't mutate
+        the shared object. `tool_name` lets /help mark a disabled tool `(disabled)`.
         """
         for cls in tool_classes().values():
             template = cls.subcommand
             if not isinstance(template, Subcommand):
                 continue
             sub = dataclasses.replace(
-                template, handler=self._make_tool_handler(cls, template)
+                template,
+                handler=self._make_tool_handler(cls, template),
+                section="tools",
+                tool_name=cls.tool_name(),
             )
-            self._reg(self._tools, sub)
+            self._register(sub)
 
-    def _make_tool_handler(
-        self, cls: type[BaseTool], subcommand: Subcommand
-    ) -> Callable:
-        """Build the handler that parses a `/tool` line into an instance and
-        runs it through the shared group+hooks orchestration."""
+    def _make_tool_handler(self, cls: type[BaseTool], template: Subcommand) -> Callable:
+        """Build the handler that parses a `/tool` line into an instance and runs
+        it through the shared group+hooks orchestration. `-h/--help` is intercepted
+        upstream in `Subcommand.__call__`, so it never reaches argparse here."""
 
         async def handler(interface: SolveigInterface, *tokens: str) -> None:
-            primary = subcommand.commands[0]
-            usage_line = f"Usage: {primary} {subcommand.usage}".strip()
-
-            # Our own help - never forward `-h`/`--help` to argparse, which
-            # prints to stdout and raises SystemExit regardless of
-            # cli_exit_on_error.
-            if any(tok in ("-h", "--help") for tok in tokens):
-                await interface.display_info(usage_line)
-                return
-
             try:
                 instance = cls.from_cli_tokens(list(tokens))
             except (SettingsError, ValidationError) as e:
                 await interface.display_error(str(e))
-                await interface.display_info(usage_line)
+                await interface.display_info(f"Usage: {template.help_line()}")
                 return
 
             try:
                 await run_tool_and_hooks(instance, self.config, interface)
             except (PluginException, ToolDisabledError) as e:
-                # ToolDisabledError: the tool is disabled in config — refused
-                # uniformly for every tool by the run_tool_and_hooks guard, so no
-                # command-specific check here.
+                # ToolDisabledError: refused uniformly for every tool by the
+                # run_tool_and_hooks guard, so no per-tool check here.
                 await interface.display_error(str(e))
 
         return handler
@@ -343,21 +174,19 @@ class SubcommandRunner:
     # Dispatch
     # ------------------------------------------------------------------
 
-    async def __call__(self, subcommand: str, interface: SolveigInterface) -> bool:
+    async def __call__(self, command_line: str, interface: SolveigInterface) -> bool:
         try:
-            tokens = shlex.split(subcommand)
+            tokens = shlex.split(command_line)
         except ValueError:
-            tokens = subcommand.split()
+            tokens = command_line.split()
         if not tokens:
             return False
 
-        # Longest-prefix match: try 2-token key first ("/config set"), then 1-token
+        # Longest-prefix match: try 2-token key first ("/config set"), then 1-token.
         for n in (2, 1):
             key = " ".join(tokens[:n])
             if key in self._registry:
-                sub = self._registry[key]
-                remaining = tokens[n:]
-                await sub(*remaining, interface=interface)
+                await self._registry[key](*tokens[n:], interface=interface)
                 return True
 
         return False
@@ -366,8 +195,9 @@ class SubcommandRunner:
     # /config subcommands
     # ------------------------------------------------------------------
 
-    async def _config_list_cmd(self, interface: SolveigInterface, *args) -> None:
-        """List all editable config fields with their current values."""
+    @subcommand("/config", "/config list", section="config")
+    async def _config_list_cmd(self, interface: SolveigInterface) -> None:
+        """List editable config fields with their current values."""
         lines = []
         for field_name, _description in CONFIG_EDITABLE_FIELDS.items():
             value = get_config_value(self.config, field_name)
@@ -377,12 +207,10 @@ class SubcommandRunner:
             "\n".join(lines), title="Config (editable fields)"
         )
 
-    async def _config_get_cmd(self, interface: SolveigInterface, *args) -> None:
-        """Show current value and description for a single field."""
-        if not args:
-            await interface.display_error("Usage: /config get <field>")
-            return
-        field_name = args[0].strip()
+    @subcommand("/config get", section="config", detail=True)
+    async def _config_get_cmd(self, interface: SolveigInterface, field: str) -> None:
+        """Show current value for a field."""
+        field_name = field.strip()
         if field_name not in CONFIG_EDITABLE_FIELDS:
             await interface.display_error(
                 f"Unknown field: '{field_name}'. Use /config list to see all fields."
@@ -393,53 +221,23 @@ class SubcommandRunner:
         description = CONFIG_EDITABLE_FIELDS[field_name]
         await interface.display_info(f"{field_name} = {display}  ({description})")
 
-    async def _config_save_cmd(
-        self, interface: SolveigInterface, *args, **kwargs
-    ) -> None:
-        """Persist only the explicitly-declared config fields to a file.
-
-        No-arg target = the highest-precedence loaded config file, else the
-        default path. Writing just config._declared (not a full dump) keeps the
-        saved file minimal — only what the user actually set.
-        """
-        target = (
-            args[0] if args else (self.config._loaded_paths or [DEFAULT_CONFIG_PATH])[0]
-        )
-        try:
-            sources.save_config(self.config.declared_config(), target)
-        except OSError as e:
-            await interface.display_error(f"Could not save config: {e}")
-            return
-        await interface.display_success(f"Config saved to {target}")
-
+    @subcommand("/config set", section="config", detail=True)
     async def _config_set_cmd(
-        self, interface: SolveigInterface, *args, **kwargs
+        self, interface: SolveigInterface, field: str, *value: str
     ) -> None:
+        """Set a field (prompts if the value is omitted).
+
+        Accepts `/config set <field> <value...>`, `/config set <field>=<value>`,
+        or `/config set <field>` to be prompted. The value is the greedy rest of
+        the line, so it may contain spaces.
         """
-        Set a config field. Supports:
-          /config set <key> <value>
-          /config set <key>           (prompts for value)
-          /config set <key>=<value>
-        """
-        # _parse_cli_args turns "api_key=val" into kwargs; reconstruct as positional token
-        if not args and kwargs:
-            args = tuple(f"{k}={v}" for k, v in kwargs.items())
+        field_name = field.strip()
+        # inline `<field>=<value>` form
+        if "=" in field_name and not value:
+            field_name, _, inline = field_name.partition("=")
+            field_name = field_name.strip()
+            value = (inline,) if inline else ()
 
-        if not args:
-            await interface.display_error(
-                "Usage: /config set <field> [value]  or  /config set <field>=<value>"
-            )
-            return
-
-        # Parse key=value or "key value" forms
-        if "=" in args[0]:
-            field_name, _, value_str = args[0].partition("=")
-            value_str = value_str if value_str else None
-        else:
-            field_name = args[0]
-            value_str = " ".join(args[1:]) if len(args) > 1 else None
-
-        field_name = field_name.strip()
         if field_name not in CONFIG_EDITABLE_FIELDS:
             await interface.display_error(
                 f"Unknown or non-editable field: '{field_name}'. "
@@ -447,25 +245,43 @@ class SubcommandRunner:
             )
             return
 
-        if value_str is None:
+        if not value:
             await self.edit_config_field(field_name, interface)
             return
 
         try:
-            new_value = parse_config_value(self.config, field_name, value_str)
+            new_value = parse_config_value(self.config, field_name, " ".join(value))
         except (ValueError, KeyError) as e:
             await interface.display_error(f"Invalid value for '{field_name}': {e}")
             return
 
         await self._apply_and_confirm(field_name, new_value, interface)
 
+    @subcommand("/config save", section="config", detail=True)
+    async def _config_save_cmd(
+        self, interface: SolveigInterface, path: str = ""
+    ) -> None:
+        """Save changed fields to a config file.
+
+        No-arg target = the highest-precedence loaded config file, else the
+        default path. Writing just config._declared (not a full dump) keeps the
+        saved file minimal — only what the user actually set.
+        """
+        target = path or (self.config._loaded_paths or [DEFAULT_CONFIG_PATH])[0]
+        try:
+            sources.save_config(self.config.declared_config(), target)
+        except OSError as e:
+            await interface.display_error(f"Could not save config: {e}")
+            return
+        await interface.display_success(f"Config saved to {target}")
+
     async def edit_config_field(
         self, field_name: str, interface: SolveigInterface
     ) -> None:
         """Interactively prompt for a config field's new value and apply it.
 
-        Typed entry point for UI surfaces (e.g. StatsBar click-to-edit) so
-        they don't have to synthesize a "/config set <field>" string.
+        Typed entry point for UI surfaces (e.g. StatsBar click-to-edit) and the
+        prompt-on-omit path of `/config set` / `/model set`.
         """
         if field_name not in CONFIG_EDITABLE_FIELDS:
             await interface.display_error(
@@ -522,10 +338,9 @@ class SubcommandRunner:
     # /model subcommands
     # ------------------------------------------------------------------
 
-    async def _model_set_cmd(self, interface: SolveigInterface, *args) -> None:
-        await self._config_set_cmd(interface, "api.model", *args)
-
-    async def _model_info(self, interface: SolveigInterface, *args) -> None:
+    @subcommand("/model", "/model info", section="model")
+    async def _model_info(self, interface: SolveigInterface) -> None:
+        """Show current model details."""
         if not self.config.api.model:
             await interface.display_warning(
                 "No model configured. Use /model set <name>."
@@ -544,14 +359,26 @@ class SubcommandRunner:
             lines.append("(No details cached — try /model refresh)")
         await interface.display_text_box("\n".join(lines), title="Model Info")
 
-    async def _model_refresh(self, interface: SolveigInterface, *args) -> None:
+    @subcommand("/model set", section="model", detail=True)
+    async def _model_set_cmd(self, interface: SolveigInterface, name: str = "") -> None:
+        """Change the model (prompts if the name is omitted)."""
+        if name:
+            await self._apply_and_confirm("api.model", name, interface)
+        else:
+            await self.edit_config_field("api.model", interface)
+
+    @subcommand("/model refresh", section="model", detail=True)
+    async def _model_refresh(self, interface: SolveigInterface) -> None:
+        """Re-fetch model info from the API."""
         if not self.config.api.model:
             await interface.display_error("No model configured to refresh.")
             return
         self.config.model_info = None
         await fetch_and_apply_model_info(self.config, self.provider_ref, interface)
 
-    async def _model_list(self, interface: SolveigInterface, *args) -> None:
+    @subcommand("/model list", section="model", detail=True)
+    async def _model_list(self, interface: SolveigInterface) -> None:
+        """List available models from the API."""
         raw_client = getattr(self.provider_ref.provider, "client", None)
         if raw_client is None:
             await interface.display_error(
@@ -575,40 +402,49 @@ class SubcommandRunner:
     # Basic subcommands
     # ------------------------------------------------------------------
 
-    async def draw_help(self, interface: SolveigInterface, *args, **kwargs) -> str:
+    @subcommand("/help", section="basic")
+    async def draw_help(self, interface: SolveigInterface) -> str:
+        """Print this message."""
         help_str = f"""
 You're using Solveig to interact with an AI assistant at {self.config.api.url}.
 This message was printed because you used the '/help' sub-command.
 You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 """.strip()
 
-        sections = [
-            ("Basic sub-commands", self._basic),
-            ("Config sub-commands", self._config),
-            ("Model sub-commands", self._model),
-            ("Session sub-commands", self._session),
-            ("MCP sub-commands", self._mcp),
-            ("Tool sub-commands", self._tools),
-        ]
-        for section_title, registry in sections:
-            top = [(cmd, e) for cmd, e in registry.items() if not e.is_detail]
-            details = [(cmd, e) for cmd, e in registry.items() if e.is_detail]
+        for key, title in _SECTIONS:
+            subs = [s for s in self._subcommands if s.section == key]
+            top = [s for s in subs if not s.is_detail]
+            details = [s for s in subs if s.is_detail]
             if not top and not details:
                 continue
-            help_str += f"\n\n{section_title}:"
-            for _cmd, sub in top:
-                help_str += f"\n  • {sub.help_line()}"
-            for _cmd, sub in details:
-                help_str += f"\n      {sub.help_line()}"
+            help_str += f"\n\n{title}:"
+            for sub in top:
+                help_str += f"\n  • {sub.help_line(disabled=self._is_disabled(sub))}"
+            for sub in details:
+                help_str += f"\n      {sub.help_line(disabled=self._is_disabled(sub))}"
 
         await interface.display_text_box(help_str, title="Help")
         return help_str
+
+    def _is_disabled(self, sub: Subcommand) -> bool:
+        """A tool-backed subcommand whose tool is disabled in config — /help marks
+        it `(disabled)` (still listed, never hidden)."""
+        return sub.tool_name is not None and not self.config.is_tool_enabled(
+            sub.tool_name
+        )
+
+    @subcommand("/exit", section="basic")
+    async def stop_interface(self, interface: SolveigInterface) -> None:
+        """Exit the application (Ctrl+C also works)."""
+        await interface.stop()
 
     # ------------------------------------------------------------------
     # /mcp subcommands
     # ------------------------------------------------------------------
 
-    async def _mcp_list_cmd(self, interface: SolveigInterface, *args, **kwargs) -> None:
+    @subcommand("/mcp", "/mcp list", section="mcp")
+    async def _mcp_list_cmd(self, interface: SolveigInterface) -> None:
+        """List connected MCP servers."""
         if not MCP_CONNECTIONS:
             await interface.display_info("No MCP servers connected.")
             return
@@ -620,40 +456,35 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             )
         await interface.display_text_box("\n".join(lines), title="MCP Connections")
 
-    async def _mcp_connect_cmd(
-        self, interface: SolveigInterface, *args, **kwargs
-    ) -> None:
-        if not args:
-            await interface.display_error("Usage: /mcp connect <url>")
-            return
-        # connect() returns None (and displays its own error) on failure -
-        # it doesn't raise, so there's nothing to catch here.
-        await connect(MCPServerConfig(url=args[0]), self.config, interface)
+    @subcommand("/mcp connect", section="mcp", detail=True)
+    async def _mcp_connect_cmd(self, interface: SolveigInterface, url: str) -> None:
+        """Connect to an MCP server."""
+        # connect() returns None (and displays its own error) on failure — it
+        # doesn't raise, so there's nothing to catch here.
+        await connect(MCPServerConfig(url=url), self.config, interface)
 
-    async def _mcp_disconnect_cmd(
-        self, interface: SolveigInterface, *args, **kwargs
-    ) -> None:
-        if not args:
-            await interface.display_error("Usage: /mcp disconnect <name or url>")
-            return
-        identifier = args[0]
-        conn = find_connection(identifier)
+    @subcommand("/mcp disconnect", section="mcp", detail=True)
+    async def _mcp_disconnect_cmd(self, interface: SolveigInterface, name: str) -> None:
+        """Disconnect from an MCP server."""
+        conn = find_connection(name)
         if conn is None:
             await interface.display_error(
-                f"No connection matching '{identifier}'. Use /mcp list to see active connections."
+                f"No connection matching '{name}'. "
+                "Use /mcp list to see active connections."
             )
             return
         await disconnect(conn.url, self.config, interface)
         await interface.display_success(f"Disconnected from '{conn.display_name}'.")
 
-    async def stop_interface(self, interface: SolveigInterface, *args, **kwargs):
-        await interface.stop()
-
     # ------------------------------------------------------------------
     # /session commands
     # ------------------------------------------------------------------
 
-    async def session_list(self, interface: SolveigInterface, *args, **kwargs):
+    @subcommand(
+        "/session", "/session list", "/sessions", "/sessions list", section="session"
+    )
+    async def session_list(self, interface: SolveigInterface) -> None:
+        """List stored sessions."""
         if self.session_manager is None:
             await interface.display_error(
                 "Session manager is disabled (auto_save_session=false and no --resume)"
@@ -671,32 +502,34 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
                 "total_tokens_received", 0
             )
             lines.append(
-                f"{i}. **{session_data['id']}** — {age}, {message_count} messages, {tokens} tokens."
+                f"{i}. **{session_data['id']}** — {age}, "
+                f"{message_count} messages, {tokens} tokens."
             )
         await interface.display_text_box(
             "\n".join(lines), language="markdown", title="Sessions"
         )
 
-    async def session_store(self, interface: SolveigInterface, *args, **kwargs):
+    @subcommand(
+        "/session store", "/sessions store", "/store", section="session", detail=True
+    )
+    async def session_store(self, interface: SolveigInterface, name: str = "") -> None:
+        """Store current session."""
         if self.session_manager is None:
             await interface.display_error(
                 "Session manager is disabled (auto_save_session=false and no --resume)"
             )
             return
-        name = args[0] if args else None
-        filename = await self.session_manager.store(self.conversation, name)
+        filename = await self.session_manager.store(self.conversation, name or None)
         await interface.display_success(f"Session stored: {filename}")
 
-    async def session_delete(self, interface: SolveigInterface, *args, **kwargs):
+    @subcommand("/session delete", "/sessions delete", section="session", detail=True)
+    async def session_delete(self, interface: SolveigInterface, name: str) -> None:
+        """Delete a session."""
         if self.session_manager is None:
             await interface.display_error(
                 "Session manager is disabled (auto_save_session=false and no --resume)"
             )
             return
-        if not args:
-            await interface.display_error("Usage: /session delete <name>")
-            return
-        name = args[0]
         try:
             path_str = await self.session_manager._fuzzy_find(name)
         except FileNotFoundError as e:
@@ -710,16 +543,19 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             await self.session_manager.delete(name)
             await interface.display_success(f"Deleted {filename}")
 
-    async def session_resume(self, interface: SolveigInterface, *args, **kwargs):
+    @subcommand(
+        "/session resume", "/sessions resume", "/resume", section="session", detail=True
+    )
+    async def session_resume(self, interface: SolveigInterface, name: str = "") -> None:
+        """Resume a session (latest if omitted)."""
         if self.session_manager is None:
             await interface.display_error(
                 "Session manager is disabled (auto_save_session=false and no --resume). "
                 "Restart with --resume or enable auto_save_session."
             )
             return
-        name = args[0] if args else None
         try:
-            session_data = await self.session_manager.load(name)
+            session_data = await self.session_manager.load(name or None)
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return
