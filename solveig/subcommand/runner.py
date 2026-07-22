@@ -21,13 +21,12 @@ from solveig.config.editor import (
     prompt_for_field,
 )
 from solveig.conversation import Conversation
-from solveig.exceptions import PluginException
+from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface import SolveigInterface
 from solveig.mcp_servers.client import connect, disconnect, find_connection
 from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import Subcommand
-from solveig.tools import CommandTool
 from solveig.tools.available import tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
@@ -323,12 +322,6 @@ class SubcommandRunner:
                 await interface.display_info(usage_line)
                 return
 
-            if cls is CommandTool and not self.config.tools.command.enabled:
-                await interface.display_error(
-                    "Command execution is disabled (tools.command.enabled=false)."
-                )
-                return
-
             try:
                 instance = cls.from_cli_tokens(list(tokens))
             except (SettingsError, ValidationError) as e:
@@ -338,7 +331,10 @@ class SubcommandRunner:
 
             try:
                 await run_tool_and_hooks(instance, self.config, interface)
-            except PluginException as e:
+            except (PluginException, ToolDisabledError) as e:
+                # ToolDisabledError: the tool is disabled in config — refused
+                # uniformly for every tool by the run_tool_and_hooks guard, so no
+                # command-specific check here.
                 await interface.display_error(str(e))
 
         return handler

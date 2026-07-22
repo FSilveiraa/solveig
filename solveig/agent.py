@@ -41,7 +41,7 @@ from solveig.api import ProviderRef, get_model
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
-from solveig.exceptions import PluginException, UserCancel
+from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface import SolveigInterface
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
@@ -385,7 +385,7 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
                 run_tool_and_hooks(instance, config, interface), status="Executing"
             ) as task:
                 result = await task
-        except PluginException as e:
+        except (PluginException, ToolDisabledError) as e:
             raise ModelRetry(str(e)) from e
 
         if isinstance(result, ToolResult):

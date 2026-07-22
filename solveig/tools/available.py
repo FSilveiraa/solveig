@@ -75,13 +75,10 @@ class AvailableTools:
         def is_tool_active(
             ctx: RunContext[SolveigContext], tool_def: ToolDefinition
         ) -> bool:
-            # A core tool is active iff its `tools.<name>.enabled` flag is set;
-            # plugin tools have no static entry and are enabled-by-default
-            # (per-plugin config lives in Sub-project B's plugins.tools/hooks).
-            tools_config = ctx.deps.config.tools
-            if tool_def.name in type(tools_config).model_fields:
-                return bool(getattr(tools_config, tool_def.name).enabled)
-            return True
+            # Same rule the run_tool_and_hooks guard uses
+            # (SolveigConfig.is_tool_enabled): a core tool is on iff its
+            # `tools.<name>.enabled` flag is set; plugin tools are on by default.
+            return ctx.deps.config.is_tool_enabled(tool_def.name)
 
         base = FunctionToolset(function_tools).filtered(is_tool_active)
         self._toolset = CombinedToolset([base, *mcp_toolsets])

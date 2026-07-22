@@ -13,6 +13,17 @@ class UserCancel(Exception):
     pass
 
 
+class ToolDisabledError(Exception):
+    """Raised when a tool call targets a tool disabled via `tools.<name>.enabled=false`.
+
+    Enforced once in `run_tool_and_hooks` (the seam both the LLM path and the
+    `/tool` subcommand path cross), so a disabled tool is refused uniformly:
+    the agent turns it into a `ModelRetry`, the subcommand into a displayed error.
+    """
+
+    pass
+
+
 class PluginException(Exception):
     """Base exception for all plugin-related errors."""
 

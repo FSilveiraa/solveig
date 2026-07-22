@@ -27,6 +27,7 @@ from typing import Any
 from pydantic_ai.messages import ToolCallPart
 
 from solveig.config import SolveigConfig
+from solveig.exceptions import ToolDisabledError
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS
 from solveig.tools.base import BaseTool
@@ -63,6 +64,15 @@ async def run_tool_and_hooks(
     (not a `PluginException`) propagates as a real cancellation.
     """
     tool_name = instance.tool_name()
+    # The single enable/disable enforcement point: both the LLM path and the
+    # /tool subcommand path reach a tool through here, so a disabled tool is
+    # refused uniformly (each caller translates ToolDisabledError). The LLM path
+    # also filters disabled tools out of the schema upstream, making this a
+    # belt-and-suspenders guard there and the *only* guard for the subcommand.
+    if not config.is_tool_enabled(tool_name):
+        raise ToolDisabledError(
+            f"Tool '{tool_name}' is disabled (tools.{tool_name}.enabled=false)."
+        )
     async with open_tool_group(
         interface,
         instance.title,

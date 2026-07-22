@@ -214,6 +214,19 @@ class SolveigConfig(BaseSettings):
             self.api.url = default
         return self
 
+    def is_tool_enabled(self, tool_name: str) -> bool:
+        """The single enable/disable rule for a tool, by name — the one home that
+        spans every namespace a tool's `enabled` flag can live in. Today: a core
+        tool (`tools.<name>`) is on iff its `.enabled` flag is set; an unknown name
+        (a plugin tool, on by default) → True. When plugin tool config lands under
+        `plugins.tools.<name>`, that check joins *here* — so both the LLM-path
+        filter (`is_tool_active`) and the `run_tool_and_hooks` guard stay one rule.
+        """
+        tools = self.tools
+        if tool_name in type(tools).model_fields:
+            return bool(getattr(tools, tool_name).enabled)
+        return True
+
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
 
