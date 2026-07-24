@@ -174,13 +174,27 @@ class SolveigConfig(BaseSettings):
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
     system_prompt: SystemPromptConfig = Field(default_factory=SystemPromptConfig)
-    briefing: list[str] = Field(default_factory=lambda: ["AGENTS.md"])
+    briefing: list[str] = Field(
+        default_factory=lambda: ["AGENTS.md"],
+        description="Markdown files appended to the system prompt in order",
+    )
     # ByteSize parses human strings ("1GiB") natively and gives .human_readable()
     # for display — no bespoke parse validator or display special-case needed.
-    min_disk_space_left: ByteSize = ByteSize(1024**3)  # 1 GiB
-    auto_allowed_paths: list[Path] = Field(default_factory=list)
-    ignore_paths: list[Path] = Field(default_factory=list)
-    disable_autonomy: bool = False
+    min_disk_space_left: ByteSize = Field(
+        default=ByteSize(1024**3),  # 1 GiB
+        description="Minimum free disk space before blocking writes",
+    )
+    auto_allowed_paths: list[Path] = Field(
+        default_factory=list,
+        description="Glob patterns for auto-approved file paths",
+    )
+    ignore_paths: list[Path] = Field(
+        default_factory=list,
+        description="Glob patterns for paths that are fully blocked from all tool access",
+    )
+    disable_autonomy: bool = Field(
+        default=False, description="Require user approval between agentic steps"
+    )
 
     # --- CLI-only inputs (parsed from the command line, never persisted) ---
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)

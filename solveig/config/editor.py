@@ -17,60 +17,72 @@ import typing
 from collections.abc import Callable
 from typing import Any
 
+from pydantic import BaseModel
+
 from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.interface import SolveigInterface, themes
 
 from .config import SolveigConfig
 
 # ---------------------------------------------------------------------------
-# Field registry — every field the user may change at runtime, by dotted path
+# Editable fields — DERIVED from the living schema, never hand-maintained.
+# A field's declaration is the whole truth about it (D0): it is editable at
+# runtime unless its own declaration says otherwise (`Field(exclude=True)`,
+# used by the CLI-only fields), so there is exactly one place to chase when a
+# field moves or dies. The walk runs per call against the CURRENT
+# `model_fields` — config is a living object (composed tool/plugin sections
+# appear during the two-phase bootstrap), so caching a copy would be a second,
+# stale truth.
 # ---------------------------------------------------------------------------
 
-CONFIG_EDITABLE_FIELDS: dict[str, str] = {
-    # Model / API connection
-    "api.model": "LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
-    "api.url": "LLM API endpoint URL",
-    "api.type": "API provider type (openai, anthropic, gemini)",
-    "api.key": "API authentication key",
-    "api.temperature": "Model temperature 0.0–2.0",
-    "api.max_context": "Max context window in tokens (-1 = model's limit)",
-    "api.timeout": "LLM API request timeout in seconds",
-    # System prompt
-    "system_prompt.content": "Raw system prompt template",
-    "system_prompt.add_examples": "Include few-shot examples in system prompt",
-    "system_prompt.add_os_info": "Include OS info in system prompt",
-    "briefing": "Markdown files appended to the system prompt in order (comma-separated paths)",
-    # Safety & permissions
-    "min_disk_space_left": "Minimum free disk space before blocking writes",
-    "auto_allowed_paths": "Glob patterns for auto-approved file paths (comma-separated)",
-    "ignore_paths": "Glob patterns for paths that are fully blocked from all tool access (comma-separated)",
-    # Tools (each core tool disables uniformly via tools.<name>.enabled)
-    "tools.command.enabled": "Enable the shell command tool",
-    "tools.command.auto_execute": "Regex patterns for auto-approved shell commands (comma-separated)",
-    "tools.http.enabled": "Enable the HTTP tool",
-    "tools.http.timeout": "HTTP request timeout in seconds",
-    "tools.http.max_response_bytes": "Truncate HTTP response bodies at this many bytes",
-    "tools.read.enabled": "Enable the file read tool",
-    "tools.write.enabled": "Enable the file write tool",
-    "tools.edit.enabled": "Enable the file edit tool",
-    "tools.delete.enabled": "Enable the file delete tool",
-    "tools.copy.enabled": "Enable the file copy tool",
-    "tools.move.enabled": "Enable the file move tool",
-    "tools.tasks.enabled": "Enable the task-planning tool",
-    # Behaviour
-    "disable_autonomy": "Require user approval between agentic steps",
-    "interface.stream": "Stream assistant output token-by-token as it's generated",
-    "interface.auto_collapse_tools": "Auto-collapse tool groups after approval",
-    "interface.auto_copy_selection": "Auto-copy click-drag selected text to clipboard on mouse release",
-    # Plugins
-    "plugins.paths": "Plugin discovery directories (comma-separated)",
-    # Session
-    "session.dir": "Directory for stored sessions",
-    "session.auto_save": "Auto-save the session after each response",
-    # Interface
-    "interface.theme": "UI color theme",
-    "interface.code_theme": "Code syntax highlighting theme",
-}
+
+def _is_container(annotation: Any) -> bool:
+    """Dict-of-models fields (e.g. `mcp.servers`) are structural, not leaves:
+    edited by their own flows (/mcp connect), not one dotted path per entry."""
+    return typing.get_origin(annotation) is dict
+
+
+def editable_fields(config: SolveigConfig) -> dict[str, str]:
+    """Walk the composed schema to every editable leaf: {dotted_path: description}.
+
+    A leaf is a field whose annotation isn't a BaseModel subclass (those are
+    recursed) and whose declaration doesn't opt out (`exclude=True`) or hold a
+    dict-of-models container. The description comes from the field's own
+    `Field(description=…)`; undescribed leaves fall back to their dotted path.
+    """
+    return {
+        path: info.description or path for path, info in _field_infos(config).items()
+    }
+
+
+def _field_infos(config: SolveigConfig) -> dict[str, Any]:
+    """The same walk as `editable_fields`, but returning each leaf's FieldInfo —
+    the declaration itself, for readers that need more than the description
+    (e.g. the prompt's `choices`)."""
+    out: dict[str, Any] = {}
+
+    def walk(model: type[BaseModel], prefix: str) -> None:
+        for name, info in model.model_fields.items():
+            if info.exclude:
+                continue
+            annotation = info.annotation
+            if (
+                annotation is not None
+                and isinstance(annotation, type)
+                and issubclass(annotation, BaseModel)
+            ):
+                walk(annotation, f"{prefix}{name}.")
+            elif not _is_container(annotation):
+                out[f"{prefix}{name}"] = info
+
+    walk(type(config), "")
+    return out
+
+
+def field_description(config: SolveigConfig, dotted: str) -> str:
+    """The declared description for one dotted path ("" if unknown)."""
+    return editable_fields(config).get(dotted, "")
+
 
 # ---------------------------------------------------------------------------
 # Dotted-path traversal
@@ -160,6 +172,17 @@ def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
 # Type-aware UI prompting
 # ---------------------------------------------------------------------------
 
+# Constrained choices as a property of the field's TYPE, not its name (D0):
+# a field declared `theme: Palette` prompts with every registered palette;
+# `type: ...[BaseAPI]` with every API type; the str-typed code_theme resolves
+# its options from the same registry its validator would consult. Each entry
+# is (predicate, options, display-current) — adding a constrained type means
+# adding a Field whose type is listed here, nothing else.
+_CHOICES_BY_TYPE: list[tuple[Any, Callable[[], list[str]], Callable[[Any], str]]] = [
+    (themes.Palette, lambda: list(themes.THEMES.keys()), lambda v: v.name),
+    (type, lambda: list(API_TYPES.keys()), lambda v: v.name),
+]
+
 
 async def prompt_for_field(
     field_name: str,
@@ -169,38 +192,43 @@ async def prompt_for_field(
     """
     Prompt the user for a new value for field_name using the appropriate UI element.
 
+    - constrained types  → ask_choice with the type's own options
     - bool fields        → ask_choice (True / False)
-    - constrained fields → ask_choice with known options
+    - list fields        → ask_question (comma-separated)
     - everything else    → ask_question (free text, then parsed)
 
     Returns the parsed Python value ready to be set on config.
     Raises ValueError if the raw input cannot be parsed.
     """
     raw_type = _leaf_type(config, field_name)
-    description = CONFIG_EDITABLE_FIELDS[field_name]
+    description = field_description(config, field_name)
     current = get_config_value(config, field_name)
 
-    # --- Constrained-choice fields ---
-    if field_name == "interface.theme":
-        keys = list(themes.THEMES.keys())
+    # --- Choices declared on the field itself (`json_schema_extra={"choices": …}`) —
+    # the generic case: any field whose options live in its declaration prompts
+    # as a menu, no type- or name-keying in the editor.
+    info = _field_infos(config).get(field_name)
+    declared_choices = (info.json_schema_extra or {}).get("choices") if info else None
+    if declared_choices:
         idx = await interface.ask_choice(
-            f"{description} (current: {current.name})", keys, add_cancel=True
+            f"{description} (current: {current})",
+            list(declared_choices),
+            add_cancel=True,
         )
-        return list(themes.THEMES.values())[idx]
+        return declared_choices[idx]
 
-    if field_name == "interface.code_theme":
-        options = sorted(themes.CODE_THEMES)
-        idx = await interface.ask_choice(
-            f"{description} (current: {current})", options, add_cancel=True
-        )
-        return options[idx]
-
-    if field_name == "api.type":
-        keys = list(API_TYPES.keys())
-        idx = await interface.ask_choice(
-            f"{description} (current: {current.name})", keys, add_cancel=True
-        )
-        return list(API_TYPES.values())[idx]
+    # --- Constrained-choice fields, driven by the leaf's declared type ---
+    for choice_type, options_of, display_of in _CHOICES_BY_TYPE:
+        if raw_type is choice_type or (
+            choice_type is type and isinstance(raw_type, type)
+        ):
+            keys = options_of()
+            idx = await interface.ask_choice(
+                f"{description} (current: {display_of(current)})", keys, add_cancel=True
+            )
+            if choice_type is type:
+                return list(API_TYPES.values())[idx]
+            return list(themes.THEMES.values())[idx]
 
     # --- Bool fields ---
     if raw_type is bool:

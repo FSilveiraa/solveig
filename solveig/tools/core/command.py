@@ -23,7 +23,10 @@ class CommandConfig(ToolConfig):
     # once, at parse time — invalid regexes are rejected declaratively) and
     # serializes them back to their source strings for /config save. "It's a regex"
     # is a property of the field, not something command.py re-derives per call.
-    auto_execute: list[re.Pattern] = Field(default_factory=list)
+    auto_execute: list[re.Pattern] = Field(
+        default_factory=list,
+        description="Regex patterns for auto-approved shell commands",
+    )
 
 
 class CommandTool(BaseTool[CommandConfig]):

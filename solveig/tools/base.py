@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
@@ -45,7 +45,7 @@ class ToolConfig(BaseModel):
 
     # arbitrary_types_allowed for subclasses carrying e.g. re.Pattern (CommandConfig).
     model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
-    enabled: bool = True
+    enabled: bool = Field(default=True, description="Enable this tool")
 
 
 # The private marker `CliPositionalArg[T]` injects into a field's Annotated

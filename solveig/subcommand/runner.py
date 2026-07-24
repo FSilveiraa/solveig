@@ -21,8 +21,8 @@ from pydantic_settings.exceptions import SettingsError
 from solveig.api import ProviderRef
 from solveig.config import DEFAULT_CONFIG_PATH, MCPServerConfig, SolveigConfig, sources
 from solveig.config.editor import (
-    CONFIG_EDITABLE_FIELDS,
     apply_config_field,
+    editable_fields,
     fetch_and_apply_model_info,
     get_config_value,
     parse_config_value,
@@ -199,7 +199,7 @@ class SubcommandRunner:
     async def _config_list_cmd(self, interface: SolveigInterface) -> None:
         """List editable config fields with their current values."""
         lines = []
-        for field_name, _description in CONFIG_EDITABLE_FIELDS.items():
+        for field_name, _description in editable_fields(self.config).items():
             value = get_config_value(self.config, field_name)
             display = self._format_field_value(value)
             lines.append(f"{field_name:<32} = {display}")
@@ -211,15 +211,17 @@ class SubcommandRunner:
     async def _config_get_cmd(self, interface: SolveigInterface, field: str) -> None:
         """Show current value for a field."""
         field_name = field.strip()
-        if field_name not in CONFIG_EDITABLE_FIELDS:
+        fields = editable_fields(self.config)
+        if field_name not in fields:
             await interface.display_error(
                 f"Unknown field: '{field_name}'. Use /config list to see all fields."
             )
             return
         value = get_config_value(self.config, field_name)
         display = self._format_field_value(value)
-        description = CONFIG_EDITABLE_FIELDS[field_name]
-        await interface.display_info(f"{field_name} = {display}  ({description})")
+        await interface.display_info(
+            f"{field_name} = {display}  ({fields[field_name]})"
+        )
 
     @subcommand("/config set", section="config", detail=True)
     async def _config_set_cmd(
@@ -238,7 +240,7 @@ class SubcommandRunner:
             field_name = field_name.strip()
             value = (inline,) if inline else ()
 
-        if field_name not in CONFIG_EDITABLE_FIELDS:
+        if field_name not in editable_fields(self.config):
             await interface.display_error(
                 f"Unknown or non-editable field: '{field_name}'. "
                 "Use /config list to see all options."
@@ -283,7 +285,7 @@ class SubcommandRunner:
         Typed entry point for UI surfaces (e.g. StatsBar click-to-edit) and the
         prompt-on-omit path of `/config set` / `/model set`.
         """
-        if field_name not in CONFIG_EDITABLE_FIELDS:
+        if field_name not in editable_fields(self.config):
             await interface.display_error(
                 f"Unknown or non-editable field: '{field_name}'. "
                 "Use /config list to see all options."

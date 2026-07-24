@@ -29,9 +29,16 @@ class ShellcheckConfig(ToolConfig):
     Read Any-style inside the hook as `config.plugins.hooks.shellcheck.<field>`."""
 
     # None -> auto-detect from the OS; set to force a shell dialect for the linter.
-    shell: str | None = None
-    ignore_codes: list[str] = Field(default_factory=list)
-    ask_to_execute: bool = True
+    shell: str | None = Field(
+        default=None,
+        description="Force a shell dialect for the linter (default: auto-detect)",
+    )
+    ignore_codes: list[str] = Field(
+        default_factory=list, description="Shellcheck rule codes to suppress"
+    )
+    ask_to_execute: bool = Field(
+        default=True, description="Ask before running a command shellcheck flags"
+    )
 
 
 def is_obviously_dangerous(cmd: str) -> bool:

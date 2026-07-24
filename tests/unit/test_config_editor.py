@@ -7,10 +7,10 @@ import pytest
 
 from solveig.api import ProviderRef
 from solveig.config.editor import (
-    CONFIG_EDITABLE_FIELDS,
     _parse_field_value,
     _unwrap_optional,
     apply_config_field,
+    editable_fields,
 )
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -98,35 +98,48 @@ class TestParseFieldValue:
 
 
 # ---------------------------------------------------------------------------
-# CONFIG_EDITABLE_FIELDS registry
+# editable_fields — the schema-derived registry
 # ---------------------------------------------------------------------------
 
 
-class TestConfigEditableFields:
-    async def test_expected_fields_present(self):
-        expected = {
-            "model",
-            "temperature",
-            "verbose",
-            "max_context",
-            "api_key",
-            "url",
-            "api_type",
+class TestEditableFields:
+    async def test_core_leaves_present(self):
+        fields = editable_fields(DEFAULT_CONFIG)
+        for path in (
+            "api.model",
+            "api.url",
+            "api.type",
+            "api.key",
+            "api.temperature",
+            "api.max_context",
+            "interface.theme",
+            "interface.code_theme",
+            "tools.command.enabled",
+            "tools.http.timeout",
+            "session.auto_save",
             "briefing",
-            "no_commands",
-            "theme",
-            "code_theme",
-        }
-        for field in expected:
-            assert field in CONFIG_EDITABLE_FIELDS, f"Missing field: {field}"
+            "disable_autonomy",
+        ):
+            assert path in fields, f"Missing field: {path}"
 
     async def test_all_descriptions_non_empty(self):
-        for field, desc in CONFIG_EDITABLE_FIELDS.items():
-            assert desc, f"Empty description for field: {field}"
+        for path, desc in editable_fields(DEFAULT_CONFIG).items():
+            assert desc, f"Empty description for field: {path}"
 
-    async def test_all_fields_exist_on_config(self):
-        for field in CONFIG_EDITABLE_FIELDS:
-            assert hasattr(DEFAULT_CONFIG, field), f"Config missing field: {field}"
+    async def test_excluded_fields_absent(self):
+        fields = editable_fields(DEFAULT_CONFIG)
+        for path in ("prompt", "config", "resume", "add_mcp", "mcp.servers"):
+            assert path not in fields, f"Should be excluded: {path}"
+
+    async def test_plugin_sections_appear_after_bootstrap(self):
+        """The P1 headline: composed plugin sections are runtime-editable with
+        no hand-maintained registry entries."""
+        from solveig.config import SolveigConfig
+
+        config, _, _ = await SolveigConfig.parse_config_and_prompt([])
+        fields = editable_fields(config)
+        assert "plugins.tools.tree.enabled" in fields
+        assert "plugins.hooks.shellcheck.enabled" in fields
 
 
 # ---------------------------------------------------------------------------

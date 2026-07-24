@@ -49,15 +49,25 @@ Response format:
 
 class ApiConfig(BaseModel):
     model_config = _MUTABLE
-    url: str = ""
-    type: builtins.type[APIType.BaseAPI] = APIType.OPENAI
+    url: str = Field(default="", description="LLM API endpoint URL")
+    type: builtins.type[APIType.BaseAPI] = Field(
+        default=APIType.OPENAI,
+        description="API provider type (openai, anthropic, gemini)",
+    )
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).
-    key: SecretStr = SecretStr("")
-    model: str | None = None
-    temperature: float = 0.0
-    max_context: int = -1
-    timeout: float = 60.0
+    key: SecretStr = Field(default=SecretStr(""), description="API authentication key")
+    model: str | None = Field(
+        default=None,
+        description="LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
+    )
+    temperature: float = Field(default=0.0, description="Model temperature 0.0-2.0")
+    max_context: int = Field(
+        default=-1, description="Max context window in tokens (-1 = model's limit)"
+    )
+    timeout: float = Field(
+        default=60.0, description="LLM API request timeout in seconds"
+    )
 
     @field_validator("type", mode="before")
     @classmethod
@@ -113,9 +123,15 @@ class SystemPromptConfig(BaseModel):
     """The system-prompt category (distinct from top-level `briefing`)."""
 
     model_config = _MUTABLE
-    content: str = DEFAULT_SYSTEM_PROMPT
-    add_examples: bool = False
-    add_os_info: bool = False
+    content: str = Field(
+        default=DEFAULT_SYSTEM_PROMPT, description="Raw system prompt template"
+    )
+    add_examples: bool = Field(
+        default=False, description="Include few-shot examples in system prompt"
+    )
+    add_os_info: bool = Field(
+        default=False, description="Include OS info in system prompt"
+    )
 
 
 class PluginsConfig(BaseModel):
@@ -124,7 +140,9 @@ class PluginsConfig(BaseModel):
     core's `config.tools`)."""
 
     model_config = _MUTABLE
-    paths: list[str] = Field(default_factory=list)
+    paths: list[str] = Field(
+        default_factory=list, description="Plugin discovery directories"
+    )
     tools: PluginToolsConfig = Field(default_factory=PluginToolsConfig)
     hooks: PluginHooksConfig = Field(default_factory=PluginHooksConfig)
 
@@ -171,17 +189,38 @@ class McpConfig(BaseModel):
 
 class SessionConfig(BaseModel):
     model_config = _MUTABLE
-    dir: str = ".solveig/sessions"
-    auto_save: bool = True
+    dir: str = Field(
+        default=".solveig/sessions", description="Directory for stored sessions"
+    )
+    auto_save: bool = Field(
+        default=True, description="Auto-save the session after each response"
+    )
 
 
 class InterfaceConfig(BaseModel):
     model_config = _MUTABLE
-    theme: themes.Palette = Field(default_factory=lambda: themes.DEFAULT_THEME)
-    code_theme: str = themes.DEFAULT_CODE_THEME
-    stream: bool = True
-    auto_collapse_tools: bool = True
-    auto_copy_selection: bool = True
+    theme: themes.Palette = Field(
+        default_factory=lambda: themes.DEFAULT_THEME, description="UI color theme"
+    )
+    code_theme: str = Field(
+        default=themes.DEFAULT_CODE_THEME,
+        description="Code syntax highlighting theme",
+        # Choices declared on the FIELD (D0), read generically by the config
+        # editor's prompt. Sorted at declaration; a future user-styles registry
+        # changes this one line, not the editor.
+        json_schema_extra={"choices": sorted(themes.CODE_THEMES)},
+    )
+    stream: bool = Field(
+        default=True,
+        description="Stream assistant output token-by-token as it's generated",
+    )
+    auto_collapse_tools: bool = Field(
+        default=True, description="Auto-collapse tool groups after approval"
+    )
+    auto_copy_selection: bool = Field(
+        default=True,
+        description="Auto-copy click-drag selected text to clipboard on mouse release",
+    )
 
     @field_validator("theme", mode="before")
     @classmethod

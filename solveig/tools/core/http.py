@@ -33,8 +33,10 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
 
 
 class HttpConfig(ToolConfig):
-    timeout: float = 10.0
-    max_response_bytes: int = 50_000
+    timeout: float = Field(default=10.0, description="HTTP request timeout in seconds")
+    max_response_bytes: int = Field(
+        default=50_000, description="Truncate HTTP response bodies at this many bytes"
+    )
 
 
 class HttpTool(BaseTool[HttpConfig]):
