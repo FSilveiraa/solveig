@@ -1,5 +1,7 @@
 import pytest
 from pydantic_ai import Agent
+
+from solveig.inbox import Inbox
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.test import TestModel
 
@@ -21,7 +23,7 @@ async def test_run_turn_adopts_messages_into_conversation():
     view = RecordingTranscript(conv)  # observes reactively
     agent = Agent(TestModel())  # no consent tools -> single request/response
 
-    await run_turn(agent, conv, _deps(MockInterface(), conv), "hello")
+    await run_turn(agent, conv, _deps(MockInterface(), conv), "hello", Inbox())
 
     # user prompt + assistant response landed as reactive entries
     kinds = [type(m).__name__ for m in conv.messages]
@@ -38,7 +40,7 @@ async def test_run_turn_preserves_prior_history_ids():
     before_ids = list(conv.ids)
 
     agent = Agent(TestModel())
-    await run_turn(agent, conv, _deps(MockInterface(), conv), "again")
+    await run_turn(agent, conv, _deps(MockInterface(), conv), "again", Inbox())
 
     # prior ids unchanged (identity-preserved), new ones appended after
     assert list(conv.ids)[: len(before_ids)] == before_ids

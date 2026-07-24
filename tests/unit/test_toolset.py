@@ -34,6 +34,7 @@ from solveig.agent import (
 )
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
+from solveig.inbox import Inbox
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
@@ -420,13 +421,14 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
     """With `disable_autonomy`, `run_turn` blocks at the tool-round boundary
     until `pending_queue` is fed; the fed comment is then injected into the run
     as a `UserPromptPart` and the run resumes."""
-    config = DEFAULT_CONFIG.with_(disable_autonomy=True)
+    config = DEFAULT_CONFIG.model_copy(update={"disable_autonomy": True})
     interface = MockInterface()
     agent, model = _two_round_agent(config, interface)
     conv = Conversation()
     deps = SolveigContext(config=config, interface=interface)
 
-    task = asyncio.create_task(run_turn(agent, conv, deps, "go"))
+    inbox = Inbox()
+    task = asyncio.create_task(run_turn(agent, conv, deps, "go", inbox))
     # let it get through round 1 (the tool call) and reach the gate
     for _ in range(500):
         await asyncio.sleep(0)
@@ -434,12 +436,12 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
             break
     await asyncio.sleep(0.02)
 
-    # Blocked: round 2 can't happen until the queue is fed (empty queue -> the
-    # gate's `await dequeue_pending()` suspends the whole run).
+    # Blocked: round 2 can't happen until the inbox is fed (empty inbox -> the
+    # gate's `await inbox.get()` suspends the whole run).
     assert not task.done()
     assert model.get_call_count() == 1
 
-    interface.pending_queue.put_nowait("go ahead")
+    inbox.put_nowait("go ahead")
     await asyncio.wait_for(task, timeout=2)
 
     assert model.get_call_count() == 2  # resumed
@@ -452,11 +454,12 @@ async def test_comment_interleaving_drains_queue_without_blocking():
     tool-round boundary."""
     config = DEFAULT_CONFIG  # disable_autonomy=False
     interface = MockInterface()
-    interface.pending_queue.put_nowait("mid-run note")
+    inbox = Inbox()
+    inbox.put_nowait("mid-run note")
     agent, _ = _two_round_agent(config, interface)
     conv = Conversation()
     deps = SolveigContext(config=config, interface=interface)
 
-    await run_turn(agent, conv, deps, "go")
+    await run_turn(agent, conv, deps, "go", inbox)
 
     assert any("mid-run note" in p for p in _user_prompts(conv.messages))

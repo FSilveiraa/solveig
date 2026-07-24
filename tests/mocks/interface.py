@@ -75,7 +75,6 @@ class MockInterface(TerminalInterface):
         self.groups: list[str] = []
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
-        self.pending_queue = asyncio.Queue()
 
     # Core async display methods
     async def start(self) -> None:
@@ -104,9 +103,6 @@ class MockInterface(TerminalInterface):
         # (conversation.messages) rather than captured output strings. Tool
         # display stays imperative and is still captured in `outputs`.
         pass
-
-    async def notify_pending_queue_changed(self) -> None:
-        pass  # no live "queued messages" widget to refresh outside the real Textual app
 
     async def stop(self) -> None:
         self.outputs.append("INTERFACE_STOPPED")

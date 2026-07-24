@@ -42,6 +42,7 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
+from solveig.inbox import Inbox
 from solveig.interface import SolveigInterface
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
@@ -140,6 +141,7 @@ async def run_turn(
     conversation: Conversation,
     deps: SolveigContext,
     prompt: str,
+    inbox: Inbox,
 ) -> None:
     """Core-owned per-turn loop. pydantic-ai remains the engine (model I/O,
     tool schemas + execution, consent via the tool_execute capability); this
@@ -226,6 +228,7 @@ async def run_turn(
                     await _gate_and_interleave(
                         deps,
                         run,
+                        inbox,
                         tools_ran=_response_has_tool_calls(node.model_response),
                     )
                     continue
@@ -240,7 +243,7 @@ def _response_has_tool_calls(response: ModelResponse) -> bool:
 
 
 async def _gate_and_interleave(
-    deps: SolveigContext, run: Any, *, tools_ran: bool
+    deps: SolveigContext, run: Any, inbox: Inbox, *, tools_ran: bool
 ) -> None:
     interface = deps.interface
     # Autonomy pause only mid-work: gate a round that actually ran tools (more
@@ -250,15 +253,18 @@ async def _gate_and_interleave(
     # leave the gate blocked forever.
     if deps.config.disable_autonomy and tools_ran:
         await interface.update_stats(status="Awaiting confirmation to continue")
-        comment = await interface.dequeue_pending()
+        comment = await inbox.get()
         await interface.update_stats(status=None)
         run.enqueue(comment, priority="asap")
     # Always-on drain: anything typed while tools ran (or while the gate was
     # blocked) is delivered at the next opportunity, in any autonomy mode -
     # including a comment that turns a would-be-terminating run into one more
     # round (priority='asap').
-    while (queued := await interface.try_dequeue_pending()) is not None:
-        run.enqueue(queued, priority="asap")
+    while True:
+        try:
+            run.enqueue(inbox.get_nowait(), priority="asap")
+        except asyncio.QueueEmpty:
+            break
 
 
 async def run_turn_with_retry(
@@ -268,6 +274,7 @@ async def run_turn_with_retry(
     conversation: Conversation,
     system_prompt: str,
     prompt: str,
+    inbox: Inbox,
     model: Model | None = None,
 ) -> bool:
     """Drive one conversation turn (build the per-turn Agent + run_turn) with
@@ -296,7 +303,7 @@ async def run_turn_with_retry(
         deps = SolveigContext(config=config, interface=interface)
         try:
             with Agent.parallel_tool_call_execution_mode("sequential"):
-                await run_turn(agent, conversation, deps, prompt)
+                await run_turn(agent, conversation, deps, prompt, inbox)
             return True
         except (asyncio.CancelledError, UserCancel):
             await interface.display_info("Request cancelled")

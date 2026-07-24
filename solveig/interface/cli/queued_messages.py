@@ -1,23 +1,13 @@
 """Queued messages display widget for Textual UI."""
 
-import asyncio
-
 from textual.containers import Vertical
 from textual.widgets import Static
 
+from solveig.inbox import Inbox
 from solveig.interface.cli.collapsible_widgets import (
     CustomCollapsible,
 )
 from solveig.interface.themes import Palette
-
-
-def _peek_all(queue: asyncio.Queue) -> list[str]:
-    """View all comments currently queued without consuming them.
-
-    `asyncio.Queue` has no public peek API - reaching into its private
-    `_queue` deque is the documented workaround for read-only inspection.
-    """
-    return list(queue._queue)  # type: ignore[attr-defined]
 
 
 class QueuedMessageItem(Static):
@@ -39,10 +29,12 @@ class QueuedMessagesDisplay(Vertical):
     """Collapsible display for queued messages.
 
     Shows a count when collapsed, lists messages when expanded.
-    Only visible when there are messages in the queue.
+    Only visible when there are messages in the queue. Re-renders via the
+    Inbox's `on_change` doorbell (wired by the app at mount) - any mutation
+    from any consumer, no per-call-site notification (D5).
     """
 
-    def __init__(self, queue: asyncio.Queue, theme: Palette, **kwargs):
+    def __init__(self, queue: Inbox, theme: Palette, **kwargs):
         self._queue = queue
         self._theme = theme
         self._collapsible: CustomCollapsible | None = None
@@ -71,7 +63,7 @@ class QueuedMessagesDisplay(Vertical):
 
         with self._collapsible:
             with self._content_container:
-                for comment in _peek_all(self._queue):
+                for comment in self._queue.pending:
                     yield QueuedMessageItem(comment, classes="queued-message-item")
 
     def _get_title(self) -> str:
@@ -93,7 +85,7 @@ class QueuedMessagesDisplay(Vertical):
         self._content_container.remove_children()
 
         # Add current user comments from queue
-        for comment in _peek_all(self._queue):
+        for comment in self._queue.pending:
             self._content_container.mount(
                 QueuedMessageItem(comment, classes="queued-message-item")
             )

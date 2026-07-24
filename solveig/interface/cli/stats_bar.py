@@ -150,7 +150,7 @@ class StatsBar(Widget):
         field_name = event.data_table.row_fields[event.coordinate.row]
 
         interface = self._interface_ref
-        if interface is None or interface.subcommand_executor is None:
+        if interface is None or interface.on_edit_config_field is None:
             return
 
         if field_name is None:
@@ -158,7 +158,7 @@ class StatsBar(Widget):
             return
 
         try:
-            await interface.subcommand_executor.edit_config_field(field_name, interface)
+            await interface.on_edit_config_field(interface, field_name)
         except UserCancel:
             pass
 

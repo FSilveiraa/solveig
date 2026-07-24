@@ -6,6 +6,7 @@ from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
+from solveig.inbox import Inbox
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_THEME, THEMES, Palette, to_textual_theme
 from solveig.utils.misc import copy_to_clipboard
@@ -47,7 +48,7 @@ class SolveigTextualApp(TextualApp):
         self,
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
-        pending_queue: asyncio.Queue | None = None,
+        inbox: Inbox | None = None,
         auto_copy_selection: bool = True,
         interface_ref: SolveigInterface | None = None,
         **kwargs,
@@ -55,7 +56,7 @@ class SolveigTextualApp(TextualApp):
         super().__init__(**kwargs)
         self._input_callback = input_callback
         self._theme = theme
-        self._pending_queue = pending_queue
+        self._inbox = inbox
         self._auto_copy_selection = auto_copy_selection
         # Back-reference to the SolveigInterface that owns this app, for
         # cancellation checks (on_key/on_event) and stat-cell click handling.
@@ -81,10 +82,10 @@ class SolveigTextualApp(TextualApp):
         """Create the main layout."""
         yield ConversationArea(id="conversation")
 
-        # Queued messages display (only if queue provided)
-        if self._pending_queue is not None:
+        # Queued messages display (only if the session Inbox was provided)
+        if self._inbox is not None:
             yield QueuedMessagesDisplay(
-                queue=self._pending_queue,
+                queue=self._inbox,
                 theme=self._theme,
                 id="queued_messages",
             )
@@ -109,21 +110,17 @@ class SolveigTextualApp(TextualApp):
         self._input_widget = self.query_one("#input", InputBar)
         self._stats_dashboard = self.query_one("#stats", StatsBar)
 
-        if self._pending_queue is not None:
+        if self._inbox is not None:
             self._queued_messages_display = self.query_one(
                 "#queued_messages", QueuedMessagesDisplay
             )
+            # The display reacts to the Inbox's doorbell (D5): any mutation
+            # from any consumer - main loop get, gate drain, typed input put -
+            # re-renders it. No notify-by-courtesy at call sites.
+            self._inbox.on_change = self._queued_messages_display.update_display
 
         # Focus the input widget so user can start typing immediately
         self._input_widget.focus()
-
-    def update_queued_display(self):
-        """Update the queued messages display.
-
-        Call this after queue changes to refresh the UI.
-        """
-        if self._queued_messages_display is not None:
-            self._queued_messages_display.update_display()
 
     def on_ready(self) -> None:
         # Announce interface is ready
@@ -137,11 +134,11 @@ class SolveigTextualApp(TextualApp):
         - Otherwise: exit the application
         """
         if event.key == "ctrl+c":
-            # Check if there's an active network request via the interface
+            # Check if there's an active operation via the interface
             interface = self._interface_ref
-            if interface is not None and interface.has_active_request:
+            if interface is not None and interface.has_active_operations:
                 event.stop()
-                interface.cancel_request()
+                interface.cancel_active_operation()
             else:
                 self.exit()
 

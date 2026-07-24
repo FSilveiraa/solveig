@@ -3,7 +3,7 @@
 import asyncio
 import difflib
 import random
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Literal
@@ -12,7 +12,6 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
-from solveig.exceptions import UserCancel
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
@@ -209,25 +208,33 @@ class TerminalInterface(LocalDisplay):
     """
     CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
 
-    The root of the interface tree: owns the `SolveigTextualApp`,
-    `pending_queue`, and spinners. `LocalDisplay` supplies the "local
-    display" implementation (display_text, display_text_box, with_group,
-    etc.), shared unchanged with `GroupInterface` (defined below) -
-    only `_container` differs between the two.
+    The root of the interface tree: owns the `SolveigTextualApp`, spinners,
+    and the CLI's prompt-serialization lock. Cancellation (the
+    `_active_operations` registry + both cancel verbs) is protocol-level in
+    `SolveigInterface` - every UI with input has both a per-operation and a
+    global untargeted cancel. `LocalDisplay` supplies the "local display"
+    implementation (display_text, display_text_box, with_group, etc.),
+    shared unchanged with `GroupInterface` (defined below) - only
+    `_container` differs between the two.
     """
 
     def __init__(
         self,
-        pending_queue: asyncio.Queue | None = None,
         theme: Palette = DEFAULT_THEME,
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
+        on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None,
+        on_edit_config_field: Callable[[SolveigInterface, str], Awaitable[None]]
+        | None = None,
         **kwargs,
     ):
-        self.pending_queue = pending_queue or asyncio.Queue()
+        # Producer callbacks wired at construction (the Inbox and the command
+        # router both already exist by the time the interface is created - see
+        # run.py's run_async ordering); nothing is set-later.
+        self.on_user_input = on_user_input
+        self.on_edit_config_field = on_edit_config_field
         app = SolveigTextualApp(
             theme=theme,
-            pending_queue=self.pending_queue,
             input_callback=self._handle_input,
             interface_ref=self,
             **kwargs,
@@ -236,6 +243,9 @@ class TerminalInterface(LocalDisplay):
         self.base_indent = base_indent
         # Section title for tracking
         self._section_title: str = ""
+        # CLI prompt serialization: one visible prompt at a time (a terminal
+        # constraint - the protocol leaves this policy to the frontend).
+        self._choice_lock = asyncio.Lock()
 
         # Rich's implementation forces us to create custom spinners by
         # starting from an existing spinner and altering it
@@ -283,27 +293,12 @@ class TerminalInterface(LocalDisplay):
         self.app.exit()
 
     async def _handle_input(self, user_input: str):
-        """Handle input from the textual app by putting it in the message history event queue."""
-        # Check if it's a command
-        is_subcommand = False
-        if self.subcommand_executor is not None:
-            try:
-                is_subcommand = await self.subcommand_executor(
-                    user_input, interface=self
-                )
-            except UserCancel:
-                is_subcommand = True
-            except Exception as e:
-                is_subcommand = True
-                await self.display_error(
-                    f"Found error when executing '{user_input}' sub-command: {e}"
-                )
-
-        if not is_subcommand and self.pending_queue is not None:
-            await self.enqueue_pending(user_input)
-
-    async def notify_pending_queue_changed(self) -> None:
-        self.app.update_queued_display()
+        """The Textual app's input callback: hand the user's text to the app's
+        producer (`on_user_input`, wired by run.py to the session Inbox /
+        command router - see decision D5). The interface PRODUCES input; it
+        never holds the queue it lands in."""
+        if self.on_user_input is not None:
+            await self.on_user_input(self, user_input)
 
     @property
     def _container(self):
@@ -313,15 +308,18 @@ class TerminalInterface(LocalDisplay):
         )
 
     async def _ask_question(self, question: str, default: str = "") -> str:
-        """Ask for specific input, preserving any current typing."""
-        return await self.app.ask_user(question, default)
+        """Ask for specific input, preserving any current typing. Serialized
+        through the CLI's own lock (one visible prompt at a time)."""
+        async with self._choice_lock:
+            return await self.app.ask_user(question, default)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
         """Prompt with the given choices (already final - "Cancel processing"
         appended, if any), returns the raw selected index. The base class's
         `ask_choice` owns building that list, echoing the answer, and
         raising UserCancel - see SolveigInterface.ask_choice."""
-        return await self.app.ask_choice(question, choices)
+        async with self._choice_lock:
+            return await self.app.ask_choice(question, choices)
 
     async def _update_stats(
         self,
@@ -417,9 +415,9 @@ class GroupInterface(LocalDisplay):
     display calls mount into its own group's container instead of wherever the
     root currently mounts content.
 
-    A group never owns its own `SolveigTextualApp`, spinners, or
-    `pending_queue` - it borrows the root's, which `LocalDisplay.__init__`
-    takes directly instead of constructing them.
+    A group never owns its own `SolveigTextualApp` or spinners - it borrows
+    the root's, which `LocalDisplay.__init__` takes directly instead of
+    constructing them.
     """
 
     def __init__(self, root: "TerminalInterface", group_widget: "CustomCollapsible"):

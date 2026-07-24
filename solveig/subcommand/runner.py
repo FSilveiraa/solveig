@@ -248,7 +248,7 @@ class SubcommandRunner:
             return
 
         if not value:
-            await self.edit_config_field(field_name, interface)
+            await self.edit_config_field(interface, field_name)
             return
 
         try:
@@ -278,12 +278,14 @@ class SubcommandRunner:
         await interface.display_success(f"Config saved to {target}")
 
     async def edit_config_field(
-        self, field_name: str, interface: SolveigInterface
+        self, interface: SolveigInterface, field_name: str
     ) -> None:
         """Interactively prompt for a config field's new value and apply it.
 
-        Typed entry point for UI surfaces (e.g. StatsBar click-to-edit) and the
-        prompt-on-omit path of `/config set` / `/model set`.
+        The interface's `on_edit_config_field` callback (stats-bar
+        click-to-edit) and the prompt-on-omit path of `/config set` /
+        `/model set`. Param order follows the producer-callback convention
+        (interface first) so it can be wired directly.
         """
         if field_name not in editable_fields(self.config):
             await interface.display_error(
@@ -367,7 +369,7 @@ class SubcommandRunner:
         if name:
             await self._apply_and_confirm("api.model", name, interface)
         else:
-            await self.edit_config_field("api.model", interface)
+            await self.edit_config_field(interface, "api.model")
 
     @subcommand("/model refresh", section="model", detail=True)
     async def _model_refresh(self, interface: SolveigInterface) -> None:
