@@ -24,7 +24,7 @@ from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
-from solveig.plugins import initialize_plugins
+from solveig.plugins import discover_plugins, report_plugins
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.tools.available import AVAILABLE_TOOLS
@@ -53,8 +53,10 @@ async def setup_loop(
     for warning in startup_warnings:
         await interface.display_warning(warning)
 
-    # Initialize plugins and MCP servers, then rebuild the tools union.
-    await initialize_plugins(config=config, interface=interface)
+    # Discover plugins (UI-free) + report them, connect MCP servers, then rebuild
+    # the tools union.
+    plugin_errors = discover_plugins(config)
+    await report_plugins(config, interface, plugin_errors)
     await connect_all(config=config, interface=interface)
     AVAILABLE_TOOLS.rebuild(config)
 

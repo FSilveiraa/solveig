@@ -60,13 +60,13 @@ class AvailableTools:
         # Every discovered plugin tool is included here; the FilteredToolset
         # below decides core-tool visibility live from `tools.<name>.enabled`
         # (plugin tools are enabled-by-default in the current schema).
-        # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS.all's specific callable
+        # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS's specific callable
         # types don't unify into anything FunctionToolset's constructor (or
         # the .filtered() predicate's deps type below) accepts precisely -
         # same class of "no way to express a dynamic tool union to mypy"
         # noted elsewhere in this codebase.
         function_tools: list[Any] = [
-            _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS.all.values())
+            _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS)
         ]
 
         if not function_tools and not mcp_toolsets:
@@ -102,7 +102,7 @@ def tool_classes() -> dict[str, type[BaseTool]]:
     here; replay falls back to a generic render for those.
     """
     classes: dict[str, type[BaseTool]] = {cls.tool_name(): cls for cls in CORE_TOOLS}
-    for tool in PLUGIN_TOOLS.all.values():
+    for tool in PLUGIN_TOOLS:
         if isinstance(tool, type) and issubclass(tool, BaseTool):
             classes[tool.tool_name()] = tool
     return classes

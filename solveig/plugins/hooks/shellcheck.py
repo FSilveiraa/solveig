@@ -6,17 +6,32 @@ import os
 import platform
 import tempfile
 
+from pydantic import Field
+
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface import SolveigInterface
 from solveig.plugins.hooks import before
 from solveig.tools import CommandTool
+from solveig.tools.base import ToolConfig
 
 DANGEROUS_PATTERNS = [
     "rm -rf",
     "mkfs",
     ":(){",
 ]
+
+
+class ShellcheckConfig(ToolConfig):
+    """Typed `plugins.hooks.shellcheck` config — declared via
+    `@before(config_model=ShellcheckConfig)` (a hook is a function, so it opts into
+    a schema through the decorator, the callable parallel of `@tool(config_model=…)`).
+    Read Any-style inside the hook as `config.plugins.hooks.shellcheck.<field>`."""
+
+    # None -> auto-detect from the OS; set to force a shell dialect for the linter.
+    shell: str | None = None
+    ignore_codes: list[str] = Field(default_factory=list)
+    ask_to_execute: bool = True
 
 
 def is_obviously_dangerous(cmd: str) -> bool:
@@ -26,18 +41,16 @@ def is_obviously_dangerous(cmd: str) -> bool:
     return False
 
 
-def detect_shell(plugin_config: dict) -> str:
-    # Check for plugin-specific shell configuration
-    if "shell" in plugin_config:
-        return plugin_config["shell"]
-
-    # Fall back to OS detection
+def detect_shell(shell_override: str | None) -> str:
+    # Explicit config override wins over OS detection.
+    if shell_override:
+        return shell_override
     if platform.system().lower() == "windows":
         return "powershell"
     return "bash"
 
 
-@before(tools=(CommandTool,))
+@before(tools=(CommandTool,), config_model=ShellcheckConfig)
 async def shellcheck(
     tool_args: dict, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
@@ -48,14 +61,14 @@ async def shellcheck(
     NOTE: Windows/PowerShell support is untested.
     """
     command_str = tool_args["command"]
-    # NOTE: per-hook config (plugins.hooks.<fnname>) lands in Sub-project B; until
-    # then the hook runs with defaults.
-    plugin_config: dict = {}
+    # Any-style read of this hook's own typed config section (keyed by the hook's
+    # __name__). Composed onto config.plugins.hooks during the two-phase bootstrap.
+    settings = config.plugins.hooks.shellcheck
 
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")
 
-    shell_name = detect_shell(plugin_config)
+    shell_name = detect_shell(settings.shell)
 
     # NOTE: delete=False + explicit os.remove() (not delete=True) so the file stays
     # on disk for the external shellcheck process to read.
@@ -74,9 +87,8 @@ async def shellcheck(
             f"--shell={shell_name}",
         ]
 
-        ignore_codes = plugin_config.get("ignore_codes", [])
-        if ignore_codes:
-            cmd.extend(["--exclude", ",".join(ignore_codes)])
+        if settings.ignore_codes:
+            cmd.extend(["--exclude", ",".join(settings.ignore_codes)])
 
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -129,7 +141,7 @@ async def shellcheck(
                             await group.display_warning(message)
 
                 # Ask the user if they want to proceed
-                if plugin_config.get("ask_to_execute", True):
+                if settings.ask_to_execute:
                     run_anyway_choice = await interface.ask_choice(
                         "Shellcheck found issues with this command. Execute anyway?",
                         choices=["Yes", "No"],

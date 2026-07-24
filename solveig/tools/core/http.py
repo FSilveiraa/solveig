@@ -10,7 +10,7 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
 from solveig.subcommand.base import Subcommand
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -32,7 +32,12 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
     return body, ""
 
 
-class HttpTool(BaseTool):
+class HttpConfig(ToolConfig):
+    timeout: float = 10.0
+    max_response_bytes: int = 50_000
+
+
+class HttpTool(BaseTool[HttpConfig]):
     """Make an HTTP request.
 
     Use output_file to download binary content to disk.
@@ -95,7 +100,7 @@ class HttpTool(BaseTool):
             await interface.display_warning("Rejected")
             return ToolResult(content="User declined to send the request.")
 
-        response = await self._send_request(interface, config.tools.http.timeout)
+        response = await self._send_request(interface, self.settings(config).timeout)
         if isinstance(response, ToolResult):  # error
             return response
 
@@ -208,9 +213,10 @@ class HttpTool(BaseTool):
         response_headers: dict[str, str],
     ) -> ToolResult:
         raw = response.text
-        truncated = len(raw) > config.tools.http.max_response_bytes
+        max_response_bytes = self.settings(config).max_response_bytes
+        truncated = len(raw) > max_response_bytes
         if truncated:
-            raw = raw[: config.tools.http.max_response_bytes]
+            raw = raw[:max_response_bytes]
 
         send_choice = await interface.ask_choice(
             "Send response to assistant?", ["Send", "Inspect first", "Don't send"]

@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from contextvars import ContextVar
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anyio import Path
-from pydantic import ByteSize, Field, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ByteSize,
+    Field,
+    PrivateAttr,
+    create_model,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     CliPositionalArg,
@@ -18,6 +27,8 @@ from pydantic_settings import (
 from solveig.api import ModelInfo
 from solveig.config import sources
 from solveig.config.models import (
+    _MUTABLE,
+    _MUTABLE_ALLOW,
     DEFAULT_SYSTEM_PROMPT,
     ApiConfig,
     CoreToolsConfig,
@@ -29,6 +40,9 @@ from solveig.config.models import (
     SystemPromptConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
+
+if TYPE_CHECKING:
+    from solveig.tools.base import BaseTool
 
 # DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
 # for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
@@ -105,6 +119,33 @@ class AnyconfigSource(PydanticBaseSettingsSource):
     def __call__(self) -> dict[str, Any]:
         explicit = self.current_state.get("config")
         return sources.load_paths(sources.resolve_config_files(explicit))
+
+
+def _compose_section(
+    target: type[BaseModel],
+    field_name: str,
+    pairs: list[tuple[str, type]],
+    model_name: str,
+    config_dict: Any = _MUTABLE,
+) -> None:
+    """Build `target.<field_name>`'s real schema at runtime — one field per
+    `(name, config_model)` pair — and swap it in (annotation + default_factory +
+    `model_rebuild`). The single machinery both core (`config.tools`) and plugin
+    (`config.plugins.tools`) tool config go through, so they get the same treatment.
+    `config_dict` is `_MUTABLE_ALLOW` for the plugin section (PRESERVE unknown blocks)."""
+    fields: dict[str, Any] = {
+        name: (config_model, Field(default_factory=config_model))
+        for name, config_model in pairs
+    }
+    with warnings.catch_warnings():
+        # `copy` (CopyTool) deliberately shadows the deprecated BaseModel.copy.
+        warnings.filterwarnings(
+            "ignore", message=r'Field name "copy".*shadows', category=UserWarning
+        )
+        composed = create_model(model_name, __config__=config_dict, **fields)
+    target.model_fields[field_name].annotation = composed
+    target.model_fields[field_name].default_factory = composed
+    target.model_rebuild(force=True)
 
 
 class SolveigConfig(BaseSettings):
@@ -216,16 +257,70 @@ class SolveigConfig(BaseSettings):
 
     def is_tool_enabled(self, tool_name: str) -> bool:
         """The single enable/disable rule for a tool, by name — the one home that
-        spans every namespace a tool's `enabled` flag can live in. Today: a core
-        tool (`tools.<name>`) is on iff its `.enabled` flag is set; an unknown name
-        (a plugin tool, on by default) → True. When plugin tool config lands under
-        `plugins.tools.<name>`, that check joins *here* — so both the LLM-path
-        filter (`is_tool_active`) and the `run_tool_and_hooks` guard stay one rule.
-        """
+        spans every namespace a tool's `enabled` flag can live in: a core tool
+        (`tools.<name>`) or a plugin tool (`plugins.tools.<name>`) is on iff its
+        `.enabled` flag is set; an unknown name → True (on by default). Both the
+        LLM-path filter (`is_tool_active`) and the `run_tool_and_hooks` guard use
+        this one rule."""
         tools = self.tools
         if tool_name in type(tools).model_fields:
             return bool(getattr(tools, tool_name).enabled)
+        plugin_tools = self.plugins.tools
+        if tool_name in type(plugin_tools).model_fields:
+            return bool(getattr(plugin_tools, tool_name).enabled)
         return True
+
+    def is_hook_enabled(self, hook_name: str) -> bool:
+        """The enable/disable rule for a hook, by name — the parallel of
+        `is_tool_enabled` for the `plugins.hooks.<name>` namespace. A hook is on iff
+        its `.enabled` flag is set; an unknown name → True (on by default). The gate
+        `run_tool_and_hooks` consults before firing each registered hook."""
+        hooks = self.plugins.hooks
+        if hook_name in type(hooks).model_fields:
+            return bool(getattr(hooks, hook_name).enabled)
+        return True
+
+    @classmethod
+    def compose_core_tools(cls, tools: list[type[BaseTool]]) -> None:
+        """Build the `config.tools` section from the core tool list — one field per
+        tool (`tool_name()` → its `config_model`) — so `config` never hand-enumerates
+        core tools; adding a core tool needs no change here.
+
+        Called once from `config/__init__.py` *after* the `SolveigConfig` re-export
+        (the load order that lets each tool module resolve its top-level `from
+        solveig.config import SolveigConfig`), and re-run only on a genuine
+        tool-membership change — never per tool call."""
+        pairs = [(tool.tool_name(), tool.config_model) for tool in tools]
+        _compose_section(cls, "tools", pairs, "CoreToolsConfig")
+
+    @classmethod
+    def compose_plugin_tools(cls, plugin_tools: list[Any]) -> None:
+        """Build the `config.plugins.tools` section from the discovered plugin tools
+        — the plugin parallel of `compose_core_tools`, and phase 2 of the two-phase
+        bootstrap (parse → discover → compose → reparse). Reads each entry's config
+        type via `config_model_of` (a `BaseTool` ClassVar or a callable's
+        `@tool(config_model=…)` stash), so plugin config validates like core config.
+        Rebuilds `SolveigConfig` too, since it embeds `PluginsConfig`."""
+        from solveig.plugins.tools import config_model_of, plugin_tool_name
+
+        pairs = [(plugin_tool_name(e), config_model_of(e)) for e in plugin_tools]
+        _compose_section(
+            PluginsConfig, "tools", pairs, "PluginToolsConfig", _MUTABLE_ALLOW
+        )
+        cls.model_rebuild(force=True)
+
+    @classmethod
+    def compose_plugin_hooks(cls, hooks: list[tuple[str, type]]) -> None:
+        """Build the `config.plugins.hooks` section from the discovered hooks — the
+        hook parallel of `compose_plugin_tools`, also part of phase 2 of the two-phase
+        bootstrap. Takes the `(hook_name, config_model)` pairs `all_hooks()` already
+        deduped (a hook is a function, so there's no generic to auto-derive from — its
+        config type is a `@before/@after(config_model=…)` stash or bare `ToolConfig`).
+        Rebuilds `SolveigConfig` too, since it embeds `PluginsConfig`."""
+        _compose_section(
+            PluginsConfig, "hooks", hooks, "PluginHooksConfig", _MUTABLE_ALLOW
+        )
+        cls.model_rebuild(force=True)
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
@@ -273,11 +368,30 @@ class SolveigConfig(BaseSettings):
     @classmethod
     async def parse_config_and_prompt(cls, cli_args=None):
         argv = list(sys.argv[1:] if cli_args is None else cli_args)
-        token = _PENDING_ARGV.set(argv)
-        try:
-            cfg = cls()  # pydantic parses the whole CLI + env + files, then validates
-        finally:
-            _PENDING_ARGV.reset(token)
+
+        def _parse() -> SolveigConfig:
+            token = _PENDING_ARGV.set(argv)
+            try:
+                return cls()  # pydantic parses CLI + env + files, then validates
+            finally:
+                _PENDING_ARGV.reset(token)
+
+        # Two-phase bootstrap: parse once to learn plugins.paths, discover plugin
+        # tools, and compose the plugins.tools schema — so the second parse validates
+        # plugin config against the real per-plugin models, the same pipeline core
+        # config goes through. Discovery is idempotent (setup_loop re-runs it for
+        # interface-side reporting). It currently scans the built-in plugins package;
+        # external plugins.paths scanning is what makes phase 1's config load-bearing.
+        phase1 = _parse()
+        from solveig.plugins import discover_plugins
+        from solveig.plugins.hooks import all_hooks
+        from solveig.plugins.tools import PLUGIN_TOOLS
+
+        discover_plugins(phase1)
+        cls.compose_plugin_tools(PLUGIN_TOOLS)
+        cls.compose_plugin_hooks(all_hooks())
+
+        cfg = _parse()
         cfg._loaded_paths = sources.resolve_config_files(cfg.config)
         cfg._record_declared(argv)
         for url in cfg.add_mcp:

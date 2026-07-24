@@ -1,13 +1,14 @@
 """Command tool - executes shell commands."""
 
 import asyncio
+import re
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.subcommand.base import Subcommand
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
@@ -17,7 +18,15 @@ if TYPE_CHECKING:
     from solveig.interface import SolveigInterface
 
 
-class CommandTool(BaseTool):
+class CommandConfig(ToolConfig):
+    # Compiled patterns: pydantic validates each string into a re.Pattern (compiled
+    # once, at parse time — invalid regexes are rejected declaratively) and
+    # serializes them back to their source strings for /config save. "It's a regex"
+    # is a property of the field, not something command.py re-derives per call.
+    auto_execute: list[re.Pattern] = Field(default_factory=list)
+
+
+class CommandTool(BaseTool[CommandConfig]):
     """Execute a shell command and inspect its output.
 
     Changing cwd path persists between commands.
@@ -72,7 +81,7 @@ class CommandTool(BaseTool):
         run = False
         inspect = False
 
-        for pattern in config.tools.command.auto_execute:
+        for pattern in self.settings(config).auto_execute:
             if pattern.match(self.command):
                 run = True
                 await interface.display_info(

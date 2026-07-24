@@ -29,7 +29,7 @@ from pydantic_ai.messages import ToolCallPart
 from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface import SolveigInterface
-from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS
+from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
@@ -83,17 +83,19 @@ async def run_tool_and_hooks(
         # prompt appears with the operation already visible above it.
         await instance.display_header(group)
 
-        # Hooks are enabled-by-default (per-hook enable/disable config is
-        # Sub-project B); every registered hook for this tool fires.
+        # Hooks are enabled-by-default; a hook disabled via plugins.hooks.<name>.
+        # enabled=false is skipped here (the one gate, parallel to is_tool_enabled).
         for before_hook in BEFORE_HOOKS.get(tool_name, ()):
-            await before_hook(instance.model_dump(), config, group)
+            if config.is_hook_enabled(hook_name(before_hook)):
+                await before_hook(instance.model_dump(), config, group)
 
         result = await instance.execute(config, group)
         if not isinstance(result, ToolResult):
             return result
 
         for after_hook in AFTER_HOOKS.get(tool_name, ()):
-            result = await after_hook(result, config, group)
+            if config.is_hook_enabled(hook_name(after_hook)):
+                result = await after_hook(result, config, group)
         return result
 
 

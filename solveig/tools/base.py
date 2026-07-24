@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
@@ -33,6 +33,20 @@ from solveig.utils.misc import _camel_to_snake, format_path_info
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
     from solveig.interface import SolveigInterface
+
+
+class ToolConfig(BaseModel):
+    """Base config every tool's config extends — the universal `enabled` flag
+    (on by default). A tool with extra settings subclasses it (e.g. `HttpConfig`
+    in http.py) and points `config_model` at the subclass; a plugin tool does the
+    same. `SolveigConfig.compose_core_tools()` reads each tool's `config_model` to build
+    the `tools` section at runtime, so core and plugin tools are identical here —
+    which is what makes "add a core tool" == "add a plugin tool"."""
+
+    # arbitrary_types_allowed for subclasses carrying e.g. re.Pattern (CommandConfig).
+    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
+    enabled: bool = True
+
 
 # The private marker `CliPositionalArg[T]` injects into a field's Annotated
 # metadata. Pulled out via `get_args` so positional-field detection doesn't
@@ -56,10 +70,21 @@ CLI_PARSE_OPTS: dict[str, Any] = {
 }
 
 
-class BaseTool(BaseModel, ABC):
+# `ToolConfigType` (the PEP 695 parameter below) is threaded through BaseTool so a
+# tool's `settings(config)` is statically typed to its own config type (`HttpTool`
+# -> `HttpConfig`). The argument is ERASED at runtime — pydantic rewrites a generic
+# model's bases — so composition can't recover it from the generic; each tool also
+# sets `config_model` explicitly for the runtime side. See `settings()` /
+# `compose_core_tools()`.
+class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     """Declarative tool: fields are the tool's arguments, `execute()` is the
     live behaviour, `display_header()` is the intent shown before execution and
-    re-shown on replay, and `display()` is the replay entrypoint."""
+    re-shown on replay, and `display()` is the replay entrypoint.
+
+    Generic over its config type: a tool with extra settings declares
+    `class HttpTool(BaseTool[HttpConfig])`, so `self.settings(config)` is typed to
+    `HttpConfig`. A tool with no extra settings is a plain `BaseTool` and gets
+    `settings() -> ToolConfig` (just `enabled`)."""
 
     # Optional explicit tool name; when None it's derived from the class name
     # (`EditTool` -> `edit`, `TasksTool` -> `tasks`).
@@ -78,12 +103,30 @@ class BaseTool(BaseModel, ABC):
     # so the tool contract stays unchanged while `/read foo` still works.
     cli_defaults: ClassVar[dict[str, Any]] = {}
 
+    # The tool's config type, read by `compose_*_tools()` to build this tool's
+    # slice of `config.tools` / `config.plugins.tools`. AUTO-DERIVED from the
+    # `BaseTool[SomeConfig]` generic arg in `__pydantic_init_subclass__` below (so
+    # the config type is declared ONCE, in the generic — never repeated here).
+    # Defaults to bare `ToolConfig` (just `enabled`) for a plain `BaseTool`; a
+    # plugin callable, having no generic, sets it via `@tool(config_model=...)`,
+    # which also overrides the derived value on a class.
+    config_model: ClassVar[type[ToolConfig]] = ToolConfig
+
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         # Runs *after* pydantic has populated `model_fields` (unlike
         # `__init_subclass__`, where they're not yet available) - so
         # `_generate_usage()` can see the fields.
         super().__pydantic_init_subclass__(**kwargs)
+
+        # Recover the concrete `BaseTool[SomeConfig]` argument from pydantic's own
+        # generic metadata (populated at subclass-init time) and record it as
+        # `config_model` — the runtime half of the generic, so the tool never
+        # repeats its config type. A bare `BaseTool` subclass keeps the default.
+        args = getattr(cls, "__pydantic_generic_metadata__", {}).get("args", ())
+        if args and isinstance(args[0], type) and issubclass(args[0], ToolConfig):
+            cls.config_model = args[0]
+
         own = cls.__dict__.get("subcommand")
         if not isinstance(own, Subcommand):
             return
@@ -100,6 +143,14 @@ class BaseTool(BaseModel, ABC):
         if cls.name is not None:
             return cls.name
         return _camel_to_snake(cls.__name__.removesuffix("Tool"))
+
+    def settings(self, config: "SolveigConfig") -> ToolConfigType:
+        """This tool's own slice of `config.tools`, statically typed to its
+        `config_model` via the `BaseTool[ToolConfigType]` generic (so `HttpTool`
+        sees `HttpConfig`). The composed `config.tools` model is dynamic, so a
+        direct `config.tools.<name>` read is Any — go through here for the typed
+        view."""
+        return getattr(config.tools, self.tool_name())
 
     # ------------------------------------------------------------------
     # `/tool` subcommand support (see the migration log's "Subcommand

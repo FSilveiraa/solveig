@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import builtins
 import fnmatch
-import re
-import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import (
     BaseModel,
@@ -19,6 +17,15 @@ import solveig.interface.themes as themes
 from solveig.api import APIType, parse_api_type
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
+# Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow"). Used
+# for the composed `plugins.tools` section so a config FILE's block for an
+# undiscovered plugin round-trips through `/config save` instead of being dropped
+# (which would strip a teammate's plugin config on a machine lacking that plugin)
+# — surfaced as a warning at load, not an error. CLI stays strict (argparse rejects
+# an unknown `--plugins.tools.foo.x` regardless, since it's not a defined flag).
+_MUTABLE_ALLOW = ConfigDict(
+    validate_assignment=True, arbitrary_types_allowed=True, extra="allow"
+)
 
 DEFAULT_SYSTEM_PROMPT = """
 You are an AI assistant helping a user through a tool called Solveig that allows you to call tools.
@@ -66,57 +73,33 @@ class ApiConfig(BaseModel):
         return v.get_secret_value()
 
 
-class ToolConfig(BaseModel):
-    """Base config every tool's config extends — carries the universal `enabled`
-    flag (enabled-by-default). This is the declaration seam Sub-project B reuses
-    for plugin tools/hooks; in A, the core tools below extend it statically."""
+class _ComposedSection(BaseModel):
+    """Base for a config section whose real per-entry fields are composed at
+    runtime from a tool list, not hand-enumerated here — `config.tools` (core
+    tools, from `CORE_TOOLS`) and `config.plugins.tools` (plugin tools, from the
+    discovered `PLUGIN_TOOLS`), both built by `SolveigConfig.compose_*()` in
+    config.py. Adding a tool touches nothing here. The `TYPE_CHECKING` `__getattr__`
+    types a direct `config.tools.<name>` read as Any (Any-style access stays
+    available); the *typed* path is a tool's own `self.settings(config)`. The
+    per-tool config type lives on each tool (`ToolConfig`/subclass in tools/)."""
 
     model_config = _MUTABLE
-    enabled: bool = True
+
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any: ...
 
 
-class HttpConfig(ToolConfig):
-    timeout: float = 10.0
-    max_response_bytes: int = 50_000
+class CoreToolsConfig(_ComposedSection):
+    """Placeholder for `config.tools` — c
+     plugin tool's config validates like a core tool's."""
 
 
-class CommandConfig(ToolConfig):
-    # Compiled patterns: pydantic validates each string into a re.Pattern (compiled
-    # once, at parse time — invalid regexes are rejected declaratively) and
-    # serializes them back to their source strings for /config save. "It's a regex"
-    # is a property of the field, not something command.py re-derives per call.
-    auto_execute: list[re.Pattern] = Field(default_factory=list)
-
-
-# NOTE: the `copy` field below mirrors CopyTool's `tool_name()` and is required for
-# `tools.copy.enabled` to line up with the tool registry. It deliberately shadows the
-# deprecated `BaseModel.copy()` (we use `model_copy` everywhere), so we silence the
-# one-time "shadows an attribute in parent" UserWarning pydantic raises at class build.
-with warnings.catch_warnings():
-    warnings.filterwarnings(
-        "ignore", message=r'Field name "copy".*shadows', category=UserWarning
-    )
-
-    class CoreToolsConfig(BaseModel):
-        """The `tools` section: CORE tools only (static, known set). Every core tool
-        has an entry so it can be disabled uniformly via `tools.<name>.enabled`.
-        `command`/`http` carry extra fields; the rest are plain ToolConfig (just
-        `enabled`). Named CoreToolsConfig (not ToolsConfig) so it doesn't read one
-        `s` away from the per-tool `ToolConfig` element it contains; plugin tool
-        config lives separately under `plugins.tools` in Sub-project B."""
-
-        model_config = _MUTABLE
-        command: CommandConfig = Field(default_factory=CommandConfig)
-        http: HttpConfig = Field(default_factory=HttpConfig)
-        read: ToolConfig = Field(default_factory=ToolConfig)
-        write: ToolConfig = Field(default_factory=ToolConfig)
-        edit: ToolConfig = Field(default_factory=ToolConfig)
-        delete: ToolConfig = Field(default_factory=ToolConfig)
-        # `copy` deliberately shadows deprecated BaseModel.copy (see NOTE above);
-        # mypy sees the field/method type clash, hence the ignore.
-        copy: ToolConfig = Field(default_factory=ToolConfig)  # type: ignore[assignment]
-        move: ToolConfig = Field(default_factory=ToolConfig)
-        tasks: ToolConfig = Field(default_factory=ToolConfig)
+class PluginHooksConfig(_ComposedSection):
+    """Placeholder for `config.plugins.hooks` — composed from discovered hooks
+    during the same two-phase bootstrap, so a hook's config validates like a
+    tool's. A hook is a function (no generic to auto-derive its config type from),
+    so its schema comes from `@before/@after(config_model=…)` or bare `ToolConfig`."""
 
 
 class SystemPromptConfig(BaseModel):
@@ -129,11 +112,14 @@ class SystemPromptConfig(BaseModel):
 
 
 class PluginsConfig(BaseModel):
-    """In A: discovery dirs only. Plugins are discovered and on-by-default; per-plugin
-    config (`plugins.tools.*`/`plugins.hooks.*`) is Sub-project B."""
+    """`paths` = discovery dirs; `tools`/`hooks` = per-plugin config, both composed
+    at runtime from the discovered plugins (empty placeholders until then, same as
+    core's `config.tools`)."""
 
     model_config = _MUTABLE
     paths: list[str] = Field(default_factory=list)
+    tools: PluginToolsConfig = Field(default_factory=PluginToolsConfig)
+    hooks: PluginHooksConfig = Field(default_factory=PluginHooksConfig)
 
 
 class MCPServerConfig(BaseModel):

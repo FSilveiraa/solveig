@@ -19,6 +19,7 @@ indexed by a single plugin/file-derived key. Plugin name is only derived
 Sub-project B's per-hook config).
 """
 
+import warnings
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -26,7 +27,7 @@ from typing import Any
 from solveig.config import SolveigConfig
 from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 
 BeforeHook = Callable[
@@ -61,6 +62,42 @@ def plugin_name(fn: Callable[..., Any]) -> str:
     return fn.__name__
 
 
+def hook_name(fn: Callable[..., Any]) -> str:
+    """The name a hook is configured/gated under: `plugins.hooks.<hook_name>`.
+    A hook is a function, so its identity is `__name__` — the callable parallel of
+    a plugin tool's `plugin_tool_name` (one file may export several hooks, each its
+    own config entry). The `config_model` for that entry comes from
+    `@before/@after(config_model=…)`, or bare `ToolConfig` (enabled-only)."""
+    return fn.__name__
+
+
+def all_hooks() -> list[tuple[str, type[ToolConfig]]]:
+    """Every distinct hook, as `(hook_name, config_model)` pairs for schema
+    composition (`SolveigConfig.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed
+    by *target tool*, so a hook registered for several tools appears under several
+    keys but is ONE function — deduped by identity here. Two different hooks sharing
+    a `__name__` would collide into one config entry; the later one is dropped with a
+    warning (the schema key must be unique), matching how a plugin file names its
+    tools uniquely."""
+    seen: dict[str, Callable[..., Any]] = {}
+    pairs: list[tuple[str, type[ToolConfig]]] = []
+    for registry in (BEFORE_HOOKS, AFTER_HOOKS):
+        for hooks in registry.values():
+            for hook in hooks:
+                name = hook_name(hook)
+                if name in seen:
+                    if seen[name] is not hook:
+                        warnings.warn(
+                            f"Two hooks named '{name}' — dropping the later one from "
+                            f"config composition (hook config keys must be unique).",
+                            stacklevel=2,
+                        )
+                    continue
+                seen[name] = hook
+                pairs.append((name, getattr(hook, "config_model", ToolConfig)))
+    return pairs
+
+
 def registered_plugin_names() -> set[str]:
     """All plugin names with at least one registered before/after hook - used to report load/skip status."""
     names = {plugin_name(hook) for hooks in BEFORE_HOOKS.values() for hook in hooks}
@@ -76,8 +113,20 @@ def clear_hooks() -> None:
 
 def before(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
+    *,
+    config_model: type[ToolConfig] | None = None,
 ) -> Callable[[BeforeHook], BeforeHook]:
+    """Register a before-hook for `tools`. `config_model=` declares a typed
+    `plugins.hooks.<hook_name>` config schema (the callable parallel of a tool's
+    `@tool(config_model=…)`); without it the hook gets bare `ToolConfig`
+    (enabled-only). Either way the hook reads its config Any-style via
+    `config.plugins.hooks.<name>`."""
+
     def register(fn: BeforeHook) -> BeforeHook:
+        if config_model is not None:
+            # A hook is a plain function with no BaseTool generic to auto-derive
+            # from; stashing config_model here is how it opts into a typed schema.
+            fn.config_model = config_model  # type: ignore[attr-defined]
         for target in tools:
             BEFORE_HOOKS[_tool_key(target)].append(fn)
         return fn
@@ -87,8 +136,14 @@ def before(
 
 def after(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
+    *,
+    config_model: type[ToolConfig] | None = None,
 ) -> Callable[[AfterHook], AfterHook]:
+    """Register an after-hook for `tools`. See `before` for `config_model=`."""
+
     def register(fn: AfterHook) -> AfterHook:
+        if config_model is not None:
+            fn.config_model = config_model  # type: ignore[attr-defined]
         for target in tools:
             AFTER_HOOKS[_tool_key(target)].append(fn)
         return fn
@@ -96,29 +151,27 @@ def after(
     return register
 
 
-async def load_and_filter_hooks(config: SolveigConfig, interface: SolveigInterface):
-    """Discover hook plugin modules and report which loaded.
+def load_and_filter_plugin_hooks(config: SolveigConfig) -> list[str]:
+    """Discover hook plugin modules into the hook registries — idempotent, UI-free.
 
-    Hooks register themselves via `@before`/`@after` at import time and are
-    enabled-by-default (no `config.plugins` enable map); per-hook enable/disable
-    config is Sub-project B. `config` is kept on the signature for symmetry with
-    the tool loader and B's future gating.
+    Returns discovery error messages for the caller to surface (reporting is a
+    separate step). Hooks register via `@before`/`@after` at import and are
+    enabled-by-default; per-hook gating (`plugins.hooks.<name>.enabled`) is enforced
+    live in `run_tool_and_hooks`. `config` is kept on the signature for symmetry
+    with the tool loader.
     """
     clear_hooks()
-
-    await rescan_and_load_plugins(
-        plugin_module_path="solveig.plugins.hooks",
-        interface=interface,
-    )
-
-    for name in sorted(registered_plugin_names()):
-        await interface.display_success(f"'{name}': Loaded")
+    _succeeded, _failed, errors = rescan_and_load_plugins("solveig.plugins.hooks")
+    return errors
 
 
 __all__ = [
     "before",
     "after",
     "clear_hooks",
+    "plugin_name",
+    "hook_name",
+    "all_hooks",
     "registered_plugin_names",
-    "load_and_filter_hooks",
+    "load_and_filter_plugin_hooks",
 ]

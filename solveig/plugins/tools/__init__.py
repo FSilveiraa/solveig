@@ -1,102 +1,107 @@
 """Registry for dynamically discovered plugin tools.
 
-Unlike core tools (hand-listed in `CORE_TOOLS`, no marker needed - inclusion
-in that list is the only "this is a tool" signal), plugin tools are found by
-scanning modules at runtime (`rescan_and_load_plugins`), so there's no static
-list anyone edits by hand. `@tool` here is that missing piece: a plugin
-author's only job is to decorate their function so it self-registers into
-`PLUGIN_TOOLS.all` - pure bookkeeping, no signature rewriting.
+Unlike core tools (hand-listed in `CORE_TOOLS`, no marker needed), plugin tools
+are found by scanning modules at runtime (`load_and_filter_plugin_tools`), so
+there's no static list anyone edits by hand. `@tool` is that missing piece: a
+plugin author's only job is to decorate their tool so it self-registers into
+`PLUGIN_TOOLS` — pure bookkeeping, no signature rewriting.
 
-Indexed by tool (function) name, not plugin (file) name - pydantic-ai already
-requires tool names to be globally unique, so this is free uniqueness rather
-than an assumption. Keying by file name instead would silently collide
-whenever one plugin file exports more than one tool (only the last
-registration in that file would survive). `owners` tracks tool name -> plugin
-name separately, for load reporting (and Sub-project B's per-plugin config) - a
-file exporting several tools is one reporting unit, but each tool is its own
-schema entry.
+`PLUGIN_TOOLS` mirrors `CORE_TOOLS`'s shape: a plain list. Its elements are
+`BaseTool` subclasses (typed config via `settings()`, like core) OR plain
+callables. A callable gets bare `ToolConfig` (enabled-only) unless it declares
+`@tool(config_model=MyConfig)`; either way it reads its config Any-style from
+`config.plugins.tools.<name>` (a `BaseTool` reads it typed). `config_model_of` /
+`plugin_tool_name` / `plugin_owner` derive per-entry facts on demand (name from
+`tool_name()`/`__name__`, owner from the module path) — no separate index.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from typing import Any
+from typing import overload
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ToolConfig
 
-PluginTool = Callable[..., Awaitable[Any]] | type[BaseTool]
+type PluginTool = Callable[..., Awaitable[object]] | type[BaseTool]
 
-
-def _tool_name(fn: PluginTool) -> str:
-    """The actual name a call is dispatched under: `.tool_name()` for a
-    `BaseTool` subclass (e.g. `TreeTool` -> `"tree"`), `__name__` for a plain
-    tool function - registry keys must match this, not a Python identifier
-    (the same distinction `_tool_key` makes in `plugins/hooks/__init__.py`)."""
-    if isinstance(fn, type) and issubclass(fn, BaseTool):
-        return fn.tool_name()
-    return fn.__name__
+# Discovered plugin tools, populated by `@tool` self-registration during discovery.
+PLUGIN_TOOLS: list[PluginTool] = []
 
 
-def _plugin_name(fn: PluginTool) -> str:
-    """Derive a tool's owning plugin name from its module path (e.g. `solveig.plugins.tools.tree` -> `tree`)."""
-    module = fn.__module__
-    if ".tools." in module:
-        return module.split(".tools.")[-1]
-    return _tool_name(fn)
+@overload
+def tool(entry: PluginTool) -> PluginTool: ...
+@overload
+def tool(*, config_model: type[ToolConfig]) -> Callable[[PluginTool], PluginTool]: ...
+def tool(entry=None, *, config_model=None):
+    """Register a plugin tool into `PLUGIN_TOOLS`. Usable bare (`@tool`) or with a
+    config type (`@tool(config_model=MyConfig)`).
+
+    A `BaseTool[SomeConfig]` subclass already has its `config_model` auto-derived
+    from the generic (and typed `self.settings(config)`), so it needs nothing here;
+    `config_model=` is for a plain callable (which has no generic) that wants a
+    typed `config.plugins.tools.<name>` schema — or to override the derived type on
+    a class. Without it a callable gets bare `ToolConfig` (enabled-only) and reads
+    its config Any-style via `ctx.deps.config`."""
+
+    def register(e: PluginTool) -> PluginTool:
+        if config_model is not None:
+            # A plain callable has no declared `config_model`; stashing one is how
+            # a function opts into a typed config (a BaseTool sets it as a ClassVar).
+            e.config_model = config_model  # type: ignore[union-attr]
+        PLUGIN_TOOLS.append(e)
+        return e
+
+    return register(entry) if entry is not None else register
 
 
-@dataclass
-class ToolRegistry:
-    all: dict[str, PluginTool] = field(default_factory=dict)
-    owners: dict[str, str] = field(default_factory=dict)
-
-    def clear(self) -> None:
-        self.all.clear()
-        self.owners.clear()
-
-    def register(self, fn: PluginTool) -> PluginTool:
-        """Register a plugin tool, indexed by its actual tool name."""
-        name = _tool_name(fn)
-        self.all[name] = fn
-        self.owners[name] = _plugin_name(fn)
-        return fn
-
-
-PLUGIN_TOOLS = ToolRegistry()
-
-# Module-level aliases — callers can import these directly instead of going through PLUGIN_TOOLS.
-tool = PLUGIN_TOOLS.register
-clear_tools = PLUGIN_TOOLS.clear
-
-
-async def load_and_filter_tools(config: SolveigConfig, interface: SolveigInterface):
-    """Discover and load tool plugins, and report them in the UI.
-
-    Plugins are enabled-by-default now (no `config.plugins` enable map);
-    per-plugin config/gating is Sub-project B. `config` is kept on the
-    signature for symmetry with the hook loader and B's future filtering.
-    """
+def clear_tools() -> None:
     PLUGIN_TOOLS.clear()
 
-    await rescan_and_load_plugins(
-        plugin_module_path="solveig.plugins.tools",
-        interface=interface,
-    )
 
-    reported_plugins: set[str] = set()
-    for tool_name in PLUGIN_TOOLS.all:
-        plugin_name = PLUGIN_TOOLS.owners[tool_name]
-        if plugin_name not in reported_plugins:
-            await interface.display_success(f"'{plugin_name}': Loaded")
-            reported_plugins.add(plugin_name)
+def plugin_tool_name(entry: PluginTool) -> str:
+    """The name a call dispatches under: `.tool_name()` for a `BaseTool` subclass
+    (e.g. `TreeTool` -> `"tree"`), `__name__` for a plain callable."""
+    if isinstance(entry, type) and issubclass(entry, BaseTool):
+        return entry.tool_name()
+    return entry.__name__
+
+
+def plugin_owner(entry: PluginTool) -> str:
+    """The owning plugin (file) name, from the module path (`...tools.tree` -> `tree`).
+    One file may export several tools (one reporting unit, each its own schema entry)."""
+    module = entry.__module__
+    if ".tools." in module:
+        return module.split(".tools.")[-1]
+    return plugin_tool_name(entry)
+
+
+def config_model_of(entry: PluginTool) -> type[ToolConfig]:
+    """The tool's config type for schema composition: its `config_model` (a
+    `BaseTool` ClassVar, or a callable's `@tool(config_model=...)` stash) or bare
+    `ToolConfig`. The one uniform accessor compose reads over both kinds."""
+    return getattr(entry, "config_model", ToolConfig)
+
+
+def load_and_filter_plugin_tools(config: SolveigConfig) -> list[str]:
+    """Discover plugin tool modules into `PLUGIN_TOOLS` — idempotent and UI-free.
+
+    Returns discovery error messages for the caller to surface; reporting is a
+    separate step (so discovery can run before the interface exists, for the
+    two-phase config bootstrap). Plugins register via `@tool` at import;
+    enabled-by-default (gating is decided live). `config` is kept on the signature
+    for symmetry with the hook loader and future per-plugin gating."""
+    clear_tools()
+    _succeeded, _failed, errors = rescan_and_load_plugins("solveig.plugins.tools")
+    return errors
 
 
 __all__ = [
     "PLUGIN_TOOLS",
-    "ToolRegistry",
+    "PluginTool",
     "tool",
     "clear_tools",
-    "load_and_filter_tools",
+    "plugin_tool_name",
+    "plugin_owner",
+    "config_model_of",
+    "load_and_filter_plugin_tools",
 ]

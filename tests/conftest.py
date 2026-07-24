@@ -12,7 +12,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestServer
 
 from solveig.config import SolveigConfig
-from solveig.plugins import clear_plugins, initialize_plugins
+from solveig.plugins import clear_plugins, discover_plugins
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 from tests.mocks import MockInterface
 
@@ -230,8 +230,7 @@ async def load_plugins():
 
     # The factory function that will be yielded to the test
     async def _loader(config: SolveigConfig):
-        interface = MockInterface()
-        await initialize_plugins(config, interface)
+        discover_plugins(config)
 
     yield _loader
 
