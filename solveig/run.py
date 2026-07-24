@@ -229,6 +229,18 @@ async def run_async(
             return
         inbox.put_nowait(text)
 
+    def wire_interface(iface: SolveigInterface) -> None:
+        """Finish wiring an injected interface's producer callbacks.
+
+        Test/demo code (MockInterface, DemoInterface) constructs its interface
+        before run_async and injects it, so the composition root must finish
+        wiring an object it didn't construct. This is the ONE named path for
+        post-construction wiring; the constructed path passes the same
+        callbacks as constructor arguments.
+        """
+        iface.on_user_input = route_user_input
+        iface.on_edit_config_field = subcommand_executor.edit_config_field
+
     # Interface is created before spawning the loop task so that user_prompt
     # can be queued immediately: by the time the loop calls inbox.get(), the
     # prompt is already there and won't block.
@@ -242,8 +254,7 @@ async def run_async(
             on_edit_config_field=subcommand_executor.edit_config_field,
         )
     else:
-        interface.on_user_input = route_user_input
-        interface.on_edit_config_field = subcommand_executor.edit_config_field
+        wire_interface(interface)
 
     if user_prompt:
         inbox.put_nowait(user_prompt)

@@ -83,9 +83,11 @@ class SolveigInterface(ABC):
     # `on_user_input(self, text)` - the interface passes itself, so the app's
     # router needs no closure over the interface (constructor-wirable, no
     # late-binding trick). Awaitable because the router awaits dispatch.
+    # Wired exactly once: by constructor (real frontends) or by the
+    # composition root's `wire_interface` (injected test/demo interfaces).
     on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None
     # App-wired click-to-edit callback (stats bar cells), same shape:
-    # `on_edit_config_field(self, field_name)`.
+    # `on_edit_config_field(self, field_name)`. Same wiring rule as above.
     on_edit_config_field: Callable[[SolveigInterface, str], Awaitable[None]] | None = (
         None
     )
