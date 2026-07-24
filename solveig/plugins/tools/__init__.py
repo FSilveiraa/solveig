@@ -66,15 +66,6 @@ def plugin_tool_name(entry: PluginTool) -> str:
     return entry.__name__
 
 
-def plugin_owner(entry: PluginTool) -> str:
-    """The owning plugin (file) name, from the module path (`...tools.tree` -> `tree`).
-    One file may export several tools (one reporting unit, each its own schema entry)."""
-    module = entry.__module__
-    if ".tools." in module:
-        return module.split(".tools.")[-1]
-    return plugin_tool_name(entry)
-
-
 def config_model_of(entry: PluginTool) -> type[ToolConfig]:
     """The tool's config type for schema composition: its `config_model` (a
     `BaseTool` ClassVar, or a callable's `@tool(config_model=...)` stash) or bare
@@ -101,7 +92,6 @@ __all__ = [
     "tool",
     "clear_tools",
     "plugin_tool_name",
-    "plugin_owner",
     "config_model_of",
     "load_and_filter_plugin_tools",
 ]

@@ -33,7 +33,6 @@ from solveig.config.models import (
     ApiConfig,
     CoreToolsConfig,
     InterfaceConfig,
-    McpConfig,
     MCPServerConfig,
     PluginsConfig,
     SessionConfig,
@@ -169,7 +168,7 @@ class SolveigConfig(BaseSettings):
     plugins: PluginsConfig = Field(
         default_factory=lambda: PluginsConfig(paths=list(DEFAULT_PLUGIN_PATHS))
     )
-    mcp: McpConfig = Field(default_factory=McpConfig)
+    mcp: dict[str, MCPServerConfig] = Field(default_factory=dict)
     tools: CoreToolsConfig = Field(default_factory=CoreToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
@@ -254,6 +253,23 @@ class SolveigConfig(BaseSettings):
     def _abs_paths(cls, v: Any) -> Any:
         return [Filesystem.get_absolute_path(p) for p in v] if v else []
 
+    @field_validator("mcp", mode="before")
+    @classmethod
+    def _normalize_mcp(cls, v: Any) -> Any:
+        # Config files write a server block keyed by URL without repeating the
+        # URL inside it (`mcp."http://x" = {name=…}`); inject the key as the
+        # entry's `url` so every MCPServerConfig is complete.
+        if not isinstance(v, dict):
+            return v
+        out: dict[str, Any] = {}
+        for url, cfg in v.items():
+            if isinstance(cfg, MCPServerConfig):
+                out[url] = cfg
+            else:
+                rest = {k: val for k, val in dict(cfg).items() if k != "url"}
+                out[url] = MCPServerConfig(url=url, **rest)
+        return out
+
     @model_validator(mode="after")
     def _default_api_url(self):
         # api.type always has a default (OPENAI); when no url is given, derive it
@@ -336,12 +352,6 @@ class SolveigConfig(BaseSettings):
         )
         cls.model_rebuild(force=True)
 
-    def to_dict(self) -> dict[str, Any]:
-        return self.model_dump(mode="json")
-
-    def to_json(self, indent: int | None = 2, **kw) -> str:
-        return self.model_dump_json(indent=indent, **kw)
-
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared`) — what `/config save` persists.
@@ -409,5 +419,5 @@ class SolveigConfig(BaseSettings):
         cfg._loaded_paths = sources.resolve_config_files(cfg.config)
         cfg._record_declared(argv)
         for url in cfg.add_mcp:
-            cfg.mcp.servers.setdefault(url, MCPServerConfig(url=url))
+            cfg.mcp.setdefault(url, MCPServerConfig(url=url))
         return cfg, cfg.prompt.strip(), cfg.resume

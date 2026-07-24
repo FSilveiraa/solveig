@@ -168,25 +168,6 @@ class MCPServerConfig(BaseModel):
         return True
 
 
-class McpConfig(BaseModel):
-    model_config = _MUTABLE
-    servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
-
-    @field_validator("servers", mode="before")
-    @classmethod
-    def _normalize(cls, v: Any) -> Any:
-        if not isinstance(v, dict):
-            return v
-        out: dict[str, Any] = {}
-        for url, cfg in v.items():
-            if isinstance(cfg, MCPServerConfig):
-                out[url] = cfg
-            else:
-                rest = {k: val for k, val in dict(cfg).items() if k != "url"}
-                out[url] = MCPServerConfig(url=url, **rest)
-        return out
-
-
 class SessionConfig(BaseModel):
     model_config = _MUTABLE
     dir: str = Field(

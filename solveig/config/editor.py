@@ -37,7 +37,7 @@ from .config import SolveigConfig
 
 
 def _is_container(annotation: Any) -> bool:
-    """Dict-of-models fields (e.g. `mcp.servers`) are structural, not leaves:
+    """Dict-of-models fields (e.g. `mcp`) are structural, not leaves:
     edited by their own flows (/mcp connect), not one dotted path per entry."""
     return typing.get_origin(annotation) is dict
 
