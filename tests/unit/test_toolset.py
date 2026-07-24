@@ -34,7 +34,7 @@ from solveig.agent import (
 )
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
-from solveig.inbox import Inbox
+from solveig.user_message_queue import UserMessageQueue
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
@@ -427,7 +427,7 @@ async def test_autonomy_gate_blocks_until_queue_fed_then_injects_comment():
     conv = Conversation()
     deps = SolveigContext(config=config, interface=interface)
 
-    inbox = Inbox()
+    inbox = UserMessageQueue()
     task = asyncio.create_task(run_turn(agent, conv, deps, "go", inbox))
     # let it get through round 1 (the tool call) and reach the gate
     for _ in range(500):
@@ -454,7 +454,7 @@ async def test_comment_interleaving_drains_queue_without_blocking():
     tool-round boundary."""
     config = DEFAULT_CONFIG  # disable_autonomy=False
     interface = MockInterface()
-    inbox = Inbox()
+    inbox = UserMessageQueue()
     inbox.put_nowait("mid-run note")
     agent, _ = _two_round_agent(config, interface)
     conv = Conversation()

@@ -72,9 +72,9 @@ class GrowingInput(TextArea):
             # Check if there's an active operation via the app
             app = self.app
             interface = getattr(app, "_interface_ref", None)
-            if interface is not None and interface.has_active_operations:
+            if interface is not None and interface.get_active_tasks():
                 event.stop()
-                interface.cancel_active_operation()
+                interface.cancel_task()
 
         elif (
             event.key == "up"

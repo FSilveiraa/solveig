@@ -1,4 +1,4 @@
-"""The session's input inbox: user intent's single entry point.
+"""The session's user-message queue: user intent's single entry point.
 
 An `asyncio.Queue` subclass (D5, project log 2026-07-24): every consumer uses
 the stdlib Queue API unchanged (the main loop `await`s `get()`, the mid-turn
@@ -14,19 +14,23 @@ gate drains via `get_nowait()`, the interface's `on_user_input` is literally
 - **A read view.** `pending` exposes the queued items without consuming them
   (asyncio.Queue has no public peek), replacing the `queue._queue`
   private-attribute hack.
+
+Named `UserMessageQueue` (not "Inbox"): a future Email-connection capability
+will own that word; this class is exactly what it says - the queue of user
+messages awaiting consumption.
 """
 
 import asyncio
 from collections.abc import Callable
 
 
-class Inbox(asyncio.Queue[str]):
+class UserMessageQueue(asyncio.Queue[str]):
     """asyncio.Queue + an `on_change` doorbell + a `pending` read view."""
 
     def __init__(self) -> None:
         super().__init__()
         # Sync callable (e.g. a Textual widget's update_display). Assigned by
-        # whoever displays the inbox; fires after every put/get.
+        # whoever displays the queue; fires after every put/get.
         self.on_change: Callable[[], None] | None = None
 
     def _put(self, item: str) -> None:

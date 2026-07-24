@@ -121,7 +121,7 @@ class EditableComment(Comment, EditableMessage):
         )
 
     async def begin_edit(self) -> None:
-        if self.interface.has_active_operations:
+        if self.interface.get_active_tasks():
             await self._flash_finish_run_first()
             return
         try:
@@ -134,24 +134,24 @@ class EditableComment(Comment, EditableMessage):
         await self.conversation.edit(self.message_id, self.part_index, new_text)
 
     async def retry(self) -> None:
-        if self.interface.has_active_operations:
+        if self.interface.get_active_tasks():
             await self._flash_finish_run_first()
             return
         text = self.comment
         await self.conversation.truncate_from(self.message_id)
         # Resubmit through the app's producer callback - the same path typed
-        # input takes (command routing + the session Inbox).
+        # input takes (command routing + the session UserMessageQueue).
         if self.interface.on_user_input is not None:
             await self.interface.on_user_input(self.interface, text)
 
     async def delete_from_here(self) -> None:
-        if self.interface.has_active_operations:
+        if self.interface.get_active_tasks():
             await self._flash_finish_run_first()
             return
         await self.conversation.truncate_from(self.message_id)
 
     async def branch_from_here(self) -> None:
-        if self.interface.has_active_operations:
+        if self.interface.get_active_tasks():
             await self._flash_finish_run_first()
             return
         await self.session_manager.checkpoint(self.conversation)

@@ -130,8 +130,7 @@ async def run_untyped_tool(
             await group.display_warning("Rejected")
             return "User declined to run this tool."
 
-        async with group.with_cancellable(handler(args), status="Executing") as task:
-            result = await task
+        result = await handler(args)
 
         await group.display_text_box(str(result), title="Result", collapsed=choice == 0)
 

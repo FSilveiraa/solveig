@@ -6,8 +6,8 @@ render (display_*), ask (ask_*), scope output (with_group), status and
 animations, theming, and the reactive handshake (attach_conversation). It
 deliberately also carries the two concerns every interactive frontend shares
 - producer callbacks (on_user_input/on_edit_config_field, wired by run.py)
-and cancellation (with_cancellable + the _active_operations registry + both
-cancel verbs). App-session state (the input Inbox) and command dispatch live
+and cancellation (with_cancellable + the _active_tasks registry + the
+cancel_task verb). App-session state (the input UserMessageQueue) and command dispatch live
 OUTSIDE the interface - see solveig/inbox.py and decisions D0/D5.
 """
 
@@ -67,12 +67,11 @@ class SolveigInterface(ABC):
 
     - **Producer callbacks** (`on_user_input`, `on_edit_config_field`) -
       wired by run.py at construction; the interface produces input without
-      naming app objects (the Inbox, the SubcommandRunner). Decision D5.
-    - **Cancellation** (`with_cancellable`, the `_active_operations`
-      registry, `cancel_operation`/`cancel_active_operation`,
-      `has_active_operations`) - every interactive UI has both a
-      per-operation cancel (a button) and a global untargeted one (Esc,
-      Ctrl+.), so the registry and both verbs live here.
+      naming app objects (the UserMessageQueue, the SubcommandRunner). Decision D5.
+    - **Cancellation** (`with_cancellable`, the `_active_tasks`
+      registry, `cancel_task`, `get_active_tasks`) - every interactive UI has
+      both a per-task cancel (a button) and a global untargeted one (Esc,
+      Ctrl+.), so the registry and the verb live here.
 
     What is NOT here: the input queue (owned by run.py's main loop -
     `solveig/inbox.py`), prompt serialization policy (each frontend's own,
@@ -92,7 +91,7 @@ class SolveigInterface(ABC):
     )
 
     _root_ref: SolveigInterface | None = None
-    _active_operations_ref: dict[asyncio.Task, None] | None = None
+    _active_tasks_ref: dict[asyncio.Task, None] | None = None
 
     def set_theme(self, theme: Palette) -> None:
         """Re-theme the live interface (the colours used for both CSS and Rich
@@ -107,36 +106,31 @@ class SolveigInterface(ABC):
         return self._root_ref if self._root_ref is not None else self
 
     @property
-    def _active_operations(self) -> dict[asyncio.Task, None]:
-        """Registration-ordered set of in-flight cancellable OPERATIONS,
-        shared by every scope rooted at this interface (a group's
-        `with_cancellable` registers on the root, so cancellation works no
-        matter which scope declared the operation). A dict for O(1) targeted
-        removal; insertion order gives "latest" for the global cancel."""
+    def _active_tasks(self) -> dict[asyncio.Task, None]:
+        """Registration-ordered set of in-flight cancellable TASKS, shared by
+        every scope rooted at this interface (a group's `with_cancellable`
+        registers on the root, so cancellation works no matter which scope
+        declared the task). A dict for O(1) targeted removal; insertion order
+        gives "latest" for the untargeted cancel."""
         root = self._root
-        if root._active_operations_ref is None:
-            root._active_operations_ref = {}
-        return root._active_operations_ref
+        if root._active_tasks_ref is None:
+            root._active_tasks_ref = {}
+        return root._active_tasks_ref
 
-    @property
-    def has_active_operations(self) -> bool:
-        """Anything in flight the user could cancel?"""
-        return any(not t.done() for t in self._active_operations)
+    def get_active_tasks(self) -> dict[asyncio.Task, None]:
+        """The in-flight cancellable tasks, registration-ordered. Empty is
+        falsy, so `if interface.get_active_tasks():` is the busy check."""
+        return self._active_tasks
 
-    def cancel_operation(self, task: asyncio.Task) -> bool:
-        """Targeted cancel (a per-operation button). The frontend holds the
-        task handle from its own display of in-flight operations."""
-        if not task.done():
-            task.cancel()
-            return True
-        return False
-
-    def cancel_active_operation(self) -> bool:
-        """Global untargeted cancel (Esc/Ctrl+.): the LATEST unfinished
-        operation - the only attribution an untargeted keystroke can have."""
-        for task in reversed(list(self._active_operations)):
-            if not task.done():
-                task.cancel()
+    def cancel_task(self, task: asyncio.Task | None = None) -> bool:
+        """Cancel one in-flight task: the GIVEN one (a per-task button), or
+        the LATEST registered when None (Esc/Ctrl+. - an untargeted keystroke
+        can only mean "the most recent thing"). Same verb at both targeting
+        resolutions, like list.pop() with and without an index."""
+        candidates = [task] if task is not None else reversed(list(self._active_tasks))
+        for t in candidates:
+            if t is not None and not t.done():
+                t.cancel()
                 return True
         return False
 
@@ -148,15 +142,15 @@ class SolveigInterface(ABC):
         final_status: str | None = None,
         timeout: float | None = None,
     ) -> AsyncGenerator[asyncio.Task]:
-        """Declare `coro` a busy, user-cancellable OPERATION: run it as a task,
-        register it in `_active_operations`, show `status` while it runs,
-        unregister when done. Cancellation mechanics live HERE (cancel_operation
-        / cancel_active_operation) - every UI with input has both a per-
-        operation cancel (a button) and a global untargeted one (Esc, Ctrl+.),
-        so the registry + both verbs are protocol, not per-frontend rewrites.
+        """Declare `coro` a busy, user-cancellable piece of work: run it as a
+        task, register it in `_active_tasks`, show `status` while it runs,
+        unregister when done. Cancellation mechanics live HERE (cancel_task,
+        targeted or latest) - every UI with input has both a per-task cancel
+        (a button) and a global untargeted one (Esc, Ctrl+.), so the registry
+        and the verb are protocol, not per-frontend rewrites.
         """
         task = asyncio.ensure_future(coro)
-        self._active_operations[task] = None
+        self._active_tasks[task] = None
         try:
             if status is not None:
                 async with self.with_animation(
@@ -169,7 +163,7 @@ class SolveigInterface(ABC):
             else:
                 yield task
         finally:
-            self._active_operations.pop(task, None)
+            self._active_tasks.pop(task, None)
 
     async def start(self) -> None:
         """Start the interface. Delegates to the root - only the root
@@ -272,10 +266,27 @@ class SolveigInterface(ABC):
     async def ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing.
 
-        Delegates to the root interface. Prompt SERIALIZATION (one visible
-        prompt at a time) is the frontend's own policy, implemented inside
-        its `_ask_*` - a terminal locks, a web UI may stack prompt cards."""
-        return await self._root._ask_question(question, default)
+        A user-addressable wait is a registered task like any other: while
+        the prompt is open it sits in `_active_tasks`, so a targeted cancel
+        (a per-prompt ✕) or an untargeted one (Esc -> cancel_task()) reaches
+        it through the SAME machinery as background work - but prompts are
+        NOT wrapped in `with_cancellable` (they're waits, not work; no
+        spinner, and no "callers must remember to wrap" burden - the
+        registration lives here, at the one seam). A cancel at the prompt
+        boundary is translated CancelledError -> UserCancel: to the caller,
+        Esc during a question is the user ANSWERING "cancel", identical to
+        picking a Cancel menu item. Prompt CONCURRENCY is each frontend's
+        policy (inside its `_ask_*`): a terminal may lock, Textual can show
+        stacked prompts, a web UI stacks cards.
+        """
+        task = asyncio.ensure_future(self._root._ask_question(question, default))
+        self._active_tasks[task] = None
+        try:
+            return await task
+        except asyncio.CancelledError:
+            raise UserCancel from None
+        finally:
+            self._active_tasks.pop(task, None)
 
     async def _ask_question(self, question: str, default: str = "") -> str:
         raise NotImplementedError("Subclass must implement _ask_question")
@@ -284,16 +295,25 @@ class SolveigInterface(ABC):
         self, question: str, choices: Iterable[str], add_cancel: bool = True
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected
-        option (starting at 0). The prompt itself delegates to the root
-        interface (serialization is the frontend's policy - see ask_question)
-        - but the answer is echoed via `self.display_text`, so it lands in
-        the caller's own scope (e.g. inside a tool's group) rather than
-        always at the root."""
+        option (starting at 0). The prompt-wait is a cancellable like any
+        other (see ask_question for the full why): Esc during a choice is
+        translated to UserCancel at the boundary, i.e. the same control flow
+        as picking the appended "Cancel processing" item - call sites handle
+        both identically. The answer is echoed via `self.display_text`, so
+        it lands in the caller's own scope (e.g. inside a tool's group)
+        rather than always at the root."""
         choices_list = list(choices)
         if add_cancel:
             choices_list.append("Cancel processing")
 
-        choice_index = await self._root._ask_choice(question, choices_list)
+        task = asyncio.ensure_future(self._root._ask_choice(question, choices_list))
+        self._active_tasks[task] = None
+        try:
+            choice_index = await task
+        except asyncio.CancelledError:
+            raise UserCancel from None
+        finally:
+            self._active_tasks.pop(task, None)
         await self.display_text(choices_list[choice_index], prefix=question)
         if add_cancel and choice_index == len(choices_list) - 1:
             raise UserCancel()

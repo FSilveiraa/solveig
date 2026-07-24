@@ -22,7 +22,6 @@ from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
 from solveig.conversation import Conversation
 from solveig.exceptions import UserCancel
-from solveig.inbox import Inbox
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
@@ -30,6 +29,7 @@ from solveig.plugins import discover_plugins, report_plugins
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.runner import SubcommandRunner
 from solveig.tools.available import AVAILABLE_TOOLS
+from solveig.user_message_queue import UserMessageQueue
 
 
 async def setup_loop(
@@ -95,7 +95,7 @@ async def main_loop(
     interface: SolveigInterface,
     provider_ref: ProviderRef,
     conversation: Conversation,
-    inbox: Inbox,
+    inbox: UserMessageQueue,
     session_manager: SessionManager,
     model: Model | None = None,
     resume_session: str | None = None,
@@ -103,7 +103,7 @@ async def main_loop(
 ) -> None:
     """Main async conversation loop.
 
-    Each iteration blocks on the session Inbox for the next user prompt, then
+    Each iteration blocks on the session UserMessageQueue for the next user prompt, then
     hands it to the Agent for a full run - which may include any number of
     tool-call rounds, all driven internally by pydantic-ai and the loop
     capability (autonomy gate, live display, comment interleaving). There is
@@ -186,13 +186,13 @@ async def run_async(
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
 
-    # The session Inbox (D5): user intent's single entry point, owned here.
+    # The session UserMessageQueue (D5): user intent's single entry point, owned here.
     # The interface produces into it (via its constructor-wired on_user_input
     # router); the main loop and the mid-turn gate consume. Created before the
     # interface so the Textual app's QueuedMessagesDisplay can subscribe to
     # its doorbell, and before the loop task so a CLI user_prompt is queued
     # before the first get().
-    inbox = Inbox()
+    inbox = UserMessageQueue()
 
     conversation = Conversation()
     session_manager = SessionManager(config=config)
@@ -213,7 +213,7 @@ async def run_async(
     )
 
     # Producer wiring (D5): typed input routes commands to the runner and
-    # prompts to the Inbox; stats-bar clicks route to the config editor. The
+    # prompts to the UserMessageQueue; stats-bar clicks route to the config editor. The
     # interface passes ITSELF to these callbacks (no closure needed), so both
     # are plain constructor arguments.
     async def route_user_input(iface: SolveigInterface, text: str) -> None:

@@ -42,12 +42,12 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
-from solveig.inbox import Inbox
 from solveig.interface import SolveigInterface
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
 from solveig.tools.result import ToolResult
+from solveig.user_message_queue import UserMessageQueue
 
 
 def build_agent(
@@ -141,7 +141,7 @@ async def run_turn(
     conversation: Conversation,
     deps: SolveigContext,
     prompt: str,
-    inbox: Inbox,
+    inbox: UserMessageQueue,
 ) -> None:
     """Core-owned per-turn loop. pydantic-ai remains the engine (model I/O,
     tool schemas + execution, consent via the tool_execute capability); this
@@ -243,7 +243,7 @@ def _response_has_tool_calls(response: ModelResponse) -> bool:
 
 
 async def _gate_and_interleave(
-    deps: SolveigContext, run: Any, inbox: Inbox, *, tools_ran: bool
+    deps: SolveigContext, run: Any, inbox: UserMessageQueue, *, tools_ran: bool
 ) -> None:
     interface = deps.interface
     # Autonomy pause only mid-work: gate a round that actually ran tools (more
@@ -274,7 +274,7 @@ async def run_turn_with_retry(
     conversation: Conversation,
     system_prompt: str,
     prompt: str,
-    inbox: Inbox,
+    inbox: UserMessageQueue,
     model: Model | None = None,
 ) -> bool:
     """Drive one conversation turn (build the per-turn Agent + run_turn) with
@@ -381,15 +381,15 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         config, interface = ctx.deps.config, ctx.deps.interface
         instance = _tool_instance(args)
 
-        if instance is None:
-            return await run_untyped_tool(config, interface, call, args, handler)
-
+        # The ONE execution entrypoint for every tool call (typed and MCP):
+        # cancellable here, so Esc kills a network call (MCP) or a tool body
+        # alike. A consent PROMPT inside the body registers itself as the
+        # latest task (ask_* -> _active_tasks), so Esc during a prompt still
+        # hits the prompt (decline via UserCancel) rather than the body.
         try:
-            # Cancellable like the model-request phase above, but no timeout -
-            # a tool (including any interactive approval wait inside it) isn't
-            # something that can time out, only something the user can cancel.
             async with interface.with_cancellable(
-                run_tool_and_hooks(instance, config, interface), status="Executing"
+                _dispatch(instance, config, interface, call, args, handler),
+                status="Executing",
             ) as task:
                 result = await task
         except (PluginException, ToolDisabledError) as e:
@@ -400,3 +400,20 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         return result
 
     return hooks
+
+
+async def _dispatch(
+    instance: Any,
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    call: ToolCallPart,
+    args: dict[str, Any],
+    handler: Any,
+) -> Any:
+    """Route one tool call to its execution seam: a typed BaseTool through
+    `run_tool_and_hooks`, anything else (MCP, plain-function plugin) through
+    `run_untyped_tool`. Exists so the capability can wrap BOTH branches in
+    one with_cancellable - the single entrypoint all tool execution shares."""
+    if instance is None:
+        return await run_untyped_tool(config, interface, call, args, handler)
+    return await run_tool_and_hooks(instance, config, interface)

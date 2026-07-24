@@ -210,7 +210,7 @@ class TerminalInterface(LocalDisplay):
 
     The root of the interface tree: owns the `SolveigTextualApp`, spinners,
     and the CLI's prompt-serialization lock. Cancellation (the
-    `_active_operations` registry + both cancel verbs) is protocol-level in
+    `_active_tasks` registry + `cancel_task`) is protocol-level in
     `SolveigInterface` - every UI with input has both a per-operation and a
     global untargeted cancel. `LocalDisplay` supplies the "local display"
     implementation (display_text, display_text_box, with_group, etc.),
@@ -228,7 +228,7 @@ class TerminalInterface(LocalDisplay):
         | None = None,
         **kwargs,
     ):
-        # Producer callbacks wired at construction (the Inbox and the command
+        # Producer callbacks wired at construction (the UserMessageQueue and the command
         # router both already exist by the time the interface is created - see
         # run.py's run_async ordering); nothing is set-later.
         self.on_user_input = on_user_input
@@ -294,7 +294,7 @@ class TerminalInterface(LocalDisplay):
 
     async def _handle_input(self, user_input: str):
         """The Textual app's input callback: hand the user's text to the app's
-        producer (`on_user_input`, wired by run.py to the session Inbox /
+        producer (`on_user_input`, wired by run.py to the session UserMessageQueue /
         command router - see decision D5). The interface PRODUCES input; it
         never holds the queue it lands in."""
         if self.on_user_input is not None:

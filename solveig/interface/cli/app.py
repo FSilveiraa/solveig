@@ -6,9 +6,9 @@ from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
-from solveig.inbox import Inbox
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_THEME, THEMES, Palette, to_textual_theme
+from solveig.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
 from .conversation import ConversationArea
@@ -48,7 +48,7 @@ class SolveigTextualApp(TextualApp):
         self,
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
-        inbox: Inbox | None = None,
+        inbox: UserMessageQueue | None = None,
         auto_copy_selection: bool = True,
         interface_ref: SolveigInterface | None = None,
         **kwargs,
@@ -82,7 +82,7 @@ class SolveigTextualApp(TextualApp):
         """Create the main layout."""
         yield ConversationArea(id="conversation")
 
-        # Queued messages display (only if the session Inbox was provided)
+        # Queued messages display (only if the session UserMessageQueue was provided)
         if self._inbox is not None:
             yield QueuedMessagesDisplay(
                 queue=self._inbox,
@@ -114,7 +114,7 @@ class SolveigTextualApp(TextualApp):
             self._queued_messages_display = self.query_one(
                 "#queued_messages", QueuedMessagesDisplay
             )
-            # The display reacts to the Inbox's doorbell (D5): any mutation
+            # The display reacts to the UserMessageQueue's doorbell (D5): any mutation
             # from any consumer - main loop get, gate drain, typed input put -
             # re-renders it. No notify-by-courtesy at call sites.
             self._inbox.on_change = self._queued_messages_display.update_display
@@ -136,9 +136,9 @@ class SolveigTextualApp(TextualApp):
         if event.key == "ctrl+c":
             # Check if there's an active operation via the interface
             interface = self._interface_ref
-            if interface is not None and interface.has_active_operations:
+            if interface is not None and interface.get_active_tasks():
                 event.stop()
-                interface.cancel_active_operation()
+                interface.cancel_task()
             else:
                 self.exit()
 

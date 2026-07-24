@@ -9,7 +9,7 @@ from pydantic_ai.toolsets.function import FunctionToolset
 from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
-from solveig.inbox import Inbox
+from solveig.user_message_queue import UserMessageQueue
 from solveig.tools.available import AVAILABLE_TOOLS
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 from tests.mocks.reactive import RecordingTranscript
@@ -34,7 +34,7 @@ async def test_single_response_streams_then_finalizes_without_duplicate():
     view = RecordingTranscript(conv)
     agent = Agent(FunctionModel(stream_function=_chunks))
 
-    await run_turn(agent, conv, _deps(conv), "hi", Inbox())
+    await run_turn(agent, conv, _deps(conv), "hi", UserMessageQueue())
 
     kinds = [type(m).__name__ for m in conv.messages]
     assert kinds == ["ModelRequest", "ModelResponse"]  # exactly one response, no dup
@@ -68,7 +68,7 @@ async def test_rerenders_show_growing_partial_content():
     view = ContentRecorder(conv)
     agent = Agent(FunctionModel(stream_function=_chunks))
 
-    await run_turn(agent, conv, _deps(conv), "hi", Inbox())
+    await run_turn(agent, conv, _deps(conv), "hi", UserMessageQueue())
 
     # There must be a rerender showing partial content: more than nothing, but
     # not yet the whole "Hello world". A frozen snapshot never produces this.
@@ -86,7 +86,7 @@ async def test_multi_round_streaming_preserves_order_and_no_duplicates():
     RecordingTranscript(conv)
     agent = Agent(TestModel(), toolsets=[FunctionToolset([echo])])
 
-    await run_turn(agent, conv, _deps(conv), "go", Inbox())
+    await run_turn(agent, conv, _deps(conv), "go", UserMessageQueue())
 
     kinds = [type(m).__name__ for m in conv.messages]
     # request -> response(tool call) -> tool-return request -> response(text)
@@ -112,7 +112,7 @@ async def test_create_mock_model_streams_reasoning_and_text():
     )
     agent = Agent(model)
 
-    await run_turn(agent, conv, _deps(conv), "hi", Inbox())
+    await run_turn(agent, conv, _deps(conv), "hi", UserMessageQueue())
 
     assert [type(m).__name__ for m in conv.messages] == [
         "ModelRequest",
@@ -153,15 +153,15 @@ async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
         deps.config, None, "sys", model=FunctionModel(stream_function=_slow)
     )
 
-    turn = asyncio.create_task(run_turn(agent, conv, deps, "hi", Inbox()))
+    turn = asyncio.create_task(run_turn(agent, conv, deps, "hi", UserMessageQueue()))
 
     # Cancel once streaming has actually started (a partial rerender landed).
     for _ in range(200):
         if any(k == "rerender" for k, _ in view.events):
             break
         await asyncio.sleep(0.01)
-    assert interface.has_active_operations
-    assert interface.cancel_active_operation()
+    assert interface.get_active_tasks()
+    assert interface.cancel_task()
 
     with pytest.raises(asyncio.CancelledError):
         await turn

@@ -3,11 +3,11 @@
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from solveig.inbox import Inbox
 from solveig.interface.cli.collapsible_widgets import (
     CustomCollapsible,
 )
 from solveig.interface.themes import Palette
+from solveig.user_message_queue import UserMessageQueue
 
 
 class QueuedMessageItem(Static):
@@ -30,11 +30,11 @@ class QueuedMessagesDisplay(Vertical):
 
     Shows a count when collapsed, lists messages when expanded.
     Only visible when there are messages in the queue. Re-renders via the
-    Inbox's `on_change` doorbell (wired by the app at mount) - any mutation
+    UserMessageQueue's `on_change` doorbell (wired by the app at mount) - any mutation
     from any consumer, no per-call-site notification (D5).
     """
 
-    def __init__(self, queue: Inbox, theme: Palette, **kwargs):
+    def __init__(self, queue: UserMessageQueue, theme: Palette, **kwargs):
         self._queue = queue
         self._theme = theme
         self._collapsible: CustomCollapsible | None = None
