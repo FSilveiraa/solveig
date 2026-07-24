@@ -31,8 +31,8 @@ from solveig.config.editor import (
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface import SolveigInterface
+from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import connect, disconnect, find_connection
-from solveig.mcp_servers.connections import MCP_CONNECTIONS
 from solveig.sessions.manager import SessionManager
 from solveig.subcommand.base import (
     Subcommand,

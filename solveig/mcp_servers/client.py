@@ -10,13 +10,13 @@ of those becomes a no-op nested increment/decrement as long as this
 module's own hold is still outstanding.
 
 `MCP_CONNECTIONS` is the single source of truth for connected servers. The
-dict itself lives in `mcp_servers/connections.py` - a dependency-free module,
-because this module imports `AVAILABLE_TOOLS` (to trigger rebuilds on
-connect/disconnect) while `tools/available.py` needs the same dict during
-`rebuild()`: importing it from here at module level would cycle. Both sides
-import it from `connections.py` at top level. `AVAILABLE_TOOLS.rebuild()`
-derives the toolset list it needs (`[c.toolset for c in MCP_CONNECTIONS.values()]`)
-from this dict directly rather than a second list kept in sync by hand.
+dict lives in `mcp_servers/__init__.py` so `tools/available.py` (which this
+module imports to trigger rebuilds on connect/disconnect) can read the same
+shared object at top level without a circular import: this module holds its
+own reference, and only *other* modules import the dict from the package.
+`AVAILABLE_TOOLS.rebuild()` derives the toolset list it needs
+(`[c.toolset for c in MCP_CONNECTIONS.values()]`) from this dict directly
+rather than a second list kept in sync by hand.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from pydantic_ai.toolsets import AbstractToolset
 from solveig.config import MCPServerConfig
 from solveig.context import SolveigContext, get_introspection_context
 from solveig.interface import SolveigInterface
-from solveig.mcp_servers.connections import MCP_CONNECTIONS
+from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.tools.available import AVAILABLE_TOOLS
 
 if TYPE_CHECKING:

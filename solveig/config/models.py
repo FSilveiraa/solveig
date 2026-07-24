@@ -91,8 +91,15 @@ class _ComposedSection(BaseModel):
 
 
 class CoreToolsConfig(_ComposedSection):
-    """Placeholder for `config.tools` — c
-     plugin tool's config validates like a core tool's."""
+    """Placeholder for `config.tools` — composed from `CORE_TOOLS` at import
+    time (`config/__init__._compose_core_tools()`), so a core tool's config
+    validates like any other."""
+
+
+class PluginToolsConfig(_ComposedSection):
+    """Placeholder for `config.plugins.tools` — composed from discovered
+    plugin tools during the two-phase bootstrap, so a plugin tool's config
+    validates like a core tool's."""
 
 
 class PluginHooksConfig(_ComposedSection):
