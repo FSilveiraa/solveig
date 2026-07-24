@@ -32,7 +32,10 @@ dependencies = [
     "distro>=1.9.0",
     "openai>=1.108.0",
     "pydantic>=2.11.0",
-    "pydantic-ai>=2.5.0",
+    # Floor = developed/tested version; ceiling <3 because solveig pins framework
+    # behaviors a major owes nothing to. tests/unit/test_pydantic_ai_invariants.py
+    # is the upgrade gate: run it on any bump (tier labels say how to react).
+    "pydantic-ai>=2.17,<3",
     "textual>=6.1.0",
     "rich>=14.0.0",
     "httpx>=0.28.0",
