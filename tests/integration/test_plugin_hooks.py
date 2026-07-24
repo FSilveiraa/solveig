@@ -202,6 +202,7 @@ class TestLoadAndFilterHooks:
     @pytest.mark.no_file_mocking
     async def test_shellcheck_and_trafilatura_discovered_via_real_scan(self):
         """Real hook plugins self-register on discovery, independent of config.plugins."""
+        SolveigConfig.bootstrap()
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",
@@ -217,6 +218,7 @@ class TestLoadAndFilterHooks:
     @pytest.mark.no_file_mocking
     async def test_no_duplicate_registration_across_repeated_loads(self, load_plugins):
         """Reloading plugin modules on repeated loads doesn't grow the registry unboundedly."""
+        SolveigConfig.bootstrap()
         config = SolveigConfig(
             url="test-url", api_key="test-key", plugins={"shellcheck": {}}
         )
@@ -245,6 +247,7 @@ class TestInitializePlugins:
     @pytest.mark.no_file_mocking
     async def test_hooks_registered_even_when_owning_plugin_not_enabled(self):
         """initialize_plugins() discovers every hook plugin, active or not."""
+        SolveigConfig.bootstrap()
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",

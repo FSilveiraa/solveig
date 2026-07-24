@@ -23,6 +23,3 @@ def _compose_core_tools() -> None:
     from solveig.tools import CORE_TOOLS
 
     SolveigConfig.compose_core_tools(CORE_TOOLS)
-
-
-_compose_core_tools()

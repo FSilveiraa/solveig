@@ -352,6 +352,20 @@ class SolveigConfig(BaseSettings):
         )
         cls.model_rebuild(force=True)
 
+    @classmethod
+    def bootstrap(cls) -> None:
+        """Idempotent schema composition: core tools first, then plugins.
+
+        Called explicitly at bootstrap time (phase 1 of parse_config_and_prompt)
+        instead of relying on an import-time side effect. Idempotent BY
+        CONSTRUCTION: calling it N times composes the same schema N times
+        (compose already force-rebuilds; the pin proves it). The function-local
+        import in _compose_core_tools stays — the import-cycle law still holds.
+        """
+        from solveig.config import _compose_core_tools
+
+        _compose_core_tools()
+
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared`) — what `/config save` persists.
@@ -406,6 +420,9 @@ class SolveigConfig(BaseSettings):
         # config goes through. Discovery is idempotent (setup_loop re-runs it for
         # interface-side reporting). It currently scans the built-in plugins package;
         # external plugins.paths scanning is what makes phase 1's config load-bearing.
+        # Phase 1 also bootstraps the core-tools schema explicitly (was an import-time
+        # side effect; now idempotent and observable).
+        cls.bootstrap()
         phase1 = _parse()
         from solveig.plugins import discover_plugins
         from solveig.plugins.hooks import all_hooks

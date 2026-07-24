@@ -62,6 +62,7 @@ class TestToolPluginFiltering:
 
     async def test_tree_plugin_skipped_when_not_in_config(self):
         """The real tree plugin's owner is absent from config.plugins."""
+        SolveigConfig.bootstrap()
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",
@@ -73,6 +74,7 @@ class TestToolPluginFiltering:
 
     async def test_tree_plugin_loaded_when_in_config(self):
         """The real tree plugin is discovered and its owner is enabled in config.plugins."""
+        SolveigConfig.bootstrap()
         config = SolveigConfig(
             url="test-url",
             api_key="test-key",

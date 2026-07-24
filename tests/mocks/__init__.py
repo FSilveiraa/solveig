@@ -4,6 +4,11 @@ from solveig.utils.misc import parse_human_readable_size
 from .client import create_mock_model
 from .interface import MockInterface
 
+# The mock config relies on the core-tools schema being composed. It was
+# previously an import-time side effect; now it's an explicit bootstrap call
+# (same mechanism as the plugin two-phase bootstrap, phase 1).
+SolveigConfig.bootstrap()
+
 DEFAULT_CONFIG = SolveigConfig(
     api={
         "type": APIType.OPENAI,
