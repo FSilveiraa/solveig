@@ -155,7 +155,7 @@ async def main_loop(
             received_tokens=conversation.usage.output_tokens,
         )
         if session_manager and config.session.auto_save:
-            await session_manager.store(conversation)
+            await session_manager.append(conversation)
 
 
 async def run_async(
@@ -281,6 +281,13 @@ async def run_async(
         traceback.print_exc()
 
     finally:
+        # Write a checkpoint meta line so cumulative token counts survive
+        # the next resume — append-only, no rewriting.
+        if session_manager and config.session.auto_save:
+            try:
+                await session_manager.write_checkpoint(conversation)
+            except Exception:
+                pass  # best-effort; the session file already has all messages
         if loop_task:
             loop_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

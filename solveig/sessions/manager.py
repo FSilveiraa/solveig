@@ -17,6 +17,7 @@ from datetime import datetime
 
 from anyio import Path
 from pydantic_ai.messages import (
+    ModelMessage,
     ModelMessagesTypeAdapter,
 )
 from pydantic_ai.usage import RunUsage
@@ -29,18 +30,56 @@ from solveig.utils.file import Filesystem
 
 
 def parse_conversation_blob(text: str) -> dict:
-    """Parse a stored conversation blob's raw JSON text into its parts.
+    """Parse stored conversation data from raw text — two formats, one reader.
 
-    Same shape used for both session files and story files under
-    system_prompt/stories/ - a session is just a story with token counts.
-    Token count fields are optional and default to 0, so a story file that
-    never had them (or a session file with them stripped) still parses.
+    **Legacy blob** (single JSON object, still used by story files):
+        {"messages": [...], "total_tokens_sent": N, ...}
+
+    **Log format** (one value per line, append-only session files):
+        <ModelMessage>
+        <ModelMessage>
+        {"session_meta": true, "total_tokens_sent": N, ...}  ← optional, last one wins
+
+    Detection: the first line's first char — legacy blobs start with '{' and
+    contain a "messages" key; log lines start with '{' and contain either
+    "kind" (a message) or "session_meta" (meta).  An empty file returns
+    zero messages and zero totals.
+
+    Stories are always legacy blobs; new session files use the log format.
+    Old session files (written before the log-format cutover) keep loading.
     """
-    blob = json.loads(text)
+    text = text.strip()
+    if not text:
+        return {"messages": [], "total_tokens_sent": 0, "total_tokens_received": 0}
+
+    # Legacy blob: single JSON object with a "messages" key.
+    if text.startswith("{") and '"messages"' in text[:200]:
+        blob = json.loads(text)
+        return {
+            "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
+            "total_tokens_sent": blob.get("total_tokens_sent", 0),
+            "total_tokens_received": blob.get("total_tokens_received", 0),
+        }
+
+    # Log format: one JSON value per line.
+    messages: list[ModelMessage] = []
+    total_sent = 0
+    total_received = 0
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        if obj.get("session_meta"):
+            total_sent = obj.get("total_tokens_sent", 0)
+            total_received = obj.get("total_tokens_received", 0)
+        else:
+            messages.extend(ModelMessagesTypeAdapter.validate_python([obj]))
+
     return {
-        "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
-        "total_tokens_sent": blob.get("total_tokens_sent", 0),
-        "total_tokens_received": blob.get("total_tokens_received", 0),
+        "messages": messages,
+        "total_tokens_sent": total_sent,
+        "total_tokens_received": total_received,
     }
 
 
@@ -48,6 +87,10 @@ class SessionManager:
     def __init__(self, config: SolveigConfig):
         self.config = config
         self.current_path: Path | None = None
+        # High-water mark: how many messages from conversation.messages are
+        # already on disk. Append writes only messages beyond this index.
+        # Set to 0 on new sessions, loaded from file on resume.
+        self._saved_count: int = 0
 
     @property
     def sessions_dir(self) -> Path:
@@ -105,12 +148,49 @@ class SessionManager:
     # ------------------------------------------------------------------
 
     async def store(self, conversation: Conversation, name: str | None = None) -> str:
-        """Overwrite the session file with the full conversation."""
+        """Full write: all messages + checkpoint meta line.
+
+        Used for the initial session creation (first autosave after a new
+        session), explicit /store, and named saves. Resets _saved_count.
+        """
         sessions_dir = await self._ensure_dir()
         if name or self.current_path is None:
             self.current_path = Path(f"{sessions_dir}/{self._session_filename(name)}")
-        await self._write(conversation, self.current_path)
+        lines = self._serialize_messages(conversation.messages) + self._serialize_meta(
+            conversation
+        )
+        await Filesystem.write_file_text(self.current_path, lines)
+        self._saved_count = len(conversation.messages)
         return self.current_path.name
+
+    async def append(self, conversation: Conversation) -> None:
+        """Append only new messages (since last save) to the session file.
+
+        The steady-state autosave path: O(new content) only. Creates the file
+        on first call (no current_path yet). Does NOT write a checkpoint line —
+        that happens at session-end or explicit /store.
+        """
+        if self.current_path is None:
+            # First call for a new session: fall through to store (full write).
+            await self.store(conversation)
+            return
+        new_messages = conversation.messages[self._saved_count :]
+        if not new_messages:
+            return
+        lines = self._serialize_messages(new_messages)
+        await Filesystem.write_file_text(self.current_path, lines, append=True)
+        self._saved_count = len(conversation.messages)
+
+    async def write_checkpoint(self, conversation: Conversation) -> None:
+        """Append a session_meta line with current token totals.
+
+        Called at clean session exit and from /store. The last meta line in
+        the file is authoritative on resume. Append-only — never rewrites.
+        """
+        if self.current_path is None:
+            return
+        meta_line = self._serialize_meta(conversation)
+        await Filesystem.write_file_text(self.current_path, meta_line, append=True)
 
     async def checkpoint(self, conversation: Conversation) -> str:
         """Write a snapshot to a NEW timestamped file, leaving current_path alone.
@@ -122,16 +202,31 @@ class SessionManager:
         """
         sessions_dir = await self._ensure_dir()
         path = Path(f"{sessions_dir}/{self._session_filename('branch')}")
-        await self._write(conversation, path)
+        lines = self._serialize_messages(conversation.messages) + self._serialize_meta(
+            conversation
+        )
+        await Filesystem.write_file_text(path, lines)
         return path.name
 
-    async def _write(self, conversation: Conversation, path: Path) -> None:
-        blob = {
+    @staticmethod
+    def _serialize_messages(
+        messages: list[ModelMessage] | tuple[ModelMessage, ...], start: int = 0
+    ) -> str:
+        """Serialize messages[start:] to newline-terminated JSONL lines."""
+        lines = ""
+        for msg in messages[start:]:
+            lines += json.dumps(to_jsonable_python([msg])[0], default=str) + "\n"
+        return lines
+
+    @staticmethod
+    def _serialize_meta(conversation: Conversation) -> str:
+        """One meta line with current token totals."""
+        meta = {
+            "session_meta": True,
             "total_tokens_sent": conversation.usage.input_tokens,
             "total_tokens_received": conversation.usage.output_tokens,
-            "messages": to_jsonable_python(conversation.messages),
         }
-        await Filesystem.write_file_text(path, json.dumps(blob) + "\n", append=False)
+        return json.dumps(meta) + "\n"
 
     async def load(self, name: str | None = None) -> dict:
         """Load session data by name (fuzzy match) or the most recent session."""
@@ -145,6 +240,7 @@ class SessionManager:
         self.current_path = Path(path_str)
         file_content = await Filesystem.read_file(self.current_path)
         parsed = parse_conversation_blob(file_content.content)
+        self._saved_count = len(parsed["messages"])
         session_id = self.current_path.name.removesuffix(".jsonl")
         return {
             "id": session_id,
@@ -161,14 +257,14 @@ class SessionManager:
         for path_str, mtime in await self._get_sessions():
             try:
                 file_content = await Filesystem.read_file(Path(path_str))
-                blob = json.loads(file_content.content)
+                parsed = parse_conversation_blob(file_content.content)
                 session_id = path_str.rsplit("/", 1)[-1].removesuffix(".jsonl")
                 result.append(
                     {
                         "id": session_id,
-                        "message_count": len(blob.get("messages", [])),
-                        "total_tokens_sent": blob.get("total_tokens_sent", 0),
-                        "total_tokens_received": blob.get("total_tokens_received", 0),
+                        "message_count": len(parsed["messages"]),
+                        "total_tokens_sent": parsed["total_tokens_sent"],
+                        "total_tokens_received": parsed["total_tokens_received"],
                         "_mtime": mtime,
                         "_path": path_str,
                     }
