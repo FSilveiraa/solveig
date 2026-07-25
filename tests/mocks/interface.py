@@ -126,18 +126,6 @@ class MockInterface(TerminalInterface):
     async def display_info(self, message: str) -> None:
         self.outputs.append(f"ℹ️  Info: {message}")
 
-    async def display_comment(
-        self,
-        role,
-        message: str,
-        *,
-        conversation=None,
-        session_manager=None,
-        message_id=None,
-        part_index=None,
-    ) -> None:
-        self.outputs.append(f"🗩  {message}")
-
     async def clear_conversation(self) -> None:
         self.outputs.append("CONVERSATION_CLEARED")
 

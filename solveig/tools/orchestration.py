@@ -111,14 +111,17 @@ async def run_untyped_tool(
     proper header or decline ToolResult from. Mirrors ReadTool's run+send /
     run+inspect-then-decide / don't-run negotiation (minus the metadata-only
     middle ground), letting the user see the result before it's sent.
-    `call.tool_name` is already the sanitized, prefixed name."""
-    async with open_tool_group(interface, f"MCP: {call.tool_name}", config) as group:
+    `call.tool_name` is already the sanitized, prefixed name (an MCP tool's
+    name carries its server prefix from `PrefixedToolset`, so the origin is
+    visible without labeling the group — and a plain-function plugin tool
+    isn't MCP at all)."""
+    async with open_tool_group(interface, call.tool_name, config) as group:
         await group.display_text_box(
             json.dumps(args, indent=2, default=str), title="Args", language="json"
         )
 
         choice = await group.ask_choice(
-            "Allow this MCP tool call?",
+            "Allow this tool call?",
             [
                 "Run and send result",
                 "Run and inspect result first",

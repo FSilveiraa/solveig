@@ -1,6 +1,8 @@
 import anyconfig
 import pytest
 
+from unittest.mock import MagicMock
+
 from solveig.api import APIType
 from solveig.config import SolveigConfig
 
@@ -111,16 +113,18 @@ async def test_command_disabled_the_same_uniform_way_as_any_tool():
     assert c.tools.read.enabled is True  # others stay enabled
 
 
-async def test_model_info_is_not_a_cli_flag():
-    # model_info is runtime API-reported state, not user config — off the CLI
-    # entirely, settable at runtime via the property.
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
-    assert c.model_info is None
-    from solveig.api import ModelInfo
+async def test_model_info_lives_on_provider_ref_not_config():
+    # model_info is runtime API-reported provider state — never user config:
+    # off the CLI, off model_dump, cached on the ProviderRef that reported it.
+    from solveig.api import ModelInfo, ProviderRef
 
-    c.model_info = ModelInfo(model="gpt-4.1")
-    assert c.model_info.model == "gpt-4.1"
-    assert "model_info" not in c.to_dict()
+    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    assert not hasattr(c, "model_info")
+
+    ref = ProviderRef(provider=MagicMock())
+    assert ref.model_info is None
+    ref.model_info = ModelInfo(model="gpt-4.1")
+    assert ref.model_info.model == "gpt-4.1"
 
 
 async def test_default_plugin_paths_local_over_global():

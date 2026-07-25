@@ -264,10 +264,10 @@ async def fetch_and_apply_model_info(
     interface: SolveigInterface,
 ) -> bool:
     """
-    Fetch model details from the API and apply them to config.
+    Fetch model details from the API and apply them.
 
     Updates: config.api.model (if it was None, resolved to first available),
-             config.model_info, config.api.max_context (if model reports a
+             provider_ref.model_info, config.api.max_context (if model reports a
              tighter limit), stats bar.
 
     Always animates while the request is in-flight.
@@ -287,7 +287,7 @@ async def fetch_and_apply_model_info(
     except NotImplementedError:
         # Provider doesn't support model detail fetching — set minimal info
         if config.api.model:
-            config.model_info = ModelInfo(model=config.api.model)
+            provider_ref.model_info = ModelInfo(model=config.api.model)
         return True
     except ModelNotFound as e:
         await e.print(interface)
@@ -302,7 +302,7 @@ async def fetch_and_apply_model_info(
         return False
 
     config.api.model = model_info.model
-    config.model_info = model_info
+    provider_ref.model_info = model_info
 
     if model_info.context_length is not None:
         if (
@@ -330,7 +330,7 @@ async def _hook_model_changed(
     provider_ref: ProviderRef,
     interface: SolveigInterface,
 ) -> None:
-    config.model_info = None
+    provider_ref.model_info = None
     await fetch_and_apply_model_info(config, provider_ref, interface)
 
 

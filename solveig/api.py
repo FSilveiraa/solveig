@@ -17,9 +17,16 @@ class ModelInfo:
 
 @dataclass
 class ProviderRef:
-    """Mutable holder for the current provider connection, enabling runtime replacement."""
+    """Mutable holder for the current provider connection, enabling runtime replacement.
+
+    Also caches `model_info` — the API-reported model facts (context length,
+    pricing) fetched at startup / on `/model refresh`. It's provider state, not
+    config: reported BY the API this ref connects to, never user-set, and it
+    invalidates when the provider or model changes (the `api.model` post-set
+    hook clears it)."""
 
     provider: Provider
+    model_info: ModelInfo | None = None
 
 
 class APIType:

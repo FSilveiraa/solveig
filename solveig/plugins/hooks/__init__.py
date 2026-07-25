@@ -75,10 +75,12 @@ def all_hooks() -> list[tuple[str, type[ToolConfig]]]:
     """Every distinct hook, as `(hook_name, config_model)` pairs for schema
     composition (`SolveigConfig.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed
     by *target tool*, so a hook registered for several tools appears under several
-    keys but is ONE function — deduped by identity here. Two different hooks sharing
-    a `__name__` would collide into one config entry; the later one is dropped with a
-    warning (the schema key must be unique), matching how a plugin file names its
-    tools uniquely."""
+    keys but is ONE function — deduped by identity here. Two DIFFERENT hooks sharing
+    a `__name__` collide into one config entry: both still FIRE (execution iterates
+    the registries, not the schema), but they share the FIRST hook's gating — so
+    `plugins.hooks.<name>.enabled=false` disables both, and the later hook's own
+    `config_model` never reaches the schema. The warning names that consequence
+    rather than pretending the later hook was dropped."""
     seen: dict[str, Callable[..., Any]] = {}
     pairs: list[tuple[str, type[ToolConfig]]] = []
     for registry in (BEFORE_HOOKS, AFTER_HOOKS):
@@ -88,8 +90,10 @@ def all_hooks() -> list[tuple[str, type[ToolConfig]]]:
                 if name in seen:
                     if seen[name] is not hook:
                         warnings.warn(
-                            f"Two hooks named '{name}' — dropping the later one from "
-                            f"config composition (hook config keys must be unique).",
+                            f"Two different hooks named '{name}' — both will run, "
+                            f"but they share one config entry (plugins.hooks.{name}, "
+                            f"from the first): gating applies to both and the later "
+                            f"hook's config_model is ignored. Rename one hook.",
                             stacklevel=2,
                         )
                     continue

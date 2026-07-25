@@ -350,7 +350,7 @@ class SubcommandRunner:
                 "No model configured. Use /model set <name>."
             )
             return
-        info = self.config.model_info
+        info = self.provider_ref.model_info
         lines = [f"Model: {self.config.api.model}"]
         if info:
             if info.context_length is not None:
@@ -377,7 +377,7 @@ class SubcommandRunner:
         if not self.config.api.model:
             await interface.display_error("No model configured to refresh.")
             return
-        self.config.model_info = None
+        self.provider_ref.model_info = None
         await fetch_and_apply_model_info(self.config, self.provider_ref, interface)
 
     @subcommand("/model list", section="model", detail=True)
@@ -535,7 +535,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
             )
             return
         try:
-            path_str = await self.session_manager._fuzzy_find(name)
+            path_str = await self.session_manager.resolve(name)
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return

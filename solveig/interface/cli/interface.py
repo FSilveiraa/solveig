@@ -6,7 +6,7 @@ import random
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from rich.spinner import Spinner
 from rich.syntax import Syntax
@@ -15,7 +15,6 @@ from textual.widgets import Collapsible, Markdown
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
-from solveig.interface.cli.widgets import EditableComment
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
@@ -87,29 +86,6 @@ class LocalDisplay(SolveigInterface):
 
     async def display_info(self, message: str) -> None:
         await self._display_text(message, style="info")
-
-    async def display_comment(
-        self,
-        role: Literal["user", "assistant"],
-        message: str,
-        *,
-        conversation: "Conversation",
-        session_manager: "SessionManager",
-        message_id: str,
-        part_index: int,
-    ) -> None:
-        await self.app._conversation_area._add_element(
-            EditableComment(
-                message,
-                conversation=conversation,
-                session_manager=session_manager,
-                interface=self,
-                message_id=message_id,
-                part_index=part_index,
-                role=role,
-            ),
-            self._container,
-        )
 
     async def clear_conversation(self) -> None:
         await self.app._conversation_area.clear()

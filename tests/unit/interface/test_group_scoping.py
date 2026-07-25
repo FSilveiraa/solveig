@@ -41,18 +41,6 @@ class _StubInterface(SolveigInterface):
     async def display_info(self, message: str) -> None:
         self.calls.append(("display_info", message))
 
-    async def display_comment(
-        self,
-        role,
-        message: str,
-        *,
-        conversation=None,
-        session_manager=None,
-        msg_index=None,
-        part_index=None,
-    ) -> None:
-        self.calls.append(("display_comment", message))
-
     async def clear_conversation(self) -> None:
         self.calls.append(("clear_conversation",))
 

@@ -24,7 +24,6 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from solveig.api import ModelInfo
 from solveig.config import sources
 from solveig.config.models import (
     _MUTABLE,
@@ -208,22 +207,12 @@ class SolveigConfig(BaseSettings):
     # tool (`--tools.command.enabled false`), so there is no `--no-commands` sugar.
 
     # --- runtime (not persisted; NOT a config field) ---
-    # model_info is API-reported model facts (context length, pricing) fetched at
-    # startup and cached for the stats bar — never user-set, so it's a PrivateAttr
-    # (kept off the CLI + out of model_dump) exposed via the model_info property.
-    _model_info: ModelInfo | None = PrivateAttr(default=None)
+    # model_info (API-reported model facts) lives on ProviderRef — provider state,
+    # not config. See api.py.
     # provenance for /config save (highest-precedence loaded file = [0])
     _loaded_paths: list[str] = PrivateAttr(default_factory=list)
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
     _declared: set[str] = PrivateAttr(default_factory=set)
-
-    @property
-    def model_info(self) -> ModelInfo | None:
-        return self._model_info
-
-    @model_info.setter
-    def model_info(self, value: ModelInfo | None) -> None:
-        self._model_info = value
 
     @classmethod
     def settings_customise_sources(

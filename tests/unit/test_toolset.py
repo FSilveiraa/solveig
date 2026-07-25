@@ -198,9 +198,9 @@ async def test_mcp_style_tool_is_grouped_approved_and_displayed():
         capabilities=[build_tool_execution_capability()],
     )
 
-    assert any(g.startswith("START: MCP: search") for g in interface.groups)
-    assert any(g.startswith("END: MCP: search") for g in interface.groups)
-    assert any("Allow this MCP tool call?" in q for q in interface.questions)
+    assert any(g.startswith("START: search") for g in interface.groups)
+    assert any(g.startswith("END: search") for g in interface.groups)
+    assert any("Allow this tool call?" in q for q in interface.questions)
     returns = _tool_returns(result)
     assert len(returns) == 1
     assert returns[0].content == {"results": ["a", "b"]}

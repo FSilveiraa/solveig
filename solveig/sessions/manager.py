@@ -78,12 +78,14 @@ class SessionManager:
         ]
         return sorted(items, key=lambda pm: pm[1], reverse=True)
 
-    async def _fuzzy_find(self, name: str) -> str:
-        """Return abs path string of session.
+    async def resolve(self, name: str) -> str:
+        """Resolve a session name to an absolute path string.
 
         Resolves *name* as an absolute path first; if the file exists, return
         it directly.  Otherwise fall back to fuzzy matching against stored
-        session filenames.
+        session filenames (first match, newest-first ordering). Raises
+        FileNotFoundError when nothing matches. Public API: the subcommand
+        runner resolves names the same way load/delete do.
         """
         resolved = Filesystem.get_absolute_path(name)
         if await Filesystem.exists(resolved):
@@ -134,7 +136,7 @@ class SessionManager:
     async def load(self, name: str | None = None) -> dict:
         """Load session data by name (fuzzy match) or the most recent session."""
         if name:
-            path_str = await self._fuzzy_find(name)
+            path_str = await self.resolve(name)
         else:
             sessions = await self._get_sessions()
             if not sessions:
@@ -177,7 +179,7 @@ class SessionManager:
 
     async def delete(self, name: str) -> str:
         """Delete session by fuzzy name match; returns the deleted filename."""
-        path_str = await self._fuzzy_find(name)
+        path_str = await self.resolve(name)
         await Filesystem.delete(Path(path_str))
         return path_str.rsplit("/", 1)[-1]
 
