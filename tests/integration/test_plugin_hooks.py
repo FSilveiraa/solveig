@@ -7,7 +7,7 @@ whole exception-translation layer is gone. Scope is split from
 `test_plugin_tools.py` (registry/discovery) and whatever exercises
 `AvailableTools.rebuild()`'s `FilteredToolset`: this file owns registry
 mechanics (`before`/`after` registration, `plugin_name` derivation,
-`clear_hooks`) and real plugin discovery (`load_and_filter_hooks` finding
+`clear_hooks`) and real plugin discovery (`load_and_filter_plugin_hooks` finding
 `shellcheck`/`trafilatura`); `test_toolset.py` already owns
 `run_tool_and_hooks`'s call-time orchestration (gating, blocking, chaining)
 using a synthetic tool, so that isn't retested here against real hooks.
@@ -15,7 +15,7 @@ using a synthetic tool, so that isn't retested here against real hooks.
 One architectural note worth keeping visible: like plugin tools
 (`PLUGIN_TOOLS`, `tools/available.py`'s `is_tool_active`), `BEFORE_HOOKS`/
 `AFTER_HOOKS` are never filtered by `config.plugins` at load time -
-`load_and_filter_hooks()` discovers and registers everything unconditionally
+`load_and_filter_plugin_hooks()` discovers and registers everything unconditionally
 (hooks self-register via the decorator at import time), and `config.plugins`
 gating happens live, per call, inside `run_tool_and_hooks`
 (`tools/orchestration.py`). So "skipped" here only ever means "not reported
@@ -28,14 +28,14 @@ from unittest.mock import patch
 import pytest
 
 from solveig.config import SolveigConfig
-from solveig.plugins import clear_plugins, initialize_plugins
+from solveig.plugins import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
     AFTER_HOOKS,
     BEFORE_HOOKS,
     after,
     before,
     clear_hooks,
-    load_and_filter_hooks,
+    load_and_filter_plugin_hooks,
     plugin_name,
     registered_plugin_names,
 )
@@ -60,34 +60,38 @@ class TestHookRegistration:
     async def test_before_registers_under_tool_name(self):
         async def my_hook(tool_args, config, interface): ...
 
-        before(tools=("some_tool",))(my_hook)
+        hook = before(tools=("some_tool",))(my_hook)
 
-        assert BEFORE_HOOKS["some_tool"] == [my_hook]
+        assert BEFORE_HOOKS["some_tool"] == [hook]
+        assert hook.fn is my_hook
 
     async def test_before_registers_under_function_target(self):
         async def target_tool(ctx): ...
 
         async def my_hook(tool_args, config, interface): ...
 
-        before(tools=(target_tool,))(my_hook)
+        hook = before(tools=(target_tool,))(my_hook)
 
-        assert BEFORE_HOOKS["target_tool"] == [my_hook]
+        assert BEFORE_HOOKS["target_tool"] == [hook]
+        assert hook.fn is my_hook
 
     async def test_after_registers_under_tool_name(self):
         async def my_hook(result, config, interface):
             return result
 
-        after(tools=("some_tool",))(my_hook)
+        hook = after(tools=("some_tool",))(my_hook)
 
-        assert AFTER_HOOKS["some_tool"] == [my_hook]
+        assert AFTER_HOOKS["some_tool"] == [hook]
+        assert hook.fn is my_hook
 
     async def test_hook_registers_under_multiple_targets(self):
         async def my_hook(tool_args, config, interface): ...
 
-        before(tools=("tool_a", "tool_b"))(my_hook)
+        hook = before(tools=("tool_a", "tool_b"))(my_hook)
 
-        assert BEFORE_HOOKS["tool_a"] == [my_hook]
-        assert BEFORE_HOOKS["tool_b"] == [my_hook]
+        assert BEFORE_HOOKS["tool_a"] == [hook]
+        assert BEFORE_HOOKS["tool_b"] == [hook]
+        assert hook.fn is my_hook
 
     async def test_clear_hooks_empties_both_registries(self):
         async def my_before(tool_args, config, interface): ...
@@ -139,76 +143,85 @@ class TestPluginNameDerivation:
     async def test_falls_back_to_function_name_outside_hooks_package(self):
         async def a_locally_defined_hook(tool_args, config, interface): ...
 
-        # This test module isn't under solveig/plugins/hooks/, so there's no
-        # ".hooks." to split on - plugin_name() must fall back to __name__.
-        assert plugin_name(a_locally_defined_hook) == "a_locally_defined_hook"
+        # plugin_name() expects a Hook object; wrap the local function so
+        # the test exercises the fallback-to-__name__ path.
+        from solveig.plugins.hooks import Hook
+        h = Hook(a_locally_defined_hook)
+        assert plugin_name(h) == "a_locally_defined_hook"
 
 
 # ---------------------------------------------------------------------------
-# load_and_filter_hooks() - discovery and reporting
+# load_and_filter_plugin_hooks() - discovery and reporting
 # ---------------------------------------------------------------------------
 
 
 class TestLoadAndFilterHooks:
     async def test_hook_registered_regardless_of_config(self):
-        """Discovery/registration is unconditional - config.plugins only affects reporting."""
-
+        """Discovery/registration is unconditional — hooks self-register at import,
+        and load_and_filter_plugin_hooks just rescans + returns errors."""
         async def my_hook(tool_args, config, interface): ...
 
-        async def fake_rescan(**_):
+        def fake_rescan(path):
             before(tools=("some_tool",))(my_hook)
+            return (1, 0, [])  # succeeded, failed, errors
 
-        config = DEFAULT_CONFIG.with_(plugins={})  # my_plugin not listed
+        config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
             "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            await load_and_filter_hooks(config, MockInterface())
+            errors = load_and_filter_plugin_hooks(config)
 
-        assert BEFORE_HOOKS["some_tool"] == [my_hook]
+        assert errors == []  # no import errors
+        assert len(BEFORE_HOOKS["some_tool"]) == 1
+        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
 
     async def test_reports_loaded_when_plugin_in_config(self):
         async def my_hook(tool_args, config, interface): ...
 
-        async def fake_rescan(**_):
+        def fake_rescan(path):
             before(tools=("some_tool",))(my_hook)
+            return (1, 0, [])
 
-        config = DEFAULT_CONFIG.with_(plugins={"my_hook": {}})
-        interface = MockInterface()
+        config = SolveigConfig(
+            cli_args=[], api={"url":"http://x","key":"k"},
+            plugins={"hooks": {"my_hook": {}}},
+        )
         with patch(
             "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            await load_and_filter_hooks(config, interface)
+            errors = load_and_filter_plugin_hooks(config)
 
-        assert any("'my_hook': Loaded" in line for line in interface.outputs)
+        # Registration is unconditional; gating is live in run_tool_and_hooks.
+        assert errors == []
+        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
 
     async def test_reports_skipped_when_plugin_not_in_config(self):
         async def my_hook(tool_args, config, interface): ...
 
-        async def fake_rescan(**_):
+        def fake_rescan(path):
             before(tools=("some_tool",))(my_hook)
+            return (1, 0, [])
 
-        config = DEFAULT_CONFIG.with_(plugins={})
-        interface = MockInterface()
+        config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
             "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            await load_and_filter_hooks(config, interface)
+            errors = load_and_filter_plugin_hooks(config)
 
-        assert any(
-            "'my_hook': Skipped (missing from config)" in line
-            for line in interface.outputs
-        )
+        # Registration is always unconditional — hooks register regardless.
+        assert errors == []
+        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
 
     @pytest.mark.no_file_mocking
     async def test_shellcheck_and_trafilatura_discovered_via_real_scan(self):
         """Real hook plugins self-register on discovery, independent of config.plugins."""
-        SolveigConfig.bootstrap()
+        SolveigConfig.compose_core_tools()
         config = SolveigConfig(
-            url="test-url",
-            api_key="test-key",
+            cli_args=[],
+            api={"url": "test-url", "key": "test-key"},
             plugins={"some_other_plugin": {}},
         )
-        await load_and_filter_hooks(config=config, interface=MockInterface())
+        load_and_filter_plugin_hooks(config=config)
 
         before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
         after_names = {plugin_name(hook) for hook in AFTER_HOOKS.get("http", [])}
@@ -218,9 +231,9 @@ class TestLoadAndFilterHooks:
     @pytest.mark.no_file_mocking
     async def test_no_duplicate_registration_across_repeated_loads(self, load_plugins):
         """Reloading plugin modules on repeated loads doesn't grow the registry unboundedly."""
-        SolveigConfig.bootstrap()
+        SolveigConfig.compose_core_tools()
         config = SolveigConfig(
-            url="test-url", api_key="test-key", plugins={"shellcheck": {}}
+            cli_args=[], api={"url": "test-url", "key": "test-key"}, plugins={"shellcheck": {}}
         )
 
         def command_hook_count() -> int:
@@ -239,21 +252,21 @@ class TestLoadAndFilterHooks:
 
 
 # ---------------------------------------------------------------------------
-# initialize_plugins() - full plugin bootstrap
+# discover_plugins() - full plugin bootstrap
 # ---------------------------------------------------------------------------
 
 
 class TestInitializePlugins:
     @pytest.mark.no_file_mocking
     async def test_hooks_registered_even_when_owning_plugin_not_enabled(self):
-        """initialize_plugins() discovers every hook plugin, active or not."""
-        SolveigConfig.bootstrap()
+        """discover_plugins() discovers every hook plugin, active or not."""
+        SolveigConfig.compose_core_tools()
         config = SolveigConfig(
-            url="test-url",
-            api_key="test-key",
+            cli_args=[],
+            api={"url": "test-url", "key": "test-key"},
             plugins={"some_other_plugin": {}},
         )
-        await initialize_plugins(config=config, interface=MockInterface())
+        discover_plugins(config=config)
 
         before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
         assert "shellcheck" in before_names

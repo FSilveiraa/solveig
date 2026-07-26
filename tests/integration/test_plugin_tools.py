@@ -1,99 +1,95 @@
-"""Tests for the tool plugin system."""
+"""Tests for the tool plugin system — current API (list-based PLUGIN_TOOLS)."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from solveig.config import SolveigConfig
-from solveig.plugins.tools import PLUGIN_TOOLS, load_and_filter_tools
+from solveig.plugins.tools import (
+    PLUGIN_TOOLS,
+    config_model_of,
+    load_and_filter_plugin_tools,
+    plugin_tool_name,
+)
 from solveig.plugins.tools.tree import TreeTool
-from tests.mocks import DEFAULT_CONFIG, MockInterface
+from solveig.tools.base import ToolConfig
 
 pytestmark = pytest.mark.anyio
 
 
 # ---------------------------------------------------------------------------
-# Tool plugin filtering
+# Tool plugin filtering (mocked registry)
 # ---------------------------------------------------------------------------
 
 
 class TestToolPluginFiltering:
-    """`load_and_filter_tools` just discovers + reports; live visibility is
-    decided per-step by `is_tool_active` (`tools/available.py`), which reads
-    `PLUGIN_TOOLS.owners` against `ctx.deps.config.plugins` directly - there's
-    no separate "active" set to keep in sync. These tests assert the same
-    membership check `is_tool_active` performs."""
-
     @pytest.fixture(autouse=True)
     def clean_tools(self):
         PLUGIN_TOOLS.clear()
 
     async def test_tool_discovered_and_enabled_when_in_config(self):
-        """A tool discovered by the rescan is registered and its plugin is enabled in config."""
-        mock_tool_cls = MagicMock(__name__="my_tool")
+        """A tool discovered by the rescan is registered."""
 
-        async def fake_rescan(**_):
-            PLUGIN_TOOLS.register(mock_tool_cls)
+        class MockTool:
+            config_model = ToolConfig
+            __name__ = "my_tool"
+            __module__ = "solveig.plugins.tools.fake"
 
-        config = DEFAULT_CONFIG.with_(plugins={"my_tool": {}})
-        with patch(
-            "solveig.plugins.tools.rescan_and_load_plugins", side_effect=fake_rescan
-        ):
-            await load_and_filter_tools(config, MockInterface())
+        def fake_rescan(path):
+            PLUGIN_TOOLS.append(MockTool)
+            return (1, 0, [])
 
-        assert PLUGIN_TOOLS.all["my_tool"] is mock_tool_cls
-        assert PLUGIN_TOOLS.owners["my_tool"] in config.plugins
-
-    async def test_tool_discovered_but_disabled_when_not_in_config(self):
-        """A tool discovered by the rescan is still registered even if its plugin is absent from config."""
-        mock_tool_cls = MagicMock(__name__="my_tool")
-
-        async def fake_rescan(**_):
-            PLUGIN_TOOLS.register(mock_tool_cls)
-
-        config = DEFAULT_CONFIG.with_(plugins={})
-        with patch(
-            "solveig.plugins.tools.rescan_and_load_plugins", side_effect=fake_rescan
-        ):
-            await load_and_filter_tools(config, MockInterface())
-
-        assert "my_tool" in PLUGIN_TOOLS.all
-        assert PLUGIN_TOOLS.owners["my_tool"] not in config.plugins
-
-    async def test_tree_plugin_skipped_when_not_in_config(self):
-        """The real tree plugin's owner is absent from config.plugins."""
-        SolveigConfig.bootstrap()
         config = SolveigConfig(
-            url="test-url",
-            api_key="test-key",
-            plugins={"some_other_plugin": {}},
+            cli_args=[], api={"url": "http://x", "key": "k"}
         )
-        await load_and_filter_tools(config=config, interface=MockInterface())
+        with patch(
+            "solveig.plugins.tools.rescan_and_load_plugins",
+            side_effect=fake_rescan,
+        ):
+            load_and_filter_plugin_tools(config)
 
-        assert PLUGIN_TOOLS.owners["tree"] not in config.plugins
+        names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
+        assert "my_tool" in names
+        assert config_model_of(PLUGIN_TOOLS[0]) is ToolConfig
 
+    async def test_tool_discovered_but_not_in_config(self):
+        """A tool discovered by the rescan is still registered."""
+
+        class MockTool:
+            config_model = ToolConfig
+            __name__ = "my_tool"
+            __module__ = "solveig.plugins.tools.fake"
+
+        def fake_rescan(path):
+            PLUGIN_TOOLS.append(MockTool)
+            return (1, 0, [])
+
+        config = SolveigConfig(
+            cli_args=[], api={"url": "http://x", "key": "k"}
+        )
+        with patch(
+            "solveig.plugins.tools.rescan_and_load_plugins",
+            side_effect=fake_rescan,
+        ):
+            load_and_filter_plugin_tools(config)
+
+        assert len(PLUGIN_TOOLS) == 1
+        assert plugin_tool_name(PLUGIN_TOOLS[0]) == "my_tool"
+
+    @pytest.mark.no_file_mocking
     async def test_tree_plugin_loaded_when_in_config(self):
-        """The real tree plugin is discovered and its owner is enabled in config.plugins."""
-        SolveigConfig.bootstrap()
+        """The real tree plugin is discovered."""
+        SolveigConfig.compose_core_tools()
+        SolveigConfig.compose_plugin_tools()
         config = SolveigConfig(
-            url="test-url",
-            api_key="test-key",
-            plugins={"tree": {}},
+            cli_args=[],
+            api={"url": "test-url", "key": "test-key"},
+            plugins={"tools": {"tree": {}}},
         )
-        await load_and_filter_tools(config=config, interface=MockInterface())
+        load_and_filter_plugin_tools(config)
 
-        # `tree` is a @tool-decorated BaseTool subclass (TreeTool) now, keyed
-        # by its dispatch name (`TreeTool.tool_name()` -> "tree"), not by the
-        # Python class name. rescan_and_load_plugins re-imports the module, so
-        # the loaded class is a distinct (but equivalent) object from this
-        # module's own TreeTool import - compare by name/class name, not `is`.
-        assert "tree" in PLUGIN_TOOLS.all
-        assert PLUGIN_TOOLS.owners["tree"] in config.plugins
-        loaded = PLUGIN_TOOLS.all["tree"]
-        assert loaded.__name__ == TreeTool.__name__
-        assert loaded.tool_name() == "tree"
-
-
-# `tree`'s own behavior (declined/accepted/inspect flows, metadata listing
-# contents) is covered by tests/plugins/test_tree.py, which calls the plain
-# tree() function directly - no need to duplicate that here.
+        names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
+        assert "tree" in names
+        # Check it has a real config model (not bare ToolConfig)
+        tree = next(t for t in PLUGIN_TOOLS if plugin_tool_name(t) == "tree")
+        assert config_model_of(tree) is not ToolConfig

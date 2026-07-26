@@ -7,9 +7,10 @@ from .interface import MockInterface
 # The mock config relies on the core-tools schema being composed. It was
 # previously an import-time side effect; now it's an explicit bootstrap call
 # (same mechanism as the plugin two-phase bootstrap, phase 1).
-SolveigConfig.bootstrap()
+SolveigConfig.compose_core_tools()
 
 DEFAULT_CONFIG = SolveigConfig(
+    cli_args=[],  # hermetic: don't parse pytest's process argv
     api={
         "type": APIType.OPENAI,
         "key": "test-key",

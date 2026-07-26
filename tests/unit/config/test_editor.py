@@ -12,8 +12,8 @@ from solveig.config.editor import (
 
 
 def _cfg() -> SolveigConfig:
-    # Hermetic construction (no _PENDING_ARGV) — kwargs only, no CLI/file/env.
-    return SolveigConfig(api={"url": "http://x"})
+    # Hermetic construction (cli_args=[]) — kwargs only, no CLI/file/env.
+    return SolveigConfig(cli_args=[], api={"url": "http://x"})
 
 
 def test_dotted_get_set_roundtrip():

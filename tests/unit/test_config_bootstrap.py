@@ -1,7 +1,7 @@
 """Pin the config bootstrap as explicitly idempotent (D3).
 
 The core-tools schema was previously composed as an import-time side effect
-in `config/__init__.py`. It is now an explicit `SolveigConfig.bootstrap()`
+in `config/__init__.py`. It is now an explicit `SolveigConfig.compose_core_tools()`
 call — the same mechanism as the plugin two-phase bootstrap, phase 1. These
 tests pin that the bootstrap is idempotent and that the placeholder behavior
 without it is a documented choice, not a surprise.
@@ -27,11 +27,11 @@ def _schema_snapshot() -> dict[str, set[str]]:
 
 
 async def test_bootstrap_is_idempotent():
-    """bootstrap() twice → the composed schema is IDENTICAL both times."""
-    SolveigConfig.bootstrap()
+    """compose_core_tools() twice → the composed schema is IDENTICAL both times."""
+    SolveigConfig.compose_core_tools()
     first = _schema_snapshot()
 
-    SolveigConfig.bootstrap()
+    SolveigConfig.compose_core_tools()
     second = _schema_snapshot()
 
     assert first == second
@@ -41,7 +41,7 @@ async def test_bootstrap_is_idempotent():
 
 async def test_bootstrap_composes_core_tools():
     """After bootstrap, config.tools carries one field per core tool."""
-    SolveigConfig.bootstrap()
+    SolveigConfig.compose_core_tools()
     tools_annotation = SolveigConfig.model_fields["tools"].annotation
     assert tools_annotation is not None
     # CORE_TOOLS is 9 tools; spot-check the known ones.
@@ -62,8 +62,8 @@ async def test_bootstrap_composes_core_tools():
 async def test_config_after_bootstrap_validates_per_tool_config():
     """A SolveigConfig constructed after bootstrap validates a full per-tool
     config (proving the real schema, not the placeholder)."""
-    SolveigConfig.bootstrap()
-    cfg = SolveigConfig(api={"url": "http://x"})
+    SolveigConfig.compose_core_tools()
+    cfg = SolveigConfig(cli_args=[], api={"url": "http://x"})
     # A core tool's config field exists and carries its own model.
     read_cfg = getattr(cfg.tools, "read", None)
     assert read_cfg is not None
@@ -74,11 +74,11 @@ async def test_placeholder_without_bootstrap_is_documented():
     """A bare SolveigConfig() WITHOUT bootstrap sees the placeholder
     CoreToolsConfig — no per-tool fields. This test documents the trade-off
     explicitly (option (a) in the design log): call sites that need the real
-    schema must call bootstrap() first. If this test ever fails because the
+    schema must call compose_core_tools() first. If this test ever fails because the
     placeholder grew fields, the design assumption changed — revisit the log.
     """
     # NOTE: this test is ORDER-SENSITIVE — if another test already called
-    # bootstrap(), the class-level schema is composed and stays composed
+    # compose_core_tools(), the class-level schema is composed and stays composed
     # (compose mutates the class, not the instance). We assert the
     # placeholder's shape only when it is genuinely the placeholder; after
     # any bootstrap the assertion is skipped. This is the honest way to test

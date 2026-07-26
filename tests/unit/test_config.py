@@ -78,7 +78,7 @@ async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "solveig.config.sources.DEFAULT_CONFIG_SEARCH", [str(tmp_path / "nope")]
     )
-    c = SolveigConfig(api={"url": "http://direct"})
+    c = SolveigConfig(cli_args=[], api={"url": "http://direct"})
     assert c.api.url == "http://direct"
     assert c.prompt == "" and c.config_files is None
 

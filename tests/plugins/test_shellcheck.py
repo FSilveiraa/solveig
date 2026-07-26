@@ -19,11 +19,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import (
     BEFORE_HOOKS,
     clear_hooks,
-    load_and_filter_hooks,
+    load_and_filter_plugin_hooks,
     plugin_name,
 )
 from solveig.plugins.hooks.shellcheck import is_obviously_dangerous, shellcheck
@@ -33,7 +34,19 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
-SHELLCHECK_CONFIG = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+SHELLCHECK_CONFIG = SolveigConfig(
+    cli_args=[],
+    api={"url": "http://x", "key": "k"},
+    plugins={"hooks": {"shellcheck": {}}},
+)
+
+
+@pytest.fixture(autouse=True)
+def _compose_hooks():
+    """Ensure the core + plugin hooks schema is composed so
+    config.plugins.hooks.shellcheck exists."""
+    SolveigConfig.compose_core_tools()
+    SolveigConfig.compose_plugin_hooks()
 
 
 class TestDangerousPatternDetection:
@@ -131,13 +144,13 @@ class TestShellcheckDiscoveryAndRegistration:
         clear_hooks()
 
     async def test_registers_as_a_before_hook_on_command(self):
-        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
 
         hook_names = [plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])]
         assert "shellcheck" in hook_names
 
     async def test_does_not_register_for_other_tools(self):
-        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
 
         for tool_name, hooks in BEFORE_HOOKS.items():
             if tool_name != "command":
@@ -158,7 +171,7 @@ class TestShellcheckBlocksCommandThroughOrchestration:
 
     @pytest.mark.no_subprocess_mocking
     async def test_dangerous_command_blocked(self):
-        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
         interface = MockInterface()
         instance = CommandTool(command="rm -rf /")
 
@@ -176,7 +189,7 @@ class TestShellcheckBlocksCommandThroughOrchestration:
         even consults it, regardless of what's in the registry."""
         from solveig.tools.core.read import ReadTool
 
-        await load_and_filter_hooks(SHELLCHECK_CONFIG, MockInterface())
+        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
         interface = MockInterface(choices=[1])  # decline to send metadata
         instance = ReadTool(path=str(tmp_path), metadata_only=True)
 

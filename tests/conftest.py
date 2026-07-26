@@ -143,7 +143,7 @@ def default_config_file():
     ambient config for *every* test, without touching disk.
 
     With the nested pydantic-settings cutover, the file layer is loaded by
-    `AnyconfigSource`, which searches `sources.DEFAULT_CONFIG_SEARCH` when no
+    `ConfigFileSource`, which searches `sources.DEFAULT_CONFIG_SEARCH` when no
     explicit `--config` is given. Left alone that reads the developer's real
     `~/.config/solveig.json` (and would trip the legacy-flat-key guard). We
     empty the default-search list for the test run so ambient config never
