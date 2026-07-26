@@ -46,15 +46,12 @@ from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks
 from solveig.utils.misc import format_age
 
-# /help sections in display order — (section key on Subcommand, section title).
-_SECTIONS: list[tuple[str, str]] = [
-    ("basic", "Basic sub-commands"),
-    ("config", "Config sub-commands"),
-    ("model", "Model sub-commands"),
-    ("session", "Session sub-commands"),
-    ("mcp", "MCP sub-commands"),
-    ("tools", "Tool sub-commands"),
-]
+
+def _build_sections(subs: list[Subcommand]) -> list[tuple[str, str]]:
+    """Derive /help sections from the registered subcommands — no hand-kept
+    list that drifts when someone adds a new section."""
+    seen = dict.fromkeys(sub.section for sub in subs)
+    return [(s, s.replace("_", " ").title()) for s in seen]
 
 
 class SubcommandRunner:
@@ -196,7 +193,7 @@ class SubcommandRunner:
     # ------------------------------------------------------------------
 
     @subcommand("/config", "/config list", section="config")
-    async def _config_list_cmd(self, interface: SolveigInterface) -> None:
+    async def config_list(self, interface: SolveigInterface) -> None:
         """List editable config fields with their current values."""
         lines = []
         for field_name, _description in editable_fields(self.config).items():
@@ -208,7 +205,7 @@ class SubcommandRunner:
         )
 
     @subcommand("/config get", section="config", detail=True)
-    async def _config_get_cmd(self, interface: SolveigInterface, field: str) -> None:
+    async def config_get(self, interface: SolveigInterface, field: str) -> None:
         """Show current value for a field."""
         field_name = field.strip()
         fields = editable_fields(self.config)
@@ -224,7 +221,7 @@ class SubcommandRunner:
         )
 
     @subcommand("/config set", section="config", detail=True)
-    async def _config_set_cmd(
+    async def config_set(
         self, interface: SolveigInterface, field: str, *value: str
     ) -> None:
         """Set a field (prompts if the value is omitted).
@@ -260,9 +257,7 @@ class SubcommandRunner:
         await self._apply_and_confirm(field_name, new_value, interface)
 
     @subcommand("/config save", section="config", detail=True)
-    async def _config_save_cmd(
-        self, interface: SolveigInterface, path: str = ""
-    ) -> None:
+    async def config_save(self, interface: SolveigInterface, path: str = "") -> None:
         """Save changed fields to a config file.
 
         No-arg target = the highest-precedence loaded config file, else the
@@ -340,7 +335,7 @@ class SubcommandRunner:
     # ------------------------------------------------------------------
 
     @subcommand("/model", "/model info", section="model")
-    async def _model_info(self, interface: SolveigInterface) -> None:
+    async def model_info(self, interface: SolveigInterface) -> None:
         """Show current model details."""
         if not self.config.api.model:
             await interface.display_warning(
@@ -361,7 +356,7 @@ class SubcommandRunner:
         await interface.display_text_box("\n".join(lines), title="Model Info")
 
     @subcommand("/model set", section="model", detail=True)
-    async def _model_set_cmd(self, interface: SolveigInterface, name: str = "") -> None:
+    async def model_set(self, interface: SolveigInterface, name: str = "") -> None:
         """Change the model (prompts if the name is omitted)."""
         if name:
             await self._apply_and_confirm("api.model", name, interface)
@@ -369,7 +364,7 @@ class SubcommandRunner:
             await self.edit_config_field(interface, "api.model")
 
     @subcommand("/model refresh", section="model", detail=True)
-    async def _model_refresh(self, interface: SolveigInterface) -> None:
+    async def model_refresh(self, interface: SolveigInterface) -> None:
         """Re-fetch model info from the API."""
         if not self.config.api.model:
             await interface.display_error("No model configured to refresh.")
@@ -378,33 +373,33 @@ class SubcommandRunner:
         await fetch_and_apply_model_info(self.config, self.provider_ref, interface)
 
     @subcommand("/model list", section="model", detail=True)
-    async def _model_list(self, interface: SolveigInterface) -> None:
+    async def model_list(self, interface: SolveigInterface) -> None:
         """List available models from the API."""
-        raw_client = getattr(self.provider_ref.provider, "client", None)
-        if raw_client is None:
+        try:
+            async with interface.with_cancellable(
+                self.config.api.type.list_models(self.provider_ref.provider),
+                status="Fetching model list",
+            ) as task:
+                names = await task
+        except NotImplementedError:
             await interface.display_error(
                 "This API type does not support listing models."
             )
             return
-        try:
-            async with interface.with_cancellable(
-                raw_client.models.list(), status="Fetching model list"
-            ) as task:
-                models = await task
-            names = sorted(m.id for m in models.data)
-            await interface.display_text_box(
-                "\n".join(f"• {n}" for n in names),
-                title=f"Available Models ({len(names)})",
-            )
         except Exception as e:
             await interface.display_error(f"Could not list models: {e}")
+            return
+        await interface.display_text_box(
+            "\n".join(f"• {n}" for n in names),
+            title=f"Available Models ({len(names)})",
+        )
 
     # ------------------------------------------------------------------
     # Basic subcommands
     # ------------------------------------------------------------------
 
     @subcommand("/help", section="basic")
-    async def draw_help(self, interface: SolveigInterface) -> str:
+    async def help(self, interface: SolveigInterface) -> str:
         """Print this message."""
         help_str = f"""
 You're using Solveig to interact with an AI assistant at {self.config.api.url}.
@@ -412,7 +407,7 @@ This message was printed because you used the '/help' sub-command.
 You can exit Solveig by pressing Ctrl+C or sending '/exit'.
 """.strip()
 
-        for key, title in _SECTIONS:
+        for key, title in _build_sections(self._subcommands):
             subs = [s for s in self._subcommands if s.section == key]
             top = [s for s in subs if not s.is_detail]
             details = [s for s in subs if s.is_detail]
@@ -434,7 +429,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         )
 
     @subcommand("/exit", section="basic")
-    async def stop_interface(self, interface: SolveigInterface) -> None:
+    async def exit(self, interface: SolveigInterface) -> None:
         """Exit the application (Ctrl+C also works)."""
         await interface.stop()
 
@@ -443,7 +438,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
     # ------------------------------------------------------------------
 
     @subcommand("/mcp", "/mcp list", section="mcp")
-    async def _mcp_list_cmd(self, interface: SolveigInterface) -> None:
+    async def mcp_list(self, interface: SolveigInterface) -> None:
         """List connected MCP servers."""
         if not MCP_CONNECTIONS:
             await interface.display_info("No MCP servers connected.")
@@ -457,14 +452,14 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         await interface.display_text_box("\n".join(lines), title="MCP Connections")
 
     @subcommand("/mcp connect", section="mcp", detail=True)
-    async def _mcp_connect_cmd(self, interface: SolveigInterface, url: str) -> None:
+    async def mcp_connect(self, interface: SolveigInterface, url: str) -> None:
         """Connect to an MCP server."""
         # connect() returns None (and displays its own error) on failure — it
         # doesn't raise, so there's nothing to catch here.
         await connect(MCPServerConfig(url=url), self.config, interface)
 
     @subcommand("/mcp disconnect", section="mcp", detail=True)
-    async def _mcp_disconnect_cmd(self, interface: SolveigInterface, name: str) -> None:
+    async def mcp_disconnect(self, interface: SolveigInterface, name: str) -> None:
         """Disconnect from an MCP server."""
         conn = find_connection(name)
         if conn is None:

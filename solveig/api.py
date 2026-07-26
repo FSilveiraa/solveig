@@ -53,6 +53,12 @@ class APIType:
         ) -> ModelInfo | None:
             raise NotImplementedError()
 
+        @staticmethod
+        async def list_models(provider: Provider) -> list[str]:
+            """Return the sorted model IDs available from this provider.
+            Raises NotImplementedError for types that don't support listing."""
+            raise NotImplementedError()
+
     class OPENAI(BaseAPI):
         default_url = "https://api.openai.com/v1"
         name = "openai"
@@ -99,6 +105,11 @@ class APIType:
                     float(model_obj.model_extra["pricing"]["completion"]) * 1000000, 2
                 )
             return info
+
+        @staticmethod
+        async def list_models(provider: Provider) -> list[str]:
+            models_list = await provider.client.models.list()
+            return sorted(m.id for m in models_list.data)
 
     class ANTHROPIC(BaseAPI):
         default_url = "https://api.anthropic.com/v1"
