@@ -17,8 +17,11 @@ from solveig.tools.base import ToolConfig
 from solveig.tools.core.command import CommandConfig
 from solveig.tools.core.http import HttpConfig
 
-# The core-tools schema must be composed before CoreToolsConfig has real fields.
-SolveigConfig.compose_core_tools()
+
+@pytest.fixture(autouse=True)
+def _compose_for_models():
+    """The core-tools schema must be composed before SolveigConfig().tools has real fields."""
+    SolveigConfig.compose_core_tools()
 
 
 async def test_api_type_from_string_and_serializes_to_name():
