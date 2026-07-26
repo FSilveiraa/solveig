@@ -412,7 +412,7 @@ class TestToolSubcommands:
         """At least some tool subcommands should be present in the registry."""
         runner, _, _ = make_runner()
         # Core tools like /command, /read, /write etc. should be registered
-        assert len(runner._tools) > 0
+        assert len(runner._subcommands) > 0
 
     async def test_command_tool_subcommand_registered(self):
         runner, _, _ = make_runner()
