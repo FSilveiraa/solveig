@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import warnings
@@ -74,11 +75,24 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "api.max_context": "max-context",
     "system_prompt.add_examples": "add-examples",
     "system_prompt.add_os_info": "add-os-info",
-    "config_files": "config",
+    # NOTE: `config_files` is NOT a CLI shortcut — the `--config` flag is split
+    # out of argv and consumed by ConfigFileSource, which stamps the RESOLVED
+    # paths onto the field. Exposing it as a CLI flag would collide with that.
     # `--mcp` can't be used since it's already config field, so `--mcp-url`
     # accumulates into `startup_mcp_servers` and later populates `.mcp`
     "startup_mcp_servers": "mcp-url",
 }
+
+
+def _split_config_flags(argv: list[str]) -> tuple[list[str], list[str]]:
+    """Pull every `--config FILE` out of argv, returning (config_paths,
+    remaining_argv). `--config` is consumed by the config-file source, NOT
+    parsed as a pydantic CLI flag — removing it here lets CliSettingsSource
+    parse the rest without erroring on an unknown flag."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--config", action="append", dest="config", default=[])
+    ns, rest = parser.parse_known_args(argv)
+    return ns.config, rest
 
 
 class ConfigObserver(Protocol):
@@ -91,17 +105,27 @@ class ConfigObserver(Protocol):
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
-    """Config-file layer allowing pydantic-settings to load config files. Reads
-    the `--config` value the CLI source already parsed (via `current_state`)
-    plus the default search paths, and loads+merges them with anyconfig.
+    """Config-file layer. The `--config FILE` paths arrive already split out of
+    argv by `settings_customise_sources` (`requested`). They are resolved
+    (existence-checked) or replaced by the default search paths, loaded+merged
+    with anyconfig, and the RESOLVED paths are stamped into the returned dict's
+    `config_files` key — making that field the one home for "which config files
+    were actually loaded". A non-existent user-passed path is dropped here (the
+    historical record is `cli_args`).
     NOTE: this component does file I/O bypassing the Filesystem module"""
+
+    def __init__(self, settings_cls, requested: list[str] | None = None):
+        super().__init__(settings_cls)
+        self._requested = requested or []
 
     def get_field_value(self, field, field_name):  # whole-dict source
         return None, "", False
 
     def __call__(self) -> dict[str, Any]:
-        explicit: list[str] = self.current_state.get("config_files") or []
-        return sources.load_paths(sources.resolve_config_files(explicit))
+        resolved = sources.resolve_config_files(self._requested)
+        data = sources.load_paths(resolved)
+        data["config_files"] = resolved
+        return data
 
 
 # ---------------------------------------------------------------------------
@@ -237,11 +261,11 @@ class SolveigConfig(BaseSettings):
     # CLI-only fields
     # ------------------------------------------------------------
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
-    # list of config file paths the user specified. Differs from `_loaded_config_file_paths`
-    # which tracks config file path that were actually parsed
-    config_files: list[str] = Field(
-        default_factory=list, exclude=True
-    )  # --config FILE (repeatable; later wins, /config save targets the last)
+    # The config files actually loaded — resolved (existence-checked) `--config`
+    # paths, or the default search results when no --config was passed. Stamped
+    # by ConfigFileSource at parse; [0] is the /config save target. The one home
+    # for "which config files were loaded".
+    config_files: list[str] = Field(default_factory=list, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
@@ -256,9 +280,6 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Runtime fields (unpersisted)
     # ------------------------------------------------------------
-    # loaded config files, used by /config save ([0] = highest precedence = save target)
-    # different from `config_files`, which tracks config file paths the user passed explicitly
-    _loaded_config_file_paths: list[str] = PrivateAttr(default_factory=list)
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
     _declared_fields: set[str] = PrivateAttr(default_factory=set)
     # observers for field changes
@@ -308,6 +329,9 @@ class SolveigConfig(BaseSettings):
             return (init_settings,)
         if argv is None:
             argv = sys.argv[1:]
+        # `--config` belongs to the file source, not pydantic's CLI parser —
+        # split it out so CliSettingsSource never sees a flag it would reject.
+        config_paths, argv = _split_config_flags(argv)
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files. pydantic
         # deep-merges nested models across sources and validates.
         cli = CliSettingsSource(
@@ -316,7 +340,12 @@ class SolveigConfig(BaseSettings):
             cli_shortcuts=_CLI_SHORTCUTS,
             **_CLI_OPTS,
         )
-        return (init_settings, cli, env_settings, ConfigFileSource(settings_cls))
+        return (
+            init_settings,
+            cli,
+            env_settings,
+            ConfigFileSource(settings_cls, requested=config_paths),
+        )
 
     @field_validator("auto_allowed_paths", "ignored_paths", mode="before")
     @classmethod
@@ -464,10 +493,9 @@ class SolveigConfig(BaseSettings):
         persists. Env-provided values are transient and intentionally excluded,
         as are `exclude=True` CLI-only fields (derived from the declaration,
         not a hand-kept name list)."""
-        declared = _dict_to_dotted_leaves(
-            sources.load_paths(self._loaded_config_file_paths)
-        )
+        declared = _dict_to_dotted_leaves(sources.load_paths(self.config_files))
         argv = self.cli_args if self.cli_args is not None else sys.argv[1:]
+        _, argv = _split_config_flags(argv)  # CliSettingsSource rejects --config
         if argv:
             cli: CliSettingsSource = CliSettingsSource(
                 type(self),
@@ -505,8 +533,7 @@ class SolveigConfig(BaseSettings):
         cls.compose_plugin_hooks()
         cfg = cls(cli_args=cli_args)
 
-        # Set
-        cfg._loaded_config_file_paths = sources.resolve_config_files(cfg.config_files)
+        # config_files is already stamped (resolved paths) by ConfigFileSource.
         cfg._record_declared()
         for url in cfg.startup_mcp_servers:
             cfg.mcp.setdefault(url, MCPServerConfig(url=url))

@@ -37,9 +37,14 @@ def resolve_config_files(explicit: list[str]) -> list[str]:
     """Highest precedence first. Any explicit --config FILE (repeatable)
     replaces the default search entirely — passing configs means we do NOT
     also merge the search paths. Among explicit files the LAST one wins
-    (and is where /config save writes), so the list comes back reversed."""
+    (and is where /config save writes), so the list comes back reversed.
+    Non-existent explicit paths are dropped (the historical record is argv)."""
     if explicit:
-        return [os.path.expanduser(p) for p in reversed(explicit)]
+        return [
+            p
+            for p in (os.path.expanduser(x) for x in reversed(explicit))
+            if os.path.isfile(p)
+        ]
     found: list[str] = []
     for base in DEFAULT_CONFIG_SEARCH:
         for ext in _EXTS:

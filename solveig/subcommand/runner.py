@@ -268,9 +268,7 @@ class SubcommandRunner:
         default path. Writing just config._declared (not a full dump) keeps the
         saved file minimal — only what the user actually set.
         """
-        target = (
-            path or (self.config._loaded_config_file_paths or [DEFAULT_CONFIG_PATH])[0]
-        )
+        target = path or (self.config.config_files or [DEFAULT_CONFIG_PATH])[0]
         try:
             sources.save_config(self.config.declared_config(), target)
         except OSError as e:
