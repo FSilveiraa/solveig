@@ -84,11 +84,14 @@ _CLI_SHORTCUTS: dict[str, str] = {
 }
 
 
-def _split_config_flags(argv: list[str]) -> tuple[list[str], list[str]]:
+def _split_config_path_from_cli_args(
+    argv: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
     """Pull every `--config FILE` out of argv, returning (config_paths,
     remaining_argv). `--config` is consumed by the config-file source, NOT
     parsed as a pydantic CLI flag — removing it here lets CliSettingsSource
     parse the rest without erroring on an unknown flag."""
+    argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--config", action="append", dest="config", default=[])
     ns, rest = parser.parse_known_args(argv)
@@ -111,7 +114,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
     with anyconfig, and the RESOLVED paths are stamped into the returned dict's
     `config_files` key — making that field the one home for "which config files
     were actually loaded". A non-existent user-passed path is dropped here (the
-    historical record is `cli_args`).
+    historical record is `cli_override`).
     NOTE: this component does file I/O bypassing the Filesystem module"""
 
     def __init__(self, settings_cls, requested: list[str] | None = None):
@@ -270,12 +273,12 @@ class SolveigConfig(BaseSettings):
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
     )  # use `--mcp-url URL`
-    # The argv to parse, as a tri-state constructor kwarg read back by
-    # settings_customise_sources (via init_settings) to build the CLI source:
+    # Tri-state constructor kwarg: override which argv the CLI/file sources parse.
+    # Kept as the durable boot record when a list is supplied.
     #   None (default) → parse the real process argv
-    #   a list         → parse that argv instead (tests, embedded use)
-    #   []             → hermetic — no CLI/env/file reads at all
-    cli_args: list[str] | None = Field(default=None, exclude=True)
+    #   a list         → parse that instead (tests, embedded use)
+    #   []             → hermetic — no CLI/env/file reads
+    cli_override: list[str] | None = Field(default=None, exclude=True)
 
     # ------------------------------------------------------------
     # Runtime fields (unpersisted)
@@ -324,14 +327,14 @@ class SolveigConfig(BaseSettings):
         """Decide the settings-source stack. argv is a constructor kwarg
         (init_settings carries the init kwargs): None → the real process argv,
         a list → that argv, [] → hermetic (explicit kwargs only)."""
-        argv = init_settings.init_kwargs.get("cli_args")
+        argv = init_settings.init_kwargs.get("cli_override")
         if argv == []:
             return (init_settings,)
         if argv is None:
             argv = sys.argv[1:]
         # `--config` belongs to the file source, not pydantic's CLI parser —
         # split it out so CliSettingsSource never sees a flag it would reject.
-        config_paths, argv = _split_config_flags(argv)
+        config_paths, argv = _split_config_path_from_cli_args(argv)
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files. pydantic
         # deep-merges nested models across sources and validates.
         cli = CliSettingsSource(
@@ -489,13 +492,15 @@ class SolveigConfig(BaseSettings):
 
     def _record_declared(self) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
-        config file(s) and the command line (`cli_args`) — what `/config save`
+        config file(s) and the command line (`cli_override`) — what `/config save`
         persists. Env-provided values are transient and intentionally excluded,
         as are `exclude=True` CLI-only fields (derived from the declaration,
         not a hand-kept name list)."""
         declared = _dict_to_dotted_leaves(sources.load_paths(self.config_files))
-        argv = self.cli_args if self.cli_args is not None else sys.argv[1:]
-        _, argv = _split_config_flags(argv)  # CliSettingsSource rejects --config
+        argv = self.cli_override if self.cli_override is not None else sys.argv[1:]
+        _, argv = _split_config_path_from_cli_args(
+            argv
+        )  # CliSettingsSource rejects --config
         if argv:
             cli: CliSettingsSource = CliSettingsSource(
                 type(self),
@@ -515,12 +520,12 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     @classmethod
     async def parse_config_and_prompt(
-        cls, cli_args: list[str] | None = None
+        cls, cli_override: list[str] | None = None
     ) -> tuple[SolveigConfig, str, str | None]:
         # Compose the core tools section schema (known at init) and create a config
         # only for plugin discovery.
         cls.compose_core_tools()
-        plugin_discovery_config = cls(cli_args=cli_args)
+        plugin_discovery_config = cls(cli_override=cli_override)
 
         from solveig.plugins import discover_plugins
 
@@ -531,7 +536,7 @@ class SolveigConfig(BaseSettings):
         # same pipeline core config goes through.
         cls.compose_plugin_tools()
         cls.compose_plugin_hooks()
-        cfg = cls(cli_args=cli_args)
+        cfg = cls(cli_override=cli_override)
 
         # config_files is already stamped (resolved paths) by ConfigFileSource.
         cfg._record_declared()
