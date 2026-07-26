@@ -21,7 +21,6 @@ from pydantic_settings.exceptions import SettingsError
 from solveig.api import ProviderRef
 from solveig.config import DEFAULT_CONFIG_PATH, MCPServerConfig, SolveigConfig, sources
 from solveig.config.editor import (
-    apply_config_field,
     editable_fields,
     fetch_and_apply_model_info,
     get_config_value,
@@ -304,13 +303,10 @@ class SubcommandRunner:
         self, field_name: str, new_value: object, interface: SolveigInterface
     ) -> None:
         old_value = get_config_value(self.config, field_name)
-        await apply_config_field(
-            field_name,
-            new_value,
-            self.config,
-            self.provider_ref,
-            interface,
-        )
+        changed = await self.config.change_field(field_name, new_value)
+        if not changed:
+            await interface.display_info(f"config.{field_name} unchanged")
+            return
         old_display = self._format_field_value(old_value)
         new_display = self._format_field_value(new_value)
         await interface.display_success(

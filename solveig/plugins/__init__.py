@@ -12,9 +12,9 @@ from solveig.interface import SolveigInterface
 
 from .hooks import (
     after,
-    all_hooks,
     before,
     clear_hooks,
+    hooks_config_map,
     load_and_filter_plugin_hooks,
 )
 from .tools import (
@@ -65,7 +65,7 @@ async def report_plugins(
                 )
 
         async with group.with_group("Hooks") as hooks_group:
-            for name in sorted(name for name, _ in all_hooks()):
+            for name in sorted(hooks_config_map()):
                 if config.is_hook_enabled(name):
                     await hooks_group.display_success(f"'{name}': loaded")
                 else:

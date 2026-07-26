@@ -157,12 +157,12 @@ class HttpTool(BaseTool[HttpConfig]):
         assert self.output_file is not None
         output_abs_path = Filesystem.get_absolute_path(self.output_file)
 
-        if Filesystem.path_matches_patterns(output_abs_path, config.ignore_paths):
+        if Filesystem.path_matches_patterns(output_abs_path, config.ignored_paths):
             await interface.display_error(
-                f"Path blocked by ignore_paths: {output_abs_path}"
+                f"Path blocked by ignored_paths: {output_abs_path}"
             )
             return ToolResult(
-                issues=[f"path blocked by ignore_paths: {output_abs_path}"]
+                issues=[f"path blocked by ignored_paths: {output_abs_path}"]
             )
 
         try:

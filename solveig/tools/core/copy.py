@@ -53,11 +53,11 @@ class CopyTool(BaseTool):
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
 
         for blocked in (abs_source_path, abs_destination_path):
-            if Filesystem.path_matches_patterns(blocked, config.ignore_paths):
+            if Filesystem.path_matches_patterns(blocked, config.ignored_paths):
                 await interface.display_error(
-                    f"Path blocked by ignore_paths: {blocked}"
+                    f"Path blocked by ignored_paths: {blocked}"
                 )
-                return ToolResult(issues=[f"path blocked by ignore_paths: {blocked}"])
+                return ToolResult(issues=[f"path blocked by ignored_paths: {blocked}"])
 
         try:
             await Filesystem.validate_read_access(abs_source_path)

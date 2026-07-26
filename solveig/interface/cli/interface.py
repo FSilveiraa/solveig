@@ -62,6 +62,54 @@ class LocalDisplay(SolveigInterface):
         self.theme = theme
         self.app.theme = theme.name
 
+    def _live_code_theme(self) -> str:
+        """Code theme is owned by the root LocalDisplay; groups read it live so
+        a runtime `/config set interface.code_theme` paints nested scopes without
+        remounting or tracking live GroupInterface instances."""
+        root = self._root_ref if self._root_ref is not None else self
+        if isinstance(root, LocalDisplay):
+            return root.code_theme
+        return self.code_theme
+
+    def set_code_theme(self, code_theme: str) -> None:
+        """Keep the root `code_theme` in sync for future Syntax(...) builds and
+        best-effort restyle already-mounted code/diff boxes without touching
+        the reactive conversation tree."""
+        root = self._root_ref if self._root_ref is not None else self
+        if isinstance(root, LocalDisplay):
+            root.code_theme = code_theme
+        else:
+            self.code_theme = code_theme
+        if self._root_ref is None:
+            self._refresh_mounted_syntax(code_theme)
+
+    def _refresh_mounted_syntax(self, code_theme: str) -> None:
+        """In-place restyle of Static widgets holding a Rich Syntax renderable."""
+        from rich.syntax import Syntax
+
+        from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
+
+        try:
+            boxes = self.app.query(CollapsibleTextBox)
+        except Exception:
+            return
+        for box in boxes:
+            container = getattr(box, "_text_container", None)
+            if container is None:
+                continue
+            renderable = getattr(container, "renderable", None)
+            if not isinstance(renderable, Syntax):
+                content = getattr(container, "content", None)
+                if isinstance(content, Syntax):
+                    renderable = content
+                else:
+                    continue
+            code = renderable.code
+            lexer = renderable.lexer
+            lexer_name = getattr(lexer, "name", None) or "text"
+            container.update(Syntax(code, lexer=lexer_name, theme=code_theme))
+            box.refresh(layout=True)
+
     async def _display_text(
         self, text: str, style: str = "text", prefix: str | None = None
     ) -> None:
@@ -119,7 +167,9 @@ class LocalDisplay(SolveigInterface):
             if language_name == "markdown":
                 to_display = Markdown(text)
             elif language_name:
-                to_display = Syntax(text, lexer=language_name, theme=self.code_theme)
+                to_display = Syntax(
+                    text, lexer=language_name, theme=self._live_code_theme()
+                )
 
         return await self.app._conversation_area.add_text_box(
             to_display,
@@ -152,7 +202,7 @@ class LocalDisplay(SolveigInterface):
 
         to_display: str | Syntax = diff_text
         if diff_text.strip():
-            to_display = Syntax(diff_text, lexer="diff", theme=self.code_theme)
+            to_display = Syntax(diff_text, lexer="diff", theme=self._live_code_theme())
         else:
             to_display = "(Same content)"
         await self.app._conversation_area.add_text_box(

@@ -8,7 +8,7 @@ from solveig.tools import HttpTool, ToolResult
 try:
     import trafilatura as _trafilatura
 except ImportError:
-    _trafilatura = None  # type: ignore[assignment]
+    _trafilatura = None
 
 
 @after(tools=(HttpTool,))

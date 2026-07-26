@@ -101,6 +101,12 @@ class SolveigInterface(ABC):
         the no-op default."""
         return None
 
+    def set_code_theme(self, code_theme: str) -> None:
+        """Update the pygments theme used for Syntax/code blocks. New renders
+        pick it up; concrete UIs may also refresh already-mounted code views
+        in place. Must not remount the conversation tree. Default is a no-op."""
+        return None
+
     @property
     def _root(self) -> SolveigInterface:
         """The top-level interface backing this scope - itself, unless this

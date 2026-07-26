@@ -20,6 +20,7 @@ from solveig.agent import run_turn_with_retry
 from solveig.api import ProviderRef, get_provider
 from solveig.config import SolveigConfig
 from solveig.config.editor import fetch_and_apply_model_info
+from solveig.config.runtime_effects import AppConfigSubscriber
 from solveig.conversation import Conversation
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
@@ -255,6 +256,11 @@ async def run_async(
         )
     else:
         wire_interface(interface)
+
+    # Config emits; this one observer packages all interface/provider reactions
+    # (theme, code_theme, stats, model fetch). Not a second bus — just the
+    # composition-root subscriber that holds the deps reactions need.
+    config.subscribe(AppConfigSubscriber(interface, provider_ref))
 
     if user_prompt:
         inbox.put_nowait(user_prompt)

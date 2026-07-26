@@ -3,8 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import warnings
-from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from anyio import Path
 from pydantic import (
@@ -44,7 +43,14 @@ if TYPE_CHECKING:
 
 # DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
 # for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
-__all__ = ["DEFAULT_CONFIG_PATH", "DEFAULT_SYSTEM_PROMPT", "SolveigConfig"]
+__all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_SYSTEM_PROMPT",
+    "ConfigObserver",
+    "SolveigConfig",
+    "get_config_value",
+    "set_config_value",
+]
 
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.solveig/config.json")
 
@@ -53,21 +59,15 @@ DEFAULT_PLUGIN_PATHS = [
     "~/.solveig/plugins",
 ]  # built-in dir prepended by loader (Task 8)
 
-# CliSettingsSource options — mirrors tools/base.py CLI_PARSE_OPTS.
-# cli_avoid_json=True => nested fields become dotted flags (--api.url) not JSON blobs.
+# Options for CliSettingsSource to parse — mirrors tools/base.py CLI_PARSE_OPTS.
 _CLI_OPTS: dict[str, Any] = {
-    "cli_avoid_json": True,
+    "cli_avoid_json": True,  # makes ested fields become dotted flags (--api.url) not JSON blobs.
     "cli_exit_on_error": False,
     "cli_kebab_case": False,
     "cli_implicit_flags": True,
     "cli_enforce_required": False,
 }
 # Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
-# Maps the CLI-only `add_mcp` append field to --mcp-server. NOTE: this cannot be
-# the historical bare --mcp — under nested pydantic-settings the `mcp` submodel
-# field itself owns the bare `--mcp` flag (a whole-model JSON fallback that a
-# cli_shortcut can't override), so the repeatable startup flag is spelled
-# --mcp-server <url> instead.
 _CLI_SHORTCUTS: dict[str, str] = {
     "api.url": "url",
     "api.model": "model",
@@ -77,46 +77,76 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "api.max_context": "max-context",
     "system_prompt.add_examples": "add-examples",
     "system_prompt.add_os_info": "add-os-info",
-    "add_mcp": "mcp-server",
+    # `--mcp` can't be used since it's already config field, so `--mcp-url`
+    # accumulates into `startup_mcp_servers` and later populates `.mcp`
+    "startup_mcp_servers": "mcp-url",
 }
 
-# Top-level CLI-only / runtime field names — parsed from argv or set at runtime but
-# never persisted, so they must not leak into `_declared` (the /config save set).
-_CLI_ONLY_FIELDS: frozenset[str] = frozenset({"prompt", "config", "resume", "add_mcp"})
 
-# The argv to parse during a parse_config_and_prompt() call. When None (default),
-# SolveigConfig(...) is a plain HERMETIC construction from explicit kwargs only —
-# no ambient CLI or config-file reads (important for tests + the ripple's direct
-# constructions). Set only for the duration of one parse.
-_PENDING_ARGV: ContextVar[list[str] | None] = ContextVar("_pending_argv", default=None)
+class ConfigObserver(Protocol):
+    """Subscriber for runtime config changes. Config is the source of truth and emits
+    config + changed fields to observers who (stats update, provider model fetch, …)."""
 
-
-def _dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
-    """Flatten a nested provided-config dict into dotted leaf paths (`api.url`,
-    `tools.http.timeout`). Powers `_declared` — the set of explicitly-set fields
-    `/config save` persists."""
-    out: set[str] = set()
-    for key, value in (data or {}).items():
-        path = f"{prefix}{key}"
-        if isinstance(value, dict) and value:
-            out |= _dotted_leaves(value, f"{path}.")
-        else:
-            out.add(path)
-    return out
+    async def config_changed(
+        self, config: SolveigConfig, paths: frozenset[str]
+    ) -> None: ...
 
 
-class AnyconfigSource(PydanticBaseSettingsSource):
-    """Config-file layer. Reads the `--config` value the CLI source already
-    parsed (via `current_state`) plus the default search paths, and loads+merges
-    them with anyconfig. Config I/O is deliberately delegated here (bypasses
-    Filesystem)."""
+class ConfigFileSource(PydanticBaseSettingsSource):
+    """Config-file layer allowing pydantic-settings to load config files. Reads
+    the `--config` value the CLI source already parsed (via `current_state`)
+    plus the default search paths, and loads+merges them with anyconfig.
+    NOTE: this component does file I/O bypassing the Filesystem module"""
 
     def get_field_value(self, field, field_name):  # whole-dict source
         return None, "", False
 
     def __call__(self) -> dict[str, Any]:
-        explicit = self.current_state.get("config")
+        explicit: list[str] = self.current_state.get("config") or []
         return sources.load_paths(sources.resolve_config_files(explicit))
+
+
+# ---------------------------------------------------------------------------
+# Dotted paths — the one home for addressing a config leaf by dotted string
+# (`api.url`, `tools.http.timeout`). Used by _declared tracking, /config set,
+# notify fan-out. Editor (UI) imports get_config_value/set_config_value.
+# ---------------------------------------------------------------------------
+
+
+def _resolve(config: SolveigConfig, dotted: str) -> tuple[Any, str]:
+    """Walk a dotted path to its leaf, returning (owning_model, leaf_name)."""
+    obj: Any = config
+    *parents, leaf = dotted.split(".")
+    for part in parents:
+        obj = getattr(obj, part)
+    return obj, leaf
+
+
+def get_config_value(config: SolveigConfig, dotted: str) -> Any:
+    obj, leaf = _resolve(config, dotted)
+    return getattr(obj, leaf)
+
+
+def set_config_value(config: SolveigConfig, dotted: str, value: Any) -> Any:
+    """Set a dotted leaf; returns the previous value. validate_assignment on
+    the leaf's owning model re-validates (str → APIType/Palette/ByteSize, …)."""
+    obj, leaf = _resolve(config, dotted)
+    old = getattr(obj, leaf)
+    setattr(obj, leaf, value)
+    return old
+
+
+def _dict_to_dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
+    """Flatten a nested config dict into dotted leaf paths (`api.url`,
+    `tools.http.timeout`) — the same language /config set and notify speak."""
+    out: set[str] = set()
+    for key, value in (data or {}).items():
+        path = f"{prefix}{key}"
+        if isinstance(value, dict) and value:
+            out |= _dict_to_dotted_leaves(value, f"{path}.")
+        else:
+            out.add(path)
+    return out
 
 
 def _compose_section(
@@ -126,17 +156,24 @@ def _compose_section(
     model_name: str,
     config_dict: Any = _MUTABLE,
 ) -> None:
-    """Build `target.<field_name>`'s real schema at runtime — one field per
-    `(name, config_model)` pair — and swap it in (annotation + default_factory +
-    `model_rebuild`). The single machinery both core (`config.tools`) and plugin
-    (`config.plugins.tools`) tool config go through, so they get the same treatment.
-    `config_dict` is `_MUTABLE_ALLOW` for the plugin section (PRESERVE unknown blocks)."""
+    """Attach one validated field per entry to a placeholder section by
+    rebuilding the model class — `config.tools` and `config.plugins.*` get
+    their real schema from the tool/hook list, so adding one touches nothing
+    here. `config_dict` is `_MUTABLE_ALLOW` for plugin sections (an unknown
+    plugin's config block PRESERVES through /config save as `model_extra`).
+
+    Example:
+        target=PluginsConfig, field_name="hooks",
+        pairs=[("shellcheck", ShellcheckConfig), ("trafilatura", ToolConfig)]
+        → PluginsConfig.hooks becomes a model with fields
+          {shellcheck: ShellcheckConfig, trafilatura: ToolConfig}.
+    """
     fields: dict[str, Any] = {
         name: (config_model, Field(default_factory=config_model))
         for name, config_model in pairs
     }
     with warnings.catch_warnings():
-        # `copy` (CopyTool) deliberately shadows the deprecated BaseModel.copy.
+        # HACK: `copy` (CopyTool) deliberately shadows the deprecated BaseModel.copy.
         warnings.filterwarnings(
             "ignore", message=r'Field name "copy".*shadows', category=UserWarning
         )
@@ -177,7 +214,6 @@ class SolveigConfig(BaseSettings):
         description="Markdown files appended to the system prompt in order",
     )
     # ByteSize parses human strings ("1GiB") natively and gives .human_readable()
-    # for display — no bespoke parse validator or display special-case needed.
     min_disk_space_left: ByteSize = Field(
         default=ByteSize(1024**3),  # 1 GiB
         description="Minimum free disk space before blocking writes",
@@ -186,7 +222,7 @@ class SolveigConfig(BaseSettings):
         default_factory=list,
         description="Glob patterns for auto-approved file paths",
     )
-    ignore_paths: list[Path] = Field(
+    ignored_paths: list[Path] = Field(
         default_factory=list,
         description="Glob patterns for paths that are fully blocked from all tool access",
     )
@@ -196,23 +232,52 @@ class SolveigConfig(BaseSettings):
 
     # --- CLI-only inputs (parsed from the command line, never persisted) ---
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
-    config: str | None = Field(
-        default=None, exclude=True
-    )  # --config: which file to read
-    resume: str | None = Field(default=None, exclude=True)  # --resume [name]
-    add_mcp: list[str] = Field(
+    config: list[str] = Field(
         default_factory=list, exclude=True
-    )  # --mcp-server URL (repeatable)
-    # NOTE: command is not special — it's disabled the same uniform way as any core
-    # tool (`--tools.command.enabled false`), so there is no `--no-commands` sugar.
+    )  # --config FILE (repeatable; later wins, /config save targets the last)
+    resume: str | None = Field(default=None, exclude=True)  # --resume [name]
+    startup_mcp_servers: list[str] = Field(
+        default_factory=list, exclude=True
+    )  # use `--mcp-url URL`
 
-    # --- runtime (not persisted; NOT a config field) ---
-    # model_info (API-reported model facts) lives on ProviderRef — provider state,
-    # not config. See api.py.
-    # provenance for /config save (highest-precedence loaded file = [0])
+    # --- runtime (not persisted; NOT config fields) ---
+    # loaded config files, used by /config save ([0] = highest precedence = save target)
     _loaded_paths: list[str] = PrivateAttr(default_factory=list)
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
     _declared: set[str] = PrivateAttr(default_factory=set)
+    # observers for field changes
+    _observers: list[ConfigObserver] = PrivateAttr(default_factory=list)
+    # The argv this instance was booted from. [] or a list = boot parse;
+    # None = hermetic construction (tests, direct SolveigConfig(**kwargs)).
+    _boot_argv: list[str] | None = PrivateAttr(default=None)
+
+    # Transient bridge: settings_customise_sources is a classmethod pydantic
+    # calls inside cls(), before any instance exists — the only place a CLI
+    # source can be built, and the only moment argv is needed. Set by
+    # parse_config_and_prompt for the duration of one construction; the
+    # durable record lives on the instance as _boot_argv.
+    _argv_at_boot: ClassVar[list[str] | None] = None
+
+    def subscribe(self, observer: ConfigObserver) -> None:
+        """Register a runtime reaction to config changes."""
+        self._observers.append(observer)
+
+    async def notify_changed(self, paths: frozenset[str]) -> None:
+        """Fan out to every observer after a user edit of `paths` (dotted)."""
+        for observer in self._observers:
+            await observer.config_changed(self, paths)
+
+    async def change_field(self, dotted: str, value: Any) -> bool:
+        """The single user-edit write seam: set a dotted field, record it in
+        `_declared`, and notify observers — only when the value actually
+        changed (returns False on a no-op set). Internal writers that must
+        stay silent (fetch_and_apply_model_info) use set_config_value directly."""
+        old = set_config_value(self, dotted, value)
+        if old == get_config_value(self, dotted):
+            return False
+        self._declared.add(dotted)
+        await self.notify_changed(frozenset({dotted}))
+        return True
 
     @classmethod
     def settings_customise_sources(
@@ -223,7 +288,7 @@ class SolveigConfig(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        argv = _PENDING_ARGV.get()
+        argv = cls._argv_at_boot
         if argv is None:
             # Direct construction from explicit kwargs — hermetic, no CLI/file/env reads.
             return (init_settings,)
@@ -235,9 +300,9 @@ class SolveigConfig(BaseSettings):
             cli_shortcuts=_CLI_SHORTCUTS,
             **_CLI_OPTS,
         )
-        return (init_settings, cli, env_settings, AnyconfigSource(settings_cls))
+        return (init_settings, cli, env_settings, ConfigFileSource(settings_cls))
 
-    @field_validator("auto_allowed_paths", "ignore_paths", mode="before")
+    @field_validator("auto_allowed_paths", "ignored_paths", mode="before")
     @classmethod
     def _abs_paths(cls, v: Any) -> Any:
         return [Filesystem.get_absolute_path(p) for p in v] if v else []
@@ -329,15 +394,19 @@ class SolveigConfig(BaseSettings):
         cls.model_rebuild(force=True)
 
     @classmethod
-    def compose_plugin_hooks(cls, hooks: list[tuple[str, type]]) -> None:
-        """Build the `config.plugins.hooks` section from the discovered hooks — the
-        hook parallel of `compose_plugin_tools`, also part of phase 2 of the two-phase
-        bootstrap. Takes the `(hook_name, config_model)` pairs `all_hooks()` already
-        deduped (a hook is a function, so there's no generic to auto-derive from — its
-        config type is a `@before/@after(config_model=…)` stash or bare `ToolConfig`).
-        Rebuilds `SolveigConfig` too, since it embeds `PluginsConfig`."""
+    def compose_plugin_hooks(cls, config_by_hook: dict[str, type]) -> None:
+        """Build the `config.plugins.hooks` section from the discovered hooks —
+        the hook parallel of `compose_plugin_tools`. `config_by_hook` is
+        `hooks_config_map()`'s deduped {hook_name: config_model}; a hook's
+        config type is declared on the Hook class (`config_model`), defaulting
+        to bare `ToolConfig` (enabled-only). Rebuilds `SolveigConfig` too,
+        since it embeds `PluginsConfig`."""
         _compose_section(
-            PluginsConfig, "hooks", hooks, "PluginHooksConfig", _MUTABLE_ALLOW
+            PluginsConfig,
+            "hooks",
+            list(config_by_hook.items()),
+            "PluginHooksConfig",
+            _MUTABLE_ALLOW,
         )
         cls.model_rebuild(force=True)
 
@@ -358,13 +427,9 @@ class SolveigConfig(BaseSettings):
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared`) — what `/config save` persists.
-
-        `_declared` is the single source of truth for "was this set?"; each of its
-        dotted paths is by construction a real leaf of the serialized config, so we
-        just copy those leaves out of `model_dump(mode="json")` (which applies the
-        field serializers: key un-masked, enums → names, byte sizes → ints, command
-        patterns → source strings), walking source and destination in lockstep.
-        """
+        Each declared path is copied out of `model_dump(mode="json")` (which
+        applies the field serializers: key un-masked, enums → names, byte
+        sizes → ints, command patterns → source strings)."""
         full = self.model_dump(mode="json")
         out: dict[str, Any] = {}
         for path in sorted(self._declared):
@@ -377,19 +442,25 @@ class SolveigConfig(BaseSettings):
             dest[leaf] = src[leaf]
         return out
 
-    def _record_declared(self, argv: list[str]) -> None:
+    def _record_declared(self) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
-        config file(s) and the command line — the fields `/config save` persists.
-        Env-provided values are transient and intentionally excluded."""
-        cli: CliSettingsSource = CliSettingsSource(
-            type(self), cli_parse_args=argv, cli_shortcuts=_CLI_SHORTCUTS, **_CLI_OPTS
-        )
-        # Flatten each source to dotted leaves and union the sets — a shallow dict
-        # merge would let one source's `api` sub-dict clobber the other's.
-        declared = _dotted_leaves(sources.load_paths(self._loaded_paths))
-        declared |= _dotted_leaves(cli() or {})
+        config file(s) and the command line (`_boot_argv`) — what `/config save`
+        persists. Env-provided values are transient and intentionally excluded,
+        as are `exclude=True` CLI-only fields (derived from the declaration,
+        not a hand-kept name list)."""
+        declared = _dict_to_dotted_leaves(sources.load_paths(self._loaded_paths))
+        if self._boot_argv is not None:
+            cli: CliSettingsSource = CliSettingsSource(
+                type(self),
+                cli_parse_args=self._boot_argv,
+                cli_shortcuts=_CLI_SHORTCUTS,
+                **_CLI_OPTS,
+            )
+            declared |= _dict_to_dotted_leaves(cli() or {})
         self._declared = {
-            path for path in declared if path.split(".", 1)[0] not in _CLI_ONLY_FIELDS
+            path
+            for path in declared
+            if not type(self).model_fields[path.split(".", 1)[0]].exclude
         }
 
     @classmethod
@@ -397,33 +468,32 @@ class SolveigConfig(BaseSettings):
         argv = list(sys.argv[1:] if cli_args is None else cli_args)
 
         def _parse() -> SolveigConfig:
-            token = _PENDING_ARGV.set(argv)
+            token = cls._argv_at_boot
+            cls._argv_at_boot = argv
             try:
-                return cls()  # pydantic parses CLI + env + files, then validates
+                cfg = cls()  # pydantic parses CLI + env + files, then validates
             finally:
-                _PENDING_ARGV.reset(token)
+                cls._argv_at_boot = token
+            cfg._boot_argv = argv
+            return cfg
 
-        # Two-phase bootstrap: parse once to learn plugins.paths, discover plugin
-        # tools, and compose the plugins.tools schema — so the second parse validates
-        # plugin config against the real per-plugin models, the same pipeline core
-        # config goes through. Discovery is idempotent (setup_loop re-runs it for
-        # interface-side reporting). It currently scans the built-in plugins package;
-        # external plugins.paths scanning is what makes phase 1's config load-bearing.
-        # Phase 1 also bootstraps the core-tools schema explicitly (was an import-time
-        # side effect; now idempotent and observable).
+        # Two-phase bootstrap: parse once to learn plugins.paths, discover
+        # plugin tools/hooks, compose their schema — so the second parse
+        # validates plugin config against the real per-plugin models, the same
+        # pipeline core config goes through. Discovery is idempotent.
         cls.bootstrap()
         phase1 = _parse()
         from solveig.plugins import discover_plugins
-        from solveig.plugins.hooks import all_hooks
+        from solveig.plugins.hooks import hooks_config_map
         from solveig.plugins.tools import PLUGIN_TOOLS
 
         discover_plugins(phase1)
         cls.compose_plugin_tools(PLUGIN_TOOLS)
-        cls.compose_plugin_hooks(all_hooks())
+        cls.compose_plugin_hooks(hooks_config_map())
 
         cfg = _parse()
         cfg._loaded_paths = sources.resolve_config_files(cfg.config)
-        cfg._record_declared(argv)
-        for url in cfg.add_mcp:
+        cfg._record_declared()
+        for url in cfg.startup_mcp_servers:
             cfg.mcp.setdefault(url, MCPServerConfig(url=url))
         return cfg, cfg.prompt.strip(), cfg.resume

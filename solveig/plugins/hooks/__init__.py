@@ -30,12 +30,38 @@ from solveig.plugins.utils import rescan_and_load_plugins
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 
-BeforeHook = Callable[
+BeforeHookFn = Callable[
     [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]
 ]
-AfterHook = Callable[
+AfterHookFn = Callable[
     [ToolResult, SolveigConfig, SolveigInterface], Awaitable[ToolResult]
 ]
+
+
+class Hook:
+    """A hook as a callable object: config_model is DECLARED on the class
+    (default bare ToolConfig = enabled-only), not stashed on a function.
+    `@before`/`@after` build these from plain functions; an author may also
+    subclass directly. Identity is the instance (its `name`)."""
+
+    config_model: type[ToolConfig] = ToolConfig
+
+    def __init__(self, fn: Callable[..., Any], name: str | None = None):
+        self.fn = fn
+        self.name = name or fn.__name__
+        self.module = fn.__module__
+
+    def __call__(self, *args: Any) -> Any:
+        return self.fn(*args)
+
+
+class BeforeHook(Hook):
+    fn: BeforeHookFn
+
+
+class AfterHook(Hook):
+    fn: AfterHookFn
+
 
 BEFORE_HOOKS: dict[str, list[BeforeHook]] = defaultdict(list)
 AFTER_HOOKS: dict[str, list[AfterHook]] = defaultdict(list)
@@ -54,58 +80,54 @@ def _tool_key(target: "str | type[BaseTool] | Callable[..., Any]") -> str:
     return target.__name__
 
 
-def plugin_name(fn: Callable[..., Any]) -> str:
-    """Derive a hook's owning plugin name from its module path (e.g. `solveig.plugins.hooks.shellcheck` -> `shellcheck`)."""
-    module = fn.__module__
-    if ".hooks." in module:
-        return module.split(".hooks.")[-1]
-    return fn.__name__
+def plugin_name(hook: Hook) -> str:
+    """Derive a hook's owning plugin name from its module path (e.g.
+    `solveig.plugins.hooks.shellcheck` -> `shellcheck`)."""
+    if ".hooks." in hook.module:
+        return hook.module.split(".hooks.")[-1]
+    return hook.name
 
 
-def hook_name(fn: Callable[..., Any]) -> str:
+def hook_name(hook: Hook) -> str:
     """The name a hook is configured/gated under: `plugins.hooks.<hook_name>`.
-    A hook is a function, so its identity is `__name__` — the callable parallel of
-    a plugin tool's `plugin_tool_name` (one file may export several hooks, each its
-    own config entry). The `config_model` for that entry comes from
-    `@before/@after(config_model=…)`, or bare `ToolConfig` (enabled-only)."""
-    return fn.__name__
+    One file may export several hooks, each its own config entry."""
+    return hook.name
 
 
-def all_hooks() -> list[tuple[str, type[ToolConfig]]]:
-    """Every distinct hook, as `(hook_name, config_model)` pairs for schema
-    composition (`SolveigConfig.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed
-    by *target tool*, so a hook registered for several tools appears under several
-    keys but is ONE function — deduped by identity here. Two DIFFERENT hooks sharing
-    a `__name__` collide into one config entry: both still FIRE (execution iterates
-    the registries, not the schema), but they share the FIRST hook's gating — so
-    `plugins.hooks.<name>.enabled=false` disables both, and the later hook's own
-    `config_model` never reaches the schema. The warning names that consequence
-    rather than pretending the later hook was dropped."""
-    seen: dict[str, Callable[..., Any]] = {}
-    pairs: list[tuple[str, type[ToolConfig]]] = []
+def hooks_config_map() -> dict[str, type[ToolConfig]]:
+    """Every distinct hook as {hook_name: config_model} for schema composition
+    (`SolveigConfig.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed by
+    *target tool*, so a hook registered for several tools appears under several
+    keys but is ONE instance — deduped by name here. Two DIFFERENT hooks sharing
+    a name collide into one config entry: both still FIRE (execution iterates
+    the registries, not the schema), but they share the FIRST hook's gating —
+    the warning names that consequence."""
+    seen: dict[str, Hook] = {}
+    configs: dict[str, type[ToolConfig]] = {}
     for registry in (BEFORE_HOOKS, AFTER_HOOKS):
         for hooks in registry.values():
             for hook in hooks:
-                name = hook_name(hook)
-                if name in seen:
-                    if seen[name] is not hook:
+                if hook.name in seen:
+                    if seen[hook.name] is not hook:
                         warnings.warn(
-                            f"Two different hooks named '{name}' — both will run, "
-                            f"but they share one config entry (plugins.hooks.{name}, "
-                            f"from the first): gating applies to both and the later "
-                            f"hook's config_model is ignored. Rename one hook.",
+                            f"Two different hooks named '{hook.name}' — both "
+                            f"will run, but they share one config entry "
+                            f"(plugins.hooks.{hook.name}, from the first): "
+                            f"gating applies to both and the later hook's "
+                            f"config_model is ignored. Rename one hook.",
                             stacklevel=2,
                         )
                     continue
-                seen[name] = hook
-                pairs.append((name, getattr(hook, "config_model", ToolConfig)))
-    return pairs
+                seen[hook.name] = hook
+                configs[hook.name] = hook.config_model
+    return configs
 
 
 def registered_plugin_names() -> set[str]:
-    """All plugin names with at least one registered before/after hook - used to report load/skip status."""
-    names = {plugin_name(hook) for hooks in BEFORE_HOOKS.values() for hook in hooks}
-    names.update(plugin_name(hook) for hooks in AFTER_HOOKS.values() for hook in hooks)
+    """All plugin names with at least one registered before/after hook - used
+    to report load/skip status."""
+    names = {plugin_name(h) for hooks in BEFORE_HOOKS.values() for h in hooks}
+    names.update(plugin_name(h) for hooks in AFTER_HOOKS.values() for h in hooks)
     return names
 
 
@@ -119,21 +141,19 @@ def before(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
     *,
     config_model: type[ToolConfig] | None = None,
-) -> Callable[[BeforeHook], BeforeHook]:
+) -> Callable[[BeforeHookFn], BeforeHook]:
     """Register a before-hook for `tools`. `config_model=` declares a typed
-    `plugins.hooks.<hook_name>` config schema (the callable parallel of a tool's
-    `@tool(config_model=…)`); without it the hook gets bare `ToolConfig`
-    (enabled-only). Either way the hook reads its config Any-style via
-    `config.plugins.hooks.<name>`."""
+    `plugins.hooks.<hook_name>` config schema on the hook class; without it
+    the hook gets bare `ToolConfig` (enabled-only). Either way the hook reads
+    its config Any-style via `config.plugins.hooks.<name>`."""
 
-    def register(fn: BeforeHook) -> BeforeHook:
+    def register(fn: BeforeHookFn) -> BeforeHook:
+        hook = BeforeHook(fn)
         if config_model is not None:
-            # A hook is a plain function with no BaseTool generic to auto-derive
-            # from; stashing config_model here is how it opts into a typed schema.
-            fn.config_model = config_model  # type: ignore[attr-defined]
+            hook.config_model = config_model
         for target in tools:
-            BEFORE_HOOKS[_tool_key(target)].append(fn)
-        return fn
+            BEFORE_HOOKS[_tool_key(target)].append(hook)
+        return hook
 
     return register
 
@@ -142,15 +162,16 @@ def after(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
     *,
     config_model: type[ToolConfig] | None = None,
-) -> Callable[[AfterHook], AfterHook]:
+) -> Callable[[AfterHookFn], AfterHook]:
     """Register an after-hook for `tools`. See `before` for `config_model=`."""
 
-    def register(fn: AfterHook) -> AfterHook:
+    def register(fn: AfterHookFn) -> AfterHook:
+        hook = AfterHook(fn)
         if config_model is not None:
-            fn.config_model = config_model  # type: ignore[attr-defined]
+            hook.config_model = config_model
         for target in tools:
-            AFTER_HOOKS[_tool_key(target)].append(fn)
-        return fn
+            AFTER_HOOKS[_tool_key(target)].append(hook)
+        return hook
 
     return register
 
@@ -172,10 +193,13 @@ def load_and_filter_plugin_hooks(config: SolveigConfig) -> list[str]:
 __all__ = [
     "before",
     "after",
+    "Hook",
+    "BeforeHook",
+    "AfterHook",
     "clear_hooks",
     "plugin_name",
     "hook_name",
-    "all_hooks",
+    "hooks_config_map",
     "registered_plugin_names",
     "load_and_filter_plugin_hooks",
 ]

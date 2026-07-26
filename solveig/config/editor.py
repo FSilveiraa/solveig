@@ -1,15 +1,12 @@
 """
-Generic config editor for SolveigConfig.
+Generic config editor for SolveigConfig — the UI half.
 
-Provides type-aware prompting, dotted-path field application, and post-set hooks
-so any config field can be read or changed at runtime without restarting.
-
-Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
-`tools.http.timeout`, `interface.theme`). `set_config_value` traverses to the
-leaf's owning sub-model and `setattr`s there, so pydantic's per-model
-`validate_assignment` fires on the model that actually owns the field — that's
-what re-parses e.g. `api.type` (string → APIType) or `interface.theme`
-(string → Palette) for free, without bespoke coercion here.
+Type-aware prompting (ask_choice/ask_question per field type) and raw-string
+parsing for `/config set`. The write seam itself lives on the config:
+`SolveigConfig.change_field(dotted, value)` sets, records `_declared`, and
+notifies observers; traversal helpers (`get_config_value`/`set_config_value`)
+live in config.py next to it. Fields are addressed by DOTTED PATH into the
+nested schema (`api.model`, `tools.http.timeout`, `interface.theme`).
 """
 
 import asyncio
@@ -22,7 +19,7 @@ from pydantic import BaseModel
 from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.interface import SolveigInterface, themes
 
-from .config import SolveigConfig
+from .config import SolveigConfig, get_config_value
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the living schema, never hand-maintained.
@@ -85,34 +82,6 @@ def field_description(config: SolveigConfig, dotted: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Dotted-path traversal
-# ---------------------------------------------------------------------------
-
-
-def _resolve(config: SolveigConfig, dotted: str) -> tuple[Any, str]:
-    """Walk a dotted path to its leaf, returning (owning_model, leaf_name).
-
-    get/set operate on the leaf's owning model so pydantic's per-model
-    `validate_assignment` fires on the sub-model that actually owns the field.
-    """
-    obj: Any = config
-    *parents, leaf = dotted.split(".")
-    for part in parents:
-        obj = getattr(obj, part)
-    return obj, leaf
-
-
-def get_config_value(config: SolveigConfig, dotted: str) -> Any:
-    obj, leaf = _resolve(config, dotted)
-    return getattr(obj, leaf)
-
-
-def set_config_value(config: SolveigConfig, dotted: str, value: Any) -> None:
-    obj, leaf = _resolve(config, dotted)
-    setattr(obj, leaf, value)  # validate_assignment re-validates on the leaf model
-
-
-# ---------------------------------------------------------------------------
 # Type utilities
 # ---------------------------------------------------------------------------
 
@@ -128,9 +97,12 @@ def _unwrap_optional(tp: Any) -> Any:
 
 
 def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
-    """The (optional-unwrapped) declared type of a dotted field's leaf, read from
-    the leaf's owning sub-model — not `SolveigConfig` itself."""
-    obj, leaf = _resolve(config, dotted)
+    """The (optional-unwrapped) declared type of a dotted field's leaf, read
+    from the leaf's owning sub-model — not `SolveigConfig` itself."""
+    obj = config
+    *parents, leaf = dotted.split(".")
+    for part in parents:
+        obj = getattr(obj, part)
     hints = typing.get_type_hints(type(obj))
     return _unwrap_optional(hints[leaf])
 
@@ -253,8 +225,10 @@ async def prompt_for_field(
 
 
 # ---------------------------------------------------------------------------
-# Model info fetch — lives here so run.py, subcommand.py, and hooks can all
-# import it without any circular dependency on run.py
+# Model info fetch — lives here so run.py / subscriber can import it without
+# cycling through run.py. Mutations here are INTERNAL: they setattr model /
+# max_context and update stats directly, and deliberately do NOT call
+# config.notify_changed (that would re-enter the model-fetch observer).
 # ---------------------------------------------------------------------------
 
 
@@ -318,77 +292,3 @@ async def fetch_and_apply_model_info(
         output_price=model_info.output_price,
     )
     return True
-
-
-# ---------------------------------------------------------------------------
-# Post-set hooks — Layer 1 (no interface/client deps beyond simple updates)
-# ---------------------------------------------------------------------------
-
-
-async def _hook_model_changed(
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> None:
-    provider_ref.model_info = None
-    await fetch_and_apply_model_info(config, provider_ref, interface)
-
-
-async def _hook_max_context_changed(
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> None:
-    await interface.update_stats(max_context=config.api.max_context)
-
-
-async def _hook_theme_changed(
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> None:
-    interface.set_theme(config.interface.theme)
-
-
-# ---------------------------------------------------------------------------
-# Hook registry
-# ---------------------------------------------------------------------------
-
-_HookFn = Callable[[SolveigConfig, ProviderRef, SolveigInterface], Any]
-
-CONFIG_POST_SET_HOOKS: dict[str, _HookFn] = {
-    "api.model": _hook_model_changed,
-    "api.max_context": _hook_max_context_changed,
-    "interface.theme": _hook_theme_changed,
-    # NOTE: tools.command.enabled needs no hook - the FilteredToolset's
-    # is_tool_active reads ctx.deps.config live per step, so toggling it takes
-    # effect on the next step with no rebuild (rebuild is for membership changes
-    # only). briefing needs no hook either - run.py recomputes the system prompt
-    # fresh every turn. All other editable fields currently need no post-set hook.
-}
-
-# ---------------------------------------------------------------------------
-# Apply a field value + run its hook
-# ---------------------------------------------------------------------------
-
-
-async def apply_config_field(
-    field_name: str,
-    new_value: Any,
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> None:
-    """
-    Set config.<dotted field_name> = new_value and run any registered post-set
-    hook. The hook is responsible for all side effects (stats updates, client
-    recreation, etc.).
-
-    A runtime `/config set` is explicit user intent, so the field is recorded in
-    `_declared` — that's the set `/config save` (Task 7) persists.
-    """
-    set_config_value(config, field_name, new_value)
-    config._declared.add(field_name)
-    hook = CONFIG_POST_SET_HOOKS.get(field_name)
-    if hook:
-        await hook(config, provider_ref, interface)

@@ -28,14 +28,18 @@ LEGACY_KEY_MAP: dict[str, str] = {
     "auto_collapse_tools": "interface.auto_collapse_tools",
     "auto_copy_selection": "interface.auto_copy_selection",
     "mcp_servers": "mcp.servers",
+    "ignore_paths": "ignored_paths",
     "verbose": "(removed)",
 }
 
 
-def resolve_config_files(explicit: str | None) -> list[str]:
-    """Highest precedence first. Explicit path short-circuits the search."""
+def resolve_config_files(explicit: list[str]) -> list[str]:
+    """Highest precedence first. Any explicit --config FILE (repeatable)
+    replaces the default search entirely — passing configs means we do NOT
+    also merge the search paths. Among explicit files the LAST one wins
+    (and is where /config save writes), so the list comes back reversed."""
     if explicit:
-        return [explicit]
+        return [os.path.expanduser(p) for p in reversed(explicit)]
     found: list[str] = []
     for base in DEFAULT_CONFIG_SEARCH:
         for ext in _EXTS:

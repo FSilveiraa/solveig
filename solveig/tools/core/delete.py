@@ -42,9 +42,9 @@ class DeleteTool(BaseTool):
     ) -> ToolResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        if Filesystem.path_matches_patterns(abs_path, config.ignore_paths):
-            await interface.display_error(f"Path blocked by ignore_paths: {abs_path}")
-            return ToolResult(issues=[f"path blocked by ignore_paths: {abs_path}"])
+        if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
+            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
             is_directory = await Filesystem.is_dir(abs_path)
