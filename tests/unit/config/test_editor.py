@@ -1,71 +1,87 @@
+"""Tests for config traversals — set_config_value, get_config_value, change_field."""
+
 import pytest
 
 from solveig.api import APIType
-from solveig.config import SolveigConfig
-from solveig.config.editor import (
-    CONFIG_EDITABLE_FIELDS,
-    apply_config_field,
-    get_config_value,
-    parse_config_value,
-    set_config_value,
-)
+from solveig.config import SolveigConfig, get_config_value, set_config_value
+from solveig.config.editor import parse_config_value
+
+pytestmark = pytest.mark.anyio
 
 
 def _cfg() -> SolveigConfig:
-    # Hermetic construction (cli_args=[]) — kwargs only, no CLI/file/env.
     return SolveigConfig(cli_args=[], api={"url": "http://x"})
 
 
-def test_dotted_get_set_roundtrip():
-    c = _cfg()
-    set_config_value(c, "tools.http.timeout", 5.0)
-    assert get_config_value(c, "tools.http.timeout") == 5.0
-    assert c.tools.http.timeout == 5.0
+# ---------------------------------------------------------------------------
+# set_config_value / get_config_value — the low-level dotted traversals
+# ---------------------------------------------------------------------------
 
 
-def test_top_level_path_has_no_dot():
-    c = _cfg()
-    set_config_value(c, "disable_autonomy", True)
-    assert get_config_value(c, "disable_autonomy") is True
-    assert c.disable_autonomy is True
+class TestDottedGetSet:
+    async def test_roundtrip_nested(self):
+        c = _cfg()
+        set_config_value(c, "tools.http.timeout", 5.0)
+        assert get_config_value(c, "tools.http.timeout") == 5.0
+        assert c.tools.http.timeout == 5.0
+
+    async def test_top_level(self):
+        c = _cfg()
+        set_config_value(c, "disable_autonomy", True)
+        assert get_config_value(c, "disable_autonomy") is True
+        assert c.disable_autonomy is True
+
+    async def test_validate_assignment_coerces(self):
+        c = _cfg()
+        set_config_value(c, "api.type", "anthropic")
+        assert c.api.type is APIType.ANTHROPIC
 
 
-def test_set_reparses_via_validate_assignment():
-    # setattr on the leaf model fires ApiConfig's before-validator, coercing the
-    # string to the real APIType — no bespoke coercion in the editor.
-    c = _cfg()
-    set_config_value(c, "api.type", "anthropic")
-    assert c.api.type is APIType.ANTHROPIC
+# ---------------------------------------------------------------------------
+# parse_config_value — coarse string → Python coercion
+# ---------------------------------------------------------------------------
 
 
-def test_parse_config_value_coarse_parses_then_set_reparses():
-    c = _cfg()
-    # parse_config_value only coarsely parses (string passthrough for APIType);
-    # the set does the real coercion.
-    value = parse_config_value(c, "api.type", "gemini")
-    set_config_value(c, "api.type", value)
-    assert c.api.type is APIType.GEMINI
+class TestParseConfigValue:
+    async def test_string_passthrough(self):
+        c = _cfg()
+        # APIType is not coarse-parsed; validate_assignment does the real work
+        value = parse_config_value(c, "api.type", "gemini")
+        set_config_value(c, "api.type", value)
+        assert c.api.type is APIType.GEMINI
 
-    # bool leaf is parsed to a real bool (bool("false") pitfall handled)
-    assert parse_config_value(c, "tools.command.enabled", "false") is False
-
-
-def test_registry_uses_dotted_paths():
-    assert "api.key" in CONFIG_EDITABLE_FIELDS
-    assert "tools.command.enabled" in CONFIG_EDITABLE_FIELDS
-    assert "tools.http.timeout" in CONFIG_EDITABLE_FIELDS
-    # dropped flat/removed fields
-    assert "no_commands" not in CONFIG_EDITABLE_FIELDS
-    assert "model" not in CONFIG_EDITABLE_FIELDS
-    assert "verbose" not in CONFIG_EDITABLE_FIELDS
+    async def test_bool_false(self):
+        c = _cfg()
+        assert parse_config_value(c, "tools.command.enabled", "false") is False
 
 
-@pytest.mark.anyio
-async def test_apply_records_declared_for_save():
-    # A runtime set is explicit user intent → recorded in _declared (what
-    # /config save persists). tools.http.timeout has no post-set hook, so
-    # provider_ref/interface are unused here.
-    c = _cfg()
-    await apply_config_field("tools.http.timeout", 3.0, c, None, None)
-    assert "tools.http.timeout" in c._declared_fields
-    assert c.tools.http.timeout == 3.0
+# ---------------------------------------------------------------------------
+# change_field — the user-edit write seam (set + declared + notify)
+# ---------------------------------------------------------------------------
+
+
+class TestChangeField:
+    async def test_sets_and_records_declared(self):
+        c = _cfg()
+        changed = await c.change_field("tools.http.timeout", 3.0)
+        assert changed is True
+        assert "tools.http.timeout" in c._declared_fields
+        assert c.tools.http.timeout == 3.0
+
+    async def test_same_value_is_noop(self):
+        c = _cfg()
+        await c.change_field("api.max_context", 12345)
+        changed = await c.change_field("api.max_context", 12345)
+        assert changed is False
+
+    async def test_notifies_observers(self):
+        c = _cfg()
+        seen = []
+
+        class Probe:
+            async def config_changed(self, config, paths):
+                seen.append(paths)
+
+        c.subscribe(Probe())
+        await c.change_field("api.max_context", 999)
+        assert seen == [frozenset({"api.max_context"})]
