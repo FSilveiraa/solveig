@@ -331,7 +331,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         schema-clean."""
 
         async def run(ctx, params):
-            return await params.execute(ctx.deps.config, ctx.deps.interface)
+            return await params.execute(ctx.deps.config_files, ctx.deps.interface)
 
         run.__annotations__ = {
             "ctx": RunContext[SolveigContext],

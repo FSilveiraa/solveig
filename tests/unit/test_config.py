@@ -80,7 +80,7 @@ async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
     )
     c = SolveigConfig(api={"url": "http://direct"})
     assert c.api.url == "http://direct"
-    assert c.prompt == "" and c.config is None
+    assert c.prompt == "" and c.config_files is None
 
 
 async def test_system_prompt_is_its_own_category():
@@ -140,11 +140,11 @@ async def test_declared_tracks_file_and_cli_fields(tmp_path):
         ["--config", str(p), "--url", "CLI"]
     )
     # both the file-provided and CLI-provided leaf paths are declared for /config save
-    assert "api.model" in c._declared
-    assert "api.url" in c._declared
+    assert "api.model" in c._declared_fields
+    assert "api.url" in c._declared_fields
     # CLI-only fields never leak into _declared
-    assert "config" not in c._declared
-    assert "prompt" not in c._declared
+    assert "config" not in c._declared_fields
+    assert "prompt" not in c._declared_fields
 
 
 async def test_declared_config_saves_only_declared_serialized():

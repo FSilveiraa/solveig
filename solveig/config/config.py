@@ -39,7 +39,7 @@ from solveig.config.models import (
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
 
 if TYPE_CHECKING:
-    from solveig.tools.base import BaseTool
+    pass
 
 # DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
 # for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
@@ -184,6 +184,9 @@ def _compose_section(
 
 
 class SolveigConfig(BaseSettings):
+    # ------------------------------------------------------------
+    # Pydantic model config
+    # ------------------------------------------------------------
     # NOTE: the _CLI_OPTS keys are inlined here (rather than **-expanded) so mypy
     # can check them against the SettingsConfigDict TypedDict; the same dict is
     # **-expanded into CliSettingsSource(...) below, where a plain dict is fine.
@@ -199,7 +202,9 @@ class SolveigConfig(BaseSettings):
         cli_enforce_required=False,
     )
 
-    # --- persistent config ---
+    # ------------------------------------------------------------
+    # Persisted config fields
+    # ------------------------------------------------------------
     api: ApiConfig = Field(default_factory=ApiConfig)
     plugins: PluginsConfig = Field(
         default_factory=lambda: PluginsConfig(paths=list(DEFAULT_PLUGIN_PATHS))
@@ -230,29 +235,37 @@ class SolveigConfig(BaseSettings):
         default=False, description="Require user approval between agentic steps"
     )
 
-    # --- CLI-only inputs (parsed from the command line, never persisted) ---
+    # ------------------------------------------------------------
+    # CLI-only fields
+    # ------------------------------------------------------------
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
-    config: list[str] = Field(
+    config_files: list[str] = Field(
         default_factory=list, exclude=True
     )  # --config FILE (repeatable; later wins, /config save targets the last)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
     )  # use `--mcp-url URL`
-    # The argv this instance was booted from. Passed as a constructor kwarg by
-    # parse_config_and_prompt, read back by settings_customise_sources (via
-    # init_settings) to build the CLI source, and kept as the durable record.
-    # None (default) = hermetic construction — no CLI/env/file reads.
+    # The argv to parse, as a tri-state constructor kwarg read back by
+    # settings_customise_sources (via init_settings) to build the CLI source:
+    #   None (default) → parse the real process argv
+    #   a list         → parse that argv instead (tests, embedded use)
+    #   []             → hermetic — no CLI/env/file reads at all
     cli_args: list[str] | None = Field(default=None, exclude=True)
 
-    # --- runtime (not persisted; NOT config fields) ---
+    # ------------------------------------------------------------
+    # Runtime fields (unpersisted)
+    # ------------------------------------------------------------
     # loaded config files, used by /config save ([0] = highest precedence = save target)
-    _loaded_paths: list[str] = PrivateAttr(default_factory=list)
+    _loaded_config_file_paths: list[str] = PrivateAttr(default_factory=list)
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
-    _declared: set[str] = PrivateAttr(default_factory=set)
+    _declared_fields: set[str] = PrivateAttr(default_factory=set)
     # observers for field changes
     _observers: list[ConfigObserver] = PrivateAttr(default_factory=list)
 
+    # ------------------------------------------------------------
+    # Config change observers
+    # ------------------------------------------------------------
     def subscribe(self, observer: ConfigObserver) -> None:
         """Register a runtime reaction to config changes."""
         self._observers.append(observer)
@@ -270,10 +283,13 @@ class SolveigConfig(BaseSettings):
         old = set_config_value(self, dotted, value)
         if old == get_config_value(self, dotted):
             return False
-        self._declared.add(dotted)
+        self._declared_fields.add(dotted)
         await self.notify_changed(frozenset({dotted}))
         return True
 
+    # ------------------------------------------------------------
+    # Pydantic overrides
+    # ------------------------------------------------------------
     @classmethod
     def settings_customise_sources(
         cls,
@@ -283,11 +299,14 @@ class SolveigConfig(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        # argv arrives as a constructor kwarg (init_settings carries the init
-        # kwargs). None = hermetic: explicit kwargs only, no CLI/env/file reads.
+        """Decide the settings-source stack. argv is a constructor kwarg
+        (init_settings carries the init kwargs): None → the real process argv,
+        a list → that argv, [] → hermetic (explicit kwargs only)."""
         argv = init_settings.init_kwargs.get("cli_args")
-        if argv is None:
+        if argv == []:
             return (init_settings,)
+        if argv is None:
+            argv = sys.argv[1:]
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files. pydantic
         # deep-merges nested models across sources and validates.
         cli = CliSettingsSource(
@@ -361,7 +380,7 @@ class SolveigConfig(BaseSettings):
         return True
 
     @classmethod
-    def compose_core_tools(cls, tools: list[type[BaseTool]]) -> None:
+    def compose_core_tools(cls) -> None:
         """Build the `config.tools` section from the core tool list — one field per
         tool (`tool_name()` → its `config_model`) — so `config` never hand-enumerates
         core tools; adding a core tool needs no change here.
@@ -370,55 +389,49 @@ class SolveigConfig(BaseSettings):
         (the load order that lets each tool module resolve its top-level `from
         solveig.config import SolveigConfig`), and re-run only on a genuine
         tool-membership change — never per tool call."""
-        pairs = [(tool.tool_name(), tool.config_model) for tool in tools]
+        from solveig.tools import CORE_TOOLS
+
+        pairs = [(tool.tool_name(), tool.config_model) for tool in CORE_TOOLS]
         _compose_section(cls, "tools", pairs, "CoreToolsConfig")
 
     @classmethod
-    def compose_plugin_tools(cls, plugin_tools: list[Any]) -> None:
+    def compose_plugin_tools(cls) -> None:
         """Build the `config.plugins.tools` section from the discovered plugin tools
         — the plugin parallel of `compose_core_tools`, and phase 2 of the two-phase
         bootstrap (parse → discover → compose → reparse). Reads each entry's config
         type via `config_model_of` (a `BaseTool` ClassVar or a callable's
         `@tool(config_model=…)` stash), so plugin config validates like core config.
         Rebuilds `SolveigConfig` too, since it embeds `PluginsConfig`."""
-        from solveig.plugins.tools import config_model_of, plugin_tool_name
+        from solveig.plugins.tools import (
+            PLUGIN_TOOLS,
+            config_model_of,
+            plugin_tool_name,
+        )
 
-        pairs = [(plugin_tool_name(e), config_model_of(e)) for e in plugin_tools]
+        pairs = [(plugin_tool_name(e), config_model_of(e)) for e in PLUGIN_TOOLS]
         _compose_section(
             PluginsConfig, "tools", pairs, "PluginToolsConfig", _MUTABLE_ALLOW
         )
         cls.model_rebuild(force=True)
 
     @classmethod
-    def compose_plugin_hooks(cls, config_by_hook: dict[str, type]) -> None:
+    def compose_plugin_hooks(cls) -> None:
         """Build the `config.plugins.hooks` section from the discovered hooks —
         the hook parallel of `compose_plugin_tools`. `config_by_hook` is
         `hooks_config_map()`'s deduped {hook_name: config_model}; a hook's
         config type is declared on the Hook class (`config_model`), defaulting
         to bare `ToolConfig` (enabled-only). Rebuilds `SolveigConfig` too,
         since it embeds `PluginsConfig`."""
+        from solveig.plugins.hooks import hooks_config_map
+
         _compose_section(
             PluginsConfig,
             "hooks",
-            list(config_by_hook.items()),
+            list(hooks_config_map().items()),
             "PluginHooksConfig",
             _MUTABLE_ALLOW,
         )
         cls.model_rebuild(force=True)
-
-    @classmethod
-    def bootstrap(cls) -> None:
-        """Idempotent schema composition: core tools first, then plugins.
-
-        Called explicitly at bootstrap time (phase 1 of parse_config_and_prompt)
-        instead of relying on an import-time side effect. Idempotent BY
-        CONSTRUCTION: calling it N times composes the same schema N times
-        (compose already force-rebuilds; the pin proves it). The function-local
-        import in _compose_core_tools stays — the import-cycle law still holds.
-        """
-        from solveig.config import _compose_core_tools
-
-        _compose_core_tools()
 
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
@@ -428,7 +441,7 @@ class SolveigConfig(BaseSettings):
         sizes → ints, command patterns → source strings)."""
         full = self.model_dump(mode="json")
         out: dict[str, Any] = {}
-        for path in sorted(self._declared):
+        for path in sorted(self._declared_fields):
             *parents, leaf = path.split(".")
             src: Any = full
             dest = out
@@ -444,45 +457,49 @@ class SolveigConfig(BaseSettings):
         persists. Env-provided values are transient and intentionally excluded,
         as are `exclude=True` CLI-only fields (derived from the declaration,
         not a hand-kept name list)."""
-        declared = _dict_to_dotted_leaves(sources.load_paths(self._loaded_paths))
-        if self.cli_args is not None:
+        declared = _dict_to_dotted_leaves(
+            sources.load_paths(self._loaded_config_file_paths)
+        )
+        argv = self.cli_args if self.cli_args is not None else sys.argv[1:]
+        if argv:
             cli: CliSettingsSource = CliSettingsSource(
                 type(self),
-                cli_parse_args=self.cli_args,
+                cli_parse_args=argv,
                 cli_shortcuts=_CLI_SHORTCUTS,
                 **_CLI_OPTS,
             )
             declared |= _dict_to_dotted_leaves(cli() or {})
-        self._declared = {
+        self._declared_fields = {
             path
             for path in declared
             if not type(self).model_fields[path.split(".", 1)[0]].exclude
         }
 
     @classmethod
-    async def parse_config_and_prompt(cls, cli_args=None):
-        argv = list(sys.argv[1:] if cli_args is None else cli_args)
-
+    async def parse_config_and_prompt(
+        cls, cli_args=None
+    ) -> tuple[SolveigConfig, str, str | None]:
         def _parse() -> SolveigConfig:
-            return cls(cli_args=argv)  # argv flows in as a constructor kwarg
+            # cli_args=None → the hook reads the real process argv itself.
+            return cls(cli_args=cli_args)
 
         # Two-phase bootstrap: parse once to learn plugins.paths, discover
         # plugin tools/hooks, compose their schema — so the second parse
         # validates plugin config against the real per-plugin models, the same
         # pipeline core config goes through. Discovery is idempotent.
-        cls.bootstrap()
+        cls.compose_core_tools()
         phase1 = _parse()
+
         from solveig.plugins import discover_plugins
-        from solveig.plugins.hooks import hooks_config_map
-        from solveig.plugins.tools import PLUGIN_TOOLS
 
         discover_plugins(phase1)
-        cls.compose_plugin_tools(PLUGIN_TOOLS)
-        cls.compose_plugin_hooks(hooks_config_map())
+        cls.compose_plugin_tools()
+        cls.compose_plugin_hooks()
 
         cfg = _parse()
-        cfg._loaded_paths = sources.resolve_config_files(cfg.config)
+        cfg._loaded_config_file_paths = sources.resolve_config_files(cfg.config_files)
         cfg._record_declared()
         for url in cfg.startup_mcp_servers:
             cfg.mcp.setdefault(url, MCPServerConfig(url=url))
+        # TODO: consider returning just config, since the other fields are direct reads
         return cfg, cfg.prompt.strip(), cfg.resume

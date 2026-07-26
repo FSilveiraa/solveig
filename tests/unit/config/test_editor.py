@@ -67,5 +67,5 @@ async def test_apply_records_declared_for_save():
     # provider_ref/interface are unused here.
     c = _cfg()
     await apply_config_field("tools.http.timeout", 3.0, c, None, None)
-    assert "tools.http.timeout" in c._declared
+    assert "tools.http.timeout" in c._declared_fields
     assert c.tools.http.timeout == 3.0
