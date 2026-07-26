@@ -34,19 +34,21 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
-SHELLCHECK_CONFIG = SolveigConfig(
-    cli_args=[],
-    api={"url": "http://x", "key": "k"},
-    plugins={"hooks": {"shellcheck": {}}},
-)
 
-
-@pytest.fixture(autouse=True)
-def _compose_hooks():
-    """Ensure the core + plugin hooks schema is composed so
-    config.plugins.hooks.shellcheck exists."""
+@pytest.fixture(autouse=True, scope="module")
+def _compose_and_build_config():
+    """Compose the hooks schema and make SHELLCHECK_CONFIG available."""
+    global SHELLCHECK_CONFIG
     SolveigConfig.compose_core_tools()
     SolveigConfig.compose_plugin_hooks()
+    SHELLCHECK_CONFIG = SolveigConfig(
+        cli_args=[],
+        api={"url": "http://x", "key": "k"},
+        plugins={"hooks": {"shellcheck": {}}},
+    )
+
+
+SHELLCHECK_CONFIG: SolveigConfig  # set by fixture above
 
 
 class TestDangerousPatternDetection:

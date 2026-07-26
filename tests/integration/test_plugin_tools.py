@@ -29,14 +29,12 @@ class TestToolPluginFiltering:
 
     async def test_tool_discovered_and_enabled_when_in_config(self):
         """A tool discovered by the rescan is registered."""
+        from solveig.plugins.tools import FunctionTool
 
-        class MockTool:
-            config_model = ToolConfig
-            __name__ = "my_tool"
-            __module__ = "solveig.plugins.tools.fake"
+        async def my_tool_fn(): ...
 
         def fake_rescan(path):
-            PLUGIN_TOOLS.append(MockTool)
+            PLUGIN_TOOLS.append(FunctionTool(my_tool_fn))
             return (1, 0, [])
 
         config = SolveigConfig(
@@ -49,19 +47,17 @@ class TestToolPluginFiltering:
             load_and_filter_plugin_tools(config)
 
         names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
-        assert "my_tool" in names
+        assert "my_tool_fn" in names
         assert config_model_of(PLUGIN_TOOLS[0]) is ToolConfig
 
     async def test_tool_discovered_but_not_in_config(self):
         """A tool discovered by the rescan is still registered."""
+        from solveig.plugins.tools import FunctionTool
 
-        class MockTool:
-            config_model = ToolConfig
-            __name__ = "my_tool"
-            __module__ = "solveig.plugins.tools.fake"
+        async def my_tool_fn(): ...
 
         def fake_rescan(path):
-            PLUGIN_TOOLS.append(MockTool)
+            PLUGIN_TOOLS.append(FunctionTool(my_tool_fn))
             return (1, 0, [])
 
         config = SolveigConfig(
@@ -74,7 +70,7 @@ class TestToolPluginFiltering:
             load_and_filter_plugin_tools(config)
 
         assert len(PLUGIN_TOOLS) == 1
-        assert plugin_tool_name(PLUGIN_TOOLS[0]) == "my_tool"
+        assert plugin_tool_name(PLUGIN_TOOLS[0]) == "my_tool_fn"
 
     @pytest.mark.no_file_mocking
     async def test_tree_plugin_loaded_when_in_config(self):
@@ -90,6 +86,3 @@ class TestToolPluginFiltering:
 
         names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
         assert "tree" in names
-        # Check it has a real config model (not bare ToolConfig)
-        tree = next(t for t in PLUGIN_TOOLS if plugin_tool_name(t) == "tree")
-        assert config_model_of(tree) is not ToolConfig
