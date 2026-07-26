@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import warnings
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from anyio import Path
 from pydantic import (
@@ -37,9 +37,6 @@ from solveig.config.models import (
     SystemPromptConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
-
-if TYPE_CHECKING:
-    pass
 
 # DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
 # for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
@@ -77,6 +74,7 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "api.max_context": "max-context",
     "system_prompt.add_examples": "add-examples",
     "system_prompt.add_os_info": "add-os-info",
+    "config_files": "config",
     # `--mcp` can't be used since it's already config field, so `--mcp-url`
     # accumulates into `startup_mcp_servers` and later populates `.mcp`
     "startup_mcp_servers": "mcp-url",
@@ -102,7 +100,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
         return None, "", False
 
     def __call__(self) -> dict[str, Any]:
-        explicit: list[str] = self.current_state.get("config") or []
+        explicit: list[str] = self.current_state.get("config_files") or []
         return sources.load_paths(sources.resolve_config_files(explicit))
 
 
@@ -239,6 +237,8 @@ class SolveigConfig(BaseSettings):
     # CLI-only fields
     # ------------------------------------------------------------
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
+    # list of config file paths the user specified. Differs from `_loaded_config_file_paths`
+    # which tracks config file path that were actually parsed
     config_files: list[str] = Field(
         default_factory=list, exclude=True
     )  # --config FILE (repeatable; later wins, /config save targets the last)
@@ -257,6 +257,7 @@ class SolveigConfig(BaseSettings):
     # Runtime fields (unpersisted)
     # ------------------------------------------------------------
     # loaded config files, used by /config save ([0] = highest precedence = save target)
+    # different from `config_files`, which tracks config file paths the user passed explicitly
     _loaded_config_file_paths: list[str] = PrivateAttr(default_factory=list)
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
     _declared_fields: set[str] = PrivateAttr(default_factory=set)
@@ -288,7 +289,7 @@ class SolveigConfig(BaseSettings):
         return True
 
     # ------------------------------------------------------------
-    # Pydantic overrides
+    # Pydantic overrides/validators
     # ------------------------------------------------------------
     @classmethod
     def settings_customise_sources(
@@ -354,6 +355,9 @@ class SolveigConfig(BaseSettings):
             self.api.url = default
         return self
 
+    # ------------------------------------------------------------
+    # Tool/Hook section schema
+    # ------------------------------------------------------------
     def is_tool_enabled(self, tool_name: str) -> bool:
         """The single enable/disable rule for a tool, by name — the one home that
         spans every namespace a tool's `enabled` flag can live in: a core tool
@@ -433,6 +437,9 @@ class SolveigConfig(BaseSettings):
         )
         cls.model_rebuild(force=True)
 
+    # ------------------------------------------------------------
+    # Explicitly declared config fields
+    # ------------------------------------------------------------
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared`) — what `/config save` persists.
@@ -475,28 +482,30 @@ class SolveigConfig(BaseSettings):
             if not type(self).model_fields[path.split(".", 1)[0]].exclude
         }
 
+    # ------------------------------------------------------------
+    # Entrypoint
+    # ------------------------------------------------------------
     @classmethod
     async def parse_config_and_prompt(
-        cls, cli_args=None
+        cls, cli_args: list[str] | None = None
     ) -> tuple[SolveigConfig, str, str | None]:
-        def _parse() -> SolveigConfig:
-            # cli_args=None → the hook reads the real process argv itself.
-            return cls(cli_args=cli_args)
-
-        # Two-phase bootstrap: parse once to learn plugins.paths, discover
-        # plugin tools/hooks, compose their schema — so the second parse
-        # validates plugin config against the real per-plugin models, the same
-        # pipeline core config goes through. Discovery is idempotent.
+        # Compose the core tools section schema (known at init) and create a config
+        # only for plugin discovery.
         cls.compose_core_tools()
-        phase1 = _parse()
+        plugin_discovery_config = cls(cli_args=cli_args)
 
         from solveig.plugins import discover_plugins
 
-        discover_plugins(phase1)
+        discover_plugins(plugin_discovery_config)
+
+        # Re-compose the schema for the plugin section (tools + hooks). The second
+        # parse validates plugin config against the real per-plugin models, the
+        # same pipeline core config goes through.
         cls.compose_plugin_tools()
         cls.compose_plugin_hooks()
+        cfg = cls(cli_args=cli_args)
 
-        cfg = _parse()
+        # Set
         cfg._loaded_config_file_paths = sources.resolve_config_files(cfg.config_files)
         cfg._record_declared()
         for url in cfg.startup_mcp_servers:
