@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Integration tests for the `WriteTool` tool.
 
 `WriteTool(path=..., is_directory=..., content=None)` is constructed (field
@@ -188,7 +189,7 @@ class TestDirectoryOperations:
 class TestAutoAllowedPaths:
     async def test_auto_allowed_file_creation(self, tmp_path):
         test_file = tmp_path / "auto_file.txt"
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(
@@ -204,7 +205,7 @@ class TestAutoAllowedPaths:
 
     async def test_auto_allowed_directory_creation(self, tmp_path):
         test_dir = tmp_path / "auto_directory"
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
@@ -218,7 +219,7 @@ class TestAutoAllowedPaths:
     async def test_auto_allowed_file_update(self, tmp_path):
         test_file = tmp_path / "existing_auto.txt"
         test_file.write_text("Original content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(
@@ -270,7 +271,7 @@ class TestErrorHandling:
 
     async def test_disk_space_validation(self, tmp_path):
         test_file = tmp_path / "disk_space_test.txt"
-        config = DEFAULT_CONFIG.with_(min_disk_space_left="999TB")
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left="999TB")
         interface = MockInterface()
 
         result = await WriteTool(

@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """End-to-end tests for complete conversation loops through the real pydantic-ai
 Agent, driven by `run_async` + a `FunctionModel`-scripted response sequence.
 
@@ -53,7 +54,7 @@ class TestConversationFlow:
 
     async def test_command_execution_flow(self):
         """user request -> LLM calls two commands -> user approves -> execution."""
-        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), plugins={"hooks": {"shellcheck": {}}})
         model = create_mock_model(
             ModelResponse(
                 parts=[
@@ -93,7 +94,7 @@ class TestConversationFlow:
 
     async def test_file_operations_flow(self, tmp_path):
         """File operations flow with mixed accept/decline responses."""
-        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), plugins={"hooks": {"shellcheck": {}}})
 
         temp_dir_path = Path(str(tmp_path))
         temp_file_path = temp_dir_path / "new_file.txt"
@@ -147,7 +148,7 @@ class TestConversationFlow:
 
     async def test_command_error_handling(self):
         """Error handling in command execution flow."""
-        config = DEFAULT_CONFIG.with_(plugins={"shellcheck": {}})
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), plugins={"hooks": {"shellcheck": {}}})
         model = create_mock_model(
             ModelResponse(
                 parts=[

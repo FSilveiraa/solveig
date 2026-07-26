@@ -120,7 +120,7 @@ class TestAutoAllowedPaths:
         source_file = tmp_path / "auto_source.txt"
         dest_file = tmp_path / "auto_dest.txt"
         source_file.write_text("Auto-move content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await MoveTool(
@@ -138,7 +138,7 @@ class TestAutoAllowedPaths:
         dest_dir = tmp_path / "auto_dest"
         source_dir.mkdir()
         (source_dir / "content.txt").write_text("Directory content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await MoveTool(
@@ -156,7 +156,7 @@ class TestAutoAllowedPaths:
         auto_file.parent.mkdir()
         manual_file.parent.mkdir()
         auto_file.write_text("Source content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/auto/**"])
         interface = MockInterface(choices=[0])
 
         result = await MoveTool(

@@ -18,7 +18,7 @@ pytestmark = pytest.mark.anyio
 
 
 def make_runner(config=None, session_manager=None):
-    cfg = config if config is not None else DEFAULT_CONFIG.with_()
+    cfg = config if config is not None else SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     conversation = Conversation()
     provider_ref = ProviderRef(provider=MagicMock())
     runner = SubcommandRunner(
@@ -236,7 +236,7 @@ class TestModelCommands:
         assert "test-model" in output
 
     async def test_model_info_no_model_shows_warning(self):
-        cfg = DEFAULT_CONFIG.with_(model=None)
+        cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), api={"model": None})
         runner, _, _ = make_runner(config=cfg)
         interface = MockInterface()
         await runner("/model", interface)

@@ -130,7 +130,7 @@ class TestAutoAllowedPaths:
     async def test_auto_allowed_file_deletion(self, tmp_path):
         test_file = tmp_path / "auto_delete_file.txt"
         test_file.write_text("Auto-delete content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await DeleteTool(path=str(test_file)).execute(
@@ -146,7 +146,7 @@ class TestAutoAllowedPaths:
         test_dir = tmp_path / "auto_delete_dir"
         test_dir.mkdir()
         (test_dir / "content.txt").write_text("Directory content")
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await DeleteTool(path=str(test_dir)).execute(
@@ -166,7 +166,7 @@ class TestAutoAllowedPaths:
         manual_file.parent.mkdir()
         manual_file.write_text("Manual content")
 
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/auto/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/auto/**"])
 
         interface1 = MockInterface()
         result1 = await DeleteTool(path=str(auto_file)).execute(

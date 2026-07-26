@@ -195,7 +195,7 @@ class TestAutoAllowedPaths:
         test_content = "Auto-allowed content"
         test_file.write_text(test_content)
 
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
             *make_ctx(config, interface)
@@ -207,7 +207,7 @@ class TestAutoAllowedPaths:
     async def test_auto_allowed_directory(self, tmp_path):
         (tmp_path / "file.txt").write_text("content")
 
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface()
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
             *make_ctx(config, interface)

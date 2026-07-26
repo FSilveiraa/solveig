@@ -87,7 +87,7 @@ class TestTreeChoices:
 
 class TestTreeAutoAllowedPaths:
     async def test_auto_allowed_directory_bypasses_send_choice(self, tmp_path):
-        config = DEFAULT_CONFIG.with_(auto_allowed_paths=[str(tmp_path)])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface(choices=[1])  # still asked whether to read at all
 
         result = await TreeTool(path=str(tmp_path)).execute(

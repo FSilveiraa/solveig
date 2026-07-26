@@ -154,7 +154,7 @@ class TestAutoExecuteCommands:
         (tmp_path / "file1.txt").touch()
         (tmp_path / "file2.txt").touch()
         interface = MockInterface()
-        config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"auto_execute": ["^ls.*", "^pwd$"]}})
 
         result = await CommandTool(command="ls").execute(*make_ctx(config, interface))
 
@@ -165,7 +165,7 @@ class TestAutoExecuteCommands:
 
     async def test_auto_execute_non_matching_pattern(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
-        config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls.*", "^pwd$"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"auto_execute": ["^ls.*", "^pwd$"]}})
 
         result = await CommandTool(command="echo hello").execute(
             *make_ctx(config, interface)
@@ -178,7 +178,7 @@ class TestAutoExecuteCommands:
     async def test_auto_execute_complex_patterns(self, sandboxed_shell, tmp_path: Path):
         (tmp_path / "file.txt").touch()
         interface = MockInterface()
-        config = DEFAULT_CONFIG.with_(auto_execute_commands=["^ls(\\s+-[a-z]+)*\\s*$"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"auto_execute": ["^ls(\\s+-[a-z]+}})*\\s*$"])
 
         test_cases = [
             ("ls", True),

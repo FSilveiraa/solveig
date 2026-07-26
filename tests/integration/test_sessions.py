@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Integration tests for SessionManager.
 
 `SessionManager.store()`/`load()` (de)serialize a `Conversation`
@@ -37,7 +38,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_manager(tmp_path):
-    cfg = DEFAULT_CONFIG.with_(sessions_dir=str(tmp_path / "sessions"))
+    cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), session={"dir": str(tmp_path / "sessions")})
     return SessionManager(config=cfg), cfg
 
 

@@ -35,7 +35,9 @@ from solveig.agent import (
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
-from solveig.exceptions import PluginException
+from solveig.api import APIType
+from solveig.config import SolveigConfig
+from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.plugins.hooks import after, before, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool
@@ -317,7 +319,7 @@ async def test_before_and_after_hooks_fire_and_are_gated_by_config_plugins():
     off = await drive_tool_call(
         toolset,
         _echo_call(call_id="off"),
-        config=DEFAULT_CONFIG.with_(plugins={}),
+        config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump()),
         capabilities=[build_tool_execution_capability()],
     )
     assert fired == []
@@ -328,7 +330,7 @@ async def test_before_and_after_hooks_fire_and_are_gated_by_config_plugins():
     on = await drive_tool_call(
         toolset,
         _echo_call(call_id="on"),
-        config=DEFAULT_CONFIG.with_(
+        config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
             plugins={"record_before": {}, "transform_after": {}}
         ),
         capabilities=[build_tool_execution_capability()],
@@ -349,7 +351,7 @@ async def test_before_hook_plugin_exception_becomes_model_retry():
     result = await drive_tool_call(
         FunctionToolset([EchoTool.as_tool()]),
         _echo_call(),
-        config=DEFAULT_CONFIG.with_(plugins={"block": {}}),
+        config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), plugins={"hooks": {"block": {}}}),
         capabilities=[build_tool_execution_capability()],
     )
 
@@ -372,8 +374,8 @@ async def test_filtered_toolset_hides_command_live_without_rebuild():
     AVAILABLE_TOOLS.rebuild(DEFAULT_CONFIG)  # membership built once
     toolset = AVAILABLE_TOOLS.toolset
 
-    on = _run_context(DEFAULT_CONFIG.with_(no_commands=False), MockInterface())
-    off = _run_context(DEFAULT_CONFIG.with_(no_commands=True), MockInterface())
+    on = _run_context(SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"enabled": True}}), MockInterface())
+    off = _run_context(SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"enabled": False}}), MockInterface())
 
     tools_on = await toolset.get_tools(on)
     tools_off = await toolset.get_tools(off)  # same toolset object, no rebuild

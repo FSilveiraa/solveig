@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Integration tests for the `HttpTool` tool.
 
 `HttpTool(url=..., method="GET", headers=None, body=None,
@@ -109,7 +110,7 @@ async def test_non_200_response_still_accepted(local_http_server):
 async def test_response_truncated_when_body_exceeds_limit(local_http_server):
     long_body = "x" * 100
     server = await local_http_server(_app_with_response(200, long_body))
-    config = DEFAULT_CONFIG.with_(http_max_response_bytes=10)
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"http": {"max_response_bytes": 10}})
     interface = MockInterface(choices=[0, 0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
@@ -173,7 +174,7 @@ async def test_timeout_returns_issue(local_http_server):
     app = web.Application()
     app.router.add_get("/", slow_handler)
     server = await local_http_server(app)
-    config = DEFAULT_CONFIG.with_(http_timeout=0.05)
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"http": {"timeout": 0.05}})
     interface = MockInterface(choices=[0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
