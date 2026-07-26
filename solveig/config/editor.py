@@ -19,18 +19,12 @@ from pydantic import BaseModel
 from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
 from solveig.interface import SolveigInterface, themes
 
-from .config import SolveigConfig, get_config_value
+from .config import SolveigConfig, _resolve, get_config_value
 
 # ---------------------------------------------------------------------------
-# Editable fields — DERIVED from the living schema, never hand-maintained.
-# A field's declaration is the whole truth about it (D0): it is editable at
-# runtime unless its own declaration says otherwise (`Field(exclude=True)`,
-# used by the CLI-only fields), so there is exactly one place to chase when a
-# field moves or dies. The walk runs per call against the CURRENT
-# `model_fields` — config is a living object (composed tool/plugin sections
-# appear during the two-phase bootstrap), so caching a copy would be a second,
-# stale truth.
+# Editable fields — DERIVED from the live schema, never hand-maintained.
 # ---------------------------------------------------------------------------
+# A field with `exclude=True` opts out of runtime editing (one source of truth).
 
 
 def _is_container(annotation: Any) -> bool:
@@ -53,9 +47,8 @@ def editable_fields(config: SolveigConfig) -> dict[str, str]:
 
 
 def _field_infos(config: SolveigConfig) -> dict[str, Any]:
-    """The same walk as `editable_fields`, but returning each leaf's FieldInfo —
-    the declaration itself, for readers that need more than the description
-    (e.g. the prompt's `choices`)."""
+    """The same walk as `editable_fields`, returning each leaf's FieldInfo
+    for readers that need more than the description (e.g. prompt choices)."""
     out: dict[str, Any] = {}
 
     def walk(model: type[BaseModel], prefix: str) -> None:
@@ -76,16 +69,6 @@ def _field_infos(config: SolveigConfig) -> dict[str, Any]:
     return out
 
 
-def field_description(config: SolveigConfig, dotted: str) -> str:
-    """The declared description for one dotted path ("" if unknown)."""
-    return editable_fields(config).get(dotted, "")
-
-
-# ---------------------------------------------------------------------------
-# Type utilities
-# ---------------------------------------------------------------------------
-
-
 def _unwrap_optional(tp: Any) -> Any:
     """Union[X, None] → X. Anything else returned unchanged."""
     origin = typing.get_origin(tp)
@@ -97,14 +80,9 @@ def _unwrap_optional(tp: Any) -> Any:
 
 
 def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
-    """The (optional-unwrapped) declared type of a dotted field's leaf, read
-    from the leaf's owning sub-model — not `SolveigConfig` itself."""
-    obj = config
-    *parents, leaf = dotted.split(".")
-    for part in parents:
-        obj = getattr(obj, part)
-    hints = typing.get_type_hints(type(obj))
-    return _unwrap_optional(hints[leaf])
+    """The (optional-unwrapped) declared type of a dotted field's leaf."""
+    obj, leaf = _resolve(config, dotted)
+    return _unwrap_optional(typing.get_type_hints(type(obj))[leaf])
 
 
 def _parse_field_value(tp: Any, raw: str) -> Any:
@@ -144,12 +122,9 @@ def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
 # Type-aware UI prompting
 # ---------------------------------------------------------------------------
 
-# Constrained choices as a property of the field's TYPE, not its name (D0):
-# a field declared `theme: Palette` prompts with every registered palette;
-# `type: ...[BaseAPI]` with every API type; the str-typed code_theme resolves
-# its options from the same registry its validator would consult. Each entry
-# is (predicate, options, display-current) — adding a constrained type means
-# adding a Field whose type is listed here, nothing else.
+# Constrained choices are a property of the field's TYPE, not its name: a
+# field declared `theme: Palette` prompts with every registered palette; str-
+# typed code_theme resolves options from the same registry its validator uses.
 _CHOICES_BY_TYPE: list[tuple[Any, Callable[[], list[str]], Callable[[Any], str]]] = [
     (themes.Palette, lambda: list(themes.THEMES.keys()), lambda v: v.name),
     (type, lambda: list(API_TYPES.keys()), lambda v: v.name),
@@ -173,7 +148,7 @@ async def prompt_for_field(
     Raises ValueError if the raw input cannot be parsed.
     """
     raw_type = _leaf_type(config, field_name)
-    description = field_description(config, field_name)
+    description = editable_fields(config).get(field_name, field_name)
     current = get_config_value(config, field_name)
 
     # --- Choices declared on the field itself (`json_schema_extra={"choices": …}`) —

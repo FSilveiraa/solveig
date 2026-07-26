@@ -81,8 +81,8 @@ def _plugin_paths_union(paths_low_to_high: list[str]) -> list[str]:
 
 
 def load_paths(paths_high_first: list[str]) -> dict:
-    """Merge with EARLIER paths winning. anyconfig.load merges a list low->high,
-    so reverse (highest goes last => wins)."""
+    """Merge with HIGHER-precedence paths winning. anyconfig.load merges
+    low→high (last wins), so we reverse (highest goes last)."""
     if not paths_high_first:
         return {}
     low_to_high = list(reversed(paths_high_first))

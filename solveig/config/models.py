@@ -114,9 +114,8 @@ class PluginToolsConfig(_ComposedSection):
 
 class PluginHooksConfig(_ComposedSection):
     """Placeholder for `config.plugins.hooks` — composed from discovered hooks
-    during the same two-phase bootstrap, so a hook's config validates like a
-    tool's. A hook is a function (no generic to auto-derive its config type from),
-    so its schema comes from `@before/@after(config_model=…)` or bare `ToolConfig`."""
+    during the two-phase bootstrap, so a hook's config validates like a tool's.
+    A hook's config type is declared on the Hook class (`config_model`)."""
 
 
 class SystemPromptConfig(BaseModel):
