@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Integration tests for the `CommandTool` tool.
 
 `CommandTool(command=..., timeout=10.0)` is constructed (field validators run
@@ -178,7 +179,7 @@ class TestAutoExecuteCommands:
     async def test_auto_execute_complex_patterns(self, sandboxed_shell, tmp_path: Path):
         (tmp_path / "file.txt").touch()
         interface = MockInterface()
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"auto_execute": ["^ls(\\s+-[a-z]+}})*\\s*$"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"auto_execute": ["^ls(\\s+-[a-z]+)*\\s*$"]}})
 
         test_cases = [
             ("ls", True),

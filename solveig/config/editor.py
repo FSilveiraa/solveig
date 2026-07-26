@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from solveig.api import API_TYPES
+from solveig.api import API_TYPES, APIType
 from solveig.interface import SolveigInterface, themes
 
 from .config import SolveigConfig, _resolve, get_config_value
@@ -126,7 +126,7 @@ def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
 # typed code_theme resolves options from the same registry its validator uses.
 _CHOICES_BY_TYPE: list[tuple[Any, Callable[[], list[str]], Callable[[Any], str]]] = [
     (themes.Palette, lambda: list(themes.THEMES.keys()), lambda v: v.name),
-    (type, lambda: list(API_TYPES.keys()), lambda v: v.name),
+    (APIType, lambda: list(API_TYPES.keys()), lambda v: v.name),
 ]
 
 
@@ -165,14 +165,12 @@ async def prompt_for_field(
 
     # --- Constrained-choice fields, driven by the leaf's declared type ---
     for choice_type, options_of, display_of in _CHOICES_BY_TYPE:
-        if raw_type is choice_type or (
-            choice_type is type and isinstance(raw_type, type)
-        ):
+        if raw_type is choice_type:
             keys = options_of()
             idx = await interface.ask_choice(
                 f"{description} (current: {display_of(current)})", keys, add_cancel=True
             )
-            if choice_type is type:
+            if choice_type is APIType:
                 return list(API_TYPES.values())[idx]
             return list(themes.THEMES.values())[idx]
 

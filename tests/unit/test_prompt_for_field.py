@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Unit tests for config.editor.prompt_for_field."""
 
 import pytest
@@ -18,14 +19,14 @@ pytestmark = pytest.mark.anyio
 async def test_bool_field_returns_true():
     """Choosing index 0 for a bool field returns True."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("verbose", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("disable_autonomy", config, MockInterface(choices=[0]))
     assert result is True
 
 
 async def test_bool_field_returns_false():
     """Choosing index 1 for a bool field returns False."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("verbose", config, MockInterface(choices=[1]))
+    result = await prompt_for_field("disable_autonomy", config, MockInterface(choices=[1]))
     assert result is False
 
 
@@ -37,7 +38,7 @@ async def test_bool_field_returns_false():
 async def test_theme_returns_theme_object():
     """prompt_for_field for 'theme' returns the corresponding Palette object."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("theme", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("interface.theme", config, MockInterface(choices=[0]))
     assert result is list(themes.THEMES.values())[0]
 
 
@@ -45,7 +46,7 @@ async def test_code_theme_returns_string():
     """prompt_for_field for 'code_theme' returns a valid code theme string."""
     code_theme_options = sorted(themes.CODE_THEMES)
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("code_theme", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("interface.code_theme", config, MockInterface(choices=[0]))
     assert result == code_theme_options[0]
 
 
@@ -53,7 +54,7 @@ async def test_api_type_returns_api_type_value():
     """prompt_for_field for 'api_type' returns the corresponding API type."""
     api_type_values = list(API_TYPES.values())
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("api_type", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("api.type", config, MockInterface(choices=[0]))
     assert result is api_type_values[0]
 
 
@@ -96,31 +97,31 @@ async def test_str_field_returns_string():
     """Free-text input for a str field is returned as-is."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     result = await prompt_for_field(
-        "model", config, MockInterface(user_inputs=["gpt-4o"])
+        "api.model", config, MockInterface(user_inputs=["gpt-4o"])
     )
     assert result == "gpt-4o"
 
 
 async def test_str_or_none_empty_returns_none():
     """Empty input for an optional str field (model) returns None."""
-    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), api={"model": None})
-    result = await prompt_for_field("model", config, MockInterface(user_inputs=[""]))
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"api.model": None})
+    result = await prompt_for_field("api.model", config, MockInterface(user_inputs=[""]))
     assert result is None
 
 
 async def test_int_field_returns_int():
     """Free-text input for an int field is parsed to int."""
-    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), api={"max_context": 4096})
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"api.max_context": 4096})
     result = await prompt_for_field(
-        "max_context", config, MockInterface(user_inputs=["8192"])
+        "api.max_context", config, MockInterface(user_inputs=["8192"])
     )
     assert result == 8192
 
 
 async def test_float_field_returns_float():
     """Free-text input for a float field is parsed to float."""
-    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), api={"temperature": 0.0})
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"api.temperature": 0.0})
     result = await prompt_for_field(
-        "temperature", config, MockInterface(user_inputs=["0.7"])
+        "api.temperature", config, MockInterface(user_inputs=["0.7"])
     )
     assert result == pytest.approx(0.7)

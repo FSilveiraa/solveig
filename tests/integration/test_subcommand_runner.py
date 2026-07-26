@@ -1,3 +1,4 @@
+from solveig.config import SolveigConfig
 """Integration tests for SubcommandRunner dispatch and handlers."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -236,7 +237,7 @@ class TestModelCommands:
         assert "test-model" in output
 
     async def test_model_info_no_model_shows_warning(self):
-        cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), api={"model": None})
+        cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"model": None})
         runner, _, _ = make_runner(config=cfg)
         interface = MockInterface()
         await runner("/model", interface)
