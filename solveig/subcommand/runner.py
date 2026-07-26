@@ -11,6 +11,7 @@ one-concept/two-authors design.
 from __future__ import annotations
 
 import dataclasses
+import os
 import re
 import shlex
 from collections.abc import Callable
@@ -37,7 +38,6 @@ from solveig.subcommand.base import (
     Subcommand,
     UsageError,
     bind_tokens,
-    first_docline,
     subcommand,
     usage_of,
 )
@@ -98,11 +98,12 @@ class SubcommandRunner:
             if mark is None:
                 continue
             bound = getattr(self, name)
+            desc = mark.description or ((bound.__doc__ or "").strip().splitlines()[0])
             self._register(
                 Subcommand(
                     commands=mark.commands,
                     handler=self._make_builtin_handler(bound, mark.commands[0]),
-                    description=mark.description or first_docline(bound),
+                    description=desc if desc else "",
                     usage=usage_of(bound),
                     section=mark.section,
                     is_detail=mark.is_detail,
@@ -427,8 +428,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         return help_str
 
     def _is_disabled(self, sub: Subcommand) -> bool:
-        """A tool-backed subcommand whose tool is disabled in config — /help marks
-        it `(disabled)` (still listed, never hidden)."""
+        # Marks a tool subcommand (disabled) in /help when its tool is off.
         return sub.tool_name is not None and not self.config.is_tool_enabled(
             sub.tool_name
         )
@@ -535,7 +535,7 @@ You can exit Solveig by pressing Ctrl+C or sending '/exit'.
         except FileNotFoundError as e:
             await interface.display_error(str(e))
             return
-        filename = path_str.rsplit("/", 1)[-1]
+        filename = os.path.basename(path_str)
         choice = await interface.ask_choice(
             f"Delete session '{filename}'?", ["Yes", "No"], add_cancel=False
         )

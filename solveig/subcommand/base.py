@@ -97,12 +97,6 @@ def usage_of(handler: Callable) -> str:
     return " ".join(parts)
 
 
-def first_docline(handler: Callable) -> str:
-    """The first line of the handler's docstring — its `/help` blurb."""
-    doc = (handler.__doc__ or "").strip()
-    return doc.splitlines()[0] if doc else ""
-
-
 @dataclass
 class _SubcommandMark:
     """What `@subcommand` stamps onto a method; the runner reads it during
