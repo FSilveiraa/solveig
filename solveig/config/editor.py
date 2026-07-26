@@ -3,20 +3,19 @@ Generic config editor for SolveigConfig — the UI half.
 
 Type-aware prompting (ask_choice/ask_question per field type) and raw-string
 parsing for `/config set`. The write seam itself lives on the config:
-`SolveigConfig.change_field(dotted, value)` sets, records `_declared`, and
+`SolveigConfig.change_field(dotted, value)` sets, records `_declared_fields`, and
 notifies observers; traversal helpers (`get_config_value`/`set_config_value`)
 live in config.py next to it. Fields are addressed by DOTTED PATH into the
 nested schema (`api.model`, `tools.http.timeout`, `interface.theme`).
 """
 
-import asyncio
 import typing
 from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel
 
-from solveig.api import API_TYPES, ModelInfo, ModelNotFound, ProviderRef
+from solveig.api import API_TYPES
 from solveig.interface import SolveigInterface, themes
 
 from .config import SolveigConfig, _resolve, get_config_value
@@ -197,73 +196,3 @@ async def prompt_for_field(
     # --- Free-text fields (str, int, float, str | None) ---
     raw = await interface.ask_question(f"{description} (current: {current}):")
     return _parse_field_value(raw_type, raw)
-
-
-# ---------------------------------------------------------------------------
-# Model info fetch — lives here so run.py / subscriber can import it without
-# cycling through run.py. Mutations here are INTERNAL: they setattr model /
-# max_context and update stats directly, and deliberately do NOT call
-# config.notify_changed (that would re-enter the model-fetch observer).
-# ---------------------------------------------------------------------------
-
-
-async def fetch_and_apply_model_info(
-    config: SolveigConfig,
-    provider_ref: ProviderRef,
-    interface: SolveigInterface,
-) -> bool:
-    """
-    Fetch model details from the API and apply them.
-
-    Updates: config.api.model (if it was None, resolved to first available),
-             provider_ref.model_info, config.api.max_context (if model reports a
-             tighter limit), stats bar.
-
-    Always animates while the request is in-flight.
-    Returns True on success, False on failure (error already displayed).
-    """
-    try:
-        async with interface.with_cancellable(
-            config.api.type.get_model_details(
-                provider=provider_ref.provider, model=config.api.model
-            ),
-            status="Connecting to assistant",
-        ) as task:
-            model_info = await task
-    except asyncio.CancelledError:
-        await interface.display_info("Model info fetch cancelled")
-        return False
-    except NotImplementedError:
-        # Provider doesn't support model detail fetching — set minimal info
-        if config.api.model:
-            provider_ref.model_info = ModelInfo(model=config.api.model)
-        return True
-    except ModelNotFound as e:
-        await e.print(interface)
-        return False
-    except Exception as e:
-        await interface.display_error(
-            f"Found error when trying to fetch model details: {e}"
-        )
-        return False
-
-    if model_info is None:
-        return False
-
-    config.api.model = model_info.model
-    provider_ref.model_info = model_info
-
-    if model_info.context_length is not None:
-        if (
-            config.api.max_context < 0
-            or config.api.max_context > model_info.context_length
-        ):
-            config.api.max_context = model_info.context_length
-
-    await interface.update_stats(
-        model=config.api.model,
-        max_context=config.api.max_context,
-        input_price=model_info.input_price,
-        output_price=model_info.output_price,
-    )
-    return True

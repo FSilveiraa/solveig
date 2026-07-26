@@ -84,14 +84,11 @@ class ApiConfig(BaseModel):
 
 
 class _ComposedSection(BaseModel):
-    """Base for a config section whose real per-entry fields are composed at
-    runtime from a tool list, not hand-enumerated here — `config.tools` (core
-    tools, from `CORE_TOOLS`) and `config.plugins.tools` (plugin tools, from the
-    discovered `PLUGIN_TOOLS`), both built by `SolveigConfig.compose_*()` in
-    config.py. Adding a tool touches nothing here. The `TYPE_CHECKING` `__getattr__`
-    types a direct `config.tools.<name>` read as Any (Any-style access stays
-    available); the *typed* path is a tool's own `self.settings(config)`. The
-    per-tool config type lives on each tool (`ToolConfig`/subclass in tools/)."""
+    """Base for config sections built at runtime from a tool/hook list.
+    Placeholder classes (CoreToolsConfig, PluginToolsConfig, …) subclass
+    this; their real schema is injected by `_compose_section`. The
+    TYPE_CHECKING `__getattr__` types untyped `config.tools.<name>` reads
+    as `Any` at dev time; the typed path is a tool's `self.settings(config)`."""
 
     model_config = _MUTABLE
 

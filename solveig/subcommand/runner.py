@@ -22,11 +22,11 @@ from solveig.api import ProviderRef
 from solveig.config import DEFAULT_CONFIG_PATH, MCPServerConfig, SolveigConfig, sources
 from solveig.config.editor import (
     editable_fields,
-    fetch_and_apply_model_info,
     get_config_value,
     parse_config_value,
     prompt_for_field,
 )
+from solveig.config.runtime_effects import fetch_and_apply_model_info
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface import SolveigInterface

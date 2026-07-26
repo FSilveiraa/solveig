@@ -53,7 +53,7 @@ DEFAULT_CONFIG_PATH = os.path.expanduser("~/.solveig/config.json")
 DEFAULT_PLUGIN_PATHS = [
     "./.solveig/plugins",
     "~/.solveig/plugins",
-]  # built-in dir prepended by loader (Task 8)
+]  # built-in plugin dirs; plugin discovery appends external paths to this
 
 # Options for CliSettingsSource to parse — mirrors tools/base.py CLI_PARSE_OPTS.
 _CLI_OPTS: dict[str, Any] = {

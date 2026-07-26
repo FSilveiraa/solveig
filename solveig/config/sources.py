@@ -65,21 +65,6 @@ def _check_legacy(data: dict) -> None:
         )
 
 
-def _plugin_paths_union(paths_low_to_high: list[str]) -> list[str]:
-    """`plugins.paths` UNIONS across config files (order-preserving dedupe) rather
-    than being replaced by the highest-precedence file — every layer contributes a
-    discovery dir. All other lists keep anyconfig's default replace semantics."""
-    union: list[str] = []
-    for path in paths_low_to_high:
-        one = anyconfig.load(path)
-        if not isinstance(one, dict):  # a scalar/None config file has no plugins
-            continue
-        for plugin_path in (one.get("plugins") or {}).get("paths") or []:
-            if plugin_path not in union:
-                union.append(plugin_path)
-    return union
-
-
 def load_paths(paths_high_first: list[str]) -> dict:
     """Merge with HIGHER-precedence paths winning. anyconfig.load merges
     low→high (last wins), so we reverse (highest goes last)."""
@@ -89,7 +74,18 @@ def load_paths(paths_high_first: list[str]) -> dict:
     merged = anyconfig.load(low_to_high, ac_merge=anyconfig.MS_DICTS)
     data = dict(merged) if isinstance(merged, dict) else {}
     _check_legacy(data)
-    union = _plugin_paths_union(low_to_high)
+    # plugins.paths UNIONS across every config file (order-preserving dedupe)
+    # — each layer contributes a discovery dir. Re-reading individual files
+    # here is a second pass; configs are kilobyte-scale so the double-IO is
+    # cheaper than a recursive deep-merge by hand to avoid it.
+    union: list[str] = []
+    for path in low_to_high:
+        one = anyconfig.load(path)
+        if not isinstance(one, dict):
+            continue
+        for pp in (one.get("plugins") or {}).get("paths") or []:
+            if pp not in union:
+                union.append(pp)
     if union:
         data.setdefault("plugins", {})["paths"] = union
     return data
