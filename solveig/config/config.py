@@ -37,10 +37,8 @@ from solveig.config.models import (
     SessionConfig,
     SystemPromptConfig,
 )
-from solveig.utils.file import Filesystem  # path normalization only (not config I/O)
+from solveig.utils.file import Filesystem  # path normalization, not config I/O
 
-# DEFAULT_SYSTEM_PROMPT lives in models.py (imported above) and is re-exported here
-# for stable `solveig.config.config.DEFAULT_SYSTEM_PROMPT` / `solveig.config` imports.
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_SYSTEM_PROMPT",
@@ -59,7 +57,7 @@ DEFAULT_PLUGIN_PATHS = [
 
 # Options for CliSettingsSource to parse — mirrors tools/base.py CLI_PARSE_OPTS.
 _CLI_OPTS: dict[str, Any] = {
-    "cli_avoid_json": True,  # makes ested fields become dotted flags (--api.url) not JSON blobs.
+    "cli_avoid_json": True,  # makes nested fields become dotted flags (--api.url) not JSON blobs.
     "cli_exit_on_error": False,
     "cli_kebab_case": False,
     "cli_implicit_flags": True,
@@ -75,23 +73,17 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "api.max_context": "max-context",
     "system_prompt.add_examples": "add-examples",
     "system_prompt.add_os_info": "add-os-info",
-    # NOTE: `config_files` is NOT a CLI shortcut — the `--config` flag is split
-    # out of argv and consumed by ConfigFileSource, which stamps the RESOLVED
-    # paths onto the field. Exposing it as a CLI flag would collide with that.
-    # `--mcp` can't be used since it's already config field, so `--mcp-url`
-    # accumulates into `startup_mcp_servers` and later populates `.mcp`
-    "startup_mcp_servers": "mcp-url",
+    "startup_mcp_servers": "mcp-url",  # --mcp is taken by the mcp submodel
 }
 
 
 def _split_config_path_from_cli_args(
-    argv: list[str] | None = None,
+    argv: list[str],
 ) -> tuple[list[str], list[str]]:
     """Pull every `--config FILE` out of argv, returning (config_paths,
-    remaining_argv). `--config` is consumed by the config-file source, NOT
-    parsed as a pydantic CLI flag — removing it here lets CliSettingsSource
+    remaining_argv). `--config` is consumed by the config-file source, not
+    parsed as a pydantic CLI flag — stripping it here lets CliSettingsSource
     parse the rest without erroring on an unknown flag."""
-    argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--config", action="append", dest="config", default=[])
     ns, rest = parser.parse_known_args(argv)
@@ -99,8 +91,7 @@ def _split_config_path_from_cli_args(
 
 
 class ConfigObserver(Protocol):
-    """Subscriber for runtime config changes. Config is the source of truth and emits
-    config + changed fields to observers who (stats update, provider model fetch, …)."""
+    """A runtime subscriber that reacts to dotted config paths changing."""
 
     async def config_changed(
         self, config: SolveigConfig, paths: frozenset[str]
@@ -108,14 +99,10 @@ class ConfigObserver(Protocol):
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
-    """Config-file layer. The `--config FILE` paths arrive already split out of
-    argv by `settings_customise_sources` (`requested`). They are resolved
-    (existence-checked) or replaced by the default search paths, loaded+merged
-    with anyconfig, and the RESOLVED paths are stamped into the returned dict's
-    `config_files` key — making that field the one home for "which config files
-    were actually loaded". A non-existent user-passed path is dropped here (the
-    historical record is `cli_args`).
-    NOTE: this component does file I/O bypassing the Filesystem module"""
+    """The `--config FILE` paths arrive already split from argv. They are
+    resolved and loaded; the resolved paths are stamped into the `config_files`
+    field so it holds the single-source truth of what was loaded. Falls back
+    to the default search paths when no --config was given."""
 
     def __init__(self, settings_cls, requested: list[str] | None = None):
         super().__init__(settings_cls)
@@ -127,7 +114,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
     def __call__(self) -> dict[str, Any]:
         resolved = sources.resolve_config_files(self._requested)
         data = sources.load_paths(resolved)
-        data["config_files"] = resolved
+        data["config_files"] = resolved  # stamp so the field is the one home
         return data
 
 
@@ -181,18 +168,9 @@ def _compose_section(
     model_name: str,
     config_dict: Any = _MUTABLE,
 ) -> None:
-    """Attach one validated field per entry to a placeholder section by
-    rebuilding the model class — `config.tools` and `config.plugins.*` get
-    their real schema from the tool/hook list, so adding one touches nothing
-    here. `config_dict` is `_MUTABLE_ALLOW` for plugin sections (an unknown
-    plugin's config block PRESERVES through /config save as `model_extra`).
-
-    Example:
-        target=PluginsConfig, field_name="hooks",
-        pairs=[("shellcheck", ShellcheckConfig), ("trafilatura", ToolConfig)]
-        → PluginsConfig.hooks becomes a model with fields
-          {shellcheck: ShellcheckConfig, trafilatura: ToolConfig}.
-    """
+    """Build a composed model from (name, config_model) pairs and swap it into
+    `target.<field_name>` — one field per entry, so adding a tool/hook needs
+    no change here. `config_dict` is `_MUTABLE_ALLOW` for plugin sections."""
     fields: dict[str, Any] = {
         name: (config_model, Field(default_factory=config_model))
         for name, config_model in pairs
@@ -324,11 +302,8 @@ class SolveigConfig(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        """Decide the settings-source stack. cli_args is the definitive boot
-        record — the hook reads it from init_kwargs (None → sys.argv, a list →
-        that, [] → hermetic) and parsed argv feeds the CLI source. The field is
-        stamped to the real argv post-construction so it's never None on the
-        instance."""
+        """Build the settings-source stack. CLI args flow through cli_args;
+        --config flags are split out for ConfigFileSource."""
         argv = init_settings.init_kwargs.get("cli_args")
         if argv == []:
             return (init_settings,)
@@ -393,12 +368,8 @@ class SolveigConfig(BaseSettings):
     # Tool/Hook section schema
     # ------------------------------------------------------------
     def is_tool_enabled(self, tool_name: str) -> bool:
-        """The single enable/disable rule for a tool, by name — the one home that
-        spans every namespace a tool's `enabled` flag can live in: a core tool
-        (`tools.<name>`) or a plugin tool (`plugins.tools.<name>`) is on iff its
-        `.enabled` flag is set; an unknown name → True (on by default). Both the
-        LLM-path filter (`is_tool_active`) and the `run_tool_and_hooks` guard use
-        this one rule."""
+        # The one home for "is this tool on?" — checks core tools, then
+        # plugin tools, defaults to True for an unknown name.
         tools = self.tools
         if tool_name in type(tools).model_fields:
             return bool(getattr(tools, tool_name).enabled)
@@ -408,10 +379,9 @@ class SolveigConfig(BaseSettings):
         return True
 
     def is_hook_enabled(self, hook_name: str) -> bool:
-        """The enable/disable rule for a hook, by name — the parallel of
-        `is_tool_enabled` for the `plugins.hooks.<name>` namespace. A hook is on iff
-        its `.enabled` flag is set; an unknown name → True (on by default). The gate
-        `run_tool_and_hooks` consults before firing each registered hook."""
+        # The one home for "is this hook on?" — checks plugins.hooks.<name>,
+        # defaults to True for an unknown name. run_tool_and_hooks consults
+        # this before firing each registered hook.
         hooks = self.plugins.hooks
         if hook_name in type(hooks).model_fields:
             return bool(getattr(hooks, hook_name).enabled)
@@ -419,14 +389,8 @@ class SolveigConfig(BaseSettings):
 
     @classmethod
     def compose_core_tools(cls) -> None:
-        """Build the `config.tools` section from the core tool list — one field per
-        tool (`tool_name()` → its `config_model`) — so `config` never hand-enumerates
-        core tools; adding a core tool needs no change here.
-
-        Called once from `config/__init__.py` *after* the `SolveigConfig` re-export
-        (the load order that lets each tool module resolve its top-level `from
-        solveig.config import SolveigConfig`), and re-run only on a genuine
-        tool-membership change — never per tool call."""
+        """Build `config.tools` from the core tool list — one field per tool,
+        so adding a core tool needs no change here."""
         from solveig.tools import CORE_TOOLS
 
         pairs = [(tool.tool_name(), tool.config_model) for tool in CORE_TOOLS]
@@ -434,12 +398,10 @@ class SolveigConfig(BaseSettings):
 
     @classmethod
     def compose_plugin_tools(cls) -> None:
-        """Build the `config.plugins.tools` section from the discovered plugin tools
-        — the plugin parallel of `compose_core_tools`, and phase 2 of the two-phase
-        bootstrap (parse → discover → compose → reparse). Reads each entry's config
-        type via `config_model_of` (a `BaseTool` ClassVar or a callable's
-        `@tool(config_model=…)` stash), so plugin config validates like core config.
-        Rebuilds `SolveigConfig` too, since it embeds `PluginsConfig`."""
+        """Build `config.plugins.tools` from the discovered plugin tools — the
+        plugin parallel of `compose_core_tools`. Each entry's config type is
+        a declared field (BaseTool ClassVar or FunctionTool.config_model),
+        so plugin config validates like core config."""
         from solveig.plugins.tools import (
             PLUGIN_TOOLS,
             config_model_of,
@@ -454,12 +416,9 @@ class SolveigConfig(BaseSettings):
 
     @classmethod
     def compose_plugin_hooks(cls) -> None:
-        """Build the `config.plugins.hooks` section from the discovered hooks —
-        the hook parallel of `compose_plugin_tools`. `config_by_hook` is
-        `hooks_config_map()`'s deduped {hook_name: config_model}; a hook's
-        config type is declared on the Hook class (`config_model`), defaulting
-        to bare `ToolConfig` (enabled-only). Rebuilds `SolveigConfig` too,
-        since it embeds `PluginsConfig`."""
+        """Build `config.plugins.hooks` from the discovered hooks — the hook
+        parallel of `compose_plugin_tools`. A hook's config type is declared
+        on the Hook class (`config_model`), defaulting to bare `ToolConfig`."""
         from solveig.plugins.hooks import hooks_config_map
 
         _compose_section(
@@ -499,9 +458,10 @@ class SolveigConfig(BaseSettings):
         as are `exclude=True` CLI-only fields (derived from the declaration,
         not a hand-kept name list)."""
         declared = _dict_to_dotted_leaves(sources.load_paths(self.config_files))
-        _, argv = _split_config_path_from_cli_args(
-            self.cli_args
-        )  # CliSettingsSource rejects --config
+        if self.cli_args is not None:
+            _, argv = _split_config_path_from_cli_args(
+                self.cli_args
+            )  # CliSettingsSource rejects --config
         if argv:
             cli: CliSettingsSource = CliSettingsSource(
                 type(self),
