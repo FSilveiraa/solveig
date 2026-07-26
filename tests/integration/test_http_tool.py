@@ -211,7 +211,13 @@ async def test_output_file_accept_writes_response_to_disk(local_http_server, tmp
 
     result = await HttpTool(
         url=str(server.make_url("/")), output_file=str(output_path)
-    ).execute(*make_ctx(interface=interface))
+    ).execute(*make_ctx(
+        config=SolveigConfig(
+            cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
+            min_disk_space_left=0,
+        ),
+        interface=interface,
+    ))
 
     assert result.issues == []
     assert output_path.read_text() == "downloaded content"
@@ -226,7 +232,13 @@ async def test_output_file_decline_leaves_no_file(local_http_server, tmp_path):
 
     result = await HttpTool(
         url=str(server.make_url("/")), output_file=str(output_path)
-    ).execute(*make_ctx(interface=interface))
+    ).execute(*make_ctx(
+        config=SolveigConfig(
+            cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
+            min_disk_space_left=0,
+        ),
+        interface=interface,
+    ))
 
     assert result.issues == []
     assert "declined to write" in result.content.lower()

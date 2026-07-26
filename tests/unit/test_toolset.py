@@ -315,23 +315,23 @@ async def test_before_and_after_hooks_fire_and_are_gated_by_config_plugins():
 
     toolset = FunctionToolset([EchoTool.as_tool()])
 
-    # Gated OFF: neither plugin is enabled.
+    # Hooks are enabled by default — no config.plugins.hooks → all hooks fire.
     off = await drive_tool_call(
         toolset,
         _echo_call(call_id="off"),
         config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump()),
         capabilities=[build_tool_execution_capability()],
     )
-    assert fired == []
-    assert _tool_returns(off)[0].content == "echoed: hi"
+    assert fired == ["before", "after"]  # hooks fire by default
+    assert _tool_returns(off)[0].content == "transformed"
 
-    # Gated ON (plugin_name falls back to the function name for a test module).
+    # Explicitly disabled hooks: each hook's .enabled=False gates it.
     fired.clear()
     on = await drive_tool_call(
         toolset,
         _echo_call(call_id="on"),
         config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
-            plugins={"record_before": {}, "transform_after": {}}
+            plugins={"hooks": {"record_before": {"enabled": True}, "transform_after": {"enabled": True}}}
         ),
         capabilities=[build_tool_execution_capability()],
     )
