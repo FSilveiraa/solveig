@@ -34,6 +34,12 @@ from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 
+import shutil
+_needs_shellcheck = pytest.mark.skipif(
+    shutil.which("shellcheck") is None,
+    reason="shellcheck binary not installed",
+)
+
 
 @pytest.fixture(autouse=True, scope="module")
 def _compose_and_build_config():
@@ -68,6 +74,7 @@ class TestDangerousPatternDetection:
             )
 
 
+@_needs_shellcheck
 class TestShellcheckHookDirect:
     """Calling the hook function directly - no toolset/registry involved."""
 
@@ -159,6 +166,7 @@ class TestShellcheckDiscoveryAndRegistration:
                 assert not any(plugin_name(hook) == "shellcheck" for hook in hooks)
 
 
+@_needs_shellcheck
 class TestShellcheckBlocksCommandThroughOrchestration:
     """Full stack: real registry + the real `run_tool_and_hooks` seam, proving
     shellcheck actually blocks a real `CommandTool` call when wired in - not
