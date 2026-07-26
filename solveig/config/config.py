@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from anyio import Path
 from pydantic import (
@@ -239,6 +239,11 @@ class SolveigConfig(BaseSettings):
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
     )  # use `--mcp-url URL`
+    # The argv this instance was booted from. Passed as a constructor kwarg by
+    # parse_config_and_prompt, read back by settings_customise_sources (via
+    # init_settings) to build the CLI source, and kept as the durable record.
+    # None (default) = hermetic construction — no CLI/env/file reads.
+    cli_args: list[str] | None = Field(default=None, exclude=True)
 
     # --- runtime (not persisted; NOT config fields) ---
     # loaded config files, used by /config save ([0] = highest precedence = save target)
@@ -247,16 +252,6 @@ class SolveigConfig(BaseSettings):
     _declared: set[str] = PrivateAttr(default_factory=set)
     # observers for field changes
     _observers: list[ConfigObserver] = PrivateAttr(default_factory=list)
-    # The argv this instance was booted from. [] or a list = boot parse;
-    # None = hermetic construction (tests, direct SolveigConfig(**kwargs)).
-    _boot_argv: list[str] | None = PrivateAttr(default=None)
-
-    # Transient bridge: settings_customise_sources is a classmethod pydantic
-    # calls inside cls(), before any instance exists — the only place a CLI
-    # source can be built, and the only moment argv is needed. Set by
-    # parse_config_and_prompt for the duration of one construction; the
-    # durable record lives on the instance as _boot_argv.
-    _argv_at_boot: ClassVar[list[str] | None] = None
 
     def subscribe(self, observer: ConfigObserver) -> None:
         """Register a runtime reaction to config changes."""
@@ -288,9 +283,10 @@ class SolveigConfig(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        argv = cls._argv_at_boot
+        # argv arrives as a constructor kwarg (init_settings carries the init
+        # kwargs). None = hermetic: explicit kwargs only, no CLI/env/file reads.
+        argv = init_settings.init_kwargs.get("cli_args")
         if argv is None:
-            # Direct construction from explicit kwargs — hermetic, no CLI/file/env reads.
             return (init_settings,)
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files. pydantic
         # deep-merges nested models across sources and validates.
@@ -444,15 +440,15 @@ class SolveigConfig(BaseSettings):
 
     def _record_declared(self) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
-        config file(s) and the command line (`_boot_argv`) — what `/config save`
+        config file(s) and the command line (`cli_args`) — what `/config save`
         persists. Env-provided values are transient and intentionally excluded,
         as are `exclude=True` CLI-only fields (derived from the declaration,
         not a hand-kept name list)."""
         declared = _dict_to_dotted_leaves(sources.load_paths(self._loaded_paths))
-        if self._boot_argv is not None:
+        if self.cli_args is not None:
             cli: CliSettingsSource = CliSettingsSource(
                 type(self),
-                cli_parse_args=self._boot_argv,
+                cli_parse_args=self.cli_args,
                 cli_shortcuts=_CLI_SHORTCUTS,
                 **_CLI_OPTS,
             )
@@ -468,14 +464,7 @@ class SolveigConfig(BaseSettings):
         argv = list(sys.argv[1:] if cli_args is None else cli_args)
 
         def _parse() -> SolveigConfig:
-            token = cls._argv_at_boot
-            cls._argv_at_boot = argv
-            try:
-                cfg = cls()  # pydantic parses CLI + env + files, then validates
-            finally:
-                cls._argv_at_boot = token
-            cfg._boot_argv = argv
-            return cfg
+            return cls(cli_args=argv)  # argv flows in as a constructor kwarg
 
         # Two-phase bootstrap: parse once to learn plugins.paths, discover
         # plugin tools/hooks, compose their schema — so the second parse
