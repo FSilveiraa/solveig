@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import warnings
 from typing import Any, Protocol
@@ -40,7 +39,7 @@ from solveig.config.models import (
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 
 __all__ = [
-    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_CONFIG_PATHS",
     "DEFAULT_SYSTEM_PROMPT",
     "ConfigObserver",
     "SolveigConfig",
@@ -48,12 +47,15 @@ __all__ = [
     "set_config_value",
 ]
 
-DEFAULT_CONFIG_PATH = os.path.expanduser("~/.solveig/config.json")
-
+# Default paths for config files and plugins. CLI/config overrides these, does not append
+DEFAULT_CONFIG_PATHS = [
+    "./.solveig/config.yaml",
+    "~/.solveig/config.yaml",
+]
 DEFAULT_PLUGIN_PATHS = [
     "./.solveig/plugins",
     "~/.solveig/plugins",
-]  # built-in plugin dirs; plugin discovery appends external paths to this
+]
 
 # Options for CliSettingsSource to parse — mirrors tools/base.py CLI_PARSE_OPTS.
 _CLI_OPTS: dict[str, Any] = {
@@ -246,7 +248,7 @@ class SolveigConfig(BaseSettings):
     # paths, or the default search results when no --config was passed. Stamped
     # by ConfigFileSource at parse; [0] is the /config save target. The one home
     # for "which config files were loaded".
-    config_files: list[str] = Field(default_factory=list, exclude=True)
+    config_files: list[str] = Field(default=DEFAULT_CONFIG_PATHS, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
@@ -454,22 +456,20 @@ class SolveigConfig(BaseSettings):
     def _record_declared(self) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
         config file(s) and the command line (`cli_args`) — what `/config save`
-        persists. Env-provided values are transient and intentionally excluded,
-        as are `exclude=True` CLI-only fields (derived from the declaration,
-        not a hand-kept name list)."""
+        persists. Excludes env vars and CLI-only fields (`exclude=True`)"""
         declared = _dict_to_dotted_leaves(sources.load_paths(self.config_files))
         if self.cli_args is not None:
             _, argv = _split_config_path_from_cli_args(
                 self.cli_args
             )  # CliSettingsSource rejects --config
-        if argv:
-            cli: CliSettingsSource = CliSettingsSource(
-                type(self),
-                cli_parse_args=argv,
-                cli_shortcuts=_CLI_SHORTCUTS,
-                **_CLI_OPTS,
-            )
-            declared |= _dict_to_dotted_leaves(cli() or {})
+            if argv:
+                cli: CliSettingsSource = CliSettingsSource(
+                    type(self),
+                    cli_parse_args=argv,
+                    cli_shortcuts=_CLI_SHORTCUTS,
+                    **_CLI_OPTS,
+                )
+                declared |= _dict_to_dotted_leaves(cli() or {})
         self._declared_fields = {
             path
             for path in declared

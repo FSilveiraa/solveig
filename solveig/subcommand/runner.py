@@ -20,7 +20,7 @@ from pydantic import ByteSize, SecretStr, ValidationError
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.api import ProviderRef
-from solveig.config import DEFAULT_CONFIG_PATH, MCPServerConfig, SolveigConfig, sources
+from solveig.config import DEFAULT_CONFIG_PATHS, MCPServerConfig, SolveigConfig, sources
 from solveig.config.editor import (
     editable_fields,
     get_config_value,
@@ -264,7 +264,7 @@ class SubcommandRunner:
         default path. Writing just config._declared (not a full dump) keeps the
         saved file minimal — only what the user actually set.
         """
-        target = path or (self.config.config_files or [DEFAULT_CONFIG_PATH])[0]
+        target = path or (self.config.config_files or DEFAULT_CONFIG_PATHS)[0]
         try:
             sources.save_config(self.config.declared_config(), target)
         except OSError as e:

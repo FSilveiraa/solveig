@@ -1,5 +1,5 @@
 from .config import (
-    DEFAULT_CONFIG_PATH,
+    DEFAULT_CONFIG_PATHS,
     DEFAULT_SYSTEM_PROMPT,
     ConfigObserver,
     SolveigConfig,
@@ -12,7 +12,7 @@ __all__ = [
     "SolveigConfig",
     "ConfigObserver",
     "MCPServerConfig",
-    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_CONFIG_PATHS",
     "DEFAULT_SYSTEM_PROMPT",
     "get_config_value",
     "set_config_value",
