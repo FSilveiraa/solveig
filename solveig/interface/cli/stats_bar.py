@@ -24,16 +24,20 @@ class StatsTable(DataTable):
 
 
 class StatsBar(Widget):
-    """Stats bar with collapsible table content."""
+    """Stats bar with collapsible table content.  Observes config changes
+    reactively; click-to-edit prompts the user then writes through
+    ``config.set()`` — the observer loop handles the display refresh."""
 
     def __init__(
         self,
         theme: Palette,
         interface_ref: SolveigInterface | None = None,
+        config = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._interface_ref = interface_ref
+        self._config = config
         self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
@@ -139,28 +143,44 @@ class StatsBar(Widget):
             )
 
     def on_mount(self):
-        """Populate tables and title after mount."""
+        """Populate tables, title, and subscribe to config for auto-refresh."""
         self._refresh_title()
         self._refresh_stats()
 
+        config = self._config
+        if config is not None:
+
+            @config.on_change("api.model", "api.url", "api.max_context")
+            async def _on_stats_change(config, paths):
+                self.update(
+                    model=config.api.model,
+                    url=config.api.url,
+                    max_context=config.api.max_context,
+                )
+
     async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-        """Clicking an editable stat cell opens its config prompt."""
+        """Clicking an editable stat cell prompts the user then writes through
+        ``config.set()`` — the observer (AppConfigSubscriber) refreshes the display."""
         if not isinstance(event.data_table, StatsTable):
             return
         field_name = event.data_table.row_fields[event.coordinate.row]
 
         interface = self._interface_ref
-        if interface is None or interface.on_edit_config_field is None:
+        config = self._config
+        if interface is None or config is None:
             return
 
         if field_name is None:
             await interface.update_stats(status="This stat isn't editable", duration=2)
             return
 
+        from solveig.config.editor import prompt_for_field
+
         try:
-            await interface.on_edit_config_field(interface, field_name)
+            new_value = await prompt_for_field(field_name, config, interface)
         except UserCancel:
-            pass
+            return
+        await config.set(field_name, new_value)
 
     def update(
         self,

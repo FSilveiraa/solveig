@@ -226,11 +226,10 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     async def execute(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> ToolResult:
-        """Run the tool live: header, previews, consent, side effects, banners.
-        Owns the whole interactive flow (consent often depends on values
-        computed mid-body, e.g. a diff), and returns the `ToolResult` the model
-        sees. The body should call `await self.display_header(interface)` at the
-        top so the intent header is identical live and on replay."""
+        """Run the tool live: consent, side effects, banners.  The group is
+        already open and ``display_header()`` has already been called (by the
+        orchestration loop), so execute() starts straight into its consent and
+        work — it never touches display_header itself."""
         raise NotImplementedError
 
     @property

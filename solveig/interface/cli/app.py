@@ -51,6 +51,7 @@ class SolveigTextualApp(TextualApp):
         inbox: UserMessageQueue | None = None,
         auto_copy_selection: bool = True,
         interface_ref: SolveigInterface | None = None,
+        config = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -58,9 +59,8 @@ class SolveigTextualApp(TextualApp):
         self._theme = theme
         self._inbox = inbox
         self._auto_copy_selection = auto_copy_selection
-        # Back-reference to the SolveigInterface that owns this app, for
-        # cancellation checks (on_key/on_event) and stat-cell click handling.
         self._interface_ref = interface_ref
+        self._config = config
 
         # Register every palette as a Textual theme and select the configured
         # one, so the widget CSS's $section/$box/$group/... variables resolve and
@@ -101,6 +101,7 @@ class SolveigTextualApp(TextualApp):
             id="stats",
             theme=self._theme,
             interface_ref=self._interface_ref,
+            config=self._config,
         )
 
     def on_mount(self) -> None:

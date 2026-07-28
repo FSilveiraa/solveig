@@ -43,8 +43,6 @@ __all__ = [
     "DEFAULT_SYSTEM_PROMPT",
     "ConfigObserver",
     "SolveigConfig",
-    "get_config_value",
-    "set_config_value",
 ]
 
 # Default paths for config files and plugins. CLI/config overrides these, does not append
@@ -95,7 +93,7 @@ def _split_config_path_from_cli_args(
 class ConfigObserver(Protocol):
     """A runtime subscriber that reacts to dotted config paths changing."""
 
-    async def config_changed(
+    async def on_config_changed(
         self, config: SolveigConfig, paths: frozenset[str]
     ) -> None: ...
 
@@ -123,32 +121,8 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 
 
 # ---------------------------------------------------------------------------
-# Dotted paths utils (config.api.url -> "api.url")
+# Utils
 # ---------------------------------------------------------------------------
-
-
-def _resolve(config: SolveigConfig, dotted: str) -> tuple[Any, str]:
-    """Walk a dotted path to its leaf, returning (owning_model, leaf_name)."""
-    obj: Any = config
-    *parents, leaf = dotted.split(".")
-    for part in parents:
-        obj = getattr(obj, part)
-    return obj, leaf
-
-
-def get_config_value(config: SolveigConfig, dotted: str) -> Any:
-    obj, leaf = _resolve(config, dotted)
-    return getattr(obj, leaf)
-
-
-def set_config_value(config: SolveigConfig, dotted: str, value: Any) -> Any:
-    """Set a dotted leaf; returns the previous value. validate_assignment on
-    the leaf's owning model re-validates (str → APIType/Palette/ByteSize, …)."""
-    obj, leaf = _resolve(config, dotted)
-    old = getattr(obj, leaf)
-    setattr(obj, leaf, value)
-    return old
-
 
 def _dict_to_dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
     """Flatten a nested config dict into dotted leaf paths (`api.url`,
@@ -265,36 +239,80 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
     _declared_fields: set[str] = PrivateAttr(default_factory=set)
-    # observers for field changes
-    _observers: list[ConfigObserver] = PrivateAttr(default_factory=list)
+    # observers for field changes: (callback, paths_filter | None)
+    _observers: list[tuple[ConfigObserver, frozenset[str] | None]] = PrivateAttr(
+        default_factory=list
+    )
+
 
     # ------------------------------------------------------------
     # Config change observers
     # ------------------------------------------------------------
-    def subscribe(self, observer: ConfigObserver) -> None:
-        """Register a runtime reaction to config changes."""
-        self._observers.append(observer)
+
+    def subscribe(
+        self,
+        observer: ConfigObserver,
+        paths: frozenset[str] | None = None,
+    ) -> None:
+        """Register a runtime reaction to config changes.  When *paths* is
+        given the observer is only notified for those dotted paths; *None*
+        means "notify me of every change".
+        """
+        self._observers.append((observer, paths))
 
     async def notify_changed(self, paths: frozenset[str]) -> None:
-        """Fan out to every observer after a user edit of `paths` (dotted)."""
-        for observer in self._observers:
-            await observer.config_changed(self, paths)
+        """Fan out to every observer whose path filter matches *paths*."""
+        for observer, filter_paths in self._observers:
+            if filter_paths is None or (paths & filter_paths):
+                await observer.on_config_changed(self, paths)
 
-    async def change_field(self, dotted: str, value: Any) -> bool:
-        """The single user-edit write seam: set a dotted field, record it in
-        `_declared`, and notify observers — only when the value actually
-        changed (returns False on a no-op set). Internal writers that must
-        stay silent (fetch_and_apply_model_info) use set_config_value directly."""
-        old = set_config_value(self, dotted, value)
-        if old == get_config_value(self, dotted):
+    def on_change(self, *paths: str):
+        """Decorator: register a callback for the given *paths*.  Empty
+        *paths* means every change.  Usage::
+
+            @config.on_change("api.model", "api.url")
+            async def _on_api_change(config, paths): ...
+        """
+        filt = frozenset(paths) if paths else None
+
+        def register(fn):
+            self._observers.append((fn, filt))
+            return fn
+        return register
+
+    def get(self, dotted: str) -> Any:
+        obj, leaf = self._resolve(dotted)
+        return getattr(obj, leaf)
+
+    async def set(self, dotted: str, value: Any, *, notify: bool = True) -> bool:
+        """The single user-edit write seam.  Record in *_declared* and — when
+        the value actually changed — notify observers.  Pass *notify=False* for
+        internal writes (e.g. max_context from a model-fetch) that must be
+        visible but shouldn't re-trigger dependent observers."""
+        obj, leaf = self._resolve(dotted)
+        old = getattr(obj, leaf)
+        setattr(obj, leaf, value)
+        new = getattr(obj, leaf)
+        if old == new:
             return False
         self._declared_fields.add(dotted)
-        await self.notify_changed(frozenset({dotted}))
+        if notify:
+            await self.notify_changed(frozenset({dotted}))
         return True
+
+    def _resolve(self, dotted: str) -> tuple[Any, str]:
+        """Walk a dotted path to its leaf, returning (owning_model, leaf_name)."""
+        *parents, leaf = dotted.split(".")
+        obj: Any = self
+        for part in parents:
+            obj = getattr(obj, part)
+        return obj, leaf
+
 
     # ------------------------------------------------------------
     # Pydantic overrides/validators
     # ------------------------------------------------------------
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -369,6 +387,7 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Tool/Hook section schema
     # ------------------------------------------------------------
+
     def is_tool_enabled(self, tool_name: str) -> bool:
         # The one home for "is this tool on?" — checks core tools, then
         # plugin tools, defaults to True for an unknown name.
@@ -435,6 +454,7 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Explicitly declared config fields
     # ------------------------------------------------------------
+
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared`) — what `/config save` persists.
@@ -479,6 +499,7 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Entrypoint
     # ------------------------------------------------------------
+
     @classmethod
     async def parse_config_and_prompt(
         cls, cli_args: list[str] | None = None

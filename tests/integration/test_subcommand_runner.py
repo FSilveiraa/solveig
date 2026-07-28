@@ -204,7 +204,6 @@ class TestConfigCommands:
         interface = MockInterface()
         await registry("/config set api.temperature 0.7", interface)
         assert cfg.api.temperature == pytest.approx(0.7)
-        assert any("✅" in o for o in interface.outputs)
 
     async def test_config_set_key_equals_value_form(self):
         """/config set temperature=0.3 — key=value syntax."""

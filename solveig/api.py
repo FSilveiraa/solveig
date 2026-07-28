@@ -24,16 +24,49 @@ class ModelInfo:
 
 @dataclass
 class ProviderRef:
-    """Mutable holder for the current provider connection, enabling runtime replacement.
-
-    Also caches `model_info` — the API-reported model facts (context length,
-    pricing) fetched at startup / on `/model refresh`. It's provider state, not
-    config: reported BY the API this ref connects to, never user-set, and it
-    invalidates when the provider or model changes (the `api.model` post-set
-    hook clears it)."""
+    """Mutable holder for the current provider connection, enabling runtime
+    replacement.  Subscribes to config changes at construction: on api.model/
+    api.url/api.type change, builds a new provider locally and only swaps on
+    success — the old provider stays live until the replacement is proven.
+    On failure, reverts the model so the UI sees the reversion."""
 
     provider: Provider
+    config: "SolveigConfig"
     model_info: ModelInfo | None = None
+
+    def __post_init__(self):
+        @self.config.on_change("api.model", "api.url", "api.type")
+        async def _on_change(config: "SolveigConfig", paths: frozenset[str]) -> None:
+            if (
+                self.model_info
+                and self.model_info.model == config.api.model
+            ):
+                return  # already using this config
+
+            old_model = config.api.model
+            try:
+                new_provider = config.api.type.get_provider(
+                    url=config.api.url,
+                    api_key=config.api.key.get_secret_value(),
+                )
+                info = await config.api.type.get_model_details(
+                    provider=new_provider, model=config.api.model
+                )
+            except Exception:
+                await config.set("api.model", old_model)
+                return
+
+            if info is None:
+                await config.set("api.model", old_model)
+                return
+
+            # Success — atomic swap, silent max-context update
+            self.provider = new_provider
+            self.model_info = info
+            if info.context_length is not None:
+                await config.set(
+                    "api.max_context", info.context_length, notify=False
+                )
 
 
 class APIType:
@@ -270,7 +303,7 @@ async def model_set(
     model: str,
 ) -> None:
     """Set the active model."""
-    changed = await config.change_field("api.model", model.strip())
+    changed = await config.set("api.model", model.strip())
     if changed:
         await interface.display_info(f"Model set to {model}. Fetching details...")
     else:

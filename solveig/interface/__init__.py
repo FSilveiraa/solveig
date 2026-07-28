@@ -7,7 +7,7 @@ async display methods (`display_text`/`display_error`/...), input
 subscription handshake (`attach_conversation`). Two cross-cutting concerns
 live on the protocol deliberately:
 
-- **Producer callbacks** (`on_user_input`, `on_edit_config_field`) - the
+- **Producer callbacks** (`on_user_input`) — the
   interface never names app objects (runner, UserMessageQueue); run.py wires these at
   construction to the session's input routing (decision D5).
 - **Cancellation** (`with_cancellable`, the `_active_tasks` registry,

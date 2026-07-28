@@ -5,7 +5,7 @@ The display protocol for Solveig's frontends.
 render (display_*), ask (ask_*), scope output (with_group), status and
 animations, theming, and the reactive handshake (attach_conversation). It
 deliberately also carries the two concerns every interactive frontend shares
-- producer callbacks (on_user_input/on_edit_config_field, wired by run.py)
+- producer callbacks (on_user_input, wired by run.py)
 and cancellation (with_cancellable + the _active_tasks registry + the
 cancel_task verb). App-session state (the input UserMessageQueue) and command dispatch live
 OUTSIDE the interface - see solveig/inbox.py and decisions D0/D5.
@@ -65,7 +65,7 @@ class SolveigInterface(ABC):
     Two cross-cutting concerns are protocol-level ON PURPOSE (every UI with
     user input shares them, so a frontend never re-implements them):
 
-    - **Producer callbacks** (`on_user_input`, `on_edit_config_field`) -
+    - **Producer callbacks** (`on_user_input`) -
       wired by run.py at construction; the interface produces input without
       naming app objects (the UserMessageQueue, the SubcommandRunner). Decision D5.
     - **Cancellation** (`with_cancellable`, the `_active_tasks`
@@ -86,11 +86,6 @@ class SolveigInterface(ABC):
     # Wired exactly once: by constructor (real frontends) or by the
     # composition root's `wire_interface` (injected test/demo interfaces).
     on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None
-    # App-wired click-to-edit callback (stats bar cells), same shape:
-    # `on_edit_config_field(self, field_name)`. Same wiring rule as above.
-    on_edit_config_field: Callable[[SolveigInterface, str], Awaitable[None]] | None = (
-        None
-    )
 
     _root_ref: SolveigInterface | None = None
     _active_tasks_ref: dict[asyncio.Task, None] | None = None

@@ -2,11 +2,11 @@
 Generic config editor for SolveigConfig — the UI half.
 
 Type-aware prompting (ask_choice/ask_question per field type) and raw-string
-parsing for `/config set`. The write seam itself lives on the config:
-`SolveigConfig.change_field(dotted, value)` sets, records `_declared_fields`, and
-notifies observers; traversal helpers (`get_config_value`/`set_config_value`)
-live in config.py next to it. Fields are addressed by DOTTED PATH into the
-nested schema (`api.model`, `tools.http.timeout`, `interface.theme`).
+parsing for `/config set`. The write seam lives on the config:
+`SolveigConfig.set(dotted, value)` sets, records `_declared_fields`, and
+notifies observers.  Callers handle their own display; the config doesn't.
+Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
+`tools.http.timeout`, `interface.theme`).
 """
 
 import re
@@ -21,7 +21,7 @@ from solveig.interface import SolveigInterface, themes
 from solveig.subcommands.base import subcommand
 
 from . import sources
-from .config import DEFAULT_CONFIG_PATHS, SolveigConfig, _resolve, get_config_value
+from .config import DEFAULT_CONFIG_PATHS, SolveigConfig
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.
@@ -83,7 +83,7 @@ def _unwrap_optional(tp: Any) -> Any:
 
 def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
     """The (optional-unwrapped) declared type of a dotted field's leaf."""
-    obj, leaf = _resolve(config, dotted)
+    obj, leaf = config._resolve(dotted)
     return _unwrap_optional(typing.get_type_hints(type(obj))[leaf])
 
 
@@ -116,7 +116,7 @@ def _parse_field_value(tp: Any, raw: str) -> Any:
 
 def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
     """Parse a raw `/config set <field> <value>` string into the leaf field's
-    Python type. The subsequent set_config_value/setattr validates it."""
+    Python type. The subsequent setattr validates it."""
     return _parse_field_value(_leaf_type(config, dotted), raw)
 
 
@@ -151,7 +151,7 @@ async def prompt_for_field(
     """
     raw_type = _leaf_type(config, field_name)
     description = editable_fields(config).get(field_name, field_name)
-    current = get_config_value(config, field_name)
+    current = config.get(field_name)
 
     # --- Choices declared on the field itself (`json_schema_extra={"choices": …}`) —
     # the generic case: any field whose options live in its declaration prompts
@@ -211,7 +211,7 @@ async def config_list(config: SolveigConfig, interface: SolveigInterface) -> Non
     """List editable config fields with their current values."""
     lines = []
     for field_name, _description in editable_fields(config).items():
-        value = get_config_value(config, field_name)
+        value = config.get(field_name)
         display = _format_field_value(value)
         lines.append(f"{field_name:<32} = {display}")
     await interface.display_text_box("\n".join(lines), title="Config (editable fields)")
@@ -229,7 +229,7 @@ async def config_get(
             f"Unknown field: '{field_name}'. Use /config list to see all fields."
         )
         return
-    value = get_config_value(config, field_name)
+    value = config.get(field_name)
     display = _format_field_value(value)
     await interface.display_info(f"{field_name} = {display}  ({fields[field_name]})")
 
@@ -260,16 +260,11 @@ async def config_set(
         return
 
     if not value:
-        await _edit_config_field(config, interface, field_name)
-        return
-
-    try:
+        new_value = await prompt_for_field(field_name, config, interface)
+    else:
         new_value = parse_config_value(config, field_name, " ".join(value))
-    except (ValueError, KeyError) as e:
-        await interface.display_error(f"Invalid value for '{field_name}': {e}")
-        return
 
-    await _apply_and_confirm(config, interface, field_name, new_value)
+    await config.set(field_name, new_value)
 
 
 @subcommand("/config save", section="config", detail=True)
@@ -296,51 +291,8 @@ async def config_save(
 
 
 # ---------------------------------------------------------------------------
-# Shared helpers (exported for run.py stats-bar callback)
+# Display helpers
 # ---------------------------------------------------------------------------
-
-
-async def edit_config_field(
-    config: SolveigConfig, interface: SolveigInterface, field_name: str
-) -> None:
-    """Prompt for a field's new value and apply it. Used as the stats-bar
-    click-to-edit callback."""
-    await _edit_config_field(config, interface, field_name)
-
-
-async def _edit_config_field(
-    config: SolveigConfig, interface: SolveigInterface, field_name: str
-) -> None:
-    if field_name not in editable_fields(config):
-        await interface.display_error(
-            f"Unknown or non-editable field: '{field_name}'. "
-            "Use /config list to see all options."
-        )
-        return
-    try:
-        new_value = await prompt_for_field(field_name, config, interface)
-    except (ValueError, KeyError) as e:
-        await interface.display_error(f"Invalid value for '{field_name}': {e}")
-        return
-    await _apply_and_confirm(config, interface, field_name, new_value)
-
-
-async def _apply_and_confirm(
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    field_name: str,
-    new_value: object,
-) -> None:
-    old_value = get_config_value(config, field_name)
-    changed = await config.change_field(field_name, new_value)
-    if not changed:
-        await interface.display_info(f"config.{field_name} unchanged")
-        return
-    old_display = _format_field_value(old_value)
-    new_display = _format_field_value(new_value)
-    await interface.display_success(
-        f"Changed config.{field_name}: {old_display} → {new_display}"
-    )
 
 
 def _format_field_value(value: object) -> str:

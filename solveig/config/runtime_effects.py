@@ -9,7 +9,6 @@ model details from the API in reaction to a config change IS a runtime effect
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from solveig.api import ModelInfo, ModelNotFound
@@ -18,33 +17,6 @@ if TYPE_CHECKING:
     from solveig.api import ProviderRef
     from solveig.config.config import SolveigConfig
     from solveig.interface.base import SolveigInterface
-
-
-@dataclass
-class AppConfigSubscriber:
-    """Reacts to user-driven config edits that need interface/provider deps."""
-
-    interface: SolveigInterface
-    provider_ref: ProviderRef
-
-    async def config_changed(
-        self, config: SolveigConfig, paths: frozenset[str]
-    ) -> None:
-        if "interface.theme" in paths:
-            self.interface.set_theme(config.interface.theme)
-
-        if "interface.code_theme" in paths:
-            self.interface.set_code_theme(config.interface.code_theme)
-
-        if "api.max_context" in paths:
-            await self.interface.update_stats(max_context=config.api.max_context)
-
-        if "api.model" in paths:
-            # Invalidate cached model details, then refetch. Fetch assigns
-            # model/max_context directly and updates stats itself without
-            # notify_changed (re-entrancy guard — see SolveigConfig.subscribe).
-            self.provider_ref.model_info = None
-            await fetch_and_apply_model_info(config, self.provider_ref, self.interface)
 
 
 async def fetch_and_apply_model_info(
