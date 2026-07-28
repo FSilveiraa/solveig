@@ -35,3 +35,7 @@ demo session="":
 # Start the local mock MCP server for manual /mcp connect testing
 mcp:
     python tests/mocks/mcp_server.py
+
+# Force Hermes to re-create podman containers with re-read config
+hermes-restart:
+    podman rm -f $(podman ps -aq --filter label=hermes-agent=1)

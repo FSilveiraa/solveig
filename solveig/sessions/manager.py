@@ -26,6 +26,7 @@ from pydantic_core import to_jsonable_python
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
+from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
 
 
@@ -302,3 +303,82 @@ class SessionManager:
         await interface.display_text_box(
             text=header, language="markdown", title="Resumed session"
         )
+
+
+# ---------------------------------------------------------------------------
+# Subcommands — the session manager owns session lifecycle, so it declares
+# the surface.
+# ---------------------------------------------------------------------------
+
+
+@subcommand("/session list", "/sessions", section="session")
+async def session_list(
+    session_manager: SessionManager,
+    interface: SolveigInterface,
+) -> None:
+    """List stored sessions."""
+    sessions = await session_manager.list_sessions()
+    if not sessions:
+        await interface.display_info(
+            "No saved sessions. Sessions are auto-saved after each response."
+        )
+        return
+
+    lines: list[str] = []
+    for s in sessions:
+        lines.append(
+            f"{s['id']:<36}  {s['message_count']:>3} msgs  "
+            f"{s['total_tokens_sent'] + s['total_tokens_received']:>5} tokens"
+        )
+
+    await interface.display_text_box("\n".join(lines), title="Sessions")
+
+
+@subcommand("/session store", "/store", section="session", detail=True)
+async def session_store(
+    config: SolveigConfig,
+    conversation: Conversation,
+    session_manager: SessionManager,
+    interface: SolveigInterface,
+    name: str = "",
+) -> None:
+    """Store the current session (with optional name)."""
+    filename = await session_manager.store(
+        conversation, name=name.strip() or None
+    )
+    await interface.display_success(f"Session stored as {filename}")
+
+
+@subcommand("/session delete", section="session", detail=True)
+async def session_delete(
+    session_manager: SessionManager,
+    interface: SolveigInterface,
+    name: str,
+) -> None:
+    """Delete a stored session by name (supports fuzzy matching)."""
+    try:
+        filename = await session_manager.delete(name.strip())
+    except FileNotFoundError as e:
+        await interface.display_error(str(e))
+        return
+    await interface.display_success(f"Deleted session {filename}")
+
+
+@subcommand("/session resume", "/resume", section="session", detail=True)
+async def session_resume(
+    config: SolveigConfig,
+    conversation: Conversation,
+    session_manager: SessionManager,
+    interface: SolveigInterface,
+    name: str = "",
+) -> None:
+    """Resume a stored session by name (latest if omitted)."""
+    try:
+        session_data = await session_manager.load(name.strip() or None)
+    except FileNotFoundError as e:
+        await interface.display_error(str(e))
+        return
+
+    await session_manager.announce_resumed_session(session_data, interface)
+    await conversation.load(session_data["messages"], session_data["usage"])
+    await interface.display_success("Session resumed.")

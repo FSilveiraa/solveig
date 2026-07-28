@@ -2,7 +2,7 @@
 Tests for solveig.utils.filesystem module.
 
 The tool tests were first implemented and they already test the actual file
-operations, so this file focuses on testing the metadata class and size parsing.
+operations, so this file focuses on testing the metadata class.
 """
 
 from datetime import datetime
@@ -10,48 +10,8 @@ from datetime import datetime
 import pytest
 
 from solveig.utils.file import FileMetadata
-from solveig.utils.misc import parse_human_readable_size
 
 pytestmark = pytest.mark.anyio
-
-
-class TestSizeNotationParsing:
-    """Test size notation parsing functionality."""
-
-    async def test_parse_int_bytes(self):
-        """Test parsing integer bytes."""
-        assert parse_human_readable_size(1024) == 1024
-        assert parse_human_readable_size("1024") == 1024
-
-    async def test_parse_size_units(self):
-        """Test parsing various size units."""
-        assert parse_human_readable_size("1 KB") == 1000
-        assert parse_human_readable_size("1 MB") == 1000000
-        assert parse_human_readable_size("1 GB") == 1000000000
-        assert parse_human_readable_size("1 KiB") == 1024
-        assert parse_human_readable_size("1 MiB") == 1024**2
-        assert parse_human_readable_size("1 GiB") == 1024**3
-
-    async def test_parse_decimal_sizes(self):
-        """Test parsing decimal sizes."""
-        assert parse_human_readable_size("1.5 KB") == 1500
-        assert parse_human_readable_size("2.5 GiB") == int(2.5 * 1024**3)
-
-    async def test_parse_invalid_unit(self):
-        """Test parsing invalid units raises ValueError."""
-        with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_human_readable_size("1 XB")
-
-    async def test_parse_invalid_format(self):
-        """Test parsing invalid format raises ValueError."""
-        with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_human_readable_size("invalid")
-        with pytest.raises(ValueError, match="not a valid disk size"):
-            parse_human_readable_size("1.2.3 GB")
-
-    async def test_parse_none_returns_zero(self):
-        """Test parsing None returns 0."""
-        assert parse_human_readable_size(None) == 0
 
 
 class TestMetadata:

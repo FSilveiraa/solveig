@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from solveig.subcommand.base import Subcommand
+from solveig.subcommands.base import Subcommand
 
 pytestmark = [pytest.mark.anyio]
 

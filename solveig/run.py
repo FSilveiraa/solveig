@@ -9,6 +9,7 @@ awaits interface.start(). When the interface exits, the Task is cancelled.
 
 import asyncio
 import contextlib
+import functools
 import sys
 import traceback
 import warnings
@@ -19,6 +20,7 @@ from solveig import system_prompt
 from solveig.agent import run_turn_with_retry
 from solveig.api import ProviderRef, get_provider
 from solveig.config import SolveigConfig
+from solveig.config.editor import edit_config_field
 from solveig.config.runtime_effects import (
     AppConfigSubscriber,
     fetch_and_apply_model_info,
@@ -30,7 +32,7 @@ from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import discover_plugins, report_plugins
 from solveig.sessions.manager import SessionManager
-from solveig.subcommand.runner import SubcommandRunner
+from solveig.subcommands.registry import SubcommandRegistry
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.user_message_queue import UserMessageQueue
 
@@ -208,11 +210,13 @@ async def run_async(
         )
     )
 
-    subcommand_executor = SubcommandRunner(
-        config=config,
-        conversation=conversation,
-        provider_ref=provider_ref,
-        session_manager=session_manager,
+    subcommand_executor = SubcommandRegistry(
+        deps={
+            SolveigConfig: config,
+            Conversation: conversation,
+            ProviderRef: provider_ref,
+            SessionManager: session_manager,
+        }
     )
 
     # Producer wiring (D5): typed input routes commands to the runner and
@@ -241,8 +245,8 @@ async def run_async(
         post-construction wiring; the constructed path passes the same
         callbacks as constructor arguments.
         """
+        iface.on_edit_config_field = functools.partial(edit_config_field, config)
         iface.on_user_input = route_user_input
-        iface.on_edit_config_field = subcommand_executor.edit_config_field
 
     # Interface is created before spawning the loop task so that user_prompt
     # can be queued immediately: by the time the loop calls inbox.get(), the
@@ -254,7 +258,7 @@ async def run_async(
             auto_copy_selection=config.interface.auto_copy_selection,
             inbox=inbox,
             on_user_input=route_user_input,
-            on_edit_config_field=subcommand_executor.edit_config_field,
+            on_edit_config_field=functools.partial(edit_config_field, config),
         )
     else:
         wire_interface(interface)

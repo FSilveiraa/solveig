@@ -2,24 +2,21 @@
 
 Guidance for AI coding agents working in this repository. Start here.
 
-> **Status note (2026-07-24):** branch `pydantic-settings-config` just landed three
-> big migrations (pydantic-ai core, reactive conversation/UX, nested typed config).
-> The **test suite is deliberately mid-migration** — many tests are red by design
-> (big-bang cutover, no compat shims; Task 10 is the test restoration). Gates that
-> **must** hold at all times: `ruff format`, `ruff check`, `mypy solveig/`, and
-> `python -c "import solveig.run"`. The reactive-core tests (`test_conversation.py`,
-> `test_run_turn.py`, `test_streaming.py`, `test_toolset.py`) are green — keep them
-> that way. `CLAUDE.md` is canonical but partially stale; this file tracks the
-> as-built state. `ignore/project-logs/YYYY-…-config-foundation.md` → "Current
-> state" is the living migration record.
-
 ## What this is
 
 Solveig is an autonomous, safety-first AI agent for the terminal, built on
 **pydantic-ai** (agent engine), **pydantic-settings** (config), **Textual**
 (TUI), and **FastMCP** (MCP). Any OpenAI-compatible LLM. Python ≥ 3.13, fully
-async. The design vision is **modern, declarative, reactive Python** — pick the
-option that makes the project *simpler or better*, never the shortest or easiest.
+async.
+
+Solveig is designed around a single idea: **components declare what they care
+about, and the framework reacts.** A config change notifies observers; an
+observer wakes up and updates the model info; the stats bar refreshes.
+A module that owns config editing registers its own subcommands — the runner
+knows arg parsing, not config semantics. A tool writes to an interface scoped
+to its group; the interface renders. Every interaction is event → reaction →
+event, never imperative fetch → check → act. Pick the option that makes the
+project *simpler or better*, never the shortest or easiest.
 
 ## Commands (via `just`)
 
@@ -78,6 +75,42 @@ single-flight.
 story, and a live conversation share one blob shape (`parse_conversation_blob`).
 `--add-examples` renders a recorded story mechanically, so examples can't drift.
 
+## Design
+
+These are not style preferences — they are the seams the codebase is built on.
+
+- **Component-owned surfaces.** Each module registers its own subcommands. The
+  config module owns `/config set`, `/config save`; the MCP module owns
+  `/mcp connect`. The subcommand registry knows arg parsing and dispatch — it
+  has no idea what a config or an MCP connection is. A component declares its
+  surface; the framework binds it.
+
+- **Declarative, not imperative.** Components declare what they care about and
+  react to changes. The reactive transcript (`conversation.py` → observers) is
+  the canonical example: one insertion-ordered dict is the single source of
+  truth; mutations fire observers; the UI renders the diff. Config changes
+  follow the same pattern: `SolveigConfig.notify_changed` fires, `ProviderRef`
+  wakes up and fetches new model info, the stats bar refreshes. Event →
+  reaction → event — never fetch → check → act.
+
+- **Signature is the contract.** A subcommand handler declares what it needs in
+  its function signature — injected deps matched by type, CLI args parsed via
+  `CliSettingsSource`. A tool declares its arguments as pydantic model fields —
+  one model is simultaneously the LLM schema, the validator, and the CLI parser.
+  No hand-rolled argv parsing, no ambient state reach-throughs.
+
+- **One rule, one home.** Every cross-cutting concern has exactly one named seam —
+  `is_tool_enabled`/`is_hook_enabled` (enablement), `run_tool_and_hooks`
+  (execution), `open_tool_group` (auto-collapse), `_compose_section` (schema
+  composition), `to_tool_return()` (the pydantic-ai crossover). When you add a
+  rule, put it on the existing seam — never a second copy.
+
+- **Delegation is complete.** No residue wrappers re-implementing pydantic-ai —
+  wrap only where Solveig carries real domain semantics (e.g. `ToolResult.private`).
+- **Field behavior lives on the field type.** Parse/display/secrecy go on the
+  type (`SecretStr`, `ByteSize`, `list[re.Pattern]`, `Palette`, `APIType`), not
+  in name-keyed lookup tables.
+
 ## Tools
 
 - **`tools/base.py` — `BaseTool[ToolConfigType]`** is the keystone. One pydantic
@@ -131,7 +164,8 @@ story, and a live conversation share one blob shape (`parse_conversation_blob`).
   and gets a load-time warning (never silently dropped). CLI stays strict.
 - **`/config save` persists only `_declared` fields** (explicitly set via file/CLI/
   `/config set`), tracked as dotted paths; `declared_config()` copies those leaves out
-  of `model_dump`. `plugins.paths` UNIONs local+global. `model_info` is a `PrivateAttr`
+  of `model_dump`. Pass `--full`/`--all` to dump the complete config including defaults
+  (export/onboarding). `plugins.paths` UNIONs local+global. `model_info` is a `PrivateAttr`
   (API-reported, never user-set). Field-intrinsic types carry behavior: `api.key` is
   `SecretStr`, `min_disk_space_left` is `ByteSize`, `command.auto_execute` is
   `list[re.Pattern]` (compiled at the field).
@@ -204,25 +238,42 @@ membership change). Untyped MCP calls route through `run_untyped_tool`.
 
 ## Subcommands
 
-`subcommand/base.py` — ONE `Subcommand` concept, two authors: a **built-in** is an
-`@subcommand`-marked `SubcommandRunner` method whose *signature* is its arg spec
-(`bind_tokens`, `usage_of`); a **tool** command parses its model fields via
-`from_cli_tokens`. Both land in one registry and dispatch identically.
-`subcommand/runner.py` — `/config`, `/model`, `/session`, `/mcp`, `/help`, `/exit`,
-`/store`, `/resume`, plus each tool's `/tool`.
+**Push model.** Every subcommand source pushes a template into a module-level list
+(`_PENDING` in `subcommand/base.py`) at import time. The `@subcommand` decorator on
+a plain function does it; `BaseTool.__pydantic_init_subclass__` does it for tools.
+The registry reads the list, inspects each function's signature, separates injected
+deps (matched by type) from CLI args (parsed via `CliSettingsSource`), and binds a
+handler. No fetch, no iterate, no two-author split in dispatch.
+
+**Built-in commands** are standalone functions in the module that owns the behaviour:
+
+```python
+# solveig/config/commands.py
+@subcommand("/config save", section="config", detail=True)
+async def config_save(
+    config: SolveigConfig,          # injected
+    interface: SolveigInterface,    # injected
+    path: str = "",                 # CLI-parsed
+    full: bool = False,             # CLI-parsed → --full / --no-full
+) -> None:
+    ...
+```
+
+Injected types (`SolveigConfig`, `SolveigInterface`, `Conversation`, `ProviderRef`,
+`SessionManager`) are provided by the framework. Bool params with defaults become
+`--flag/--no-flag`. `*rest` maps to a greedy positional list.
+
+**Tool commands** push the same way — `BaseTool.__pydantic_init_subclass__` pushes a
+template with `tool_cls` set; the registry binds a handler that parses via
+`from_cli_tokens` → `CliSettingsSource` and orchestrates via `run_tool_and_hooks`.
+
+`subcommand/base.py` — the `_PENDING` list, `_SubcommandTemplate` dataclass,
+`@subcommand` decorator, and `Subcommand` runtime dispatch object.
+`subcommand/registry.py` — `SubcommandRegistry`: reads `_PENDING`, binds handlers,
+dispatches via longest-prefix match, generates `/help`.
 
 ## Conventions that matter (do not regress)
 
-- **One rule, one home.** Every cross-cutting concern has exactly one named seam —
-  `is_tool_enabled`/`is_hook_enabled` (enablement), `run_tool_and_hooks` (execution),
-  `open_tool_group` (auto-collapse), `_compose_section` (schema composition),
-  `to_tool_return()` (the pydantic-ai crossover), `_thinking` (the animation policy).
-  When you add a rule, put it on the existing seam — never a second copy.
-- **Delegation is complete.** No residue wrappers re-implementing pydantic-ai — wrap
-  only where Solveig carries real domain semantics (e.g. `ToolResult.private`).
-- **Field behavior lives on the field type.** Parse/display/secrecy go on the type
-  (`SecretStr`, `ByteSize`, `list[re.Pattern]`, `Palette`, `APIType`), not in
-  name-keyed lookup tables.
 - **No compat shims; big-bang cutovers.** Migrations go red mid-flight and green at
   the end. Commit per task even while red.
 - **Seam comments explain *why*.** The load-bearing, non-obvious invariants are
@@ -243,9 +294,7 @@ membership change). Untyped MCP calls route through `run_untyped_tool`.
 Pyramid: `tests/unit` (mocked), `tests/integration` (real subprocess/file markers),
 `tests/end_to_end`. "Mock by default"; `tests/mocks/` has the headless
 `RecordingTranscript`, mock interface/client, and the `just mock`/`just demo` harness.
-UI (`solveig/interface/cli/*`) is excluded from coverage. See the Status note — the
-suite is mid-migration; fix a red test only if your change caused it, and keep the
-reactive-core tests green.
+UI (`solveig/interface/cli/*`) is excluded from coverage.
 
 ## Commits
 

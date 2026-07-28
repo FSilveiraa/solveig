@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.plugins.tools import tool
-from solveig.subcommand.base import Subcommand
+from solveig.subcommands.base import Subcommand
 from solveig.tools import BaseTool, ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path

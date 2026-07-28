@@ -36,6 +36,7 @@ from solveig.config import MCPServerConfig
 from solveig.context import SolveigContext, get_introspection_context
 from solveig.interface import SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
+from solveig.subcommands.base import subcommand
 from solveig.tools.available import AVAILABLE_TOOLS
 
 if TYPE_CHECKING:
@@ -134,12 +135,7 @@ async def connect(
     tool_prefix = server_config.name or _default_tool_prefix(server_config.url)
     mcp_toolset = _build_mcp_toolset(server_config)
 
-    toolset: AbstractToolset = mcp_toolset
-    if server_config.allowed_tools or server_config.blocked_tools:
-        toolset = toolset.filtered(
-            lambda ctx, tool_def: server_config.is_tool_allowed(tool_def.name)
-        )
-    toolset = toolset.prefixed(tool_prefix)
+    toolset: AbstractToolset = mcp_toolset.prefixed(tool_prefix)
 
     conn = MCPConnection(server_config=server_config, toolset=toolset)
 
@@ -213,3 +209,66 @@ async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> Non
             for server_config in config.mcp.values()
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Subcommands — the MCP client owns MCP connection management, so it declares
+# the surface.
+# ---------------------------------------------------------------------------
+
+
+@subcommand("/mcp list", section="mcp")
+async def mcp_list(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+) -> None:
+    """List configured and connected MCP servers."""
+    if not config.mcp and not MCP_CONNECTIONS:
+        await interface.display_info(
+            "No MCP servers configured. Use /mcp connect <url> to connect."
+        )
+        return
+
+    lines: list[str] = []
+    for conn in MCP_CONNECTIONS.values():
+        name = conn.display_name
+        tool_count = len(conn.tool_names)
+        lines.append(f"● {name}  ({tool_count} tools)")
+        for tool in conn.tool_names:
+            lines.append(f"    {tool}")
+
+    for url, cfg in config.mcp.items():
+        if url not in MCP_CONNECTIONS:
+            name = cfg.name or url
+            lines.append(f"○ {name}  (configured, not connected)")
+
+    await interface.display_text_box("\n".join(lines), title="MCP Servers")
+
+
+@subcommand("/mcp connect", section="mcp", detail=True)
+async def mcp_connect(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    url: str,
+) -> None:
+    """Connect to an MCP server by URL."""
+    url = url.strip()
+    server_config = config.mcp.get(url, MCPServerConfig(url=url))
+    await connect(server_config, config, interface)
+
+
+@subcommand("/mcp disconnect", section="mcp", detail=True)
+async def mcp_disconnect(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    identifier: str,
+) -> None:
+    """Disconnect from an MCP server by URL or name."""
+    identifier = identifier.strip()
+    conn = find_connection(identifier)
+    if conn is None:
+        await interface.display_error(
+            f"No connected MCP server matching '{identifier}'."
+        )
+        return
+    await disconnect(conn.url, config, interface)

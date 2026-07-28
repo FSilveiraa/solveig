@@ -101,16 +101,18 @@ class ConfigObserver(Protocol):
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
-    """The `--config FILE` paths arrive already split from argv. They are
-    resolved and loaded; the resolved paths are stamped into the `config_files`
-    field so it holds the single-source truth of what was loaded. Falls back
-    to the default search paths when no --config was given."""
+    """This class models one config file passed through `--config FILE`.
+    Paths arrive already split from argv. They are resolved and loaded; the
+    resolved paths are stamped into the `config_files` field so it holds the
+    single-source truth of what was loaded. Falls back to the default search
+    paths when no --config was given."""
 
     def __init__(self, settings_cls, requested: list[str] | None = None):
         super().__init__(settings_cls)
         self._requested = requested or []
 
-    def get_field_value(self, field, field_name):  # whole-dict source
+    # pydantic base-class override
+    def get_field_value(self, field, field_name):
         return None, "", False
 
     def __call__(self) -> dict[str, Any]:
@@ -121,9 +123,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 
 
 # ---------------------------------------------------------------------------
-# Dotted paths — the one home for addressing a config leaf by dotted string
-# (`api.url`, `tools.http.timeout`). Used by _declared tracking, /config set,
-# notify fan-out. Editor (UI) imports get_config_value/set_config_value.
+# Dotted paths utils (config.api.url -> "api.url")
 # ---------------------------------------------------------------------------
 
 

@@ -1,8 +1,15 @@
 import contextlib
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
+
+from solveig.subcommands import subcommand
+
+if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
+    from solveig.interface import SolveigInterface
 
 
 @dataclass
@@ -212,3 +219,100 @@ class ModelNotFound(Exception):
                 title="Available models",
                 collapsed=True,
             )
+
+
+# ---------------------------------------------------------------------------
+# Subcommands — declared here because ProviderRef + APIType own model
+# management.  SolveigConfig / SolveigInterface are TYPE_CHECKING-only
+# (config.models imports APIType from here, so top-level imports would cycle);
+# fetch_and_apply_model_info is imported lazily inside model_refresh.
+# ---------------------------------------------------------------------------
+
+
+@subcommand("/model list", section="model")
+async def model_list(
+    config: "SolveigConfig",
+    provider_ref: ProviderRef,
+    interface: "SolveigInterface",
+) -> None:
+    """List available models from the provider."""
+    try:
+        models = await config.api.type.list_models(provider_ref.provider)
+    except NotImplementedError:
+        await interface.display_error(
+            f"Model listing is not supported for {config.api.type.name}. "
+            f"Use /model set <name> to set a model manually."
+        )
+        return
+    except Exception as e:
+        await interface.display_error(f"Could not list models: {e}")
+        return
+
+    if not models:
+        await interface.display_info("No models available.")
+        return
+
+    current = config.api.model
+    lines = []
+    for m in models:
+        prefix = "→ " if m == current else "  "
+        lines.append(f"{prefix}{m}")
+
+    await interface.display_text_box(
+        "\n".join(lines), title=f"Models ({config.api.type.name})"
+    )
+
+
+@subcommand("/model set", section="model", detail=True)
+async def model_set(
+    config: "SolveigConfig",
+    interface: "SolveigInterface",
+    model: str,
+) -> None:
+    """Set the active model."""
+    changed = await config.change_field("api.model", model.strip())
+    if changed:
+        await interface.display_info(f"Model set to {model}. Fetching details...")
+    else:
+        await interface.display_info(f"Model already set to {model}.")
+
+
+@subcommand("/model info", section="model", detail=True)
+async def model_info(
+    config: "SolveigConfig",
+    provider_ref: ProviderRef,
+    interface: "SolveigInterface",
+) -> None:
+    """Show current model details."""
+    info = provider_ref.model_info
+    if info is None:
+        await interface.display_info("No model info loaded. Run /model refresh.")
+        return
+
+    lines = [
+        f"Model:           {info.model}",
+    ]
+    if info.context_length is not None:
+        lines.append(f"Context length:  {info.context_length:,} tokens")
+    if info.input_price is not None:
+        lines.append(f"Input price:    ${info.input_price:.2f}/M tokens")
+    if info.output_price is not None:
+        lines.append(f"Output price:   ${info.output_price:.2f}/M tokens")
+
+    await interface.display_text_box("\n".join(lines), title="Model Info")
+
+
+@subcommand("/model refresh", section="model", detail=True)
+async def model_refresh(
+    config: "SolveigConfig",
+    provider_ref: ProviderRef,
+    interface: "SolveigInterface",
+) -> None:
+    """Refresh model details from the API."""
+    # Lazy import to avoid cycle: config.runtime_effects imports ModelInfo from here.
+    from solveig.config.runtime_effects import fetch_and_apply_model_info
+
+    provider_ref.model_info = None
+    ok = await fetch_and_apply_model_info(config, provider_ref, interface)
+    if ok:
+        await interface.display_success("Model info refreshed.")

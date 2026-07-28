@@ -25,7 +25,7 @@ from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
 from solveig.context import SolveigContext
-from solveig.subcommand.base import Subcommand
+from solveig.subcommands.base import _PENDING, Subcommand, _SubcommandTemplate
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import _camel_to_snake, format_path_info
@@ -137,6 +137,18 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
             own.description = cls._subcommand_description()
         if not own.usage:
             own.usage = cls._generate_usage()
+
+        # Push into the pending list so the registry binds it — same push
+        # model as @subcommand-decorated built-in functions.
+        _PENDING.append(
+            _SubcommandTemplate(
+                tool_cls=cls,
+                commands=list(own.commands),
+                section="tools",
+                is_detail=own.is_detail,
+                description=own.description,
+            )
+        )
 
     @classmethod
     def tool_name(cls) -> str:

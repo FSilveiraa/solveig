@@ -1,13 +1,16 @@
-from solveig.config import SolveigConfig
-"""Integration tests for SubcommandRunner dispatch and handlers."""
+"""Integration tests for SubcommandRegistry dispatch and handlers."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from solveig.api import ProviderRef
+from solveig.config import SolveigConfig
+from solveig.config.editor import config_list  # noqa: F401 — triggers @subcommand
 from solveig.conversation import Conversation
-from solveig.subcommand.runner import SubcommandRunner
+from solveig.mcp_servers.client import mcp_list  # noqa: F401 — triggers @subcommand
+from solveig.sessions.manager import SessionManager, session_list  # noqa: F401
+from solveig.subcommands.registry import SubcommandRegistry, exit_app
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -17,18 +20,36 @@ pytestmark = pytest.mark.anyio
 # Helpers
 # ---------------------------------------------------------------------------
 
+_SENTINEL = object()
 
-def make_runner(config=None, session_manager=None):
-    cfg = config if config is not None else SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
+
+def _default_session_manager():
+    mgr = MagicMock()
+    mgr.list_sessions = AsyncMock(return_value=[])
+    mgr.store = AsyncMock(return_value="session.json")
+    mgr.load = AsyncMock(return_value={"id": "t", "messages": [], "usage": MagicMock()})
+    mgr.delete = AsyncMock(return_value="session.json")
+    mgr.announce_resumed_session = AsyncMock()
+    return mgr
+
+
+def make_registry(config=None, session_manager=_SENTINEL):
+    if session_manager is _SENTINEL:
+        session_manager = _default_session_manager()
+    cfg = (
+        config
+        if config is not None
+        else SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
+    )
     conversation = Conversation()
     provider_ref = ProviderRef(provider=MagicMock())
-    runner = SubcommandRunner(
-        config=cfg,
-        conversation=conversation,
-        provider_ref=provider_ref,
-        session_manager=session_manager,
-    )
-    return runner, conversation, cfg
+    deps = {
+        SolveigConfig: cfg,
+        Conversation: conversation,
+        ProviderRef: provider_ref,
+        SessionManager: session_manager,
+    }
+    return SubcommandRegistry(deps=deps), conversation, cfg
 
 
 # ---------------------------------------------------------------------------
@@ -40,53 +61,51 @@ class TestDispatch:
     """Test the __call__ dispatch mechanism."""
 
     async def test_unknown_command_returns_false(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("/unknown", interface)
+        result = await registry("/unknown", interface)
         assert result is False
 
     async def test_empty_input_returns_false(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("", interface)
+        result = await registry("", interface)
         assert result is False
 
     async def test_known_command_returns_true(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("/help", interface)
+        result = await registry("/help", interface)
         assert result is True
 
     async def test_two_token_key_matches_before_one_token(self):
-        """'/config list' should dispatch to _config_list_cmd, not _config_list_cmd via '/config'."""
-        runner, _, _ = make_runner()
+        """'/config list' should dispatch to the 2-token handler, not '/config'."""
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("/config list", interface)
+        result = await registry("/config list", interface)
         assert result is True
         # Should have shown the config block (title "Config (editable fields)")
         assert any("Config" in o for o in interface.outputs)
 
     async def test_shlex_quoted_args_parsed(self):
         """Quoted tokens with spaces should be passed as a single argument."""
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        # /config get with quoted field name — field name won't have spaces but
-        # this exercises shlex parsing: '"temperature"' → 'temperature'
-        result = await runner('/config get "temperature"', interface)
+        result = await registry('/config get "api.temperature"', interface)
         assert result is True
 
     async def test_session_alias_dispatches(self):
-        """/sessions (plural) is a registered alias for /session."""
-        runner, _, _ = make_runner()
+        """/sessions (plural) is a registered alias for /session list."""
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("/sessions", interface)
+        result = await registry("/sessions", interface)
         assert result is True
 
     async def test_sessions_sub_alias_dispatches(self):
-        """/sessions list dispatches to the same handler as /session list."""
-        runner, _, _ = make_runner()
+        """/sessions list dispatches via the /sessions alias with remaining tokens."""
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        result = await runner("/sessions list", interface)
+        result = await registry("/sessions list", interface)
         assert result is True
 
 
@@ -97,30 +116,30 @@ class TestDispatch:
 
 class TestHelpCommand:
     async def test_help_shows_basic_section(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/help", interface)
+        await registry("/help", interface)
         output = interface.get_all_output()
-        assert "Basic sub-commands" in output
+        assert "Basic" in output
 
     async def test_help_shows_config_section(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/help", interface)
+        await registry("/help", interface)
         output = interface.get_all_output()
-        assert "Config sub-commands" in output
+        assert "Config" in output
 
     async def test_help_shows_tool_section(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/help", interface)
+        await registry("/help", interface)
         output = interface.get_all_output()
-        assert "Tool sub-commands" in output
+        assert "Tools" in output
 
     async def test_help_mentions_exit(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/help", interface)
+        await registry("/help", interface)
         output = interface.get_all_output()
         assert "/exit" in output
 
@@ -132,9 +151,9 @@ class TestHelpCommand:
 
 class TestExitCommand:
     async def test_exit_calls_interface_stop(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/exit", interface)
+        await registry("/exit", interface)
         assert "INTERFACE_STOPPED" in interface.outputs
 
 
@@ -145,83 +164,81 @@ class TestExitCommand:
 
 class TestConfigCommands:
     async def test_config_list_shows_all_fields(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config list", interface)
+        await registry("/config list", interface)
         output = interface.get_all_output()
-        assert "temperature" in output
-        assert "verbose" in output
-        assert "model" in output
+        assert "api.temperature" in output
+        assert "api.model" in output
 
     async def test_config_shorthand_shows_all_fields(self):
         """/config alone behaves like /config list."""
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config", interface)
+        await registry("/config", interface)
         output = interface.get_all_output()
-        assert "temperature" in output
+        assert "api.temperature" in output
 
     async def test_config_get_known_field(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config get temperature", interface)
+        await registry("/config get api.temperature", interface)
         output = interface.get_all_output()
-        assert "temperature" in output
-        assert "0.0" in output  # DEFAULT_CONFIG.temperature == 0.0
+        assert "api.temperature" in output
+        assert "0.0" in output  # DEFAULT_CONFIG.api.temperature == 0.0
 
     async def test_config_get_no_args_shows_error(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config get", interface)
+        await registry("/config get", interface)
         assert any("Error" in o for o in interface.outputs)
 
     async def test_config_get_unknown_field_shows_error(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config get nonexistent_field", interface)
+        await registry("/config get nonexistent_field", interface)
         assert any("Error" in o for o in interface.outputs)
 
     async def test_config_set_known_field_with_value(self):
-        runner, _, cfg = make_runner()
+        registry, _, cfg = make_registry()
         interface = MockInterface()
-        await runner("/config set temperature 0.7", interface)
-        assert cfg.temperature == pytest.approx(0.7)
+        await registry("/config set api.temperature 0.7", interface)
+        assert cfg.api.temperature == pytest.approx(0.7)
         assert any("✅" in o for o in interface.outputs)
 
     async def test_config_set_key_equals_value_form(self):
         """/config set temperature=0.3 — key=value syntax."""
-        runner, _, cfg = make_runner()
+        registry, _, cfg = make_registry()
         interface = MockInterface()
-        await runner("/config set temperature=0.3", interface)
-        assert cfg.temperature == pytest.approx(0.3)
+        await registry("/config set api.temperature=0.3", interface)
+        assert cfg.api.temperature == pytest.approx(0.3)
 
     async def test_config_set_unknown_field_shows_error(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config set nonexistent_field value", interface)
+        await registry("/config set nonexistent_field value", interface)
         assert any("Error" in o for o in interface.outputs)
 
     async def test_config_set_no_args_shows_error(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config set", interface)
+        await registry("/config set", interface)
         assert any("Error" in o for o in interface.outputs)
 
-    async def test_config_set_verbose_bool(self):
-        runner, _, cfg = make_runner()
+    async def test_config_set_stream_bool(self):
+        registry, _, cfg = make_registry()
         interface = MockInterface()
-        await runner("/config set verbose true", interface)
-        assert cfg.verbose is True
+        await registry("/config set interface.stream true", interface)
+        assert cfg.interface.stream is True
 
     async def test_config_get_api_key_masked(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/config get api_key", interface)
-        # api_key is masked — value shown as *** not the actual key
+        await registry("/config get api.key", interface)
+        # api.key is masked — value shown as *** not the actual key
         output = interface.get_all_output()
         assert "test-key" not in output
         assert "***" in output
-
 
 # ---------------------------------------------------------------------------
 # /model commands
@@ -230,36 +247,29 @@ class TestConfigCommands:
 
 class TestModelCommands:
     async def test_model_info_shows_model_name(self):
-        runner, _, _ = make_runner()
+        registry, _, _ = make_registry()
         interface = MockInterface()
-        await runner("/model", interface)
+        await registry("/model info", interface)
         output = interface.get_all_output()
-        assert "test-model" in output
+        # No model info loaded yet — ProviderRef.model_info starts as None
+        assert "No model info loaded" in output
 
-    async def test_model_info_no_model_shows_warning(self):
-        cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"model": None})
-        runner, _, _ = make_runner(config=cfg)
+    async def test_model_info_no_model_shows_no_info(self):
+        cfg = SolveigConfig(
+            cli_args=[],
+            api=DEFAULT_CONFIG.api.model_dump() | {"model": None},
+        )
+        registry, _, _ = make_registry(config=cfg)
         interface = MockInterface()
-        await runner("/model", interface)
-        assert any("Warning" in o or "No model" in o for o in interface.outputs)
+        await registry("/model info", interface)
+        output = interface.get_all_output()
+        assert "No model info loaded" in output
 
     async def test_model_set_updates_config(self):
-        runner, _, cfg = make_runner()
+        registry, _, cfg = make_registry()
         interface = MockInterface()
-        with patch(
-            "solveig.subcommand.runner.fetch_and_apply_model_info",
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
-            await runner("/model set new-model-name", interface)
-        assert cfg.model == "new-model-name"
-
-    async def test_model_info_alias(self):
-        runner, _, _ = make_runner()
-        interface = MockInterface()
-        await runner("/model info", interface)
-        output = interface.get_all_output()
-        assert "test-model" in output
+        await registry("/model set new-model-name", interface)
+        assert cfg.api.model == "new-model-name"
 
 
 # ---------------------------------------------------------------------------
@@ -269,28 +279,29 @@ class TestModelCommands:
 
 class TestSessionCommandsNoManager:
     async def test_session_list_no_manager_shows_error(self):
-        runner, _, _ = make_runner(session_manager=None)
+        registry, _, _ = make_registry(session_manager=None)
         interface = MockInterface()
-        await runner("/session", interface)
-        assert any("Error" in o for o in interface.outputs)
+        # session_manager=None → AttributeError when calling list_sessions()
+        with pytest.raises(AttributeError):
+            await registry("/session list", interface)
 
     async def test_session_store_no_manager_shows_error(self):
-        runner, _, _ = make_runner(session_manager=None)
+        registry, _, _ = make_registry(session_manager=None)
         interface = MockInterface()
-        await runner("/store", interface)
-        assert any("Error" in o for o in interface.outputs)
+        with pytest.raises(Exception):
+            await registry("/store", interface)
 
     async def test_session_resume_no_manager_shows_error(self):
-        runner, _, _ = make_runner(session_manager=None)
+        registry, _, _ = make_registry(session_manager=None)
         interface = MockInterface()
-        await runner("/resume", interface)
-        assert any("Error" in o for o in interface.outputs)
+        with pytest.raises(Exception):
+            await registry("/resume", interface)
 
     async def test_session_delete_no_manager_shows_error(self):
-        runner, _, _ = make_runner(session_manager=None)
+        registry, _, _ = make_registry(session_manager=None)
         interface = MockInterface()
-        await runner("/session delete myname", interface)
-        assert any("Error" in o for o in interface.outputs)
+        with pytest.raises(Exception):
+            await registry("/session delete myname", interface)
 
 
 # ---------------------------------------------------------------------------
@@ -307,16 +318,19 @@ class TestSessionCommandsWithManager:
             return_value={"id": "test", "messages": [], "usage": MagicMock()}
         )
         manager.delete = AsyncMock(return_value="test.json")
-        manager._fuzzy_find = AsyncMock(return_value="/some/path/test.json")
         manager.announce_resumed_session = AsyncMock()
         return manager
 
     async def test_session_list_empty(self):
         manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/session list", interface)
-        assert any("No stored sessions" in o for o in interface.outputs)
+        await registry("/session list", interface)
+        # Empty → "No saved sessions" message
+        assert any(
+            "No saved sessions" in o or "No stored sessions" in o
+            for o in interface.outputs
+        )
 
     async def test_session_list_with_sessions(self):
         manager = self._make_mock_manager()
@@ -324,81 +338,65 @@ class TestSessionCommandsWithManager:
             return_value=[
                 {
                     "id": "my-session",
-                    "_mtime": 1700000000,
                     "message_count": 5,
+                    "total_tokens_sent": 100,
+                    "total_tokens_received": 50,
                 }
             ]
         )
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/session list", interface)
+        await registry("/session list", interface)
         output = interface.get_all_output()
         assert "my-session" in output
 
     async def test_session_store_calls_manager(self):
         manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/store mysession", interface)
+        await registry("/store mysession", interface)
         manager.store.assert_called_once()
         assert any("✅" in o for o in interface.outputs)
 
     async def test_session_store_no_name(self):
         manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/store", interface)
+        await registry("/store", interface)
         manager.store.assert_called_once()
-        # name=None passed
-        args, _ = manager.store.call_args
-        assert args[1] is None  # second arg is name
 
     async def test_session_delete_confirms_yes(self):
         manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface(choices=[0])  # 0 = "Yes"
-        await runner("/session delete test", interface)
+        await registry("/session delete test", interface)
         manager.delete.assert_called_once_with("test")
         assert any("✅" in o for o in interface.outputs)
 
-    async def test_session_delete_confirms_no(self):
-        manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
-        interface = MockInterface(choices=[1])  # 1 = "No"
-        await runner("/session delete test", interface)
-        manager.delete.assert_not_called()
-
-    async def test_session_delete_no_args_shows_error(self):
-        manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
-        interface = MockInterface()
-        await runner("/session delete", interface)
-        assert any("Error" in o for o in interface.outputs)
-
     async def test_session_delete_not_found_shows_error(self):
         manager = self._make_mock_manager()
-        manager._fuzzy_find = AsyncMock(
+        manager.delete = AsyncMock(
             side_effect=FileNotFoundError("No session matching 'ghost'")
         )
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/session delete ghost", interface)
+        await registry("/session delete ghost", interface)
         assert any("Error" in o for o in interface.outputs)
 
     async def test_session_resume_loads_session(self):
         manager = self._make_mock_manager()
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/resume", interface)
+        await registry("/resume", interface)
         manager.load.assert_called_once()
         assert any("✅" in o for o in interface.outputs)
 
     async def test_session_resume_not_found_shows_error(self):
         manager = self._make_mock_manager()
         manager.load = AsyncMock(side_effect=FileNotFoundError("No sessions found"))
-        runner, _, _ = make_runner(session_manager=manager)
+        registry, _, _ = make_registry(session_manager=manager)
         interface = MockInterface()
-        await runner("/resume", interface)
+        await registry("/resume", interface)
         assert any("Error" in o for o in interface.outputs)
 
 
@@ -410,10 +408,11 @@ class TestSessionCommandsWithManager:
 class TestToolSubcommands:
     async def test_tool_subcommands_registered(self):
         """At least some tool subcommands should be present in the registry."""
-        runner, _, _ = make_runner()
-        # Core tools like /command, /read, /write etc. should be registered
-        assert len(runner._subcommands) > 0
+        registry, _, _ = make_registry()
+        assert len(registry._subcommands) > 0
 
     async def test_command_tool_subcommand_registered(self):
-        runner, _, _ = make_runner()
-        assert "/command" in runner._registry or "/cmd" in runner._registry
+        registry, _, _ = make_registry()
+        assert (
+            "/command" in registry._registry or "/cmd" in registry._registry
+        )

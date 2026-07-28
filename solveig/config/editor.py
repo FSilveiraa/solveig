@@ -9,16 +9,19 @@ live in config.py next to it. Fields are addressed by DOTTED PATH into the
 nested schema (`api.model`, `tools.http.timeout`, `interface.theme`).
 """
 
+import re
 import typing
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ByteSize, SecretStr
 
 from solveig.api import API_TYPES, APIType
 from solveig.interface import SolveigInterface, themes
+from solveig.subcommands.base import subcommand
 
-from .config import SolveigConfig, _resolve, get_config_value
+from . import sources
+from .config import DEFAULT_CONFIG_PATHS, SolveigConfig, _resolve, get_config_value
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.
@@ -194,3 +197,162 @@ async def prompt_for_field(
     # --- Free-text fields (str, int, float, str | None) ---
     raw = await interface.ask_question(f"{description} (current: {current}):")
     return _parse_field_value(raw_type, raw)
+
+
+# ---------------------------------------------------------------------------
+# Subcommands — declared here because the config editor owns config editing.
+# The `@subcommand` decorator pushes into `_PENDING` at import time; the
+# registry binds handlers later.
+# ---------------------------------------------------------------------------
+
+
+@subcommand("/config", "/config list", section="config")
+async def config_list(config: SolveigConfig, interface: SolveigInterface) -> None:
+    """List editable config fields with their current values."""
+    lines = []
+    for field_name, _description in editable_fields(config).items():
+        value = get_config_value(config, field_name)
+        display = _format_field_value(value)
+        lines.append(f"{field_name:<32} = {display}")
+    await interface.display_text_box("\n".join(lines), title="Config (editable fields)")
+
+
+@subcommand("/config get", section="config", detail=True)
+async def config_get(
+    config: SolveigConfig, interface: SolveigInterface, field: str
+) -> None:
+    """Show current value for a field."""
+    field_name = field.strip()
+    fields = editable_fields(config)
+    if field_name not in fields:
+        await interface.display_error(
+            f"Unknown field: '{field_name}'. Use /config list to see all fields."
+        )
+        return
+    value = get_config_value(config, field_name)
+    display = _format_field_value(value)
+    await interface.display_info(f"{field_name} = {display}  ({fields[field_name]})")
+
+
+@subcommand("/config set", section="config", detail=True)
+async def config_set(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    field: str,
+    *value: str,
+) -> None:
+    """Set a field (prompts if the value is omitted).
+
+    Accepts `/config set <field> <value...>`, `/config set <field>=<value>`,
+    or `/config set <field>` to be prompted.
+    """
+    field_name = field.strip()
+    if "=" in field_name and not value:
+        field_name, _, inline = field_name.partition("=")
+        field_name = field_name.strip()
+        value = (inline,) if inline else ()
+
+    if field_name not in editable_fields(config):
+        await interface.display_error(
+            f"Unknown or non-editable field: '{field_name}'. "
+            "Use /config list to see all options."
+        )
+        return
+
+    if not value:
+        await _edit_config_field(config, interface, field_name)
+        return
+
+    try:
+        new_value = parse_config_value(config, field_name, " ".join(value))
+    except (ValueError, KeyError) as e:
+        await interface.display_error(f"Invalid value for '{field_name}': {e}")
+        return
+
+    await _apply_and_confirm(config, interface, field_name, new_value)
+
+
+@subcommand("/config save", section="config", detail=True)
+async def config_save(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    path: str = "",
+    full: bool = False,
+) -> None:
+    """Save changed fields to a config file.
+
+    No-arg target = the highest-precedence loaded config file. By default saves
+    only explicitly-set fields. Pass --full/--all to dump the complete config
+    including defaults.
+    """
+    target = path or (config.config_files or DEFAULT_CONFIG_PATHS)[0]
+    data = config.model_dump(mode="json") if full else config.declared_config()
+    try:
+        sources.save_config(data, target)
+    except OSError as e:
+        await interface.display_error(f"Could not save config: {e}")
+        return
+    await interface.display_success(f"Config saved to {target}")
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers (exported for run.py stats-bar callback)
+# ---------------------------------------------------------------------------
+
+
+async def edit_config_field(
+    config: SolveigConfig, interface: SolveigInterface, field_name: str
+) -> None:
+    """Prompt for a field's new value and apply it. Used as the stats-bar
+    click-to-edit callback."""
+    await _edit_config_field(config, interface, field_name)
+
+
+async def _edit_config_field(
+    config: SolveigConfig, interface: SolveigInterface, field_name: str
+) -> None:
+    if field_name not in editable_fields(config):
+        await interface.display_error(
+            f"Unknown or non-editable field: '{field_name}'. "
+            "Use /config list to see all options."
+        )
+        return
+    try:
+        new_value = await prompt_for_field(field_name, config, interface)
+    except (ValueError, KeyError) as e:
+        await interface.display_error(f"Invalid value for '{field_name}': {e}")
+        return
+    await _apply_and_confirm(config, interface, field_name, new_value)
+
+
+async def _apply_and_confirm(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    field_name: str,
+    new_value: object,
+) -> None:
+    old_value = get_config_value(config, field_name)
+    changed = await config.change_field(field_name, new_value)
+    if not changed:
+        await interface.display_info(f"config.{field_name} unchanged")
+        return
+    old_display = _format_field_value(old_value)
+    new_display = _format_field_value(new_value)
+    await interface.display_success(
+        f"Changed config.{field_name}: {old_display} → {new_display}"
+    )
+
+
+def _format_field_value(value: object) -> str:
+    """Format a config value for display, driven by type — never by field name."""
+    if isinstance(value, SecretStr):
+        return "***" if value.get_secret_value() else "(not set)"
+    if isinstance(value, ByteSize):
+        return value.human_readable()
+    if isinstance(value, re.Pattern):
+        return value.pattern
+    if isinstance(value, list):
+        return ", ".join(_format_field_value(v) for v in value) if value else "(empty)"
+    if hasattr(value, "name"):  # Palette, APIType subclass
+        return value.name
+    return repr(value)

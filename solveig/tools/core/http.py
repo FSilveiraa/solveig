@@ -9,7 +9,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
-from solveig.subcommand.base import Subcommand
+from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem

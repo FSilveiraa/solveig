@@ -54,8 +54,28 @@ class AvailableTools:
         """Recompute the base toolset from CORE_TOOLS, every discovered plugin
         tool, and every connected MCP server's toolset. Only needed after tool
         *membership* actually changes - see the module docstring for why
-        `tools.<name>.enabled` toggling doesn't need this."""
-        mcp_toolsets = [conn.toolset for conn in MCP_CONNECTIONS.values()]
+        `tools.<name>.enabled` toggling doesn't need this.
+
+        MCP toolsets are wrapped in a live FilteredToolset that reads
+        config.mcp[server_url].is_tool_allowed() on every call — same
+        reactive pattern as core tools: edit the config, it takes effect
+        next turn without a rebuild.
+        """
+        mcp_toolsets: list[AbstractToolset] = []
+        for server_url, conn in MCP_CONNECTIONS.items():
+            ts = conn.toolset
+            # Apply allow/block live — predicate reads config fresh each call.
+            # When both lists are empty, is_tool_allowed returns True (no-op).
+
+            def _mcp_active(
+                ctx: RunContext[SolveigContext],
+                td: ToolDefinition,
+                url: str = server_url,
+            ) -> bool:
+                return ctx.deps.config.mcp[url].is_tool_allowed(td.name)
+
+            ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
+            mcp_toolsets.append(ts)
 
         # Every discovered plugin tool is included here; the FilteredToolset
         # below decides core-tool visibility live from `tools.<name>.enabled`

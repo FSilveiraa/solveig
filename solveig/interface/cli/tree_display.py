@@ -3,10 +3,10 @@
 from datetime import datetime
 from pathlib import PurePath
 
+from pydantic import ByteSize
 from textual.widgets import Tree
 
 from solveig.utils.file import FileMetadata
-from solveig.utils.misc import convert_size_to_human_readable
 
 
 class TreeDisplay(Tree):
@@ -46,7 +46,7 @@ class TreeDisplay(Tree):
 
         if display_metadata:
             if not metadata.is_directory:
-                size_str = convert_size_to_human_readable(metadata.size)
+                size_str = ByteSize(metadata.size).human_readable()
                 label += f"  |  size: {size_str}"
 
             if metadata.modified_time:

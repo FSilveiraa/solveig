@@ -14,8 +14,6 @@ from typing import ClassVar, Literal
 from anyio import Path
 from pydantic import Field
 
-from solveig.utils.misc import parse_human_readable_size
-
 
 @dataclass
 class FileMetadata:
@@ -239,11 +237,10 @@ class Filesystem:
         path: str | Path,
         content: str | bytes | None = None,
         content_size: int | None = None,
-        min_disk_size_left: str | int = 0,
+        min_disk_size_left: int = 0,
     ) -> None:
         """Async validation that a file or directory can be written."""
         abs_path = cls.get_absolute_path(path)
-        min_disk_bytes_left = parse_human_readable_size(min_disk_size_left)
 
         # Check if path already exists
         if await cls.exists(abs_path):
@@ -267,10 +264,10 @@ class Filesystem:
         if content_size is not None:
             free_space = await cls._get_free_space(closest_writable_parent)
             free_after_write = free_space - content_size
-            if free_after_write <= min_disk_bytes_left:
+            if free_after_write <= min_disk_size_left:
                 raise OSError(
                     f"Insufficient disk space: After writing {content_size} bytes to {abs_path}, "
-                    f"only {free_after_write} bytes would be available, minimum configured is {min_disk_bytes_left} bytes"
+                    f"only {free_after_write} bytes would be available, minimum configured is {min_disk_size_left} bytes"
                 )
 
     # =============================================================================
