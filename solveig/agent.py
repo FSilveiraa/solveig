@@ -37,7 +37,7 @@ from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
-from solveig.api import ProviderRef, get_model
+from solveig.api import ProviderRef
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
@@ -73,8 +73,8 @@ def build_agent(
         assert config.api.model is not None, (
             "build_agent requires config.api.model to be set"
         )
-        resolved_model = get_model(
-            config.api.type, provider_ref.provider, config.api.model
+        resolved_model = config.api.type.get_model(
+            provider_ref.provider, config.api.model
         )
     return Agent(
         resolved_model,

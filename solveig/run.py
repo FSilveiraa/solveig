@@ -17,11 +17,8 @@ from pydantic_ai.models import Model
 
 from solveig import system_prompt
 from solveig.agent import run_turn_with_retry
-from solveig.api import ProviderRef, get_provider
+from solveig.api import ProviderRef
 from solveig.config import SolveigConfig
-from solveig.config.runtime_effects import (
-    fetch_and_apply_model_info,
-)
 from solveig.conversation import Conversation
 from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
@@ -85,7 +82,7 @@ async def setup_loop(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
-        await fetch_and_apply_model_info(config, provider_ref, interface)
+        await provider_ref.refresh(config)
 
     await interface.update_stats(url=config.api.url, model=config.api.model)
 
@@ -200,11 +197,13 @@ async def run_async(
     session_manager = SessionManager(config=config)
 
     provider_ref = provider_ref or ProviderRef(
-        provider=get_provider(
-            config.api.type,
+        provider=config.api.type.get_provider(
             api_key=config.api.key.get_secret_value() or None,
             url=config.api.url,
-        )
+        ),
+        config=config,
+        url=config.api.url,
+        type=config.api.type,
     )
 
     subcommand_executor = SubcommandRegistry(

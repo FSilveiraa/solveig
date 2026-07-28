@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 import solveig.interface.themes as themes
-from solveig.api import APIType, parse_api_type
+from solveig.api import APIType, OpenAI, TYPE_BY_NAME, resolve_api_type
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 # Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow"). Used
@@ -50,10 +50,21 @@ Response format:
 class ApiConfig(BaseModel):
     model_config = _MUTABLE
     url: str = Field(default="", description="LLM API endpoint URL")
-    type: builtins.type[APIType.BaseAPI] = Field(
-        default=APIType.OPENAI,
+    type: APIType = Field(
+        default_factory=OpenAI,
         description="API provider type (openai, anthropic, gemini)",
     )
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def _parse_type(cls, v: Any) -> APIType:
+        if isinstance(v, str):
+            return resolve_api_type(v)
+        return v
+
+    @field_serializer("type")
+    def _ser_type(self, v: APIType) -> str:
+        return type(v).__name__.lower()
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).
     key: SecretStr = Field(default=SecretStr(""), description="API authentication key")
@@ -68,15 +79,6 @@ class ApiConfig(BaseModel):
     timeout: float = Field(
         default=60.0, description="LLM API request timeout in seconds"
     )
-
-    @field_validator("type", mode="before")
-    @classmethod
-    def _parse_type(cls, v: Any) -> Any:
-        return parse_api_type(v) if isinstance(v, str) else v
-
-    @field_serializer("type")
-    def _ser_type(self, v: builtins.type[APIType.BaseAPI]) -> str:
-        return v.name
 
     @field_serializer("key")
     def _ser_key(self, v: SecretStr) -> str:

@@ -1,6 +1,7 @@
 from pydantic import ByteSize
 
-from solveig import APIType, SolveigConfig
+from solveig import SolveigConfig
+from solveig.api import OpenAI
 
 from .client import create_mock_model
 from .interface import MockInterface
@@ -13,7 +14,7 @@ SolveigConfig.compose_core_tools()
 DEFAULT_CONFIG = SolveigConfig(
     cli_args=[],  # hermetic: don't parse pytest's process argv
     api={
-        "type": APIType.OPENAI,
+        "type": "openai",
         "key": "test-key",
         "url": "test-url",
         "model": "test-model",
