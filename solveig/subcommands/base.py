@@ -18,8 +18,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from solveig.interface import SolveigInterface
-
 # ---------------------------------------------------------------------------
 # Push-model pending list — everything pushes here at import time
 # ---------------------------------------------------------------------------
@@ -119,16 +117,10 @@ class Subcommand:
             line += "  (disabled)"
         return line
 
-    async def __call__(self, *tokens: str, interface: SolveigInterface) -> Any:
-        """Hand the raw tokens to the handler. ``-h``/``--help`` short-circuits to
-        a usage line for *any* subcommand (built-in or tool) before the handler
-        parses — otherwise argparse (on the tool path) would print to stdout and
-        raise SystemExit. ``interface`` is always the handler's first argument."""
+    async def __call__(self, *tokens: str) -> Any:
+        """Hand the raw tokens to the handler."""
         assert self.handler is not None, (
             f"Subcommand {self.commands} has no handler — "
             "it is likely still a ClassVar template that was never registered."
         )
-        if any(token in ("-h", "--help") for token in tokens):
-            await interface.display_info(f"Usage: {self.help_line()}")
-            return None
-        return await self.handler(interface, *tokens)
+        return await self.handler(*tokens)

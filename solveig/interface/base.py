@@ -5,17 +5,17 @@ The display protocol for Solveig's frontends.
 render (display_*), ask (ask_*), scope output (with_group), status and
 animations, theming, and the reactive handshake (attach_conversation). It
 deliberately also carries the two concerns every interactive frontend shares
-- producer callbacks (on_user_input, wired by run.py)
+- the user-message queue (the interface's output channel for typed input)
 and cancellation (with_cancellable + the _active_tasks registry + the
-cancel_task verb). App-session state (the input UserMessageQueue) and command dispatch live
-OUTSIDE the interface - see solveig/inbox.py and decisions D0/D5.
+cancel_task verb). Command dispatch lives OUTSIDE the interface - the queue's
+prompt gate routes /commands before insertion.
 """
 
 from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.themes import Palette
     from solveig.sessions.manager import SessionManager
+    from solveig.user_message_queue import UserMessageQueue
 
 
 class MutableTextBox:
@@ -65,27 +66,23 @@ class SolveigInterface(ABC):
     Two cross-cutting concerns are protocol-level ON PURPOSE (every UI with
     user input shares them, so a frontend never re-implements them):
 
-    - **Producer callbacks** (`on_user_input`) -
-      wired by run.py at construction; the interface produces input without
-      naming app objects (the UserMessageQueue, the SubcommandRunner). Decision D5.
+    - **User-message queue** (`user_message_queue`) - the interface's output
+      channel for typed input. The interface `put`s; the queue's prompt gate
+      decides what actually lands (prompts vs swallowed /commands).
     - **Cancellation** (`with_cancellable`, the `_active_tasks`
       registry, `cancel_task`, `get_active_tasks`) - every interactive UI has
       both a per-task cancel (a button) and a global untargeted one (Esc,
       Ctrl+.), so the registry and the verb live here.
 
-    What is NOT here: the input queue (owned by run.py's main loop -
-    `solveig/inbox.py`), prompt serialization policy (each frontend's own,
-    e.g. the CLI's `_choice_lock`), and command dispatch (the runner's).
+    What is NOT here: prompt serialization policy (each frontend's own,
+    e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
     """
 
-    # App-wired producer callback: the ONE way user-typed input leaves the
-    # interface (prompts and retries alike). Called as
-    # `on_user_input(self, text)` - the interface passes itself, so the app's
-    # router needs no closure over the interface (constructor-wirable, no
-    # late-binding trick). Awaitable because the router awaits dispatch.
-    # Wired exactly once: by constructor (real frontends) or by the
-    # composition root's `wire_interface` (injected test/demo interfaces).
-    on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None
+    # The interface's output channel: typed input goes here. Set by
+    # constructor (real frontends) or post-construction by the composition
+    # root (injected test/demo interfaces). None until wired; `_handle_input`
+    # no-ops without it.
+    user_message_queue: UserMessageQueue | None = None
 
     _root_ref: SolveigInterface | None = None
     _active_tasks_ref: dict[asyncio.Task, None] | None = None

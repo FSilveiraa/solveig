@@ -20,7 +20,6 @@ from solveig.agent import run_turn_with_retry
 from solveig.api import Client
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
-from solveig.exceptions import UserCancel
 from solveig.interface import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
@@ -34,7 +33,7 @@ from solveig.user_message_queue import UserMessageQueue
 async def _display_setup(
     config: SolveigConfig,
     interface: SolveigInterface,
-    provider_ref: Client,
+    client: Client,
     conversation: Conversation,
     session_manager: SessionManager,
     resume_session: str | None,
@@ -77,7 +76,7 @@ async def _display_setup(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
         )
     else:
-        await provider_ref.refresh(config)
+        await client.refresh(config)
 
     await interface.update_stats(url=config.api.url, model=config.api.model)
 
@@ -87,7 +86,7 @@ async def _display_setup(
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    provider_ref: Client,
+    client: Client,
     conversation: Conversation,
     user_message_queue: UserMessageQueue,
     session_manager: SessionManager,
@@ -108,7 +107,7 @@ async def main_loop(
     system_prompt_text = await _display_setup(
         config=config,
         interface=interface,
-        provider_ref=provider_ref,
+        client=client,
         conversation=conversation,
         session_manager=session_manager,
         resume_session=resume_session,
@@ -133,7 +132,7 @@ async def main_loop(
         system_prompt_text = await system_prompt.get_system_prompt(config)
         ok = await run_turn_with_retry(
             config=config,
-            provider_ref=provider_ref,
+            client=client,
             interface=interface,
             conversation=conversation,
             system_prompt=system_prompt_text,
@@ -156,7 +155,7 @@ async def run_async(
     config: SolveigConfig | None = None,
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
-    provider_ref: Client | None = None,
+    client: Client | None = None,
     model: Model | None = None,
     resume_session: str | None = None,
 ) -> Conversation:
@@ -182,7 +181,7 @@ async def run_async(
     user_message_queue = UserMessageQueue()
     conversation = Conversation()
     session_manager = SessionManager(config)
-    provider_ref = provider_ref or Client(config)
+    client = client or Client(config)
 
     # Non-display plugin discovery + tool rebuild — happens before the
     # interface exists so the composed config is ready when the Textual app
@@ -190,47 +189,33 @@ async def run_async(
     discover_plugins(config)
     AVAILABLE_TOOLS.rebuild(config)
 
-    subcommand_executor = SubcommandRegistry(
-        deps={
-            SolveigConfig: config,
-            Conversation: conversation,
-            Client: provider_ref,
-            SessionManager: session_manager,
-        }
-    )
-
-    # Producer wiring (D5): typed input routes commands to the executor and
-    # prompts to the UserMessageQueue.  The interface passes ITSELF to these
-    # callbacks (no closure needed), so both are plain constructor arguments.
-    async def route_user_input(iface: SolveigInterface, text: str) -> None:
-        try:
-            if await subcommand_executor(text, interface=iface):
-                return
-        except UserCancel:
-            return
-        except Exception as e:
-            await iface.display_error(
-                f"Found error when executing '{text}' sub-command: {e}"
-            )
-            return
-        user_message_queue.put_nowait(text)
-
     if interface is None:
         interface = TerminalInterface(
             theme=config.interface.theme,
             code_theme=config.interface.code_theme,
             auto_copy_selection=config.interface.auto_copy_selection,
-            inbox=user_message_queue,
-            on_user_input=route_user_input,
+            user_message_queue=user_message_queue,
             config=config,
         )
     else:
-        # Test/demo code injected an interface it already constructed — finish
-        # wiring the producer callback that run_async owns.
-        interface.on_user_input = route_user_input
+        # Test/demo code injected an interface it already constructed - wire
+        # its output channel to the session queue.
+        interface.user_message_queue = user_message_queue
+
+    # The registry owns the prompt gate: /commands are dispatched before
+    # insertion, prompts pass through unchanged. Self-registers on the queue
+    # in its constructor.
+    subcommand_executor = SubcommandRegistry(
+        config=config,
+        conversation=conversation,
+        interface=interface,
+        client=client,
+        session_manager=session_manager,
+        user_message_queue=user_message_queue,
+    )
 
     if user_prompt:
-        user_message_queue.put_nowait(user_prompt)
+        await user_message_queue.put(user_prompt)
 
     loop_task = None
     try:
@@ -238,7 +223,7 @@ async def run_async(
             main_loop(
                 interface=interface,
                 config=config,
-                provider_ref=provider_ref,
+                client=client,
                 conversation=conversation,
                 user_message_queue=user_message_queue,
                 model=model,

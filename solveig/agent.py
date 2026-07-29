@@ -52,7 +52,7 @@ from solveig.user_message_queue import UserMessageQueue
 
 def build_agent(
     config: SolveigConfig,
-    provider_ref: Client,
+    client: Client,
     system_prompt: str,
     model: Model | None = None,
 ) -> Agent[SolveigContext, str]:
@@ -74,7 +74,7 @@ def build_agent(
             "build_agent requires config.api.model to be set"
         )
         resolved_model = config.api.type.get_model(
-            provider_ref.provider, config.api.model
+            client.provider, config.api.model
         )
     return Agent(
         resolved_model,
@@ -269,7 +269,7 @@ async def _gate_and_interleave(
 
 async def run_turn_with_retry(
     config: SolveigConfig,
-    provider_ref: Client,
+    client: Client,
     interface: SolveigInterface,
     conversation: Conversation,
     system_prompt: str,
@@ -299,7 +299,7 @@ async def run_turn_with_retry(
         if len(conversation.messages) > baseline:
             await conversation.truncate_from(conversation.ids[baseline])
 
-        agent = build_agent(config, provider_ref, system_prompt, model=model)
+        agent = build_agent(config, client, system_prompt, model=model)
         deps = SolveigContext(config=config, interface=interface)
         try:
             with Agent.parallel_tool_call_execution_mode("sequential"):

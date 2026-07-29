@@ -139,10 +139,10 @@ class EditableComment(Comment, EditableMessage):
             return
         text = self.comment
         await self.conversation.truncate_from(self.message_id)
-        # Resubmit through the app's producer callback - the same path typed
-        # input takes (command routing + the session UserMessageQueue).
-        if self.interface.on_user_input is not None:
-            await self.interface.on_user_input(self.interface, text)
+        # Resubmit through the session UserMessageQueue - the same path typed
+        # input takes (prompt gate routes /commands before insertion).
+        if self.interface.user_message_queue is not None:
+            await self.interface.user_message_queue.put(text)
 
     async def delete_from_here(self) -> None:
         if self.interface.get_active_tasks():

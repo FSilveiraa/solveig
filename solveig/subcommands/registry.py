@@ -1,28 +1,33 @@
 """SubcommandRegistry — reads `_PENDING`, binds handlers, dispatches.
 
-The registry is a pure pipe: it receives a deps dict at construction, reads the
-module-level `_PENDING` list (populated at import time by `@subcommand` and tool
-`__pydantic_init_subclass__`), builds one handler per template, and exposes a
-single `__call__` for dispatch. No domain knowledge — it doesn't know what a
-config or an MCP connection is.
+The registry is a pure pipe: it receives its dependencies as constructor
+arguments, reads the module-level `_PENDING` list (populated at import time by
+`@subcommand` and tool `__pydantic_init_subclass__`), builds one handler per
+template, and exposes a single `__call__` for dispatch. No domain knowledge —
+it doesn't know what a config or an MCP connection is.
 
 One CLI parsing path: CliSettingsSource for everything. Built-in handler params
 become a throwaway pydantic model (required positional → CliPositionalArg[T],
 bool with default → --flag/--no-flag, *rest → list[str]).
+
+The registry also owns the prompt gate: on construction it registers itself as
+the queue's `prompt_handler`, so /commands typed as user input are dispatched
+before insertion and prompts pass through unchanged.
 """
 
 from __future__ import annotations
 
 import inspect
 import shlex
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, ValidationError, create_model
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ToolDisabledError
+from solveig.conversation import Conversation
+from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface import SolveigInterface
 from solveig.subcommands.base import (
     _PENDING,
@@ -31,6 +36,11 @@ from solveig.subcommands.base import (
     subcommand,
 )
 from solveig.tools.orchestration import run_tool_and_hooks
+
+if TYPE_CHECKING:
+    from solveig.api import Client
+    from solveig.sessions.manager import SessionManager
+    from solveig.user_message_queue import UserMessageQueue
 
 
 def _build_sections(subs: list[Subcommand]) -> list[tuple[str, str]]:
@@ -49,13 +59,37 @@ _CLI_OPTS: dict[str, Any] = {
 
 
 class SubcommandRegistry:
-    def __init__(self, deps: dict[type, Any]):
-        self._deps = deps
+    def __init__(
+        self,
+        config: SolveigConfig,
+        conversation: Conversation,
+        interface: SolveigInterface,
+        client: Client,
+        session_manager: SessionManager,
+        user_message_queue: UserMessageQueue,
+    ) -> None:
+        self._config = config
+        self._conversation = conversation
+        self._interface = interface
+        self._client = client
+        self._session_manager = session_manager
+        self._user_message_queue = user_message_queue
+        # Build the deps dict the binding logic uses for type→instance resolution.
+        self._deps: dict[type, Any] = {
+            SolveigConfig: config,
+            Conversation: conversation,
+            SolveigInterface: interface,
+            type(client): client,
+            SessionManager: session_manager,
+        }
         # Resolve TYPE_CHECKING string annotations: {"SolveigConfig": SolveigConfig, …}
-        self._dep_by_name = {k.__name__: k for k in deps}
+        self._dep_by_name = {k.__name__: k for k in self._deps}
         self._registry: dict[str, Subcommand] = {}
         self._subcommands: list[Subcommand] = []
         self._bind_all()
+        # HACK: Self-register as the queue's prompt gate: /commands are
+        # dispatched before insertion; prompts pass through unchanged.
+        user_message_queue.prompt_handler = self.handle_prompt
 
     # ------------------------------------------------------------------
     # Binding
@@ -71,17 +105,9 @@ class SubcommandRegistry:
 
         # /help is self-referential — the registry owns its own help display.
         # Not pushed through _PENDING since it's the same object dispatching it.
-        async def _help_handler(interface: SolveigInterface, *tokens: str) -> None:
-            await self.help(interface)
-
-        self._register(
-            Subcommand(
-                commands=["/help"],
-                handler=_help_handler,
-                description="List available commands",
-                section="basic",
-            )
-        )
+        @subcommand("/help")
+        async def _help_handler(*tokens: str) -> None:
+            await self.help()
 
     def _register(self, sub: Subcommand) -> None:
         self._subcommands.append(sub)
@@ -91,18 +117,15 @@ class SubcommandRegistry:
     # ------------------------------------------------------------------
     # Injection detection
     # ------------------------------------------------------------------
-    # A parameter is injected (not CLI-parsed) when its annotation is:
-    #   - SolveigInterface (universal dispatcher param, always passed by handler)
-    #   - A key in self._deps (resolved via _dep_by_name for TYPE_CHECKING strings)
-    #   - inspect.Parameter.empty (unannotated, treated as injected)
+    # A parameter is injected (not CLI-parsed) when its annotation is a key
+    # in self._deps (resolved via _dep_by_name for TYPE_CHECKING strings)
+    # or inspect.Parameter.empty (unannotated, treated as injected).
 
     def _is_injected(self, ann: Any) -> bool:
         if ann is inspect.Parameter.empty:
             return True
-        if ann is SolveigInterface:
-            return True
         if isinstance(ann, str):
-            return ann == "SolveigInterface" or ann in self._dep_by_name
+            return ann in self._dep_by_name
         return ann in self._deps
 
     def _resolve_dep(self, ann: Any) -> Any:
@@ -156,7 +179,7 @@ class SubcommandRegistry:
         usage = _builtin_usage(cli_fields, var_positional_name)
         CliModel = create_model("_Cli", **cli_fields) if cli_fields else None
 
-        async def handler(interface: SolveigInterface, *tokens: str) -> None:
+        async def handler(*tokens: str) -> None:
             parsed: dict[str, Any] = {}
             if CliModel:
                 try:
@@ -166,20 +189,16 @@ class SubcommandRegistry:
                         **_CLI_OPTS,
                     )()
                 except (SettingsError, ValidationError) as e:
-                    await interface.display_error(str(e))
-                    await interface.display_info(
+                    await self._interface.display_error(str(e))
+                    await self._interface.display_info(
                         f"Usage: {template.commands[0]} {usage}".rstrip()
                     )
                     return
 
-            # Build final kwargs: interface + injected deps + CLI args
-            kwargs: dict[str, Any] = {"interface": interface}
+            # Build final kwargs: injected deps + CLI args
+            kwargs: dict[str, Any] = {}
             for name in injected_names:
                 ann = sig.parameters[name].annotation
-                if ann is SolveigInterface or (
-                    isinstance(ann, str) and ann == "SolveigInterface"
-                ):
-                    continue  # already set by the dispatcher
                 kwargs[name] = self._resolve_dep(ann)
 
             # Merge parsed CLI args (except var-positional) into kwargs
@@ -224,18 +243,19 @@ class SubcommandRegistry:
         cls = template.tool_cls
         tool_template = cls.subcommand
 
-        async def handler(interface: SolveigInterface, *tokens: str) -> None:
+        async def handler(*tokens: str) -> None:
             try:
                 instance = cls.from_cli_tokens(list(tokens))
             except (SettingsError, ValidationError) as e:
-                await interface.display_error(str(e))
-                await interface.display_info(f"Usage: {tool_template.help_line()}")
+                await self._interface.display_error(str(e))
+                await self._interface.display_info(
+                    f"Usage: {tool_template.help_line()}"
+                )
                 return
             try:
-                config = self._deps[SolveigConfig]
-                await run_tool_and_hooks(instance, config, interface)
+                await run_tool_and_hooks(instance, self._config, self._interface)
             except (PluginException, ToolDisabledError) as e:
-                await interface.display_error(str(e))
+                await self._interface.display_error(str(e))
 
         return Subcommand(
             commands=template.commands,
@@ -251,7 +271,7 @@ class SubcommandRegistry:
     # Dispatch
     # ------------------------------------------------------------------
 
-    async def __call__(self, command_line: str, interface: SolveigInterface) -> bool:
+    async def __call__(self, command_line: str) -> bool:
         try:
             tokens = shlex.split(command_line)
         except ValueError:
@@ -262,16 +282,44 @@ class SubcommandRegistry:
         for n in (2, 1):
             key = " ".join(tokens[:n])
             if key in self._registry:
-                await self._registry[key](*tokens[n:], interface=interface)
+                sub = self._registry[key]
+                remaining = tokens[n:]
+                # -h/--help short-circuits to a usage line for any subcommand
+                # before the handler parses — otherwise argparse (tool path)
+                # would print to stdout and raise SystemExit.
+                if any(t in ("-h", "--help") for t in remaining):
+                    await self._interface.display_info(f"Usage: {sub.help_line()}")
+                    return True
+                await sub(*remaining)
                 return True
 
         return False
 
     # ------------------------------------------------------------------
+    # Prompt gate — the queue's prompt_handler
+    # ------------------------------------------------------------------
+
+    async def handle_prompt(self, text: str) -> str | None:
+        """Run /commands through the executor, pass prompts through unchanged.
+        Returns the (possibly transformed) text to enqueue, or None to
+        swallow (was a /command, already dispatched)."""
+        try:
+            if await self(text):
+                return None
+        except UserCancel:
+            return None
+        except Exception as e:
+            await self._interface.display_error(
+                f"Found error when executing '{text}' sub-command: {e}"
+            )
+            return None
+        return text
+
+    # ------------------------------------------------------------------
     # Help
     # ------------------------------------------------------------------
 
-    async def help(self, interface: SolveigInterface) -> str:
+    async def help(self) -> str:
         help_str = ""
         for key, title in _build_sections(self._subcommands):
             subs = [s for s in self._subcommands if s.section == key]
@@ -284,14 +332,13 @@ class SubcommandRegistry:
                 help_str += f"\n  • {sub.help_line(disabled=self._is_disabled(sub))}"
             for sub in details:
                 help_str += f"\n      {sub.help_line(disabled=self._is_disabled(sub))}"
-        await interface.display_text_box(help_str, title="Help")
+        await self._interface.display_text_box(help_str, title="Help")
         return help_str
 
     def _is_disabled(self, sub: Subcommand) -> bool:
-        config = self._deps.get(SolveigConfig)
-        if config is None or sub.tool_name is None:
+        if sub.tool_name is None:
             return False
-        return not config.is_tool_enabled(sub.tool_name)
+        return not self._config.is_tool_enabled(sub.tool_name)
 
 
 # -------------------------------------------------------------------

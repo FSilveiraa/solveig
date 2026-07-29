@@ -7,17 +7,16 @@ async display methods (`display_text`/`display_error`/...), input
 subscription handshake (`attach_conversation`). Two cross-cutting concerns
 live on the protocol deliberately:
 
-- **Producer callbacks** (`on_user_input`) — the
-  interface never names app objects (runner, UserMessageQueue); run.py wires these at
-  construction to the session's input routing (decision D5).
+- **User-message queue** (`user_message_queue`) — the interface's output
+  channel for typed input. The interface `put`s; the queue's prompt gate
+  routes /commands before insertion.
 - **Cancellation** (`with_cancellable`, the `_active_tasks` registry,
   `cancel_task`, `get_active_tasks`) - every UI with input
   has both a per-operation and a global untargeted cancel, so the registry
   and both verbs are shared protocol, not per-frontend rewrites.
 
-What does NOT live here: the input queue itself (the session UserMessageQueue is owned
-by run.py's main loop - `solveig/inbox.py`), prompt serialization policy
-(the CLI's `_choice_lock`), and command dispatch (the SubcommandRunner).
+What does NOT live here: prompt serialization policy (each frontend's own,
+e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
 
 The terminal implementation lives under `cli/` (`TerminalInterface` + its
 Textual app); tests supply a `MockInterface`.

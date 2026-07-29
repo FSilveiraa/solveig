@@ -48,16 +48,16 @@ class SolveigTextualApp(TextualApp):
         self,
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
-        inbox: UserMessageQueue | None = None,
+        user_message_queue: UserMessageQueue | None = None,
         auto_copy_selection: bool = True,
         interface_ref: SolveigInterface | None = None,
-        config = None,
+        config=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._input_callback = input_callback
         self._theme = theme
-        self._inbox = inbox
+        self._user_message_queue = user_message_queue
         self._auto_copy_selection = auto_copy_selection
         self._interface_ref = interface_ref
         self._config = config
@@ -83,9 +83,9 @@ class SolveigTextualApp(TextualApp):
         yield ConversationArea(id="conversation")
 
         # Queued messages display (only if the session UserMessageQueue was provided)
-        if self._inbox is not None:
+        if self._user_message_queue is not None:
             yield QueuedMessagesDisplay(
-                queue=self._inbox,
+                queue=self._user_message_queue,
                 theme=self._theme,
                 id="queued_messages",
             )
@@ -111,14 +111,10 @@ class SolveigTextualApp(TextualApp):
         self._input_widget = self.query_one("#input", InputBar)
         self._stats_dashboard = self.query_one("#stats", StatsBar)
 
-        if self._inbox is not None:
+        if self._user_message_queue is not None:
             self._queued_messages_display = self.query_one(
                 "#queued_messages", QueuedMessagesDisplay
             )
-            # The display reacts to the UserMessageQueue's doorbell (D5): any mutation
-            # from any consumer - main loop get, gate drain, typed input put -
-            # re-renders it. No notify-by-courtesy at call sites.
-            self._inbox.on_change = self._queued_messages_display.update_display
 
         # Focus the input widget so user can start typing immediately
         self._input_widget.focus()

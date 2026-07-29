@@ -3,7 +3,7 @@
 import asyncio
 import difflib
 import random
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
     from solveig.sessions.manager import SessionManager
+    from solveig.user_message_queue import UserMessageQueue
 
 
 class LocalDisplay(SolveigInterface):
@@ -249,19 +250,18 @@ class TerminalInterface(LocalDisplay):
         theme: Palette = DEFAULT_THEME,
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
-        on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None,
+        user_message_queue: "UserMessageQueue | None" = None,
         config=None,
         **kwargs,
     ):
-        # Producer callback wired at construction (the UserMessageQueue and the
-        # command router both already exist by the time the interface is created
-        # — see run.py's run_async ordering); nothing is set-later.
-        self.on_user_input = on_user_input
+        # The interface's output channel: typed input lands here via `put`.
+        self.user_message_queue = user_message_queue
         app = SolveigTextualApp(
             theme=theme,
             input_callback=self._handle_input,
             interface_ref=self,
             config=config,
+            user_message_queue=user_message_queue,
             **kwargs,
         )
         super().__init__(app=app, theme=theme, code_theme=code_theme)
@@ -329,12 +329,11 @@ class TerminalInterface(LocalDisplay):
         self.app.exit()
 
     async def _handle_input(self, user_input: str):
-        """The Textual app's input callback: hand the user's text to the app's
-        producer (`on_user_input`, wired by run.py to the session UserMessageQueue /
-        command router - see decision D5). The interface PRODUCES input; it
-        never holds the queue it lands in."""
-        if self.on_user_input is not None:
-            await self.on_user_input(self, user_input)
+        """The Textual app's input callback: hand the user's text to the
+        session UserMessageQueue. The queue's prompt gate routes /commands
+        before insertion; the interface never knows the difference."""
+        if self.user_message_queue is not None:
+            await self.user_message_queue.put(user_input)
 
     @property
     def _container(self):

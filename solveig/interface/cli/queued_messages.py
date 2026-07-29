@@ -30,7 +30,7 @@ class QueuedMessagesDisplay(Vertical):
 
     Shows a count when collapsed, lists messages when expanded.
     Only visible when there are messages in the queue. Re-renders via the
-    UserMessageQueue's `on_change` doorbell (wired by the app at mount) - any mutation
+    UserMessageQueue's `on_change` doorbell (self-registered at mount) - any mutation
     from any consumer, no per-call-site notification (D5).
     """
 
@@ -40,6 +40,11 @@ class QueuedMessagesDisplay(Vertical):
         self._collapsible: CustomCollapsible | None = None
         self._content_container: Vertical | None = None
         super().__init__(**kwargs)
+
+    def on_mount(self) -> None:
+        # Self-register the doorbell: any mutation from any consumer
+        # (main loop get, gate drain, typed input put) re-renders the display.
+        self._queue.on_change = self.update_display
 
     def compose(self):
         """Create the widget layout."""

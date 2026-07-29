@@ -187,15 +187,18 @@ class Client:
         self.model_info: ModelInfo | None = None
 
         @config.on_change("api.model", "api.url", "api.type")
-        async def _on_api_change(config: SolveigConfig, paths: frozenset[str]) -> None:
-            if (
-                self.model_info
-                and self.model_info.model == config.api.model
-                and self.provider.base_url == config.api.url
-                and type(self.type) is type(config.api.type)
-            ):
-                return
-            await self.refresh(config)
+        async def _on_api_change(_config: SolveigConfig, paths: frozenset[str]):
+            return await self._on_api_change(_config, paths)
+
+    async def _on_api_change(self, config: SolveigConfig, paths: frozenset[str]) -> None:
+        if (
+            self.model_info
+            and self.model_info.model == config.api.model
+            and self.provider.base_url == config.api.url
+            and type(self.type) is type(config.api.type)
+        ):
+            return
+        await self.refresh(config)
 
     async def refresh(self, config: SolveigConfig) -> None:
         """Build provider from config, fetch model details, atomic swap."""
@@ -233,12 +236,12 @@ class Client:
 @subcommand("/model list", section="model")
 async def model_list(
     config: SolveigConfig,
-    provider_ref: Client,
+    client: Client,
     interface: SolveigInterface,
 ) -> None:
     """List available models from the provider."""
     try:
-        models = await config.api.type.list_models(provider_ref.provider)
+        models = await config.api.type.list_models(client.provider)
     except NotImplementedError as e:
         await interface.display_error(str(e))
         return
@@ -272,11 +275,11 @@ async def model_set(
 
 @subcommand("/model info", section="model", detail=True)
 async def model_info(
-    provider_ref: Client,
+    client: Client,
     interface: SolveigInterface,
 ) -> None:
     """Show current model details."""
-    info = provider_ref.model_info
+    info = client.model_info
     if info is None:
         await interface.display_info("No model info loaded. Run /model refresh.")
         return
@@ -295,8 +298,8 @@ async def model_info(
 @subcommand("/model refresh", section="model", detail=True)
 async def model_refresh(
     config: SolveigConfig,
-    provider_ref: Client,
+    client: Client,
 ) -> None:
     """Refresh model details from the API."""
-    provider_ref.model_info = None
-    await provider_ref.refresh(config)
+    client.model_info = None
+    await client.refresh(config)
