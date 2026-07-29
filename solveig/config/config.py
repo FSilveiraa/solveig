@@ -50,6 +50,7 @@ DEFAULT_CONFIG_PATHS = [
     "./.solveig/config.yaml",
     "~/.solveig/config.yaml",
 ]
+
 DEFAULT_PLUGIN_PATHS = [
     "./.solveig/plugins",
     "~/.solveig/plugins",
@@ -66,6 +67,7 @@ CLI_SETTINGS_OPTS: dict[str, Any] = {
     "case_sensitive": True,
     "cli_enforce_required": False,
 }
+
 # Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
 _CLI_SHORTCUTS: dict[str, str] = {
     "api.url": "url",
@@ -84,9 +86,7 @@ def _split_config_path_from_cli_args(
     argv: list[str],
 ) -> tuple[list[str], list[str]]:
     """Pull every `--config FILE` out of argv, returning (config_paths,
-    remaining_argv). `--config` is consumed by the config-file source, not
-    parsed as a pydantic CLI flag — stripping it here lets CliSettingsSource
-    parse the rest without erroring on an unknown flag."""
+    remaining_argv). `--config` is consumed by the config-file source."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--config", action="append", dest="config", default=[])
     ns, rest = parser.parse_known_args(argv)

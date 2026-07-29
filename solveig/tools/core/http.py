@@ -10,7 +10,12 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
 from solveig.subcommands.base import Subcommand
-from solveig.tools.base import BaseTool, ToolConfig
+from solveig.tools.base import (
+    BaseTool,
+    ConsentDecision,
+    ToolConfig,
+    check_path_security,
+)
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -155,33 +160,33 @@ class HttpTool(BaseTool[HttpConfig]):
         response_headers: dict[str, str],
     ) -> ToolResult:
         assert self.output_file is not None
-        output_abs_path = Filesystem.get_absolute_path(self.output_file)
 
-        if Filesystem.path_matches_patterns(output_abs_path, config.ignored_paths):
+        decision, abs_path = check_path_security(self.output_file, config)
+        if decision == ConsentDecision.BLOCKED:
             await interface.display_error(
-                f"Path blocked by ignored_paths: {output_abs_path}"
+                f"Path blocked by ignored_paths: {abs_path}"
             )
             return ToolResult(
-                issues=[f"path blocked by ignored_paths: {output_abs_path}"]
+                issues=[f"path blocked by ignored_paths: {abs_path}"]
             )
 
         try:
             await Filesystem.validate_write_access(
-                path=output_abs_path,
+                path=abs_path,
                 content=response.content,
                 min_disk_size_left=config.min_disk_space_left,
             )
         except (OSError, PermissionError) as e:
-            await interface.display_error(f"Cannot write to {output_abs_path}: {e}")
+            await interface.display_error(f"Cannot write to {abs_path}: {e}")
             return ToolResult(issues=[e])
 
-        if Filesystem.path_matches_patterns(output_abs_path, config.auto_allowed_paths):
+        if decision == ConsentDecision.AUTO_ALLOWED:
             await interface.display_info(
                 "Writing output file since path is auto-allowed."
             )
         elif (
             await interface.ask_choice(
-                f"Write response to {output_abs_path}?", ["Yes", "No"]
+                f"Write response to {abs_path}?", ["Yes", "No"]
             )
         ) != 0:
             await interface.display_warning("Rejected")
@@ -191,18 +196,18 @@ class HttpTool(BaseTool[HttpConfig]):
 
         try:
             await Filesystem.write_file_bytes(
-                output_abs_path,
+                abs_path,
                 content=response.content,
                 min_space_left=config.min_disk_space_left,
             )
-            await interface.display_success(f"Saved to {output_abs_path}")
+            await interface.display_success(f"Saved to {abs_path}")
         except OSError as e:
             await interface.display_error(f"Failed to write file: {e}")
             return ToolResult(issues=[e])
 
         return ToolResult(
-            content=f"Status {status_code}. Saved response body to {output_abs_path}",
-            metadata={"status_code": status_code, "output_file": str(output_abs_path)},
+            content=f"Status {status_code}. Saved response body to {abs_path}",
+            metadata={"status_code": status_code, "output_file": str(abs_path)},
             private={"url": self.url, "response_headers": response_headers},
         )
 

@@ -17,6 +17,7 @@ This is a first-class pydantic-ai mechanism (`_function_schema._build_schema`'s
 import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,8 +33,31 @@ from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import _camel_to_snake, format_path_info
 
 if TYPE_CHECKING:
+    from anyio import Path
+
     from solveig.config import SolveigConfig
     from solveig.interface import SolveigInterface
+
+
+class ConsentDecision(Enum):
+    """What a path-security check decided: block it, auto-allow it, or ask."""
+
+    BLOCKED = "blocked"
+    AUTO_ALLOWED = "auto_allowed"
+    NEEDS_CONSENT = "needs_consent"
+
+
+def check_path_security(
+    path: str, config: "SolveigConfig"
+) -> tuple[ConsentDecision, "Path"]:
+    """Check a filesystem path against ignored_paths and auto_allowed_paths.
+    Returns (decision, absolute_path).  Caller handles display and consent UI."""
+    abs_path = Filesystem.get_absolute_path(path)
+    if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
+        return ConsentDecision.BLOCKED, abs_path
+    if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
+        return ConsentDecision.AUTO_ALLOWED, abs_path
+    return ConsentDecision.NEEDS_CONSENT, abs_path
 
 
 class ToolConfig(BaseModel):

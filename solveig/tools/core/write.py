@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -45,9 +45,8 @@ class WriteTool(BaseTool):
     async def execute(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> ToolResult:
-        abs_path = Filesystem.get_absolute_path(self.path)
-
-        if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
+        decision, abs_path = check_path_security(self.path, config)
+        if decision == ConsentDecision.BLOCKED:
             await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
@@ -73,7 +72,7 @@ class WriteTool(BaseTool):
                 )
 
         noun = "directory" if self.is_directory else "file"
-        if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
+        if decision == ConsentDecision.AUTO_ALLOWED:
             await interface.display_text(
                 f"{'Updating' if already_exists else 'Creating'} "
                 f"{noun} since it matches config.auto_allowed_paths"

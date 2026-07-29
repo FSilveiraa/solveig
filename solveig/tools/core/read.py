@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.subcommands.base import Subcommand
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -83,9 +83,8 @@ class ReadTool(BaseTool):
     async def execute(
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> ToolResult:
-        abs_path = Filesystem.get_absolute_path(self.path)
-
-        if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
+        decision, abs_path = check_path_security(self.path, config)
+        if decision == ConsentDecision.BLOCKED:
             await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
@@ -95,27 +94,25 @@ class ReadTool(BaseTool):
             await interface.display_error(f"Cannot access {abs_path}: {e}")
             return ToolResult(issues=[e])
 
-        path_matches = Filesystem.path_matches_patterns(
-            abs_path, config.auto_allowed_paths
-        )
+        auto_allowed = decision == ConsentDecision.AUTO_ALLOWED
         metadata = await Filesystem.read_metadata(abs_path)
 
         if metadata.is_directory or self.metadata_only:
-            return await self._read_metadata_only(interface, path_matches, metadata)
+            return await self._read_metadata_only(interface, auto_allowed, metadata)
 
-        return await self._read_content(interface, abs_path, path_matches, metadata)
+        return await self._read_content(interface, abs_path, auto_allowed, metadata)
 
     async def _read_metadata_only(
         self,
         interface: "SolveigInterface",
-        path_matches: bool,
+        auto_allowed: bool,
         metadata: FileMetadata,
     ) -> ToolResult:
         """Directory or metadata_only request: offer to send just the file/dir metadata."""
         if metadata.is_directory:
             await interface.display_tree(metadata=metadata)
 
-        if path_matches:
+        if auto_allowed:
             await interface.display_info("Sending metadata since path is auto-allowed.")
             send_metadata = True
         else:
@@ -135,7 +132,7 @@ class ReadTool(BaseTool):
         self,
         interface: "SolveigInterface",
         abs_path: "Path",
-        path_matches: bool,
+        auto_allowed: bool,
         metadata: FileMetadata,
     ) -> ToolResult:
         """File content request: negotiate depth of access, read, display, then send."""
@@ -148,7 +145,7 @@ class ReadTool(BaseTool):
         else:
             await interface.display_text("Content and metadata", prefix="Requesting:")
 
-        if path_matches:
+        if auto_allowed:
             await interface.display_info(
                 "Reading and sending file since path is auto-allowed."
             )

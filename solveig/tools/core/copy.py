@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.subcommands.base import Subcommand
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -52,12 +52,13 @@ class CopyTool(BaseTool):
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)
 
-        for blocked in (abs_source_path, abs_destination_path):
-            if Filesystem.path_matches_patterns(blocked, config.ignored_paths):
+        for path in (self.source_path, self.destination_path):
+            decision, abs_path = check_path_security(path, config)
+            if decision == ConsentDecision.BLOCKED:
                 await interface.display_error(
-                    f"Path blocked by ignored_paths: {blocked}"
+                    f"Path blocked by ignored_paths: {abs_path}"
                 )
-                return ToolResult(issues=[f"path blocked by ignored_paths: {blocked}"])
+                return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_read_access(abs_source_path)
@@ -69,10 +70,9 @@ class CopyTool(BaseTool):
             )
             return ToolResult(issues=[e])
 
-        auto_copy = Filesystem.path_matches_patterns(
-            abs_source_path, config.auto_allowed_paths
-        ) and Filesystem.path_matches_patterns(
-            abs_destination_path, config.auto_allowed_paths
+        auto_copy = all(
+            check_path_security(path, config)[0] == ConsentDecision.AUTO_ALLOWED
+            for path in (self.source_path, self.destination_path)
         )
 
         dest_exists = not is_dir and await Filesystem.exists(abs_destination_path)

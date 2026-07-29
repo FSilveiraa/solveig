@@ -7,7 +7,7 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
 from solveig.subcommands.base import Subcommand
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -90,7 +90,8 @@ class EditTool(BaseTool):
     ) -> ToolResult | None:
         """Reject the edit up front (blocked path, unreadable, directory, or
         unwritable); return the error `ToolResult`, or `None` to proceed."""
-        if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
+        decision, _ = check_path_security(str(abs_path), config)
+        if decision == ConsentDecision.BLOCKED:
             await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
         try:
@@ -156,7 +157,8 @@ class EditTool(BaseTool):
         occurrences_replaced: int,
     ) -> ToolResult:
         """Get approval (auto-allowed paths bypass it) and write the file."""
-        if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
+        decision, _ = check_path_security(str(abs_path), config)
+        if decision == ConsentDecision.AUTO_ALLOWED:
             await interface.display_info(
                 f"Auto-applying edit ({occurrences_replaced} replacement(s)) since path is auto-allowed."
             )
