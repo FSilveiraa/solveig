@@ -40,6 +40,9 @@ class Palette:
         if self.group_pending is None:
             self.group_pending = _blend(self.group, self.background, 0.5)
 
+    def display_value(self) -> str:
+        return self.name
+
 
 terracotta = Palette(
     # Info

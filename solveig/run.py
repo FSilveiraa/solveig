@@ -168,16 +168,15 @@ async def run_async(
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                (
-                    config,
-                    user_prompt,
-                    resume_session,
-                ) = await SolveigConfig.parse_config_and_prompt()
+                config = await SolveigConfig.parse_config_and_prompt()
             startup_warnings = tuple(str(w.message) for w in caught)
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
 
+    assert config is not None  # narrow for mypy after the if-not-config branch
+    user_prompt = user_prompt or config.prompt.strip()
+    resume_session = resume_session or config.resume
     user_message_queue = UserMessageQueue()
     conversation = Conversation()
     session_manager = SessionManager(config)

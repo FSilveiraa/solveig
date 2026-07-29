@@ -9,19 +9,18 @@ Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
 `tools.http.timeout`, `interface.theme`).
 """
 
-import re
 import typing
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, ByteSize, SecretStr
+from pydantic import BaseModel
 
 from solveig.api import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.interface import SolveigInterface, themes
 from solveig.subcommands.base import subcommand
 
 from . import sources
-from .config import DEFAULT_CONFIG_PATHS, SolveigConfig
+from .config import DEFAULT_CONFIG_PATHS, SolveigConfig, display_config_value
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.
@@ -212,7 +211,7 @@ async def config_list(config: SolveigConfig, interface: SolveigInterface) -> Non
     lines = []
     for field_name, _description in editable_fields(config).items():
         value = config.get(field_name)
-        display = _format_field_value(value)
+        display = display_config_value(value)
         lines.append(f"{field_name:<32} = {display}")
     await interface.display_text_box("\n".join(lines), title="Config (editable fields)")
 
@@ -230,7 +229,7 @@ async def config_get(
         )
         return
     value = config.get(field_name)
-    display = _format_field_value(value)
+    display = display_config_value(value)
     await interface.display_info(f"{field_name} = {display}  ({fields[field_name]})")
 
 
@@ -291,20 +290,4 @@ async def config_save(
 
 
 # ---------------------------------------------------------------------------
-# Display helpers
-# ---------------------------------------------------------------------------
-
-
-def _format_field_value(value: object) -> str:
-    """Format a config value for display, driven by type — never by field name."""
-    if isinstance(value, SecretStr):
-        return "***" if value.get_secret_value() else "(not set)"
-    if isinstance(value, ByteSize):
-        return value.human_readable()
-    if isinstance(value, re.Pattern):
-        return value.pattern
-    if isinstance(value, list):
-        return ", ".join(_format_field_value(v) for v in value) if value else "(empty)"
-    if hasattr(value, "name"):  # Palette, APIType subclass
-        return value.name
-    return repr(value)
+# Subcommands — declared here because the config editor owns config editing.

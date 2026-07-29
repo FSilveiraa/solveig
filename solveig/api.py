@@ -32,6 +32,9 @@ class APIType:
 
     default_url: str = ""
 
+    def display_value(self) -> str:
+        return type(self).__name__.lower()
+
     def get_provider(
         self, url: str | None = None, api_key: str | None = None
     ) -> Provider:

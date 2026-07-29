@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import warnings
 from collections.abc import Awaitable, Callable
@@ -12,6 +13,7 @@ from pydantic import (
     ByteSize,
     Field,
     PrivateAttr,
+    SecretStr,
     create_model,
     field_validator,
     model_validator,
@@ -98,11 +100,8 @@ ConfigObserver = Callable[["SolveigConfig", frozenset[str]], Awaitable[None]]
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
-    """This class models one config file passed through `--config FILE`.
-    Paths arrive already split from argv. They are resolved and loaded; the
-    resolved paths are stamped into the `config_files` field so it holds the
-    single-source truth of what was loaded. Falls back to the default search
-    paths when no --config was given."""
+    """A pydantic-settings class modeling one config file passed through `--config FILE`.
+    Resolved paths get loaded by pydantic-settings and stored in `config.config_files`."""
 
     def __init__(self, settings_cls, requested: list[str] | None = None):
         super().__init__(settings_cls)
@@ -137,6 +136,23 @@ def _dict_to_dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
     return out
 
 
+def display_config_value(value: object) -> str:
+    """Format a config value for display, driven by type — never by field name.
+    Types we own (Palette, APIType) carry their own display_value() method;
+    third-party types (SecretStr, ByteSize, re.Pattern) are dispatched here."""
+    if hasattr(value, "display_value"):
+        return value.display_value()
+    if isinstance(value, SecretStr):
+        return "***" if value.get_secret_value() else "(not set)"
+    if isinstance(value, ByteSize):
+        return value.human_readable()
+    if isinstance(value, re.Pattern):
+        return value.pattern
+    if isinstance(value, list):
+        return ", ".join(display_config_value(v) for v in value) if value else "(empty)"
+    return repr(value)
+
+
 def _compose_section(
     target: type[BaseModel],
     field_name: str,
@@ -166,21 +182,22 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Pydantic model config
     # ------------------------------------------------------------
-    # NOTE: the cli_* keys are inlined here (rather than **-expanded) so mypy
-    # can check them against the SettingsConfigDict TypedDict.  The actual CLI
-    # parsing goes through the hand-built CliSettingsSource in
-    # settings_customise_sources, which reads CLI_SETTINGS_OPTS — these
-    # model_config copies are a mypy formality, not the runtime config.
+    # NOTE: the cli_* keys from CLI_OPTS are inlined here (rather than
+    # **-expanded) so mypy can check them against the SettingsConfigDict
+    # TypedDict. The actual CLI parsing goes through the hand-built
+    # CliSettingsSource in settings_customise_sources, which reads
+    # CLI_SETTINGS_OPTS — these model_config copies are a mypy formality,
+    # not the runtime config.
     model_config = SettingsConfigDict(
         validate_assignment=True,
         arbitrary_types_allowed=True,
         env_prefix="SOLVEIG_",
         env_nested_delimiter="__",
         cli_avoid_json=True,
-        cli_exit_on_error=False,
-        cli_kebab_case=False,
-        cli_implicit_flags=True,
-        cli_enforce_required=False,
+        cli_exit_on_error=CLI_SETTINGS_OPTS.get("cli_exit_on_error", False),
+        cli_kebab_case=CLI_SETTINGS_OPTS.get("cli_kebab_case", False),
+        cli_implicit_flags=CLI_SETTINGS_OPTS.get("cli_implicit_flags", True),
+        cli_enforce_required=CLI_SETTINGS_OPTS.get("cli_enforce_required", False),
     )
 
     # ------------------------------------------------------------
@@ -251,6 +268,7 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
 
     async def notify_changed(self, paths: frozenset[str]) -> None:
+        """Notify all observers, filtered by registered config path."""
         for fn, filter_paths in self._observers:
             if filter_paths is None or (paths & filter_paths):
                 await fn(self, paths)
@@ -494,7 +512,7 @@ class SolveigConfig(BaseSettings):
     @classmethod
     async def parse_config_and_prompt(
         cls, cli_args: list[str] | None = None
-    ) -> tuple[SolveigConfig, str, str | None]:
+    ) -> SolveigConfig:
         # Compose the core tools section schema (known at init) and create a config
         # only for plugin discovery.
         cls.compose_core_tools()
@@ -519,5 +537,4 @@ class SolveigConfig(BaseSettings):
         cfg._record_declared()
         for url in cfg.startup_mcp_servers:
             cfg.mcp.setdefault(url, MCPServerConfig(url=url))
-        # TODO: consider returning just config, since the other fields are direct reads
-        return cfg, cfg.prompt.strip(), cfg.resume
+        return cfg
