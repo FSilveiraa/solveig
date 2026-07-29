@@ -1,7 +1,7 @@
 """Builds the pydantic-ai Agent that drives a single conversation turn.
 
 Cheap enough to rebuild per turn: the `Provider` (the real network client) is
-held separately in a `ProviderRef` and reused across turns; only the `Agent`
+held separately in a `Client` and reused across turns; only the `Agent`
 wrapper (model + toolset + capabilities) is rebuilt, so runtime config changes
 (model, briefing, disable_autonomy) take effect on the very next request
 without restarting anything.
@@ -37,7 +37,7 @@ from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
-from solveig.api import ProviderRef
+from solveig.api import Client
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
@@ -52,7 +52,7 @@ from solveig.user_message_queue import UserMessageQueue
 
 def build_agent(
     config: SolveigConfig,
-    provider_ref: ProviderRef,
+    provider_ref: Client,
     system_prompt: str,
     model: Model | None = None,
 ) -> Agent[SolveigContext, str]:
@@ -269,7 +269,7 @@ async def _gate_and_interleave(
 
 async def run_turn_with_retry(
     config: SolveigConfig,
-    provider_ref: ProviderRef,
+    provider_ref: Client,
     interface: SolveigInterface,
     conversation: Conversation,
     system_prompt: str,

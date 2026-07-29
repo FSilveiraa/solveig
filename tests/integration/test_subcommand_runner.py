@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from solveig.api import ProviderRef
+from solveig.api import Client
 from solveig.config import SolveigConfig
 from solveig.config.editor import config_list  # noqa: F401 — triggers @subcommand
 from solveig.conversation import Conversation
@@ -42,11 +42,11 @@ def make_registry(config=None, session_manager=_SENTINEL):
         else SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     )
     conversation = Conversation()
-    provider_ref = ProviderRef(provider=MagicMock())
+    provider_ref = Client(provider=MagicMock())
     deps = {
         SolveigConfig: cfg,
         Conversation: conversation,
-        ProviderRef: provider_ref,
+        Client: provider_ref,
         SessionManager: session_manager,
     }
     return SubcommandRegistry(deps=deps), conversation, cfg

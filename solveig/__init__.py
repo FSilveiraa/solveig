@@ -11,13 +11,13 @@ __author__ = "Francisco"
 __license__ = "MIT"
 
 # Import main classes for easy access
-from .api import APIType, ModelInfo, ProviderRef
+from .api import APIType, ModelInfo, Client
 from .config import SolveigConfig
 
 __all__ = [
     "SolveigConfig",
     "APIType",
-    "ProviderRef",
+    "Client",
     "ModelInfo",
     "__version__",
 ]

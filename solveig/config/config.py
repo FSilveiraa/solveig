@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import sys
 import warnings
-from typing import Any, Protocol
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from anyio import Path
 from pydantic import (
@@ -41,7 +42,6 @@ from solveig.utils.file import Filesystem  # path normalization, not config I/O
 __all__ = [
     "DEFAULT_CONFIG_PATHS",
     "DEFAULT_SYSTEM_PROMPT",
-    "ConfigObserver",
     "SolveigConfig",
 ]
 
@@ -90,12 +90,8 @@ def _split_config_path_from_cli_args(
     return ns.config, rest
 
 
-class ConfigObserver(Protocol):
-    """A runtime subscriber that reacts to dotted config paths changing."""
-
-    async def on_config_changed(
-        self, config: SolveigConfig, paths: frozenset[str]
-    ) -> None: ...
+# An async callback (config, changed_paths) — registered via @config.on_change.
+ConfigObserver = Callable[["SolveigConfig", frozenset[str]], Awaitable[None]]
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
@@ -123,6 +119,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 # ---------------------------------------------------------------------------
 # Utils
 # ---------------------------------------------------------------------------
+
 
 def _dict_to_dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
     """Flatten a nested config dict into dotted leaf paths (`api.url`,
@@ -244,31 +241,18 @@ class SolveigConfig(BaseSettings):
         default_factory=list
     )
 
-
     # ------------------------------------------------------------
-    # Config change observers
+    # Config change observers — @config.on_change(*paths) decorator
     # ------------------------------------------------------------
-
-    def subscribe(
-        self,
-        observer: ConfigObserver,
-        paths: frozenset[str] | None = None,
-    ) -> None:
-        """Register a runtime reaction to config changes.  When *paths* is
-        given the observer is only notified for those dotted paths; *None*
-        means "notify me of every change".
-        """
-        self._observers.append((observer, paths))
 
     async def notify_changed(self, paths: frozenset[str]) -> None:
-        """Fan out to every observer whose path filter matches *paths*."""
-        for observer, filter_paths in self._observers:
+        for fn, filter_paths in self._observers:
             if filter_paths is None or (paths & filter_paths):
-                await observer.on_config_changed(self, paths)
+                await fn(self, paths)
 
     def on_change(self, *paths: str):
-        """Decorator: register a callback for the given *paths*.  Empty
-        *paths* means every change.  Usage::
+        """Decorator: register a callback for the given dotted *paths.
+        Empty *paths means every change.  Usage::
 
             @config.on_change("api.model", "api.url")
             async def _on_api_change(config, paths): ...
@@ -278,6 +262,7 @@ class SolveigConfig(BaseSettings):
         def register(fn):
             self._observers.append((fn, filt))
             return fn
+
         return register
 
     def get(self, dotted: str) -> Any:
@@ -307,7 +292,6 @@ class SolveigConfig(BaseSettings):
         for part in parents:
             obj = getattr(obj, part)
         return obj, leaf
-
 
     # ------------------------------------------------------------
     # Pydantic overrides/validators

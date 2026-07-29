@@ -250,7 +250,7 @@ class TerminalInterface(LocalDisplay):
         code_theme: str = DEFAULT_CODE_THEME,
         base_indent: int = 2,
         on_user_input: Callable[[SolveigInterface, str], Awaitable[None]] | None = None,
-        config = None,
+        config=None,
         **kwargs,
     ):
         # Producer callback wired at construction (the UserMessageQueue and the
@@ -268,13 +268,15 @@ class TerminalInterface(LocalDisplay):
         self.base_indent = base_indent
 
         if config is not None:
+
             @config.on_change("interface.theme")
-            async def _on_theme_change(config, paths):
+            async def _on_theme(config, paths):
                 self.set_theme(config.interface.theme)
 
             @config.on_change("interface.code_theme")
-            async def _on_code_theme_change(config, paths):
+            async def _on_code_theme(config, paths):
                 self.set_code_theme(config.interface.code_theme)
+
         # Section title for tracking
         self._section_title: str = ""
         # CLI prompt serialization: one visible prompt at a time (a terminal

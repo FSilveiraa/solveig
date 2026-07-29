@@ -17,7 +17,7 @@ from pydantic_ai.models import Model
 
 from solveig import system_prompt
 from solveig.agent import run_turn_with_retry
-from solveig.api import ProviderRef
+from solveig.api import Client
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.exceptions import UserCancel
@@ -31,30 +31,26 @@ from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.user_message_queue import UserMessageQueue
 
 
-async def setup_loop(
+async def _display_setup(
     config: SolveigConfig,
     interface: SolveigInterface,
-    provider_ref: ProviderRef,
+    provider_ref: Client,
     conversation: Conversation,
     session_manager: SessionManager,
     resume_session: str | None,
     startup_warnings: tuple[str, ...] = (),
 ) -> str:
-    """One-time setup that runs after the interface is ready. Returns the system prompt."""
+    """Display-dependent setup that runs after the interface is ready.
+    Returns the system prompt."""
     await interface.wait_until_ready()
-    # Yield control to the event loop to ensure the UI is fully ready for animations
     await asyncio.sleep(0)
 
-    # Subscribe the interface's reactive transcript now that both the
-    # conversation and the (ready) interface exist - live turns render through it.
     await interface.attach_conversation(conversation, session_manager)
 
-    # Config-parse warnings captured before the interface existed (run_async)
     for warning in startup_warnings:
         await interface.display_warning(warning)
 
-    # Discover plugins (UI-free) + report them, connect MCP servers, then rebuild
-    # the tools union.
+    # Report plugins + connect MCP servers (needs interface for display).
     plugin_errors = discover_plugins(config)
     await report_plugins(config, interface, plugin_errors)
     await connect_all(config=config, interface=interface)
@@ -76,7 +72,6 @@ async def setup_loop(
         except FileNotFoundError as e:
             await interface.display_error(f"Could not resume session: {e}")
 
-    # No model set: warn and wait for the user to configure one.
     if config.api.model is None:
         await interface.display_warning(
             "No model configured. Use /model list to check available models and /model set <name> to set one."
@@ -92,9 +87,9 @@ async def setup_loop(
 async def main_loop(
     config: SolveigConfig,
     interface: SolveigInterface,
-    provider_ref: ProviderRef,
+    provider_ref: Client,
     conversation: Conversation,
-    inbox: UserMessageQueue,
+    user_message_queue: UserMessageQueue,
     session_manager: SessionManager,
     model: Model | None = None,
     resume_session: str | None = None,
@@ -110,7 +105,7 @@ async def main_loop(
     mid-run concern now (see `agent.py`'s `build_loop_capability`), so the
     outer loop's only job is to wait for the next prompt and hand it off.
     """
-    system_prompt_text = await setup_loop(
+    system_prompt_text = await _display_setup(
         config=config,
         interface=interface,
         provider_ref=provider_ref,
@@ -121,9 +116,9 @@ async def main_loop(
     )
 
     while True:
-        if inbox.empty():
+        if user_message_queue.empty():
             await interface.update_stats(status="Awaiting input")
-        prompt = await inbox.get()
+        prompt = await user_message_queue.get()
         await interface.update_stats(status=None)
 
         # The user prompt renders reactively through the transcript once
@@ -143,7 +138,7 @@ async def main_loop(
             conversation=conversation,
             system_prompt=system_prompt_text,
             prompt=prompt,
-            inbox=inbox,
+            inbox=user_message_queue,
             model=model,
         )
         if not ok:
@@ -161,7 +156,7 @@ async def run_async(
     config: SolveigConfig | None = None,
     user_prompt: str = "",
     interface: SolveigInterface | None = None,
-    provider_ref: ProviderRef | None = None,
+    provider_ref: Client | None = None,
     model: Model | None = None,
     resume_session: str | None = None,
 ) -> Conversation:
@@ -181,48 +176,36 @@ async def run_async(
                 ) = await SolveigConfig.parse_config_and_prompt()
             startup_warnings = tuple(str(w.message) for w in caught)
         except Exception as e:
-            # The interface doesn't exist yet - print and cancel startup
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
 
-    # The session UserMessageQueue (D5): user intent's single entry point, owned here.
-    # The interface produces into it (via its constructor-wired on_user_input
-    # router); the main loop and the mid-turn gate consume. Created before the
-    # interface so the Textual app's QueuedMessagesDisplay can subscribe to
-    # its doorbell, and before the loop task so a CLI user_prompt is queued
-    # before the first get().
     user_message_queue = UserMessageQueue()
-
     conversation = Conversation()
-    session_manager = SessionManager(config=config)
+    session_manager = SessionManager(config)
+    provider_ref = provider_ref or Client(config)
 
-    provider_ref = provider_ref or ProviderRef(
-        provider=config.api.type.get_provider(
-            api_key=config.api.key.get_secret_value() or None,
-            url=config.api.url,
-        ),
-        config=config,
-        url=config.api.url,
-        type=config.api.type,
-    )
+    # Non-display plugin discovery + tool rebuild — happens before the
+    # interface exists so the composed config is ready when the Textual app
+    # mounts.  discover_plugins is explicitly UI-free.
+    discover_plugins(config)
+    AVAILABLE_TOOLS.rebuild(config)
 
     subcommand_executor = SubcommandRegistry(
         deps={
             SolveigConfig: config,
             Conversation: conversation,
-            ProviderRef: provider_ref,
+            Client: provider_ref,
             SessionManager: session_manager,
         }
     )
 
-    # Producer wiring (D5): typed input routes commands to the runner and
-    # prompts to the UserMessageQueue; stats-bar clicks route to the config editor. The
-    # interface passes ITSELF to these callbacks (no closure needed), so both
-    # are plain constructor arguments.
+    # Producer wiring (D5): typed input routes commands to the executor and
+    # prompts to the UserMessageQueue.  The interface passes ITSELF to these
+    # callbacks (no closure needed), so both are plain constructor arguments.
     async def route_user_input(iface: SolveigInterface, text: str) -> None:
         try:
             if await subcommand_executor(text, interface=iface):
-                return  # it was a /command, dispatched
+                return
         except UserCancel:
             return
         except Exception as e:
@@ -232,20 +215,6 @@ async def run_async(
             return
         user_message_queue.put_nowait(text)
 
-    def wire_interface(iface: SolveigInterface) -> None:
-        """Finish wiring an injected interface's producer callbacks.
-
-        Test/demo code (MockInterface, DemoInterface) constructs its interface
-        before run_async and injects it, so the composition root must finish
-        wiring an object it didn't construct. This is the ONE named path for
-        post-construction wiring; the constructed path passes the same
-        callbacks as constructor arguments.
-        """
-        iface.on_user_input = route_user_input
-
-    # Interface is created before spawning the loop task so that user_prompt
-    # can be queued immediately: by the time the loop calls inbox.get(), the
-    # prompt is already there and won't block.
     if interface is None:
         interface = TerminalInterface(
             theme=config.interface.theme,
@@ -256,7 +225,9 @@ async def run_async(
             config=config,
         )
     else:
-        wire_interface(interface)
+        # Test/demo code injected an interface it already constructed — finish
+        # wiring the producer callback that run_async owns.
+        interface.on_user_input = route_user_input
 
     if user_prompt:
         user_message_queue.put_nowait(user_prompt)
@@ -269,7 +240,7 @@ async def run_async(
                 config=config,
                 provider_ref=provider_ref,
                 conversation=conversation,
-                inbox=user_message_queue,
+                user_message_queue=user_message_queue,
                 model=model,
                 resume_session=resume_session,
                 startup_warnings=startup_warnings,
@@ -283,8 +254,6 @@ async def run_async(
         traceback.print_exc()
 
     finally:
-        # Write a checkpoint meta line so cumulative token counts survive
-        # the next resume — append-only, no rewriting.
         if session_manager and config.session.auto_save:
             try:
                 await session_manager.write_checkpoint(conversation)
