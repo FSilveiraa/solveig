@@ -12,7 +12,7 @@ async.
 Solveig is designed around a single idea: **components declare what they care
 about, and the framework reacts.** A config change notifies observers; an
 observer wakes up and updates the model info; the stats bar refreshes.
-A module that owns config editing registers its own subcommands — the runner
+A module that owns config editing registers its own subcommands — the registry
 knows arg parsing, not config semantics. A tool writes to an interface scoped
 to its group; the interface renders. Every interaction is event → reaction →
 event, never imperative fetch → check → act. Pick the option that makes the
@@ -42,7 +42,7 @@ run.py        Entry point. run_async() wires config/interface/conversation, spaw
               foreground. main_loop: dequeue a prompt → run_turn_with_retry → the
               reactive transcript renders everything (no predicted display).
 agent.py      build_agent() builds a fresh pydantic-ai Agent PER TURN (cheap; the
-              Provider lives in a reused ProviderRef) so runtime config changes apply
+              Provider lives in a reused Client) so runtime config changes apply
               next turn. run_turn() drives agent.iter() by hand: optimistic user-prompt
               echo, per-token streaming into a live entry, the autonomy gate, and
               typed-ahead comment interleaving are plain lines in that loop.
@@ -58,8 +58,12 @@ conversation.py  The reactive single source of truth. ONE insertion-ordered
               mount / rerender / remove.
 context.py    SolveigContext = the RunContext deps dataclass — exactly {config,
               interface}. Nothing else; capabilities read ctx.deps live at call time.
-api.py        APIType (OPENAI/ANTHROPIC/GEMINI BaseAPI subclasses), ProviderRef,
-              ModelInfo, get_provider/get_model. Flattened from the old llm/ package.
+api.py        APIType (base class with OpenAI/Anthropic/Gemini subclasses), Client
+              (runtime provider holder, reactive to config), ModelInfo, model
+              subcommands. Flattened from the old llm/ package.
+user_message_queue.py  UserMessageQueue — asyncio.Queue[str] + a prompt gate on
+              put() (routes /commands before insertion) + an on_change doorbell
+              (self-registered by the queued-messages display widget).
 ```
 
 **Loop ownership:** core drives `agent.iter()`; pydantic-ai stays the engine for
@@ -89,9 +93,17 @@ These are not style preferences — they are the seams the codebase is built on.
   react to changes. The reactive transcript (`conversation.py` → observers) is
   the canonical example: one insertion-ordered dict is the single source of
   truth; mutations fire observers; the UI renders the diff. Config changes
-  follow the same pattern: `SolveigConfig.notify_changed` fires, `ProviderRef`
-  wakes up and fetches new model info, the stats bar refreshes. Event →
-  reaction → event — never fetch → check → act.
+  follow the same pattern: `@config.on_change(...)` registers a callback,
+  `Client` wakes up and fetches new model info, the stats bar refreshes. Event
+  → reaction → event — never fetch → check → act.
+
+- **Constructor injection, not post-init wiring.** If an object needs a
+  dependency, it takes it in the constructor — no `setup()`, no `wire_*()`,
+  no `__post_init__` that does real work. Objects self-register their
+  observers (`@config.on_change` in `Client.__init__`, `queue.prompt_handler`
+  in `SubcommandRegistry.__init__`, `queue.on_change` in
+  `QueuedMessagesDisplay.on_mount`). The composition root in `run_async`
+  constructs objects in dependency order; no closures, no late binding.
 
 - **Signature is the contract.** A subcommand handler declares what it needs in
   its function signature — injected deps matched by type, CLI args parsed via
@@ -196,12 +208,13 @@ Dual architecture in `solveig/plugins/`:
 `discover_plugins(config)` is idempotent and UI-free (folds external `plugins.paths`
 into the built-in packages, then scans); `report_plugins` renders the Plugins dialog
 list-all-mark-disabled (a disabled plugin is shown, never hidden). Discovery runs in
-the config bootstrap (phase 1) and again in `setup_loop` for reporting.
+the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 
 ## Interface
 
-- `interface/base.py` — `SolveigInterface` (ABC): the display protocol + the input
-  queue + the cancellation registry. `interface/reactive.py` — `ReactiveTranscript`,
+- `interface/base.py` — `SolveigInterface` (ABC): the display protocol + the
+  user-message queue (the interface's output channel for typed input) + the
+  cancellation registry. `interface/reactive.py` — `ReactiveTranscript`,
   the pure observer base (mount/rerender/remove). `interface/cli/` — the Textual
   materialization (`transcript.py` maps a message part → widget; `app.py` holds the
   static theme-independent CSS).
@@ -252,30 +265,40 @@ handler. No fetch, no iterate, no two-author split in dispatch.
 @subcommand("/config save", section="config", detail=True)
 async def config_save(
     config: SolveigConfig,          # injected
-    interface: SolveigInterface,    # injected
-    path: str = "",                 # CLI-parsed
-    full: bool = False,             # CLI-parsed → --full / --no-full
+    interface: SolveigInterface,     # injected
+    path: str = "",                  # CLI-parsed
+    full: bool = False,              # CLI-parsed → --full / --no-full
 ) -> None:
     ...
 ```
 
-Injected types (`SolveigConfig`, `SolveigInterface`, `Conversation`, `ProviderRef`,
-`SessionManager`) are provided by the framework. Bool params with defaults become
-`--flag/--no-flag`. `*rest` maps to a greedy positional list.
+Injected types (`SolveigConfig`, `SolveigInterface`, `Conversation`, `Client`,
+`SessionManager`) are resolved by the registry from its constructor arguments —
+no `deps` dict parameter, no `interface=` kwarg on dispatch. Bool params with
+defaults become `--flag/--no-flag`. `*rest` maps to a greedy positional list.
 
 **Tool commands** push the same way — `BaseTool.__pydantic_init_subclass__` pushes a
 template with `tool_cls` set; the registry binds a handler that parses via
 `from_cli_tokens` → `CliSettingsSource` and orchestrates via `run_tool_and_hooks`.
 
+The registry also owns the **prompt gate**: it self-registers as the queue's
+`prompt_handler` in its constructor. `/commands typed as user input are dispatched
+before insertion; prompts pass through unchanged.
+
 `subcommand/base.py` — the `_PENDING` list, `_SubcommandTemplate` dataclass,
 `@subcommand` decorator, and `Subcommand` runtime dispatch object.
 `subcommand/registry.py` — `SubcommandRegistry`: reads `_PENDING`, binds handlers,
-dispatches via longest-prefix match, generates `/help`.
+dispatches via longest-prefix match, generates `/help`, self-registers as the
+queue's prompt gate.
 
 ## Conventions that matter (do not regress)
 
 - **No compat shims; big-bang cutovers.** Migrations go red mid-flight and green at
   the end. Commit per task even while red.
+- **No `setup()`/`wire_*()` post-init methods.** If an object needs a dependency,
+  pass it in the constructor. No post-construction wiring, no closures that close
+  over objects created later. Objects self-register their observers in `__init__`
+  or `on_mount`.
 - **Seam comments explain *why*.** The load-bearing, non-obvious invariants are
   documented at the seam (see `Conversation.adopt`'s object-identity note, the
   `_compose_core_tools` import-order note, `_thinking`'s two-sites rationale). Keep
