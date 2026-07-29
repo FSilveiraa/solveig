@@ -205,7 +205,7 @@ async def run_async(
     # The registry owns the prompt gate: /commands are dispatched before
     # insertion, prompts pass through unchanged. Self-registers on the queue
     # in its constructor.
-    subcommand_executor = SubcommandRegistry(
+    SubcommandRegistry(
         config=config,
         conversation=conversation,
         interface=interface,

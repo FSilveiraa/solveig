@@ -55,12 +55,15 @@ DEFAULT_PLUGIN_PATHS = [
     "~/.solveig/plugins",
 ]
 
-# Options for CliSettingsSource to parse — mirrors tools/base.py CLI_PARSE_OPTS.
-_CLI_OPTS: dict[str, Any] = {
-    "cli_avoid_json": True,  # makes nested fields become dotted flags (--api.url) not JSON blobs.
+# Options for CliSettingsSource — one home for how CLI parsing behaves across config
+# boot, built-in subcommand parsing, and tool subcommand parsing.  "cli_avoid_json"
+# is NOT here: the config boot path merges it on top (nested SolveigConfig fields
+# need dotted flags), but subcommands parse flat models where it's a no-op.
+CLI_SETTINGS_OPTS: dict[str, Any] = {
     "cli_exit_on_error": False,
     "cli_kebab_case": False,
     "cli_implicit_flags": True,
+    "case_sensitive": True,
     "cli_enforce_required": False,
 }
 # Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
@@ -163,9 +166,11 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
     # Pydantic model config
     # ------------------------------------------------------------
-    # NOTE: the _CLI_OPTS keys are inlined here (rather than **-expanded) so mypy
-    # can check them against the SettingsConfigDict TypedDict; the same dict is
-    # **-expanded into CliSettingsSource(...) below, where a plain dict is fine.
+    # NOTE: the cli_* keys are inlined here (rather than **-expanded) so mypy
+    # can check them against the SettingsConfigDict TypedDict.  The actual CLI
+    # parsing goes through the hand-built CliSettingsSource in
+    # settings_customise_sources, which reads CLI_SETTINGS_OPTS — these
+    # model_config copies are a mypy formality, not the runtime config.
     model_config = SettingsConfigDict(
         validate_assignment=True,
         arbitrary_types_allowed=True,
@@ -322,7 +327,8 @@ class SolveigConfig(BaseSettings):
             settings_cls,
             cli_parse_args=argv,
             cli_shortcuts=_CLI_SHORTCUTS,
-            **_CLI_OPTS,
+            **CLI_SETTINGS_OPTS,
+            cli_avoid_json=True,
         )
         return (
             init_settings,
@@ -471,7 +477,8 @@ class SolveigConfig(BaseSettings):
                     type(self),
                     cli_parse_args=argv,
                     cli_shortcuts=_CLI_SHORTCUTS,
-                    **_CLI_OPTS,
+                    **CLI_SETTINGS_OPTS,
+                    cli_avoid_json=True,
                 )
                 declared |= _dict_to_dotted_leaves(cli() or {})
         self._declared_fields = {

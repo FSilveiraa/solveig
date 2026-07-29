@@ -1,4 +1,5 @@
 from .config import (
+    CLI_SETTINGS_OPTS,
     DEFAULT_CONFIG_PATHS,
     DEFAULT_SYSTEM_PROMPT,
     ConfigObserver,
@@ -7,6 +8,7 @@ from .config import (
 from .models import MCPServerConfig
 
 __all__ = [
+    "CLI_SETTINGS_OPTS",
     "SolveigConfig",
     "ConfigObserver",
     "MCPServerConfig",

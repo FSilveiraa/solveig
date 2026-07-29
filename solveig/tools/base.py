@@ -24,6 +24,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
+from solveig.config import CLI_SETTINGS_OPTS
 from solveig.context import SolveigContext
 from solveig.subcommands.base import _PENDING, Subcommand, _SubcommandTemplate
 from solveig.tools.result import ToolResult
@@ -53,21 +54,10 @@ class ToolConfig(BaseModel):
 # import the private `pydantic_settings.sources.types._CliPositionalArg` path.
 _CLI_POSITIONAL_MARKER = typing.get_args(CliPositionalArg)[1]
 
-# Options handed to `CliSettingsSource` when parsing a `/tool` line. Source-only
-# (no env/dotenv/secrets layering - those would let a stray env var override a
-# tool arg, see the migration log). `cli_exit_on_error=False` turns parse
-# failures into a catchable `SettingsError` instead of `SystemExit`;
-# `cli_implicit_flags` gives `--flag/--no-flag` bools; `cli_kebab_case=False`
-# keeps snake_case field names as flags; `cli_enforce_required=False` lets a
-# missing optional flag simply be absent (positionals stay required at the
-# argparse level regardless) so `_cli_defaults` / pydantic fill the rest.
-CLI_PARSE_OPTS: dict[str, Any] = {
-    "cli_exit_on_error": False,
-    "cli_implicit_flags": True,
-    "cli_kebab_case": False,
-    "case_sensitive": True,
-    "cli_enforce_required": False,
-}
+# Options handed to `CliSettingsSource` when parsing a `/tool` line.
+# Lives in config.py; imported here so adding a tool flag doesn't need
+# a second edit.  Source-only (no env/dotenv/secrets layering - those
+# would let a stray env var override a tool arg, see the migration log).
 
 
 # `ToolConfigType` (the PEP 695 parameter below) is threaded through BaseTool so a
@@ -218,7 +208,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         parsed = CliSettingsSource(
             cls,  # type: ignore[arg-type]
             cli_parse_args=list(tokens),
-            **CLI_PARSE_OPTS,
+            **CLI_SETTINGS_OPTS,
         )()
         return cls.model_validate({**cls.cli_defaults, **parsed})
 
@@ -342,7 +332,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         schema-clean."""
 
         async def run(ctx, params):
-            return await params.execute(ctx.deps.config_files, ctx.deps.interface)
+            return await params.execute(ctx.deps.config, ctx.deps.interface)
 
         run.__annotations__ = {
             "ctx": RunContext[SolveigContext],

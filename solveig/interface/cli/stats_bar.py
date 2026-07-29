@@ -32,7 +32,7 @@ class StatsBar(Widget):
         self,
         theme: Palette,
         interface_ref: SolveigInterface | None = None,
-        config = None,
+        config=None,
         **kwargs,
     ):
         super().__init__(**kwargs)

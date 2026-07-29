@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import fnmatch
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +13,7 @@ from pydantic import (
 )
 
 import solveig.interface.themes as themes
-from solveig.api import APIType, OpenAI, TYPE_BY_NAME, resolve_api_type
+from solveig.api import APIType, OpenAI, resolve_api_type
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 # Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow"). Used
@@ -65,6 +64,7 @@ class ApiConfig(BaseModel):
     @field_serializer("type")
     def _ser_type(self, v: APIType) -> str:
         return type(v).__name__.lower()
+
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).
     key: SecretStr = Field(default=SecretStr(""), description="API authentication key")

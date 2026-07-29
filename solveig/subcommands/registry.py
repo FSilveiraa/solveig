@@ -25,7 +25,7 @@ from pydantic import Field, ValidationError, create_model
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 from pydantic_settings.exceptions import SettingsError
 
-from solveig.config import SolveigConfig
+from solveig.config import CLI_SETTINGS_OPTS, SolveigConfig
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface import SolveigInterface
@@ -46,16 +46,6 @@ if TYPE_CHECKING:
 def _build_sections(subs: list[Subcommand]) -> list[tuple[str, str]]:
     seen = dict.fromkeys(sub.section for sub in subs)
     return [(s, s.replace("_", " ").title()) for s in seen]
-
-
-# Options for CliSettingsSource — same as tools/base.py:CLI_PARSE_OPTS
-_CLI_OPTS: dict[str, Any] = {
-    "cli_exit_on_error": False,
-    "cli_implicit_flags": True,
-    "cli_kebab_case": False,
-    "case_sensitive": True,
-    "cli_enforce_required": False,
-}
 
 
 class SubcommandRegistry:
@@ -160,7 +150,7 @@ class SubcommandRegistry:
             elif param.kind == param.VAR_POSITIONAL:
                 var_positional_name = name
                 cli_fields[name] = (
-                    CliPositionalArg[list[str]],  # type: ignore[valid-type]
+                    CliPositionalArg[list[str]],
                     Field(default_factory=list),
                 )
             elif ann is bool and param.default is not param.empty:
@@ -184,9 +174,9 @@ class SubcommandRegistry:
             if CliModel:
                 try:
                     parsed = CliSettingsSource(
-                        CliModel,  # type: ignore[arg-type]
+                        CliModel,
                         cli_parse_args=list(tokens),
-                        **_CLI_OPTS,
+                        **CLI_SETTINGS_OPTS,
                     )()
                 except (SettingsError, ValidationError) as e:
                     await self._interface.display_error(str(e))

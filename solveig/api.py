@@ -190,7 +190,9 @@ class Client:
         async def _on_api_change(_config: SolveigConfig, paths: frozenset[str]):
             return await self._on_api_change(_config, paths)
 
-    async def _on_api_change(self, config: SolveigConfig, paths: frozenset[str]) -> None:
+    async def _on_api_change(
+        self, config: SolveigConfig, paths: frozenset[str]
+    ) -> None:
         if (
             self.model_info
             and self.model_info.model == config.api.model

@@ -343,9 +343,7 @@ async def session_store(
     name: str = "",
 ) -> None:
     """Store the current session (with optional name)."""
-    filename = await session_manager.store(
-        conversation, name=name.strip() or None
-    )
+    filename = await session_manager.store(conversation, name=name.strip() or None)
     await interface.display_success(f"Session stored as {filename}")
 
 

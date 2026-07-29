@@ -11,7 +11,7 @@ __author__ = "Francisco"
 __license__ = "MIT"
 
 # Import main classes for easy access
-from .api import APIType, ModelInfo, Client
+from .api import APIType, Client, ModelInfo
 from .config import SolveigConfig
 
 __all__ = [

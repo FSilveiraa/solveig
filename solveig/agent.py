@@ -73,9 +73,7 @@ def build_agent(
         assert config.api.model is not None, (
             "build_agent requires config.api.model to be set"
         )
-        resolved_model = config.api.type.get_model(
-            client.provider, config.api.model
-        )
+        resolved_model = config.api.type.get_model(client.provider, config.api.model)
     return Agent(
         resolved_model,
         deps_type=SolveigContext,

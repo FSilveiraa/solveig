@@ -16,7 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, ByteSize, SecretStr
 
-from solveig.api import APIType, TYPE_BY_NAME, resolve_api_type
+from solveig.api import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.interface import SolveigInterface, themes
 from solveig.subcommands.base import subcommand
 
