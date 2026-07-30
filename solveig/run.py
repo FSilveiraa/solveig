@@ -15,7 +15,6 @@ import warnings
 
 from pydantic_ai.models import Model
 
-from solveig import system_prompt
 from solveig.agent import run_turn_with_retry
 from solveig.api import Client
 from solveig.config import SolveigConfig
@@ -26,6 +25,7 @@ from solveig.mcp_servers.client import connect_all
 from solveig.plugins import discover_plugins, report_plugins
 from solveig.sessions.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
+from solveig.system_prompt.compose import get_system_prompt
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.user_message_queue import UserMessageQueue
 
@@ -55,7 +55,7 @@ async def _display_setup(
     await connect_all(config=config, interface=interface)
     AVAILABLE_TOOLS.rebuild(config)
 
-    sys_prompt = await system_prompt.get_system_prompt(config)
+    sys_prompt = await get_system_prompt(config)
     await interface.display_text_box(
         sys_prompt,
         title="System Prompt",
@@ -129,7 +129,7 @@ async def main_loop(
             )
             continue
 
-        system_prompt_text = await system_prompt.get_system_prompt(config)
+        system_prompt_text = await get_system_prompt(config)
         ok = await run_turn_with_retry(
             config=config,
             client=client,

@@ -1,7 +1,7 @@
+from unittest.mock import MagicMock
+
 import anyconfig
 import pytest
-
-from unittest.mock import MagicMock
 
 from solveig.api import APIType
 from solveig.config import SolveigConfig
@@ -84,7 +84,7 @@ async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
 
 
 async def test_system_prompt_is_its_own_category():
-    from solveig.config.models import DEFAULT_SYSTEM_PROMPT
+    from solveig.system_prompt import DEFAULT_SYSTEM_PROMPT
 
     c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
     assert c.system_prompt.content == DEFAULT_SYSTEM_PROMPT
@@ -116,7 +116,7 @@ async def test_command_disabled_the_same_uniform_way_as_any_tool():
 async def test_model_info_lives_on_provider_ref_not_config():
     # model_info is runtime API-reported provider state — never user config:
     # off the CLI, off model_dump, cached on the ProviderRef that reported it.
-    from solveig.api import ModelInfo, Client
+    from solveig.api import Client, ModelInfo
 
     c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
     assert not hasattr(c, "model_info")

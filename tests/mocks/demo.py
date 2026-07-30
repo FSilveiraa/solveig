@@ -152,7 +152,7 @@ async def run_async_mock(
     an interactive shell for driving the real interface by hand.
     """
     if mock_messages is None:
-        from solveig.system_prompt import load_story
+        from solveig.system_prompt.compose import load_story
 
         story = await load_story("sync_review")
         mock_messages = [m for m in story if isinstance(m, ModelResponse)]

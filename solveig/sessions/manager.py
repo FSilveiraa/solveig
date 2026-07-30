@@ -12,8 +12,11 @@ banner. See the module docstring on `solveig.tools.base.BaseTool` for the
 live/replay split.
 """
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from anyio import Path
 from pydantic_ai.messages import (
@@ -23,11 +26,13 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
-from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface
 from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
+
+if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
 
 
 def parse_conversation_blob(text: str) -> dict:

@@ -12,7 +12,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from solveig.system_prompt import load_story, render_as_example
+from solveig.system_prompt.compose import load_story, render_as_example
 
 pytestmark = pytest.mark.anyio
 

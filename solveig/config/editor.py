@@ -19,8 +19,8 @@ from solveig.api import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.interface import SolveigInterface, themes
 from solveig.subcommands.base import subcommand
 
-from . import sources
-from .config import DEFAULT_CONFIG_PATHS, SolveigConfig, display_config_value
+from . import DEFAULT_CONFIG_PATHS, sources
+from .config import SolveigConfig, display_config_value
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.

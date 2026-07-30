@@ -7,7 +7,6 @@ from solveig.api import APIType
 from solveig.config import SolveigConfig
 from solveig.config.models import (
     ApiConfig,
-    CoreToolsConfig,
     InterfaceConfig,
     MCPServerConfig,
     SystemPromptConfig,
@@ -91,7 +90,7 @@ async def test_http_and_command_inherit_enabled_from_base():
 
 
 async def test_system_prompt_defaults():
-    from solveig.config.models import DEFAULT_SYSTEM_PROMPT
+    from solveig.system_prompt import DEFAULT_SYSTEM_PROMPT
 
     sp = SystemPromptConfig()
     assert sp.content == DEFAULT_SYSTEM_PROMPT

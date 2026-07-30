@@ -26,11 +26,10 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from solveig.config import sources
+from solveig.config import DEFAULT_CONFIG_PATHS, DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
     _MUTABLE,
     _MUTABLE_ALLOW,
-    DEFAULT_SYSTEM_PROMPT,
     ApiConfig,
     CoreToolsConfig,
     InterfaceConfig,
@@ -42,20 +41,7 @@ from solveig.config.models import (
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 
 __all__ = [
-    "DEFAULT_CONFIG_PATHS",
-    "DEFAULT_SYSTEM_PROMPT",
     "SolveigConfig",
-]
-
-# Default paths for config files and plugins. CLI/config overrides these, does not append
-DEFAULT_CONFIG_PATHS = [
-    "./.solveig/config.yaml",
-    "~/.solveig/config.yaml",
-]
-
-DEFAULT_PLUGIN_PATHS = [
-    "./.solveig/plugins",
-    "~/.solveig/plugins",
 ]
 
 # Options for CliSettingsSource — one home for how CLI parsing behaves across config
@@ -332,6 +318,8 @@ class SolveigConfig(BaseSettings):
         """Build the settings-source stack. CLI args flow through cli_args;
         --config flags are split out for ConfigFileSource."""
         argv = init_settings.init_kwargs.get("cli_args")
+        # `if not argv` accepts `argv==None`,which we want to pass
+        # to pydantic-settings' parsing
         if argv == []:
             return (init_settings,)
         if argv is None:
