@@ -15,7 +15,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from solveig.config import SolveigConfig
+from solveig import bootstrap
 from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.run import run_async
@@ -102,7 +102,7 @@ async def load_session_for_demo(
     """Load a stored session and extract assistant responses and user prompts
     for demo replay - the assistant responses become the mock model's scripted
     replies, the user prompts become the auto-typed messages."""
-    config, _, _ = await SolveigConfig.parse_config_and_prompt()
+    config, _, _ = await bootstrap.parse_config_and_prompt()
     session_data = await SessionManager(config).load(name)
     messages: list[ModelMessage] = session_data["messages"]
 
@@ -166,7 +166,7 @@ async def run_async_mock(
             ]
 
     mock_model = create_mock_model(*mock_messages, sleep_seconds=sleep_seconds)
-    config, user_prompt, resume = await SolveigConfig.parse_config_and_prompt()
+    config, user_prompt, resume = await bootstrap.parse_config_and_prompt()
     # model="fake-model" is a display-only placeholder - the injected mock model.s
     # injected `model=mock_model` bypasses real model resolution for the agent
     # itself, but config.model still drives the stats bar and setup_loop's

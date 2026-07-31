@@ -64,7 +64,7 @@ class ToolConfig(BaseModel):
     """Base config every tool's config extends — the universal `enabled` flag
     (on by default). A tool with extra settings subclasses it (e.g. `HttpConfig`
     in http.py) and points `config_model` at the subclass; a plugin tool does the
-    same. `SolveigConfig.compose_core_tools()` reads each tool's `config_model` to build
+    same. `bootstrap.compose_core_tools()` reads each tool's `config_model` to build
     the `tools` section at runtime, so core and plugin tools are identical here —
     which is what makes "add a core tool" == "add a plugin tool"."""
 

@@ -96,7 +96,7 @@ def hook_name(hook: Hook) -> str:
 
 def hooks_config_map() -> dict[str, type[ToolConfig]]:
     """Every distinct hook as {hook_name: config_model} for schema composition
-    (`SolveigConfig.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed by
+    (`bootstrap.compose_plugin_hooks`). BEFORE/AFTER_HOOKS are keyed by
     *target tool*, so a hook registered for several tools appears under several
     keys but is ONE instance — deduped by name here. Two DIFFERENT hooks sharing
     a name collide into one config entry: both still FIRE (execution iterates

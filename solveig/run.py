@@ -15,6 +15,7 @@ import warnings
 
 from pydantic_ai.models import Model
 
+from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
@@ -168,7 +169,7 @@ async def run_async(
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                config = await SolveigConfig.parse_config_and_prompt()
+                config = await bootstrap.parse_config_and_prompt()
             startup_warnings = tuple(str(w.message) for w in caught)
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)

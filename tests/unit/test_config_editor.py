@@ -4,6 +4,7 @@ import typing
 
 import pytest
 
+from solveig import bootstrap
 from solveig.config.editor import _parse_field_value, _unwrap_optional, editable_fields
 from tests.mocks import DEFAULT_CONFIG
 
@@ -81,7 +82,7 @@ class TestEditableFields:
         """Composed plugin sections are editable after a full bootstrap parse."""
         from solveig.config import SolveigConfig
 
-        config, _, _ = await SolveigConfig.parse_config_and_prompt([])
+        config, _, _ = await bootstrap.parse_config_and_prompt([])
         fields = editable_fields(config)
         assert "plugins.tools.tree.enabled" in fields
         assert "plugins.hooks.shellcheck.enabled" in fields

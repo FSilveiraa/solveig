@@ -404,44 +404,40 @@ class SolveigConfig(BaseSettings):
             return bool(getattr(hooks, hook_name).enabled)
         return True
 
-    @classmethod
-    def compose_core_tools(cls) -> None:
-        """Build `config.tools` from the core tool list — one field per tool,
-        so adding a core tool needs no change here."""
-        from solveig.tools import CORE_TOOLS
+    # ------------------------------------------------------------
+    # Runtime schema composition
+    # ------------------------------------------------------------
+    # Config knows HOW to build these sections — it owns the models and the
+    # mutability rules. It does not know WHAT goes in them: the caller supplies
+    # (name, config_model) pairs. That keeps config from importing tools or
+    # plugins, which sit above it. `solveig.bootstrap` gathers the pairs.
 
-        pairs = [(tool.tool_name(), tool.config_model) for tool in CORE_TOOLS]
+    @classmethod
+    def compose_tools(cls, pairs: list[tuple[str, type]]) -> None:
+        """Build `config.tools` — one field per core tool, so adding a core
+        tool needs no change here."""
         _compose_section(cls, "tools", pairs, "CoreToolsConfig")
 
     @classmethod
-    def compose_plugin_tools(cls) -> None:
-        """Build `config.plugins.tools` from the discovered plugin tools — the
-        plugin parallel of `compose_core_tools`. Each entry's config type is
-        a declared field (BaseTool ClassVar or FunctionTool.config_model),
-        so plugin config validates like core config."""
-        from solveig.plugins.tools import (
-            PLUGIN_TOOLS,
-            config_model_of,
-            plugin_tool_name,
-        )
-
-        pairs = [(plugin_tool_name(e), config_model_of(e)) for e in PLUGIN_TOOLS]
+    def compose_plugin_tools(cls, pairs: list[tuple[str, type]]) -> None:
+        """Build `config.plugins.tools` — the plugin parallel of
+        `compose_tools`. Each entry's config type is a declared field (BaseTool
+        generic arg or FunctionTool.config_model), so plugin config validates
+        like core config."""
         _compose_section(
             PluginsConfig, "tools", pairs, "PluginToolsConfig", _MUTABLE_ALLOW
         )
         cls.model_rebuild(force=True)
 
     @classmethod
-    def compose_plugin_hooks(cls) -> None:
-        """Build `config.plugins.hooks` from the discovered hooks — the hook
-        parallel of `compose_plugin_tools`. A hook's config type is declared
-        on the Hook class (`config_model`), defaulting to bare `ToolConfig`."""
-        from solveig.plugins.hooks import hooks_config_map
-
+    def compose_plugin_hooks(cls, pairs: list[tuple[str, type]]) -> None:
+        """Build `config.plugins.hooks` — the hook parallel of
+        `compose_plugin_tools`. A hook's config type comes from its
+        `@before/@after(config_model=…)`, defaulting to bare `ToolConfig`."""
         _compose_section(
             PluginsConfig,
             "hooks",
-            list(hooks_config_map().items()),
+            pairs,
             "PluginHooksConfig",
             _MUTABLE_ALLOW,
         )
@@ -494,33 +490,32 @@ class SolveigConfig(BaseSettings):
         }
 
     # ------------------------------------------------------------
-    # Entrypoint
+    # Construction
     # ------------------------------------------------------------
 
     @classmethod
-    async def parse_config_and_prompt(
-        cls, cli_args: list[str] | None = None
-    ) -> SolveigConfig:
-        # Compose the core tools section schema (known at init) and create a config
-        # only for plugin discovery.
-        cls.compose_core_tools()
-        plugin_discovery_config = cls(cli_args=cli_args)
-        if plugin_discovery_config.cli_args is None:
-            plugin_discovery_config.cli_args = list(sys.argv[1:])
+    def parse(cls, cli_args: list[str] | None = None) -> SolveigConfig:
+        """One pass over the layered sources (CLI > env > files), nothing more.
 
-        from solveig.plugins import discover_plugins
-
-        discover_plugins(plugin_discovery_config)
-
-        # Re-compose the schema for the plugin section (tools + hooks). The second
-        # parse validates plugin config against the real per-plugin models, the
-        # same pipeline core config goes through.
-        cls.compose_plugin_tools()
-        cls.compose_plugin_hooks()
+        Used for the provisional config that plugin discovery reads
+        `plugins.paths` from, before the plugin schema exists.
+        """
         cfg = cls(cli_args=cli_args)
         if cfg.cli_args is None:
             cfg.cli_args = list(sys.argv[1:])
+        return cfg
 
+    @classmethod
+    def build(cls, cli_args: list[str] | None = None) -> SolveigConfig:
+        """`parse()` plus the finishing touches for the config that is kept:
+        declared-field tracking (what `/config save` persists) and startup MCP
+        servers.
+
+        The two-phase dance around this (compose core tools → discover plugins
+        → compose plugin sections → parse again) is startup sequencing and
+        lives in `solveig.bootstrap`, above tools and plugins.
+        """
+        cfg = cls.parse(cli_args)
         # config_files is already stamped (resolved paths) by ConfigFileSource.
         cfg._record_declared()
         for url in cfg.startup_mcp_servers:

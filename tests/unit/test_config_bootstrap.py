@@ -1,7 +1,7 @@
 """Pin the config bootstrap as explicitly idempotent (D3).
 
 The core-tools schema was previously composed as an import-time side effect
-in `config/__init__.py`. It is now an explicit `SolveigConfig.compose_core_tools()`
+in `config/__init__.py`. It is now an explicit `bootstrap.compose_core_tools()`
 call — the same mechanism as the plugin two-phase bootstrap, phase 1. These
 tests pin that the bootstrap is idempotent and that the placeholder behavior
 without it is a documented choice, not a surprise.
@@ -9,6 +9,7 @@ without it is a documented choice, not a surprise.
 
 import pytest
 
+from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.config.models import CoreToolsConfig, PluginHooksConfig, PluginToolsConfig
 
@@ -28,10 +29,10 @@ def _schema_snapshot() -> dict[str, set[str]]:
 
 async def test_bootstrap_is_idempotent():
     """compose_core_tools() twice → the composed schema is IDENTICAL both times."""
-    SolveigConfig.compose_core_tools()
+    bootstrap.compose_core_tools()
     first = _schema_snapshot()
 
-    SolveigConfig.compose_core_tools()
+    bootstrap.compose_core_tools()
     second = _schema_snapshot()
 
     assert first == second
@@ -41,7 +42,7 @@ async def test_bootstrap_is_idempotent():
 
 async def test_bootstrap_composes_core_tools():
     """After bootstrap, config.tools carries one field per core tool."""
-    SolveigConfig.compose_core_tools()
+    bootstrap.compose_core_tools()
     tools_annotation = SolveigConfig.model_fields["tools"].annotation
     assert tools_annotation is not None
     # CORE_TOOLS is 9 tools; spot-check the known ones.
@@ -62,7 +63,7 @@ async def test_bootstrap_composes_core_tools():
 async def test_config_after_bootstrap_validates_per_tool_config():
     """A SolveigConfig constructed after bootstrap validates a full per-tool
     config (proving the real schema, not the placeholder)."""
-    SolveigConfig.compose_core_tools()
+    bootstrap.compose_core_tools()
     cfg = SolveigConfig(cli_args=[], api={"url": "http://x"})
     # A core tool's config field exists and carries its own model.
     read_cfg = getattr(cfg.tools, "read", None)

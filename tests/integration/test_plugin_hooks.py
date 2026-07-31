@@ -27,6 +27,7 @@ from unittest.mock import patch
 
 import pytest
 
+from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.plugins import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
@@ -215,7 +216,7 @@ class TestLoadAndFilterHooks:
     @pytest.mark.no_file_mocking
     async def test_shellcheck_and_trafilatura_discovered_via_real_scan(self):
         """Real hook plugins self-register on discovery, independent of config.plugins."""
-        SolveigConfig.compose_core_tools()
+        bootstrap.compose_core_tools()
         config = SolveigConfig(
             cli_args=[],
             api={"url": "test-url", "key": "test-key"},
@@ -231,7 +232,7 @@ class TestLoadAndFilterHooks:
     @pytest.mark.no_file_mocking
     async def test_no_duplicate_registration_across_repeated_loads(self, load_plugins):
         """Reloading plugin modules on repeated loads doesn't grow the registry unboundedly."""
-        SolveigConfig.compose_core_tools()
+        bootstrap.compose_core_tools()
         config = SolveigConfig(
             cli_args=[], api={"url": "test-url", "key": "test-key"}, plugins={"shellcheck": {}}
         )
@@ -260,7 +261,7 @@ class TestInitializePlugins:
     @pytest.mark.no_file_mocking
     async def test_hooks_registered_even_when_owning_plugin_not_enabled(self):
         """discover_plugins() discovers every hook plugin, active or not."""
-        SolveigConfig.compose_core_tools()
+        bootstrap.compose_core_tools()
         config = SolveigConfig(
             cli_args=[],
             api={"url": "test-url", "key": "test-key"},

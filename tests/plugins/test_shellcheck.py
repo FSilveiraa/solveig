@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.hooks import (
@@ -45,8 +46,8 @@ _needs_shellcheck = pytest.mark.skipif(
 def _compose_and_build_config():
     """Compose the hooks schema and make SHELLCHECK_CONFIG available."""
     global SHELLCHECK_CONFIG
-    SolveigConfig.compose_core_tools()
-    SolveigConfig.compose_plugin_hooks()
+    bootstrap.compose_core_tools()
+    bootstrap.compose_plugin_hooks()
     SHELLCHECK_CONFIG = SolveigConfig(
         cli_args=[],
         api={"url": "http://x", "key": "k"},

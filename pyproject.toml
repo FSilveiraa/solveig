@@ -111,6 +111,7 @@ name = "Solveig layers"
 type = "layers"
 layers = [
     "solveig.run",
+    "solveig.bootstrap",
     "solveig.agent",
     "solveig.subcommands.registry",
     "solveig.sessions : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.plugins.tools import (
     PLUGIN_TOOLS,
@@ -75,8 +76,8 @@ class TestToolPluginFiltering:
     @pytest.mark.no_file_mocking
     async def test_tree_plugin_loaded_when_in_config(self):
         """The real tree plugin is discovered."""
-        SolveigConfig.compose_core_tools()
-        SolveigConfig.compose_plugin_tools()
+        bootstrap.compose_core_tools()
+        bootstrap.compose_plugin_tools()
         config = SolveigConfig(
             cli_args=[],
             api={"url": "test-url", "key": "test-key"},

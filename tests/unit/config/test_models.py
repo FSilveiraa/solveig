@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 pytestmark = pytest.mark.anyio
 
+from solveig import bootstrap
 from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 from solveig.config.models import (
@@ -20,7 +21,7 @@ from solveig.tools.core.http import HttpConfig
 @pytest.fixture(autouse=True)
 def _compose_for_models():
     """The core-tools schema must be composed before SolveigConfig().tools has real fields."""
-    SolveigConfig.compose_core_tools()
+    bootstrap.compose_core_tools()
 
 
 async def test_api_type_from_string_and_serializes_to_name():

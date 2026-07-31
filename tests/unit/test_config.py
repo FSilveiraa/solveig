@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import anyconfig
 import pytest
 
+from solveig import bootstrap
 from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 
@@ -10,7 +11,7 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_defaults_and_nesting_dotted_flags():
-    c, prompt, resume = await SolveigConfig.parse_config_and_prompt(
+    c, prompt, resume = await bootstrap.parse_config_and_prompt(
         ["--api.url", "http://x", "hello world"]
     )
     assert c.api.url == "http://x"
@@ -24,7 +25,7 @@ async def test_defaults_and_nesting_dotted_flags():
 
 async def test_cli_shortcuts_long_aliases():
     # cli_shortcuts give namespace-dropping LONG aliases (not -u short flags)
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         [
             "--url",
             "http://y",
@@ -45,7 +46,7 @@ async def test_cli_shortcuts_long_aliases():
 
 
 async def test_no_verbose_no_with():
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    c, _, _ = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
     assert not hasattr(c, "verbose")
     assert not hasattr(c, "with_")
 
@@ -54,7 +55,7 @@ async def test_no_verbose_no_with():
 async def test_file_and_cli_deep_merge(tmp_path):
     p = tmp_path / "c.json"
     anyconfig.dump({"api": {"url": "FILE", "model": "m"}}, str(p))
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--config", str(p), "--url", "CLI"]
     )
     assert c.api.url == "CLI"  # CLI overlays file
@@ -62,7 +63,7 @@ async def test_file_and_cli_deep_merge(tmp_path):
 
 
 async def test_model_dump_excludes_cli_and_runtime_fields():
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--api-type", "anthropic"]
     )
     d = c.to_dict()
@@ -86,7 +87,7 @@ async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
 async def test_system_prompt_is_its_own_category():
     from solveig.system_prompt import DEFAULT_SYSTEM_PROMPT
 
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    c, _, _ = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
     assert c.system_prompt.content == DEFAULT_SYSTEM_PROMPT
     assert c.system_prompt.add_examples is False
     assert c.system_prompt.add_os_info is False
@@ -96,7 +97,7 @@ async def test_system_prompt_is_its_own_category():
 
 
 async def test_add_examples_shortcut_targets_nested_field():
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--add-examples", "--add-os-info"]
     )
     assert c.system_prompt.add_examples is True
@@ -106,7 +107,7 @@ async def test_add_examples_shortcut_targets_nested_field():
 async def test_command_disabled_the_same_uniform_way_as_any_tool():
     # command is NOT special: disabled via the generic tools.<name>.enabled path,
     # not a bespoke --no-commands flag.
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--no-tools.command.enabled"]
     )
     assert c.tools.command.enabled is False
@@ -119,7 +120,7 @@ async def test_model_info_lives_on_provider_ref_not_config():
     from solveig.api.client import Client
     from solveig.api.types import ModelInfo
 
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    c, _, _ = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
     assert not hasattr(c, "model_info")
 
     ref = Client(provider=MagicMock())
@@ -129,7 +130,7 @@ async def test_model_info_lives_on_provider_ref_not_config():
 
 
 async def test_default_plugin_paths_local_over_global():
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
+    c, _, _ = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
     assert c.plugins.paths == ["./.solveig/plugins", "~/.solveig/plugins"]
 
 
@@ -137,7 +138,7 @@ async def test_default_plugin_paths_local_over_global():
 async def test_declared_tracks_file_and_cli_fields(tmp_path):
     p = tmp_path / "c.json"
     anyconfig.dump({"api": {"model": "from-file"}}, str(p))
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--config", str(p), "--url", "CLI"]
     )
     # both the file-provided and CLI-provided leaf paths are declared for /config save
@@ -152,7 +153,7 @@ async def test_declared_config_saves_only_declared_serialized():
     # /config save persists exactly the declared leaves, serialized: secret
     # un-masked, api type as its name, byte size as int, command patterns as
     # source strings — and nothing that wasn't explicitly set.
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         [
             "--url",
             "http://x",
@@ -180,7 +181,7 @@ async def test_declared_config_saves_only_declared_serialized():
 async def test_env_layer_between_cli_and_file(monkeypatch):
     monkeypatch.setenv("SOLVEIG_API__KEY", "from-env")
     monkeypatch.setenv("SOLVEIG_API__MODEL", "env-model")
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--model", "cli-model"]
     )
     assert c.api.key.get_secret_value() == "from-env"  # env supplies what CLI omitted
@@ -191,7 +192,7 @@ async def test_mcp_flag_appends_into_servers():
     # NOTE: the repeatable startup flag is --mcp-server, not the historical bare
     # --mcp: under nested pydantic-settings the `mcp` submodel owns the bare
     # `--mcp` flag (whole-model JSON fallback), so a cli_shortcut can't reclaim it.
-    c, _, _ = await SolveigConfig.parse_config_and_prompt(
+    c, _, _ = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--mcp-server", "stdio://a", "--mcp-server", "stdio://b"]
     )
     assert set(c.mcp.servers) == {"stdio://a", "stdio://b"}
