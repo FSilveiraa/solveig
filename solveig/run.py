@@ -19,12 +19,13 @@ from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
-from solveig.conversation import Conversation
 from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import discover_plugins, report_plugins
-from solveig.sessions.manager import SessionManager
+from solveig.session.conversation import Conversation
+from solveig.session.display import SessionDisplay
+from solveig.session.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
 from solveig.user_message_queue import UserMessageQueue
@@ -195,6 +196,11 @@ async def run_async(
         # Test/demo code injected an interface it already constructed - wire
         # its output channel to the session queue.
         interface.user_message_queue = user_message_queue
+
+    # The conversation's two observers, both self-registering: one shows it,
+    # one saves it. SessionDisplay is built after the interface because it
+    # drives the interface's transcript verbs.
+    SessionDisplay(conversation, interface)
 
     # The registry owns the prompt gate: /commands are dispatched before
     # insertion, prompts pass through unchanged. Self-registers on the queue

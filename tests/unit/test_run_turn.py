@@ -7,7 +7,7 @@ from pydantic_ai.models.test import TestModel
 
 from solveig.agent import run_turn
 from solveig.context import SolveigContext
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 from tests.mocks.reactive import RecordingTranscript
 

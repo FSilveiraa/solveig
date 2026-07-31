@@ -8,6 +8,7 @@ from typing import Any
 
 import anyio
 from pydantic import BaseModel
+from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
 from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
@@ -28,6 +29,18 @@ def _dump_field(obj: Any) -> Any:
         return {_dump_field(k): _dump_field(v) for k, v in obj.items()}
     else:
         return obj
+
+
+def _part_text(part: Any) -> str | None:
+    """The non-empty conversational text a part would render, or None (empty,
+    or a tool call/return - which a frontend never draws)."""
+    if isinstance(part, UserPromptPart) and isinstance(part.content, str):
+        text = part.content
+    elif isinstance(part, (TextPart, ThinkingPart)):
+        text = part.content
+    else:
+        return None
+    return text if text.strip() else None
 
 
 class MockInterface(TerminalInterface):
@@ -63,9 +76,13 @@ class MockInterface(TerminalInterface):
         user_inputs: list[str | None] | None = None,
         choices: list[int] | None = None,
         timeout_seconds: float | None = 10,
+        conversation=None,
         **kwargs,
     ) -> None:
         # Do not call super().__init__() since that would init() the Textual App
+        self._conversation = conversation
+        self.shown: dict[str, list[str]] = {}
+        self.transcript_events: list[tuple] = []
         self.outputs: list[str] = []
         self.user_inputs = user_inputs or []
         self.choices = choices or []
@@ -119,8 +136,33 @@ class MockInterface(TerminalInterface):
     async def display_info(self, message: str) -> None:
         self.outputs.append(f"ℹ️  Info: {message}")
 
-    async def clear_conversation(self) -> None:
-        self.outputs.append("CONVERSATION_CLEARED")
+    # -- transcript verbs -----------------------------------------------------
+    # Headless materialization: record what SessionDisplay asked for instead of
+    # drawing it, so the full Conversation -> observer -> frontend chain stays
+    # assertable without Textual. `shown` mirrors what a real frontend would
+    # have on screen, keyed by message.
+
+    async def show_message_part(self, message_id: str, part_index: int) -> None:
+        message = self.conversation.get(message_id) if self.conversation else None
+        if message is None or part_index >= len(message.parts):
+            return
+        text = _part_text(message.parts[part_index])
+        if text is not None:
+            self.shown.setdefault(message_id, []).append(text)
+        self.transcript_events.append(("show", message_id, part_index))
+
+    async def update_message(self, message_id: str) -> None:
+        message = self.conversation.get(message_id) if self.conversation else None
+        if message is None:
+            return
+        texts = [_part_text(part) for part in message.parts]
+        self.shown[message_id] = [text for text in texts if text is not None]
+        self.transcript_events.append(("update", message_id))
+
+    async def drop_messages(self, message_ids: list[str]) -> None:
+        for message_id in message_ids:
+            self.shown.pop(message_id, None)
+        self.transcript_events.append(("drop", tuple(message_ids)))
 
     async def display_diff(
         self,

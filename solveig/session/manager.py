@@ -4,13 +4,14 @@ Stores/restores `Conversation` as a single JSON blob per session file
 (whole-list `ModelMessagesTypeAdapter` dump) - pydantic-ai's own sanctioned
 serialize/restore pair, not a bespoke format.
 
-Replay is not a special path: `Conversation.load()` repopulates the messages
-and fires `message_added` per one, and the reactive transcript renders each -
-closed content via render nodes, tool calls via
+Replay is not this module's business: `Conversation.load()` repopulates the
+messages and fires `conversation_loaded`, and `SessionDisplay` (this manager's
+peer observer) walks the loaded history and draws it - closed content through
+the interface's transcript verbs, recorded tool calls through
 `tools.orchestration.replay_tool_call` (the tool's own `replay()`, wrapped in
-the same group posture a live call gets). `announce_resumed_session()` just
-shows the banner. See the module docstring on `solveig.tools.base.BaseTool` for the
-live/replay split.
+the same group posture a live call gets). This module only reads the bytes;
+`announce_resumed_session()` just shows the banner. See the module docstring on
+`solveig.tools.base.BaseTool` for the live/replay split.
 """
 
 from __future__ import annotations
@@ -27,8 +28,8 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
-from solveig.conversation import Conversation, ConversationObserver, MessageId
 from solveig.interface.base import SolveigInterface
+from solveig.session.conversation import Conversation, ConversationObserver, MessageId
 from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
 
@@ -158,7 +159,7 @@ class SessionManager(ConversationObserver):
         if self._auto_save:
             await self.store(self.conversation)
 
-    async def conversation_loaded(self) -> None:
+    async def conversation_loaded(self, previous: Conversation) -> None:
         """A resume adopted this history FROM disk — writing it back would at
         best be redundant and at worst clobber the file being read."""
 

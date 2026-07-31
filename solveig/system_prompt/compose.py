@@ -22,7 +22,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig.config import SolveigConfig
-from solveig.sessions.manager import parse_conversation_blob
+from solveig.session.manager import parse_conversation_blob
 from solveig.utils.file import Filesystem
 
 _STORIES_DIR = Path(__file__).parent / "stories"

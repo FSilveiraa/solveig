@@ -196,3 +196,28 @@ async def test_mcp_flag_appends_into_servers():
         ["--url", "http://x", "--mcp-server", "stdio://a", "--mcp-server", "stdio://b"]
     )
     assert set(c.mcp.servers) == {"stdio://a", "stdio://b"}
+
+
+async def test_build_with_no_config_file_anywhere(tmp_path, monkeypatch):
+    """A machine with no config file at all must still start.
+
+    REGRESSION (currently failing, bug not yet fixed): `config_files` defaults
+    to `DEFAULT_CONFIG_PATHS`, which carries an unexpanded `~`.
+    `ConfigFileSource` stamps the *resolved* list over that default, but when
+    nothing is found it stamps `[]` — which is falsy, so pydantic keeps the raw
+    default instead. `_record_declared()` then hands those literal paths to
+    anyconfig, which tries to open `<cwd>/~/.solveig/config.yaml` and raises
+    FileNotFoundError.
+
+    Reproduces only outside the test fixtures' usual patching and only when no
+    config file exists, which is why it survived: `conftest.default_config_file`
+    empties the *search* list, not the field default.
+    """
+    monkeypatch.chdir(tmp_path)  # guarantee ./.solveig/config.yaml is absent
+
+    config = SolveigConfig.build([])
+
+    # Nothing was found, so nothing should be recorded as a loaded file --
+    # and crucially no unexpanded '~' path should survive into config_files.
+    assert not any("~" in path for path in config.config_files)
+    assert config._declared_fields == set()

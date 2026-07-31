@@ -4,7 +4,7 @@ import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from textual.app import App, ComposeResult
 
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from solveig.exceptions import UserCancel
 from solveig.interface.cli.buttons import (
     BranchButton,

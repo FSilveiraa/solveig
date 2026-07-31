@@ -11,7 +11,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import RunUsage
 
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 
 pytestmark = pytest.mark.anyio
 

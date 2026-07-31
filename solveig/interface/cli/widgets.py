@@ -14,8 +14,8 @@ from solveig.utils.misc import copy_to_clipboard
 from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
 
 if TYPE_CHECKING:
-    from solveig.conversation import Conversation
     from solveig.interface.base import SolveigInterface
+    from solveig.session.conversation import Conversation
 
 
 class Comment(Static):

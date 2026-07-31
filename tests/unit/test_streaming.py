@@ -8,7 +8,7 @@ from pydantic_ai.toolsets.function import FunctionToolset
 
 from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
 from solveig.tools.available import AVAILABLE_TOOLS
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model

@@ -1,7 +1,7 @@
 import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from tests.mocks.reactive import RecordingTranscript
 
 pytestmark = pytest.mark.anyio

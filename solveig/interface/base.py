@@ -24,8 +24,8 @@ from solveig.exceptions import UserCancel
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
-    from solveig.conversation import Conversation
     from solveig.interface.themes import Palette
+    from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -87,9 +87,10 @@ class SolveigInterface(ABC):
     _active_tasks_ref: dict[asyncio.Task, None] | None = None
 
     # The history this frontend displays, handed to the root at construction.
-    # WHEN a frontend builds its observer over it is that frontend's own
-    # lifecycle problem (Textual cannot mount widgets before its app is up),
-    # which is exactly why it is not a protocol handshake.
+    # Read-side only: the transcript verbs below address messages by id, so a
+    # frontend needs the history to look them up (and to hand to an editable
+    # widget, which writes a user's edit straight back). The frontend does NOT
+    # observe it - SessionDisplay does that and calls the verbs.
     _conversation: Conversation | None = None
 
     @property
@@ -223,10 +224,36 @@ class SolveigInterface(ABC):
         """Display a system message."""
         ...
 
+    # -- transcript ----------------------------------------------------------
+    # The three verbs SessionDisplay drives. It decides WHAT should be visible
+    # (including which parts it draws itself, e.g. a recorded tool call); a
+    # frontend only materializes what it is handed, and never subscribes to the
+    # conversation itself.
+
     @abstractmethod
-    async def clear_conversation(self) -> None:
-        """Remove all currently displayed conversation content, in
-        preparation for a full redraw after a delete/retry/branch."""
+    async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
+        """Materialize one part of `self.conversation`'s message. Called in part
+        order; a part this frontend has no rendering for is a no-op (the caller
+        does not know, or need to know, which those are).
+
+        Finer-grained than the other two because it is the only one with
+        anything to interleave: SessionDisplay may draw a part itself in the
+        middle of a message, so it has to hand parts over one at a time to keep
+        them in order."""
+        ...
+
+    @abstractmethod
+    async def update_message(self, message_id: MessageId) -> None:
+        """Redraw an already-shown message in place - a streamed token landed,
+        a stream finished, or the user edited it. Parts that appeared since the
+        last call are appended."""
+        ...
+
+    @abstractmethod
+    async def drop_messages(self, message_ids: list[MessageId]) -> None:
+        """Remove these messages from the display. The ids may already be gone
+        from the conversation, so this must work from the frontend's own
+        record of what it mounted."""
         ...
 
     @abstractmethod

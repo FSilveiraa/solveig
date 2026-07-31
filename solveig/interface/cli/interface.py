@@ -15,14 +15,14 @@ from textual.widgets import Collapsible, Markdown
 from solveig.interface.base import MutableTextBox, SolveigInterface
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
+from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
 if TYPE_CHECKING:
-    from solveig.conversation import Conversation
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
-    from solveig.interface.cli.transcript import TextualTranscript
+    from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -136,8 +136,27 @@ class LocalDisplay(SolveigInterface):
     async def display_info(self, message: str) -> None:
         await self._display_text(message, style="info")
 
-    async def clear_conversation(self) -> None:
-        await self.app._conversation_area.clear()
+    # The root's message display - a scoped child (with_group) shares it, same
+    # as `conversation`. None until the app is up (see _wait_until_ready), so
+    # the three transcript verbs below no-op before there is a screen.
+    _message_display: "MessageDisplay | None" = None
+
+    @property
+    def _messages(self) -> "MessageDisplay | None":
+        root = self._root
+        return root._message_display if isinstance(root, LocalDisplay) else None
+
+    async def show_message_part(self, message_id: "MessageId", part_index: int) -> None:
+        if self._messages is not None:
+            await self._messages.show_part(message_id, part_index)
+
+    async def update_message(self, message_id: "MessageId") -> None:
+        if self._messages is not None:
+            await self._messages.update(message_id)
+
+    async def drop_messages(self, message_ids: list["MessageId"]) -> None:
+        if self._messages is not None:
+            await self._messages.drop(message_ids)
 
     async def display_tree(
         self,
@@ -244,8 +263,6 @@ class TerminalInterface(LocalDisplay):
     shared unchanged with `GroupInterface` (defined below) - only
     `_container` differs between the two.
     """
-
-    _transcript: "TextualTranscript | None" = None
 
     def __init__(
         self,
@@ -401,14 +418,14 @@ class TerminalInterface(LocalDisplay):
         from textual._context import active_app
 
         active_app.set(self.app)
-        # Mount the reactive transcript now, not at construction: it needs the
+        # Build the message display now, not at construction: it needs the
         # app's conversation area, which does not exist until the app is up.
         # That timing is this frontend's problem, so it is solved here rather
-        # than by a handshake every other frontend has to implement.
-        if self._conversation is not None and self._transcript is None:
-            from .transcript import TextualTranscript
-
-            self._transcript = TextualTranscript(
+        # than by a handshake every other frontend has to implement. The
+        # transcript verbs no-op until it exists - nothing can be shown before
+        # there is a screen to show it on.
+        if self._conversation is not None and self._message_display is None:
+            self._message_display = MessageDisplay(
                 self._conversation, self.app._conversation_area, self
             )
         # Print banner

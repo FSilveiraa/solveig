@@ -114,8 +114,8 @@ layers = [
     "solveig.bootstrap",
     "solveig.agent",
     "solveig.subcommands.registry",
-    "solveig.sessions : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
-    "solveig.interface.base : solveig.interface.reactive : solveig.interface.cli : solveig.conversation : solveig.context : solveig.api.client",
+    "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
+    "solveig.interface.base : solveig.interface.cli : solveig.session.conversation : solveig.context : solveig.api.client",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
     "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types",
 ]
@@ -124,7 +124,11 @@ layers = [
 name = "Frontends depend only on the protocol"
 type = "forbidden"
 source_modules = ["solveig.interface.base", "solveig.interface.cli"]
-forbidden_modules = ["solveig.sessions", "solveig.config.editor"]
+forbidden_modules = [
+    "solveig.session.manager",
+    "solveig.session.display",
+    "solveig.config.editor",
+]
 
 [[tool.importlinter.contracts]]
 name = "Config does not depend on the API client"
@@ -133,7 +137,7 @@ source_modules = ["solveig.config"]
 forbidden_modules = ["solveig.api.client"]
 
 [[tool.importlinter.contracts]]
-name = "MCP notifies tools, it does not call them"
+name = "Toolset assembly reads MCP, not the other way round"
 type = "forbidden"
 source_modules = ["solveig.mcp_servers.client"]
 forbidden_modules = ["solveig.tools"]

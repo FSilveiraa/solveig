@@ -40,9 +40,9 @@ from pydantic_ai.tools import ToolDefinition
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
-from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import SolveigInterface
+from solveig.session.conversation import Conversation
 from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool

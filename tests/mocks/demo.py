@@ -16,11 +16,11 @@ from pydantic_ai.messages import (
 )
 
 from solveig import bootstrap
-from solveig.conversation import Conversation
 from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.run import run_async
-from solveig.sessions.manager import SessionManager
+from solveig.session.conversation import Conversation
+from solveig.session.manager import SessionManager
 from solveig.utils.file import Filesystem
 from tests.mocks.client import create_mock_model
 

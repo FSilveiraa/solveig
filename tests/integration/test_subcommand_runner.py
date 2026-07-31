@@ -7,9 +7,9 @@ import pytest
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.config.editor import config_list  # noqa: F401 — triggers @subcommand
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from solveig.mcp_servers.client import mcp_list  # noqa: F401 — triggers @subcommand
-from solveig.sessions.manager import SessionManager, session_list  # noqa: F401
+from solveig.session.manager import SessionManager, session_list  # noqa: F401
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface

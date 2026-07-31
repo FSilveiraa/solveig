@@ -27,9 +27,9 @@ from pydantic_settings.exceptions import SettingsError
 
 from solveig.api.client import Client
 from solveig.config import CLI_SETTINGS_OPTS, SolveigConfig
-from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import SolveigInterface
+from solveig.session.conversation import Conversation
 from solveig.subcommands.base import (
     _PENDING,
     Subcommand,
@@ -39,7 +39,7 @@ from solveig.subcommands.base import (
 from solveig.tools.orchestration import run_tool_and_hooks
 
 if TYPE_CHECKING:
-    from solveig.sessions.manager import SessionManager
+    from solveig.session.manager import SessionManager
     from solveig.user_message_queue import UserMessageQueue
 
 

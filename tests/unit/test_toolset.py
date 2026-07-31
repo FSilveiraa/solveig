@@ -33,11 +33,10 @@ from solveig.agent import (
     run_turn,
 )
 from solveig.context import SolveigContext
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
-from solveig.api.types import APIType
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ToolDisabledError
+from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after, before, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool

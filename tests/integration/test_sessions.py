@@ -25,8 +25,8 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import RunUsage
 
-from solveig.conversation import Conversation
-from solveig.sessions.manager import SessionManager
+from solveig.session.conversation import Conversation
+from solveig.session.manager import SessionManager
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
@@ -52,7 +52,7 @@ class TestParseConversationBlob:
         from pydantic_ai.messages import ModelRequest, UserPromptPart
         from pydantic_core import to_jsonable_python
 
-        from solveig.sessions.manager import parse_conversation_blob
+        from solveig.session.manager import parse_conversation_blob
 
         messages = [ModelRequest(parts=[UserPromptPart(content="hi")])]
         blob_text = json.dumps(
@@ -74,7 +74,7 @@ class TestParseConversationBlob:
     def test_defaults_missing_token_counts_to_zero(self):
         from pydantic_core import to_jsonable_python
 
-        from solveig.sessions.manager import parse_conversation_blob
+        from solveig.session.manager import parse_conversation_blob
 
         blob_text = json.dumps({"messages": to_jsonable_python([])})
 

@@ -55,7 +55,7 @@ class ConversationObserver(Protocol):
     async def branched_from(
         self, message_id: MessageId, previous: Conversation
     ) -> None: ...
-    async def conversation_loaded(self) -> None: ...
+    async def conversation_loaded(self, previous: Conversation) -> None: ...
 
 
 @dataclass
@@ -67,7 +67,7 @@ class Conversation:
 
     def register_observer(self, observer: ConversationObserver) -> None:
         """Observers self-register in their own constructor (see
-        ReactiveTranscript, SessionManager) — the composition root never wires
+        SessionDisplay, SessionManager) — the composition root never wires
         them. The conversation only ever holds "things with these methods"; it
         never learns what any of them are."""
         self._observers.append(observer)
@@ -171,23 +171,28 @@ class Conversation:
     async def load(self, messages: Sequence[ModelMessage], usage: RunUsage) -> None:
         """Replace the whole conversation (session resume / replay), reactively.
 
-        Populates ALL new entries before firing message_added for each - so
-        during every mount the full loaded history is queryable (a tool call can
-        find its result and replay itself). This is the same reactive path a
-        live turn uses: replay isn't special.
+        ONE event, fired once the new history is fully in place: an observer
+        reacting to it sees the finished conversation and walks it however it
+        likes. A load deliberately does NOT replay itself as a burst of
+        `message_added` — the arrival of a live message and the wholesale
+        replacement of the history are different things, and an observer that
+        needs to tell them apart (a display redrawing recorded tool calls) must
+        not have to infer it from what happens to be queryable at the time.
 
-        Clearing fires `conversation_loaded`, NOT `truncated_from`: nothing is
-        being discarded here, the history is being adopted from somewhere else.
+        `previous` is the history being replaced, for symmetry with
+        `branched_from` — the destructive events all hand over their BEFORE,
+        since by the time anyone is notified the entries are gone.
+
+        Fires `conversation_loaded`, NOT `truncated_from`: nothing is being
+        discarded here, the history is being adopted from somewhere else.
         Persistence must not react to a load by writing back over the file it
         just read."""
+        previous = self._snapshot()
         self._entries = {str(uuid.uuid4()): message for message in messages}
         self._inflight_id = None
         self.usage = usage
         for observer in self._observers:
-            await observer.conversation_loaded()
-        for message_id in list(self._entries.keys()):
-            for observer in self._observers:
-                await observer.message_added(message_id)
+            await observer.conversation_loaded(previous)
 
     async def begin_stream(self, response: ModelMessage) -> MessageId:
         """Start streaming a model response: hold the current snapshot as a

@@ -11,7 +11,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from textual.app import App, ComposeResult
 
-from solveig.conversation import Conversation
+from solveig.session.conversation import Conversation
 from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
 from solveig.interface.cli.conversation import ConversationArea
 from solveig.interface.cli.transcript import TextualTranscript

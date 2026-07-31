@@ -17,7 +17,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_core import to_jsonable_python
 
-from solveig.sessions.manager import SessionManager, parse_conversation_blob
+from solveig.session.manager import SessionManager, parse_conversation_blob
 
 pytestmark = pytest.mark.anyio
 

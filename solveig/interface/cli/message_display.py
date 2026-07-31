@@ -1,12 +1,18 @@
-"""Textual materialization of the reactive transcript (Surface-1).
+"""Textual materialization of conversation messages.
 
-Observes the Conversation and mounts CLOSED-content parts (user/assistant text,
-reasoning) as widgets into the ConversationArea, keyed by message_id.
+Turns a message part into a widget in the ConversationArea, keyed by message_id,
+and keeps the bookkeeping that needs (which widgets belong to which message, and
+which role the last section header announced).
 
-Tool call/return parts are deliberately NOT rendered here: a tool is not a
-1:1-presentable concept (its display is a flow, not one widget), so
-`_make_widget` returns None for it and the tool owns its own display via
-execute()/replay(). Never teach this transcript about tools.
+This is NOT an observer. `SessionDisplay` watches the conversation and calls
+`TerminalInterface`'s three transcript verbs, which delegate here - so nothing
+in this file knows what a tool is, what a session is, or when a message arrived
+versus when it was loaded from disk. It knows how to draw a piece of text.
+
+A part it has no rendering for (a tool call or return) yields no widget and is
+skipped: a tool is not a 1:1-presentable concept - its display is a flow, not
+one widget - so the tool owns its own display via execute()/replay(). Never
+teach this file about tools.
 """
 
 from __future__ import annotations
@@ -18,15 +24,12 @@ from pydantic_ai.messages import (
     ModelResponse,
     TextPart,
     ThinkingPart,
-    ToolCallPart,
     UserPromptPart,
 )
 from textual.widget import Widget
 from textual.widgets import Markdown as MarkdownWidget
 
-from solveig.conversation import Conversation, MessageId
-from solveig.interface.reactive import ReactiveTranscript
-from solveig.tools.orchestration import build_returns_map, replay_tool_call
+from solveig.session.conversation import Conversation, MessageId
 
 from .collapsible_widgets import CollapsibleTextBox
 from .widgets import EditableComment, SectionHeader
@@ -67,25 +70,29 @@ def _renderable_content(part: ModelRequestPart | ModelResponsePart) -> str | Non
     return None
 
 
-class TextualTranscript(ReactiveTranscript):
+class MessageDisplay:
     def __init__(
         self,
         conversation: Conversation,
         area: ConversationArea,
         interface: SolveigInterface,
     ) -> None:
+        self.conversation = conversation
         self._area = area
         self._interface = interface
         self._widgets: dict[MessageId, list[Widget]] = {}
         self._last_section_role: str | None = None
-        super().__init__(conversation)
 
-    async def mount(self, message_id: MessageId) -> None:
+    async def show_part(self, message_id: MessageId, part_index: int) -> None:
+        """Mount one part's widget, emitting a section header first if this
+        message opens a new role. Called once per part, in order, so the header
+        check has to be idempotent - it is, since it only fires on a genuine
+        role change."""
         message = self.conversation.get(message_id)
-        if message is None:
+        if message is None or part_index >= len(message.parts):
             return
         role = _role_of(message)
-        widgets: list[Widget] = []
+        widgets = self._widgets.setdefault(message_id, [])
 
         if role is not None and role != self._last_section_role:
             header = SectionHeader(role.capitalize())
@@ -93,27 +100,14 @@ class TextualTranscript(ReactiveTranscript):
             widgets.append(header)
             self._last_section_role = role
 
-        returns = None
-        for part_index, part in enumerate(message.parts):
-            widget = self._make_widget(part, message_id, part_index, role)
-            if widget is not None:
-                await self._mount_widget(widget)
-                widgets.append(widget)
-            elif isinstance(part, ToolCallPart):
-                # A tool call renders itself (the tool's own replay: header +
-                # result) only once its result is present - which it is on
-                # replay (load populates the whole history first) but not on a
-                # live run (execute() shows the tool live before the result
-                # exists, so this is skipped and there's no double render).
-                if returns is None:
-                    returns = build_returns_map(self.conversation.messages)
-                return_part = returns.get(part.tool_call_id)
-                if return_part is not None:
-                    await replay_tool_call(self._interface, part, return_part)
+        widget = self._make_widget(
+            message.parts[part_index], message_id, part_index, role
+        )
+        if widget is not None:
+            await self._mount_widget(widget)
+            widgets.append(widget)
 
-        self._widgets[message_id] = widgets
-
-    async def rerender(self, message_id: MessageId) -> None:
+    async def update(self, message_id: MessageId) -> None:
         """Update this message's widgets in place (edit or streaming). Content
         widgets are updated where they already exist and appended for parts that
         appeared since (streaming only ever appends parts, and the streamed
@@ -140,7 +134,7 @@ class TextualTranscript(ReactiveTranscript):
             rendered += 1
         self._widgets[message_id] = existing
 
-    async def remove(self, message_ids: list[MessageId]) -> None:
+    async def drop(self, message_ids: list[MessageId]) -> None:
         for message_id in message_ids:
             for widget in self._widgets.pop(message_id, []):
                 await widget.remove()
@@ -190,7 +184,7 @@ class TextualTranscript(ReactiveTranscript):
 
     def _recompute_section_role(self) -> str | None:
         """The role of the last still-mounted role-bearing message, so the next
-        mount emits a section header only on a genuine role change."""
+        part shown emits a section header only on a genuine role change."""
         for message_id in reversed(self.conversation.ids):
             role = _role_of(self.conversation.get(message_id))
             if role is not None:
