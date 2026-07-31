@@ -17,6 +17,7 @@ teach this file about tools.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pydantic_ai.messages import (
@@ -70,6 +71,16 @@ def _renderable_content(part: ModelRequestPart | ModelResponsePart) -> str | Non
     return None
 
 
+@dataclass
+class _Mounted:
+    """What this frontend knows about one message it drew: the widgets it put on
+    screen and the role it announced. ONE record, so a drop forgets both at once
+    - two dicts keyed by message id would be two things to keep in step."""
+
+    role: str | None
+    widgets: list[Widget] = field(default_factory=list)
+
+
 class MessageDisplay:
     def __init__(
         self,
@@ -80,7 +91,11 @@ class MessageDisplay:
         self.conversation = conversation
         self._area = area
         self._interface = interface
-        self._widgets: dict[MessageId, list[Widget]] = {}
+        # Insertion-ordered, so iteration order IS mount order. This is the only
+        # honest description of what is on screen: by the time `drop` runs the
+        # conversation already describes the state AFTER the change, which for a
+        # load is a history that has not been drawn yet.
+        self._mounted: dict[MessageId, _Mounted] = {}
         self._last_section_role: str | None = None
 
     async def show_part(self, message_id: MessageId, part_index: int) -> None:
@@ -92,12 +107,12 @@ class MessageDisplay:
         if message is None or part_index >= len(message.parts):
             return
         role = _role_of(message)
-        widgets = self._widgets.setdefault(message_id, [])
+        mounted = self._mounted.setdefault(message_id, _Mounted(role=role))
 
         if role is not None and role != self._last_section_role:
             header = SectionHeader(role.capitalize())
             await self._mount_widget(header)
-            widgets.append(header)
+            mounted.widgets.append(header)
             self._last_section_role = role
 
         widget = self._make_widget(
@@ -105,7 +120,7 @@ class MessageDisplay:
         )
         if widget is not None:
             await self._mount_widget(widget)
-            widgets.append(widget)
+            mounted.widgets.append(widget)
 
     async def update(self, message_id: MessageId) -> None:
         """Update this message's widgets in place (edit or streaming). Content
@@ -116,7 +131,8 @@ class MessageDisplay:
         if message is None:
             return
         role = _role_of(message)
-        existing = self._widgets.get(message_id, [])
+        mounted = self._mounted.setdefault(message_id, _Mounted(role=role))
+        existing = mounted.widgets
         content_widgets = [w for w in existing if not isinstance(w, SectionHeader)]
 
         rendered = 0
@@ -132,13 +148,38 @@ class MessageDisplay:
                     await self._mount_widget(widget)
                     existing.append(widget)
             rendered += 1
-        self._widgets[message_id] = existing
 
     async def drop(self, message_ids: list[MessageId]) -> None:
-        for message_id in message_ids:
-            for widget in self._widgets.pop(message_id, []):
-                await widget.remove()
+        """Unmount every widget belonging to these messages in ONE structural
+        change and ONE layout pass.
+
+        `batch()` takes the widget lock and suppresses intermediate refreshes;
+        `remove_children` prunes the whole set at once. Deliberately serialized
+        - Textual's own bulk API acquires that lock, and racing DOM mutations
+        (e.g. gathering N `widget.remove()` calls) would parallelize nothing:
+        these are tree edits, not I/O.
+
+        PRECONDITION: every widget handed over is an IMMEDIATE child of the
+        conversation area. `remove_children` does not verify it - given an
+        iterable it prunes with `parent=self` and trusts the caller. True here
+        because `_mount_widget` mounts into the area itself; a widget mounted
+        somewhere nested (a tool's group, which this class does not own) must
+        never end up in a record.
+        """
+        doomed = [
+            widget
+            for message_id in message_ids
+            for widget in self._forget(message_id).widgets
+        ]
+        if doomed:
+            async with self._area.batch():
+                await self._area.remove_children(doomed)
         self._last_section_role = self._recompute_section_role()
+
+    def _forget(self, message_id: MessageId) -> _Mounted:
+        """Drop this message's record and hand it back - one pop, so the
+        widgets and the role it announced can never fall out of step."""
+        return self._mounted.pop(message_id, _Mounted(role=None))
 
     # -- helpers ------------------------------------------------------------
 
@@ -183,10 +224,12 @@ class MessageDisplay:
             widget.append(content)
 
     def _recompute_section_role(self) -> str | None:
-        """The role of the last still-mounted role-bearing message, so the next
-        part shown emits a section header only on a genuine role change."""
-        for message_id in reversed(self.conversation.ids):
-            role = _role_of(self.conversation.get(message_id))
-            if role is not None:
-                return role
+        """The role of the last still-MOUNTED role-bearing message, so the next
+        part shown emits a section header only on a genuine role change. Read
+        from this object's own records, never from the conversation: after a
+        load the conversation holds messages nothing has drawn yet, and
+        trusting it there swallows the opening section header."""
+        for mounted in reversed(self._mounted.values()):
+            if mounted.role is not None:
+                return mounted.role
         return None

@@ -86,12 +86,13 @@ class SessionDisplay(ConversationObserver):
         """A resume replaces the history wholesale: drop whatever is up, then
         walk the loaded history. This is the one path that redraws recorded
         tool calls - see the module docstring."""
-        # NOTE: a load drops EVERY shown id, which a frontend could serve far
-        # more cheaply by wiping its container than by removing widgets one at
-        # a time. That stays the frontend's call - it gets the whole list in a
-        # single drop_messages, so it can see it is dropping all it holds and
-        # take the shortcut. A separate "clear everything" verb would make
-        # every frontend implement two drops to express one idea.
+        # NOTE: a load drops EVERY shown id, so the whole list goes over in a
+        # single drop_messages and the frontend can unmount it in one batch.
+        # It canNOT answer this by wiping its container: the surface holds
+        # things the transcript never mounted (banner, system prompt, tool
+        # groups), and on a resume the system prompt is displayed BEFORE the
+        # load. Bulk removal is the frontend's business; a second "clear
+        # everything" verb would only make every frontend write two drops.
         if self._order:
             dropped, self._order = self._order, []
             await self.interface.drop_messages(dropped)
