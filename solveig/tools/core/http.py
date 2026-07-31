@@ -163,12 +163,8 @@ class HttpTool(BaseTool[HttpConfig]):
 
         decision, abs_path = check_path_security(self.output_file, config)
         if decision == ConsentDecision.BLOCKED:
-            await interface.display_error(
-                f"Path blocked by ignored_paths: {abs_path}"
-            )
-            return ToolResult(
-                issues=[f"path blocked by ignored_paths: {abs_path}"]
-            )
+            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_write_access(
@@ -185,9 +181,7 @@ class HttpTool(BaseTool[HttpConfig]):
                 "Writing output file since path is auto-allowed."
             )
         elif (
-            await interface.ask_choice(
-                f"Write response to {abs_path}?", ["Yes", "No"]
-            )
+            await interface.ask_choice(f"Write response to {abs_path}?", ["Yes", "No"])
         ) != 0:
             await interface.display_warning("Rejected")
             return ToolResult(

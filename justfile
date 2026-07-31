@@ -17,12 +17,16 @@ check *flags:
     mypy {{src}} --ignore-missing-imports || fail=1
     exit $fail
 
+# Check import layering: a module may only import its own layer or below
+import *flags:
+    lint-imports {{flags}}
+
 # Run the test suite with coverage (pass extra flags/paths, e.g. `just test tests/unit/test_config.py`)
 test *flags:
     pytest --cov=solveig --cov-report=term-missing {{flags}}
 
-# Run the full CI suite: format, static checks (lint + mypy), test
-ci: format check test
+# Run the full CI suite: format, static checks (lint + mypy), import layering, test
+ci: format check import test
 
 # Interactive Textual shell: you type, a mock LLM client replies with canned turns
 mock:

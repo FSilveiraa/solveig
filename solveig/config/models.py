@@ -14,7 +14,7 @@ from pydantic import (
 
 import solveig.interface.themes as themes
 from solveig.api import APIType, OpenAI, resolve_api_type
-from solveig.system_prompt import DEFAULT_SYSTEM_PROMPT
+from solveig.config import DEFAULT_SYSTEM_PROMPT
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 # Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow"). Used

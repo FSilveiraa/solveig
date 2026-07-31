@@ -55,6 +55,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "import-linter>=2.0",
     "aiohttp>=3.10.0",
 ]
 anthropic = ["anthropic>=0.68.0"]
@@ -98,3 +99,40 @@ ignore = ["E501"]  # E501: line too long
 # comments honest - a stale one (its underlying issue since fixed) becomes an error.
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+[tool.importlinter]
+# A module may only import its own layer or below. "|" = independent siblings,
+# ":" = siblings that may import each other. TYPE_CHECKING and function-local
+# imports both count.
+root_package = "solveig"
+
+[[tool.importlinter.contracts]]
+name = "Solveig layers"
+type = "layers"
+layers = [
+    "solveig.run",
+    "solveig.agent",
+    "solveig.subcommands.registry",
+    "solveig.sessions : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
+    "solveig.interface.base : solveig.interface.reactive : solveig.interface.cli : solveig.conversation : solveig.context : solveig.api",
+    "solveig.config.config : solveig.config.models : solveig.config.sources",
+    "solveig.utils | solveig.exceptions | solveig.interface.themes",
+]
+
+[[tool.importlinter.contracts]]
+name = "Frontends depend only on the protocol"
+type = "forbidden"
+source_modules = ["solveig.interface.base", "solveig.interface.cli"]
+forbidden_modules = ["solveig.sessions", "solveig.config.editor"]
+
+[[tool.importlinter.contracts]]
+name = "Config does not depend on the API client"
+type = "forbidden"
+source_modules = ["solveig.config"]
+forbidden_modules = ["solveig.api"]
+
+[[tool.importlinter.contracts]]
+name = "Tools do not depend on MCP"
+type = "forbidden"
+source_modules = ["solveig.tools"]
+forbidden_modules = ["solveig.mcp_servers"]

@@ -1,21 +1,14 @@
 """System-prompt composition — assemble the final prompt string from its parts.
 
-The default text lives in ``__init__`` (the package's static declaration);
-this module holds the machinery that reads config + briefing files + stories
-and composes the string sent to the model each turn.
-
-``SolveigConfig`` is a TYPE_CHECKING-only import: this module must not import
-``solveig.config`` at module level, because ``config.models`` imports
-``DEFAULT_SYSTEM_PROMPT`` from the package at class-definition time. The import
-order is config → system_prompt/__init__ (string only) → done; compose.py is
-imported later, at call time, and never during config's module init.
+``DEFAULT_SYSTEM_PROMPT`` lives in ``solveig.config``; this module holds the
+machinery that reads config + briefing files + stories and composes the string
+sent to the model each turn.
 """
 
 from __future__ import annotations
 
 import os
 import platform
-from typing import TYPE_CHECKING
 
 import distro
 from anyio import Path
@@ -28,11 +21,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from solveig.config import SolveigConfig
 from solveig.sessions.manager import parse_conversation_blob
 from solveig.utils.file import Filesystem
-
-if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
 
 _STORIES_DIR = Path(__file__).parent / "stories"
 
