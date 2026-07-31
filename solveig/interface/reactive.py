@@ -16,10 +16,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from solveig.conversation import Conversation, MessageId
+from solveig.conversation import Conversation, ConversationObserver, MessageId
 
 
-class ReactiveTranscript(ABC):
+class ReactiveTranscript(ABC, ConversationObserver):
     """Absorbs the conversation's event set into three render hooks, so a
     frontend never sees the extra granularity: streaming, completion and edits
     are all just "redraw this one", and both kinds of rewind are just "drop

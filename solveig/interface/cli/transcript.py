@@ -26,7 +26,7 @@ from textual.widgets import Markdown as MarkdownWidget
 
 from solveig.conversation import Conversation, MessageId
 from solveig.interface.reactive import ReactiveTranscript
-from solveig.sessions.replay import build_returns_map, replay_tool_call
+from solveig.tools.orchestration import build_returns_map, replay_tool_call
 
 from .collapsible_widgets import CollapsibleTextBox
 from .widgets import EditableComment, SectionHeader

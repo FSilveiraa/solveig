@@ -1,7 +1,7 @@
-"""The one home for wrapping a tool's execution in its collapsible group.
+"""The one home for wrapping a tool call in its collapsible group.
 
-Two execution paths live here so the group/consent/display posture isn't split
-across modules:
+Three paths live here so the group/consent/display posture isn't split across
+modules:
 
 - `run_tool_and_hooks` - a typed `BaseTool` call (LLM-driven or a user-typed
   `/tool` subcommand). Opens the call's group, shows the tool's intent
@@ -13,8 +13,15 @@ across modules:
 - `run_untyped_tool` - a plain-function/MCP call with no `BaseTool` instance and
   so no typed schema/consent of its own; gets a generic group + 3-way consent +
   display treatment instead.
+- `replay_tool_call` - a call recorded in a session, re-presented from its
+  stored `ToolReturnPart`. Same shape as the two above (look the tool up by
+  name, rebuild the instance from its args, open its group, let the tool draw
+  itself) but with `replay()` in place of `execute()`, since the result already
+  exists. It lived in `sessions/` for a while purely because resume is what
+  calls it — but it is tool display, not session storage, and the group posture
+  it needs is the one defined here.
 
-Both open the group through `open_tool_group`, the single home for the
+All three open the group through `open_tool_group`, the single home for the
 auto-collapse policy. Only how a blocking `PluginException` is surfaced differs
 between the typed callers: the agent turns it into a `ModelRetry` (the model
 reacts), the subcommand displays an error (no model to answer);
@@ -22,14 +29,22 @@ reacts), the subcommand displays an error (no model to answer);
 """
 
 import json
+from collections.abc import Sequence
 from typing import Any
 
-from pydantic_ai.messages import ToolCallPart
+from pydantic import ValidationError
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ToolCallPart,
+    ToolReturnPart,
+)
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
+from solveig.tools.available import tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
@@ -151,3 +166,47 @@ async def run_untyped_tool(
 
         await group.display_warning("Rejected")
         return "User inspected the result and declined to send it to the assistant."
+
+
+def build_returns_map(
+    messages: Sequence[ModelMessage],
+) -> dict[str, ToolReturnPart]:
+    """tool_call_id -> its persisted ToolReturnPart, for O(1) pairing."""
+    returns: dict[str, ToolReturnPart] = {}
+    for message in messages:
+        if isinstance(message, ModelRequest):
+            for part in message.parts:
+                if isinstance(part, ToolReturnPart):
+                    returns[part.tool_call_id] = part
+    return returns
+
+
+async def replay_tool_call(
+    interface: SolveigInterface,
+    call: ToolCallPart,
+    return_part: ToolReturnPart,
+) -> None:
+    """Render one recorded call inside its own collapsible group: the tool's
+    `replay()` (header + result body), or a generic render if the tool isn't a
+    `BaseTool` (a not-yet-converted plugin function) or its stored args no
+    longer validate against the tool's current schema (a renamed/removed field
+    since the session was recorded)."""
+    result = ToolResult(content=return_part.content, private=return_part.metadata or {})
+    tool_cls = tool_classes().get(call.tool_name)
+
+    if tool_cls is not None:
+        try:
+            instance = tool_cls.model_validate(call.args_as_dict())
+        except ValidationError:
+            tool_cls = None
+
+    # Replayed tool groups start collapsed: a resumed session is historical, so
+    # the result body is folded away by default (same as a live run finishing
+    # under the default auto_collapse_tools) - the user expands what they want.
+    if tool_cls is None:
+        async with interface.with_group(call.tool_name, auto_collapse=True) as group:
+            await result.display_content(group)
+        return
+
+    async with interface.with_group(instance.title, auto_collapse=True) as group:
+        await instance.replay(group, result)

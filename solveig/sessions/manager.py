@@ -6,9 +6,10 @@ serialize/restore pair, not a bespoke format.
 
 Replay is not a special path: `Conversation.load()` repopulates the messages
 and fires `message_added` per one, and the reactive transcript renders each -
-closed content via render nodes, tool calls via `solveig.sessions.replay`
-(the tool's own `replay()`). `announce_resumed_session()` just shows the
-banner. See the module docstring on `solveig.tools.base.BaseTool` for the
+closed content via render nodes, tool calls via
+`tools.orchestration.replay_tool_call` (the tool's own `replay()`, wrapped in
+the same group posture a live call gets). `announce_resumed_session()` just
+shows the banner. See the module docstring on `solveig.tools.base.BaseTool` for the
 live/replay split.
 """
 
@@ -26,7 +27,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
-from solveig.conversation import Conversation, MessageId
+from solveig.conversation import Conversation, ConversationObserver, MessageId
 from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
@@ -89,7 +90,7 @@ def parse_conversation_blob(text: str) -> dict:
     }
 
 
-class SessionManager:
+class SessionManager(ConversationObserver):
     """Persistence for a `Conversation`, driven reactively.
 
     Implements `ConversationObserver` and registers itself, so nothing has to
