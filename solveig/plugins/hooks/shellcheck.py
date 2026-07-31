@@ -10,7 +10,7 @@ from pydantic import Field
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import before
 from solveig.tools import CommandTool
 from solveig.tools.base import ToolConfig

@@ -28,7 +28,7 @@ from pydantic_ai.messages import ToolCallPart
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool

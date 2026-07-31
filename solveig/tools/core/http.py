@@ -21,7 +21,7 @@ from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 
 def _format_body(body: str, content_type: str | None) -> tuple[str, str]:

@@ -27,7 +27,7 @@ from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
 from solveig.conversation import Conversation
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
 

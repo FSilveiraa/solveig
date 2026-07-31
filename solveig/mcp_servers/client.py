@@ -32,7 +32,7 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.context import SolveigContext, get_introspection_context
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
 from solveig.subcommands.base import subcommand
 from solveig.tools.available import AVAILABLE_TOOLS

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from anyio import Path
 
     from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 
 class ReadTool(BaseTool):

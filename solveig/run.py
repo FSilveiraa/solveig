@@ -19,7 +19,7 @@ from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins import discover_plugins, report_plugins

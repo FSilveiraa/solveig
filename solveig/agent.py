@@ -42,7 +42,7 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool

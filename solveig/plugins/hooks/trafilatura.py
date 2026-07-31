@@ -1,7 +1,7 @@
 """trafilatura hook - converts HTML response bodies to markdown after an HTTP request."""
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import after
 from solveig.tools import HttpTool, ToolResult
 

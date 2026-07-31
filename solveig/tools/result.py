@@ -18,7 +18,7 @@ from pydantic_ai.messages import ToolReturn
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 
 def _issue_line(issue: Exception | str) -> str:

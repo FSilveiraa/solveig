@@ -11,7 +11,7 @@ from pydantic_ai.providers import Provider
 
 from solveig.api.types import ModelInfo
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.subcommands import subcommand
 
 

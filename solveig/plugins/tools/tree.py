@@ -13,7 +13,7 @@ from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 
 @tool

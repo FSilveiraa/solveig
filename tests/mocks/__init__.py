@@ -1,6 +1,6 @@
 from pydantic import ByteSize
 
-from solveig import SolveigConfig
+from solveig.config import SolveigConfig
 
 from .client import create_mock_model
 from .interface import MockInterface

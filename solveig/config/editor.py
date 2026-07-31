@@ -16,7 +16,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
-from solveig.interface import SolveigInterface, themes
+from solveig.interface import themes
+from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import subcommand
 
 from . import DEFAULT_CONFIG_PATHS, sources

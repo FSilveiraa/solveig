@@ -22,14 +22,9 @@ The terminal implementation lives under `cli/` (`TerminalInterface` + its
 Textual app); tests supply a `MockInterface`.
 
 Themes (`Palette`, `DEFAULT_THEME`, `DEFAULT_CODE_THEME`) come from `themes.py`.
+
+Deliberately re-exports nothing: `themes` sits below config while `base` sits
+above it, so re-exporting both would merge two layers into a single node in the
+import graph — `config -> themes` would then drag in the whole protocol. Import
+from the real module (`interface.base`, `interface.themes`).
 """
-
-from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
-
-__all__ = [
-    "SolveigInterface",
-    "Palette",
-    "DEFAULT_THEME",
-    "DEFAULT_CODE_THEME",
-]

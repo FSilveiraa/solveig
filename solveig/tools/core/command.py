@@ -15,7 +15,7 @@ from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 
 class CommandConfig(ToolConfig):

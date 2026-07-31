@@ -15,7 +15,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from solveig import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.run import run_async

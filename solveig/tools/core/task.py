@@ -15,7 +15,7 @@ from solveig.tools.result import ToolResult
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
-    from solveig.interface import SolveigInterface
+    from solveig.interface.base import SolveigInterface
 
 TASK_STATUS_MAP = {
     "pending": "⚪",

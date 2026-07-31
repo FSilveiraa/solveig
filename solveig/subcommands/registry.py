@@ -29,7 +29,7 @@ from solveig.api.client import Client
 from solveig.config import CLI_SETTINGS_OPTS, SolveigConfig
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import (
     _PENDING,
     Subcommand,

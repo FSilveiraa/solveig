@@ -10,15 +10,9 @@ __version__ = "0.1.0"
 __author__ = "Francisco"
 __license__ = "MIT"
 
-# Import main classes for easy access
-from .api.client import Client
-from .api.types import APIType, ModelInfo
-from .config import SolveigConfig
+# Deliberately re-exports nothing but the metadata above: the root package is
+# imported by everything, so re-exporting Client here would drag the whole
+# provider + interface stack into `import solveig.config`. Import from the real
+# module (`solveig.config`, `solveig.api.client`, ...).
 
-__all__ = [
-    "SolveigConfig",
-    "APIType",
-    "Client",
-    "ModelInfo",
-    "__version__",
-]
+__all__ = ["__version__"]

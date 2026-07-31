@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 from solveig.plugins.utils import rescan_and_load_plugins
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult

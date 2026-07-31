@@ -16,7 +16,7 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
 from solveig.config import SolveigConfig
-from solveig.interface import SolveigInterface
+from solveig.interface.base import SolveigInterface
 
 
 @dataclass
