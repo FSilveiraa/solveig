@@ -1,11 +1,14 @@
 """Assembles the active toolset.
 
-`AVAILABLE_TOOLS` holds a plain `CombinedToolset([FilteredToolset(FunctionToolset),
-*mcp])` - no wrappers. `rebuild(config)` is only needed after a genuine change in
-tool *membership* (plugin rescan, MCP connect/disconnect); `tools.<name>.enabled`
-toggling is decided live per step by the `FilteredToolset`, using whatever
-`ctx.deps.config` says right now, so it needs no rebuild. Built on pydantic-ai's own
-`FilteredToolset` rather than a hand-rolled visibility check.
+`build_toolset(config)` inspects the tool stores - CORE_TOOLS, PLUGIN_TOOLS and
+MCP_CONNECTIONS - and returns a plain `CombinedToolset([FilteredToolset(
+FunctionToolset), *mcp])`, no wrappers. Derived fresh per turn rather than
+cached: `build_agent()` builds a new Agent each turn anyway, so a membership
+change (plugin rescan, MCP connect/disconnect) is picked up on its own and
+nothing has to announce it. `tools.<name>.enabled` toggling is likewise decided
+live per step by the `FilteredToolset` from whatever `ctx.deps.config` says.
+Built on pydantic-ai's own `FilteredToolset` rather than a hand-rolled
+visibility check.
 
 The other half of tool execution - running the plugin `@before`/`@after` hooks
 and rendering each `ToolResult` into a `ToolReturn` - is the `Hooks` capability
@@ -36,80 +39,60 @@ def _as_callable(tool: Any) -> Any:
     return tool
 
 
-class AvailableTools:
-    """Holds the currently active toolset, rebuilt from the current tool sources.
+def build_toolset(config: SolveigConfig) -> AbstractToolset:
+    """Derive the active toolset by inspecting the tool stores: CORE_TOOLS,
+    every discovered plugin tool, and every connected MCP server.
 
-    The toolset is a plain `CombinedToolset([FilteredToolset(FunctionToolset),
-    *mcp])` - no `ToolResult`-rendering or hook-running wrappers. Rendering
-    (`ToolResult` -> `ToolReturn`) and the `@before`/`@after` plugin hooks are
-    handled by the native tool-execute `Hooks` capability built in
-    `solveig/agent.py` and attached to the `Agent`, not by wrapping the
-    toolset.
+    Derived on demand rather than cached, because `build_agent()` already
+    constructs a fresh Agent per turn — so a membership change (plugin rescan,
+    MCP connect/disconnect) is picked up next turn on its own. Nothing has to
+    announce that it changed, and no store has to know this module exists.
+
+    MCP toolsets are wrapped in a live FilteredToolset that reads
+    config.mcp[server_url].is_tool_allowed() on every call — the same reactive
+    pattern as core tools.
     """
+    mcp_toolsets: list[AbstractToolset] = []
+    for server_url, conn in MCP_CONNECTIONS.items():
+        ts = conn.toolset
+        # Apply allow/block live — predicate reads config fresh each call.
+        # When both lists are empty, is_tool_allowed returns True (no-op).
 
-    def __init__(self) -> None:
-        self._toolset: AbstractToolset | None = None
-
-    def rebuild(self, config: SolveigConfig) -> None:
-        """Recompute the base toolset from CORE_TOOLS, every discovered plugin
-        tool, and every connected MCP server's toolset. Only needed after tool
-        *membership* actually changes - see the module docstring for why
-        `tools.<name>.enabled` toggling doesn't need this.
-
-        MCP toolsets are wrapped in a live FilteredToolset that reads
-        config.mcp[server_url].is_tool_allowed() on every call — same
-        reactive pattern as core tools: edit the config, it takes effect
-        next turn without a rebuild.
-        """
-        mcp_toolsets: list[AbstractToolset] = []
-        for server_url, conn in MCP_CONNECTIONS.items():
-            ts = conn.toolset
-            # Apply allow/block live — predicate reads config fresh each call.
-            # When both lists are empty, is_tool_allowed returns True (no-op).
-
-            def _mcp_active(
-                ctx: RunContext[SolveigContext],
-                td: ToolDefinition,
-                url: str = server_url,
-            ) -> bool:
-                return ctx.deps.config.mcp[url].is_tool_allowed(td.name)
-
-            ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
-            mcp_toolsets.append(ts)
-
-        # Every discovered plugin tool is included here; the FilteredToolset
-        # below decides core-tool visibility live from `tools.<name>.enabled`
-        # (plugin tools are enabled-by-default in the current schema).
-        # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS's specific callable
-        # types don't unify into anything FunctionToolset's constructor (or
-        # the .filtered() predicate's deps type below) accepts precisely -
-        # same class of "no way to express a dynamic tool union to mypy"
-        # noted elsewhere in this codebase.
-        function_tools: list[Any] = [
-            _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS)
-        ]
-
-        if not function_tools and not mcp_toolsets:
-            raise ValueError("No tools available: the tool list is empty.")
-
-        def is_tool_active(
-            ctx: RunContext[SolveigContext], tool_def: ToolDefinition
+        def _mcp_active(
+            ctx: RunContext[SolveigContext],
+            td: ToolDefinition,
+            url: str = server_url,
         ) -> bool:
-            # Same rule the run_tool_and_hooks guard uses
-            # (SolveigConfig.is_tool_enabled): a core tool is on iff its
-            # `tools.<name>.enabled` flag is set; plugin tools are on by default.
-            return ctx.deps.config.is_tool_enabled(tool_def.name)
+            return ctx.deps.config.mcp[url].is_tool_allowed(td.name)
 
-        base = FunctionToolset(function_tools).filtered(is_tool_active)
-        self._toolset = CombinedToolset([base, *mcp_toolsets])
+        ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
+        mcp_toolsets.append(ts)
 
-    @property
-    def toolset(self) -> AbstractToolset:
-        assert self._toolset is not None, "Call rebuild() before accessing toolset"
-        return self._toolset
+    # Every discovered plugin tool is included here; the FilteredToolset
+    # below decides core-tool visibility live from `tools.<name>.enabled`
+    # (plugin tools are enabled-by-default in the current schema).
+    # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS's specific callable
+    # types don't unify into anything FunctionToolset's constructor (or
+    # the .filtered() predicate's deps type below) accepts precisely -
+    # same class of "no way to express a dynamic tool union to mypy"
+    # noted elsewhere in this codebase.
+    function_tools: list[Any] = [
+        _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS)
+    ]
 
+    if not function_tools and not mcp_toolsets:
+        raise ValueError("No tools available: the tool list is empty.")
 
-AVAILABLE_TOOLS = AvailableTools()
+    def is_tool_active(
+        ctx: RunContext[SolveigContext], tool_def: ToolDefinition
+    ) -> bool:
+        # Same rule the run_tool_and_hooks guard uses
+        # (SolveigConfig.is_tool_enabled): a core tool is on iff its
+        # `tools.<name>.enabled` flag is set; plugin tools are on by default.
+        return ctx.deps.config.is_tool_enabled(tool_def.name)
+
+    base = FunctionToolset(function_tools).filtered(is_tool_active)
+    return CombinedToolset([base, *mcp_toolsets])
 
 
 def tool_classes() -> dict[str, type[BaseTool]]:

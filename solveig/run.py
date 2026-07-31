@@ -27,7 +27,6 @@ from solveig.plugins import discover_plugins, report_plugins
 from solveig.sessions.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
-from solveig.tools.available import AVAILABLE_TOOLS
 from solveig.user_message_queue import UserMessageQueue
 
 
@@ -52,7 +51,6 @@ async def _display_setup(
     plugin_errors = discover_plugins(config)
     await report_plugins(config, interface, plugin_errors)
     await connect_all(config=config, interface=interface)
-    AVAILABLE_TOOLS.rebuild(config)
 
     sys_prompt = await get_system_prompt(config)
     await interface.display_text_box(
@@ -183,7 +181,6 @@ async def run_async(
     # interface exists so the composed config is ready when the Textual app
     # mounts.  discover_plugins is explicitly UI-free.
     discover_plugins(config)
-    AVAILABLE_TOOLS.rebuild(config)
 
     if interface is None:
         interface = TerminalInterface(

@@ -1,12 +1,11 @@
 """MCP (Model Context Protocol) client integration for Solveig.
 
 This package `__init__` holds the connection record and the shared
-`MCP_CONNECTIONS` dict, and nothing else: `client.py` imports `AVAILABLE_TOOLS`
-(to trigger rebuilds on connect/disconnect) while `tools/available.py` needs the
-same dict during `rebuild()` — a top-level import of either from `client` there
-would cycle. A holder that imports only downward (config) is the established
-pattern for this; the package `__init__` plays that role, with no separate
-module.
+`MCP_CONNECTIONS` dict, and nothing else. It is a dumb store: `client.py`
+writes to it, `tools/available.py` reads it when deriving the active toolset,
+and neither has to know the other exists. Nothing here announces a change —
+the toolset is rebuilt from scratch each turn, so a connect or disconnect is
+picked up on its own.
 
 `MCPConnection` lives here rather than in `client` so the dict can be typed
 without an import guard — a `TYPE_CHECKING` import back into `client` would be

@@ -9,7 +9,7 @@ into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
 `build_tool_execution_capability()` (`solveig/tools/available.py`): it reads
 `BEFORE_HOOKS`/`AFTER_HOOKS` at call time to run the registered hooks around a
 tool call via pydantic-ai's native tool-execute hook points, but doesn't own
-the registry - the same relationship `AvailableTools.rebuild()` already has
+the registry - the same relationship `available.build_toolset()` already has
 with `PLUGIN_TOOLS`.
 
 Keyed by the *tool being hooked* (name or function), appended to a list -

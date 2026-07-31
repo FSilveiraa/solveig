@@ -14,7 +14,7 @@ dict lives in `mcp_servers/__init__.py` so `tools/available.py` (which this
 module imports to trigger rebuilds on connect/disconnect) can read the same
 shared object at top level without a circular import: this module holds its
 own reference, and only *other* modules import the dict from the package.
-`AVAILABLE_TOOLS.rebuild()` derives the toolset list it needs
+`tools.available.build_toolset()` derives the toolset list it needs
 (`[c.toolset for c in MCP_CONNECTIONS.values()]`) from this dict directly
 rather than a second list kept in sync by hand.
 """
@@ -35,7 +35,6 @@ from solveig.context import SolveigContext, get_introspection_context
 from solveig.interface.base import SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
 from solveig.subcommands.base import subcommand
-from solveig.tools.available import AVAILABLE_TOOLS
 
 
 def _default_tool_prefix(url: str) -> str:
@@ -140,7 +139,6 @@ async def connect(
         await disconnect(server_config.url, config, interface)
 
     MCP_CONNECTIONS[server_config.url] = conn
-    AVAILABLE_TOOLS.rebuild(config)
 
     await interface.update_stats(
         f"MCP connected to {conn.server_name}",
@@ -161,7 +159,6 @@ async def disconnect(
         return
     server_name = conn.server_name
     await conn.toolset.__aexit__(None, None, None)
-    AVAILABLE_TOOLS.rebuild(config)
     await interface.update_stats(
         mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
     )

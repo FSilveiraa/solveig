@@ -1,7 +1,7 @@
 """Core tools the LLM can call, registered on a pydantic-ai FunctionToolset.
 
 All 9 core tools are declarative `BaseTool` subclasses (Phase 5) - see
-`solveig/tools/base.py`. `AvailableTools.rebuild()` calls `.as_tool()` on each
+`solveig/tools/base.py`. `available.build_toolset()` calls `.as_tool()` on each
 to build the pydantic-ai-facing callable.
 """
 

@@ -43,7 +43,7 @@ from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import SolveigInterface
-from solveig.tools.available import AVAILABLE_TOOLS
+from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
 from solveig.tools.result import ToolResult
@@ -78,7 +78,7 @@ def build_agent(
         resolved_model,
         deps_type=SolveigContext,
         instructions=system_prompt,
-        toolsets=[AVAILABLE_TOOLS.toolset],
+        toolsets=[build_toolset(config)],
         # Bounds each individual model request at the provider client level -
         # not the whole run.py loop below, which also covers tool execution
         # and interactive ask_choice waits that have nothing to do with
