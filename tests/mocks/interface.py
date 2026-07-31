@@ -97,13 +97,6 @@ class MockInterface(TerminalInterface):
     async def wait_until_ready(self):
         self.outputs.append("INTERFACE_READY")
 
-    async def attach_conversation(self, conversation) -> None:
-        # No reactive transcript here: conversation TEXT no longer flows through
-        # the imperative display, so e2e tests assert real state
-        # (conversation.messages) rather than captured output strings. Tool
-        # display stays imperative and is still captured in `outputs`.
-        pass
-
     async def stop(self) -> None:
         self.outputs.append("INTERFACE_STOPPED")
         self._stop_event.set()

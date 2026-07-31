@@ -22,6 +22,7 @@ from solveig.utils.misc import get_language
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
+    from solveig.interface.cli.transcript import TextualTranscript
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -244,6 +245,8 @@ class TerminalInterface(LocalDisplay):
     `_container` differs between the two.
     """
 
+    _transcript: "TextualTranscript | None" = None
+
     def __init__(
         self,
         theme: Palette = DEFAULT_THEME,
@@ -251,10 +254,13 @@ class TerminalInterface(LocalDisplay):
         base_indent: int = 2,
         user_message_queue: "UserMessageQueue | None" = None,
         config=None,
+        conversation: "Conversation | None" = None,
         **kwargs,
     ):
         # The interface's output channel: typed input lands here via `put`.
         self.user_message_queue = user_message_queue
+        # Displayed once the app is up - see _wait_until_ready.
+        self._conversation = conversation
         app = SolveigTextualApp(
             theme=theme,
             input_callback=self._handle_input,
@@ -306,15 +312,6 @@ class TerminalInterface(LocalDisplay):
     @property
     def stats(self):
         return self.app._stats_dashboard
-
-    async def attach_conversation(self, conversation: "Conversation") -> None:
-        """Mount a TextualTranscript so live conversation changes render
-        reactively (streaming, edits, truncation) into the ConversationArea."""
-        from .transcript import TextualTranscript
-
-        self._transcript = TextualTranscript(
-            conversation, self.app._conversation_area, self
-        )
 
     # SolveigInterface implementation
     async def _start(self) -> None:
@@ -404,6 +401,16 @@ class TerminalInterface(LocalDisplay):
         from textual._context import active_app
 
         active_app.set(self.app)
+        # Mount the reactive transcript now, not at construction: it needs the
+        # app's conversation area, which does not exist until the app is up.
+        # That timing is this frontend's problem, so it is solved here rather
+        # than by a handshake every other frontend has to implement.
+        if self._conversation is not None and self._transcript is None:
+            from .transcript import TextualTranscript
+
+            self._transcript = TextualTranscript(
+                self._conversation, self.app._conversation_area, self
+            )
         # Print banner
         await self.display_text(BANNER)
 

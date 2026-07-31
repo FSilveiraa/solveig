@@ -3,7 +3,7 @@ The display protocol for Solveig's frontends.
 
 `SolveigInterface` is what a UI (CLI, web, desktop, headless mock) implements:
 render (display_*), ask (ask_*), scope output (with_group), status and
-animations, theming, and the reactive handshake (attach_conversation). It
+animations, and theming. It
 deliberately also carries the two concerns every interactive frontend shares
 - the user-message queue (the interface's output channel for typed input)
 and cancellation (with_cancellable + the _active_tasks registry + the
@@ -60,7 +60,7 @@ class SolveigInterface(ABC):
     """
     The display protocol any UI implementation (CLI, web, desktop, headless
     mock) provides: render, ask, scope, status/animation, theme, and the
-    reactive handshake (`attach_conversation`).
+    and the conversation it displays (handed in at construction).
 
     Two cross-cutting concerns are protocol-level ON PURPOSE (every UI with
     user input shares them, so a frontend never re-implements them):
@@ -85,6 +85,17 @@ class SolveigInterface(ABC):
 
     _root_ref: SolveigInterface | None = None
     _active_tasks_ref: dict[asyncio.Task, None] | None = None
+
+    # The history this frontend displays, handed to the root at construction.
+    # WHEN a frontend builds its observer over it is that frontend's own
+    # lifecycle problem (Textual cannot mount widgets before its app is up),
+    # which is exactly why it is not a protocol handshake.
+    _conversation: Conversation | None = None
+
+    @property
+    def conversation(self) -> Conversation | None:
+        """The root's conversation - a scoped child (with_group) shares it."""
+        return self._root._conversation
 
     def set_theme(self, theme: Palette) -> None:
         """Re-theme the live interface (the colours used for both CSS and Rich
@@ -211,13 +222,6 @@ class SolveigInterface(ABC):
     async def display_info(self, message: str) -> None:
         """Display a system message."""
         ...
-
-    async def attach_conversation(self, conversation: Conversation) -> None:
-        """Subscribe this interface's reactive transcript to `conversation`
-        once both exist. Interface-agnostic: the Textual interface mounts a
-        `TextualTranscript`; a future web frontend would mount its own observer;
-        a headless mock may no-op. Called once, after the interface is ready."""
-        return None
 
     @abstractmethod
     async def clear_conversation(self) -> None:

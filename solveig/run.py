@@ -45,8 +45,6 @@ async def _display_setup(
     await interface.wait_until_ready()
     await asyncio.sleep(0)
 
-    await interface.attach_conversation(conversation)
-
     for warning in startup_warnings:
         await interface.display_warning(warning)
 
@@ -194,6 +192,7 @@ async def run_async(
             auto_copy_selection=config.interface.auto_copy_selection,
             user_message_queue=user_message_queue,
             config=config,
+            conversation=conversation,
         )
     else:
         # Test/demo code injected an interface it already constructed - wire

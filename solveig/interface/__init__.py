@@ -3,9 +3,10 @@
 `SolveigInterface` (`base.py`) is the display protocol every UI implements:
 async display methods (`display_text`/`display_error`/...), input
 (`ask_question`/`ask_choice`), scoped output (`with_group`), status/animation
-(`update_stats`/`with_animation`), theming (`set_theme`), and the reactive
-subscription handshake (`attach_conversation`). Two cross-cutting concerns
-live on the protocol deliberately:
+(`update_stats`/`with_animation`) and theming (`set_theme`). The conversation
+it displays is handed to the root at construction; when a frontend builds its
+observer over it is that frontend's own lifecycle problem. Two cross-cutting
+concerns live on the protocol deliberately:
 
 - **User-message queue** (`user_message_queue`) — the interface's output
   channel for typed input. The interface `put`s; the queue's prompt gate
