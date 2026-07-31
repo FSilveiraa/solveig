@@ -16,7 +16,7 @@ import warnings
 from pydantic_ai.models import Model
 
 from solveig.agent import run_turn_with_retry
-from solveig.api import Client
+from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.conversation import Conversation
 from solveig.interface import SolveigInterface

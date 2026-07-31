@@ -25,6 +25,7 @@ from pydantic import Field, ValidationError, create_model
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 from pydantic_settings.exceptions import SettingsError
 
+from solveig.api.client import Client
 from solveig.config import CLI_SETTINGS_OPTS, SolveigConfig
 from solveig.conversation import Conversation
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
@@ -38,7 +39,6 @@ from solveig.subcommands.base import (
 from solveig.tools.orchestration import run_tool_and_hooks
 
 if TYPE_CHECKING:
-    from solveig.api import Client
     from solveig.sessions.manager import SessionManager
     from solveig.user_message_queue import UserMessageQueue
 
@@ -69,7 +69,7 @@ class SubcommandRegistry:
             SolveigConfig: config,
             Conversation: conversation,
             SolveigInterface: interface,
-            type(client): client,
+            Client: client,
             SessionManager: session_manager,
         }
         # Resolve TYPE_CHECKING string annotations: {"SolveigConfig": SolveigConfig, …}

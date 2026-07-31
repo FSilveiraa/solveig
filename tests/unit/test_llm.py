@@ -5,7 +5,7 @@ Tests API type parsing.
 
 import pytest
 
-from solveig.api import APIType, parse_api_type
+from solveig.api.types import APIType, parse_api_type
 
 pytestmark = [pytest.mark.anyio]
 

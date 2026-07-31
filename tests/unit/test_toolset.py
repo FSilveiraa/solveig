@@ -35,7 +35,7 @@ from solveig.agent import (
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
-from solveig.api import APIType
+from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.plugins.hooks import after, before, clear_hooks

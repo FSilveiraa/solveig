@@ -114,9 +114,9 @@ layers = [
     "solveig.agent",
     "solveig.subcommands.registry",
     "solveig.sessions : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
-    "solveig.interface.base : solveig.interface.reactive : solveig.interface.cli : solveig.conversation : solveig.context : solveig.api",
+    "solveig.interface.base : solveig.interface.reactive : solveig.interface.cli : solveig.conversation : solveig.context : solveig.api.client",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
-    "solveig.utils | solveig.exceptions | solveig.interface.themes",
+    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types",
 ]
 
 [[tool.importlinter.contracts]]
@@ -129,10 +129,10 @@ forbidden_modules = ["solveig.sessions", "solveig.config.editor"]
 name = "Config does not depend on the API client"
 type = "forbidden"
 source_modules = ["solveig.config"]
-forbidden_modules = ["solveig.api"]
+forbidden_modules = ["solveig.api.client"]
 
 [[tool.importlinter.contracts]]
-name = "Tools do not depend on MCP"
+name = "MCP notifies tools, it does not call them"
 type = "forbidden"
-source_modules = ["solveig.tools"]
-forbidden_modules = ["solveig.mcp_servers"]
+source_modules = ["solveig.mcp_servers.client"]
+forbidden_modules = ["solveig.tools"]

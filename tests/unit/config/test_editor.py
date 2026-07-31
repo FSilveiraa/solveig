@@ -2,7 +2,7 @@
 
 import pytest
 
-from solveig.api import APIType
+from solveig.api.types import APIType
 from solveig.config import SolveigConfig, set_config_value
 from solveig.config.editor import parse_config_value
 

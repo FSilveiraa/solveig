@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 import solveig.interface.themes as themes
-from solveig.api import APIType, OpenAI, resolve_api_type
+from solveig.api.types import APIType, OpenAI, resolve_api_type
 from solveig.config import DEFAULT_SYSTEM_PROMPT
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)

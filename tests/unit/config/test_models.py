@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 pytestmark = pytest.mark.anyio
 
-from solveig.api import APIType
+from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 from solveig.config.models import (
     ApiConfig,

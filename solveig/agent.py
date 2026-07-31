@@ -37,7 +37,7 @@ from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
-from solveig.api import Client
+from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.conversation import Conversation

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import anyconfig
 import pytest
 
-from solveig.api import APIType
+from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 
 pytestmark = pytest.mark.anyio
@@ -116,7 +116,8 @@ async def test_command_disabled_the_same_uniform_way_as_any_tool():
 async def test_model_info_lives_on_provider_ref_not_config():
     # model_info is runtime API-reported provider state — never user config:
     # off the CLI, off model_dump, cached on the ProviderRef that reported it.
-    from solveig.api import Client, ModelInfo
+    from solveig.api.client import Client
+    from solveig.api.types import ModelInfo
 
     c, _, _ = await SolveigConfig.parse_config_and_prompt(["--url", "http://x"])
     assert not hasattr(c, "model_info")
