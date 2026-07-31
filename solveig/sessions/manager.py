@@ -26,7 +26,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
-from solveig.conversation import Conversation
+from solveig.conversation import Conversation, MessageId
 from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import subcommand
 from solveig.utils.file import Filesystem
@@ -90,13 +90,76 @@ def parse_conversation_blob(text: str) -> dict:
 
 
 class SessionManager:
-    def __init__(self, config: SolveigConfig):
+    """Persistence for a `Conversation`, driven reactively.
+
+    Implements `ConversationObserver` and registers itself, so nothing has to
+    remember to call it: a finished message appends, a rewind rewrites, a branch
+    snapshots first. `auto_save` is checked inside the handlers rather than by
+    the caller — a config value is this object's own business.
+
+    Writes are append-only wherever they can be. Recording message 501 opens the
+    file, writes one line and closes it; only the rare destructive events (an
+    edit, a rewind) need the file rewritten.
+    """
+
+    def __init__(self, config: SolveigConfig, conversation: Conversation):
         self.config = config
+        self.conversation = conversation
         self.current_path: Path | None = None
         # High-water mark: how many messages from conversation.messages are
         # already on disk. Append writes only messages beyond this index.
         # Set to 0 on new sessions, loaded from file on resume.
         self._saved_count: int = 0
+        conversation.register_observer(self)
+
+    # ------------------------------------------------------------------
+    # ConversationObserver
+    # ------------------------------------------------------------------
+
+    @property
+    def _auto_save(self) -> bool:
+        return bool(self.config.session.auto_save)
+
+    async def message_added(self, message_id: MessageId) -> None:
+        """A complete message — user prompt, tool call, tool return, or a
+        non-streamed response. Durable, so append it."""
+        if self._auto_save:
+            await self.append(self.conversation)
+
+    async def stream_began(self, message_id: MessageId) -> None:
+        """Provisional and still empty. Writing it to an append-only file could
+        not be taken back."""
+
+    async def stream_updated(self, message_id: MessageId) -> None:
+        """Per token. Deliberately ignored: the message isn't final yet."""
+
+    async def stream_completed(self, message_id: MessageId) -> None:
+        if self._auto_save:
+            await self.append(self.conversation)
+
+    async def message_edited(self, message_id: MessageId) -> None:
+        """An edit rewrites history, so the append-only file no longer matches.
+        One of the rare full rewrites."""
+        if self._auto_save:
+            await self.store(self.conversation)
+
+    async def truncated_from(self, message_id: MessageId) -> None:
+        """Delete/Retry: the rewind is kept, what was dropped is gone."""
+        if self._auto_save:
+            await self.store(self.conversation)
+
+    async def branched_from(
+        self, message_id: MessageId, previous: Conversation
+    ) -> None:
+        """Branch: preserve the pre-rewind conversation in its own file first,
+        then rewrite the live session at its new, shorter length."""
+        await self.checkpoint(previous)
+        if self._auto_save:
+            await self.store(self.conversation)
+
+    async def conversation_loaded(self) -> None:
+        """A resume adopted this history FROM disk — writing it back would at
+        best be redundant and at worst clobber the file being read."""
 
     @property
     def sessions_dir(self) -> Path:

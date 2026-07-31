@@ -16,6 +16,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig import bootstrap
+from solveig.conversation import Conversation
 from solveig.interface.cli.input_bar import GrowingInput
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.run import run_async
@@ -103,7 +104,7 @@ async def load_session_for_demo(
     for demo replay - the assistant responses become the mock model's scripted
     replies, the user prompts become the auto-typed messages."""
     config, _, _ = await bootstrap.parse_config_and_prompt()
-    session_data = await SessionManager(config).load(name)
+    session_data = await SessionManager(config, Conversation()).load(name)
     messages: list[ModelMessage] = session_data["messages"]
 
     mock_responses: list[ModelResponse] = []

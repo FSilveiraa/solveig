@@ -45,7 +45,7 @@ async def _display_setup(
     await interface.wait_until_ready()
     await asyncio.sleep(0)
 
-    await interface.attach_conversation(conversation, session_manager)
+    await interface.attach_conversation(conversation)
 
     for warning in startup_warnings:
         await interface.display_warning(warning)
@@ -148,8 +148,6 @@ async def main_loop(
             sent_tokens=conversation.usage.input_tokens,
             received_tokens=conversation.usage.output_tokens,
         )
-        if session_manager and config.session.auto_save:
-            await session_manager.append(conversation)
 
 
 async def run_async(
@@ -180,7 +178,7 @@ async def run_async(
     resume_session = resume_session or config.resume
     user_message_queue = UserMessageQueue()
     conversation = Conversation()
-    session_manager = SessionManager(config)
+    session_manager = SessionManager(config, conversation)
     client = client or Client(config)
 
     # Non-display plugin discovery + tool rebuild — happens before the

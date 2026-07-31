@@ -16,7 +16,6 @@ from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.base import SolveigInterface
-    from solveig.sessions.manager import SessionManager
 
 
 class Comment(Static):
@@ -82,7 +81,6 @@ class EditableComment(Comment, EditableMessage):
         comment: str,
         *,
         conversation: "Conversation",
-        session_manager: "SessionManager",
         interface: "SolveigInterface",
         message_id: str,
         part_index: int,
@@ -90,7 +88,6 @@ class EditableComment(Comment, EditableMessage):
     ):
         super().__init__(comment)
         self.conversation = conversation
-        self.session_manager = session_manager
         self.interface = interface
         self.message_id = message_id
         self.part_index = part_index
@@ -154,8 +151,10 @@ class EditableComment(Comment, EditableMessage):
         if self.interface.get_active_tasks():
             await self._flash_finish_run_first()
             return
-        await self.session_manager.checkpoint(self.conversation)
-        await self.conversation.truncate_from(self.message_id)
+        # `branch_from` rather than `truncate_from`: same rewind, different
+        # event, so persistence can preserve what's being dropped. Whether that
+        # means a file is written is none of this widget's business.
+        await self.conversation.branch_from(self.message_id)
 
 
 class CopyButton(Static):

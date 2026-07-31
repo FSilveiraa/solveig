@@ -20,19 +20,50 @@ from solveig.conversation import Conversation, MessageId
 
 
 class ReactiveTranscript(ABC):
+    """Absorbs the conversation's event set into three render hooks, so a
+    frontend never sees the extra granularity: streaming, completion and edits
+    are all just "redraw this one", and both kinds of rewind are just "drop
+    these". Persistence needs the distinctions; a display does not."""
+
     def __init__(self, conversation: Conversation) -> None:
         self.conversation = conversation
         self._order: list[MessageId] = []
-        conversation.subscribe(self)
+        conversation.register_observer(self)
 
     async def message_added(self, message_id: MessageId) -> None:
         self._order.append(message_id)
         await self.mount(message_id)
 
-    async def message_updated(self, message_id: MessageId) -> None:
+    async def stream_began(self, message_id: MessageId) -> None:
+        self._order.append(message_id)
+        await self.mount(message_id)
+
+    async def stream_updated(self, message_id: MessageId) -> None:
+        await self.rerender(message_id)
+
+    async def stream_completed(self, message_id: MessageId) -> None:
+        await self.rerender(message_id)
+
+    async def message_edited(self, message_id: MessageId) -> None:
         await self.rerender(message_id)
 
     async def truncated_from(self, message_id: MessageId) -> None:
+        await self._drop_from(message_id)
+
+    async def branched_from(
+        self, message_id: MessageId, previous: Conversation
+    ) -> None:
+        # A branch looks identical on screen; `previous` is persistence's business.
+        await self._drop_from(message_id)
+
+    async def conversation_loaded(self) -> None:
+        """A resume replaces the history wholesale: clear, then the load's
+        message_added events mount the new entries."""
+        if self._order:
+            dropped, self._order = self._order, []
+            await self.remove(dropped)
+
+    async def _drop_from(self, message_id: MessageId) -> None:
         if message_id not in self._order:
             return
         cut = self._order.index(message_id)

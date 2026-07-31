@@ -29,11 +29,33 @@ _EDITABLE_PARTS = (UserPromptPart, TextPart, ThinkingPart)
 
 class ConversationObserver(Protocol):
     """Reactive subscriber. Core notifies; the observer reflects the change
-    however it likes (a UI schedules a throttled redraw)."""
+    however it likes (a UI schedules a throttled redraw; persistence writes).
+
+    Every change notifies — streamed tokens included. Batching, if an observer
+    wants it, is that observer's own business and never encoded here.
+
+    The events are split by WHAT HAPPENED, not by what any one observer needs,
+    so nobody has to infer intent from a flag. There are no default
+    implementations — a Protocol gives none, so an observer that ignores an
+    event says so with an explicit no-op.
+
+    `message_added` always means a COMPLETE message arrived (a user prompt, a
+    tool call, a tool return, a non-streamed response). A streamed response is
+    provisional until `stream_completed`, so it gets its own `stream_began`
+    rather than being smuggled in as an add — otherwise persistence would write
+    an empty response to an append-only file and be unable to retract it.
+    """
 
     async def message_added(self, message_id: MessageId) -> None: ...
-    async def message_updated(self, message_id: MessageId) -> None: ...
+    async def stream_began(self, message_id: MessageId) -> None: ...
+    async def stream_updated(self, message_id: MessageId) -> None: ...
+    async def stream_completed(self, message_id: MessageId) -> None: ...
+    async def message_edited(self, message_id: MessageId) -> None: ...
     async def truncated_from(self, message_id: MessageId) -> None: ...
+    async def branched_from(
+        self, message_id: MessageId, previous: Conversation
+    ) -> None: ...
+    async def conversation_loaded(self) -> None: ...
 
 
 @dataclass
@@ -43,8 +65,19 @@ class Conversation:
     _observers: list[ConversationObserver] = field(default_factory=list)
     _inflight_id: MessageId | None = None
 
-    def subscribe(self, observer: ConversationObserver) -> None:
+    def register_observer(self, observer: ConversationObserver) -> None:
+        """Observers self-register in their own constructor (see
+        ReactiveTranscript, SessionManager) — the composition root never wires
+        them. The conversation only ever holds "things with these methods"; it
+        never learns what any of them are."""
         self._observers.append(observer)
+
+    def _snapshot(self) -> Conversation:
+        """A cheap copy of the current state, for handing to observers as the
+        BEFORE of a destructive change. Copies the id→message mapping only —
+        the message objects themselves are shared, and `self` keeps its own
+        identity (pydantic-ai relies on it; see `adopt`)."""
+        return Conversation(usage=self.usage, _entries=dict(self._entries))
 
     @property
     def messages(self) -> tuple[ModelMessage, ...]:
@@ -75,19 +108,41 @@ class Conversation:
             raise ValueError(f"{type(part).__name__} is not an editable part")
         part.content = new_text
         for observer in self._observers:
-            await observer.message_updated(message_id)
+            await observer.message_edited(message_id)
+
+    def _cut(self, message_id: MessageId) -> bool:
+        """Drop `message_id` and every entry after it (by insertion order).
+        False if the id isn't present (caller should not notify)."""
+        if message_id not in self._entries:
+            return False
+        keys = list(self._entries.keys())
+        for key in keys[keys.index(message_id) :]:
+            del self._entries[key]
+        return True
 
     async def truncate_from(self, message_id: MessageId) -> None:
-        """Drop `message_id` and every entry after it (by insertion order).
-        No-op + no notify if the id isn't present."""
-        if message_id not in self._entries:
+        """Rewind in place, discarding `message_id` onward — Delete and Retry.
+        What is dropped is gone; nothing is preserved. No-op + no notify if the
+        id isn't present."""
+        if not self._cut(message_id):
             return
-        keys = list(self._entries.keys())
-        cut = keys.index(message_id)
-        for key in keys[cut:]:
-            del self._entries[key]
         for observer in self._observers:
             await observer.truncated_from(message_id)
+
+    async def branch_from(self, message_id: MessageId) -> None:
+        """Rewind, but hand observers the conversation as it was — Branch.
+
+        Identical to `truncate_from` except for the event, which is the whole
+        point: persistence writes the pre-rewind state to a new file, and the
+        caller doesn't have to know that files exist. The BEFORE has to be
+        captured here because by the time anyone is notified the entries are
+        gone."""
+        if message_id not in self._entries:
+            return
+        previous = self._snapshot()
+        self._cut(message_id)
+        for observer in self._observers:
+            await observer.branched_from(message_id, previous)
 
     def reidentify(self, message_id: MessageId, message: ModelMessage) -> None:
         """Silently swap the object stored under an existing id (no observer
@@ -115,26 +170,37 @@ class Conversation:
 
     async def load(self, messages: Sequence[ModelMessage], usage: RunUsage) -> None:
         """Replace the whole conversation (session resume / replay), reactively.
-        Drops any current entries (one truncated_from), then populates ALL new
-        entries before firing message_added for each - so during every mount the
-        full loaded history is queryable (a tool call can find its result and
-        replay itself). This is the same reactive path a live turn uses: replay
-        isn't special."""
-        if self._entries:
-            await self.truncate_from(next(iter(self._entries)))
+
+        Populates ALL new entries before firing message_added for each - so
+        during every mount the full loaded history is queryable (a tool call can
+        find its result and replay itself). This is the same reactive path a
+        live turn uses: replay isn't special.
+
+        Clearing fires `conversation_loaded`, NOT `truncated_from`: nothing is
+        being discarded here, the history is being adopted from somewhere else.
+        Persistence must not react to a load by writing back over the file it
+        just read."""
         self._entries = {str(uuid.uuid4()): message for message in messages}
         self._inflight_id = None
         self.usage = usage
+        for observer in self._observers:
+            await observer.conversation_loaded()
         for message_id in list(self._entries.keys()):
             for observer in self._observers:
                 await observer.message_added(message_id)
 
     async def begin_stream(self, response: ModelMessage) -> MessageId:
-        """Start streaming a model response: append the current snapshot as a
+        """Start streaming a model response: hold the current snapshot as a
         live entry. Held by _inflight_id; each stream_updated swaps in a newer
-        snapshot until finalize_stream installs the canonical object."""
-        message_id = await self.append(response)
+        snapshot until finalize_stream installs the canonical object.
+
+        Fires `stream_began`, NOT `message_added`: this entry is provisional
+        and will be replaced. A display mounts it; persistence waits."""
+        message_id = str(uuid.uuid4())
+        self._entries[message_id] = response
         self._inflight_id = message_id
+        for observer in self._observers:
+            await observer.stream_began(message_id)
         return message_id
 
     async def stream_updated(self, response: ModelMessage) -> None:
@@ -146,7 +212,7 @@ class Conversation:
         if self._inflight_id is not None:
             self._entries[self._inflight_id] = response
             for observer in self._observers:
-                await observer.message_updated(self._inflight_id)
+                await observer.stream_updated(self._inflight_id)
 
     async def finalize_stream(self, response: ModelMessage) -> None:
         """Replace the in-flight streamed object with pydantic-ai's canonical
@@ -157,5 +223,5 @@ class Conversation:
             return
         self._entries[self._inflight_id] = response
         for observer in self._observers:
-            await observer.message_updated(self._inflight_id)
+            await observer.stream_completed(self._inflight_id)
         self._inflight_id = None

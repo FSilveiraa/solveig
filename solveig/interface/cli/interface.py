@@ -22,7 +22,6 @@ from solveig.utils.misc import get_language
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
-    from solveig.sessions.manager import SessionManager
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -308,15 +307,13 @@ class TerminalInterface(LocalDisplay):
     def stats(self):
         return self.app._stats_dashboard
 
-    async def attach_conversation(
-        self, conversation: "Conversation", session_manager: "SessionManager"
-    ) -> None:
+    async def attach_conversation(self, conversation: "Conversation") -> None:
         """Mount a TextualTranscript so live conversation changes render
         reactively (streaming, edits, truncation) into the ConversationArea."""
         from .transcript import TextualTranscript
 
         self._transcript = TextualTranscript(
-            conversation, self.app._conversation_area, self, session_manager
+            conversation, self.app._conversation_area, self
         )
 
     # SolveigInterface implementation

@@ -26,7 +26,6 @@ from solveig.utils.file import FileMetadata
 if TYPE_CHECKING:
     from solveig.conversation import Conversation
     from solveig.interface.themes import Palette
-    from solveig.sessions.manager import SessionManager
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -213,9 +212,7 @@ class SolveigInterface(ABC):
         """Display a system message."""
         ...
 
-    async def attach_conversation(
-        self, conversation: Conversation, session_manager: SessionManager
-    ) -> None:
+    async def attach_conversation(self, conversation: Conversation) -> None:
         """Subscribe this interface's reactive transcript to `conversation`
         once both exist. Interface-agnostic: the Textual interface mounts a
         `TextualTranscript`; a future web frontend would mount its own observer;

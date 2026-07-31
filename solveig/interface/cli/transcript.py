@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     )
 
     from solveig.interface.base import SolveigInterface
-    from solveig.sessions.manager import SessionManager
 
     from .conversation import ConversationArea
 
@@ -74,11 +73,9 @@ class TextualTranscript(ReactiveTranscript):
         conversation: Conversation,
         area: ConversationArea,
         interface: SolveigInterface,
-        session_manager: SessionManager,
     ) -> None:
         self._area = area
         self._interface = interface
-        self._session_manager = session_manager
         self._widgets: dict[MessageId, list[Widget]] = {}
         self._last_section_role: str | None = None
         super().__init__(conversation)
@@ -175,7 +172,6 @@ class TextualTranscript(ReactiveTranscript):
         return EditableComment(
             content,
             conversation=self.conversation,
-            session_manager=self._session_manager,
             interface=self._interface,
             message_id=message_id,
             part_index=part_index,
