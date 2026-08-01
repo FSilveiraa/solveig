@@ -49,7 +49,7 @@ async def _display_setup(
         await interface.display_warning(warning)
 
     # Report plugins + connect MCP servers (needs interface for display).
-    plugin_errors = discover_plugins(config)
+    plugin_errors = discover_plugins(config.plugins.paths)
     await report_plugins(config, interface, plugin_errors)
     await connect_all(config=config, interface=interface)
 
@@ -181,7 +181,7 @@ async def run_async(
     # Non-display plugin discovery + tool rebuild — happens before the
     # interface exists so the composed config is ready when the Textual app
     # mounts.  discover_plugins is explicitly UI-free.
-    discover_plugins(config)
+    discover_plugins(config.plugins.paths)
 
     if interface is None:
         interface = TerminalInterface(

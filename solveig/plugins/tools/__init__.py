@@ -18,7 +18,6 @@ module path) — no separate index.
 from collections.abc import Awaitable, Callable
 from typing import Any, cast, overload
 
-from solveig.config import SolveigConfig
 from solveig.plugins.utils import rescan_and_load_plugins
 from solveig.tools.base import BaseTool, ToolConfig
 
@@ -107,14 +106,13 @@ def config_model_of(entry: PluginTool) -> type[ToolConfig]:
     return ToolConfig
 
 
-def load_and_filter_plugin_tools(config: SolveigConfig) -> list[str]:
+def load_and_filter_plugin_tools() -> list[str]:
     """Discover plugin tool modules into `PLUGIN_TOOLS` — idempotent and UI-free.
 
     Returns discovery error messages for the caller to surface; reporting is a
-    separate step (so discovery can run before the interface exists, for the
-    two-phase config bootstrap). Plugins register via `@tool` at import;
-    enabled-by-default (gating is decided live). `config` is kept on the signature
-    for symmetry with the hook loader and future per-plugin gating."""
+    separate step, so discovery can run before the interface exists. Plugins
+    register via `@tool` at import; enabled-by-default (gating is decided live
+    at call time, so discovery has no use for config)."""
     clear_tools()
     _succeeded, _failed, errors = rescan_and_load_plugins("solveig.plugins.tools")
     return errors

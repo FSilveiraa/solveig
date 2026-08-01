@@ -27,15 +27,22 @@ from .tools import (
 from .utils import register_external_plugin_paths
 
 
-def discover_plugins(config: SolveigConfig) -> list[str]:
+def discover_plugins(paths: list[str]) -> list[str]:
     """Discover all plugin tools + hooks into their registries — idempotent and
-    UI-free. Folds `config.plugins.paths`' external dirs into the built-in
-    packages first (so this is where phase-1's parsed config becomes load-bearing),
-    then scans. Returns discovery error messages; the caller surfaces them (via
-    `report_plugins`). Kept reporting-free so discovery can run pre-interface."""
-    register_external_plugin_paths(config.plugins.paths)
-    errors = load_and_filter_plugin_tools(config)
-    errors += load_and_filter_plugin_hooks(config)
+    UI-free. Folds the external dirs in `paths` into the built-in packages
+    first, then scans. Returns discovery error messages; the caller surfaces
+    them (via `report_plugins`). Kept reporting-free so discovery can run
+    before the interface exists.
+
+    NOTE: takes the paths, NOT the config. Discovery needs exactly this one
+    list, and asking for the whole config meant startup had to build a config
+    before the plugin schema existed, hand it over, then throw it away and build
+    a second one — leaving a discarded object that looked usable. Narrowing the
+    signature is what lets `SolveigConfig` be built once, fully composed.
+    """
+    register_external_plugin_paths(paths)
+    errors = load_and_filter_plugin_tools()
+    errors += load_and_filter_plugin_hooks()
     return errors
 
 

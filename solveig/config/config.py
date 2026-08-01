@@ -26,7 +26,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from solveig.config import DEFAULT_CONFIG_PATHS, DEFAULT_PLUGIN_PATHS, sources
+from solveig.config import DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
     ApiConfig,
     CoreToolsConfig,
@@ -216,7 +216,12 @@ class SolveigConfig(BaseSettings):
     # paths, or the default search results when no --config was passed. Stamped
     # by ConfigFileSource at parse; [0] is the /config save target. The one home
     # for "which config files were loaded".
-    config_files: list[str] = Field(default=DEFAULT_CONFIG_PATHS, exclude=True)
+    # FIXED: defaulted to DEFAULT_CONFIG_PATHS, which is the SEARCH LIST (with
+    # an unexpanded `~`), not files that were loaded. On a machine with no
+    # config file — or any path where ConfigFileSource doesn't run — the default
+    # survived and `_record_declared` tried to open a literal `<cwd>/~/.solveig/
+    # config.yaml`, crashing startup. "Nothing loaded" is [].
+    config_files: list[str] = Field(default_factory=list, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
@@ -528,8 +533,12 @@ class SolveigConfig(BaseSettings):
     def parse(cls, cli_args: list[str] | None = None) -> SolveigConfig:
         """One pass over the layered sources (CLI > env > files), nothing more.
 
-        Used for the provisional config that plugin discovery reads
-        `plugins.paths` from, before the plugin schema exists.
+        NOTE: the result is TRANSIENT. Startup uses it to read `plugins.paths`
+        before the plugin schema exists, and drops it on the same line — the
+        config that survives is the one `build()` returns, after composition.
+        Anything that keeps a `parse()` result is holding an object whose plugin
+        sections may no longer match the class, and whose observers nothing will
+        ever notify. Use `build()`.
         """
         cfg = cls(cli_args=cli_args)
         if cfg.cli_args is None:

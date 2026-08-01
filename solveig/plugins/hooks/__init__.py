@@ -176,14 +176,13 @@ def after(
     return register
 
 
-def load_and_filter_plugin_hooks(config: SolveigConfig) -> list[str]:
+def load_and_filter_plugin_hooks() -> list[str]:
     """Discover hook plugin modules into the hook registries — idempotent, UI-free.
 
     Returns discovery error messages for the caller to surface (reporting is a
     separate step). Hooks register via `@before`/`@after` at import and are
     enabled-by-default; per-hook gating (`plugins.hooks.<name>.enabled`) is enforced
-    live in `run_tool_and_hooks`. `config` is kept on the signature for symmetry
-    with the tool loader.
+    live in `run_tool_and_hooks`, so discovery has no use for config.
     """
     clear_hooks()
     _succeeded, _failed, errors = rescan_and_load_plugins("solveig.plugins.hooks")

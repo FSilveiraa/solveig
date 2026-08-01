@@ -115,9 +115,11 @@ async def parse_config_and_prompt(
 ) -> SolveigConfig:
     """The full two-phase startup parse. See the module docstring."""
     compose_core_tools()
-    # Provisional parse: discovery only needs `plugins.paths`, and the plugin
-    # schema doesn't exist yet, so this config is thrown away.
-    discover_plugins(SolveigConfig.parse(cli_args=cli_args))
+    # Discovery needs exactly one setting, and the plugin schema does not exist
+    # yet — so read that setting through the normal source stack and let the
+    # object die on this line. Nothing is handed a half-composed config, which
+    # is what makes the config built below the only one that ever exists.
+    discover_plugins(SolveigConfig.parse(cli_args=cli_args).plugins.paths)
 
     compose_plugin_tools()
     compose_plugin_hooks()
