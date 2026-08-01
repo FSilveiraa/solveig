@@ -57,9 +57,9 @@ async def report_plugins(
                 else:
                     await tools_group.display_info(f"'{name}': loaded (disabled)")
             # PRESERVE + WARN: config for a plugin that wasn't discovered is kept
-            # (model_extra, extra="allow") so /config save never strips it, but is
+            # (see PreservingSection.undiscovered) so /config save never strips it, but is
             # flagged here — a typo or a plugin missing on this machine, not an error.
-            for name in sorted(config.plugins.tools.model_extra or {}):
+            for name in sorted(config.plugins.tools.undiscovered):
                 await tools_group.display_warning(
                     f"'{name}': config present but plugin not discovered (preserved)"
                 )
@@ -71,8 +71,8 @@ async def report_plugins(
                 else:
                     await hooks_group.display_info(f"'{name}': loaded (disabled)")
             # Same PRESERVE + WARN as tools: a hook config block for an undiscovered
-            # hook is kept (model_extra) and flagged, never silently dropped.
-            for name in sorted(config.plugins.hooks.model_extra or {}):
+            # hook is kept (PreservingSection) and flagged, never silently dropped.
+            for name in sorted(config.plugins.hooks.undiscovered):
                 await hooks_group.display_warning(
                     f"'{name}': config present but hook not discovered (preserved)"
                 )

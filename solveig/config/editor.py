@@ -19,6 +19,7 @@ from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.interface import themes
 from solveig.interface.base import SolveigInterface
 from solveig.subcommands.base import subcommand
+from solveig.utils import dotted as dotted_path
 
 from . import DEFAULT_CONFIG_PATHS, sources
 from .config import SolveigConfig, display_config_value
@@ -83,7 +84,7 @@ def _unwrap_optional(tp: Any) -> Any:
 
 def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
     """The (optional-unwrapped) declared type of a dotted field's leaf."""
-    obj, leaf = config._resolve(dotted)
+    obj, leaf = dotted_path.owner_of(config, dotted)
     return _unwrap_optional(typing.get_type_hints(type(obj))[leaf])
 
 
@@ -281,7 +282,17 @@ async def config_save(
     including defaults.
     """
     target = path or (config.config_files or DEFAULT_CONFIG_PATHS)[0]
-    data = config.model_dump(mode="json") if full else config.declared_config()
+    try:
+        data = config.model_dump(mode="json") if full else config.declared_config()
+    except dotted_path.MissingPath as e:
+        # A declared path with nothing behind it means preservation failed, not
+        # that a plugin is absent — an absent plugin's block is kept and dumps
+        # normally. Refuse rather than write a file that silently lost a value.
+        await interface.display_error(
+            f"Refusing to save: {e.path} was set but has no value to write "
+            f"(missing '{e.segment}'). Saving now would drop it."
+        )
+        return
     try:
         sources.save_config(data, target)
     except OSError as e:

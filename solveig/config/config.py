@@ -28,16 +28,17 @@ from pydantic_settings import (
 
 from solveig.config import DEFAULT_CONFIG_PATHS, DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
-    _MUTABLE,
-    _MUTABLE_ALLOW,
     ApiConfig,
     CoreToolsConfig,
     InterfaceConfig,
     MCPServerConfig,
     PluginsConfig,
+    PreservingSection,
     SessionConfig,
     SystemPromptConfig,
+    _ComposedSection,
 )
+from solveig.utils import dotted
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 from solveig.utils.misc import CLI_SETTINGS_OPTS
 
@@ -103,19 +104,6 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 # ---------------------------------------------------------------------------
 
 
-def _dict_to_dotted_leaves(data: dict[str, Any], prefix: str = "") -> set[str]:
-    """Flatten a nested config dict into dotted leaf paths (`api.url`,
-    `tools.http.timeout`) — the same language /config set and notify speak."""
-    out: set[str] = set()
-    for key, value in (data or {}).items():
-        path = f"{prefix}{key}"
-        if isinstance(value, dict) and value:
-            out |= _dict_to_dotted_leaves(value, f"{path}.")
-        else:
-            out.add(path)
-    return out
-
-
 def display_config_value(value: object) -> str:
     """Format a config value for display, driven by type — never by field name.
     Types we own (Palette, APIType) carry their own display_value() method;
@@ -138,11 +126,18 @@ def _compose_section(
     field_name: str,
     pairs: list[tuple[str, type]],
     model_name: str,
-    config_dict: Any = _MUTABLE,
+    base: type[BaseModel] = _ComposedSection,
 ) -> None:
     """Build a composed model from (name, config_model) pairs and swap it into
     `target.<field_name>` — one field per entry, so adding a tool/hook needs
-    no change here. `config_dict` is `_MUTABLE_ALLOW` for plugin sections."""
+    no change here.
+
+    NOTE: the composed model SUBCLASSES the placeholder rather than copying its
+    `model_config`, so the section's semantics travel with it — plugin sections
+    inherit `PreservingSection` and keep both `extra="allow"` and the
+    `undiscovered` accessor. (pydantic forbids `__base__` and `__config__`
+    together, which is why the base carries the config.)
+    """
     fields: dict[str, Any] = {
         name: (config_model, Field(default_factory=config_model))
         for name, config_model in pairs
@@ -152,7 +147,7 @@ def _compose_section(
         warnings.filterwarnings(
             "ignore", message=r'Field name "copy".*shadows', category=UserWarning
         )
-        composed = create_model(model_name, __config__=config_dict, **fields)
+        composed = create_model(model_name, __base__=base, **fields)
     target.model_fields[field_name].annotation = composed
     target.model_fields[field_name].default_factory = composed
     target.model_rebuild(force=True)
@@ -248,60 +243,94 @@ class SolveigConfig(BaseSettings):
     # ------------------------------------------------------------
 
     async def notify_changed(self, paths: frozenset[str]) -> None:
-        """Notify all observers, filtered by registered config path."""
-        for handler, filter_paths in self._observers:
-            # If the observer specified config paths, notify only those,otherwise notify
-            # of everything that changed. Paths can be single-value
-            # (`api.url`, `tools.http.timeout`) or section prefixes (`api`, `tools.http`)
-            paths_to_notify = [
-                path for path in paths
-                if any(path.startswith(prefix) for prefix in filter_paths)
-            ] if filter_paths else paths
-            if paths_to_notify:
-                await handler(self, frozenset(paths_to_notify))
+        """Notify all observers, filtered by registered config path.
 
-    def on_change(self, *paths: str):
-        """Decorator: register a callback for the given dotted *paths.
-        Empty *paths means every change.  Usage::
+        NOTE: iterates a COPY — a handler is allowed to register another
+        observer (a reloaded plugin module doing so at import is the live case),
+        and mutating the list mid-iteration would raise.
+
+        NOTE: a handler that mutates the schema it is being notified about (e.g.
+        recomposing `plugins.tools` in response to `plugins.paths`) changes the
+        shape of the object described by the very notification in flight. Rare
+        enough to document rather than engineer around; if it spreads, the
+        answer is to defer the recomposition, not to reorder this loop.
+        """
+        for handler, filter_paths in list(self._observers):
+            # An observer that named no paths hears about everything. One that
+            # did hears only its own matches — which may be exact
+            # (`api.url`) or a whole section (`api`, `tools.http`).
+            paths_to_notify = (
+                frozenset(
+                    path
+                    for path in paths
+                    if any(dotted.matches_prefix(path, p) for p in filter_paths)
+                )
+                if filter_paths
+                else paths
+            )
+            if paths_to_notify:
+                await handler(self, paths_to_notify)
+
+    def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
+        """Decorator: register a callback for the given dotted *paths, which may
+        be exact fields or section prefixes. Empty *paths means every change::
 
             @config.on_change("api.model", "api.url")
             async def _on_api_change(config, paths): ...
+
+        Typed against `ConfigObserver` so a mis-shaped handler is a type error
+        where it is written, rather than a TypeError inside an await later.
         """
         filt = frozenset(paths) if paths else None
 
-        def register(fn):
+        def register(fn: ConfigObserver) -> ConfigObserver:
             self._observers.append((fn, filt))
             return fn
 
         return register
 
-    def get(self, dotted: str) -> Any:
-        obj, leaf = self._resolve(dotted)
+    def unresolved_paths(self) -> dict[str, list[str]]:
+        """Subscribed paths that currently reach nothing, keyed by handler.
+
+        Derived, never stored: the answer depends on the schema as it stands
+        right now, and the schema changes when plugins are discovered or
+        reloaded. Computing it on demand means a subscription to a not-yet-
+        installed plugin reports as unresolved and then quietly stops doing so
+        once the plugin arrives — with no invalidation hook to forget.
+
+        A section counts as resolved: subscribing to `api` is legitimate.
+        """
+        out: dict[str, list[str]] = {}
+        for handler, filter_paths in self._observers:
+            if not filter_paths:
+                continue
+            missing = sorted(p for p in filter_paths if not dotted.resolves(self, p))
+            if missing:
+                name = (
+                    f"{handler.__module__}.{getattr(handler, '__qualname__', handler)}"
+                )
+                out.setdefault(name, []).extend(missing)
+        return out
+
+    def get(self, path: str) -> Any:
+        obj, leaf = dotted.owner_of(self, path)
         return getattr(obj, leaf)
 
-    async def set(self, dotted: str, value: Any, *, notify: bool = True) -> bool:
+    async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
         """The single user-edit write seam.  Record in *_declared* and — when
         the value actually changed — notify observers.  Pass *notify=False* for
         internal writes (e.g. max_context from a model-fetch) that must be
         visible but shouldn't re-trigger dependent observers."""
-        obj, leaf = self._resolve(dotted)
+        obj, leaf = dotted.owner_of(self, path)
         old = getattr(obj, leaf)
         setattr(obj, leaf, value)
         new = getattr(obj, leaf)
         if old == new:
             return False
-        self._declared_fields.add(dotted)
+        self._declared_fields.add(path)
         if notify:
-            await self.notify_changed(frozenset({dotted}))
+            await self.notify_changed(frozenset({path}))
         return True
-
-    def _resolve(self, dotted: str) -> tuple[Any, str]:
-        """Walk a dotted path to its leaf, returning (owning_model, leaf_name)."""
-        *parents, leaf = dotted.split(".")
-        obj: Any = self
-        for part in parents:
-            obj = getattr(obj, part)
-        return obj, leaf
 
     # ------------------------------------------------------------
     # Pydantic overrides/validators
@@ -426,7 +455,7 @@ class SolveigConfig(BaseSettings):
         generic arg or FunctionTool.config_model), so plugin config validates
         like core config."""
         _compose_section(
-            PluginsConfig, "tools", pairs, "PluginToolsConfig", _MUTABLE_ALLOW
+            PluginsConfig, "tools", pairs, "PluginToolsConfig", PreservingSection
         )
         cls.model_rebuild(force=True)
 
@@ -440,7 +469,7 @@ class SolveigConfig(BaseSettings):
             "hooks",
             pairs,
             "PluginHooksConfig",
-            _MUTABLE_ALLOW,
+            PreservingSection,
         )
         cls.model_rebuild(force=True)
 
@@ -453,24 +482,25 @@ class SolveigConfig(BaseSettings):
         `/config set`, tracked in `_declared`) — what `/config save` persists.
         Each declared path is copied out of `model_dump(mode="json")` (which
         applies the field serializers: key un-masked, enums → names, byte
-        sizes → ints, command patterns → source strings)."""
+        sizes → ints, command patterns → source strings).
+
+        NOTE: a declared path whose plugin is not installed still lands here —
+        `PreservingSection` keeps the block and it dumps like any other value.
+        So `MissingPath` out of this loop is not "plugin absent", it is
+        "preservation failed and this value is about to be lost", which is why
+        it propagates instead of being skipped. `/config save` reports it.
+        """
         full = self.model_dump(mode="json")
         out: dict[str, Any] = {}
         for path in sorted(self._declared_fields):
-            *parents, leaf = path.split(".")
-            src: Any = full
-            dest = out
-            for part in parents:
-                src = src[part]
-                dest = dest.setdefault(part, {})
-            dest[leaf] = src[leaf]
+            dotted.graft(out, path, dotted.extract(full, path))
         return out
 
     def _record_declared(self) -> None:
         """Populate `_declared` with the dotted paths explicitly provided by the
         config file(s) and the command line (`cli_args`) — what `/config save`
         persists. Excludes env vars and CLI-only fields (`exclude=True`)"""
-        declared = _dict_to_dotted_leaves(sources.load_paths(self.config_files))
+        declared = dotted.to_leaves(sources.load_paths(self.config_files))
         if self.cli_args is not None:
             _, argv = _split_config_path_from_cli_args(
                 self.cli_args
@@ -483,7 +513,7 @@ class SolveigConfig(BaseSettings):
                     **CLI_SETTINGS_OPTS,
                     cli_avoid_json=True,
                 )
-                declared |= _dict_to_dotted_leaves(cli() or {})
+                declared |= dotted.to_leaves(cli() or {})
         self._declared_fields = {
             path
             for path in declared

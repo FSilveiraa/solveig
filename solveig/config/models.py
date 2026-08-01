@@ -81,19 +81,41 @@ class _ComposedSection(BaseModel):
         def __getattr__(self, name: str) -> Any: ...
 
 
+class PreservingSection(_ComposedSection):
+    """A composed section that KEEPS config for entries it has no field for.
+
+    Used for the plugin sections: a block for a plugin absent on this machine
+    round-trips through `/config save` instead of being stripped from a
+    teammate's file.
+
+    `model_extra` is pydantic's own storage and stays private to this class.
+    Reaching into another model's `model_extra` from outside couples the caller
+    to a storage detail; `undiscovered` says what the bucket MEANS here, which
+    is the only thing any caller has ever wanted from it.
+    """
+
+    model_config = _MUTABLE_ALLOW
+
+    @property
+    def undiscovered(self) -> dict[str, Any]:
+        """Config blocks kept for entries that were never discovered, by name -
+        a typo, or a plugin missing on this machine. Not an error."""
+        return dict(self.model_extra or {})
+
+
 class CoreToolsConfig(_ComposedSection):
     """Placeholder for `config.tools` — composed from `CORE_TOOLS` at import
     time (`config/__init__._compose_core_tools()`), so a core tool's config
     validates like any other."""
 
 
-class PluginToolsConfig(_ComposedSection):
+class PluginToolsConfig(PreservingSection):
     """Placeholder for `config.plugins.tools` — composed from discovered
     plugin tools during the two-phase bootstrap, so a plugin tool's config
     validates like a core tool's."""
 
 
-class PluginHooksConfig(_ComposedSection):
+class PluginHooksConfig(PreservingSection):
     """Placeholder for `config.plugins.hooks` — composed from discovered hooks
     during the two-phase bootstrap, so a hook's config validates like a tool's.
     A hook's config type is declared on the Hook class (`config_model`)."""
