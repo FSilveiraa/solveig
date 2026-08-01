@@ -10,7 +10,6 @@ import anyio
 from pydantic import BaseModel
 from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
-from solveig import utils
 from solveig.interface.cli.interface import TerminalInterface
 
 
@@ -187,10 +186,9 @@ class MockInterface(TerminalInterface):
         # Correctly serialize using the project's two-step standard:
         # 1. Convert complex objects to a JSON-serializable dict.
         serializable_dict = _dump_field(metadata)
-        # 2. Dump the dict to a JSON string.
-        self.outputs.append(
-            json.dumps(serializable_dict, default=utils.misc.default_json_serialize)
-        )
+        # 2. Dump the dict to a JSON string. `default=str` matches how
+        # SessionManager writes anything to_jsonable_python left behind.
+        self.outputs.append(json.dumps(serializable_dict, default=str))
 
     async def display_text_box(
         self,

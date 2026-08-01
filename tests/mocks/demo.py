@@ -103,7 +103,7 @@ async def load_session_for_demo(
     """Load a stored session and extract assistant responses and user prompts
     for demo replay - the assistant responses become the mock model's scripted
     replies, the user prompts become the auto-typed messages."""
-    config, _, _ = await bootstrap.parse_config_and_prompt()
+    config = await bootstrap.parse_config_and_prompt()
     session_data = await SessionManager(config, Conversation()).load(name)
     messages: list[ModelMessage] = session_data["messages"]
 
@@ -167,27 +167,27 @@ async def run_async_mock(
             ]
 
     mock_model = create_mock_model(*mock_messages, sleep_seconds=sleep_seconds)
-    config, user_prompt, resume = await bootstrap.parse_config_and_prompt()
-    # model="fake-model" is a display-only placeholder - the injected mock model.s
-    # injected `model=mock_model` bypasses real model resolution for the agent
-    # itself, but config.model still drives the stats bar and setup_loop's
-    # startup fetch_and_apply_model_info() call, so leaving the user's real
-    # configured model name here would be misleading (and could trigger a real
-    # API lookup against it).
-    config = config.with_(plugins={**config.plugins, "tree": {}}, model="fake-model")
+    config = await bootstrap.parse_config_and_prompt()
+    # api.model="fake-model" is a display-only placeholder - the injected
+    # `model=mock_model` bypasses real model resolution for the agent itself,
+    # but config.api.model still drives the stats bar and setup_loop's startup
+    # fetch_and_apply_model_info() call, so leaving the user's real configured
+    # model name here would be misleading (and could trigger a real API lookup
+    # against it).
+    config.api.model = "fake-model"
     interface = DemoInterface(
-        theme=config.theme,
-        code_theme=config.code_theme,
+        theme=config.interface.theme,
+        code_theme=config.interface.code_theme,
         user_messages=(user_messages or []) if auto_type else [],
     )
 
     try:
         await run_async(
             config=config,
-            user_prompt=user_prompt,
+            user_prompt=config.prompt,
             interface=interface,
             model=mock_model,
-            resume_session=resume,
+            resume_session=config.resume,
         )
     finally:
         try:
