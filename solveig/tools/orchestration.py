@@ -14,9 +14,8 @@ modules:
   so no typed schema/consent of its own; gets a generic group + 3-way consent +
   display treatment instead.
 - `replay_tool_call` - a call recorded in a session, re-presented from its
-  stored `ToolReturnPart`. Same shape as the two above (look the tool up by
-  name, rebuild the instance from its args, open its group, let the tool draw
-  itself) but with `replay()` in place of `execute()`, since the result already
+  stored `ToolReturnPart`. Same shape as the two above (rebuild the instance
+  from its args, open its group, let the tool draw itself) but with `replay()` in place of `execute()`, since the result already
   exists. It lived in `sessions/` for a while purely because resume is what
   calls it — but it is tool display, not session storage, and the group posture
   it needs is the one defined here.
@@ -29,7 +28,7 @@ reacts), the subcommand displays an error (no model to answer);
 """
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from pydantic import ValidationError
@@ -39,12 +38,13 @@ from pydantic_ai.messages import (
     ToolCallPart,
     ToolReturnPart,
 )
+from pydantic_settings.exceptions import SettingsError
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import ToolDisabledError
+from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
-from solveig.tools.available import tool_classes
+from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
@@ -168,6 +168,58 @@ async def run_untyped_tool(
         return "User inspected the result and declined to send it to the assistant."
 
 
+def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[None]]:
+    """A tool's `/command` as a plain subcommand handler: it declares the two
+    dependencies it needs by annotating them, takes the raw words, and runs the
+    tool through the ONE execution seam - so a hand-typed `/read` gets the same
+    consent, hooks and group posture a model-issued call does."""
+
+    async def handler(
+        config: SolveigConfig, interface: SolveigInterface, *tokens: str
+    ) -> None:
+        try:
+            instance = tool_cls.from_cli_tokens(list(tokens))
+        except (SettingsError, ValidationError) as e:
+            await interface.display_error(str(e))
+            await interface.display_info(
+                f"Usage: {tool_cls.subcommands[0]} {tool_cls.subcommand_usage()}"
+            )
+            return
+        try:
+            await run_tool_and_hooks(instance, config, interface)
+        except (PluginException, ToolDisabledError) as e:
+            await interface.display_error(str(e))
+
+    return handler
+
+
+def tool_subcommand(tool_cls: object) -> Subcommand | None:
+    """The `Subcommand` a tool asked for by declaring trigger names, or None if
+    it declared none.
+
+    Takes any tool entry rather than a `type`, because a plugin may register a
+    plain callable (`FunctionTool`); that has no CLI schema to parse arguments
+    against, so it gets no subcommand and the caller needs no special case.
+
+    The one entrypoint both declaration sites use — `@tool` for a plugin,
+    `bootstrap` for `CORE_TOOLS` — so a plugin's `/tree` and a core `/read` are
+    built by identical code. It lives here because it is the only module that
+    may name both a tool and the seam that runs one.
+    """
+    if not (isinstance(tool_cls, type) and issubclass(tool_cls, BaseTool)):
+        return None
+    if not tool_cls.subcommands:
+        return None
+    return Subcommand.from_handler(
+        _tool_handler(tool_cls),
+        subcommands=list(tool_cls.subcommands),
+        section="tools",
+        description=tool_cls.subcommand_description(),
+        usage=tool_cls.subcommand_usage(),
+        tool_name=tool_cls.tool_name(),
+    )
+
+
 def build_returns_map(
     messages: Sequence[ModelMessage],
 ) -> dict[str, ToolReturnPart]:
@@ -185,14 +237,23 @@ async def replay_tool_call(
     interface: SolveigInterface,
     call: ToolCallPart,
     return_part: ToolReturnPart,
+    tool_cls: type[BaseTool] | None,
 ) -> None:
     """Render one recorded call inside its own collapsible group: the tool's
-    `replay()` (header + result body), or a generic render if the tool isn't a
-    `BaseTool` (a not-yet-converted plugin function) or its stored args no
-    longer validate against the tool's current schema (a renamed/removed field
-    since the session was recorded)."""
+    `replay()` (header + result body), or a generic render when `tool_cls` is
+    None (a not-yet-converted plugin function, or a tool no longer installed) or
+    its stored args no longer validate against the tool's current schema (a
+    renamed/removed field since the session was recorded).
+
+    NOTE: the class is HANDED IN, not looked up. Resolving a name to a class
+    means reading `CORE_TOOLS` + `PLUGIN_TOOLS`, and this module has to stay
+    importable BY those two declaration sites — a tool's `/command` handler runs
+    through `run_tool_and_hooks` below, so whoever builds one must be able to
+    name this module. Looking the class up here would close that loop for core
+    tools and plugins alike. The caller already threads `build_returns_map`
+    down the same way.
+    """
     result = ToolResult(content=return_part.content, private=return_part.metadata or {})
-    tool_cls = tool_classes().get(call.tool_name)
 
     if tool_cls is not None:
         try:

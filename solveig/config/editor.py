@@ -202,8 +202,8 @@ async def prompt_for_field(
 
 # ---------------------------------------------------------------------------
 # Subcommands — declared here because the config editor owns config editing.
-# The `@subcommand` decorator pushes into `_PENDING` at import time; the
-# registry binds handlers later.
+# The `@subcommand` decorator writes them into the built-in store at import;
+# the registry injects each handler's dependencies when it runs.
 # ---------------------------------------------------------------------------
 
 

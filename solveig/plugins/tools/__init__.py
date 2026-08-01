@@ -15,11 +15,14 @@ per-entry facts on demand (name from `tool_name()`/`__name__`, owner from the
 module path) — no separate index.
 """
 
+import warnings
 from collections.abc import Awaitable, Callable
 from typing import Any, cast, overload
 
 from solveig.plugins.utils import rescan_and_load_plugins
+from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.base import BaseTool, ToolConfig
+from solveig.tools.orchestration import tool_subcommand
 
 
 class FunctionTool:
@@ -77,6 +80,14 @@ def tool(entry=None, *, config_model=None):
                 cast(Callable[..., Awaitable[object]], e), config_model or ToolConfig
             )
         PLUGIN_TOOLS.append(e)
+        # A tool's `/command` is built and stored the moment the tool is
+        # declared, through the same entrypoint the core tool list uses. The
+        # plugin store is emptied before each rescan, so re-declaring on reload
+        # replaces rather than duplicates.
+        sub = tool_subcommand(e)
+        if sub is not None:
+            for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, sub):
+                warnings.warn(refused, stacklevel=2)
         return e
 
     return register(entry) if entry is not None else register

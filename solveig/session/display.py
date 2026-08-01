@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING
 from pydantic_ai.messages import ToolCallPart, ToolReturnPart
 
 from solveig.session.conversation import Conversation, ConversationObserver, MessageId
+from solveig.tools.available import tool_classes
+from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import build_returns_map, replay_tool_call
 
 if TYPE_CHECKING:
@@ -97,8 +99,11 @@ class SessionDisplay(ConversationObserver):
             dropped, self._order = self._order, []
             await self.interface.drop_messages(dropped)
         returns = build_returns_map(self.conversation.messages)
+        # Both indexes are built once per load and threaded down, rather than
+        # rebuilt per part.
+        classes = tool_classes()
         for message_id in self.conversation.ids:
-            await self._show(message_id, returns=returns)
+            await self._show(message_id, returns=returns, classes=classes)
 
     # -- helpers --------------------------------------------------------------
 
@@ -106,6 +111,7 @@ class SessionDisplay(ConversationObserver):
         self,
         message_id: MessageId,
         returns: dict[str, ToolReturnPart] | None = None,
+        classes: dict[str, type[BaseTool]] | None = None,
     ) -> None:
         """Walk a message's parts IN ORDER, sending each to whoever can draw it.
 
@@ -123,7 +129,17 @@ class SessionDisplay(ConversationObserver):
             if returns is not None and isinstance(part, ToolCallPart):
                 recorded = returns.get(part.tool_call_id)
                 if recorded is not None:
-                    await replay_tool_call(self.interface, part, recorded)
+                    # The class is resolved HERE, not inside replay_tool_call:
+                    # name -> class means reading the tool registries, and
+                    # `orchestration` has to stay importable by the very
+                    # modules that declare them. This layer sits above tools,
+                    # so it can look one up; that module cannot.
+                    await replay_tool_call(
+                        self.interface,
+                        part,
+                        recorded,
+                        tool_cls=(classes or {}).get(part.tool_name),
+                    )
                     continue
             await self.interface.show_message_part(message_id, part_index)
 

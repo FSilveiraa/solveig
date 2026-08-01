@@ -1,14 +1,16 @@
-"""Subcommand — a user-invokable CLI entry point, and the mailbox they arrive in.
+"""Subcommand — a user-invokable CLI entry point, and the stores they live in.
 
 A subcommand is the path where a person's typed words become an action WITHOUT
 the model: `/config set`, `/read notes.md`, `/help`. It is a sibling of the
 agent loop, not a helper for it — both consume what you type, one hands it to an
 LLM and the other runs it.
 
-**Push model.** Every source pushes a finished `Subcommand` into `_PENDING` at
-import time (a tool's are pushed during bootstrap, once the tool set is known).
-The registry reads the list, indexes it, and dispatches. It never goes looking
-for subcommands, and it never learns what a config or a tool is.
+**Push model, straight to the store.** A declaration writes itself into the
+store of whoever declared it, at the moment it is declared — `@subcommand` from
+here for built-ins, the same decorator from `solveig.plugins` for a plugin,
+`@tool` for a plugin tool. Only the core tool list, which cannot be read until
+startup, is registered in a later pass. Nothing here goes looking for
+subcommands, and nothing here learns what a config or a tool is.
 
 **One type, no half-built state.** A `Subcommand` always has a handler and
 always knows how to parse its own arguments. There is no separate "template"
@@ -26,7 +28,9 @@ nothing back.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Awaitable, Callable
+import warnings
+from collections import ChainMap
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -83,14 +87,10 @@ class Subcommand:
         is_detail:     Shown indented under its section in ``/help``.
         tool_name:     Set for a tool-backed subcommand, so ``/help`` can mark it
                        ``(disabled)`` when that tool is disabled in config.
-        source:        Module this came from. Re-registering a source REPLACES
-                       what it contributed, which is what makes plugin reload
-                       work - see `register`.
     """
 
     subcommands: list[str]
     handler: Callable[..., Awaitable[Any]]
-    source: str = ""
     dependencies: dict[str, Any] = field(default_factory=dict)
     cli_model: type[BaseModel] | None = None
     var_positional: str | None = None
@@ -179,36 +179,157 @@ class Subcommand:
         return line
 
 
-# Everything that offers a subcommand pushes one of these here at import time.
-_PENDING: list[Subcommand] = []
+class SubcommandStore(dict[str, Subcommand]):
+    """One source's subcommands, keyed by trigger. Held by reference: whoever
+    owns a source keeps its store and hands it back to re-register, so nothing
+    is ever addressed by a name or a tag."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__()
+        #: for warnings only — never for lookup or precedence
+        self.label = label
 
 
-def subcommand(
-    *commands: str,
-    section: str = "basic",
-    detail: bool = False,
-    description: str | None = None,
-) -> Callable:
-    """Mark an async function as a subcommand handler and push it into
-    `_PENDING`. The signature IS the argument spec: parameters whose type a
-    command line can express are parsed from what the user typed, the rest are
-    injected by the registry. Bool parameters with defaults become
-    ``--flag/--no-flag``; ``*rest`` maps to a greedy positional list."""
+class SubcommandStores:
+    """The ordered collection of stores, and the only thing that sees more than
+    one of them — which is what makes it the party entitled to enforce
+    precedence and report collisions.
 
-    def mark(fn: Callable) -> Callable:
-        _PENDING.append(
-            Subcommand.from_handler(
+    **Position is precedence.** Earlier stores outrank later ones, for both
+    lookup and collisions; no strings are compared and there is no separate
+    precedence table to fall out of sync. `subcommands` is a `ChainMap` VIEW
+    over the stores, not a merge: it holds references, so a store replaced by a
+    plugin reload is visible immediately with nothing to invalidate.
+
+    Nothing here knows what a tool, a config or a plugin is.
+    """
+
+    def __init__(self, *stores: SubcommandStore) -> None:
+        """Highest precedence first. Every store is given at construction, so
+        there is no ordering to establish afterwards and no way to be handed a
+        half-built collection."""
+        self.subcommands: ChainMap[str, Subcommand] = ChainMap(*stores)
+
+    def add(self, store: SubcommandStore, sub: Subcommand) -> list[str]:
+        """Put one subcommand in `store` under each of its triggers, returning
+        a warning per trigger refused.
+
+        The ONE collision rule, used by every arrival: a trigger already claimed
+        by ANOTHER store is refused rather than shadowed — losing a plugin's
+        command is better than a plugin quietly taking over `/config`. A trigger
+        this same store already holds is simply overwritten, so re-declaring is
+        never a self-collision.
+        """
+        warnings: list[str] = []
+        for name in sub.subcommands:
+            incumbent = self._holder(name)
+            if incumbent is not None and incumbent is not store:
+                warnings.append(
+                    f"'{name}' from {store.label} ignored: already provided "
+                    f"by {incumbent.label}"
+                )
+                continue
+            store[name] = sub
+        return warnings
+
+    def register(
+        self, store: SubcommandStore, subcommands: Iterable[Subcommand]
+    ) -> list[str]:
+        """Make `subcommands` the complete contents of `store`, through `add`.
+
+        Replacing wholesale is for a source handed over in one piece — the core
+        tool list. A source that arrives one declaration at a time (either
+        `@subcommand`, or `@tool` as plugins are scanned) uses `add` directly,
+        and is emptied by whoever owns its lifecycle.
+        """
+        store.clear()
+        warnings: list[str] = []
+        for sub in subcommands:
+            warnings += self.add(store, sub)
+        return warnings
+
+    def _holder(self, name: str) -> SubcommandStore | None:
+        for store in self.subcommands.maps:
+            if name in store:
+                return store  # type: ignore[return-value]
+        return None
+
+    def all(self) -> list[Subcommand]:
+        """Every reachable subcommand, in precedence order, each once. A
+        subcommand answering to several triggers appears once."""
+        seen: list[Subcommand] = []
+        for name in self.subcommands:
+            sub = self.subcommands[name]
+            if sub not in seen:
+                seen.append(sub)
+        return seen
+
+
+#: The one collection. Not a decision — several disjoint command namespaces for
+#: one keyboard would mean nothing, so instantiation has nothing to express.
+#: One store per source, module-level like every other registry in this project
+#: (`PLUGIN_TOOLS`, `BEFORE_HOOKS`, `MCP_CONNECTIONS`). Order below IS
+#: precedence, for lookup and for collisions.
+BUILTIN_SUBCOMMANDS = SubcommandStore("built-ins")
+CORE_TOOL_SUBCOMMANDS = SubcommandStore("core tools")
+PLUGIN_SUBCOMMANDS = SubcommandStore("plugins")
+SUBCOMMANDS = SubcommandStores(
+    BUILTIN_SUBCOMMANDS, CORE_TOOL_SUBCOMMANDS, PLUGIN_SUBCOMMANDS
+)
+
+
+def declaring_into(store: SubcommandStore) -> Callable[..., Callable]:
+    """Build a `@subcommand` decorator that writes into `store`.
+
+    A declaration's DESTINATION is settled by which decorator the author
+    imported, never by an argument they could forget or a string derived from
+    their module name. Core code imports `subcommand` from here and lands in the
+    built-in store; a plugin imports it from `solveig.plugins` and lands in the
+    plugin store, which is the store a reload replaces. That is the same shape
+    `@tool` and `@before`/`@after` already have — a plugin reaches for the
+    plugin package's decorator and the right registry follows.
+
+    Written straight to the store, with no inbox in between: the decorator
+    already builds a finished `Subcommand`, and it knows its store, so there is
+    nothing left for a later pass to decide. A refused trigger goes out as a
+    `UserWarning` — the only surface available at import, and the caller that
+    triggered the import (`reload_plugins`) is what turns it back into a
+    displayed warning.
+    """
+
+    def subcommand(
+        *triggers: str,
+        section: str = "basic",
+        detail: bool = False,
+        description: str | None = None,
+    ) -> Callable:
+        """Mark an async function as a subcommand handler. The signature IS the
+        argument spec: parameters whose type a command line can express are
+        parsed from what the user typed, the rest are injected by the registry.
+        Bool parameters with defaults become ``--flag/--no-flag``; ``*rest``
+        maps to a greedy positional list."""
+
+        def mark(fn: Callable) -> Callable:
+            sub = Subcommand.from_handler(
                 fn,
-                subcommands=list(commands),
+                subcommands=list(triggers),
                 section=section,
                 is_detail=detail,
                 description=description
                 or ((fn.__doc__ or "").strip().splitlines() or [""])[0],
             )
-        )
-        return fn
+            for refused in SUBCOMMANDS.add(store, sub):
+                warnings.warn(refused, stacklevel=2)
+            return fn
 
-    return mark
+        return mark
+
+    return subcommand
+
+
+#: The built-in decorator. `solveig.plugins.subcommands` builds the plugin one
+#: the same way, over the plugin store.
+subcommand = declaring_into(BUILTIN_SUBCOMMANDS)
 
 
 # Usage string, derived from the CLI fields so it matches what CliSettingsSource

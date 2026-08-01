@@ -1,9 +1,12 @@
-"""SubcommandRegistry — indexes `_PENDING`, resolves dependencies, dispatches.
+"""SubcommandRegistry — resolves dependencies and dispatches.
 
-The registry is a pure pipe with four jobs: index the pushed subcommands by
-their trigger words, hand a running subcommand the app objects it asked for,
-render `/help`, and act as the queue's prompt gate so a typed `/command` is
-dispatched instead of being sent to the model.
+The registry is a pure pipe with three jobs: hand a running subcommand the app
+objects it asked for, render `/help`, and act as the queue's prompt gate so a
+typed `/command` is dispatched instead of being sent to the model.
+
+It does NOT own an index. Lookup goes through `SUBCOMMANDS.subcommands`, a
+`ChainMap` view over the per-source stores, so a plugin reload that replaces its
+store is visible on the next keystroke with nothing here to invalidate.
 
 It has no domain knowledge - it does not know what a config, an MCP connection
 or a tool is. A subcommand arrives already knowing how to parse its own
@@ -26,7 +29,12 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
 from solveig.session.conversation import Conversation
-from solveig.subcommands.base import _PENDING, Subcommand, subcommand
+from solveig.subcommands.base import (
+    BUILTIN_SUBCOMMANDS,
+    SUBCOMMANDS,
+    Subcommand,
+    subcommand,
+)
 
 if TYPE_CHECKING:
     from solveig.session.manager import SessionManager
@@ -60,38 +68,23 @@ class SubcommandRegistry:
         }
         # Resolve TYPE_CHECKING string annotations: {"SolveigConfig": SolveigConfig, …}
         self._dep_by_name = {k.__name__: k for k in self._deps}
-        self._registry: dict[str, Subcommand] = {}
-        self._subcommands: list[Subcommand] = []
-        self._index()
-        # HACK: Self-register as the queue's prompt gate: /commands are
-        # dispatched before insertion; prompts pass through unchanged.
-        user_message_queue.prompt_handler = self.handle_prompt
-
-    # ------------------------------------------------------------------
-    # Indexing
-    # ------------------------------------------------------------------
-
-    def _index(self) -> None:
-        for sub in _PENDING:
-            self._register(sub)
-
-        # /help is self-referential, so it is built here rather than pushed:
-        # the object that renders it is the one dispatching it.
-        self._register(
+        # /help is self-referential, so it is built here rather than declared:
+        # the object that renders it is the one dispatching it. It goes in the
+        # built-in store alongside everything `@subcommand` declared.
+        SUBCOMMANDS.add(
+            BUILTIN_SUBCOMMANDS,
             Subcommand.from_handler(
                 self._help_handler,
                 subcommands=["/help"],
                 description="Show this help.",
-            )
+            ),
         )
+        # HACK: Self-register as the queue's prompt gate: /commands are
+        # dispatched before insertion; prompts pass through unchanged.
+        user_message_queue.prompt_handler = self.handle_prompt
 
     async def _help_handler(self) -> None:
         await self.help()
-
-    def _register(self, sub: Subcommand) -> None:
-        self._subcommands.append(sub)
-        for name in sub.subcommands:
-            self._registry[name] = sub
 
     # ------------------------------------------------------------------
     # Invocation
@@ -157,8 +150,8 @@ class SubcommandRegistry:
 
         for n in (2, 1):
             key = " ".join(tokens[:n])
-            if key in self._registry:
-                sub = self._registry[key]
+            sub = SUBCOMMANDS.subcommands.get(key)
+            if sub is not None:
                 remaining = tokens[n:]
                 # -h/--help short-circuits to a usage line for any subcommand
                 # before the handler parses — otherwise argparse (tool path)
@@ -197,8 +190,9 @@ class SubcommandRegistry:
 
     async def help(self) -> str:
         help_str = ""
-        for key, title in _build_sections(self._subcommands):
-            subs = [s for s in self._subcommands if s.section == key]
+        subcommands = SUBCOMMANDS.all()
+        for key, title in _build_sections(subcommands):
+            subs = [s for s in subcommands if s.section == key]
             top = [s for s in subs if not s.is_detail]
             details = [s for s in subs if s.is_detail]
             if not top and not details:
