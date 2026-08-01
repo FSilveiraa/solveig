@@ -17,6 +17,7 @@ from .hooks import (
     hooks_config_map,
     load_and_filter_plugin_hooks,
 )
+from .subcommands import clear_subcommands, subcommand
 from .tools import (
     PLUGIN_TOOLS,
     clear_tools,
@@ -41,6 +42,10 @@ def discover_plugins(paths: list[str]) -> list[str]:
     signature is what lets `SolveigConfig` be built once, fully composed.
     """
     register_external_plugin_paths(paths)
+    # Before the loaders, not inside one: a rescan re-imports every plugin
+    # module and every decorator fires again, and a module declaring a
+    # subcommand may be scanned as either a tool or a hook.
+    clear_subcommands()
     errors = load_and_filter_plugin_tools()
     errors += load_and_filter_plugin_hooks()
     return errors
@@ -88,6 +93,7 @@ async def report_plugins(
 def clear_plugins() -> None:
     clear_hooks()
     clear_tools()
+    clear_subcommands()
 
 
 __all__ = [
@@ -97,4 +103,5 @@ __all__ = [
     "tool",
     "before",
     "after",
+    "subcommand",
 ]

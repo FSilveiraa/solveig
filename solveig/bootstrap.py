@@ -18,21 +18,16 @@ against.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
-from pydantic import ValidationError
-from pydantic_settings.exceptions import SettingsError
+import warnings
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface.base import SolveigInterface
-from solveig.plugins import discover_plugins
+from solveig.plugins import discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
-from solveig.subcommands.base import _PENDING, Subcommand
+from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools import CORE_TOOLS
-from solveig.tools.base import BaseTool
-from solveig.tools.orchestration import run_tool_and_hooks
+from solveig.tools.orchestration import tool_subcommand
 
 
 def compose_core_tools() -> None:
@@ -54,60 +49,61 @@ def compose_plugin_hooks() -> None:
     SolveigConfig.compose_plugin_hooks(list(hooks_config_map().items()))
 
 
-def _tool_handler(tool_cls: type[BaseTool]):
-    """A tool's `/command` as a plain subcommand handler: it declares the two
-    dependencies it needs by annotating them, takes the raw words, and runs the
-    tool through the ONE execution seam - so a hand-typed `/read` gets the same
-    consent, hooks and group posture a model-issued call does.
+def register_core_tool_subcommands() -> list[str]:
+    """Build the core tools' `/commands` and fill their store; returns any
+    collision warnings.
 
-    Built here rather than in `tools/`: this closure has to name both the tool
-    and the orchestrator that runs it, and `tools/base.py` cannot reach the
-    orchestrator without a cycle. Keeping it here is also what lets `tools/`
-    import nothing from `subcommands/`.
+    The one source that cannot register itself as it is declared: `CORE_TOOLS`
+    is a list in `solveig/tools/__init__.py`, and building a handler there means
+    importing `orchestration`, which imports back through that same package.
+    Plugins have no such problem — `@tool` writes its command as it registers
+    the tool — so this is the only pass left, and it runs once.
     """
-
-    async def handler(
-        config: SolveigConfig, interface: SolveigInterface, *tokens: str
-    ) -> None:
-        try:
-            instance = tool_cls.from_cli_tokens(list(tokens))
-        except (SettingsError, ValidationError) as e:
-            await interface.display_error(str(e))
-            await interface.display_info(
-                f"Usage: {tool_cls.subcommands[0]} {tool_cls.subcommand_usage()}"
-            )
-            return
-        try:
-            await run_tool_and_hooks(instance, config, interface)
-        except (PluginException, ToolDisabledError) as e:
-            await interface.display_error(str(e))
-
-    return handler
+    return SUBCOMMANDS.register(
+        CORE_TOOL_SUBCOMMANDS,
+        [sub for tool in CORE_TOOLS if (sub := tool_subcommand(tool)) is not None],
+    )
 
 
-def register_tool_subcommands(tools: Iterable[type[BaseTool] | object]) -> None:
-    """Push one `Subcommand` per tool that opted in by declaring trigger names.
+async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
+    """The ONE path a change to the plugin set travels — startup reporting, a
+    `plugins.paths` change, and (later) `/plugins reload` all take it.
 
-    Runs at startup instead of at class creation because the tool set is not
-    known until plugin discovery. A plugin tool registered as a plain callable
-    has no CLI schema to parse against, so only `BaseTool` subclasses are
-    considered.
+    Discovery alone was never the whole job: whoever called it also had to
+    recompose the config sections, refresh the subcommands and render the
+    report, and each call site had to remember a different subset. That is the
+    fetch → check → act shape this project is written against, so the
+    obligations live here instead — the same argument that makes
+    `Conversation.load()` fire the events a live turn fires.
+
+    A reload reloads EVERYTHING plugin-related: `rescan_and_load_plugins` evicts
+    deleted modules and re-imports changed ones, so working out which file moved
+    would buy nothing a full rescan doesn't already give.
     """
-    for entry in tools:
-        if not (isinstance(entry, type) and issubclass(entry, BaseTool)):
-            continue
-        if not entry.subcommands:
-            continue
-        _PENDING.append(
-            Subcommand.from_handler(
-                _tool_handler(entry),
-                subcommands=list(entry.subcommands),
-                section="tools",
-                description=entry.subcommand_description(),
-                usage=entry.subcommand_usage(),
-                tool_name=entry.tool_name(),
-            )
-        )
+    # Plugin declarations land in their stores as the rescan imports them, so a
+    # refused trigger surfaces as a UserWarning from inside the import — the only
+    # channel available there. Caught here, where there is an interface to show
+    # it on. Kept apart from `errors`: a refused trigger is not a failure to
+    # load, and rendering it as one would misreport a working plugin.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        errors = discover_plugins(config.plugins.paths)
+    collisions = [str(w.message) for w in caught]
+
+    # The discovered set decides the schema, so recompose before anything reads
+    # plugin config, then bring the live config's sections up to the new
+    # classes — `config` itself keeps its identity and its subscriptions.
+    compose_plugin_tools()
+    compose_plugin_hooks()
+    config.rebuild_plugin_sections()
+
+    # NOTE: nothing re-registers subcommands here. `discover_plugins` empties the
+    # plugin store before the rescan, and every `@tool`/`@subcommand` in a
+    # scanned module refills it on import - so a plugin deleted from disk loses
+    # its command by simply never declaring it again.
+    await report_plugins(config, interface, errors)
+    for collision in collisions:
+        await interface.display_warning(collision)
 
 
 async def parse_config_and_prompt(
@@ -123,10 +119,5 @@ async def parse_config_and_prompt(
 
     compose_plugin_tools()
     compose_plugin_hooks()
-
-    # Tool commands, now that the tool set is settled: core first, then whatever
-    # discovery turned up. The registry reads the pending list when it is built.
-    register_tool_subcommands(CORE_TOOLS)
-    register_tool_subcommands(PLUGIN_TOOLS)
 
     return SolveigConfig.build(cli_args=cli_args)

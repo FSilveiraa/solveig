@@ -22,7 +22,6 @@ from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
-from solveig.plugins import discover_plugins, report_plugins
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
@@ -48,9 +47,9 @@ async def _display_setup(
     for warning in startup_warnings:
         await interface.display_warning(warning)
 
-    # Report plugins + connect MCP servers (needs interface for display).
-    plugin_errors = discover_plugins(config.plugins.paths)
-    await report_plugins(config, interface, plugin_errors)
+    # Plugins + MCP servers (both need the interface for display). Startup takes
+    # the same path a later reload does, so the two cannot drift.
+    await bootstrap.reload_plugins(config, interface)
     await connect_all(config=config, interface=interface)
 
     sys_prompt = await get_system_prompt(config)
@@ -178,11 +177,6 @@ async def run_async(
     session_manager = SessionManager(config, conversation)
     client = client or Client(config)
 
-    # Non-display plugin discovery + tool rebuild — happens before the
-    # interface exists so the composed config is ready when the Textual app
-    # mounts.  discover_plugins is explicitly UI-free.
-    discover_plugins(config.plugins.paths)
-
     if interface is None:
         interface = TerminalInterface(
             theme=config.interface.theme,
@@ -213,6 +207,20 @@ async def run_async(
         session_manager=session_manager,
         user_message_queue=user_message_queue,
     )
+
+    # Every other source has written its subcommands into its own store as it
+    # was declared; the core tool list is the one that needs a pass.
+    startup_warnings += tuple(bootstrap.register_core_tool_subcommands())
+
+    # Changing where plugins are LOADED FROM changes the plugin set, so it has
+    # to reload — until now `/config set plugins.paths` did nothing until the
+    # next restart, which is a setting that lies. Enablement is deliberately NOT
+    # here: it is checked live at call time, and disabled never means gone.
+    @config.on_change("plugins.paths")
+    async def _reload_on_plugin_paths_change(
+        changed: SolveigConfig, _paths: frozenset[str]
+    ) -> None:
+        await bootstrap.reload_plugins(changed, interface)
 
     if user_prompt:
         await user_message_queue.put(user_prompt)
