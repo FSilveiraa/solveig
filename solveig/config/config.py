@@ -39,6 +39,7 @@ from solveig.config.models import (
     SystemPromptConfig,
 )
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
+from solveig.utils.misc import CLI_SETTINGS_OPTS
 
 __all__ = [
     "SolveigConfig",
@@ -48,13 +49,6 @@ __all__ = [
 # boot, built-in subcommand parsing, and tool subcommand parsing.  "cli_avoid_json"
 # is NOT here: the config boot path merges it on top (nested SolveigConfig fields
 # need dotted flags), but subcommands parse flat models where it's a no-op.
-CLI_SETTINGS_OPTS: dict[str, Any] = {
-    "cli_exit_on_error": False,
-    "cli_kebab_case": False,
-    "cli_implicit_flags": True,
-    "case_sensitive": True,
-    "cli_enforce_required": False,
-}
 
 # Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
 _CLI_SHORTCUTS: dict[str, str] = {
@@ -255,9 +249,16 @@ class SolveigConfig(BaseSettings):
 
     async def notify_changed(self, paths: frozenset[str]) -> None:
         """Notify all observers, filtered by registered config path."""
-        for fn, filter_paths in self._observers:
-            if filter_paths is None or (paths & filter_paths):
-                await fn(self, paths)
+        for handler, filter_paths in self._observers:
+            # If the observer specified config paths, notify only those,otherwise notify
+            # of everything that changed. Paths can be single-value
+            # (`api.url`, `tools.http.timeout`) or section prefixes (`api`, `tools.http`)
+            paths_to_notify = [
+                path for path in paths
+                if any(path.startswith(prefix) for prefix in filter_paths)
+            ] if filter_paths else paths
+            if paths_to_notify:
+                await handler(self, frozenset(paths_to_notify))
 
     def on_change(self, *paths: str):
         """Decorator: register a callback for the given dotted *paths.

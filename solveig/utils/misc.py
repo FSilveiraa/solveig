@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import re
 from datetime import UTC, datetime
 from os import PathLike
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyperclip
 from pydantic import ByteSize
@@ -27,7 +29,7 @@ def format_age(mtime: int) -> str:
 
 def format_path_info(
     path: str | PathLike,
-    abs_path: "Path",
+    abs_path: Path,
     is_dir: bool,
     size: int | None = None,
     line_count: int | None = None,
@@ -109,3 +111,12 @@ def validate_non_empty_path(path: str) -> str:
 
 def _camel_to_snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+CLI_SETTINGS_OPTS: dict[str, Any] = {
+    "cli_exit_on_error": False,
+    "cli_kebab_case": False,
+    "cli_implicit_flags": True,
+    "case_sensitive": True,
+    "cli_enforce_required": False,
+}

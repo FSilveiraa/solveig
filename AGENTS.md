@@ -304,7 +304,22 @@ queue's prompt gate.
   `_compose_core_tools` import-order note, `_thinking`'s two-sites rationale). Keep
   them accurate when you change the code — several existing docstrings were allowed
   to go stale and had to be corrected.
-- **Highlighted comment prefixes** project-wide: `TODO`/`FIXME`/`NOTE`/`HACK`.
+- **Highlighted comment prefixes** project-wide (PyCharm highlights all four).
+  Each means a different thing and they are not interchangeable:
+  - `NOTE:` — something a developer needs to know and could not have guessed.
+    The shape is correct; the reason it is correct is non-obvious. Never a
+    complaint. Most seam comments in this project are NOTEs whether or not
+    they carry the prefix.
+  - `HACK:` — works, but we are not pleased with it and intend to replace it
+    properly. Say what would be better and what blocks it. A `HACK:` is a debt
+    we have acknowledged, not an excuse we have accepted.
+  - `TODO:` — a genuine next step. We know what to do and simply have not done
+    it. If you do not know what should happen, it is a `NOTE:`, not a `TODO:`.
+  - `FIXME:` — known-broken behaviour under some condition. Name the condition.
+
+  Prefer fixing over annotating: a problem raised and acknowledged gets fixed
+  now, not banked (see "Never bank an improper shape" in the philosophy above).
+  An annotation is the floor, not the goal.
 - **Import-cycle law:** tools top-level-import `solveig.config`; config must not
   import tools at module level (hence the function-local import in
   `config/__init__.py`). Respect the two-phase bootstrap ordering.

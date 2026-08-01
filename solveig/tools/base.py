@@ -25,12 +25,10 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
-from solveig.config import CLI_SETTINGS_OPTS
 from solveig.context import SolveigContext
-from solveig.subcommands.base import _PENDING, Subcommand, _SubcommandTemplate
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
-from solveig.utils.misc import _camel_to_snake, format_path_info
+from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake, format_path_info
 
 if TYPE_CHECKING:
     from anyio import Path
@@ -104,12 +102,12 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     # (`EditTool` -> `edit`, `TasksTool` -> `tasks`).
     name: ClassVar[str | None] = None
 
-    # Declare a `Subcommand` to opt this tool in to a user-invokable `/tool`
-    # command (e.g. `/read <path>`). `description`/`usage`/`raw_tokens` are
-    # filled by `__init_subclass__`; the runner completes `handler`. Tools
-    # whose args don't map cleanly to a CLI line (e.g. `tasks`, `write`) leave
-    # this None.
-    subcommand: ClassVar[Subcommand | None] = None
+    # Trigger names that opt this tool in to a user-invokable command, e.g.
+    # `["/read"]` for `/read <path>`. Names only: the blurb comes from the
+    # docstring, the usage line from the fields, and the handler is built during
+    # bootstrap - so a tool never names anything in `subcommands/`. Tools whose
+    # args don't map cleanly to a CLI line (e.g. `tasks`, `write`) leave it empty.
+    subcommands: ClassVar[list[str]] = []
 
     # Per-tool default values merged in *under* the CLI-parsed ones in
     # `from_cli_tokens`. For a field that's required in the LLM contract but
@@ -141,29 +139,6 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         if args and isinstance(args[0], type) and issubclass(args[0], ToolConfig):
             cls.config_model = args[0]
 
-        own = cls.__dict__.get("subcommand")
-        if not isinstance(own, Subcommand):
-            return
-        # Every subcommand handler now consumes the raw token line (Subcommand no
-        # longer splits key=value), so CliSettingsSource sees exactly what the user
-        # typed — no per-subcommand flag needed.
-        if not own.description:
-            own.description = cls._subcommand_description()
-        if not own.usage:
-            own.usage = cls._generate_usage()
-
-        # Push into the pending list so the registry binds it — same push
-        # model as @subcommand-decorated built-in functions.
-        _PENDING.append(
-            _SubcommandTemplate(
-                tool_cls=cls,
-                commands=list(own.commands),
-                section="tools",
-                is_detail=own.is_detail,
-                description=own.description,
-            )
-        )
-
     @classmethod
     def tool_name(cls) -> str:
         if cls.name is not None:
@@ -194,13 +169,13 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         ]
 
     @classmethod
-    def _subcommand_description(cls) -> str:
+    def subcommand_description(cls) -> str:
         """First line of the class docstring - the `/help` blurb."""
         doc = (cls.__doc__ or "").strip()
         return doc.splitlines()[0] if doc else ""
 
     @classmethod
-    def _generate_usage(cls) -> str:
+    def subcommand_usage(cls) -> str:
         """A short, readable usage string for `/help` - positional fields as
         ``<name>``, everything else as ``[--name]``. Only the display string is
         hand-built; the actual parsing is delegated to `CliSettingsSource`."""

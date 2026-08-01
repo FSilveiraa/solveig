@@ -1,42 +1,32 @@
-"""SubcommandRegistry — reads `_PENDING`, binds handlers, dispatches.
+"""SubcommandRegistry — indexes `_PENDING`, resolves dependencies, dispatches.
 
-The registry is a pure pipe: it receives its dependencies as constructor
-arguments, reads the module-level `_PENDING` list (populated at import time by
-`@subcommand` and tool `__pydantic_init_subclass__`), builds one handler per
-template, and exposes a single `__call__` for dispatch. No domain knowledge —
-it doesn't know what a config or an MCP connection is.
+The registry is a pure pipe with four jobs: index the pushed subcommands by
+their trigger words, hand a running subcommand the app objects it asked for,
+render `/help`, and act as the queue's prompt gate so a typed `/command` is
+dispatched instead of being sent to the model.
 
-One CLI parsing path: CliSettingsSource for everything. Built-in handler params
-become a throwaway pydantic model (required positional → CliPositionalArg[T],
-bool with default → --flag/--no-flag, *rest → list[str]).
-
-The registry also owns the prompt gate: on construction it registers itself as
-the queue's `prompt_handler`, so /commands typed as user input are dispatched
-before insertion and prompts pass through unchanged.
+It has no domain knowledge - it does not know what a config, an MCP connection
+or a tool is. A subcommand arrives already knowing how to parse its own
+arguments (`Subcommand.from_handler`, at declaration time); the only thing the
+registry adds is the objects that cannot exist until the app is running, which
+it matches to parameters BY TYPE. Hence one dispatch path for every subcommand,
+whoever declared it.
 """
 
 from __future__ import annotations
 
-import inspect
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field, ValidationError, create_model
-from pydantic_settings import CliPositionalArg, CliSettingsSource
+from pydantic import ValidationError
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.api.client import Client
-from solveig.config import CLI_SETTINGS_OPTS, SolveigConfig
-from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
+from solveig.config import SolveigConfig
+from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
 from solveig.session.conversation import Conversation
-from solveig.subcommands.base import (
-    _PENDING,
-    Subcommand,
-    _SubcommandTemplate,
-    subcommand,
-)
-from solveig.tools.orchestration import run_tool_and_hooks
+from solveig.subcommands.base import _PENDING, Subcommand, subcommand
 
 if TYPE_CHECKING:
     from solveig.session.manager import SessionManager
@@ -59,12 +49,8 @@ class SubcommandRegistry:
         user_message_queue: UserMessageQueue,
     ) -> None:
         self._config = config
-        self._conversation = conversation
         self._interface = interface
-        self._client = client
-        self._session_manager = session_manager
-        self._user_message_queue = user_message_queue
-        # Build the deps dict the binding logic uses for type→instance resolution.
+        # What a handler can ask for by annotating a parameter with the type.
         self._deps: dict[type, Any] = {
             SolveigConfig: config,
             Conversation: conversation,
@@ -76,186 +62,86 @@ class SubcommandRegistry:
         self._dep_by_name = {k.__name__: k for k in self._deps}
         self._registry: dict[str, Subcommand] = {}
         self._subcommands: list[Subcommand] = []
-        self._bind_all()
+        self._index()
         # HACK: Self-register as the queue's prompt gate: /commands are
         # dispatched before insertion; prompts pass through unchanged.
         user_message_queue.prompt_handler = self.handle_prompt
 
     # ------------------------------------------------------------------
-    # Binding
+    # Indexing
     # ------------------------------------------------------------------
 
-    def _bind_all(self) -> None:
-        for template in _PENDING:
-            if template.tool_cls is not None:
-                sub = self._bind_tool(template)
-            else:
-                sub = self._bind_builtin(template)
+    def _index(self) -> None:
+        for sub in _PENDING:
             self._register(sub)
 
-        # /help is self-referential — the registry owns its own help display.
-        # Not pushed through _PENDING since it's the same object dispatching it.
-        @subcommand("/help")
-        async def _help_handler(*tokens: str) -> None:
-            await self.help()
+        # /help is self-referential, so it is built here rather than pushed:
+        # the object that renders it is the one dispatching it.
+        self._register(
+            Subcommand.from_handler(
+                self._help_handler,
+                subcommands=["/help"],
+                description="Show this help.",
+            )
+        )
+
+    async def _help_handler(self) -> None:
+        await self.help()
 
     def _register(self, sub: Subcommand) -> None:
         self._subcommands.append(sub)
-        for command in sub.commands:
-            self._registry[command] = sub
+        for name in sub.subcommands:
+            self._registry[name] = sub
 
     # ------------------------------------------------------------------
-    # Injection detection
+    # Invocation
     # ------------------------------------------------------------------
-    # A parameter is injected (not CLI-parsed) when its annotation is a key
-    # in self._deps (resolved via _dep_by_name for TYPE_CHECKING strings)
-    # or inspect.Parameter.empty (unannotated, treated as injected).
 
-    def _is_injected(self, ann: Any) -> bool:
-        if ann is inspect.Parameter.empty:
-            return True
-        if isinstance(ann, str):
-            return ann in self._dep_by_name
-        return ann in self._deps
-
-    def _resolve_dep(self, ann: Any) -> Any:
-        """Return the dep value for an annotation (class or string), or None."""
-        if isinstance(ann, str):
-            cls = self._dep_by_name.get(ann)
+    def _resolve_dep(self, annotation: Any) -> Any:
+        """The app object a handler parameter asked for, matched by type (or by
+        name, for a module that stringifies its annotations)."""
+        if isinstance(annotation, str):
+            cls = self._dep_by_name.get(annotation)
             return self._deps[cls] if cls else None
-        return self._deps.get(ann)
+        return self._deps.get(annotation)
 
-    # ------------------------------------------------------------------
-    # Built-in handler binding — CliSettingsSource for everything.
-    # ------------------------------------------------------------------
-    #
-    # Signature → throwaway pydantic model:
-    #   field: str             → CliPositionalArg[str], required
-    #   field: str = ""        → CliPositionalArg[str], optional
-    #   field: bool = False    → bool, --field/--no-field
-    #   *rest: str             → list[str], greedy positional
+    async def _invoke(self, sub: Subcommand, tokens: list[str]) -> None:
+        """Parse, fill in the dependencies, call. The single error posture for
+        every subcommand lives here: a parse failure shows the message and the
+        command's own usage line."""
+        try:
+            parsed = sub.parse(tokens)
+        except (SettingsError, ValidationError) as e:
+            await self._interface.display_error(str(e))
+            await self._interface.display_info(
+                f"Usage: {sub.subcommands[0]} {sub.usage}".rstrip()
+            )
+            return
 
-    def _bind_builtin(self, template: _SubcommandTemplate) -> Subcommand:
-        assert template.fn is not None
-        sig = inspect.signature(template.fn)
+        injected = {
+            name: self._resolve_dep(annotation)
+            for name, annotation in sub.dependencies.items()
+        }
 
-        cli_fields: dict[str, tuple[type, Any]] = {}
-        injected_names: list[str] = []
-        var_positional_name: str | None = None
+        if sub.var_positional is None:
+            await sub.handler(**injected, **parsed)
+            return
 
-        for name, param in sig.parameters.items():
-            ann = param.annotation
-            if self._is_injected(ann):
-                injected_names.append(name)
-            elif param.kind == param.VAR_POSITIONAL:
-                var_positional_name = name
-                cli_fields[name] = (
-                    CliPositionalArg[list[str]],
-                    Field(default_factory=list),
-                )
-            elif ann is bool and param.default is not param.empty:
-                cli_fields[name] = (bool, Field(default=param.default))
-            elif param.default is not param.empty:
-                cli_fields[name] = (
-                    CliPositionalArg[ann],  # type: ignore[valid-type]
-                    Field(default=param.default),
-                )
+        # A *rest handler is called positionally, so the tail can be handed over
+        # RAW - CliSettingsSource would coerce it (a trailing "false" becoming a
+        # bool), and a greedy tail is exactly the case where the user's literal
+        # words matter. Count what the leading parameters consumed to find it.
+        leading: list[Any] = []
+        consumed = 0
+        for name in sub.parameters:
+            if name == sub.var_positional:
+                break
+            if name in injected:
+                leading.append(injected[name])
             else:
-                cli_fields[name] = (
-                    CliPositionalArg[ann],  # type: ignore[valid-type]
-                    Field(default=...),
-                )
-
-        usage = _builtin_usage(cli_fields, var_positional_name)
-        CliModel = create_model("_Cli", **cli_fields) if cli_fields else None
-
-        async def handler(*tokens: str) -> None:
-            parsed: dict[str, Any] = {}
-            if CliModel:
-                try:
-                    parsed = CliSettingsSource(
-                        CliModel,
-                        cli_parse_args=list(tokens),
-                        **CLI_SETTINGS_OPTS,
-                    )()
-                except (SettingsError, ValidationError) as e:
-                    await self._interface.display_error(str(e))
-                    await self._interface.display_info(
-                        f"Usage: {template.commands[0]} {usage}".rstrip()
-                    )
-                    return
-
-            # Build final kwargs: injected deps + CLI args
-            kwargs: dict[str, Any] = {}
-            for name in injected_names:
-                ann = sig.parameters[name].annotation
-                kwargs[name] = self._resolve_dep(ann)
-
-            # Merge parsed CLI args (except var-positional) into kwargs
-            all_kwargs = dict(kwargs)
-            for name, value in parsed.items():
-                if name != var_positional_name:
-                    all_kwargs[name] = value
-
-            if var_positional_name is None:
-                await template.fn(**all_kwargs)
-            else:
-                # Build leading positional args in signature order up to
-                # the *rest param.  Count consumed tokens to slice raw
-                # tokens for *rest (bypassing CliSettingsSource bool coercion).
-                leading: list[Any] = []
-                consumed = 0
-                for pname in sig.parameters:
-                    if pname == var_positional_name:
-                        break
-                    if pname in injected_names:
-                        leading.append(kwargs[pname])
-                    else:
-                        leading.append(all_kwargs[pname])
-                        consumed += 1
-                await template.fn(*leading, *tokens[consumed:])
-
-        return Subcommand(
-            commands=template.commands,
-            handler=handler,
-            description=template.description,
-            usage=usage,
-            section=template.section,
-            is_detail=template.is_detail,
-        )
-
-    # ------------------------------------------------------------------
-    # Tool handler binding
-    # ------------------------------------------------------------------
-
-    def _bind_tool(self, template: _SubcommandTemplate) -> Subcommand:
-        assert template.tool_cls is not None
-        cls = template.tool_cls
-        tool_template = cls.subcommand
-
-        async def handler(*tokens: str) -> None:
-            try:
-                instance = cls.from_cli_tokens(list(tokens))
-            except (SettingsError, ValidationError) as e:
-                await self._interface.display_error(str(e))
-                await self._interface.display_info(
-                    f"Usage: {tool_template.help_line()}"
-                )
-                return
-            try:
-                await run_tool_and_hooks(instance, self._config, self._interface)
-            except (PluginException, ToolDisabledError) as e:
-                await self._interface.display_error(str(e))
-
-        return Subcommand(
-            commands=template.commands,
-            handler=handler,
-            description=tool_template.description,
-            usage=tool_template.usage,
-            section="tools",
-            is_detail=tool_template.is_detail,
-            tool_name=cls.tool_name(),
-        )
+                leading.append(parsed[name])
+                consumed += 1
+        await sub.handler(*leading, *tokens[consumed:])
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -280,7 +166,7 @@ class SubcommandRegistry:
                 if any(t in ("-h", "--help") for t in remaining):
                     await self._interface.display_info(f"Usage: {sub.help_line()}")
                     return True
-                await sub(*remaining)
+                await self._invoke(sub, remaining)
                 return True
 
         return False
@@ -329,32 +215,6 @@ class SubcommandRegistry:
         if sub.tool_name is None:
             return False
         return not self._config.is_tool_enabled(sub.tool_name)
-
-
-# -------------------------------------------------------------------
-# Usage string — derived from the CliModel fields, not the signature.
-# This must match what CliSettingsSource will accept.
-# -------------------------------------------------------------------
-#   CliPositionalArg[ann] → <name> (required) or [name] (optional)
-#   bool                 → [--name]
-#   list[str]             → [name...]
-#   Anything else         → [--name <name>]
-
-
-def _builtin_usage(
-    fields: dict[str, tuple[type, Any]], var_positional_name: str | None
-) -> str:
-    parts: list[str] = []
-    for name, (_ann, default) in fields.items():
-        if name == var_positional_name:
-            parts.append(f"[{name}...]")
-        elif default is ...:
-            parts.append(f"<{name}>")
-        elif _ann is bool:
-            parts.append(f"[--{name}]")
-        else:
-            parts.append(f"[{name}]")
-    return " ".join(parts)
 
 
 @subcommand("/exit", section="basic")

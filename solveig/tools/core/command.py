@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, ClassVar, Self
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
-from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -35,7 +34,7 @@ class CommandTool(BaseTool[CommandConfig]):
     Changing cwd path persists between commands.
     """
 
-    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/command", "/cmd"])
+    subcommands: ClassVar[list[str]] = ["/command", "/cmd"]
 
     command: CliPositionalArg[str] = Field(
         description="Shell command to execute (e.g. 'ls -la', 'cat file.txt')."

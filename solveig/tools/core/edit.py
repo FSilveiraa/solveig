@@ -6,7 +6,6 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
-from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -29,7 +28,7 @@ class EditTool(BaseTool):
     Errors if multiple occurrences are found and replace_all=false.
     """
 
-    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/edit"])
+    subcommands: ClassVar[list[str]] = ["/edit"]
 
     path: CliPositionalArg[str] = Field(
         description="File path to edit (supports ~ for home directory)."

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
-from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
@@ -24,7 +23,7 @@ class ReadTool(BaseTool):
     Files can be read for metadata only, full contents, or specific line ranges.
     """
 
-    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/read"])
+    subcommands: ClassVar[list[str]] = ["/read"]
     # metadata_only is required in the LLM contract; default it for the CLI so
     # `/read <path>` reads content without forcing an explicit --metadata_only.
     cli_defaults: ClassVar[dict] = {"metadata_only": False}

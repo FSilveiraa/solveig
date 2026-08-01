@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
-from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
 class DeleteTool(BaseTool):
     """Permanently delete a file or directory."""
 
-    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/delete"])
+    subcommands: ClassVar[list[str]] = ["/delete"]
 
     path: CliPositionalArg[str] = Field(
         description="Path of file/directory to permanently delete (supports ~ for home directory)."

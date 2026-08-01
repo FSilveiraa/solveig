@@ -9,7 +9,6 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
-from solveig.subcommands.base import Subcommand
 from solveig.tools.base import (
     BaseTool,
     ConsentDecision,
@@ -50,7 +49,7 @@ class HttpTool(BaseTool[HttpConfig]):
     Use output_file to download binary content to disk.
     """
 
-    subcommand: ClassVar[Subcommand] = Subcommand(commands=["/http"])
+    subcommands: ClassVar[list[str]] = ["/http"]
 
     url: CliPositionalArg[str] = Field(description="URL to send the request to.")
     method: str = Field(

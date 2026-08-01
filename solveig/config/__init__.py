@@ -30,7 +30,6 @@ DEFAULT_PLUGIN_PATHS: list[str] = [
 ]
 
 from .config import (  # noqa: E402 — after the static defaults above so .config can import them back
-    CLI_SETTINGS_OPTS,
     ConfigObserver,
     SolveigConfig,
     display_config_value,
@@ -38,7 +37,6 @@ from .config import (  # noqa: E402 — after the static defaults above so .conf
 from .models import MCPServerConfig  # noqa: E402
 
 __all__ = [
-    "CLI_SETTINGS_OPTS",
     "SolveigConfig",
     "ConfigObserver",
     "MCPServerConfig",
