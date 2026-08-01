@@ -109,6 +109,15 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     # args don't map cleanly to a CLI line (e.g. `tasks`, `write`) leave it empty.
     subcommands: ClassVar[list[str]] = []
 
+    # Whether this tool's group folds itself away once the call finishes (subject
+    # to `interface.auto_collapse_tools`). False for a tool whose output IS the
+    # point of the call rather than a record of it — a task plan is meant to stay
+    # on screen. Declared here rather than as an `isinstance` check inside the
+    # execution seam: that made the posture a privilege of one core class, so no
+    # plugin could ask for it, and it was the last name the seam held that
+    # belonged to a specific tool.
+    auto_collapse: ClassVar[bool] = True
+
     # Per-tool default values merged in *under* the CLI-parsed ones in
     # `from_cli_tokens`. For a field that's required in the LLM contract but
     # shouldn't be mandatory when typed by a user (e.g. `read.metadata_only`),

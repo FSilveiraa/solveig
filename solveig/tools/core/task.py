@@ -6,7 +6,7 @@ task plan is just another tool the assistant calls whenever it wants to
 show/update one - same shape as every other tool.
 """
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,9 @@ class Task(BaseModel):
 
 class TasksTool(BaseTool):
     """Display the current task plan, replacing whatever was shown before."""
+
+    # The plan is the point of the call and stays readable after it finishes.
+    auto_collapse: ClassVar[bool] = False
 
     tasks: list[Task] = Field(
         description=(

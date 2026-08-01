@@ -46,7 +46,6 @@ from solveig.interface.base import SolveigInterface
 from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
-from solveig.tools.core.task import TasksTool
 from solveig.tools.result import ToolResult
 
 
@@ -58,9 +57,9 @@ def open_tool_group(
     auto_collapse: bool = True,
 ):
     """Open a tool call's collapsible group with the shared auto-collapse policy:
-    the config toggle AND the caller's own opt-out (e.g. Tasks never auto-
-    collapse). The single place the group + auto_collapse convention lives for
-    both the typed and untyped execution paths below."""
+    the config toggle AND the caller's own opt-out (a tool declares its own via
+    `BaseTool.auto_collapse`). The single place the group + auto_collapse
+    convention lives for both the typed and untyped execution paths below."""
     return interface.with_group(
         title, auto_collapse=config.interface.auto_collapse_tools and auto_collapse
     )
@@ -92,7 +91,7 @@ async def run_tool_and_hooks(
         interface,
         instance.title,
         config,
-        auto_collapse=not isinstance(instance, TasksTool),
+        auto_collapse=instance.auto_collapse,
     ) as group:
         # Intent first (file header, command text, URL) so a @before hook's
         # prompt appears with the operation already visible above it.
