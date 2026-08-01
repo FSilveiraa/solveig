@@ -228,9 +228,11 @@ async def load_plugins():
     default and tests must opt-in to loading them.
     """
 
-    # The factory function that will be yielded to the test
-    async def _loader(config: SolveigConfig):
-        discover_plugins(config)
+    # The factory function that will be yielded to the test. Takes the plugin
+    # search paths, matching discover_plugins - passing a whole config stopped
+    # working when discovery was narrowed to the one setting it uses.
+    async def _loader(paths: list[str] | None = None):
+        discover_plugins(paths or [])
 
     yield _loader
 

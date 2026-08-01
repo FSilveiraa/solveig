@@ -15,23 +15,31 @@ including `orchestration`, which `plugins.tools` imports back for `@tool`.
 from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 
-from .hooks import clear_hooks, hooks_config_map, load_and_filter_plugin_hooks
+from .hooks import clear_hooks, hooks_config_map
 from .subcommands import clear_subcommands
-from .tools import (
-    PLUGIN_TOOLS,
-    clear_tools,
-    load_and_filter_plugin_tools,
-    plugin_tool_name,
-)
-from .utils import register_external_plugin_paths
+from .tools import PLUGIN_TOOLS, clear_tools, plugin_tool_name
+from .utils import register_external_plugin_paths, rescan_and_load_plugins
+
+#: The one package the scan walks. External dirs are folded into its `__path__`,
+#: so a bundled and an external plugin are indistinguishable from here on.
+PLUGIN_PACKAGE = "solveig.plugins.library"
 
 
 def discover_plugins(paths: list[str]) -> list[str]:
-    """Discover all plugin tools + hooks into their registries — idempotent and
-    UI-free. Folds the external dirs in `paths` into the built-in packages
-    first, then scans. Returns discovery error messages; the caller surfaces
+    """Load every plugin into the registries it declares into — idempotent and
+    UI-free. Folds the external dirs in `paths` into the library package first,
+    then scans it once. Returns discovery error messages; the caller surfaces
     them (via `report_plugins`). Kept reporting-free so discovery can run
     before the interface exists.
+
+    ONE scan, not one per surface. A plugin declares tools, hooks and
+    subcommands with decorators, and a decorator does not care where the file
+    sits — so scanning per surface only meant a plugin wanting two of them had
+    to be two files, imported by two passes and cleared by two calls.
+
+    Every registry is emptied before the scan, never inside a loader: the scan
+    re-imports each module and every decorator fires again, so anything left
+    behind would be a duplicate.
 
     NOTE: takes the paths, NOT the config. Discovery needs exactly this one
     list, and asking for the whole config meant startup had to build a config
@@ -40,12 +48,8 @@ def discover_plugins(paths: list[str]) -> list[str]:
     signature is what lets `SolveigConfig` be built once, fully composed.
     """
     register_external_plugin_paths(paths)
-    # Before the loaders, not inside one: a rescan re-imports every plugin
-    # module and every decorator fires again, and a module declaring a
-    # subcommand may be scanned as either a tool or a hook.
-    clear_subcommands()
-    errors = load_and_filter_plugin_tools()
-    errors += load_and_filter_plugin_hooks()
+    clear_plugins()
+    _succeeded, _failed, errors = rescan_and_load_plugins(PLUGIN_PACKAGE)
     return errors
 
 
@@ -89,6 +93,9 @@ async def report_plugins(
 
 
 def clear_plugins() -> None:
+    """Empty every registry a plugin can declare into. Run before each scan (and
+    in tests) — one call, because a plugin is one file that may have declared
+    into all three."""
     clear_hooks()
     clear_tools()
     clear_subcommands()

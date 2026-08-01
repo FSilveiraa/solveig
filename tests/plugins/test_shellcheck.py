@@ -1,8 +1,8 @@
-"""Tests for the shellcheck hook plugin (`solveig/plugins/hooks/shellcheck.py`).
+"""Tests for the shellcheck hook plugin (`solveig/plugins/library/shellcheck.py`).
 
 `shellcheck` is a plain `@before(tools=(CommandTool,))`-decorated function -
 registered under `CommandTool.tool_name()` ("command") in the `BEFORE_HOOKS`
-registry (`solveig/plugins/hooks/__init__.py`). Raising from it
+registry (`solveig/plugins/hooks.py`). Raising from it
 (`SecurityError`/`ValidationError`) blocks the call - there's no result
 object to inspect for "was this blocked", just `pytest.raises(...)`.
 
@@ -22,13 +22,9 @@ import pytest
 from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
-from solveig.plugins.hooks import (
-    BEFORE_HOOKS,
-    clear_hooks,
-    load_and_filter_plugin_hooks,
-    plugin_name,
-)
-from solveig.plugins.hooks.shellcheck import is_obviously_dangerous, shellcheck
+from solveig.plugins.discovery import discover_plugins
+from solveig.plugins.hooks import BEFORE_HOOKS, clear_hooks, hook_name
+from solveig.plugins.library.shellcheck import is_obviously_dangerous, shellcheck
 from solveig.tools.core.command import CommandTool
 from solveig.tools.orchestration import run_tool_and_hooks
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -154,17 +150,17 @@ class TestShellcheckDiscoveryAndRegistration:
         clear_hooks()
 
     async def test_registers_as_a_before_hook_on_command(self):
-        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
+        discover_plugins([])
 
-        hook_names = [plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])]
+        hook_names = [hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])]
         assert "shellcheck" in hook_names
 
     async def test_does_not_register_for_other_tools(self):
-        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
+        discover_plugins([])
 
         for tool_name, hooks in BEFORE_HOOKS.items():
             if tool_name != "command":
-                assert not any(plugin_name(hook) == "shellcheck" for hook in hooks)
+                assert not any(hook_name(hook) == "shellcheck" for hook in hooks)
 
 
 @_needs_shellcheck
@@ -182,7 +178,7 @@ class TestShellcheckBlocksCommandThroughOrchestration:
 
     @pytest.mark.no_subprocess_mocking
     async def test_dangerous_command_blocked(self):
-        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
+        discover_plugins([])
         interface = MockInterface()
         instance = CommandTool(command="rm -rf /")
 
@@ -200,7 +196,7 @@ class TestShellcheckBlocksCommandThroughOrchestration:
         even consults it, regardless of what's in the registry."""
         from solveig.tools.core.read import ReadTool
 
-        load_and_filter_plugin_hooks(SHELLCHECK_CONFIG)
+        discover_plugins([])
         interface = MockInterface(choices=[1])  # decline to send metadata
         instance = ReadTool(path=str(tmp_path), metadata_only=True)
 

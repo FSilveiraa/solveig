@@ -1,25 +1,24 @@
 """Registry for dynamically discovered plugin tools.
 
 Unlike core tools (hand-listed in `CORE_TOOLS`, no marker needed), plugin tools
-are found by scanning modules at runtime (`load_and_filter_plugin_tools`), so
-there's no static list anyone edits by hand. `@tool` is that missing piece: a
+are found by scanning `solveig.plugins.library` at runtime (`discover_plugins`),
+so there's no static list anyone edits by hand. `@tool` is that missing piece: a
 plugin author's only job is to decorate their tool so it self-registers into
-`PLUGIN_TOOLS` — pure bookkeeping, no signature rewriting.
+`PLUGIN_TOOLS` — and, if it declared trigger names, into the plugin subcommand
+store at the same moment.
 
 `PLUGIN_TOOLS` mirrors `CORE_TOOLS`'s shape: a plain list. Its elements are
 `BaseTool` subclasses (typed config via `settings()`, like core) OR
 `FunctionTool` wrappers around plain callables — both kinds carry a DECLARED
 `config_model`, so schema compose reads `entry.config_model` directly (no
-getattr fallback, no stash). `plugin_tool_name` / `plugin_owner` derive
-per-entry facts on demand (name from `tool_name()`/`__name__`, owner from the
-module path) — no separate index.
+getattr fallback, no stash). `plugin_tool_name` derives the dispatch name on
+demand (`tool_name()`/`__name__`) — no separate index.
 """
 
 import warnings
 from collections.abc import Awaitable, Callable
 from typing import Any, cast, overload
 
-from solveig.plugins.utils import rescan_and_load_plugins
 from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.orchestration import tool_subcommand
@@ -117,18 +116,6 @@ def config_model_of(entry: PluginTool) -> type[ToolConfig]:
     return ToolConfig
 
 
-def load_and_filter_plugin_tools() -> list[str]:
-    """Discover plugin tool modules into `PLUGIN_TOOLS` — idempotent and UI-free.
-
-    Returns discovery error messages for the caller to surface; reporting is a
-    separate step, so discovery can run before the interface exists. Plugins
-    register via `@tool` at import; enabled-by-default (gating is decided live
-    at call time, so discovery has no use for config)."""
-    clear_tools()
-    _succeeded, _failed, errors = rescan_and_load_plugins("solveig.plugins.tools")
-    return errors
-
-
 __all__ = [
     "PLUGIN_TOOLS",
     "PluginTool",
@@ -137,5 +124,4 @@ __all__ = [
     "clear_tools",
     "plugin_tool_name",
     "config_model_of",
-    "load_and_filter_plugin_tools",
 ]

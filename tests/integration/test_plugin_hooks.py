@@ -1,4 +1,4 @@
-"""Tests for the hook plugin registry (`solveig/plugins/hooks/__init__.py`).
+"""Tests for the hook plugin registry (`solveig/plugins/hooks.py`).
 
 Replaces the old exception-based `PLUGIN_HOOKS.before`/`.after` list tests
 (`ValidationError`/`SecurityError` stopping a `BaseTool.solve()` call) - that
@@ -6,16 +6,15 @@ whole exception-translation layer is gone. Scope is split from
 `tests/unit/test_toolset.py`, mirroring the tools-side split between
 `test_plugin_tools.py` (registry/discovery) and whatever exercises
 `AvailableTools.rebuild()`'s `FilteredToolset`: this file owns registry
-mechanics (`before`/`after` registration, `plugin_name` derivation,
-`clear_hooks`) and real plugin discovery (`load_and_filter_plugin_hooks` finding
-`shellcheck`/`trafilatura`); `test_toolset.py` already owns
+mechanics (`before`/`after` registration, `hook_name`, `clear_hooks`) and real
+plugin discovery (`discover_plugins` finding `shellcheck`/`trafilatura`); `test_toolset.py` already owns
 `run_tool_and_hooks`'s call-time orchestration (gating, blocking, chaining)
 using a synthetic tool, so that isn't retested here against real hooks.
 
 One architectural note worth keeping visible: like plugin tools
 (`PLUGIN_TOOLS`, `tools/available.py`'s `is_tool_active`), `BEFORE_HOOKS`/
 `AFTER_HOOKS` are never filtered by `config.plugins` at load time -
-`load_and_filter_plugin_hooks()` discovers and registers everything unconditionally
+`discover_plugins()` discovers and registers everything unconditionally
 (hooks self-register via the decorator at import time), and `config.plugins`
 gating happens live, per call, inside `run_tool_and_hooks`
 (`tools/orchestration.py`). So "skipped" here only ever means "not reported
@@ -36,9 +35,7 @@ from solveig.plugins.hooks import (
     after,
     before,
     clear_hooks,
-    load_and_filter_plugin_hooks,
-    plugin_name,
-    registered_plugin_names,
+    hook_name,
 )
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -108,58 +105,15 @@ class TestHookRegistration:
         assert BEFORE_HOOKS == {}
         assert AFTER_HOOKS == {}
 
-    async def test_registered_plugin_names_covers_before_and_after(self):
-        async def before_hook(tool_args, config, interface): ...
-
-        async def after_hook(result, config, interface):
-            return result
-
-        before(tools=("some_tool",))(before_hook)
-        after(tools=("some_tool",))(after_hook)
-
-        # Neither function lives under a `.hooks.` module path (they're
-        # defined inline here), so plugin_name() falls back to the
-        # function's own __name__.
-        assert registered_plugin_names() == {"before_hook", "after_hook"}
-
-
 # ---------------------------------------------------------------------------
-# plugin_name() derivation
-# ---------------------------------------------------------------------------
-
-
-class TestPluginNameDerivation:
-    async def test_derives_name_from_hooks_module_path(self):
-        from solveig.plugins.hooks.shellcheck import shellcheck
-
-        assert plugin_name(shellcheck) == "shellcheck"
-
-    @pytest.mark.no_file_mocking
-    async def test_derives_name_from_hooks_module_path_for_after_hook(self):
-        # trafilatura reads its own settings.cfg on import.
-        from solveig.plugins.hooks.trafilatura import trafilatura
-
-        assert plugin_name(trafilatura) == "trafilatura"
-
-    async def test_falls_back_to_function_name_outside_hooks_package(self):
-        async def a_locally_defined_hook(tool_args, config, interface): ...
-
-        # plugin_name() expects a Hook object; wrap the local function so
-        # the test exercises the fallback-to-__name__ path.
-        from solveig.plugins.hooks import Hook
-        h = Hook(a_locally_defined_hook)
-        assert plugin_name(h) == "a_locally_defined_hook"
-
-
-# ---------------------------------------------------------------------------
-# load_and_filter_plugin_hooks() - discovery and reporting
+# discover_plugins() - discovery and reporting
 # ---------------------------------------------------------------------------
 
 
 class TestLoadAndFilterHooks:
     async def test_hook_registered_regardless_of_config(self):
         """Discovery/registration is unconditional — hooks self-register at import,
-        and load_and_filter_plugin_hooks just rescans + returns errors."""
+        and discover_plugins just rescans + returns errors."""
         async def my_hook(tool_args, config, interface): ...
 
         def fake_rescan(path):
@@ -168,9 +122,9 @@ class TestLoadAndFilterHooks:
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
-            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
+            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            errors = load_and_filter_plugin_hooks(config)
+            errors = discover_plugins([])
 
         assert errors == []  # no import errors
         assert len(BEFORE_HOOKS["some_tool"]) == 1
@@ -188,9 +142,9 @@ class TestLoadAndFilterHooks:
             plugins={"hooks": {"my_hook": {}}},
         )
         with patch(
-            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
+            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            errors = load_and_filter_plugin_hooks(config)
+            errors = discover_plugins([])
 
         # Registration is unconditional; gating is live in run_tool_and_hooks.
         assert errors == []
@@ -205,9 +159,9 @@ class TestLoadAndFilterHooks:
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
-            "solveig.plugins.hooks.rescan_and_load_plugins", side_effect=fake_rescan
+            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
         ):
-            errors = load_and_filter_plugin_hooks(config)
+            errors = discover_plugins([])
 
         # Registration is always unconditional — hooks register regardless.
         assert errors == []
@@ -222,10 +176,10 @@ class TestLoadAndFilterHooks:
             api={"url": "test-url", "key": "test-key"},
             plugins={"some_other_plugin": {}},
         )
-        load_and_filter_plugin_hooks(config=config)
+        discover_plugins([])
 
-        before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
-        after_names = {plugin_name(hook) for hook in AFTER_HOOKS.get("http", [])}
+        before_names = {hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
+        after_names = {hook_name(hook) for hook in AFTER_HOOKS.get("http", [])}
         assert "shellcheck" in before_names
         assert "trafilatura" in after_names
 
@@ -240,11 +194,11 @@ class TestLoadAndFilterHooks:
         def command_hook_count() -> int:
             return len(BEFORE_HOOKS.get("command", []))
 
-        await load_plugins(config)
+        await load_plugins()
         count_after_first = command_hook_count()
 
-        await load_plugins(config)
-        await load_plugins(config)
+        await load_plugins()
+        await load_plugins()
 
         assert count_after_first > 0
         assert command_hook_count() == count_after_first
@@ -267,9 +221,9 @@ class TestInitializePlugins:
             api={"url": "test-url", "key": "test-key"},
             plugins={"some_other_plugin": {}},
         )
-        discover_plugins(config=config)
+        discover_plugins([])
 
-        before_names = {plugin_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
+        before_names = {hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
         assert "shellcheck" in before_names
 
         clear_plugins()

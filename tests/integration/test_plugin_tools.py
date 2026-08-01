@@ -6,13 +6,9 @@ import pytest
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
-from solveig.plugins.tools import (
-    PLUGIN_TOOLS,
-    config_model_of,
-    load_and_filter_plugin_tools,
-    plugin_tool_name,
-)
-from solveig.plugins.tools.tree import TreeTool
+from solveig.plugins.discovery import discover_plugins
+from solveig.plugins.library.tree import TreeTool
+from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
 from solveig.tools.base import ToolConfig
 
 pytestmark = pytest.mark.anyio
@@ -42,10 +38,10 @@ class TestToolPluginFiltering:
             cli_args=[], api={"url": "http://x", "key": "k"}
         )
         with patch(
-            "solveig.plugins.tools.rescan_and_load_plugins",
+            "solveig.plugins.discovery.rescan_and_load_plugins",
             side_effect=fake_rescan,
         ):
-            load_and_filter_plugin_tools(config)
+            discover_plugins([])
 
         names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
         assert "my_tool_fn" in names
@@ -65,10 +61,10 @@ class TestToolPluginFiltering:
             cli_args=[], api={"url": "http://x", "key": "k"}
         )
         with patch(
-            "solveig.plugins.tools.rescan_and_load_plugins",
+            "solveig.plugins.discovery.rescan_and_load_plugins",
             side_effect=fake_rescan,
         ):
-            load_and_filter_plugin_tools(config)
+            discover_plugins([])
 
         assert len(PLUGIN_TOOLS) == 1
         assert plugin_tool_name(PLUGIN_TOOLS[0]) == "my_tool_fn"
@@ -83,7 +79,7 @@ class TestToolPluginFiltering:
             api={"url": "test-url", "key": "test-key"},
             plugins={"tools": {"tree": {}}},
         )
-        load_and_filter_plugin_tools(config)
+        discover_plugins([])
 
         names = [plugin_tool_name(t) for t in PLUGIN_TOOLS]
         assert "tree" in names

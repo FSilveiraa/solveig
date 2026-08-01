@@ -5,27 +5,27 @@ import sys
 
 
 def register_external_plugin_paths(paths: list[str]) -> None:
-    """Fold external plugin dirs (`config.plugins.paths`) into the built-in
-    packages' `__path__`, so the existing `pkgutil`-based scan discovers them with
-    no extra machinery — external modules import as `solveig.plugins.tools.<name>`
-    / `solveig.plugins.hooks.<name>`, so reload/unload and owner-name derivation
-    all keep working. Convention: a plugin dir holds `tools/` and/or `hooks/`
-    subdirs. Idempotent (skips already-registered dirs).
+    """Fold external plugin dirs (`config.plugins.paths`) into the library
+    package's `__path__`, so the existing `pkgutil`-based scan discovers them
+    with no extra machinery — an external module imports as
+    `solveig.plugins.library.<name>` and gets the same reload/unload treatment a
+    bundled plugin does. Idempotent (skips already-registered dirs).
+
+    A plugin dir holds plugin FILES, with no per-surface subdirectories: what a
+    module declares is decided by the decorators it uses, so `tools/` and
+    `hooks/` sorted nothing and split a plugin that wanted to be both.
 
     Directory probing here uses `os.path` directly, not `Filesystem`: this is
     import-system plumbing (like `pkgutil`/`importlib` already are for the built-in
     scan), not a tool/assistant file operation, so it's outside Filesystem's remit."""
-    # Local imports: utils is imported BY these packages, so importing them at
+    # Local import: utils is imported BY the plugin machinery, so importing at
     # module level would cycle.
-    import solveig.plugins.hooks as hooks_pkg
-    import solveig.plugins.tools as tools_pkg
+    import solveig.plugins.library as library
 
     for base in paths:
-        base = os.path.expanduser(base)
-        for subdir, package in (("tools", tools_pkg), ("hooks", hooks_pkg)):
-            path = os.path.join(base, subdir)
-            if os.path.isdir(path) and path not in package.__path__:
-                package.__path__.append(path)
+        path = os.path.expanduser(base)
+        if os.path.isdir(path) and path not in library.__path__:
+            library.__path__.append(path)
 
 
 def rescan_and_load_plugins(plugin_module_path: str) -> tuple[int, int, list[str]]:
