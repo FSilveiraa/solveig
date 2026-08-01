@@ -259,7 +259,15 @@ class SolveigConfig(BaseSettings):
         shape of the object described by the very notification in flight. Rare
         enough to document rather than engineer around; if it spreads, the
         answer is to defer the recomposition, not to reorder this loop.
+
+        NOTE: handlers are isolated from each other — one that raises no longer
+        cancels the ones after it. Plugin reload subscribes here, so a handler
+        now runs filesystem I/O and arbitrary plugin code; without isolation one
+        bad plugin would stop the stats bar and the theme from updating. The
+        failures are re-raised together afterwards rather than swallowed: every
+        observer gets its turn AND nothing goes quiet.
         """
+        failures: list[Exception] = []
         for handler, filter_paths in list(self._observers):
             # An observer that named no paths hears about everything. One that
             # did hears only its own matches — which may be exact
@@ -274,7 +282,12 @@ class SolveigConfig(BaseSettings):
                 else paths
             )
             if paths_to_notify:
-                await handler(self, paths_to_notify)
+                try:
+                    await handler(self, paths_to_notify)
+                except Exception as e:  # noqa: BLE001 - isolation, see above
+                    failures.append(e)
+        if failures:
+            raise ExceptionGroup("config observers failed", failures)
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
         """Decorator: register a callback for the given dotted *paths, which may
@@ -477,6 +490,28 @@ class SolveigConfig(BaseSettings):
             PreservingSection,
         )
         cls.model_rebuild(force=True)
+
+    def rebuild_plugin_sections(self) -> None:
+        """Re-validate the live plugin sections against the classes a recompose
+        just installed. Call after `compose_plugin_tools`/`compose_plugin_hooks`
+        on an already-built config — i.e. on a plugin reload; startup composes
+        before anything is built and needs this not at all.
+
+        Recomposition swaps the CLASS behind `plugins.tools`/`plugins.hooks`, so
+        a live instance keeps holding objects of the previous class. The fix is
+        NOT to build a fresh SolveigConfig: every `@config.on_change` observer
+        is registered against this object, and replacing it would leave them
+        subscribed to a corpse. So the sections are rebuilt and `self` survives.
+
+        Dumping and re-validating carries the configured values across and
+        routes a block whose plugin just disappeared into `model_extra`, where
+        PRESERVE keeps it for `/config save`.
+        """
+        for section in ("tools", "hooks"):
+            composed = PluginsConfig.model_fields[section].annotation
+            assert composed is not None  # just installed by _compose_section
+            current = getattr(self.plugins, section)
+            setattr(self.plugins, section, composed(**current.model_dump()))
 
     # ------------------------------------------------------------
     # Explicitly declared config fields
