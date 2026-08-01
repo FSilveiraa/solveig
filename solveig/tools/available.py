@@ -25,8 +25,8 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.plugins.tools import PLUGIN_TOOLS
-from solveig.tools import CORE_TOOLS
 from solveig.tools.base import BaseTool
+from solveig.tools.core import CORE_TOOLS
 
 
 def _as_callable(tool: Any) -> Any:

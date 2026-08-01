@@ -3,8 +3,7 @@ they register into.
 
 Lives here, in the plugins package, so a hook plugin author imports the
 decorators from their own package (`from solveig.plugins.hooks import before,
-after`, or `from solveig.plugins import before, after`) instead of reaching
-into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
+after`) instead of reaching into tools internals - mirroring `PLUGIN_TOOLS`/`tool` in
 `plugins/tools/__init__.py`. The consumer on the tools side is
 `build_tool_execution_capability()` (`solveig/tools/available.py`): it reads
 `BEFORE_HOOKS`/`AFTER_HOOKS` at call time to run the registered hooks around a

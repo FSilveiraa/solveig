@@ -208,10 +208,6 @@ async def run_async(
         user_message_queue=user_message_queue,
     )
 
-    # Every other source has written its subcommands into its own store as it
-    # was declared; the core tool list is the one that needs a pass.
-    startup_warnings += tuple(bootstrap.register_core_tool_subcommands())
-
     # Changing where plugins are LOADED FROM changes the plugin set, so it has
     # to reload — until now `/config set plugins.paths` did nothing until the
     # next restart, which is a setting that lies. Enablement is deliberately NOT

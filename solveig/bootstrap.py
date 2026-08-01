@@ -22,12 +22,10 @@ import warnings
 
 from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
-from solveig.plugins import discover_plugins, report_plugins
+from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
-from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
-from solveig.tools import CORE_TOOLS
-from solveig.tools.orchestration import tool_subcommand
+from solveig.tools.core import CORE_TOOLS
 
 
 def compose_core_tools() -> None:
@@ -47,22 +45,6 @@ def compose_plugin_tools() -> None:
 def compose_plugin_hooks() -> None:
     """Feed config the discovered hooks. Call after `discover_plugins`."""
     SolveigConfig.compose_plugin_hooks(list(hooks_config_map().items()))
-
-
-def register_core_tool_subcommands() -> list[str]:
-    """Build the core tools' `/commands` and fill their store; returns any
-    collision warnings.
-
-    The one source that cannot register itself as it is declared: `CORE_TOOLS`
-    is a list in `solveig/tools/__init__.py`, and building a handler there means
-    importing `orchestration`, which imports back through that same package.
-    Plugins have no such problem — `@tool` writes its command as it registers
-    the tool — so this is the only pass left, and it runs once.
-    """
-    return SUBCOMMANDS.register(
-        CORE_TOOL_SUBCOMMANDS,
-        [sub for tool in CORE_TOOLS if (sub := tool_subcommand(tool)) is not None],
-    )
 
 
 async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:

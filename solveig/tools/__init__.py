@@ -1,45 +1,13 @@
-"""Core tools the LLM can call, registered on a pydantic-ai FunctionToolset.
+"""Tools the LLM can call.
 
-All 9 core tools are declarative `BaseTool` subclasses (Phase 5) - see
-`solveig/tools/base.py`. `available.build_toolset()` calls `.as_tool()` on each
-to build the pydantic-ai-facing callable.
+Deliberately EMPTY, and it must stay that way. A package's `__init__` runs
+whenever ANY module under it is imported, so a re-export here merges the whole
+package into one graph node: asking for the leaf `solveig.tools.base` would
+load the tool list and everything it needs. `plugins.hooks` imports that leaf
+and `orchestration` imports `plugins.hooks`, so the re-export put `tools/` in
+the middle of a cycle it has no part in.
+
+Import from the real module: `solveig.tools.core` for `CORE_TOOLS` and the tool
+classes, `solveig.tools.base` for `BaseTool`, `solveig.tools.result` for
+`ToolResult`.
 """
-
-from .base import BaseTool
-from .core.command import CommandTool
-from .core.copy import CopyTool
-from .core.delete import DeleteTool
-from .core.edit import EditTool
-from .core.http import HttpTool
-from .core.move import MoveTool
-from .core.read import ReadTool
-from .core.task import TasksTool
-from .core.write import WriteTool
-from .result import ToolResult
-
-CORE_TOOLS: list[type[BaseTool]] = [
-    ReadTool,
-    WriteTool,
-    EditTool,
-    DeleteTool,
-    CopyTool,
-    MoveTool,
-    CommandTool,
-    HttpTool,
-    TasksTool,
-]
-
-__all__ = [
-    "CORE_TOOLS",
-    "BaseTool",
-    "ToolResult",
-    "ReadTool",
-    "WriteTool",
-    "EditTool",
-    "DeleteTool",
-    "CopyTool",
-    "MoveTool",
-    "CommandTool",
-    "HttpTool",
-    "TasksTool",
-]
