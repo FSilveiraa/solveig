@@ -29,6 +29,12 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
 from solveig.session.conversation import Conversation
+
+# NOTE: runtime import, not TYPE_CHECKING - `SessionManager` is a KEY in the
+# injectable-deps dict below, i.e. a runtime value, not just an annotation.
+# Under TYPE_CHECKING it resolved fine for mypy and raised NameError the moment
+# a registry was constructed.
+from solveig.session.manager import SessionManager
 from solveig.subcommands.base import (
     BUILTIN_SUBCOMMANDS,
     SUBCOMMANDS,
@@ -37,7 +43,6 @@ from solveig.subcommands.base import (
 )
 
 if TYPE_CHECKING:
-    from solveig.session.manager import SessionManager
     from solveig.user_message_queue import UserMessageQueue
 
 
