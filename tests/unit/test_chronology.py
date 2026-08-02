@@ -143,6 +143,40 @@ async def test_no_comment_leaves_the_canonical_parts_untouched():
     ]
 
 
+async def test_comment_on_a_step_that_ran_no_tools_still_reaches_the_model():
+    """The other drain site. A comment can arrive when there is no tool
+    boundary to place it behind — a step whose response was pure text, or one
+    typed after the last tool already finished. Those drain at
+    `before_model_request` as their own ModelRequest instead.
+
+    That is not a second ordering rule: with nothing to interleave between,
+    "after everything" is the only chronological position, and pydantic-ai's
+    `_merge_consecutive_messages` folds the adjacent requests into one on the
+    wire anyway (tool returns first, which is what providers require)."""
+    config = _config()
+    conversation = Conversation()
+    inbox = UserMessageQueue()
+    inbox.put_nowait("no tools were harmed")
+
+    async def text_only(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        return ModelResponse(parts=[TextPart("nothing to do")])
+
+    agent = build_agent(
+        config, client=None, system_prompt="sys", model=FunctionModel(text_only)
+    )
+    deps = SolveigContext(config=config, interface=MockInterface(choices=[0] * 10))
+    await run_turn(agent, conversation, deps, "go", inbox)
+
+    prompts = [
+        part.content
+        for message in conversation.messages
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, UserPromptPart)
+    ]
+    assert prompts == ["go", "no tools were harmed"]
+
+
 async def test_call_tools_node_streams_a_result_event_per_tool():
     """Pinned external invariant. Placing a comment between two tool results
     requires learning that tool 1 finished BEFORE tool 2 starts, and the only
