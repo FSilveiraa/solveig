@@ -43,6 +43,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
+from pydantic_graph import End
 
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
@@ -117,11 +118,9 @@ def build_loop_capability() -> Hooks[SolveigContext]:
     """Build the per-agent capability driving the (non-stream) model-request
     animation via the `model_request` hook.
 
-    Only `model_request` (and the tool-execute capability's `tool_execute`)
-    survive under `agent.iter()` - the graph node-lifecycle hooks
-    (`before_node_run`/`after_node_run`) do NOT fire in iter mode, so response
-    display and the autonomy/interleave logic live in `run_turn`'s explicit
-    loop instead, not here."""
+    Stateless, so it lives on the Agent. The concerns that need THIS run's
+    conversation state (reconciliation, the autonomy gate) are a separate
+    per-run capability - `build_run_capability` below."""
     hooks: Hooks[SolveigContext] = Hooks()
 
     @hooks.on.model_request
@@ -215,6 +214,57 @@ def _drain_user_comments(inbox: UserMessageQueue) -> list[str]:
             return comments
 
 
+def build_run_capability(
+    reconciler: _Reconciler, inbox: UserMessageQueue
+) -> Hooks[SolveigContext]:
+    """Per-RUN capability: the two concerns that need this run's conversation
+    state. Passed to `agent.iter(capabilities=[...])`, which merges it with the
+    Agent's own — so neither `SolveigContext` nor `build_agent` has to grow a
+    field for state that only exists once a run is under way.
+
+    `before_model_request` is the autonomy gate's real home: "ask before sending
+    this to the assistant". The old gate sat on the tool-round boundary and had
+    to INFER that a request was coming (a node that ran tool calls is always
+    followed by one); here it simply holds the request. It also fires on a step
+    that ran no tools, which the inference could never cover.
+
+    `after_node_run` fires only because the loop drives with `run.next()`; bare
+    `async for` uses the graph's internal iteration and skips every node hook.
+    """
+    hooks: Hooks[SolveigContext] = Hooks()
+
+    @hooks.on.before_model_request
+    async def hold_and_deliver(
+        ctx: RunContext[SolveigContext], request_context: Any
+    ) -> Any:
+        comments: list[str] = []
+        # Every step but the run's first - the user typed that prompt, there is
+        # nothing to confirm. `run_step` is already incremented when this fires.
+        if ctx.deps.config.disable_autonomy and ctx.run_step > 1:
+            comments.append(await _hold_for_autonomy(ctx.deps, inbox))
+        # Always-on drain: anything typed while tools ran, or while the gate was
+        # blocked, rides out with this request in any autonomy mode.
+        comments.extend(_drain_user_comments(inbox))
+        if comments:
+            message = ModelRequest(
+                parts=[UserPromptPart(content=comment) for comment in comments]
+            )
+            # Both lists, mirroring pydantic-ai's own PendingMessageDrainCapability:
+            # `request_context.messages` is what this step sends, `ctx.messages`
+            # is the history that outlives it. Appending to only one either
+            # loses the comment after this step or hides it from the model now.
+            request_context.messages.append(message)
+            ctx.messages.append(message)
+        return request_context
+
+    @hooks.on.after_node_run
+    async def reconcile(ctx: RunContext[SolveigContext], *, node: Any, result: Any):
+        await reconciler.sync(ctx.messages)
+        return result
+
+    return hooks
+
+
 async def run_turn(
     agent: Agent[SolveigContext, str],
     conversation: Conversation,
@@ -222,17 +272,27 @@ async def run_turn(
     prompt: str,
     inbox: UserMessageQueue,
 ) -> None:
-    """Core-owned per-turn loop. pydantic-ai remains the engine (model I/O,
-    tool schemas + execution, consent via the tool_execute capability); this
-    loop owns reconciliation into the reactive Conversation and the autonomy
-    pause / interjection as plain lines.
+    """Drive one run. pydantic-ai is the engine (model I/O, tool schemas + tool
+    execution, consent via the tool_execute capability) and now also owns the
+    lifecycle: reconciliation and the autonomy gate are hooks
+    (`build_run_capability`), not lines here. What is left is the one thing no
+    hook can express - streaming a response into a live Conversation entry with
+    the READER cancellable.
+
+    Driven by `run.next()`, not `async for`. Bare iteration uses the graph's
+    internal stepping, which fires no node hooks at all; `next()` runs the full
+    `before_node_run` -> `wrap_node_run` -> `after_node_run` lifecycle, which is
+    what lets reconciliation live in a hook. (`before_node_run` therefore fires
+    AFTER a streamed node was consumed here. Nothing registers it - the
+    framework's own `run_stream` has the same ordering and reaches for a private
+    method to avoid it.)
 
     The user's prompt is appended up front so it renders instantly (optimistic
-    echo) rather than only when the model run surfaces it. pydantic-ai creates
-    its own equal-content request object for the prompt during the run;
-    `reconcile()` folds that into the echo's id so `adopt` never mounts a
-    duplicate. Everything else adopts by object identity, and a finally adopts
-    once more so a mid-run cancel commits whatever completed (spec §8)."""
+    echo) rather than only when the run surfaces it. pydantic-ai creates its own
+    equal-content request object for the prompt during the run; `_Reconciler`
+    folds that into the echo's id so `adopt` never mounts a duplicate.
+    Everything else adopts by object identity, and a finally syncs once more so
+    a mid-run cancel commits whatever completed (spec §8)."""
     echo_id = await conversation.append(
         ModelRequest(parts=[UserPromptPart(content=prompt)])
     )
@@ -244,13 +304,15 @@ async def run_turn(
         message_history=history,
         usage=conversation.usage,
         deps=deps,
+        capabilities=[build_run_capability(reconciler, inbox)],
     ) as run:
 
         async def sync() -> None:
             await reconciler.sync(run.all_messages())
 
         try:
-            async for node in run:
+            node = run.next_node
+            while not isinstance(node, End):
                 if deps.config.interface.stream and Agent.is_model_request_node(node):
                     try:
                         async with _thinking(
@@ -271,15 +333,8 @@ async def run_turn(
                         finished = run.all_messages()
                         if finished and isinstance(finished[-1], ModelResponse):
                             await conversation.finalize_stream(finished[-1])
-                    continue
 
-                # A CallToolsNode is the tool-round boundary. `run.next_node`
-                # gives no lookahead in this loop (it mirrors the current node),
-                # but a node that actually ran tool calls is *always* followed by
-                # another model request, and a no-tool-call one goes straight to
-                # End - so the response's tool calls tell us "more is coming"
-                # without a peek.
-                if Agent.is_call_tools_node(node):
+                elif Agent.is_call_tools_node(node):
                     # Swap the streamed (throwaway) object for pydantic-ai's
                     # canonical response under the same id, so adopt won't
                     # re-append it. No-op when streaming is off. The reactive
@@ -287,46 +342,12 @@ async def run_turn(
                     # when adopt appends it - no imperative display here; the
                     # tool groups then render live inside the tool_execute hook.
                     await conversation.finalize_stream(node.model_response)
-                    await sync()
-                    await _hold_and_drain(
-                        deps,
-                        run,
-                        inbox,
-                        tools_ran=_response_has_tool_calls(node.model_response),
-                    )
-                    continue
 
-                await sync()
+                # Advancing fires the node hooks, so reconciliation happens on
+                # the way out of every node without a call here.
+                node = await run.next(node)
         finally:
             await sync()
-
-
-def _response_has_tool_calls(response: ModelResponse) -> bool:
-    return any(isinstance(part, ToolCallPart) for part in response.parts)
-
-
-async def _hold_and_drain(
-    deps: SolveigContext, run: Any, inbox: UserMessageQueue, *, tools_ran: bool
-) -> None:
-    """Compose the autonomy hold and the comment drain at the tool boundary.
-
-    Only the composition is temporary. `_hold_for_autonomy` is headed for
-    `before_model_request` (where the gate stops having to INFER that a request
-    is coming - it holds one) and `_drain_user_comments` for the per-tool
-    boundary, so this function disappears rather than moving."""
-    # Autonomy pause only mid-work: gate a step that actually ran tools (more is
-    # coming), never the terminal no-tools node (the run is ending, nothing to
-    # confirm). Hold before the drain so it consumes exactly the go-ahead it
-    # waits for - draining first would let the always-on drain steal it and
-    # leave the gate blocked forever.
-    if deps.config.disable_autonomy and tools_ran:
-        run.enqueue(await _hold_for_autonomy(deps, inbox), priority="asap")
-    # Always-on drain: anything typed while tools ran (or while the gate was
-    # blocked) is delivered at the next opportunity, in any autonomy mode -
-    # including a comment that turns a would-be-terminating step into one more
-    # step (priority='asap').
-    for comment in _drain_user_comments(inbox):
-        run.enqueue(comment, priority="asap")
 
 
 async def run_turn_with_retry(

@@ -77,9 +77,14 @@ class RecordingTranscript(ConversationObserver):
         self.mounted[message_id] = _rendered(self.conversation.get(message_id))
         self.events.append(("rerender", message_id))
 
-    async def remove(self, message_id: MessageId) -> None:
-        self.mounted.pop(message_id, None)
-        self.events.append(("remove", message_id))
+    async def remove(self, message_ids: tuple[MessageId, ...]) -> None:
+        """Batched on purpose - a truncation drops a whole tail and a load drops
+        everything, and a real frontend unmounts that in one pass
+        (`SolveigInterface.drop_messages`). One event per id would let a test
+        pass against a frontend that thrashed the widget tree."""
+        for message_id in message_ids:
+            self.mounted.pop(message_id, None)
+        self.events.append(("remove", message_ids))
 
     async def _remove_from(self, message_id: MessageId) -> None:
         # By the time a truncation fires, the entries are already gone from the
@@ -88,8 +93,7 @@ class RecordingTranscript(ConversationObserver):
         ids = list(self.mounted)
         if message_id not in ids:
             return
-        for dropped in ids[ids.index(message_id) :]:
-            await self.remove(dropped)
+        await self.remove(tuple(ids[ids.index(message_id) :]))
 
     # -- conversation events --------------------------------------------------
 
@@ -118,7 +122,7 @@ class RecordingTranscript(ConversationObserver):
         await self._remove_from(message_id)
 
     async def conversation_loaded(self, previous: Conversation) -> None:
-        for dropped in list(self.mounted):
-            await self.remove(dropped)
+        if self.mounted:
+            await self.remove(tuple(self.mounted))
         for message_id in self.conversation.ids:
             await self.mount(message_id)
