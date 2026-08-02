@@ -75,6 +75,19 @@ class Stat:
     def clickable(self) -> bool:
         return self.on_click is not None
 
+    def refresh(self) -> None:
+        """Redraw just this entry.
+
+        The owner holds the stat, so it can say precisely what went stale
+        instead of asking the whole display to re-read - which is the point of
+        `add_stat` handing the object back. A frontend can honour this because
+        it created the stat and knows where it put it.
+
+        No-op by default: a headless interface has nothing to redraw, and a
+        frontend that cannot address one entry may leave it and rely on
+        `refresh_stats()`."""
+        return None
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.label!r})"
 

@@ -20,7 +20,7 @@ from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.config.editor import register_config_stat
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import SolveigInterface, Stat
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import connect_all
@@ -40,6 +40,7 @@ def _register_stats(
     interface: SolveigInterface,
     client: Client,
     conversation: Conversation,
+    usage_stats: list[Stat],
 ) -> None:
     """Declare the stats the app itself owns.
 
@@ -74,7 +75,7 @@ def _register_stats(
 
     register_config_stat(interface, config, "Endpoint", "api.url")
 
-    interface.add_stat(
+    tokens = interface.add_stat(
         "Tokens",
         get=lambda: (conversation.usage.input_tokens, conversation.usage.output_tokens),
         render=lambda t: f"{t[0]}↑ / {t[1]}↓",
@@ -84,7 +85,7 @@ def _register_stats(
 
     # Two sources in one cell, which is exactly what a value-holding stat could
     # not have expressed: usage is pushed, max_context is observed.
-    interface.add_stat(
+    context = interface.add_stat(
         "Context",
         get=lambda: (conversation.usage.input_tokens, config.api.max_context),
         render=lambda c: f"{c[0]} / {c[1] if c[1] else 'Unlimited'}",
@@ -92,7 +93,11 @@ def _register_stats(
 
     @config.on_change("api.max_context")
     async def _max_context_changed(_c: SolveigConfig, _p: frozenset[str]) -> None:
-        interface.refresh_stats()
+        context.refresh()
+
+    # The two usage-driven stats, handed to the loop that knows when a turn
+    # ended. Holding the stats is what lets it redraw exactly those two.
+    usage_stats.extend((tokens, context))
 
     interface.add_stat(
         "MCP",
@@ -127,9 +132,14 @@ async def _display_setup(
     session_manager: SessionManager,
     resume_session: str | None,
     startup_warnings: tuple[str, ...] = (),
+    usage_stats: list[Stat] | None = None,
 ) -> str:
     """Display-dependent setup that runs after the interface is ready.
-    Returns the system prompt."""
+    Returns the system prompt.
+
+    `usage_stats` is filled with the stats that read `conversation.usage`, for
+    the caller to refresh when a turn ends - nothing observes usage, so that
+    push is the only way those two learn."""
     await interface.wait_until_ready()
     await asyncio.sleep(0)
 
@@ -172,7 +182,13 @@ async def _display_setup(
         await client.refresh(config)
 
     await interface.set_status("Ready")
-    _register_stats(config, interface, client, conversation)
+    _register_stats(
+        config,
+        interface,
+        client,
+        conversation,
+        usage_stats if usage_stats is not None else [],
+    )
 
     return sys_prompt
 
@@ -198,6 +214,10 @@ async def main_loop(
     mid-run concern now (see `agent.py`'s `build_loop_capability`), so the
     outer loop's only job is to wait for the next prompt and hand it off.
     """
+    # Filled by _display_setup with the stats that read conversation.usage.
+    # Nothing observes usage, so this loop is what tells them a turn ended -
+    # and holding them is what lets it redraw those two and nothing else.
+    usage_stats: list[Stat] = []
     system_prompt_text = await _display_setup(
         config=config,
         interface=interface,
@@ -206,6 +226,7 @@ async def main_loop(
         session_manager=session_manager,
         resume_session=resume_session,
         startup_warnings=startup_warnings,
+        usage_stats=usage_stats,
     )
 
     while True:
@@ -237,9 +258,10 @@ async def main_loop(
         if not ok:
             continue
 
-        # Tokens changed; the stat reads conversation.usage live, so a
-        # refresh is all that's needed.
-        interface.refresh_stats()
+        # Usage changed. Both stats read conversation.usage live, so this only
+        # has to name which two went stale - the rest of the bar is untouched.
+        for stat in usage_stats:
+            stat.refresh()
 
 
 async def run_async(

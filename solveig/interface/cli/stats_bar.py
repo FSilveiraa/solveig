@@ -4,6 +4,7 @@ import time
 from enum import Enum, auto
 
 from textual.containers import Horizontal
+from textual.coordinate import Coordinate
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import DataTable
@@ -39,6 +40,15 @@ class TextualStat(Stat):
     """
 
     cell: tuple[int, int] | Slot | None = None
+
+    #: The bar drawing this stat, set when it is registered. A frontend object
+    #: holding a frontend widget - it is what lets `refresh()` repaint one cell
+    #: instead of asking the whole bar to re-read.
+    bar: "StatsBar | None" = None
+
+    def refresh(self) -> None:
+        if self.bar is not None:
+            self.bar.refresh_stat(self)
 
 
 class StatsTable(DataTable):
@@ -177,15 +187,38 @@ class StatsBar(Widget):
         coordinates would be a producer deciding a layout it cannot see, and
         would break the moment a frontend arranged things differently."""
         stat.cell = self.PLACEMENT.get(stat.label)
+        stat.bar = self
         self._stats.append(stat)
         self.refresh_stats()
 
     def refresh_stats(self) -> None:
         """Re-read every stat and redraw.
 
-        All of them, not the one that changed: a stat holds no value, so there
-        is nothing to hand over, and with a handful of entries re-reading costs
-        nothing. Per-stat invalidation is a later refinement."""
+        The blunt one, for a caller that does not hold the stat that changed
+        (the command tool moves the shell's directory but never registered the
+        Path stat). An owner holding its stat calls `stat.refresh()` instead."""
+        self._refresh_stats()
+
+    def refresh_stat(self, stat: TextualStat) -> None:
+        """Redraw one entry, leaving the rest of the bar alone.
+
+        A header stat has no row, so it goes through the title. A table stat is
+        found by IDENTITY in the row it was drawn into - not by label or index,
+        so it stays correct if the layout shifts or two stats share a label.
+        Falls back to a full redraw if the stat has not been drawn yet, which is
+        the case between registration and mount."""
+        if stat.cell is Slot.HEADER:
+            self._refresh_title()
+            return
+        if not hasattr(self, "_table1"):
+            return
+        for table in (self._table1, self._table2, self._table3):
+            for row, drawn in enumerate(table.row_stats):
+                if drawn is stat:
+                    table.update_cell_at(
+                        Coordinate(row, 0), f"{stat.label}: {stat.text}"
+                    )
+                    return
         self._refresh_stats()
 
     async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:

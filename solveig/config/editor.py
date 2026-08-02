@@ -345,6 +345,6 @@ def register_config_stat(
         # client correcting a bad model - the display follows the config rather
         # than the edit path, so there is one refresh rule instead of one per
         # writer.
-        interface.refresh_stats()
+        stat.refresh()
 
     return stat
