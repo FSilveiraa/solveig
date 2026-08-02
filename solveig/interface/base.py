@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
@@ -27,6 +27,57 @@ if TYPE_CHECKING:
     from solveig.interface.themes import Palette
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
+
+
+class Stat:
+    """One entry in the stats display, handed out by `add_stat`.
+
+    An INTERFACE concept, deliberately. There is no such thing as a stat nobody
+    renders - unlike a `Conversation`, which earns a domain existence from
+    persistence, replay and the messages it feeds the model, every consumer of a
+    stat is a display. And placement is frontend-specific knowledge: the Textual
+    bar puts the model in a known cell, a web UI might use a side list, so the
+    frontend subclasses this to carry whatever it needs to lay one out. A
+    registry outside the interface would have forced the frontend to identify
+    stats by label or by registration order - a parallel structure to keep in
+    step.
+
+    Holds NO value. `get` reads the live source, so `config.api.model` stays the
+    single home and there is nothing to drift or re-sync. A stat that cached its
+    value would need an observer to keep the copy honest, which is one more
+    thing than the observer that already exists.
+
+    `on_click` takes nothing: whatever it needs (a config, an interface to
+    prompt on) its owner closed over when registering. That is what keeps the
+    behaviour of a config stat inside the config module - the widget calls a
+    callable and never learns what a config is.
+    """
+
+    def __init__(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> None:
+        self.label = label
+        self.get = get
+        self.on_click = on_click
+        #: Value -> text. The OWNER knows a context stat reads "12/128k" or
+        #: "Unlimited"; the frontend only knows where to put the result.
+        self.render = render
+
+    @property
+    def text(self) -> str:
+        value = self.get()
+        return self.render(value) if self.render else str(value)
+
+    @property
+    def clickable(self) -> bool:
+        return self.on_click is not None
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.label!r})"
 
 
 class MutableTextBox:
@@ -450,3 +501,52 @@ class SolveigInterface(ABC):
         duration: float | None = None,
     ) -> None:
         raise NotImplementedError("Subclass must implement _update_stats")
+
+    def add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        """Declare a stat and hand it back.
+
+        The interface CREATES it, so a frontend can return its own subclass
+        carrying whatever it needs to place one (the Textual bar attaches a
+        cell; a web UI might not have the concept). The caller keeps the
+        returned object as its handle - identity is the object, never a name,
+        so a typo cannot address a stat that does not exist and two owners
+        cannot collide.
+
+        The default builds a plain `Stat` and displays nothing, which is what a
+        headless interface should do: declaring a stat must not require a UI.
+        Delegates to the root - there is one stats display, and a scoped
+        interface from `with_group` must not start a second one.
+        """
+        return self._root._add_stat(label, get, on_click, render)
+
+    def _add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        return Stat(label, get, on_click, render)
+
+    def refresh_stats(self) -> None:
+        """Re-read every stat and redraw.
+
+        Deliberately not "this stat changed": a stat holds no value, so there
+        is nothing to hand over, and with a handful of entries re-reading all
+        of them costs nothing. Per-stat invalidation is a later refinement, and
+        it would need the frontend to map a stat to a cell - which it can,
+        since it made the stat.
+
+        Sync, not async: an owner calls it from a config observer or a timer
+        tick, and a redraw should never be something the caller has to await.
+        """
+        self._root._refresh_stats()
+
+    def _refresh_stats(self) -> None:
+        return None

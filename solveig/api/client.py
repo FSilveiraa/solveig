@@ -47,8 +47,15 @@ class Client:
         await self.refresh(config)
 
     async def refresh(self, config: SolveigConfig) -> None:
-        """Build provider from config, fetch model details, atomic swap."""
-        old_model = config.api.model
+        """Build provider from config, fetch model details, atomic swap.
+
+        On failure the model reverts to the last one that actually WORKED, held
+        on `self.model_info` - not to `config.api.model`, which by the time this
+        runs is already the new value the observer fired on. Reading it here
+        made the revert set the failing model back over itself: equal values,
+        so `config.set` returned early, no notification, and the bad name stayed
+        on screen as though it had been accepted."""
+        last_good = self.model_info.model if self.model_info else None
         api_type = config.api.type
         try:
             new_provider = api_type.get_provider(
@@ -59,11 +66,11 @@ class Client:
                 provider=new_provider, model=config.api.model
             )
         except Exception:
-            await config.set("api.model", old_model)
+            await self._revert(config, last_good)
             return
 
         if info is None:
-            await config.set("api.model", old_model)
+            await self._revert(config, last_good)
             return
 
         self.provider = new_provider
@@ -72,6 +79,17 @@ class Client:
         # Apply the model's max context length if the user didn't specify one
         if info.context_length is not None and config.api.max_context is None:
             await config.set("api.max_context", info.context_length)
+
+    @staticmethod
+    async def _revert(config: SolveigConfig, last_good: str | None) -> None:
+        """Put the last working model back, if there was one.
+
+        `None` means nothing has ever resolved (a bad model at startup), so
+        there is nothing to revert TO - leaving the failing name in place is
+        better than blanking the config, and the caller already surfaced the
+        failure."""
+        if last_good is not None:
+            await config.set("api.model", last_good)
 
 
 # ---------------------------------------------------------------------------

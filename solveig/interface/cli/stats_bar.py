@@ -8,25 +8,54 @@ from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import DataTable
 
-from solveig.exceptions import UserCancel
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import SolveigInterface, Stat
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 from solveig.interface.themes import Palette
 from solveig.utils.file import Filesystem
 
 
-class StatsTable(DataTable):
-    """A DataTable carrying the config field each row edits on click (None = read-only)."""
+class TextualStat(Stat):
+    """A stat plus where this frontend puts it.
 
-    def __init__(self, *args, row_fields: list[str | None], **kwargs):
+    `cell` is Textual's business alone: which table and row a stat occupies is
+    meaningless to a web UI that might render the same stats as a side list.
+    Keeping it on the subclass is why the interface hands out stats rather than
+    reading them from a registry - the frontend that placed one can find it
+    again by identity, instead of matching on a label or trusting registration
+    order to line up with a layout table.
+
+    `None` means "wherever it lands": known stats get known cells (see
+    `StatsBar.PLACEMENT`), anything a tool or plugin registers is appended.
+    """
+
+    cell: tuple[int, int] | None = None
+
+
+class StatsTable(DataTable):
+    """A DataTable that remembers which Stat occupies each row, so a click can
+    be routed back to whoever registered it."""
+
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.row_fields = row_fields
+        self.row_stats: list[Stat | None] = []
 
 
 class StatsBar(Widget):
-    """Stats bar with collapsible table content.  Observes config changes
-    reactively; click-to-edit prompts the user then writes through
-    ``config.set()`` — the observer loop handles the display refresh."""
+    """Stats bar with collapsible table content.
+
+    Renders whatever stats were registered and routes a click back to the stat's
+    owner. It knows where the well-known ones belong and nothing about what they
+    mean - no config, no models, no prices."""
+
+    #: Where a well-known stat goes, by label -> (table, row). This frontend's
+    #: knowledge alone: the labels come from whoever registers them, but the
+    #: layout is Textual's, and a web UI rendering the same stats as a side
+    #: list would have no use for it. A stat with no entry here is appended.
+    PLACEMENT: dict[str, tuple[int, int]] = {
+        "URL": (0, 0),
+        "Model": (1, 0),
+        "Context": (1, 1),
+    }
 
     def __init__(
         self,
@@ -55,6 +84,9 @@ class StatsBar(Widget):
         self.input_price: float = 0
         self.output_price: float = 0
         self.mcp_servers: list[str] = []
+        #: Registered stats, in registration order. Placement (PLACEMENT) is
+        #: applied on add; this list is what a redraw walks.
+        self._stats: list[TextualStat] = []
 
     @property
     def tokens(self):
@@ -158,29 +190,50 @@ class StatsBar(Widget):
                     max_context=config.api.max_context,
                 )
 
+    def add_stat(self, stat: TextualStat) -> None:
+        """Take a stat the interface built and show it.
+
+        Placement is decided HERE, not by the caller: a known stat goes in its
+        known cell (`PLACEMENT`), anything else is appended. A caller passing
+        coordinates would be a producer deciding a layout it cannot see, and
+        would break the moment a frontend arranged things differently."""
+        stat.cell = self.PLACEMENT.get(stat.label)
+        self._stats.append(stat)
+        self.refresh_stats()
+
+    def refresh_stats(self) -> None:
+        """Re-read every stat and redraw.
+
+        All of them, not the one that changed: a stat holds no value, so there
+        is nothing to hand over, and with a handful of entries re-reading costs
+        nothing. Per-stat invalidation is a later refinement."""
+        self._refresh_stats()
+
     async def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-        """Clicking an editable stat cell prompts the user then writes through
-        ``config.set()`` — the observer (AppConfigSubscriber) refreshes the display."""
+        """Route a click to whoever registered the stat.
+
+        The widget calls a callable and learns nothing about what it does. It
+        used to prompt and write to config itself, which meant importing
+        `solveig.config.editor` - a frontend reaching up into the domain, and
+        the last standing import-linter violation. What to do about a click is
+        the stat owner's business (`config/stats.py` builds the closure for a
+        config field)."""
         if not isinstance(event.data_table, StatsTable):
             return
-        field_name = event.data_table.row_fields[event.coordinate.row]
+        row = event.coordinate.row
+        stats = event.data_table.row_stats
+        stat = stats[row] if row < len(stats) else None
 
-        interface = self._interface_ref
-        config = self._config
-        if interface is None or config is None:
+        if stat is None or not stat.clickable:
+            interface = self._interface_ref
+            if interface is not None:
+                await interface.update_stats(
+                    status="This stat isn't editable", duration=2
+                )
             return
 
-        if field_name is None:
-            await interface.update_stats(status="This stat isn't editable", duration=2)
-            return
-
-        from solveig.config.editor import prompt_for_field
-
-        try:
-            new_value = await prompt_for_field(field_name, config, interface)
-        except UserCancel:
-            return
-        await config.set(field_name, new_value)
+        assert stat.on_click is not None  # narrowed by `clickable`
+        await stat.on_click()
 
     def update(
         self,

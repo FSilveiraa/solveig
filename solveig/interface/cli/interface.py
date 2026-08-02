@@ -3,7 +3,7 @@
 import asyncio
 import difflib
 import random
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from os import PathLike
 from typing import TYPE_CHECKING, Any
@@ -12,10 +12,11 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
-from solveig.interface.base import MutableTextBox, SolveigInterface
+from solveig.interface.base import MutableTextBox, SolveigInterface, Stat
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
+from solveig.interface.cli.stats_bar import TextualStat
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
@@ -366,6 +367,26 @@ class TerminalInterface(LocalDisplay):
         raising UserCancel - see SolveigInterface.ask_choice."""
         async with self._choice_lock:
             return await self.app.ask_choice(question, choices)
+
+    def _add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        """Build a Textual stat and hand it to the bar.
+
+        Returns `TextualStat`, which carries the placement this frontend needs
+        and another would not - the bar knows the model belongs in a specific
+        cell, a web UI might render a side list. That knowledge stays here
+        rather than being a parameter a caller has to supply."""
+        stat = TextualStat(label, get, on_click, render)
+        self.app._stats_dashboard.add_stat(stat)
+        return stat
+
+    def _refresh_stats(self) -> None:
+        self.app._stats_dashboard.refresh_stats()
 
     async def _update_stats(
         self,
