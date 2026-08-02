@@ -3,6 +3,7 @@ Persistent shell utilities for maintaining session state across command executio
 """
 
 import asyncio
+import contextlib
 from os import PathLike
 
 from solveig.utils.file import Filesystem
@@ -228,3 +229,28 @@ async def stop_persistent_shell() -> None:
     if _shell_instance:
         await _shell_instance.stop()
         _shell_instance = None
+
+
+def get_running_shell() -> PersistentShell | None:
+    """The singleton if one is running, without starting one.
+
+    `get_persistent_shell()` is async and creates on demand, so it cannot answer
+    "is there anything to clean up?" from synchronous code."""
+    return _shell_instance
+
+
+def force_reset_shell() -> None:
+    """Drop the singleton, killing its process outright.
+
+    The graceful path is `stop_persistent_shell()`, which writes `exit` and
+    waits. This exists for the case where awaiting is not possible - notably a
+    process whose original event loop is already closed, where `wait()` cannot
+    complete and the alternative is leaking the subprocess."""
+    global _shell_instance
+    if _shell_instance is None:
+        return
+    proc, _shell_instance.proc = _shell_instance.proc, None
+    _shell_instance = None
+    if proc is not None:
+        with contextlib.suppress(Exception):
+            proc.kill()

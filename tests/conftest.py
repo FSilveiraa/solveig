@@ -3,6 +3,7 @@ pytest configuration and fixtures for Solveig tests.
 Provides automatic mocking of all file I/O operations.
 """
 
+import asyncio
 import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,6 +14,7 @@ from aiohttp.test_utils import TestServer
 
 from solveig.config import SolveigConfig
 from solveig.plugins.discovery import clear_plugins, discover_plugins
+from solveig.utils import shell
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 from tests.mocks import MockInterface
 
@@ -74,11 +76,29 @@ def free_tcp_port() -> int:
 
 
 @pytest.fixture(autouse=True)
-async def clean_shell_state():
-    """Ensure a clean shell state for each test by stopping the singleton."""
+def clean_shell_state():
+    """Ensure a clean shell state for each test by stopping the singleton.
+
+    SYNC, deliberately. An `async` autouse fixture is requested by *every* test
+    including the sync ones, and pytest cannot drive an async fixture for a sync
+    test - it errors at setup with "requested an async fixture with
+    autouse=True, with no plugin or hook that handled it". That single fixture
+    was erroring several hundred otherwise-fine tests.
+
+    Nothing is lost by being sync: the singleton is only ever created by
+    `get_persistent_shell()`, which is async, so a sync test cannot have started
+    a shell and there is nothing for it to clean. An async test that did start
+    one is torn down below, in a fresh loop - `stop()` writes `exit` and waits,
+    and if the process's original loop is gone we fall back to killing it rather
+    than leaking a subprocess into the next test.
+    """
     yield
-    # This code runs *after* each test
-    await stop_persistent_shell()
+    if shell.get_running_shell() is None:
+        return
+    try:
+        asyncio.run(stop_persistent_shell())
+    except Exception:
+        shell.force_reset_shell()
 
 
 # Every real filesystem entry point `Filesystem` (solveig/utils/file.py) reaches
