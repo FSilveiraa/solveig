@@ -64,6 +64,7 @@ class Conversation:
     _entries: dict[MessageId, ModelMessage] = field(default_factory=dict)
     _observers: list[ConversationObserver] = field(default_factory=list)
     _inflight_id: MessageId | None = None
+    _assembly_id: MessageId | None = None
 
     def register_observer(self, observer: ConversationObserver) -> None:
         """Observers self-register in their own constructor (see
@@ -189,7 +190,10 @@ class Conversation:
         just read."""
         previous = self._snapshot()
         self._entries = {str(uuid.uuid4()): message for message in messages}
+        # Both provisional slots: a load replaces the history wholesale, so
+        # anything half-built belonged to the conversation being discarded.
         self._inflight_id = None
+        self._assembly_id = None
         self.usage = usage
         for observer in self._observers:
             await observer.conversation_loaded(previous)
@@ -230,3 +234,62 @@ class Conversation:
         for observer in self._observers:
             await observer.stream_completed(self._inflight_id)
         self._inflight_id = None
+
+    # -- an entry assembled part-by-part --------------------------------------
+    #
+    # The mirror of the streaming trio above, for the other direction: a
+    # ModelRequest that grows as tool returns land, rather than a ModelResponse
+    # that grows as tokens land. Both are "a provisional entry that will be
+    # replaced by pydantic-ai's canonical object", so they reuse the SAME
+    # observer events - a display mounts and re-renders either one identically,
+    # and persistence waits for either one the same way. Adding a parallel event
+    # set would make every observer implement three methods to do what it
+    # already does.
+    #
+    # A separate slot from `_inflight_id`, though: a cancelled response stream
+    # can leave that one occupied, and the two must not clobber each other.
+
+    @property
+    def assembling(self) -> bool:
+        """Whether an entry is mid-assembly and still awaiting the canonical
+        object that will replace it."""
+        return self._assembly_id is not None
+
+    @property
+    def assembly(self) -> ModelMessage | None:
+        """The entry currently being assembled, so a caller reconciling it with
+        a canonical object can see what it built."""
+        if self._assembly_id is None:
+            return None
+        return self._entries[self._assembly_id]
+
+    async def begin_assembly(self, message: ModelMessage) -> MessageId:
+        """Start an entry that will grow. Returns its id; the caller passes each
+        successive whole message to `assembly_updated`."""
+        message_id = str(uuid.uuid4())
+        self._entries[message_id] = message
+        self._assembly_id = message_id
+        for observer in self._observers:
+            await observer.stream_began(message_id)
+        return message_id
+
+    async def assembly_updated(self, message: ModelMessage) -> None:
+        """A part landed - install the grown message and re-render. Takes the
+        whole message rather than the new part, so the entry is never a
+        half-built object an observer could read mid-mutation. No-op when
+        nothing is being assembled."""
+        if self._assembly_id is not None:
+            self._entries[self._assembly_id] = message
+            for observer in self._observers:
+                await observer.stream_updated(self._assembly_id)
+
+    async def finalize_assembly(self, message: ModelMessage) -> None:
+        """Swap in pydantic-ai's canonical object under the same id, so a later
+        adopt() sees it as already present (no duplicate) and the entry keeps
+        its id. No-op when nothing is being assembled."""
+        if self._assembly_id is None:
+            return
+        self._entries[self._assembly_id] = message
+        for observer in self._observers:
+            await observer.stream_completed(self._assembly_id)
+        self._assembly_id = None

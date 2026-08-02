@@ -59,7 +59,8 @@ class RecordingTranscript(ConversationObserver):
     def __init__(self, conversation: Conversation) -> None:
         self.conversation = conversation
         self.mounted: dict[MessageId, list[str]] = {}
-        self.events: list[tuple[str, MessageId]] = []
+        # ("mount"/"rerender", id) or ("remove", (id, …)) - remove is batched.
+        self.events: list[tuple[str, MessageId | tuple[MessageId, ...]]] = []
         conversation.register_observer(self)
 
     # -- the three verbs ------------------------------------------------------

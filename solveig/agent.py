@@ -36,9 +36,11 @@ from pydantic_ai import (
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 from pydantic_ai.messages import (
+    FunctionToolResultEvent,
     ModelMessage,
     ModelRequest,
     ToolCallPart,
+    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.models import Model
@@ -162,7 +164,40 @@ class _Reconciler:
         # conversation to the run's authoritative messages.
         if len(messages) > self.anchor:
             self.conversation.reidentify(self.echo_id, messages[self.anchor])
+        await self._fold_assembly(messages)
         await self.conversation.adopt(messages)
+
+    async def _fold_assembly(self, messages: Sequence[ModelMessage]) -> None:
+        """Reconcile the tool-return entry we assembled as tools finished with
+        pydantic-ai's canonical one, built in one go when the node ended.
+
+        Two things have to be true at once, which is why this is not a swap:
+        the entry must end up being pydantic-ai's OBJECT (adopt matches by
+        identity, so a copy mounts a duplicate of every tool return), and it
+        must keep the user comments we interleaved (its object has only tool
+        returns - the comments were placed here, at the boundary, and exist
+        nowhere else). So the comments are spliced INTO that object, each behind
+        the tool return it followed, and the object goes on being pydantic-ai's.
+        Mutating `parts` is what makes both true; it is also what puts the
+        comments on the wire in the order they happened.
+
+        Identified by shape, not position: pydantic-ai appends that request to
+        the history only when the NEXT ModelRequestNode runs, so it is not the
+        trailing message at the boundary where the tools actually finished - and
+        by the time it IS trailing, a response has landed behind it. A step
+        produces exactly one unheld request carrying tool returns."""
+        assembled = self.conversation.assembly
+        if assembled is None:
+            return
+        held = {id(message) for message in self.conversation.messages}
+        for message in messages:
+            if id(message) in held or not isinstance(message, ModelRequest):
+                continue
+            if not any(isinstance(part, ToolReturnPart) for part in message.parts):
+                continue
+            message.parts = _splice_comments(assembled.parts, message.parts)
+            await self.conversation.finalize_assembly(message)
+            return
 
 
 async def _stream_response(
@@ -185,6 +220,78 @@ async def _stream_response(
         await conversation.begin_stream(stream.response)
         async for _event in stream:
             await conversation.stream_updated(stream.response)
+
+
+def _splice_comments(
+    assembled: Sequence[Any], canonical: Sequence[Any]
+) -> list[Any]:
+    """Put the user comments from `assembled` back into `canonical`, each one
+    behind the same tool return it followed.
+
+    Anchored on `tool_call_id` rather than list position: the canonical parts
+    are authoritative (a retry or a repair can add one we never saw), so we walk
+    THEM and drop each comment in after its anchor. A comment whose anchor is
+    missing goes at the end rather than being lost."""
+    after: dict[str, list[Any]] = {}
+    trailing: list[Any] = []
+    anchor: str | None = None
+    for part in assembled:
+        if isinstance(part, ToolReturnPart):
+            anchor = part.tool_call_id
+        elif anchor is None:
+            trailing.append(part)
+        else:
+            after.setdefault(anchor, []).append(part)
+
+    spliced: list[Any] = []
+    for part in canonical:
+        spliced.append(part)
+        if isinstance(part, ToolReturnPart):
+            spliced.extend(after.pop(part.tool_call_id, ()))
+    for orphaned in after.values():
+        trailing.extend(orphaned)
+    return spliced + trailing
+
+
+async def _assemble_tool_returns(
+    conversation: Conversation,
+    node: Any,
+    run_ctx: Any,
+    inbox: UserMessageQueue,
+) -> None:
+    """Grow one ModelRequest in the Conversation as each tool return lands, so
+    the transcript shows a result the moment its tool finishes rather than all
+    of them at once when the node ends.
+
+    NOTE: per-tool liveness is not a documented pydantic-ai guarantee - it holds
+    under the sequential execution run_turn_with_retry already forces (the
+    consent UI is single-flight), and with tools that genuinely overlap the same
+    events arrive buffered and out of completion order. If it ever stops
+    holding, ordering degrades quietly to "every result, then every comment", so
+    it is pinned by test_call_tools_node_streams_a_result_event_per_tool.
+
+    A comment typed while a tool ran is drained in BEHIND that tool's result -
+    the position is recorded here, at the boundary, not reconstructed later by
+    sorting timestamps. `UserPromptPart.timestamp` is stamped when the part is
+    built, not when the user hit Enter, so a sort would order by the wrong
+    clock; draining at the boundary has no clock at all."""
+    parts: list[Any] = []
+    assembling = False
+    async with node.stream(run_ctx) as stream:
+        async for event in stream:
+            if not isinstance(event, FunctionToolResultEvent):
+                continue
+            parts.append(event.part)
+            parts.extend(
+                UserPromptPart(content=comment)
+                for comment in _drain_user_comments(inbox)
+            )
+            message = ModelRequest(parts=list(parts))
+            if assembling:
+                await conversation.assembly_updated(message)
+            else:
+                await conversation.begin_assembly(message)
+                assembling = True
 
 
 async def _hold_for_autonomy(deps: SolveigContext, inbox: UserMessageQueue) -> str:
@@ -342,6 +449,12 @@ async def run_turn(
                     # when adopt appends it - no imperative display here; the
                     # tool groups then render live inside the tool_execute hook.
                     await conversation.finalize_stream(node.model_response)
+                    await sync()
+                    # Consuming the node's stream is what EXECUTES its tools, so
+                    # this replaces the advance rather than preceding it - the
+                    # `run.next()` below then finds the work already done and
+                    # just fires the node hooks and returns the next node.
+                    await _assemble_tool_returns(conversation, node, run.ctx, inbox)
 
                 # Advancing fires the node hooks, so reconciliation happens on
                 # the way out of every node without a call here.
