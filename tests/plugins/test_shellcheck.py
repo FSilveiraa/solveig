@@ -40,10 +40,15 @@ _needs_shellcheck = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True, scope="module")
 def _compose_and_build_config():
-    """Compose the hooks schema and make SHELLCHECK_CONFIG available."""
+    """Discover plugins and make SHELLCHECK_CONFIG available.
+
+    One call, not discover-then-compose: the schema recomposes as a reaction to
+    the scan, so a test cannot end up with shellcheck registered but absent from
+    `config.plugins.hooks` - which used to hand back a raw dict and fail as an
+    AttributeError inside the hook body."""
     global SHELLCHECK_CONFIG
     bootstrap.compose_core_tools()
-    bootstrap.compose_plugin_hooks()
+    discover_plugins([])
     SHELLCHECK_CONFIG = SolveigConfig(
         cli_args=[],
         api={"url": "http://x", "key": "k"},

@@ -18,11 +18,9 @@ against.
 
 from __future__ import annotations
 
-import warnings
-
 from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
-from solveig.plugins.discovery import discover_plugins, report_plugins
+from solveig.plugins.discovery import ON_SCANNED, discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
 from solveig.tools.core import CORE_TOOLS
@@ -35,16 +33,26 @@ def compose_core_tools() -> None:
     )
 
 
-def compose_plugin_tools() -> None:
-    """Feed config the discovered plugin tools. Call after `discover_plugins`."""
+def compose_plugin_sections() -> None:
+    """Rebuild `plugins.tools` and `plugins.hooks` from whatever is registered.
+
+    Subscribed to `ON_SCANNED` below, so it is a REACTION to the plugin set
+    changing rather than a step a caller has to remember after
+    `discover_plugins`. That pairing was the bug: the registry and the schema
+    are two globals, nothing kept them in sync, and a stale schema does not
+    fail - `extra="allow"` hands back a raw dict for the plugin's section and
+    the mismatch only surfaces as an AttributeError deep inside a hook.
+
+    Config cannot subscribe to this itself: it is imported by nearly everything
+    and must not import the plugin packages back. So the wiring lives here, one
+    layer above both, and neither module learns about the other."""
     SolveigConfig.compose_plugin_tools(
         [(plugin_tool_name(e), config_model_of(e)) for e in PLUGIN_TOOLS]
     )
-
-
-def compose_plugin_hooks() -> None:
-    """Feed config the discovered hooks. Call after `discover_plugins`."""
     SolveigConfig.compose_plugin_hooks(list(hooks_config_map().items()))
+
+
+ON_SCANNED.append(compose_plugin_sections)
 
 
 async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
@@ -62,30 +70,20 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     deleted modules and re-imports changed ones, so working out which file moved
     would buy nothing a full rescan doesn't already give.
     """
-    # Plugin declarations land in their stores as the rescan imports them, so a
-    # refused trigger surfaces as a UserWarning from inside the import — the only
-    # channel available there. Caught here, where there is an interface to show
-    # it on. Kept apart from `errors`: a refused trigger is not a failure to
-    # load, and rendering it as one would misreport a working plugin.
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        errors = discover_plugins(config.plugins.paths)
-    collisions = [str(w.message) for w in caught]
+    # Recomposition rides on the scan (ON_SCANNED), so this does not pair the
+    # two by hand any more - and neither does anything else that scans.
+    discover_plugins(config.plugins.paths)
 
-    # The discovered set decides the schema, so recompose before anything reads
-    # plugin config, then bring the live config's sections up to the new
-    # classes — `config` itself keeps its identity and its subscriptions.
-    compose_plugin_tools()
-    compose_plugin_hooks()
+    # Only the LIVE config needs bringing up to the new classes: recomposition
+    # swaps the class behind plugins.tools/hooks, and this instance still holds
+    # objects of the old one. It keeps its identity, and its subscriptions.
     config.rebuild_plugin_sections()
 
     # NOTE: nothing re-registers subcommands here. `discover_plugins` empties the
     # plugin store before the rescan, and every `@tool`/`@subcommand` in a
     # scanned module refills it on import - so a plugin deleted from disk loses
     # its command by simply never declaring it again.
-    await report_plugins(config, interface, errors)
-    for collision in collisions:
-        await interface.display_warning(collision)
+    await report_plugins(config, interface)
 
 
 async def parse_config_and_prompt(
@@ -98,8 +96,5 @@ async def parse_config_and_prompt(
     # object die on this line. Nothing is handed a half-composed config, which
     # is what makes the config built below the only one that ever exists.
     discover_plugins(SolveigConfig.parse(cli_args=cli_args).plugins.paths)
-
-    compose_plugin_tools()
-    compose_plugin_hooks()
 
     return SolveigConfig.build(cli_args=cli_args)

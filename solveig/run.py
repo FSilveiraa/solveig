@@ -22,6 +22,7 @@ from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers.client import connect_all
+from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
@@ -47,9 +48,16 @@ async def _display_setup(
     for warning in startup_warnings:
         await interface.display_warning(warning)
 
-    # Plugins + MCP servers (both need the interface for display). Startup takes
-    # the same path a later reload does, so the two cannot drift.
-    await bootstrap.reload_plugins(config, interface)
+    # Plugins are already loaded and composed - `parse_config_and_prompt` scanned
+    # before the config was built, because the schema has to exist before the
+    # config validates against it. All that is left is to SAY what was found,
+    # which needs the interface and so could not happen back there.
+    #
+    # This used to call reload_plugins, which scanned a second time purely to
+    # have the errors in hand at display time. The scan records them
+    # (`LAST_SCAN`) instead, so startup scans once.
+    await report_plugins(config, interface)
+    # MCP servers, which also need the interface for display.
     await connect_all(config=config, interface=interface)
 
     sys_prompt = await get_system_prompt(config)
@@ -168,6 +176,14 @@ async def run_async(
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
+    else:
+        # An INJECTED config (tests, the mock demo, an embedder) never went
+        # through the startup parse, so nothing has scanned for its plugins.
+        # Scan here rather than in _display_setup: the plugin set has to match
+        # this config before anything reads it, and _display_setup runs after
+        # the interface is up, which is far too late for a config that is
+        # already being used. The scan recomposes the schema on its own.
+        discover_plugins(config.plugins.paths)
 
     assert config is not None  # narrow for mypy after the if-not-config branch
     user_prompt = user_prompt or config.prompt.strip()

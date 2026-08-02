@@ -73,7 +73,7 @@ class TestToolPluginFiltering:
     async def test_tree_plugin_loaded_when_in_config(self):
         """The real tree plugin is discovered."""
         bootstrap.compose_core_tools()
-        bootstrap.compose_plugin_tools()
+        discover_plugins([])  # registers AND composes - see discovery.ON_SCANNED
         config = SolveigConfig(
             cli_args=[],
             api={"url": "test-url", "key": "test-key"},
