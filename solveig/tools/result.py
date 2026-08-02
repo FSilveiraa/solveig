@@ -1,12 +1,12 @@
 """The tool result contract - what a tool hands back, and how it renders itself
 into the `ToolReturn` pydantic-ai sends to the model.
 
-A tool's `execute()` returns a `ToolResult`; `@before`/`@after` plugin hooks
+A tool's `execute()` returns a `ToolResult`; `@before_tool`/`@after_tool` plugin hooks
 (dispatched by the tool-execution capability in `solveig/tools/available.py`)
 also deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn` directly.
 The `ToolResult` renders *itself* into a `ToolReturn` via `to_tool_return()`;
 that call happens exactly once, as the terminal step of the
-`after_tool_execute` hook, after every plugin `@after` hook has had its chance
+`after_tool_execute` hook, after every plugin `@after_tool` hook has had its chance
 to transform the structured result.
 """
 

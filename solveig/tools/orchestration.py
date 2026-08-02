@@ -5,8 +5,8 @@ modules:
 
 - `run_tool_and_hooks` - a typed `BaseTool` call (LLM-driven or a user-typed
   `/tool` subcommand). Opens the call's group, shows the tool's intent
-  (`display_header`), runs the plugin `@before` hooks (shellcheck etc.), runs
-  the body, runs the `@after` hooks (trafilatura etc.), and returns the
+  (`display_header`), runs the plugin `@before_tool` hooks (shellcheck etc.), runs
+  the body, runs the `@after_tool` hooks (trafilatura etc.), and returns the
   (possibly transformed) `ToolResult`. This is also the one place that scopes
   `interface` to the call's own group before handing it to `instance.execute()`
   - a tool body never sees the root interface, only its own group.
@@ -70,10 +70,10 @@ async def run_tool_and_hooks(
     config: SolveigConfig,
     interface: SolveigInterface,
 ) -> Any:
-    """Open *instance*'s group, run it with its `@before`/`@after` hooks, and
-    return whatever `execute()` produced, after any `@after` hook has
+    """Open *instance*'s group, run it with its `@before_tool`/`@after_tool` hooks, and
+    return whatever `execute()` produced, after any `@after_tool` hook has
     transformed it (a non-`ToolResult` body result - e.g. from an MCP tool -
-    passes through the after-hooks untouched). A `@before` hook raising
+    passes through the after-hooks untouched). A `@before_tool` hook raising
     `PluginException` propagates out for the caller to translate; `UserCancel`
     (not a `PluginException`) propagates as a real cancellation.
     """

@@ -2,7 +2,7 @@
 
 These drive the *framework* surface the migration introduced, not tool bodies:
 `BaseTool.as_tool()` flattening/schema, and `build_tool_execution_capability`
-running the plugin `@before`/`@after` hooks and rendering a `ToolResult` into
+running the plugin `@before_tool`/`@after_tool` hooks and rendering a `ToolResult` into
 the `ToolReturn` the model sees. They couple to pydantic-ai's schema/message
 layer on purpose - they're the early-warning system for a framework change
 that breaks the bridge.
@@ -37,7 +37,7 @@ from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException
-from solveig.plugins.hooks import after, before, clear_hooks
+from solveig.plugins.hooks import after_tool, before_tool, clear_hooks
 from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
@@ -298,16 +298,16 @@ async def test_capability_renders_tool_result_to_tool_return():
 
 
 async def test_before_and_after_hooks_fire_and_are_gated_by_config_plugins():
-    """`@before` runs before the body, `@after` can transform the result - but
+    """`@before_tool` runs before the body, `@after_tool` can transform the result - but
     only when the hook's plugin is enabled in `config.plugins` (gated live, per
     call). Off -> body result passes through untouched; on -> both fire."""
     fired: list[str] = []
 
-    @before((EchoTool,))
+    @before_tool((EchoTool,))
     async def record_before(args, config, interface):
         fired.append("before")
 
-    @after((EchoTool,))
+    @after_tool((EchoTool,))
     async def transform_after(result, config, interface):
         fired.append("after")
         return ToolResult(content="transformed", private=result.private)
@@ -343,7 +343,7 @@ async def test_before_hook_plugin_exception_becomes_model_retry():
     it into a `ModelRetry` so the model sees a retry prompt (its cue to react),
     not a crash - and the tool body never runs."""
 
-    @before((EchoTool,))
+    @before_tool((EchoTool,))
     async def block(args, config, interface):
         raise PluginException("blocked by guard")
 

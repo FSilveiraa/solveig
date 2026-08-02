@@ -17,7 +17,7 @@ at call time rather than closing over them:
   in `run_turn`'s loop, not hooks here.
 - `build_tool_execution_capability` - per-tool-call concerns via the
   `tool_execute` hook: opens the tool's collapsible group, runs the plugin
-  `@before`/`@after` hooks, and renders each `ToolResult` into the `ToolReturn`
+  `@before_tool`/`@after_tool` hooks, and renders each `ToolResult` into the `ToolReturn`
   the model sees.
 """
 
@@ -566,7 +566,7 @@ def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
 
 def build_tool_execution_capability() -> Hooks[SolveigContext]:
     """Per-tool-call capability: opens each call's collapsible group, runs the
-    plugin `@before`/`@after` hooks, and renders the `ToolResult` into a
+    plugin `@before_tool`/`@after_tool` hooks, and renders the `ToolResult` into a
     `ToolReturn`. Replaces the old `HookRunner`/`Finalizer` `WrapperToolset`
     stack with pydantic-ai's native `wrap_tool_execute` hook.
 

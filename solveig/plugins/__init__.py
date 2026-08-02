@@ -10,7 +10,7 @@ A plugin declares what it offers by importing from the module that owns that
 surface, which is also what decides where the declaration lands:
 
     from solveig.plugins.tools import tool
-    from solveig.plugins.hooks import before, after
+    from solveig.plugins.hooks import before_tool, after_tool
     from solveig.plugins.subcommands import subcommand
 
 Discovery and reporting live in `solveig.plugins.discovery`.

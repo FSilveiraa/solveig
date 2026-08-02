@@ -2,7 +2,7 @@
 
 from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
-from solveig.plugins.hooks import after
+from solveig.plugins.hooks import after_tool
 from solveig.tools.core.http import HttpTool
 from solveig.tools.result import ToolResult
 
@@ -12,7 +12,7 @@ except ImportError:
     _trafilatura = None
 
 
-@after(tools=(HttpTool,))
+@after_tool(tools=(HttpTool,))
 async def trafilatura(
     result: ToolResult, config: SolveigConfig, interface: SolveigInterface
 ) -> ToolResult:

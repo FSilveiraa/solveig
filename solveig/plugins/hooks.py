@@ -1,9 +1,9 @@
-"""Hook plugin registry - the `@before`/`@after` decorators and the state
+"""Hook plugin registry - the `@before_tool`/`@after_tool` decorators and the state
 they register into.
 
 Lives here, in the plugins package, so a hook plugin author imports the
-decorators from their own package (`from solveig.plugins.hooks import before,
-after`) instead of reaching into tools internals - mirroring `PLUGIN_TOOLS`/
+decorators from their own package (`from solveig.plugins.hooks import
+before_tool, after_tool`) instead of reaching into tools internals - mirroring `PLUGIN_TOOLS`/
 `tool` in `plugins/tools.py`. The consumer on the tools side is
 `run_tool_and_hooks` (`solveig/tools/orchestration.py`): it reads
 `BEFORE_HOOKS`/`AFTER_HOOKS` at call time to run the registered hooks around a
@@ -38,7 +38,7 @@ AfterHookFn = Callable[
 class Hook:
     """A hook as a callable object: config_model is DECLARED on the class
     (default bare ToolConfig = enabled-only), not stashed on a function.
-    `@before`/`@after` build these from plain functions; an author may also
+    `@before_tool`/`@after_tool` build these from plain functions; an author may also
     subclass directly. Identity is the instance (its `name`)."""
 
     config_model: type[ToolConfig] = ToolConfig
@@ -118,7 +118,7 @@ def clear_hooks() -> None:
     AFTER_HOOKS.clear()
 
 
-def before(
+def before_tool(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
     *,
     config_model: type[ToolConfig] | None = None,
@@ -139,12 +139,12 @@ def before(
     return register
 
 
-def after(
+def after_tool(
     tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]",
     *,
     config_model: type[ToolConfig] | None = None,
 ) -> Callable[[AfterHookFn], AfterHook]:
-    """Register an after-hook for `tools`. See `before` for `config_model=`."""
+    """Register an after-hook for `tools`. See `before_tool` for `config_model=`."""
 
     def register(fn: AfterHookFn) -> AfterHook:
         hook = AfterHook(fn)
@@ -158,8 +158,8 @@ def after(
 
 
 __all__ = [
-    "before",
-    "after",
+    "before_tool",
+    "after_tool",
     "Hook",
     "BeforeHook",
     "AfterHook",

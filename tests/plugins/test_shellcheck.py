@@ -1,6 +1,6 @@
 """Tests for the shellcheck hook plugin (`solveig/plugins/library/shellcheck.py`).
 
-`shellcheck` is a plain `@before(tools=(CommandTool,))`-decorated function -
+`shellcheck` is a plain `@before_tool(tools=(CommandTool,))`-decorated function -
 registered under `CommandTool.tool_name()` ("command") in the `BEFORE_HOOKS`
 registry (`solveig/plugins/hooks.py`). Raising from it
 (`SecurityError`/`ValidationError`) blocks the call - there's no result

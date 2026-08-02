@@ -10,7 +10,7 @@ live per step by the `FilteredToolset` from whatever `ctx.deps.config` says.
 Built on pydantic-ai's own `FilteredToolset` rather than a hand-rolled
 visibility check.
 
-The other half of tool execution - running the plugin `@before`/`@after` hooks
+The other half of tool execution - running the plugin `@before_tool`/`@after_tool` hooks
 and rendering each `ToolResult` into a `ToolReturn` - is the `Hooks` capability
 `build_tool_execution_capability()` in `solveig/agent.py`, attached to the
 `Agent` alongside the toolset (not wrapped around it).

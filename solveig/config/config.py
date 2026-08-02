@@ -481,7 +481,7 @@ class SolveigConfig(BaseSettings):
     def compose_plugin_hooks(cls, pairs: list[tuple[str, type]]) -> None:
         """Build `config.plugins.hooks` — the hook parallel of
         `compose_plugin_tools`. A hook's config type comes from its
-        `@before/@after(config_model=…)`, defaulting to bare `ToolConfig`."""
+        `@before_tool/@after_tool(config_model=…)`, defaulting to bare `ToolConfig`."""
         _compose_section(
             PluginsConfig,
             "hooks",

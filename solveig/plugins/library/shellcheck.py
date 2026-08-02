@@ -11,7 +11,7 @@ from pydantic import Field
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import SolveigInterface
-from solveig.plugins.hooks import before
+from solveig.plugins.hooks import before_tool
 from solveig.tools.base import ToolConfig
 from solveig.tools.core.command import CommandTool
 
@@ -24,7 +24,7 @@ DANGEROUS_PATTERNS = [
 
 class ShellcheckConfig(ToolConfig):
     """Typed `plugins.hooks.shellcheck` config — declared via
-    `@before(config_model=ShellcheckConfig)` (a hook is a function, so it opts into
+    `@before_tool(config_model=ShellcheckConfig)` (a hook is a function, so it opts into
     a schema through the decorator, the callable parallel of `@tool(config_model=…)`).
     Read Any-style inside the hook as `config.plugins.hooks.shellcheck.<field>`."""
 
@@ -57,7 +57,7 @@ def detect_shell(shell_override: str | None) -> str:
     return "bash"
 
 
-@before(tools=(CommandTool,), config_model=ShellcheckConfig)
+@before_tool(tools=(CommandTool,), config_model=ShellcheckConfig)
 async def shellcheck(
     tool_args: dict, config: SolveigConfig, interface: SolveigInterface
 ) -> None:

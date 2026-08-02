@@ -286,7 +286,7 @@ def declaring_into(store: SubcommandStore) -> Callable[..., Callable]:
     their module name. Core code imports `subcommand` from here and lands in the
     built-in store; a plugin imports it from `solveig.plugins` and lands in the
     plugin store, which is the store a reload replaces. That is the same shape
-    `@tool` and `@before`/`@after` already have — a plugin reaches for the
+    `@tool` and `@before_tool`/`@after_tool` already have — a plugin reaches for the
     plugin package's decorator and the right registry follows.
 
     Written straight to the store, with no inbox in between: the decorator

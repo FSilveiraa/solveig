@@ -32,8 +32,8 @@ from solveig.plugins.discovery import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
     AFTER_HOOKS,
     BEFORE_HOOKS,
-    after,
-    before,
+    after_tool,
+    before_tool,
     clear_hooks,
     hook_name,
 )
@@ -50,7 +50,7 @@ def clean_hooks():
 
 
 # ---------------------------------------------------------------------------
-# @before / @after registration mechanics
+# @before_tool / @after_tool registration mechanics
 # ---------------------------------------------------------------------------
 
 
@@ -58,7 +58,7 @@ class TestHookRegistration:
     async def test_before_registers_under_tool_name(self):
         async def my_hook(tool_args, config, interface): ...
 
-        hook = before(tools=("some_tool",))(my_hook)
+        hook = before_tool(tools=("some_tool",))(my_hook)
 
         assert BEFORE_HOOKS["some_tool"] == [hook]
         assert hook.fn is my_hook
@@ -68,7 +68,7 @@ class TestHookRegistration:
 
         async def my_hook(tool_args, config, interface): ...
 
-        hook = before(tools=(target_tool,))(my_hook)
+        hook = before_tool(tools=(target_tool,))(my_hook)
 
         assert BEFORE_HOOKS["target_tool"] == [hook]
         assert hook.fn is my_hook
@@ -77,7 +77,7 @@ class TestHookRegistration:
         async def my_hook(result, config, interface):
             return result
 
-        hook = after(tools=("some_tool",))(my_hook)
+        hook = after_tool(tools=("some_tool",))(my_hook)
 
         assert AFTER_HOOKS["some_tool"] == [hook]
         assert hook.fn is my_hook
@@ -85,7 +85,7 @@ class TestHookRegistration:
     async def test_hook_registers_under_multiple_targets(self):
         async def my_hook(tool_args, config, interface): ...
 
-        hook = before(tools=("tool_a", "tool_b"))(my_hook)
+        hook = before_tool(tools=("tool_a", "tool_b"))(my_hook)
 
         assert BEFORE_HOOKS["tool_a"] == [hook]
         assert BEFORE_HOOKS["tool_b"] == [hook]
@@ -97,8 +97,8 @@ class TestHookRegistration:
         async def my_after(result, config, interface):
             return result
 
-        before(tools=("some_tool",))(my_before)
-        after(tools=("some_tool",))(my_after)
+        before_tool(tools=("some_tool",))(my_before)
+        after_tool(tools=("some_tool",))(my_after)
 
         clear_hooks()
 
@@ -117,7 +117,7 @@ class TestLoadAndFilterHooks:
         async def my_hook(tool_args, config, interface): ...
 
         def fake_rescan(path):
-            before(tools=("some_tool",))(my_hook)
+            before_tool(tools=("some_tool",))(my_hook)
             return (1, 0, [])  # succeeded, failed, errors
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
@@ -134,7 +134,7 @@ class TestLoadAndFilterHooks:
         async def my_hook(tool_args, config, interface): ...
 
         def fake_rescan(path):
-            before(tools=("some_tool",))(my_hook)
+            before_tool(tools=("some_tool",))(my_hook)
             return (1, 0, [])
 
         config = SolveigConfig(
@@ -154,7 +154,7 @@ class TestLoadAndFilterHooks:
         async def my_hook(tool_args, config, interface): ...
 
         def fake_rescan(path):
-            before(tools=("some_tool",))(my_hook)
+            before_tool(tools=("some_tool",))(my_hook)
             return (1, 0, [])
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
