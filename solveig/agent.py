@@ -262,9 +262,7 @@ def _splice_comments(
     goes at the end rather than being dropped."""
     after: dict[str | None, list[Any]] = {}
     for comment in placed:
-        after.setdefault(comment.after, []).append(
-            UserPromptPart(content=comment.text)
-        )
+        after.setdefault(comment.after, []).append(UserPromptPart(content=comment.text))
 
     spliced: list[Any] = list(after.pop(None, ()))
     for part in canonical:

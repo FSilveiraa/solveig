@@ -1,7 +1,7 @@
 """Tests for the shellcheck hook plugin (`solveig/plugins/library/shellcheck.py`).
 
 `shellcheck` is a plain `@before_tool(tools=(CommandTool,))`-decorated function -
-registered under `CommandTool.tool_name()` ("command") in the `BEFORE_HOOKS`
+registered under `CommandTool.tool_name()` ("command") in the `HOOKS`
 registry (`solveig/plugins/hooks.py`). Raising from it
 (`SecurityError`/`ValidationError`) blocks the call - there's no result
 object to inspect for "was this blocked", just `pytest.raises(...)`.
@@ -23,7 +23,7 @@ from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.discovery import discover_plugins
-from solveig.plugins.hooks import BEFORE_HOOKS, clear_hooks, hook_name
+from solveig.plugins.hooks import HOOKS, HookKind, clear_hooks, hook_name, hooks_for
 from solveig.plugins.library.shellcheck import is_obviously_dangerous, shellcheck
 from solveig.tools.core.command import CommandTool
 from solveig.tools.orchestration import run_tool_and_hooks
@@ -152,13 +152,13 @@ class TestShellcheckDiscoveryAndRegistration:
     async def test_registers_as_a_before_hook_on_command(self):
         discover_plugins([])
 
-        hook_names = [hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])]
+        hook_names = [hook_name(hook) for hook in hooks_for(HookKind.BEFORE_TOOL, "command")]
         assert "shellcheck" in hook_names
 
     async def test_does_not_register_for_other_tools(self):
         discover_plugins([])
 
-        for tool_name, hooks in BEFORE_HOOKS.items():
+        for tool_name, hooks in HOOKS[HookKind.BEFORE_TOOL].items():  # noqa
             if tool_name != "command":
                 assert not any(hook_name(hook) == "shellcheck" for hook in hooks)
 

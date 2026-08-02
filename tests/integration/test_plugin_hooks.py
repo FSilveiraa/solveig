@@ -12,8 +12,8 @@ plugin discovery (`discover_plugins` finding `shellcheck`/`trafilatura`); `test_
 using a synthetic tool, so that isn't retested here against real hooks.
 
 One architectural note worth keeping visible: like plugin tools
-(`PLUGIN_TOOLS`, `tools/available.py`'s `is_tool_active`), `BEFORE_HOOKS`/
-`AFTER_HOOKS` are never filtered by `config.plugins` at load time -
+(`PLUGIN_TOOLS`, `tools/available.py`'s `is_tool_active`), `HOOKS` entries
+are never filtered by `config.plugins` at load time -
 `discover_plugins()` discovers and registers everything unconditionally
 (hooks self-register via the decorator at import time), and `config.plugins`
 gating happens live, per call, inside `run_tool_and_hooks`
@@ -30,8 +30,9 @@ from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.plugins.discovery import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
-    AFTER_HOOKS,
-    BEFORE_HOOKS,
+    HOOKS,
+    HookKind,
+    hooks_for,
     after_tool,
     before_tool,
     clear_hooks,
@@ -60,7 +61,7 @@ class TestHookRegistration:
 
         hook = before_tool(tools=("some_tool",))(my_hook)
 
-        assert BEFORE_HOOKS["some_tool"] == [hook]
+        assert hooks_for(HookKind.BEFORE_TOOL, "some_tool") == [hook]
         assert hook.fn is my_hook
 
     async def test_before_registers_under_function_target(self):
@@ -70,7 +71,7 @@ class TestHookRegistration:
 
         hook = before_tool(tools=(target_tool,))(my_hook)
 
-        assert BEFORE_HOOKS["target_tool"] == [hook]
+        assert hooks_for(HookKind.BEFORE_TOOL, "target_tool") == [hook]
         assert hook.fn is my_hook
 
     async def test_after_registers_under_tool_name(self):
@@ -79,7 +80,7 @@ class TestHookRegistration:
 
         hook = after_tool(tools=("some_tool",))(my_hook)
 
-        assert AFTER_HOOKS["some_tool"] == [hook]
+        assert hooks_for(HookKind.AFTER_TOOL, "some_tool") == [hook]
         assert hook.fn is my_hook
 
     async def test_hook_registers_under_multiple_targets(self):
@@ -87,11 +88,11 @@ class TestHookRegistration:
 
         hook = before_tool(tools=("tool_a", "tool_b"))(my_hook)
 
-        assert BEFORE_HOOKS["tool_a"] == [hook]
-        assert BEFORE_HOOKS["tool_b"] == [hook]
+        assert hooks_for(HookKind.BEFORE_TOOL, "tool_a") == [hook]
+        assert hooks_for(HookKind.BEFORE_TOOL, "tool_b") == [hook]
         assert hook.fn is my_hook
 
-    async def test_clear_hooks_empties_both_registries(self):
+    async def test_clear_hooks_empties_every_kind(self):
         async def my_before(tool_args, config, interface): ...
 
         async def my_after(result, config, interface):
@@ -102,8 +103,9 @@ class TestHookRegistration:
 
         clear_hooks()
 
-        assert BEFORE_HOOKS == {}
-        assert AFTER_HOOKS == {}
+        assert HOOKS == {}
+        assert hooks_for(HookKind.BEFORE_TOOL, "some_tool") == []
+        assert hooks_for(HookKind.AFTER_TOOL, "some_tool") == []
 
 # ---------------------------------------------------------------------------
 # discover_plugins() - discovery and reporting
@@ -127,8 +129,8 @@ class TestLoadAndFilterHooks:
             errors = discover_plugins([])
 
         assert errors == []  # no import errors
-        assert len(BEFORE_HOOKS["some_tool"]) == 1
-        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
+        assert len(hooks_for(HookKind.BEFORE_TOOL, "some_tool")) == 1
+        assert hooks_for(HookKind.BEFORE_TOOL, "some_tool")[0].fn is my_hook
 
     async def test_reports_loaded_when_plugin_in_config(self):
         async def my_hook(tool_args, config, interface): ...
@@ -148,7 +150,7 @@ class TestLoadAndFilterHooks:
 
         # Registration is unconditional; gating is live in run_tool_and_hooks.
         assert errors == []
-        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
+        assert hooks_for(HookKind.BEFORE_TOOL, "some_tool")[0].fn is my_hook
 
     async def test_reports_skipped_when_plugin_not_in_config(self):
         async def my_hook(tool_args, config, interface): ...
@@ -165,7 +167,7 @@ class TestLoadAndFilterHooks:
 
         # Registration is always unconditional — hooks register regardless.
         assert errors == []
-        assert BEFORE_HOOKS["some_tool"][0].fn is my_hook
+        assert hooks_for(HookKind.BEFORE_TOOL, "some_tool")[0].fn is my_hook
 
     @pytest.mark.no_file_mocking
     async def test_shellcheck_and_trafilatura_discovered_via_real_scan(self):
@@ -178,8 +180,8 @@ class TestLoadAndFilterHooks:
         )
         discover_plugins([])
 
-        before_names = {hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
-        after_names = {hook_name(hook) for hook in AFTER_HOOKS.get("http", [])}
+        before_names = {hook_name(hook) for hook in hooks_for(HookKind.BEFORE_TOOL, "command")}
+        after_names = {hook_name(hook) for hook in hooks_for(HookKind.AFTER_TOOL, "http")}
         assert "shellcheck" in before_names
         assert "trafilatura" in after_names
 
@@ -192,7 +194,7 @@ class TestLoadAndFilterHooks:
         )
 
         def command_hook_count() -> int:
-            return len(BEFORE_HOOKS.get("command", []))
+            return len(hooks_for(HookKind.BEFORE_TOOL, "command"))
 
         await load_plugins()
         count_after_first = command_hook_count()
@@ -223,7 +225,7 @@ class TestInitializePlugins:
         )
         discover_plugins([])
 
-        before_names = {hook_name(hook) for hook in BEFORE_HOOKS.get("command", [])}
+        before_names = {hook_name(hook) for hook in hooks_for(HookKind.BEFORE_TOOL, "command")}
         assert "shellcheck" in before_names
 
         clear_plugins()

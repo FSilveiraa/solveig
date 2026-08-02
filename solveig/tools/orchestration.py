@@ -43,7 +43,7 @@ from pydantic_settings.exceptions import SettingsError
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException, ToolDisabledError
 from solveig.interface.base import SolveigInterface
-from solveig.plugins.hooks import AFTER_HOOKS, BEFORE_HOOKS, hook_name
+from solveig.plugins.hooks import HookKind, hook_name, hooks_for
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
@@ -99,7 +99,7 @@ async def run_tool_and_hooks(
 
         # Hooks are enabled-by-default; a hook disabled via plugins.hooks.<name>.
         # enabled=false is skipped here (the one gate, parallel to is_tool_enabled).
-        for before_hook in BEFORE_HOOKS.get(tool_name, ()):
+        for before_hook in hooks_for(HookKind.BEFORE_TOOL, tool_name):
             if config.is_hook_enabled(hook_name(before_hook)):
                 await before_hook(instance.model_dump(), config, group)
 
@@ -107,7 +107,7 @@ async def run_tool_and_hooks(
         if not isinstance(result, ToolResult):
             return result
 
-        for after_hook in AFTER_HOOKS.get(tool_name, ()):
+        for after_hook in hooks_for(HookKind.AFTER_TOOL, tool_name):
             if config.is_hook_enabled(hook_name(after_hook)):
                 result = await after_hook(result, config, group)
         return result
