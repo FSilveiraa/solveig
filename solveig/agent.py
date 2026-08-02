@@ -22,6 +22,8 @@ at call time rather than closing over them:
 """
 
 import asyncio
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ValidationError
@@ -33,7 +35,12 @@ from pydantic_ai import (
 )
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
-from pydantic_ai.messages import ModelRequest, ToolCallPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ToolCallPart,
+    UserPromptPart,
+)
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 
@@ -42,7 +49,7 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import SolveigInterface
-from solveig.session.conversation import Conversation
+from solveig.session.conversation import Conversation, MessageId
 from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
@@ -134,6 +141,80 @@ def build_loop_capability() -> Hooks[SolveigContext]:
     return hooks
 
 
+@dataclass
+class _Reconciler:
+    """Folds pydantic-ai's authoritative message list into the reactive
+    Conversation.
+
+    Lifted out of `run_turn`'s closure ahead of the loop migration: under
+    `agent.run()` the same list arrives as `RunContext.messages`, so this body
+    becomes the `after_node_run` hook unchanged. Holding `echo_id`/`anchor` on
+    an object rather than closing over them is the whole point - a hook has no
+    enclosing scope to capture them from."""
+
+    conversation: Conversation
+    echo_id: MessageId
+    anchor: int
+    """Index where pydantic-ai's own copy of the prompt lands."""
+
+    async def sync(self, messages: Sequence[ModelMessage]) -> None:
+        # Fold pydantic-ai's own request object for the prompt into the echo id
+        # (idempotent) so it isn't mounted twice, then reconcile the
+        # conversation to the run's authoritative messages.
+        if len(messages) > self.anchor:
+            self.conversation.reidentify(self.echo_id, messages[self.anchor])
+        await self.conversation.adopt(messages)
+
+
+async def _stream_response(
+    conversation: Conversation,
+    node: Any,
+    run_ctx: Any,
+    on_start: Callable[[], Awaitable[None]],
+) -> None:
+    """Consume one streamed model response into a live Conversation entry.
+
+    Extracted ahead of the loop migration: under `agent.run()` this becomes the
+    `event_stream_handler`, where the same content arrives as `PartDeltaEvent`s
+    to accumulate rather than per-access `stream.response` snapshots. The
+    cancellation shape survives that change unchanged - the caller wraps this
+    whole consumption in one cancellable task so Esc/Ctrl+C stops the READER
+    and lets the stream's context close the HTTP stream in order (why the
+    reader, not the handler: see `_thinking`)."""
+    async with node.stream(run_ctx) as stream:
+        await on_start()
+        await conversation.begin_stream(stream.response)
+        async for _event in stream:
+            await conversation.stream_updated(stream.response)
+
+
+async def _hold_for_autonomy(deps: SolveigContext, inbox: UserMessageQueue) -> str:
+    """Block until the user grants an explicit go-ahead, returning whatever
+    they sent with it.
+
+    Becomes the `before_model_request` gate: "ask before sending this to the
+    assistant". Split from the comment drain below because the two are headed
+    for different hooks - the gate to `before_model_request`, the drain to the
+    per-tool boundary in the event stream."""
+    await deps.interface.update_stats(status="Awaiting confirmation to continue")
+    comment = await inbox.get()
+    await deps.interface.update_stats(status=None)
+    return comment
+
+
+def _drain_user_comments(inbox: UserMessageQueue) -> list[str]:
+    """Take everything typed since the last drain, oldest first.
+
+    Non-blocking by construction: an empty inbox yields an empty list, never a
+    wait. The caller decides where the comments go."""
+    comments: list[str] = []
+    while True:
+        try:
+            comments.append(inbox.get_nowait())
+        except asyncio.QueueEmpty:
+            return comments
+
+
 async def run_turn(
     agent: Agent[SolveigContext, str],
     conversation: Conversation,
@@ -156,7 +237,7 @@ async def run_turn(
         ModelRequest(parts=[UserPromptPart(content=prompt)])
     )
     history = list(conversation.messages[:-1])  # everything before the echo
-    anchor = len(history)  # pydantic-ai's own copy of the prompt lands here
+    reconciler = _Reconciler(conversation, echo_id, anchor=len(history))
 
     async with agent.iter(
         prompt,
@@ -166,32 +247,16 @@ async def run_turn(
     ) as run:
 
         async def sync() -> None:
-            # Fold pydantic-ai's own request object for the prompt into the echo
-            # id (idempotent) so it isn't mounted twice, then reconcile the
-            # conversation to the run's authoritative messages.
-            messages = run.all_messages()
-            if len(messages) > anchor:
-                conversation.reidentify(echo_id, messages[anchor])
-            await conversation.adopt(messages)
+            await reconciler.sync(run.all_messages())
 
         try:
             async for node in run:
                 if deps.config.interface.stream and Agent.is_model_request_node(node):
-                    # Stream this response token-by-token into a live entry, the
-                    # whole consumption inside ONE cancellable task so Esc/Ctrl+C
-                    # stops the READER and lets node.stream()'s context close the
-                    # HTTP stream in order (why the reader, not the handler:
-                    # see _thinking).
-                    async def stream_node(node: Any = node) -> None:
-                        async with node.stream(run.ctx) as stream:
-                            await sync()
-                            await conversation.begin_stream(stream.response)
-                            async for _event in stream:
-                                await conversation.stream_updated(stream.response)
-
                     try:
                         async with _thinking(
-                            deps.interface, stream_node(), deps.config.api.timeout
+                            deps.interface,
+                            _stream_response(conversation, node, run.ctx, sync),
+                            deps.config.api.timeout,
                         ) as task:
                             await task
                     finally:
@@ -223,7 +288,7 @@ async def run_turn(
                     # tool groups then render live inside the tool_execute hook.
                     await conversation.finalize_stream(node.model_response)
                     await sync()
-                    await _gate_and_interleave(
+                    await _hold_and_drain(
                         deps,
                         run,
                         inbox,
@@ -240,29 +305,28 @@ def _response_has_tool_calls(response: ModelResponse) -> bool:
     return any(isinstance(part, ToolCallPart) for part in response.parts)
 
 
-async def _gate_and_interleave(
+async def _hold_and_drain(
     deps: SolveigContext, run: Any, inbox: UserMessageQueue, *, tools_ran: bool
 ) -> None:
-    interface = deps.interface
-    # Autonomy pause only mid-work: gate a round that actually ran tools (more
-    # is coming), never the terminal no-tools node (the run is ending, nothing
-    # to confirm). Gate before the drain so it consumes exactly the go-ahead it
+    """Compose the autonomy hold and the comment drain at the tool boundary.
+
+    Only the composition is temporary. `_hold_for_autonomy` is headed for
+    `before_model_request` (where the gate stops having to INFER that a request
+    is coming - it holds one) and `_drain_user_comments` for the per-tool
+    boundary, so this function disappears rather than moving."""
+    # Autonomy pause only mid-work: gate a step that actually ran tools (more is
+    # coming), never the terminal no-tools node (the run is ending, nothing to
+    # confirm). Hold before the drain so it consumes exactly the go-ahead it
     # waits for - draining first would let the always-on drain steal it and
     # leave the gate blocked forever.
     if deps.config.disable_autonomy and tools_ran:
-        await interface.update_stats(status="Awaiting confirmation to continue")
-        comment = await inbox.get()
-        await interface.update_stats(status=None)
-        run.enqueue(comment, priority="asap")
+        run.enqueue(await _hold_for_autonomy(deps, inbox), priority="asap")
     # Always-on drain: anything typed while tools ran (or while the gate was
     # blocked) is delivered at the next opportunity, in any autonomy mode -
-    # including a comment that turns a would-be-terminating run into one more
-    # round (priority='asap').
-    while True:
-        try:
-            run.enqueue(inbox.get_nowait(), priority="asap")
-        except asyncio.QueueEmpty:
-            break
+    # including a comment that turns a would-be-terminating step into one more
+    # step (priority='asap').
+    for comment in _drain_user_comments(inbox):
+        run.enqueue(comment, priority="asap")
 
 
 async def run_turn_with_retry(
