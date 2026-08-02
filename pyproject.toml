@@ -117,7 +117,7 @@ layers = [
     "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
     "solveig.interface.base : solveig.interface.cli : solveig.session.conversation : solveig.context : solveig.api.client",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
-    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types",
+    "solveig.utils | solveig.exceptions | solveig.stats | solveig.interface.themes | solveig.api.types",
 ]
 
 [[tool.importlinter.contracts]]
