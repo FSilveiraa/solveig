@@ -10,7 +10,6 @@ from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
 from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
-from solveig.tools.available import AVAILABLE_TOOLS
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 from tests.mocks.reactive import RecordingTranscript
 
@@ -148,7 +147,6 @@ async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
     view = RecordingTranscript(conv)
     interface = MockInterface()
     deps = _deps(conv, stream=True, interface=interface)
-    AVAILABLE_TOOLS.rebuild(deps.config)
     agent = build_agent(
         deps.config, None, "sys", model=FunctionModel(stream_function=_slow)
     )
