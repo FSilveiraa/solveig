@@ -138,8 +138,8 @@ class CommandTool(BaseTool[CommandConfig]):
                 ) as task:
                     try:
                         output, error = await task
-                        await interface.update_stats(
-                            path=Filesystem.get_absolute_path(shell.cwd)
+                        await interface.set_path(
+                            Filesystem.get_absolute_path(shell.cwd)
                         )
                     except asyncio.CancelledError:
                         raise

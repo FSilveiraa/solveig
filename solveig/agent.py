@@ -323,9 +323,9 @@ async def _hold_for_autonomy(deps: SolveigContext, inbox: UserMessageQueue) -> s
     assistant". Split from the comment drain below because the two are headed
     for different hooks - the gate to `before_model_request`, the drain to the
     per-tool boundary in the event stream."""
-    await deps.interface.update_stats(status="Awaiting confirmation to continue")
+    await deps.interface.set_status("Awaiting confirmation to continue")
     comment = await inbox.get()
-    await deps.interface.update_stats(status=None)
+    await deps.interface.set_status(None)
     return comment
 
 

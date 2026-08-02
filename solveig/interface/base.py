@@ -417,7 +417,7 @@ class SolveigInterface(ABC):
     ) -> AsyncGenerator[SolveigInterface, Any]:
         """Context manager for grouping related output. Yields a
         SolveigInterface scoped to this group - local display calls made on
-        it land inside the group; global calls (ask_choice, update_stats,
+        it land inside the group; global calls (ask_choice, set_status,
         etc.) transparently affect the root."""
         raise NotImplementedError("Subclass must implement with_group")
         yield  # This line will never execute but makes it a valid generator
@@ -448,59 +448,33 @@ class SolveigInterface(ABC):
         raise NotImplementedError("Subclass must implement _with_animation")
         yield  # pragma: no cover - unreachable, makes this a valid generator
 
-    async def update_stats(
+    async def set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        """Update status bar with multiple pieces of information. Delegates
-        to the root interface - there is only one status bar.
+        """Set the status line in the header, with an optional flash duration.
 
-        Pass `duration` to show `status` as a flash message: it reverts to whatever
-        status was set before this call once `duration` seconds pass, unless something
-        else has changed the status in the meantime.
+        Delegates to the root interface - there is only one status line.
+        Pass `duration` to show `status` as a flash message: it reverts to
+        whatever the status was before this call once `duration` seconds
+        pass, unless something else has changed the status in the meantime.
         """
-        await self._root._update_stats(
-            status=status,
-            sent_tokens=sent_tokens,
-            received_tokens=received_tokens,
-            model=model,
-            url=url,
-            path=path,
-            max_context=max_context,
-            used_context=used_context,
-            input_price=input_price,
-            output_price=output_price,
-            mcp_servers=mcp_servers,
-            duration=duration,
-        )
+        await self._root._set_status(status, duration)
 
-    async def _update_stats(
+    async def _set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        raise NotImplementedError("Subclass must implement _update_stats")
+        raise NotImplementedError("Subclass must implement _set_status")
+
+    async def set_path(self, path: str | PathLike) -> None:
+        """Set the directory display in the header. Delegates to the root."""
+        await self._root._set_path(path)
+
+    async def _set_path(self, path: str | PathLike) -> None:
+        raise NotImplementedError("Subclass must implement _set_path")
 
     def add_stat(
         self,

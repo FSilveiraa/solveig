@@ -113,8 +113,8 @@ class EditableComment(Comment, EditableMessage):
         reconciled away when adopt() re-syncs the conversation at run end, and
         a mid-run retry would be drained into the running turn as an
         interjection instead of starting fresh."""
-        await self.interface.update_stats(
-            status="Finish or cancel the current run first", duration=3
+        await self.interface.set_status(
+            "Finish or cancel the current run first", duration=3
         )
 
     async def begin_edit(self) -> None:

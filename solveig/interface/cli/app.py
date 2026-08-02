@@ -148,7 +148,7 @@ class SolveigTextualApp(TextualApp):
                 copy_to_clipboard(selected_text)
                 self.screen.clear_selection()
                 if self._interface_ref is not None:
-                    await self._interface_ref.update_stats(
+                    await self._interface_ref.set_status(
                         status=f"Copied {len(selected_text)} characters to clipboard",
                         duration=2,
                     )

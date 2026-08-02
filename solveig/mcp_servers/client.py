@@ -140,13 +140,11 @@ async def connect(
 
     MCP_CONNECTIONS[server_config.url] = conn
 
-    await interface.update_stats(
+    await interface.set_status(
         f"MCP connected to {conn.server_name}",
         duration=2,
     )
-    await interface.update_stats(
-        mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
-    )
+    interface.refresh_stats()
     return conn
 
 
@@ -159,10 +157,8 @@ async def disconnect(
         return
     server_name = conn.server_name
     await conn.toolset.__aexit__(None, None, None)
-    await interface.update_stats(
-        mcp_servers=[c.display_name for c in MCP_CONNECTIONS.values()]
-    )
-    await interface.update_stats(
+    interface.refresh_stats()
+    await interface.set_status(
         f"MCP disconnected from {server_name}",
         duration=2,
     )

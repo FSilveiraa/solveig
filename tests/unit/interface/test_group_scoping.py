@@ -73,48 +73,17 @@ class _StubInterface(SolveigInterface):
     ) -> None:
         self.calls.append(("_display_section", title))
 
-    async def _update_stats(
+    async def _set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path=None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        # Record only the non-None kwargs for testing
         kwargs = {}
         if status is not None:
             kwargs["status"] = status
-        if sent_tokens is not None:
-            kwargs["sent_tokens"] = sent_tokens
-        if received_tokens is not None:
-            kwargs["received_tokens"] = received_tokens
-        if model is not None:
-            kwargs["model"] = model
-        if url is not None:
-            kwargs["url"] = url
-        if path is not None:
-            kwargs["path"] = path
-        if max_context is not None:
-            kwargs["max_context"] = max_context
-        if used_context is not None:
-            kwargs["used_context"] = used_context
-        if input_price is not None:
-            kwargs["input_price"] = input_price
-        if output_price is not None:
-            kwargs["output_price"] = output_price
-        if mcp_servers is not None:
-            kwargs["mcp_servers"] = mcp_servers
         if duration is not None:
             kwargs["duration"] = duration
-        self.calls.append(("_update_stats", kwargs))
+        self.calls.append(("_set_status", kwargs))
 
 
 @pytest.mark.anyio
@@ -151,13 +120,13 @@ class TestRootDelegation:
         assert result == "answer"
         assert ("_ask_question", "Path?") in root.calls
 
-    async def test_update_stats_from_scoped_interface_calls_root_backend(self):
+    async def test_set_status_from_scoped_interface_calls_root_backend(self):
         root = _StubInterface()
         scoped = _StubInterface(root=root)
 
-        await scoped.update_stats(status="Working")
+        await scoped.set_status("Working")
 
-        assert ("_update_stats", {"status": "Working"}) in root.calls
+        assert ("_set_status", {"status": "Working"}) in root.calls
 
     async def test_display_section_from_scoped_interface_calls_root_backend(self):
         root = _StubInterface()

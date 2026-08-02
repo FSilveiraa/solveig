@@ -8,6 +8,7 @@ notifies observers.  Callers handle their own display; the config doesn't.
 Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
 `tools.http.timeout`, `interface.theme`).
 """
+
 from __future__ import annotations
 
 import typing

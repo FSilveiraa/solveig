@@ -38,7 +38,7 @@ class LocalDisplay(SolveigInterface):
     of the display logic itself.
 
     `TerminalInterface`/`GroupInterface` each subclass this directly and add
-    the root-delegating global methods (`_ask_question`, `_update_stats`,
+    the root-delegating global methods (`_ask_question`, `_set_status`,
     ...) that `SolveigInterface` still leaves unimplemented.
     """
 
@@ -388,50 +388,31 @@ class TerminalInterface(LocalDisplay):
     def _refresh_stats(self) -> None:
         self.app._stats_dashboard.refresh_stats()
 
-    async def _update_stats(
+    async def _set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        """Update stats dashboard with multiple pieces of information.
+        """Set the status line, with an optional flash duration.
 
-        Pass `duration` to show `status` as a flash message: it reverts to whatever
-        status was set before this call once `duration` seconds pass, unless something
-        else has changed the status in the meantime.
+        Pass `duration` to show `status` as a flash message: it reverts to
+        whatever the status was before this call once `duration` seconds
+        pass, unless something else has changed the status in the meantime.
         """
-        previous_status = self.app._stats_dashboard._status if duration else None
-        self.app._stats_dashboard.update(
-            status=status,
-            sent_tokens=sent_tokens,
-            received_tokens=received_tokens,
-            model=model,
-            url=url,
-            path=path,
-            max_context=max_context,
-            used_context=used_context,
-            input_price=input_price,
-            output_price=output_price,
-            mcp_servers=mcp_servers,
-        )
+        dashboard = self.app._stats_dashboard
+        previous_status = dashboard._status if duration else None
+        dashboard.set_status(status)
 
         if duration and status is not None:
 
             async def _restore_status() -> None:
-                # Only restore if nothing else has changed the status in the meantime
-                if self.app._stats_dashboard._status == status:
-                    await self._update_stats(status=previous_status)
+                if dashboard._status == status:
+                    await self._set_status(previous_status)
 
             self.app.set_timer(duration, _restore_status)
+
+    async def _set_path(self, path: str | PathLike) -> None:
+        self.app._stats_dashboard.set_path(path)
 
     async def _wait_until_ready(self):
         await self.app.is_ready.wait()
@@ -474,7 +455,7 @@ class TerminalInterface(LocalDisplay):
             if final_status is not None
             else self.app._stats_dashboard._status
         )
-        await self._update_stats(status)
+        await self._set_status(status)
         await asyncio.sleep(0)
 
         spinner = random.choice(list(self.spinners.values()))
@@ -483,7 +464,7 @@ class TerminalInterface(LocalDisplay):
             yield
         finally:
             self.stats.stop_status_animation()
-            await self._update_stats(final_status)
+            await self._set_status(final_status)
 
 
 class GroupInterface(LocalDisplay):

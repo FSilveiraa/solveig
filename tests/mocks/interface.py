@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import fields, is_dataclass
 from os import PathLike
@@ -10,6 +10,7 @@ import anyio
 from pydantic import BaseModel
 from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
+from solveig.interface.base import Stat
 from solveig.interface.cli.interface import TerminalInterface
 
 
@@ -261,52 +262,27 @@ class MockInterface(TerminalInterface):
             self.groups.append(f"END: {title}")
             self.outputs.append("┗━━")
 
-    @asynccontextmanager
-    async def with_animation(
+    # -- stats overrides: no Textual app, so record instead of rendering --
+    def _add_stat(
         self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-        suffix: str | None = None,
-    ) -> AsyncGenerator[None, Any]:
-        await self.update_stats(status=status)
-        try:
-            yield
-        finally:
-            await self.update_stats(status=final_status)
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        stat = Stat(label, get, on_click, render)
+        self.stats_updates.append({"add_stat": label})
+        return stat
 
-    # Status and lifecycle
-    async def update_stats(
+    def _refresh_stats(self) -> None:
+        self.stats_updates.append({"refresh": True})
+
+    async def _set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        all_stats = {
-            "status": status,
-            "sent_tokens": sent_tokens,
-            "received_tokens": received_tokens,
-            "model": model,
-            "url": url,
-            "path": path,
-            "max_context": max_context,
-            "used_context": used_context,
-            "input_price": input_price,
-            "output_price": output_price,
-            "mcp_servers": mcp_servers,
-            "duration": duration,
-        }
-        stats = {k: v for k, v in all_stats.items() if v is not None}
-        self.stats_updates.append(stats)
+        self.stats_updates.append({"status": status, "duration": duration})
         if status and "awaiting input" in status.lower():
             # app is awaiting user input, insert it by calling the callback for user input
             try:
@@ -317,6 +293,23 @@ class MockInterface(TerminalInterface):
                 await self.stop()
             else:
                 await self._handle_input(user_input)
+
+    async def _set_path(self, path: str | PathLike) -> None:
+        self.stats_updates.append({"path": path})
+
+    @asynccontextmanager
+    async def with_animation(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
+    ) -> AsyncGenerator[None, Any]:
+        await self.set_status(status=status)
+        try:
+            yield
+        finally:
+            await self.set_status(final_status)
 
     # Test helper methods
     def get_all_output(self) -> str:

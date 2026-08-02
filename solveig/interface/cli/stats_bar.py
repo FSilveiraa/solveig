@@ -52,9 +52,12 @@ class StatsBar(Widget):
     #: layout is Textual's, and a web UI rendering the same stats as a side
     #: list would have no use for it. A stat with no entry here is appended.
     PLACEMENT: dict[str, tuple[int, int]] = {
-        "URL": (0, 0),
+        "Endpoint": (0, 0),
+        "Tokens": (0, 1),
         "Model": (1, 0),
         "Context": (1, 1),
+        "MCP": (2, 0),
+        "Price": (2, 1),
     }
 
     def __init__(
@@ -63,7 +66,7 @@ class StatsBar(Widget):
         interface_ref: SolveigInterface | None = None,
         config=None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self._interface_ref = interface_ref
         self._config = config
@@ -73,46 +76,15 @@ class StatsBar(Widget):
         self._animation_start: float | None = None
         self._animation_timeout: float | None = None
         self._status_suffix: str | None = None
-        self._sent_tokens = 0
-        self._received_tokens = 0
-        self._model = ""
-        self._url = ""
         self._path = Filesystem.get_current_directory(simplify=True)
         self._theme = theme
-        self.max_context: int | str = 0
-        self.used_context = 0
-        self.input_price: float = 0
-        self.output_price: float = 0
-        self.mcp_servers: list[str] = []
         #: Registered stats, in registration order. Placement (PLACEMENT) is
         #: applied on add; this list is what a redraw walks.
         self._stats: list[TextualStat] = []
 
     @property
-    def tokens(self):
-        return f"{self._sent_tokens}↑ / {self._received_tokens}↓"
-
-    @property
     def path(self):
         return f"🗁  {self._path}" if self._path else ""
-
-    @property
-    def context(self):
-        return f"{self.used_context} / {self.max_context if self.max_context >= 0 else 'Unlimited'}"
-
-    @property
-    def price(self):
-        return f"${self.input_price}/M↑ / ${self.output_price}/M↓"
-
-    @property
-    def mcp(self):
-        return (
-            "Disconnected"
-            if not self.mcp_servers
-            else self.mcp_servers[0]
-            if len(self.mcp_servers) == 1
-            else f"{len(self.mcp_servers)} servers"
-        )
 
     @property
     def status(self):
@@ -141,12 +113,10 @@ class StatsBar(Widget):
         )
 
         with self._collapsible:
-            # Row -> SolveigConfig field edited on click; None = read-only/computed.
             self._table1 = StatsTable(
                 show_header=False,
                 zebra_stripes=False,
                 classes="stats-table",
-                row_fields=["url", None],
             )
             self._table1.add_column("stats1", width=None)
 
@@ -154,7 +124,6 @@ class StatsBar(Widget):
                 show_header=False,
                 zebra_stripes=False,
                 classes="stats-table",
-                row_fields=["model", "max_context"],
             )
             self._table2.add_column("stats2", width=None)
 
@@ -163,7 +132,6 @@ class StatsBar(Widget):
                 show_header=False,
                 zebra_stripes=False,
                 classes="stats-table-final",
-                row_fields=[None, None],
             )
             self._table3.add_column("stats3", width=None)
 
@@ -175,20 +143,9 @@ class StatsBar(Widget):
             )
 
     def on_mount(self):
-        """Populate tables, title, and subscribe to config for auto-refresh."""
+        """Populate tables and title."""
         self._refresh_title()
         self._refresh_stats()
-
-        config = self._config
-        if config is not None:
-
-            @config.on_change("api.model", "api.url", "api.max_context")
-            async def _on_stats_change(config, paths):
-                self.update(
-                    model=config.api.model,
-                    url=config.api.url,
-                    max_context=config.api.max_context,
-                )
 
     def add_stat(self, stat: TextualStat) -> None:
         """Take a stat the interface built and show it.
@@ -227,82 +184,22 @@ class StatsBar(Widget):
         if stat is None or not stat.clickable:
             interface = self._interface_ref
             if interface is not None:
-                await interface.update_stats(
-                    status="This stat isn't editable", duration=2
-                )
+                await interface.set_status("This stat isn't editable", duration=2)
             return
 
         assert stat.on_click is not None  # narrowed by `clickable`
         await stat.on_click()
 
-    def update(
-        self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | str | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
-    ):
-        """Update the stats dashboard with new information."""
-        updated_title = updated_stats = False
+    def set_status(self, status: str | None) -> None:
+        """Set the status line in the collapsible header."""
+        self._status = status or ""
+        self._refresh_title()
 
-        if status is not None:
-            self._status = status
-            updated_title = True
-
-        if path is not None:
-            # path should be a canonical Path passed by command.py or any other cwd-altering operation, then formatted for ~
-            # if everything is implemented correctly, then passing the path below should be the same as not passing
-            abs_path = Filesystem.get_absolute_path(path)
-            self._path = Filesystem.get_current_directory(abs_path, simplify=True)
-            updated_title = True
-
-        if sent_tokens is not None:
-            self._sent_tokens = sent_tokens
-            updated_stats = True
-
-        if received_tokens is not None:
-            self._received_tokens = received_tokens
-            updated_stats = True
-
-        if model is not None:
-            self._model = model
-            updated_stats = True
-
-        if url is not None:
-            self._url = url
-            updated_stats = True
-
-        if max_context is not None:
-            self.max_context = max_context
-            updated_stats = True
-
-        if used_context is not None:
-            self.used_context = used_context
-            updated_stats = True
-
-        if input_price is not None:
-            self.input_price = input_price
-            updated_stats = True
-
-        if output_price is not None:
-            self.output_price = output_price
-            updated_stats = True
-
-        if mcp_servers is not None:
-            self.mcp_servers = mcp_servers
-            updated_stats = True
-
-        if updated_title:
-            self._refresh_title()
-        if updated_stats:
-            self._refresh_stats()
+    def set_path(self, path: str | PathLike) -> None:
+        """Set the path display in the collapsible header."""
+        abs_path = Filesystem.get_absolute_path(path)
+        self._path = Filesystem.get_current_directory(abs_path, simplify=True)
+        self._refresh_title()
 
     def start_status_animation(
         self, spinner, timeout: float | None = None, suffix: str | None = None
@@ -333,17 +230,39 @@ class StatsBar(Widget):
         self._collapsible.update_title(center=self.status, right=self.path)
 
     def _refresh_stats(self):
-        """Rebuild table rows with current values."""
-        self._table1.clear()
-        self._table2.clear()
-        self._table3.clear()
+        """Rebuild table rows from registered stats, placed by PLACEMENT.
 
-        self._table1.add_row(f"Endpoint: {self._url}")
-        self._table1.add_row(f"Tokens: {self.tokens}")
-        self._table2.add_row(f"Model: {self._model}")
-        self._table2.add_row(f"Context: {self.context}")
-        self._table3.add_row(f"MCP: {self.mcp}")
-        self._table3.add_row(f"Price: {self.price}")
+        Tables don't exist until compose() runs (during mount). Stats
+        registered before mount are drawn by on_mount's _refresh_stats().
+        """
+        if not hasattr(self, "_table1"):
+            return
+
+        for table in (self._table1, self._table2, self._table3):
+            table.clear()
+            table.row_stats = []
+
+        # Per-table row lists: (stat | None, display_text). Placed stats fill
+        # their designated cells; unplaced stats append to the last table.
+        table_rows: list[list[tuple[TextualStat | None, str]]] = [[], [], []]
+
+        for stat in self._stats:
+            if stat.cell is not None:
+                table_idx, row_idx = stat.cell
+                rows = table_rows[table_idx]
+                while len(rows) <= row_idx:
+                    rows.append((None, ""))
+                rows[row_idx] = (stat, f"{stat.label}: {stat.text}")
+
+        for stat in self._stats:
+            if stat.cell is None:
+                table_rows[-1].append((stat, f"{stat.label}: {stat.text}"))
+
+        for table_idx, rows in enumerate(table_rows):
+            table = (self._table1, self._table2, self._table3)[table_idx]
+            for stat, text in rows:
+                table.add_row(text)
+                table.row_stats.append(stat)
 
     @classmethod
     def get_css(cls) -> str:

@@ -3,7 +3,6 @@
 
 import asyncio
 import random
-from os import PathLike
 
 from pydantic_ai.messages import (
     ModelMessage,
@@ -58,35 +57,12 @@ class DemoInterface(TerminalInterface):
         # Simulate Enter — the InputBar handler clears the box and calls _handle_input
         text_input.post_message(GrowingInput.Submitted(message))
 
-    async def update_stats(
+    async def set_status(
         self,
-        status: str | None = None,
-        sent_tokens: int | None = None,
-        received_tokens: int | None = None,
-        model: str | None = None,
-        url: str | None = None,
-        path: str | PathLike | None = None,
-        max_context: int | None = None,
-        used_context: int | None = None,
-        input_price: float | None = None,
-        output_price: float | None = None,
-        mcp_servers: list[str] | None = None,
+        status: str | None,
         duration: float | None = None,
     ) -> None:
-        await super().update_stats(
-            status=status,
-            sent_tokens=sent_tokens,
-            received_tokens=received_tokens,
-            model=model,
-            url=url,
-            path=path,
-            max_context=max_context,
-            used_context=used_context,
-            input_price=input_price,
-            output_price=output_price,
-            mcp_servers=mcp_servers,
-            duration=duration,
-        )
+        await super().set_status(status=status, duration=duration)
         if status and "awaiting input" in status.lower() and self._user_messages:
             sleep_time, message = self._user_messages.pop(0)
             if self._typing_task and not self._typing_task.done():

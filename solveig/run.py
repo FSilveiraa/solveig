@@ -19,8 +19,10 @@ from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
+from solveig.config.editor import register_config_stat
 from solveig.interface.base import SolveigInterface
 from solveig.interface.cli.interface import TerminalInterface
+from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.session.conversation import Conversation
@@ -29,6 +31,79 @@ from solveig.session.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
 from solveig.user_message_queue import UserMessageQueue
+
+
+def _register_stats(
+    config: SolveigConfig,
+    interface: SolveigInterface,
+    client: Client,
+    conversation: Conversation,
+) -> None:
+    """Declare the stats the app itself owns.
+
+    Here rather than in each producing module because this is the one place
+    holding all four of config, interface, client and conversation - and stats
+    that need more than a getter (Context, Price) have to be owned by whoever
+    can also drive their redraw. Where each one LANDS is the frontend's
+    business (`StatsBar.PLACEMENT`), not this list's order.
+
+    Called once, after the interface is ready: registering twice would show
+    every stat twice, since each `add_stat` appends.
+
+    Each stat reads its source live - none of them stores a value, so nothing
+    here can go stale. What differs is how each one learns it must REDRAW:
+
+    - Endpoint/Model: `register_config_stat` wires `config.on_change` itself
+    - Context: an observer for `api.max_context`, plus the token push below
+    - Tokens: pushed by `main_loop` after each turn (nothing observes usage)
+    - Price: pushed by `Client` when it swaps `model_info`
+    - MCP: pushed by `connect`/`disconnect`
+    """
+    register_config_stat(interface, config, "Endpoint", "api.url")
+
+    interface.add_stat(
+        "Tokens",
+        get=lambda: (conversation.usage.input_tokens, conversation.usage.output_tokens),
+        render=lambda t: f"{t[0]}↑ / {t[1]}↓",
+    )
+
+    register_config_stat(interface, config, "Model", "api.model")
+
+    # Two sources in one cell, which is exactly what a value-holding stat could
+    # not have expressed: usage is pushed, max_context is observed.
+    interface.add_stat(
+        "Context",
+        get=lambda: (conversation.usage.input_tokens, config.api.max_context),
+        render=lambda c: f"{c[0]} / {c[1] if c[1] else 'Unlimited'}",
+    )
+
+    @config.on_change("api.max_context")
+    async def _max_context_changed(_c: SolveigConfig, _p: frozenset[str]) -> None:
+        interface.refresh_stats()
+
+    interface.add_stat(
+        "MCP",
+        get=lambda: [conn.display_name for conn in MCP_CONNECTIONS.values()],
+        render=lambda names: (
+            "Disconnected"
+            if not names
+            else names[0]
+            if len(names) == 1
+            else f"{len(names)} servers"
+        ),
+    )
+
+    # Never displayed before this: the price parameters were threaded through
+    # the protocol, the interface and the widget, and no producer ever set them.
+    interface.add_stat(
+        "Price",
+        get=lambda: client.model_info,
+        render=lambda info: (
+            f"${info.input_price or 0}/M↑ / ${info.output_price or 0}/M↓"
+            if info
+            else "unknown"
+        ),
+    )
 
 
 async def _display_setup(
@@ -83,7 +158,8 @@ async def _display_setup(
     else:
         await client.refresh(config)
 
-    await interface.update_stats(url=config.api.url, model=config.api.model)
+    await interface.set_status("Ready")
+    _register_stats(config, interface, client, conversation)
 
     return sys_prompt
 
@@ -121,9 +197,9 @@ async def main_loop(
 
     while True:
         if user_message_queue.empty():
-            await interface.update_stats(status="Awaiting input")
+            await interface.set_status("Awaiting input")
         prompt = await user_message_queue.get()
-        await interface.update_stats(status=None)
+        await interface.set_status(None)
 
         # The user prompt renders reactively through the transcript once
         # run_turn adopts it into the conversation - no predicted display here.
@@ -148,10 +224,9 @@ async def main_loop(
         if not ok:
             continue
 
-        await interface.update_stats(
-            sent_tokens=conversation.usage.input_tokens,
-            received_tokens=conversation.usage.output_tokens,
-        )
+        # Tokens changed; the stat reads conversation.usage live, so a
+        # refresh is all that's needed.
+        interface.refresh_stats()
 
 
 async def run_async(
