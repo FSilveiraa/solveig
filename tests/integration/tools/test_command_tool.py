@@ -250,9 +250,13 @@ class TestWorkingDirectoryTracking:
         )
         assert result.issues == []
 
-        cwd_update = next((s for s in interface.stats_updates if "path" in s), None)
-        assert cwd_update is not None
-        assert str(cwd_update["path"]) == str(subdir)
+        # Real state: the shell moved. The Path stat is a getter over exactly
+        # this, so asserting the display received a path would only test that
+        # the tool passed a value along - which it no longer does, and no
+        # longer should.
+        assert str(sandboxed_shell.cwd) == str(subdir)
+        # And the display was told to re-read. It carries no value.
+        assert any("refresh" in update for update in interface.stats_updates)
 
     async def test_detached_command_no_stats_update(self, sandboxed_shell):
         interface = MockInterface(choices=[0])
@@ -262,7 +266,9 @@ class TestWorkingDirectoryTracking:
         )
 
         assert result.issues == []
-        assert not any("path" in s for s in interface.stats_updates)
+        # A detached process can't have changed this shell's directory, so
+        # nothing should have asked the display to re-read.
+        assert not any("refresh" in s for s in interface.stats_updates)
 
 
 class TestShellIntegration:

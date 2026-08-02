@@ -294,9 +294,6 @@ class MockInterface(TerminalInterface):
             else:
                 await self._handle_input(user_input)
 
-    async def _set_path(self, path: str | PathLike) -> None:
-        self.stats_updates.append({"path": path})
-
     @asynccontextmanager
     async def with_animation(
         self,

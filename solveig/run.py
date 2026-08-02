@@ -31,6 +31,8 @@ from solveig.session.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
 from solveig.user_message_queue import UserMessageQueue
+from solveig.utils.file import Filesystem
+from solveig.utils.shell import get_running_shell
 
 
 def _register_stats(
@@ -59,6 +61,17 @@ def _register_stats(
     - Price: pushed by `Client` when it swaps `model_info`
     - MCP: pushed by `connect`/`disconnect`
     """
+    # Reads the persistent shell's cwd, which is what the user's commands
+    # actually run in - not the process's, which never moves. `get_running_shell`
+    # rather than `get_persistent_shell` because a getter must not START one:
+    # before any command has run there is no shell, and the process directory is
+    # the honest answer.
+    interface.add_stat(
+        "Path",
+        get=lambda: shell.cwd if (shell := get_running_shell()) else None,
+        render=lambda cwd: f"🗁  {Filesystem.get_current_directory(cwd, simplify=True)}",
+    )
+
     register_config_stat(interface, config, "Endpoint", "api.url")
 
     interface.add_stat(

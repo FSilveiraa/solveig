@@ -1,7 +1,7 @@
 """Stats bar - collapsible widget containing stats tables."""
 
 import time
-from os import PathLike
+from enum import Enum, auto
 
 from textual.containers import Horizontal
 from textual.timer import Timer
@@ -11,24 +11,34 @@ from textual.widgets import DataTable
 from solveig.interface.base import SolveigInterface, Stat
 from solveig.interface.cli.collapsible_widgets import CustomCollapsible
 from solveig.interface.themes import Palette
-from solveig.utils.file import Filesystem
+
+
+class Slot(Enum):
+    """A place in this bar that is not a table cell.
+
+    An enum rather than a magic tuple or a name: a member has a definition site
+    and cannot be typo'd into "unplaced". Only one so far - the collapsible
+    header, which is visible while the bar is collapsed and so is where the
+    always-relevant stat goes.
+    """
+
+    HEADER = auto()
 
 
 class TextualStat(Stat):
     """A stat plus where this frontend puts it.
 
-    `cell` is Textual's business alone: which table and row a stat occupies is
-    meaningless to a web UI that might render the same stats as a side list.
-    Keeping it on the subclass is why the interface hands out stats rather than
-    reading them from a registry - the frontend that placed one can find it
-    again by identity, instead of matching on a label or trusting registration
-    order to line up with a layout table.
+    `cell` is Textual's business alone: which table and row a stat occupies -
+    or that it belongs in the header instead - is meaningless to a web UI that
+    might render the same stats as a side list. Keeping it on the subclass is
+    why the interface hands out stats rather than reading them from a registry:
+    the frontend that placed one can find it again.
 
     `None` means "wherever it lands": known stats get known cells (see
     `StatsBar.PLACEMENT`), anything a tool or plugin registers is appended.
     """
 
-    cell: tuple[int, int] | None = None
+    cell: tuple[int, int] | Slot | None = None
 
 
 class StatsTable(DataTable):
@@ -51,13 +61,18 @@ class StatsBar(Widget):
     #: knowledge alone: the labels come from whoever registers them, but the
     #: layout is Textual's, and a web UI rendering the same stats as a side
     #: list would have no use for it. A stat with no entry here is appended.
-    PLACEMENT: dict[str, tuple[int, int]] = {
+    PLACEMENT: dict[str, tuple[int, int] | Slot] = {
         "Endpoint": (0, 0),
         "Tokens": (0, 1),
         "Model": (1, 0),
         "Context": (1, 1),
         "MCP": (2, 0),
         "Price": (2, 1),
+        # In the header rather than a table: the path is the one stat worth
+        # seeing while the bar is collapsed. Otherwise an ordinary stat - a
+        # getter, a label, the same refresh - which is why it is placed here
+        # instead of being a set_path() the widget keeps its own copy for.
+        "Path": Slot.HEADER,
     }
 
     def __init__(
@@ -76,7 +91,6 @@ class StatsBar(Widget):
         self._animation_start: float | None = None
         self._animation_timeout: float | None = None
         self._status_suffix: str | None = None
-        self._path = Filesystem.get_current_directory(simplify=True)
         self._theme = theme
         #: Registered stats, in registration order. Placement (PLACEMENT) is
         #: applied on add; this list is what a redraw walks.
@@ -84,7 +98,15 @@ class StatsBar(Widget):
 
     @property
     def path(self):
-        return f"🗁  {self._path}" if self._path else ""
+        """The header stat's text, read live like any other stat.
+
+        No stored `_path` and no `set_path` writing into one: whoever changes
+        the directory calls `refresh_stats()` and the getter reads the new
+        value, same as every stat in the tables."""
+        for stat in self._stats:
+            if stat.cell is Slot.HEADER:
+                return stat.text
+        return ""
 
     @property
     def status(self):
@@ -195,12 +217,6 @@ class StatsBar(Widget):
         self._status = status or ""
         self._refresh_title()
 
-    def set_path(self, path: str | PathLike) -> None:
-        """Set the path display in the collapsible header."""
-        abs_path = Filesystem.get_absolute_path(path)
-        self._path = Filesystem.get_current_directory(abs_path, simplify=True)
-        self._refresh_title()
-
     def start_status_animation(
         self, spinner, timeout: float | None = None, suffix: str | None = None
     ) -> None:
@@ -235,6 +251,11 @@ class StatsBar(Widget):
         Tables don't exist until compose() runs (during mount). Stats
         registered before mount are drawn by on_mount's _refresh_stats().
         """
+        # A header stat is not in a table, so a table redraw alone would leave
+        # it stale. Refreshing the title here means every stat updates on one
+        # `refresh_stats()` regardless of where it sits.
+        self._refresh_title()
+
         if not hasattr(self, "_table1"):
             return
 
@@ -247,7 +268,9 @@ class StatsBar(Widget):
         table_rows: list[list[tuple[TextualStat | None, str]]] = [[], [], []]
 
         for stat in self._stats:
-            if stat.cell is not None:
+            # A Slot (currently only HEADER) is drawn elsewhere - by
+            # _refresh_title, above - so it takes no row here.
+            if isinstance(stat.cell, tuple):
                 table_idx, row_idx = stat.cell
                 rows = table_rows[table_idx]
                 while len(rows) <= row_idx:

@@ -17,7 +17,6 @@ import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
-from os import PathLike
 from typing import TYPE_CHECKING, Any
 
 from solveig.exceptions import UserCancel
@@ -468,13 +467,6 @@ class SolveigInterface(ABC):
         duration: float | None = None,
     ) -> None:
         raise NotImplementedError("Subclass must implement _set_status")
-
-    async def set_path(self, path: str | PathLike) -> None:
-        """Set the directory display in the header. Delegates to the root."""
-        await self._root._set_path(path)
-
-    async def _set_path(self, path: str | PathLike) -> None:
-        raise NotImplementedError("Subclass must implement _set_path")
 
     def add_stat(
         self,

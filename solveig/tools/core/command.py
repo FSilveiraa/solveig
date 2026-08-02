@@ -9,7 +9,6 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
-from solveig.utils.file import Filesystem
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 if TYPE_CHECKING:
@@ -138,9 +137,10 @@ class CommandTool(BaseTool[CommandConfig]):
                 ) as task:
                     try:
                         output, error = await task
-                        await interface.set_path(
-                            Filesystem.get_absolute_path(shell.cwd)
-                        )
+                        # A command may have cd'd. The Path stat reads the
+                        # shell's cwd itself, so this only has to say "redraw"
+                        # - it never carries the value.
+                        interface.refresh_stats()
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:

@@ -5,7 +5,6 @@ import difflib
 import random
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from os import PathLike
 from typing import TYPE_CHECKING, Any
 
 from rich.spinner import Spinner
@@ -410,9 +409,6 @@ class TerminalInterface(LocalDisplay):
                     await self._set_status(previous_status)
 
             self.app.set_timer(duration, _restore_status)
-
-    async def _set_path(self, path: str | PathLike) -> None:
-        self.app._stats_dashboard.set_path(path)
 
     async def _wait_until_ready(self):
         await self.app.is_ready.wait()
