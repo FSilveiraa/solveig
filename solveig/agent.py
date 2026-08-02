@@ -23,7 +23,7 @@ at call time rather than closing over them:
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import ValidationError
@@ -143,6 +143,20 @@ def build_loop_capability() -> Hooks[SolveigContext]:
 
 
 @dataclass
+class _PlacedComment:
+    """A comment and the tool call it arrived behind.
+
+    Recorded when it happens, not derived afterwards. The alternative - reading
+    the position back out of the assembled message's part order - would make a
+    display-side artifact load-bearing, and re-derives a fact we held at the
+    moment it was true. `after` is None for a comment that arrived before any
+    tool finished."""
+
+    text: str
+    after: str | None
+
+
+@dataclass
 class _Reconciler:
     """Folds pydantic-ai's authoritative message list into the reactive
     Conversation.
@@ -157,13 +171,17 @@ class _Reconciler:
     echo_id: MessageId
     anchor: int
     """Index where pydantic-ai's own copy of the prompt lands."""
+    placed: list[_PlacedComment] = field(default_factory=list)
+    """Comments delivered during the current step, each with the tool call it
+    arrived behind. Recorded by `_assemble_tool_returns` as it happens, replayed
+    into the canonical message below, cleared once that message exists."""
 
     async def sync(self, messages: Sequence[ModelMessage]) -> None:
         # Fold pydantic-ai's own request object for the prompt into the echo id
         # (idempotent) so it isn't mounted twice, then reconcile the
         # conversation to the run's authoritative messages.
         if len(messages) > self.anchor:
-            self.conversation.reidentify(self.echo_id, messages[self.anchor])
+            await self.conversation.reidentify(self.echo_id, messages[self.anchor])
         await self._fold_assembly(messages)
         await self.conversation.adopt(messages)
 
@@ -171,33 +189,35 @@ class _Reconciler:
         """Reconcile the tool-return entry we assembled as tools finished with
         pydantic-ai's canonical one, built in one go when the node ended.
 
-        Two things have to be true at once, which is why this is not a swap:
-        the entry must end up being pydantic-ai's OBJECT (adopt matches by
-        identity, so a copy mounts a duplicate of every tool return), and it
-        must keep the user comments we interleaved (its object has only tool
-        returns - the comments were placed here, at the boundary, and exist
-        nowhere else). So the comments are spliced INTO that object, each behind
-        the tool return it followed, and the object goes on being pydantic-ai's.
-        Mutating `parts` is what makes both true; it is also what puts the
-        comments on the wire in the order they happened.
+        Two things have to be true at once, which is why this is not a swap: the
+        entry must end up being pydantic-ai's OBJECT (adopt matches by identity,
+        so a copy mounts a duplicate of every tool return), and it must keep the
+        user comments, which exist nowhere else. So the comments are replayed
+        INTO that object and it goes on being pydantic-ai's. Mutating `parts` is
+        what makes both true, and it is also what puts the comments on the wire
+        in the order they happened.
 
         Identified by shape, not position: pydantic-ai appends that request to
         the history only when the NEXT ModelRequestNode runs, so it is not the
         trailing message at the boundary where the tools actually finished - and
         by the time it IS trailing, a response has landed behind it. A step
         produces exactly one unheld request carrying tool returns."""
-        assembled = self.conversation.assembly
-        if assembled is None:
+        if not self.conversation.assembling:
             return
+        placed, self.placed = self.placed, []
         held = {id(message) for message in self.conversation.messages}
         for message in messages:
             if id(message) in held or not isinstance(message, ModelRequest):
                 continue
             if not any(isinstance(part, ToolReturnPart) for part in message.parts):
                 continue
-            message.parts = _splice_comments(assembled.parts, message.parts)
-            await self.conversation.finalize_assembly(message)
+            await self.conversation.finalize_assembly(
+                message,
+                merge=lambda _ours, theirs: _with_comments(theirs, placed),
+            )
             return
+        # No canonical message yet - this step's comments are still owed.
+        self.placed = placed
 
 
 async def _stream_response(
@@ -222,35 +242,38 @@ async def _stream_response(
             await conversation.stream_updated(stream.response)
 
 
+def _with_comments(
+    canonical: ModelMessage, placed: Sequence[_PlacedComment]
+) -> ModelMessage:
+    """Mutate pydantic-ai's message to carry the comments, and hand back the
+    SAME object - identity is what stops `adopt` mounting a second copy."""
+    canonical.parts = _splice_comments(placed, canonical.parts)
+    return canonical
+
+
 def _splice_comments(
-    assembled: Sequence[Any], canonical: Sequence[Any]
+    placed: Sequence[_PlacedComment], canonical: Sequence[Any]
 ) -> list[Any]:
-    """Put the user comments from `assembled` back into `canonical`, each one
-    behind the same tool return it followed.
+    """Replay each comment into `canonical` behind the tool return it followed.
 
-    Anchored on `tool_call_id` rather than list position: the canonical parts
-    are authoritative (a retry or a repair can add one we never saw), so we walk
-    THEM and drop each comment in after its anchor. A comment whose anchor is
-    missing goes at the end rather than being lost."""
-    after: dict[str, list[Any]] = {}
-    trailing: list[Any] = []
-    anchor: str | None = None
-    for part in assembled:
-        if isinstance(part, ToolReturnPart):
-            anchor = part.tool_call_id
-        elif anchor is None:
-            trailing.append(part)
-        else:
-            after.setdefault(anchor, []).append(part)
+    Anchored on `tool_call_id`, never on list position: the canonical parts are
+    authoritative and may hold a part we never saw (a retry, a repair), which
+    would shift every index. A comment whose anchor is missing from those parts
+    goes at the end rather than being dropped."""
+    after: dict[str | None, list[Any]] = {}
+    for comment in placed:
+        after.setdefault(comment.after, []).append(
+            UserPromptPart(content=comment.text)
+        )
 
-    spliced: list[Any] = []
+    spliced: list[Any] = list(after.pop(None, ()))
     for part in canonical:
         spliced.append(part)
         if isinstance(part, ToolReturnPart):
             spliced.extend(after.pop(part.tool_call_id, ()))
     for orphaned in after.values():
-        trailing.extend(orphaned)
-    return spliced + trailing
+        spliced.extend(orphaned)
+    return spliced
 
 
 async def _assemble_tool_returns(
@@ -258,6 +281,7 @@ async def _assemble_tool_returns(
     node: Any,
     run_ctx: Any,
     inbox: UserMessageQueue,
+    placed: list[_PlacedComment],
 ) -> None:
     """Grow one ModelRequest in the Conversation as each tool return lands, so
     the transcript shows a result the moment its tool finishes rather than all
@@ -270,28 +294,27 @@ async def _assemble_tool_returns(
     holding, ordering degrades quietly to "every result, then every comment", so
     it is pinned by test_call_tools_node_streams_a_result_event_per_tool.
 
-    A comment typed while a tool ran is drained in BEHIND that tool's result -
-    the position is recorded here, at the boundary, not reconstructed later by
-    sorting timestamps. `UserPromptPart.timestamp` is stamped when the part is
-    built, not when the user hit Enter, so a sort would order by the wrong
-    clock; draining at the boundary has no clock at all."""
+    A comment typed while a tool ran is drained in BEHIND that tool's result,
+    and `placed` records WHICH result at the moment it happens - not
+    reconstructed later from part order or from timestamps.
+    `UserPromptPart.timestamp` is stamped when the part is built, not when the
+    user hit Enter, so a sort would order by the wrong clock; the boundary has
+    no clock at all. That record is what the canonical message is rebuilt from,
+    which leaves the entry below purely a display concern."""
     parts: list[Any] = []
-    assembling = False
     async with node.stream(run_ctx) as stream:
         async for event in stream:
             if not isinstance(event, FunctionToolResultEvent):
                 continue
             parts.append(event.part)
-            parts.extend(
-                UserPromptPart(content=comment)
-                for comment in _drain_user_comments(inbox)
-            )
+            for comment in _drain_user_comments(inbox):
+                placed.append(_PlacedComment(comment, after=event.part.tool_call_id))
+                parts.append(UserPromptPart(content=comment))
             message = ModelRequest(parts=list(parts))
-            if assembling:
+            if conversation.assembling:
                 await conversation.assembly_updated(message)
             else:
                 await conversation.begin_assembly(message)
-                assembling = True
 
 
 async def _hold_for_autonomy(deps: SolveigContext, inbox: UserMessageQueue) -> str:
@@ -454,7 +477,9 @@ async def run_turn(
                     # this replaces the advance rather than preceding it - the
                     # `run.next()` below then finds the work already done and
                     # just fires the node hooks and returns the next node.
-                    await _assemble_tool_returns(conversation, node, run.ctx, inbox)
+                    await _assemble_tool_returns(
+                        conversation, node, run.ctx, inbox, reconciler.placed
+                    )
 
                 # Advancing fires the node hooks, so reconciliation happens on
                 # the way out of every node without a call here.

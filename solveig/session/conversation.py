@@ -10,7 +10,7 @@ async method that updates the dict and then awaits registered observers.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -145,14 +145,47 @@ class Conversation:
         for observer in self._observers:
             await observer.branched_from(message_id, previous)
 
-    def reidentify(self, message_id: MessageId, message: ModelMessage) -> None:
-        """Silently swap the object stored under an existing id (no observer
-        event). Used for optimistic echo: we mount the user's prompt instantly
-        under `message_id`, then fold pydantic-ai's own equal-content request
-        object into that same id so `adopt` sees it as already-present (no
-        duplicate) and the mounted widget stays put."""
-        if message_id in self._entries:
-            self._entries[message_id] = message
+    async def reconcile(
+        self,
+        message_id: MessageId,
+        canonical: ModelMessage,
+        *,
+        merge: Callable[[ModelMessage, ModelMessage], ModelMessage] | None = None,
+        announce: bool = True,
+    ) -> None:
+        """The one reconciliation rule: a provisional entry we built IS the
+        message pydantic-ai has now built for itself. Keep our id, end up
+        holding THEIR object.
+
+        Holding their object is the load-bearing half. `adopt` matches by object
+        identity, so an entry left holding our copy makes their equal-content
+        object look new and mounts a duplicate.
+
+        `merge` covers the case where our copy knows something theirs does not
+        (user comments interleaved between tool returns exist nowhere else), and
+        must fold that into their object rather than replacing it.
+
+        `announce=False` for a swap that changes nothing visible - the optimistic
+        prompt echo, where both objects carry the same text and a re-render would
+        be pure churn."""
+        if message_id not in self._entries:
+            return
+        if merge is not None:
+            canonical = merge(self._entries[message_id], canonical)
+        self._entries[message_id] = canonical
+        # Whichever provisional slot this entry occupied is now settled.
+        if self._inflight_id == message_id:
+            self._inflight_id = None
+        if self._assembly_id == message_id:
+            self._assembly_id = None
+        if announce:
+            for observer in self._observers:
+                await observer.stream_completed(message_id)
+
+    async def reidentify(self, message_id: MessageId, message: ModelMessage) -> None:
+        """Optimistic echo: we mount the user's prompt instantly, then fold
+        pydantic-ai's own equal-content request object into that same id."""
+        await self.reconcile(message_id, message, announce=False)
 
     async def adopt(self, messages: Sequence[ModelMessage]) -> None:
         """Reconcile to pydantic-ai's authoritative message list. A message
@@ -224,16 +257,10 @@ class Conversation:
                 await observer.stream_updated(self._inflight_id)
 
     async def finalize_stream(self, response: ModelMessage) -> None:
-        """Replace the in-flight streamed object with pydantic-ai's canonical
-        finalized response under the same id, so a later adopt() sees it as
-        already present (no duplicate) and the entry's id stays stable. No-op
-        when not streaming."""
-        if self._inflight_id is None:
-            return
-        self._entries[self._inflight_id] = response
-        for observer in self._observers:
-            await observer.stream_completed(self._inflight_id)
-        self._inflight_id = None
+        """The streamed response is complete: swap in pydantic-ai's canonical
+        object. No-op when not streaming."""
+        if self._inflight_id is not None:
+            await self.reconcile(self._inflight_id, response)
 
     # -- an entry assembled part-by-part --------------------------------------
     #
@@ -283,13 +310,13 @@ class Conversation:
             for observer in self._observers:
                 await observer.stream_updated(self._assembly_id)
 
-    async def finalize_assembly(self, message: ModelMessage) -> None:
-        """Swap in pydantic-ai's canonical object under the same id, so a later
-        adopt() sees it as already present (no duplicate) and the entry keeps
-        its id. No-op when nothing is being assembled."""
-        if self._assembly_id is None:
-            return
-        self._entries[self._assembly_id] = message
-        for observer in self._observers:
-            await observer.stream_completed(self._assembly_id)
-        self._assembly_id = None
+    async def finalize_assembly(
+        self,
+        message: ModelMessage,
+        *,
+        merge: Callable[[ModelMessage, ModelMessage], ModelMessage] | None = None,
+    ) -> None:
+        """The assembled entry's canonical object has arrived. `merge` folds in
+        whatever only our copy knew. No-op when nothing is being assembled."""
+        if self._assembly_id is not None:
+            await self.reconcile(self._assembly_id, message, merge=merge)
