@@ -22,13 +22,25 @@ class Client:
     live until the replacement is proven.  On failure, reverts the model
     so the UI sees the reversion."""
 
-    def __init__(self, config: SolveigConfig, provider: Provider | None = None) -> None:
+    def __init__(
+        self,
+        config: SolveigConfig,
+        provider: Provider | None = None,
+        interface: SolveigInterface | None = None,
+    ) -> None:
         self.provider = provider or config.api.type.get_provider(
             api_key=config.api.key.get_secret_value() or None,
             url=config.api.url,
         )
         self.type = config.api.type
         self.model_info: ModelInfo | None = None
+        #: Told when `model_info` is replaced, because the Price and Context
+        #: stats read it. NOT so the client can display anything - it never
+        #: does. The alternative was registering the price stat's observer
+        #: after this one and relying on observer ORDER: a config-change
+        #: listener firing before `refresh` has swapped `model_info` would read
+        #: the previous model's prices. Optional so a headless Client works.
+        self._interface = interface
 
         @config.on_change("api.model", "api.url", "api.type")
         async def _on_api_change(_config: SolveigConfig, paths: frozenset[str]):
@@ -76,6 +88,10 @@ class Client:
         self.provider = new_provider
         self.type = api_type
         self.model_info = info
+        # model_info is now the new model's - stats reading it (price, context)
+        # are stale until told, and this is the moment it stopped being true.
+        if self._interface is not None:
+            self._interface.refresh_stats()
         # Apply the model's max context length if the user didn't specify one
         if info.context_length is not None and config.api.max_context is None:
             await config.set("api.max_context", info.context_length)

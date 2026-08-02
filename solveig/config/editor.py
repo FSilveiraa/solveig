@@ -8,6 +8,7 @@ notifies observers.  Callers handle their own display; the config doesn't.
 Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
 `tools.http.timeout`, `interface.theme`).
 """
+from __future__ import annotations
 
 import typing
 from collections.abc import Callable
@@ -16,10 +17,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
+from solveig.exceptions import UserCancel
 from solveig.interface import themes
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import SolveigInterface, Stat
 from solveig.subcommands.base import subcommand
-from solveig.utils import dotted as dotted_path
+from solveig.utils import dotted
 
 from . import DEFAULT_CONFIG_PATHS, sources
 from .config import SolveigConfig, display_config_value
@@ -82,9 +84,9 @@ def _unwrap_optional(tp: Any) -> Any:
     return tp
 
 
-def _leaf_type(config: SolveigConfig, dotted: str) -> Any:
+def _leaf_type(config: SolveigConfig, path: str) -> Any:
     """The (optional-unwrapped) declared type of a dotted field's leaf."""
-    obj, leaf = dotted_path.owner_of(config, dotted)
+    obj, leaf = dotted.owner_of(config, path)
     return _unwrap_optional(typing.get_type_hints(type(obj))[leaf])
 
 
@@ -115,10 +117,10 @@ def _parse_field_value(tp: Any, raw: str) -> Any:
     return raw or None
 
 
-def parse_config_value(config: SolveigConfig, dotted: str, raw: str) -> Any:
+def parse_config_value(config: SolveigConfig, path: str, raw: str) -> Any:
     """Parse a raw `/config set <field> <value>` string into the leaf field's
     Python type. The subsequent setattr validates it."""
-    return _parse_field_value(_leaf_type(config, dotted), raw)
+    return _parse_field_value(_leaf_type(config, path), raw)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +286,7 @@ async def config_save(
     target = path or (config.config_files or DEFAULT_CONFIG_PATHS)[0]
     try:
         data = config.model_dump(mode="json") if full else config.declared_config()
-    except dotted_path.MissingPath as e:
+    except dotted.MissingPath as e:
         # A declared path with nothing behind it means preservation failed, not
         # that a plugin is absent — an absent plugin's block is kept and dumps
         # normally. Refuse rather than write a file that silently lost a value.
@@ -303,3 +305,45 @@ async def config_save(
 
 # ---------------------------------------------------------------------------
 # Subcommands — declared here because the config editor owns config editing.
+def register_config_stat(
+    interface: SolveigInterface,
+    config: SolveigConfig,
+    label: str,
+    path: str,
+) -> Stat:
+    """Show `path` in the stats display, editable by clicking it.
+
+    `path` is a full dotted path (`api.model`, not `model`) - the same one
+    `config.set` takes. The old stats bar carried short names in a row->field
+    table and `config.set("model", ...)` raised `AttributeError`, so
+    click-to-edit was broken for every row it offered.
+
+    Reads through the path on every render rather than caching, so `config` stays
+    the single home for the value; the observer below only says "redraw", never
+    "here is the new value".
+    """
+
+    async def edit() -> None:
+        # Type-aware: prompt_for_field picks the widget from the FIELD's type
+        # (constrained -> choices, bool -> yes/no, list -> comma-separated).
+        try:
+            new_value = await prompt_for_field(path, config, interface)
+        except UserCancel:
+            return
+        await config.set(path, new_value)
+
+    def current() -> object:
+        owner, leaf = dotted.owner_of(config, path)
+        return getattr(owner, leaf)
+
+    stat = interface.add_stat(label, get=current, on_click=edit)
+
+    @config.on_change(path)
+    async def _redraw(_config: SolveigConfig, _paths: frozenset[str]) -> None:
+        # Whoever changed it - this stat's own click, a /config set, an API
+        # client correcting a bad model - the display follows the config rather
+        # than the edit path, so there is one refresh rule instead of one per
+        # writer.
+        interface.refresh_stats()
+
+    return stat

@@ -195,8 +195,10 @@ async def run_async(
     user_message_queue = UserMessageQueue()
     conversation = Conversation()
     session_manager = SessionManager(config, conversation)
-    client = client or Client(config)
 
+    # Interface BEFORE client: the client tells it to redraw when model_info is
+    # replaced, because the price and context stats read that. Dependency order,
+    # as ever - nothing is wired after the fact.
     if interface is None:
         interface = TerminalInterface(
             theme=config.interface.theme,
@@ -210,6 +212,8 @@ async def run_async(
         # Test/demo code injected an interface it already constructed - wire
         # its output channel to the session queue.
         interface.user_message_queue = user_message_queue
+
+    client = client or Client(config, interface=interface)
 
     # The conversation's two observers, both self-registering: one shows it,
     # one saves it. SessionDisplay is built after the interface because it
