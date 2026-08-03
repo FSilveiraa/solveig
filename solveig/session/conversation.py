@@ -9,6 +9,7 @@ async method that updates the dict and then awaits registered observers.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from typing import Protocol
 
 from pydantic_ai.messages import (
     ModelMessage,
+    ModelMessagesTypeAdapter,
     TextPart,
     ThinkingPart,
     UserPromptPart,
@@ -25,6 +27,60 @@ from pydantic_ai.usage import RunUsage
 MessageId = str
 
 _EDITABLE_PARTS = (UserPromptPart, TextPart, ThinkingPart)
+
+
+def parse_conversation_blob(text: str) -> dict:
+    """Parse stored conversation data from raw text — two formats, one reader.
+
+    **Legacy blob** (single JSON object, still used by story files):
+        {"messages": [...], "total_tokens_sent": N, ...}
+
+    **Log format** (one value per line, append-only session files):
+        <ModelMessage>
+        <ModelMessage>
+        {"session_meta": true, "total_tokens_sent": N, ...}  ← optional, last one wins
+
+    Detection: the first line's first char — legacy blobs start with '{' and
+    contain a "messages" key; log lines start with '{' and contain either
+    "kind" (a message) or "session_meta" (meta).  An empty file returns
+    zero messages and zero totals.
+
+    Stories are always legacy blobs; new session files use the log format.
+    Old session files (written before the log-format cutover) keep loading.
+    """
+    text = text.strip()
+    if not text:
+        return {"messages": [], "total_tokens_sent": 0, "total_tokens_received": 0}
+
+    # Legacy blob: single JSON object with a "messages" key.
+    if text.startswith("{") and '"messages"' in text[:200]:
+        blob = json.loads(text)
+        return {
+            "messages": ModelMessagesTypeAdapter.validate_python(blob["messages"]),
+            "total_tokens_sent": blob.get("total_tokens_sent", 0),
+            "total_tokens_received": blob.get("total_tokens_received", 0),
+        }
+
+    # Log format: one JSON value per line.
+    messages: list[ModelMessage] = []
+    total_sent = 0
+    total_received = 0
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        if obj.get("session_meta"):
+            total_sent = obj.get("total_tokens_sent", 0)
+            total_received = obj.get("total_tokens_received", 0)
+        else:
+            messages.extend(ModelMessagesTypeAdapter.validate_python([obj]))
+
+    return {
+        "messages": messages,
+        "total_tokens_sent": total_sent,
+        "total_tokens_received": total_received,
+    }
 
 
 class ConversationObserver(Protocol):

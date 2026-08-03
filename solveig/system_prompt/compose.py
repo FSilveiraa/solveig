@@ -22,7 +22,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig.config import SolveigConfig
-from solveig.session.manager import parse_conversation_blob
+from solveig.session.conversation import parse_conversation_blob
 from solveig.utils.file import Filesystem
 
 _STORIES_DIR = Path(__file__).parent / "stories"
@@ -51,7 +51,7 @@ async def load_story(name: str) -> list[ModelMessage]:
     """Read system_prompt/stories/<name>.jsonl and return its messages.
 
     Story files are the exact same blob shape a stored session uses (see
-    solveig.sessions.manager.parse_conversation_blob) - a real session file
+    solveig.session.conversation.parse_conversation_blob) - a real session file
     can be copied into stories/ verbatim and loaded the same way.
     """
     path = _STORIES_DIR / f"{name}.jsonl"

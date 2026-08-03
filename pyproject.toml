@@ -141,3 +141,21 @@ name = "Toolset assembly reads MCP, not the other way round"
 type = "forbidden"
 source_modules = ["solveig.mcp_servers.client"]
 forbidden_modules = ["solveig.tools"]
+
+[[tool.importlinter.contracts]]
+name = "Config data models don't import the interface protocol"
+type = "forbidden"
+source_modules = ["solveig.config.models", "solveig.config.config", "solveig.config.sources"]
+forbidden_modules = ["solveig.interface.base"]
+
+[[tool.importlinter.contracts]]
+name = "Tools don't import session management"
+type = "forbidden"
+source_modules = ["solveig.tools"]
+forbidden_modules = ["solveig.session.manager", "solveig.session.display"]
+
+[[tool.importlinter.contracts]]
+name = "System prompt doesn't import session manager"
+type = "forbidden"
+source_modules = ["solveig.system_prompt"]
+forbidden_modules = ["solveig.session.manager"]
