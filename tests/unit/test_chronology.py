@@ -8,6 +8,8 @@ part is built, not when the user pressed Enter, so a sort would order by the
 wrong clock.
 """
 
+import asyncio
+
 import pytest
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -175,6 +177,52 @@ async def test_comment_on_a_step_that_ran_no_tools_still_reaches_the_model():
         if isinstance(part, UserPromptPart)
     ]
     assert prompts == ["go", "no tools were harmed"]
+
+
+async def test_comment_survives_a_cancelled_run():
+    """A comment placed mid-tools must not be lost when the run is cancelled.
+
+    It survives for a non-obvious reason, which is why this is pinned: the
+    entry `_assemble_tool_returns` builds is a REAL conversation entry, not a
+    staging buffer. A cancel only means pydantic-ai's canonical version never
+    arrives to replace it, so the comment is already where it needs to be — and
+    the next run sends `conversation.messages` as history.
+
+    Nothing handles cancellation explicitly. If the assembled entry ever
+    becomes provisional in a way that a cancel discards, this fails.
+    """
+    config = _config()
+    conversation = Conversation()
+    inbox = UserMessageQueue()
+    interface = MockInterface(choices=[0] * 10)
+    agent = build_agent(
+        config, client=None, system_prompt="sys",
+        model=FunctionModel(_two_tools_then_text),
+    )
+
+    @agent.tool_plain
+    async def slow(n: int) -> str:
+        if n == 1:
+            inbox.put_nowait("how much longer?")
+            return "result 1"
+        await asyncio.sleep(30)  # cancelled below, never completes
+        return "result 2"
+
+    deps = SolveigContext(config=config, interface=interface)
+    with Agent.parallel_tool_call_execution_mode("sequential"):
+        turn = asyncio.create_task(run_turn(agent, conversation, deps, "go", inbox))
+        for _ in range(300):
+            await asyncio.sleep(0.01)
+            if interface.get_active_tasks():
+                break
+        assert interface.cancel_task()
+        with pytest.raises(asyncio.CancelledError):
+            await turn
+
+    assert _shape(_tool_return_message(conversation)) == [
+        "ToolReturnPart:result 1",
+        "UserPromptPart:how much longer?",
+    ]
 
 
 async def test_call_tools_node_streams_a_result_event_per_tool():
