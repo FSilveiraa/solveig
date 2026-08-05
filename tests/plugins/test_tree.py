@@ -21,6 +21,7 @@ from pathlib import PurePath
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.plugins.library.tree import TreeTool
 from solveig.utils.file import FileMetadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface

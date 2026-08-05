@@ -162,7 +162,7 @@ class TestAutoExecuteCommands:
         assert "file1.txt" in result.content
         assert "file2.txt" in result.content
         assert len(interface.questions) == 0
-        assert "auto_execute_commands" in interface.get_all_output()
+        assert "config.tools.command.auto_execute" in interface.get_all_output()
 
     async def test_auto_execute_non_matching_pattern(self, sandboxed_shell):
         interface = MockInterface(choices=[0])

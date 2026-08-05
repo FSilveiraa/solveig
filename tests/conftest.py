@@ -5,6 +5,7 @@ Provides automatic mocking of all file I/O operations.
 
 import asyncio
 import contextlib
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,10 +26,19 @@ from tests.mocks import MockInterface
 # already got. Async tests just declare `async def test_...`; sync tests keep
 # working (anyio runs them too). This is the enforced-not-remembered version
 # of the per-module marker papercut.
+#
+# It also skips `permission_denied`-marked tests when running as root: the
+# container runs everything as uid 0, where chmod 0o000 is bypassed, so the
+# tool's file-permission rejection can't be exercised. Those tests are real
+# and pass under a normal user; they are skipped, not deleted.
 def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("anyio") is None:
             item.add_marker(pytest.mark.anyio)
+        if os.geteuid() == 0 and item.get_closest_marker("permission_denied"):
+            item.add_marker(
+                pytest.mark.skip(reason="file-permission rejection is bypassed as root")
+            )
 
 
 @pytest.fixture
@@ -281,12 +291,13 @@ def anyio_backend():
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
-        "markers", "no_stdio_mocking: mark test to allow print() and input()"
-    )
-    config.addinivalue_line(
         "markers", "no_file_mocking: mark test to allow file open()"
     )
     config.addinivalue_line(
         "markers",
         "no_subprocess_mocking: disables the mock_asyncio_subprocess fixture to allow real async processes",
+    )
+    config.addinivalue_line(
+        "markers",
+        "permission_denied: exercises file-permission rejection; skipped as root where chmod is bypassed",
     )

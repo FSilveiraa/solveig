@@ -17,6 +17,7 @@ not `execute()`, so header assertions target it directly rather than the
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.tools.core.read import ReadTool
 from solveig.utils.file import FileMetadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -195,7 +196,7 @@ class TestAutoAllowedPaths:
         test_content = "Auto-allowed content"
         test_file.write_text(test_content)
 
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
         result = await ReadTool(path=str(test_file), metadata_only=False).execute(
             *make_ctx(config, interface)
@@ -207,7 +208,7 @@ class TestAutoAllowedPaths:
     async def test_auto_allowed_directory(self, tmp_path):
         (tmp_path / "file.txt").write_text("content")
 
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[str(tmp_path)])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[str(tmp_path)])
         interface = MockInterface()
         result = await ReadTool(path=str(tmp_path), metadata_only=True).execute(
             *make_ctx(config, interface)
@@ -228,6 +229,7 @@ class TestErrorHandling:
         assert len(result.issues) == 1
         assert "does not exist" in str(result.issues[0]).lower()
 
+    @pytest.mark.permission_denied
     async def test_permission_denied(self, tmp_path):
         restricted_file = tmp_path / "restricted.txt"
         restricted_file.write_text("Secret")

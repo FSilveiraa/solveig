@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.tools.core.move import MoveTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
@@ -120,7 +121,7 @@ class TestAutoAllowedPaths:
         source_file = tmp_path / "auto_source.txt"
         dest_file = tmp_path / "auto_dest.txt"
         source_file.write_text("Auto-move content")
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await MoveTool(
@@ -138,7 +139,7 @@ class TestAutoAllowedPaths:
         dest_dir = tmp_path / "auto_dest"
         source_dir.mkdir()
         (source_dir / "content.txt").write_text("Directory content")
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await MoveTool(
@@ -156,7 +157,7 @@ class TestAutoAllowedPaths:
         auto_file.parent.mkdir()
         manual_file.parent.mkdir()
         auto_file.write_text("Source content")
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), auto_allowed_paths=[f"{tmp_path}/auto/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/auto/**"])
         interface = MockInterface(choices=[0])
 
         result = await MoveTool(
@@ -185,6 +186,7 @@ class TestErrorHandling:
             for phrase in ["not found", "does not exist", "no such file"]
         )
 
+    @pytest.mark.permission_denied
     async def test_move_permission_denied_source(self, tmp_path):
         restricted_dir = tmp_path / "restricted"
         restricted_dir.mkdir()
@@ -202,6 +204,7 @@ class TestErrorHandling:
         finally:
             source_file.chmod(0o644)
 
+    @pytest.mark.permission_denied
     async def test_move_permission_denied_destination(self, tmp_path):
         source_file = tmp_path / "source.txt"
         source_file.write_text("Source content")
