@@ -410,10 +410,10 @@ async def run_turn(
     Driven by `run.next()`, not `async for`. Bare iteration uses the graph's
     internal stepping, which fires no node hooks at all; `next()` runs the full
     `before_node_run` -> `wrap_node_run` -> `after_node_run` lifecycle, which is
-    what lets reconciliation live in a hook. (`before_node_run` therefore fires
-    AFTER a streamed node was consumed here. Nothing registers it - the
-    framework's own `run_stream` has the same ordering and reaches for a private
-    method to avoid it.)
+    what lets reconciliation live in a hook — this is pydantic-ai's documented
+    manual-drive pattern (its own `agent.run()` drives via `next()`). The
+    downside is that `before_node_run` fires AFTER a streamed node was consumed
+    here; nothing in solveig registers it.
 
     The user's prompt is appended up front so it renders instantly (optimistic
     echo) rather than only when the run surfaces it. pydantic-ai creates its own
