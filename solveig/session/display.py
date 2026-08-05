@@ -61,10 +61,10 @@ class SessionDisplay(ConversationObserver):
     # -- conversation events --------------------------------------------------
 
     async def message_added(self, message_id: MessageId) -> None:
-        await self._show(message_id)
+        await self._display_message(message_id)
 
     async def stream_began(self, message_id: MessageId) -> None:
-        await self._show(message_id)
+        await self._display_message(message_id)
 
     async def stream_updated(self, message_id: MessageId) -> None:
         await self.interface.update_message(message_id)
@@ -103,11 +103,11 @@ class SessionDisplay(ConversationObserver):
         # rebuilt per part.
         classes = tool_classes()
         for message_id in self.conversation.ids:
-            await self._show(message_id, returns=returns, classes=classes)
+            await self._display_message(message_id, returns=returns, classes=classes)
 
     # -- helpers --------------------------------------------------------------
 
-    async def _show(
+    async def _display_message(
         self,
         message_id: MessageId,
         returns: dict[str, ToolReturnPart] | None = None,

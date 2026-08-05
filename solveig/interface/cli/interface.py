@@ -32,10 +32,14 @@ from solveig.interface.base import (
     TreeBox,
 )
 from solveig.interface.cli.app import SolveigTextualApp
-from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
+from solveig.interface.cli.collapsible_widgets import (
+    CollapsibleDiffBox,
+    CollapsibleTextBox,
+)
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
+from solveig.interface.cli.tree_display import TreeDisplay
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
@@ -132,10 +136,7 @@ class TerminalInterface(SolveigInterface):
 
     @property
     def _container(self):
-        return (
-            self.app._conversation_area._current_section_container
-            or self.app._conversation_area
-        )
+        return self.app._conversation_area
 
     # -- message display (root-level, shared via _root) ---------------------
 
@@ -210,7 +211,7 @@ class TerminalInterface(SolveigInterface):
 
     async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
         if self._messages is not None:
-            await self._messages.show_part(message_id, part_index)
+            await self._messages.display(message_id, part_index)
 
     async def update_message(self, message_id: MessageId) -> None:
         if self._messages is not None:
@@ -231,8 +232,6 @@ class TerminalInterface(SolveigInterface):
         max_depth: int = -1,
         ignore_patterns: list[str] | None = None,
     ) -> TreeBox:
-        from solveig.interface.cli.tree_display import TreeDisplay
-
         tree_widget = TreeDisplay(
             metadata=metadata,
             display_metadata=display_metadata,
@@ -242,7 +241,7 @@ class TerminalInterface(SolveigInterface):
         )
         if title:
             tree_widget.border_title = title
-        await self.app._conversation_area._add_element(tree_widget, self._container)
+        await self.app._conversation_area.add_element(self._container, tree_widget)
         return tree_widget
 
     async def display_diff(
@@ -252,8 +251,6 @@ class TerminalInterface(SolveigInterface):
         title: str | None = None,
         context_lines: int = 3,
     ) -> DiffBox:
-        from solveig.interface.cli.collapsible_widgets import CollapsibleDiffBox
-
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
         new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
 
@@ -279,7 +276,7 @@ class TerminalInterface(SolveigInterface):
             new_content=new_content,
             title=title or "Diff",
         )
-        await self.app._conversation_area._add_element(box, self._container)
+        await self.app._conversation_area.add_element(self._container, box)
         return box
 
     # -- add (returns object, container-level) -------------------------------
@@ -401,8 +398,8 @@ class TerminalInterface(SolveigInterface):
 
     async def wait_until_ready(self) -> None:
         await self.app.is_ready.wait()
-        # HACK — Set active_app context since the interface was started from
-        # a separate asyncio task
+        # HACK — Requires local import. Set active_app context since
+        # the interface was started from a separate asyncio task
         from textual._context import active_app
 
         active_app.set(self.app)
@@ -498,7 +495,7 @@ class GroupInterface(TerminalInterface):
         suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         async with self._root.with_animation(
-            status, final_status, timeout=timeout, suffix=suffix
+            status=status, final_status=final_status, timeout=timeout, suffix=suffix
         ) as value:
             yield value
 

@@ -98,13 +98,16 @@ class MessageDisplay:
         self._mounted: dict[MessageId, _Mounted] = {}
         self._last_section_role: str | None = None
 
-    async def show_part(self, message_id: MessageId, part_index: int) -> None:
+    async def display(self, message_id: MessageId, *part_indexes: int) -> None:
+        # async def display(self, message_id: MessageId, part_index: int | None = None) -> None:
         """Mount one part's widget, emitting a section header first if this
         message opens a new role. Called once per part, in order, so the header
         check has to be idempotent - it is, since it only fires on a genuine
         role change."""
         message = self.conversation.get(message_id)
-        if message is None or part_index >= len(message.parts):
+        if message is None or any(
+            index >= len(message.parts) for index in part_indexes
+        ):
             return
         role = _role_of(message)
         mounted = self._mounted.setdefault(message_id, _Mounted(role=role))
@@ -115,12 +118,17 @@ class MessageDisplay:
             mounted.widgets.append(header)
             self._last_section_role = role
 
-        widget = self._make_widget(
-            message.parts[part_index], message_id, part_index, role
-        )
-        if widget is not None:
-            await self._mount_widget(widget)
-            mounted.widgets.append(widget)
+        widgets = [
+            widget
+            for widget in [
+                self._make_widget(message.parts[index], message_id, index, role)
+                for index in part_indexes
+            ]
+            if widget
+        ]
+        if widgets:
+            await self._mount_widget(*widgets)
+            mounted.widgets.append(*widgets)
 
     async def update(self, message_id: MessageId) -> None:
         """Update this message's widgets in place (edit or streaming). Content
@@ -183,8 +191,8 @@ class MessageDisplay:
 
     # -- helpers ------------------------------------------------------------
 
-    async def _mount_widget(self, widget: Widget) -> None:
-        await self._area._add_element(widget, self._area)
+    async def _mount_widget(self, *widgets: Widget) -> None:
+        await self._area.add_element(self._area, *widgets)
 
     def _make_widget(
         self,

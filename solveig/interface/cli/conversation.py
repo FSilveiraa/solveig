@@ -2,8 +2,9 @@
 
 from rich.syntax import Syntax
 from textual import events
-from textual.containers import ScrollableContainer, Vertical
+from textual.containers import ScrollableContainer
 from textual.dom import DOMNode
+from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 
 from solveig.utils.file import FileMetadata
@@ -43,7 +44,6 @@ class ConversationArea(ScrollableContainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._hovered_group: CustomCollapsible | None = None
-        self._current_section_container: Vertical | None = None
 
     @staticmethod
     def _nearest_group(widget: DOMNode | None) -> CustomCollapsible | None:
@@ -80,18 +80,25 @@ class ConversationArea(ScrollableContainer):
 
     async def clear(self) -> None:
         """Remove all mounted content, in preparation for a full redraw."""
-        self._current_section_container = None
         await self.remove_children()
 
-    async def _add_element(self, element, container) -> None:
-        """Mount element into the given container."""
-        await container.mount(element)
+    async def add_element(self, container: Widget, *elements: Widget) -> None:
+        """Mount widgets into the given container.
+
+        `container` is either the area itself (transcript/root rendering) or a
+        group's contents (scoped tool output inside `with_group`). Uses
+        Textual's native `mount(*widgets)` multi-mount, then a single deferred
+        layout pass once children finish composing (fixes height: auto on
+        complex widgets like Tree, Collapsible).
+        """
+        await container.mount(*elements)
 
         # Defer layout refresh so child widgets finish composing first, then
         # force a layout pass with their correct sizes (fixes height: auto on
         # complex widgets like Tree, Collapsible, etc.)
         def _after_mount():
-            element.refresh(layout=True)
+            for element in elements:
+                element.refresh(layout=True)
             self.scroll_end()
             self.call_after_refresh(self.scroll_end)
 
@@ -102,8 +109,8 @@ class ConversationArea(ScrollableContainer):
     ):
         """Add text with specific styling using semantic style names."""
         style_class = f"{style}_message" if style != "text" else style
-        await self._add_element(
-            Static(text, classes=style_class, markup=markup), container
+        await self.add_element(
+            container, Static(text, classes=style_class, markup=markup)
         )
 
     async def add_text_box(
@@ -119,16 +126,8 @@ class ConversationArea(ScrollableContainer):
         box = CollapsibleTextBox(
             content, title=title, italic=italic, collapsed=collapsed
         )
-        await self._add_element(box, container)
+        await self.add_element(container, box)
         return box
-
-    async def add_section_header(self, title: str):
-        """Add a section header, then start a new tinted container for its content."""
-        self._current_section_container = None
-        await self._add_element(SectionHeader(title), self)
-        container = Vertical(classes=f"section-{title.lower()}")
-        await self._add_element(container, self)
-        self._current_section_container = container
 
     async def add_tree_display(
         self,
@@ -147,7 +146,7 @@ class ConversationArea(ScrollableContainer):
         )
         if title:
             tree_widget.border_title = title
-        await self._add_element(tree_widget, container)
+        await self.add_element(container, tree_widget)
 
     async def enter_group(self, title: str, *, container) -> CustomCollapsible:
         """Mount a new collapsible group into container. Returns the group
@@ -206,17 +205,6 @@ class ConversationArea(ScrollableContainer):
             /* Trailing space is the last child's own bottom margin (1); padding
                here would add to it (padding never collapses) and give 2. */
             padding: 0;
-        }
-
-        /* Imperative-path section containers only - the live/reactive transcript
-           mounts comments flat and spaces them via the role/box/group margins
-           below, not here. Kept for the tint; spacing lives on the children. */
-        .section-user, .section-assistant {
-            height: auto;
-        }
-
-        .section-user {
-            background: $user-turn-bg;
         }
 
         /* The user-turn tint lives on the comment TEXT only, not the action
