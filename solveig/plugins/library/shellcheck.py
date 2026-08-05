@@ -114,7 +114,12 @@ async def shellcheck(
             )
             return
 
-        if proc.returncode == 127 and b"command not found" in stderr.lower():
+        # 127 is the shell's "command not found" exit. The message differs by
+        # shell - bash says "command not found", dash (/bin/sh) says
+        # "shellcheck: not found" - so match on the shared "not found" phrase
+        # rather than one shell's wording, or a missing binary would block
+        # every command instead of degrading to a warning.
+        if proc.returncode == 127 and b"not found" in stderr.lower():
             await interface.print(
                 "Shellcheck plugin is enabled, but the `shellcheck` command is not available.",
                 level=Level.WARNING,
