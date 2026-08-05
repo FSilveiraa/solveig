@@ -22,7 +22,11 @@ DEFAULT_CONFIG = SolveigConfig(
         model="test-model",
         temperature=0.0,
     ),
-    min_disk_space_left=ByteSize(1_000_000_000),  # 1 GB
+    # Normalize the disk-space check out of the way for tests. The container's
+    # /tmp is a ~512MB tmpfs; the 1GB production default fires "Insufficient
+    # disk space" on every file-writing tool test as a false environmental
+    # failure. Individual tests that genuinely exercise the check set their own.
+    min_disk_space_left=ByteSize(0),
     session=SessionConfig(auto_save=False),
     interface=InterfaceConfig(stream=False),
 )

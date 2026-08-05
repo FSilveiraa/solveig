@@ -38,7 +38,7 @@ from solveig.user_message_queue import UserMessageQueue
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after_tool, before_tool, clear_hooks
-from solveig.tools.available import AVAILABLE_TOOLS, tool_classes
+from solveig.tools.available import build_toolset, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
 from solveig.tools.result import ToolResult
@@ -370,8 +370,7 @@ async def test_filtered_toolset_hides_command_live_without_rebuild():
     """`no_commands` gating is evaluated live, per step, against
     `ctx.deps.config` - the same built toolset must expose `command` with
     commands on and hide it with them off, with NO `rebuild()` in between."""
-    AVAILABLE_TOOLS.rebuild(DEFAULT_CONFIG)  # membership built once
-    toolset = AVAILABLE_TOOLS.toolset
+    toolset = build_toolset(DEFAULT_CONFIG)  # membership derived once
 
     on = _run_context(SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"enabled": True}}), MockInterface())
     off = _run_context(SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"command": {"enabled": False}}), MockInterface())
