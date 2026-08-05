@@ -4,6 +4,8 @@ This module provides base collapsible widgets that can be used throughout the ap
 for any content that needs to be expandable/collapsible (stats, reasoning, logs, etc.).
 """
 
+import difflib
+
 from rich.syntax import Syntax
 from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
@@ -14,7 +16,8 @@ from textual.widgets import Collapsible, Markdown, Static
 # private module (tracked in CLAUDE.md "Known Justified Type Hacks").
 from textual.widgets._collapsible import CollapsibleTitle
 
-from ..base import MutableTextBox
+from solveig.interface.base import DiffBox, TextBox
+
 from .widgets import CopyButton
 
 
@@ -198,7 +201,7 @@ class CustomCollapsible(Collapsible):
         )
 
 
-class CollapsibleTextBox(Widget, MutableTextBox):
+class CollapsibleTextBox(Widget, TextBox):
     """A collapsible text block widget for reasoning, verbose output, etc.
 
     Similar to StatsBar pattern - a Widget that contains a Collapsible.
@@ -260,6 +263,11 @@ class CollapsibleTextBox(Widget, MutableTextBox):
         self._text_container.update("")
         self._on_content_changed()
 
+    def replace(self, text: str) -> None:
+        """Replace the entire content."""
+        self._text_container.update(text)
+        self._on_content_changed()
+
     def _on_content_changed(self):
         self.refresh(layout=True)
         parent = self.parent
@@ -295,3 +303,63 @@ class CollapsibleTextBox(Widget, MutableTextBox):
             + CustomCollapsible.get_css()
             + CopyButton.get_css()
         )
+
+
+class CollapsibleDiffBox(CollapsibleTextBox, DiffBox):
+    """A collapsible diff display — same rendering as CollapsibleTextBox but
+    carries old/new content for the DiffBox.replace() contract.
+
+    Inherits `get_css` from CollapsibleTextBox. The `replace()` here takes
+    (old_content, new_content) per DiffBox — the MRO picks this over
+    TextBox's `replace(text)` because it's defined on the most-derived class.
+    """
+
+    def __init__(
+        self,
+        content: str | Syntax,
+        old_content: str,
+        new_content: str,
+        title: str | None = None,
+    ) -> None:
+        super().__init__(content, title=title)
+        self._old_content = old_content
+        self._new_content = new_content
+
+    def replace(self, old_content: str, new_content: str) -> None:  # type: ignore[override]
+        """Replace both sides of the diff. Re-computes and re-renders.
+
+        Shadows TextBox.replace(text) — DiffBox's replace takes two args
+        because a diff has two sides. mypy can't reconcile the signatures
+        across the MRO, hence the type: ignore.
+        """
+        self._old_content = old_content
+        self._new_content = new_content
+        old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
+        new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
+        diff_text = "".join(
+            difflib.unified_diff(
+                old_lines, new_lines, fromfile="original", tofile="modified"
+            )
+        )
+        if diff_text.strip():
+            assert isinstance(self._text_container, Static)
+            self._text_container.update(
+                Syntax(diff_text, lexer="diff", theme=self._live_code_theme())
+            )
+        else:
+            self._text_container.update("(Same content)")
+        self._on_content_changed()
+
+    def _live_code_theme(self) -> str:
+        """Resolve the active code theme via the app's interface ref.
+
+        ``SolveigTextualApp`` stores the interface as ``_interface_ref`` (not
+        ``interface``), so a direct ``self.app.interface`` lookup silently
+        fell back to ``"monokai"``.  Reach the real interface and let its
+        ``_live_code_theme`` resolve the root, matching how the rest of the
+        frontend reads the live theme.
+        """
+        interface = getattr(self.app, "_interface_ref", None)
+        if interface is not None and hasattr(interface, "_live_code_theme"):
+            return interface._live_code_theme()
+        return "monokai"

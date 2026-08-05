@@ -24,16 +24,18 @@ from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
 from solveig.interface.base import (
+    DiffBox,
     Level,
-    MutableTextBox,
     SolveigInterface,
-    Stat
+    Stat,
+    TextBox,
+    TreeBox,
 )
 from solveig.interface.cli.app import SolveigTextualApp
+from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
-from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
@@ -226,14 +228,22 @@ class TerminalInterface(SolveigInterface):
         title: str | None = None,
         display_metadata: bool = False,
         expand_root: bool = True,
-    ) -> None:
-        await self.app._conversation_area.add_tree_display(
-            metadata,
-            title=title or str(metadata.path),
+        max_depth: int = -1,
+        ignore_patterns: list[str] | None = None,
+    ) -> TreeBox:
+        from solveig.interface.cli.tree_display import TreeDisplay
+
+        tree_widget = TreeDisplay(
+            metadata=metadata,
             display_metadata=display_metadata,
             expand_root=expand_root,
-            container=self._container,
+            max_depth=max_depth,
+            ignore_patterns=ignore_patterns or [],
         )
+        if title:
+            tree_widget.border_title = title
+        await self.app._conversation_area._add_element(tree_widget, self._container)
+        return tree_widget
 
     async def display_diff(
         self,
@@ -241,7 +251,9 @@ class TerminalInterface(SolveigInterface):
         new_content: str,
         title: str | None = None,
         context_lines: int = 3,
-    ) -> None:
+    ) -> DiffBox:
+        from solveig.interface.cli.collapsible_widgets import CollapsibleDiffBox
+
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
         new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
 
@@ -261,9 +273,14 @@ class TerminalInterface(SolveigInterface):
             to_display = Syntax(diff_text, lexer="diff", theme=self._live_code_theme())
         else:
             to_display = "(Same content)"
-        await self.app._conversation_area.add_text_box(
-            to_display, title=title or "Diff", container=self._container
+        box = CollapsibleDiffBox(
+            to_display,
+            old_content=old_content,
+            new_content=new_content,
+            title=title or "Diff",
         )
+        await self.app._conversation_area._add_element(box, self._container)
+        return box
 
     # -- add (returns object, container-level) -------------------------------
 
@@ -274,7 +291,7 @@ class TerminalInterface(SolveigInterface):
         language: str | None = None,
         italic: bool = False,
         collapsed: bool = False,
-    ) -> MutableTextBox:
+    ) -> TextBox:
         to_display: str | Syntax | Markdown = text
         if language:
             language_name = get_language(language.lstrip("."))

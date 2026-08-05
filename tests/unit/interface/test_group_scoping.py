@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from solveig.interface.base import MutableTextBox, SolveigInterface
+from solveig.interface.base import SolveigInterface, TextBox
 
 
 class _StubInterface(SolveigInterface):
@@ -51,9 +51,9 @@ class _StubInterface(SolveigInterface):
 
     async def display_text_box(
         self, text, title=None, language=None, italic=False, collapsed=False
-    ) -> MutableTextBox:
+    ) -> TextBox:
         self.calls.append(("display_text_box", title))
-        return MutableTextBox()
+        return TextBox()
 
     async def display_diff(
         self, old_content, new_content, title=None, context_lines=3

@@ -23,7 +23,14 @@ import anyio
 from pydantic import BaseModel
 from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
-from solveig.interface.base import Level, MutableTextBox, SolveigInterface, Stat
+from solveig.interface.base import (
+    DiffBox,
+    Level,
+    SolveigInterface,
+    Stat,
+    TextBox,
+    TreeBox,
+)
 
 
 def _dump_field(obj: Any) -> Any:
@@ -49,6 +56,54 @@ def _part_text(part: Any) -> str | None:
     else:
         return None
     return text if text.strip() else None
+
+
+class _MockTextBox(TextBox):
+    """Records `append`/`clear`/`replace` calls into the interface's outputs.
+
+    Subclasses the real `TextBox` contract so isinstance checks pass, but
+    needs no Textual app — every mutation lands in the captured `outputs`
+    list so tests can assert on what was shown.
+    """
+
+    def __init__(self, outputs: list[str]) -> None:
+        self._outputs = outputs
+
+    def append(self, text: str) -> None:
+        self._outputs.append(text.rstrip())
+
+    def clear(self) -> None:
+        self._outputs.append("[TextBox cleared]")
+
+    def replace(self, text: str) -> None:
+        self._outputs.append(text)
+
+
+class _MockDiffBox(DiffBox):
+    """Read-only diff handle that records `replace` calls into `outputs`."""
+
+    def __init__(self, outputs: list[str], title: str | None = None) -> None:
+        self._outputs = outputs
+        self._title = title
+
+    def replace(self, old_content: str, new_content: str) -> None:
+        title_str = f" ({self._title})" if self._title else ""
+        self._outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
+
+
+class _MockTreeBox(TreeBox):
+    """Tree handle that records `replace`/`refresh` calls into `outputs`."""
+
+    def __init__(self, outputs: list[str], title: str) -> None:
+        self._outputs = outputs
+        self._title = title
+
+    def replace(self, metadata) -> None:
+        self._outputs.append(f"Tree: {self._title}")
+        self._outputs.append(json.dumps(_dump_field(metadata), default=str))
+
+    def refresh(self) -> None:
+        self._outputs.append(f"[Tree refreshed: {self._title}]")
 
 
 class MockInterface(SolveigInterface):
@@ -153,11 +208,14 @@ class MockInterface(SolveigInterface):
         title: str | None = None,
         display_metadata: bool = False,
         expand_root: bool = True,
-    ) -> None:
+        max_depth: int = -1,
+        ignore_patterns: list[str] | None = None,
+    ) -> TreeBox:
         tree_title = title or str(metadata.path)
         self.outputs.append(f"Tree: {tree_title}")
         serializable_dict = _dump_field(metadata)
         self.outputs.append(json.dumps(serializable_dict, default=str))
+        return _MockTreeBox(self.outputs, tree_title)
 
     async def display_diff(
         self,
@@ -165,9 +223,10 @@ class MockInterface(SolveigInterface):
         new_content: str,
         title: str | None = None,
         context_lines: int = 3,
-    ) -> None:
+    ) -> DiffBox:
         title_str = f" ({title})" if title else ""
         self.outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
+        return _MockDiffBox(self.outputs, title)
 
     # -- add (returns object) ------------------------------------------------
 
@@ -178,20 +237,11 @@ class MockInterface(SolveigInterface):
         language: str | None = None,
         italic: bool = False,
         collapsed: bool = False,
-    ) -> MutableTextBox:
+    ) -> TextBox:
         if title:
             self.outputs.append(f"📋 {title}")
         self.outputs.append(f"{language + ': ' if language else ''}{text}")
-        outputs = self.outputs
-
-        class _Box:
-            def append(self_, line: str) -> None:
-                outputs.append(line.rstrip())
-
-            def reset(self_, content: str) -> None:
-                outputs.append(content)
-
-        return _Box()
+        return _MockTextBox(self.outputs)
 
     # -- with (context managers) ---------------------------------------------
 

@@ -13,7 +13,7 @@ Naming conventions:
 - `print`   — text output, void
 - `add_`    — returns an object (add_text_box → MutableTextBox, add_stat → Stat)
 - `with_`   — async context manager (with_group, with_animation, with_cancellable)
-- `display_`— complex void rendering (display_tree, display_diff)
+- `display_`— complex rendering, returns a box (display_tree → TreeBox, display_diff → DiffBox)
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from solveig.exceptions import UserCancel
+from solveig.interface.base.widgets import DiffBox, TextBox, TreeBox
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
@@ -104,33 +105,6 @@ class Stat:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.label!r})"
-
-
-class MutableTextBox:
-    def append(self, text: str) -> None:
-        """Append text to the end of the box."""
-
-    def clear(self) -> None:
-        """Empty the box content."""
-
-
-class EditableMessage:
-    """What a message widget must implement to host action buttons
-    (Edit/Retry/Delete/Branch)."""
-
-    async def begin_edit(self) -> None:
-        """Prompt for replacement text and overwrite this message in place."""
-
-    async def retry(self) -> None:
-        """Drop this message and everything after it, then resubmit its
-        text as a fresh prompt."""
-
-    async def delete_from_here(self) -> None:
-        """Drop this message and everything after it."""
-
-    async def branch_from_here(self) -> None:
-        """Store the current conversation as a checkpoint, then drop this
-        message and everything after it."""
 
 
 class SolveigInterface(ABC):
@@ -271,7 +245,7 @@ class SolveigInterface(ABC):
         record of what it mounted."""
         ...
 
-    # -- complex display -----------------------------------------------------
+    # -- complex display (returns a box) -------------------------------------
 
     @abstractmethod
     async def display_tree(
@@ -280,8 +254,14 @@ class SolveigInterface(ABC):
         title: str | None = None,
         display_metadata: bool = False,
         expand_root: bool = True,
-    ) -> None:
-        """Display a tree structure of a directory."""
+        max_depth: int = -1,
+        ignore_patterns: list[str] | None = None,
+    ) -> TreeBox:
+        """Display a directory tree. Returns a TreeBox the caller can
+        `replace()` with new metadata. The full metadata is already read;
+        `max_depth` and `ignore_patterns` control what renders initially,
+        not what was read. Lazy expansion is handled internally by the
+        frontend."""
         ...
 
     @abstractmethod
@@ -291,8 +271,9 @@ class SolveigInterface(ABC):
         new_content: str,
         title: str | None = None,
         context_lines: int = 3,
-    ) -> None:
-        """Display a unified diff view with syntax highlighting."""
+    ) -> DiffBox:
+        """Display a unified diff. Returns a read-only DiffBox the caller can
+        `replace()` with new old/new content."""
         ...
 
     # -- add (returns object) ------------------------------------------------
@@ -305,9 +286,9 @@ class SolveigInterface(ABC):
         language: str | None = None,
         italic: bool = False,
         collapsed: bool = False,
-    ) -> MutableTextBox:
+    ) -> TextBox:
         """Add a text block with optional title. Returns a live box the
-        caller can append to."""
+        caller can append to or replace."""
         ...
 
     @abstractmethod
@@ -346,7 +327,6 @@ class SolveigInterface(ABC):
         suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         """Context manager for displaying animation during async operations."""
-        ...
         yield  # pragma: no cover - makes this a valid generator
 
     # -- status & stats ------------------------------------------------------
