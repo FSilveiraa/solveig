@@ -338,10 +338,12 @@ subcommand = declaring_into(BUILTIN_SUBCOMMANDS)
 #   bool flag           → [--name]    *rest               → [name...]
 def _usage(fields: dict[str, Any], var_positional: str | None) -> str:
     parts: list[str] = []
-    for name, (annotation, default) in fields.items():
+    for name, (annotation, field_info) in fields.items():
         if name == var_positional:
             parts.append(f"[{name}...]")
-        elif default is ...:
+        # `field_info` is a FieldInfo; `Field(default=...)` makes it required
+        # (PydanticUndefined default, `is_required()` True), optional otherwise.
+        elif field_info.is_required():
             parts.append(f"<{name}>")
         elif annotation is bool:
             parts.append(f"[--{name}]")

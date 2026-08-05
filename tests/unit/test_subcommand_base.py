@@ -1,93 +1,160 @@
-"""Unit tests for Subcommand dataclass and _parse_cli_args."""
+"""Subcommand base — signature reading, CLI parsing, help line, store precedence.
 
-from unittest.mock import AsyncMock
+The parser is no longer a hand-rolled argv splitter; it is pydantic-settings'
+CliSettingsSource, reached through `Subcommand.parse()`. The old case list here
+(positional, kwargs/flags, greedy *rest, no-args) is still the right list — it
+just runs through the real parsing path now.
+"""
 
 import pytest
 
-from solveig.subcommands.base import Subcommand
-
-pytestmark = [pytest.mark.anyio]
-
-
-class TestParseCliArgs:
-    async def test_all_positional(self):
-        pos, kw = _parse_cli_args(["foo", "bar", "baz"])
-        assert pos == ["foo", "bar", "baz"]
-        assert kw == {}
-
-    async def test_all_kwargs(self):
-        pos, kw = _parse_cli_args(["key=value", "n=10"])
-        assert pos == []
-        assert kw == {"key": "value", "n": "10"}
-
-    async def test_mixed(self):
-        pos, kw = _parse_cli_args(["foo", "key=value", "bar"])
-        assert pos == ["foo", "bar"]
-        assert kw == {"key": "value"}
-
-    async def test_empty(self):
-        pos, kw = _parse_cli_args([])
-        assert pos == []
-        assert kw == {}
-
-    async def test_value_with_embedded_equals(self):
-        # Only the first = splits; the rest becomes the value
-        pos, kw = _parse_cli_args(["url=http://example.com/path?a=1"])
-        assert pos == []
-        assert kw == {"url": "http://example.com/path?a=1"}
-
-    async def test_leading_digit_not_kwarg(self):
-        # Token must start with a letter or underscore to be a kwarg
-        pos, kw = _parse_cli_args(["1=value"])
-        assert pos == ["1=value"]
-        assert kw == {}
+from solveig.config import SolveigConfig
+from solveig.subcommands.base import Subcommand, SubcommandStore, SubcommandStores
 
 
-class TestSubcommandHelpLine:
-    async def test_simple(self):
-        sub = Subcommand(commands=["/help"], description="Print help")
-        assert sub.help_line() == "/help — Print help"
-
-    async def test_with_alias_and_usage(self):
-        sub = Subcommand(
-            commands=["/command", "/cmd"],
-            description="Run a command",
-            usage="<cmd>",
-        )
-        assert sub.help_line() == "/command, /cmd <cmd> — Run a command"
-
-    async def test_usage_without_description(self):
-        sub = Subcommand(commands=["/test"], usage="<arg>")
-        assert sub.help_line() == "/test <arg>"
-
-    async def test_bare(self):
-        sub = Subcommand(commands=["/exit"])
-        assert sub.help_line() == "/exit"
+async def _no_args() -> None: ...
 
 
-class TestSubcommandCall:
-    async def test_positional_args(self):
-        handler = AsyncMock(return_value="ok")
-        sub = Subcommand(commands=["/test"], handler=handler)
-        interface = object()
-        await sub("foo", "bar", interface=interface)
-        handler.assert_awaited_once_with(interface, "foo", "bar")
+async def _pos(path: str) -> None: ...
 
-    async def test_kwargs(self):
-        handler = AsyncMock()
-        sub = Subcommand(commands=["/test"], handler=handler)
-        interface = object()
-        await sub("key=value", interface=interface)
-        handler.assert_awaited_once_with(interface, key="value")
 
-    async def test_mixed(self):
-        handler = AsyncMock()
-        sub = Subcommand(commands=["/test"], handler=handler)
-        interface = object()
-        await sub("pos", "key=val", interface=interface)
-        handler.assert_awaited_once_with(interface, "pos", key="val")
+async def _pos_flag(path: str, force: bool = False) -> None: ...
 
-    async def test_no_handler_raises(self):
-        sub = Subcommand(commands=["/test"])
-        with pytest.raises(AssertionError, match="no handler"):
-            await sub("foo", interface=None)
+
+async def _rest(*items: str) -> None: ...
+
+
+async def _injected(config: SolveigConfig) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# from_handler — reading the signature at declaration time
+# ---------------------------------------------------------------------------
+
+
+class TestFromHandler:
+    def test_positional_args_are_parsed_not_injected(self):
+        sub = Subcommand.from_handler(_pos, subcommands=["/test"])
+        assert sub.parameters == ["path"]
+        assert sub.dependencies == {}
+        assert sub.cli_model is not None
+
+    def test_injected_dependency_detected_by_type(self):
+        sub = Subcommand.from_handler(_injected, subcommands=["/x"])
+        assert sub.dependencies == {"config": SolveigConfig}
+        assert sub.cli_model is None
+
+    def test_bool_with_default_becomes_a_flag(self):
+        sub = Subcommand.from_handler(_pos_flag, subcommands=["/x"])
+        assert "force" in sub.parameters
+        assert "force" not in sub.dependencies
+
+    def test_star_rest_is_var_positional(self):
+        sub = Subcommand.from_handler(_rest, subcommands=["/x"])
+        assert sub.var_positional == "items"
+
+
+# ---------------------------------------------------------------------------
+# parse — the CliSettingsSource path
+# ---------------------------------------------------------------------------
+
+
+class TestParse:
+    def test_positional(self):
+        sub = Subcommand.from_handler(_pos, subcommands=["/x"])
+        assert sub.parse(["hello"]) == {"path": "hello"}
+
+    def test_no_args_returns_empty(self):
+        sub = Subcommand.from_handler(_no_args, subcommands=["/x"])
+        assert sub.parse([]) == {}
+
+    def test_bool_flag_and_positional(self):
+        sub = Subcommand.from_handler(_pos_flag, subcommands=["/x"])
+        assert sub.parse(["p", "--force"]) == {"path": "p", "force": True}
+        assert sub.parse(["p", "--no-force"])["force"] is False
+
+    def test_star_rest_is_greedy(self):
+        sub = Subcommand.from_handler(_rest, subcommands=["/x"])
+        assert sub.parse(["a", "b", "c"]) == {"items": ["a", "b", "c"]}
+
+    def test_embedded_equals_in_value_survives(self):
+        sub = Subcommand.from_handler(_pos, subcommands=["/x"])
+        assert sub.parse(["url=http://example.com/path?a=1"]) == {
+            "path": "url=http://example.com/path?a=1"
+        }
+
+
+# ---------------------------------------------------------------------------
+# help_line
+# ---------------------------------------------------------------------------
+
+
+class TestHelpLine:
+    def test_usage_string_derives_from_args(self):
+        sub = Subcommand.from_handler(_pos, subcommands=["/test"])
+        assert sub.usage == "<path>"
+        assert "/test <path>" in sub.help_line()
+
+    def test_with_description(self):
+        sub = Subcommand.from_handler(_no_args, subcommands=["/help"], description="Print")
+        assert sub.help_line() == "/help — Print"
+
+    def test_with_alias(self):
+        sub = Subcommand.from_handler(_no_args, subcommands=["/command", "/cmd"])
+        assert sub.help_line() == "/command, /cmd"
+
+    def test_disabled_marker(self):
+        sub = Subcommand.from_handler(_no_args, subcommands=["/read"])
+        assert sub.help_line(disabled=True) == "/read  (disabled)"
+
+
+# ---------------------------------------------------------------------------
+# Store precedence
+# ---------------------------------------------------------------------------
+
+
+class TestStores:
+    def make(self, *stores) -> SubcommandStores:
+        return SubcommandStores(*stores)
+
+    def test_register_replaces_a_store_wholesale(self):
+        a = SubcommandStore("a")
+        stores = self.make(a)
+        sub1 = Subcommand.from_handler(_no_args, subcommands=["/one"])
+        sub2 = Subcommand.from_handler(_no_args, subcommands=["/two"])
+        stores.register(a, [sub1])
+        stores.register(a, [sub2])
+        # the second register replaced /one
+        assert "/one" not in stores.subcommands
+        assert stores.subcommands["/two"] is sub2
+
+    def test_cross_store_collision_is_refused(self):
+        a = SubcommandStore("a")
+        b = SubcommandStore("b")
+        stores = self.make(a, b)
+        first = Subcommand.from_handler(_no_args, subcommands=["/dup"])
+        second = Subcommand.from_handler(_no_args, subcommands=["/dup"])
+
+        stores.add(a, first)
+        warnings = stores.add(b, second)
+
+        assert warnings  # the collision was reported, then refused
+        assert stores.subcommands["/dup"] is first  # earlier store kept it
+
+    def test_own_store_trigger_is_overwritten_not_collision(self):
+        a = SubcommandStore("a")
+        stores = self.make(a)
+        first = Subcommand.from_handler(_no_args, subcommands=["/x"])
+        second = Subcommand.from_handler(_no_args, subcommands=["/x"])
+
+        stores.add(a, first)
+        stores.add(a, second)
+        assert stores.subcommands["/x"] is second  # re-declaration wins locally
+
+    def test_position_is_precedence(self):
+        a = SubcommandStore("a")
+        b = SubcommandStore("b")
+        stores = self.make(a, b)
+        s = Subcommand.from_handler(_no_args, subcommands=["/k"])
+        stores.register(b, [s])  # b is the LOWER-precedence store
+        assert stores.subcommands["/k"] is s  # visible once registered anywhere
