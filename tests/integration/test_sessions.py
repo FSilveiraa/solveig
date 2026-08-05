@@ -39,7 +39,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 def make_manager(tmp_path):
     cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), session={"dir": str(tmp_path / "sessions")})
-    return SessionManager(config=cfg), cfg
+    return SessionManager(config=cfg, conversation=Conversation()), cfg
 
 
 # ---------------------------------------------------------------------------
@@ -97,21 +97,21 @@ class TestFuzzyFind:
         real_file = tmp_path / "direct.jsonl"
         real_file.write_text('{"id": "direct"}')
 
-        result = await manager._fuzzy_find(str(real_file))
+        result = await manager.resolve(str(real_file))
         assert result == str(real_file)
 
-    async def test_fuzzy_match_by_name_fragment(self, tmp_path):
-        """Session stored under a name can be fuzzy-found by a fragment."""
+    async def test_resolve_match_by_name_fragment(self, tmp_path):
+        """Session stored under a name can be resolved by a fragment."""
         manager, _ = make_manager(tmp_path)
         await manager.store(Conversation(), "mysession")
 
-        result = await manager._fuzzy_find("mysession")
+        result = await manager.resolve("mysession")
         assert "mysession" in result
 
-    async def test_fuzzy_find_not_found_raises(self, tmp_path):
+    async def test_resolve_not_found_raises(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         with pytest.raises(FileNotFoundError, match="ghost"):
-            await manager._fuzzy_find("ghost")
+            await manager.resolve("ghost")
 
     async def test_tilde_path_resolves(self, tmp_path, monkeypatch):
         """A ~ path that exists is resolved correctly."""
@@ -120,7 +120,7 @@ class TestFuzzyFind:
         real_file.write_text('{"id": "home"}')
 
         manager, _ = make_manager(tmp_path)
-        result = await manager._fuzzy_find("~/home_session.jsonl")
+        result = await manager.resolve("~/home_session.jsonl")
         assert "home_session.jsonl" in result
         assert "~" not in result
 
