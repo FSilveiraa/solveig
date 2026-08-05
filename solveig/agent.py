@@ -51,7 +51,7 @@ from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import Conversation, MessageId
 from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
@@ -525,12 +525,12 @@ async def run_turn_with_retry(
                 await run_turn(agent, conversation, deps, prompt, inbox)
             return True
         except (asyncio.CancelledError, UserCancel):
-            await interface.display_info("Request cancelled")
+            await interface.print("Request cancelled", level=Level.INFO)
             return False
         except (UnexpectedModelBehavior, UserError, ValidationError) as e:
-            await interface.display_error(str(e))
+            await interface.print(str(e), level=Level.ERROR)
         except Exception as e:
-            await interface.display_error(f"{e.__class__.__name__}: {e}")
+            await interface.print(f"{e.__class__.__name__}: {e}", level=Level.ERROR)
 
         try:
             if not await _ask_retry(interface):

@@ -59,7 +59,5 @@ class TasksTool(BaseTool):
         for i, task in enumerate(self.tasks, 1):
             status_emoji = TASK_STATUS_MAP[task.status]
             arrow = "→" if task.status == "ongoing" else " "
-            await interface.display_text(
-                f"{arrow}  {status_emoji} {i}. {task.description}"
-            )
+            await interface.print(f"{arrow}  {status_emoji} {i}. {task.description}")
         return ToolResult(content=f"Displayed {len(self.tasks)} task(s).")

@@ -27,7 +27,7 @@ from pydantic_settings.exceptions import SettingsError
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import Conversation
 
 # NOTE: runtime import, not TYPE_CHECKING - `SessionManager` is a KEY in the
@@ -110,9 +110,9 @@ class SubcommandRegistry:
         try:
             parsed = sub.parse(tokens)
         except (SettingsError, ValidationError) as e:
-            await self._interface.display_error(str(e))
-            await self._interface.display_info(
-                f"Usage: {sub.subcommands[0]} {sub.usage}".rstrip()
+            await self._interface.print(str(e), level=Level.ERROR)
+            await self._interface.print(
+                f"Usage: {sub.subcommands[0]} {sub.usage}".rstrip(), level=Level.INFO
             )
             return
 
@@ -162,7 +162,9 @@ class SubcommandRegistry:
                 # before the handler parses — otherwise argparse (tool path)
                 # would print to stdout and raise SystemExit.
                 if any(t in ("-h", "--help") for t in remaining):
-                    await self._interface.display_info(f"Usage: {sub.help_line()}")
+                    await self._interface.print(
+                        f"Usage: {sub.help_line()}", level=Level.INFO
+                    )
                     return True
                 await self._invoke(sub, remaining)
                 return True
@@ -183,8 +185,9 @@ class SubcommandRegistry:
         except UserCancel:
             return None
         except Exception as e:
-            await self._interface.display_error(
-                f"Found error when executing '{text}' sub-command: {e}"
+            await self._interface.print(
+                f"Found error when executing '{text}' sub-command: {e}",
+                level=Level.ERROR,
             )
             return None
         return text
@@ -207,7 +210,7 @@ class SubcommandRegistry:
                 help_str += f"\n  • {sub.help_line(disabled=self._is_disabled(sub))}"
             for sub in details:
                 help_str += f"\n      {sub.help_line(disabled=self._is_disabled(sub))}"
-        await self._interface.display_text_box(help_str, title="Help")
+        await self._interface.add_text_box(help_str, title="Help")
         return help_str
 
     def _is_disabled(self, sub: Subcommand) -> bool:

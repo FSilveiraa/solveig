@@ -9,6 +9,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
+from solveig.interface.base import Level
 from solveig.tools.base import (
     BaseTool,
     ConsentDecision,
@@ -79,10 +80,10 @@ class HttpTool(BaseTool[HttpConfig]):
         return f"Http: {self.method} {self.url}"
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        await interface.display_text(self.url, prefix=self.method)
+        await interface.print(self.url, prefix=self.method)
         if self.headers:
             headers_text = "\n".join(f"{k}: {v}" for k, v in self.headers.items())
-            await interface.display_text_box(headers_text, title="Request Headers")
+            await interface.add_text_box(headers_text, title="Request Headers")
         if self.body:
             try:
                 parsed = json.loads(self.body)
@@ -91,11 +92,11 @@ class HttpTool(BaseTool[HttpConfig]):
             except (json.JSONDecodeError, ValueError):
                 body_display = self.body
                 language = ""
-            await interface.display_text_box(
+            await interface.add_text_box(
                 body_display, title="Request Body", language=language
             )
         if self.output_file:
-            await interface.display_text(self.output_file, prefix="Output file:")
+            await interface.print(self.output_file, prefix="Output file:")
 
     async def execute(
         self, config: SolveigConfig, interface: "SolveigInterface"
@@ -103,7 +104,7 @@ class HttpTool(BaseTool[HttpConfig]):
         if (
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])
         ) != 0:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to send the request.")
 
         response = await self._send_request(interface, self.settings(config).timeout)
@@ -112,7 +113,7 @@ class HttpTool(BaseTool[HttpConfig]):
 
         status_code = response.status_code
         response_headers = dict(response.headers)
-        await interface.display_text(str(status_code), prefix="Status:")
+        await interface.print(str(status_code), prefix="Status:")
 
         if self.output_file:
             return await self._handle_output_file(
@@ -144,10 +145,10 @@ class HttpTool(BaseTool[HttpConfig]):
         except asyncio.CancelledError:
             return ToolResult(issues=["request cancelled by user."])
         except httpx.TimeoutException as e:
-            await interface.display_error(f"Request timed out: {e}")
+            await interface.print(f"Request timed out: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
         except httpx.RequestError as e:
-            await interface.display_error(f"Request failed: {e}")
+            await interface.print(f"Request failed: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
     async def _handle_output_file(
@@ -162,7 +163,9 @@ class HttpTool(BaseTool[HttpConfig]):
 
         decision, abs_path = check_path_security(self.output_file, config)
         if decision == ConsentDecision.BLOCKED:
-            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            await interface.print(
+                f"Path blocked by ignored_paths: {abs_path}", level=Level.ERROR
+            )
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
@@ -172,17 +175,17 @@ class HttpTool(BaseTool[HttpConfig]):
                 min_disk_size_left=config.min_disk_space_left,
             )
         except (OSError, PermissionError) as e:
-            await interface.display_error(f"Cannot write to {abs_path}: {e}")
+            await interface.print(f"Cannot write to {abs_path}: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
         if decision == ConsentDecision.AUTO_ALLOWED:
-            await interface.display_info(
-                "Writing output file since path is auto-allowed."
+            await interface.print(
+                "Writing output file since path is auto-allowed.", level=Level.INFO
             )
         elif (
             await interface.ask_choice(f"Write response to {abs_path}?", ["Yes", "No"])
         ) != 0:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(
                 content=f"Status {status_code}. User declined to write the response."
             )
@@ -193,9 +196,9 @@ class HttpTool(BaseTool[HttpConfig]):
                 content=response.content,
                 min_space_left=config.min_disk_space_left,
             )
-            await interface.display_success(f"Saved to {abs_path}")
+            await interface.print(f"Saved to {abs_path}", level=Level.SUCCESS)
         except OSError as e:
-            await interface.display_error(f"Failed to write file: {e}")
+            await interface.print(f"Failed to write file: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
         return ToolResult(
@@ -222,7 +225,7 @@ class HttpTool(BaseTool[HttpConfig]):
             "Send response to assistant?", ["Send", "Inspect first", "Don't send"]
         )
         if send_choice == 2:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(
                 content=f"Status {status_code}. User declined to send the response."
             )
@@ -230,22 +233,23 @@ class HttpTool(BaseTool[HttpConfig]):
         if send_choice == 1:
             content_type = response_headers.get("content-type")
             body_display, language = _format_body(raw, content_type)
-            await interface.display_text_box(
+            await interface.add_text_box(
                 body_display, title="Response Body", language=language
             )
             if truncated:
-                await interface.display_warning(
-                    "Response body was truncated (see config.tools.http.max_response_bytes)"
+                await interface.print(
+                    "Response body was truncated (see config.tools.http.max_response_bytes)",
+                    level=Level.WARNING,
                 )
             if (
                 await interface.ask_choice("Send to assistant?", ["Send", "Don't send"])
             ) != 0:
-                await interface.display_warning("Rejected")
+                await interface.print("Rejected", level=Level.WARNING)
                 return ToolResult(
                     content=f"Status {status_code}. User declined to send the response."
                 )
 
-        await interface.display_success("Accepted")
+        await interface.print("Accepted", level=Level.SUCCESS)
         return ToolResult(
             content=raw,
             metadata={"status_code": status_code, "truncated": truncated},

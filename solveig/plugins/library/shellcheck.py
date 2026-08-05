@@ -10,7 +10,7 @@ from pydantic import Field
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import before_tool
 from solveig.tools.base import ToolConfig
 from solveig.tools.core.command import CommandTool
@@ -107,23 +107,28 @@ async def shellcheck(
         except FileNotFoundError:
             # This case handles when the shell itself isn't found, which is a deeper system issue.
             # The more common case is the shell reporting 'command not found', handled below.
-            await interface.display_warning(
+            await interface.print(
                 "Shellcheck plugin is enabled, but the shell command failed to execute. "
-                "This may indicate a problem with your system's shell."
+                "This may indicate a problem with your system's shell.",
+                level=Level.WARNING,
             )
             return
 
         if proc.returncode == 127 and b"command not found" in stderr.lower():
-            await interface.display_warning(
-                "Shellcheck plugin is enabled, but the `shellcheck` command is not available."
+            await interface.print(
+                "Shellcheck plugin is enabled, but the `shellcheck` command is not available.",
+                level=Level.WARNING,
             )
-            await interface.display_warning(
-                "Please install Shellcheck or disable the plugin to remove this warning."
+            await interface.print(
+                "Please install Shellcheck or disable the plugin to remove this warning.",
+                level=Level.WARNING,
             )
             return
 
         if proc.returncode == 0:
-            await interface.display_success("Shellcheck: No issues with command")
+            await interface.print(
+                "Shellcheck: No issues with command", level=Level.SUCCESS
+            )
             return
 
         # Parse shellcheck warnings and raise validation error
@@ -143,9 +148,9 @@ async def shellcheck(
                         level = item.get("level", "warning")
                         message = f"[{level}] {item.get('message', 'Unknown issue')}"
                         if level == "error":
-                            await group.display_error(message)
+                            await group.print(message, level=Level.ERROR)
                         else:
-                            await group.display_warning(message)
+                            await group.print(message, level=Level.WARNING)
 
                 # Ask the user if they want to proceed
                 if settings.ask_to_execute:

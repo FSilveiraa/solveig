@@ -108,6 +108,6 @@ class ToolResult:
             return
         text = str(text)
         if "\n" in text:
-            await interface.display_text_box(text, title="Result")
+            await interface.add_text_box(text, title="Result")
         else:
-            await interface.display_text(text, prefix="Result:")
+            await interface.print(text, prefix="Result:")

@@ -27,7 +27,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import (
     Conversation,
     ConversationObserver,
@@ -320,7 +320,7 @@ class SessionManager(ConversationObserver):
             f"**Tokens sent / received:** "
             f"{usage.input_tokens} / {usage.output_tokens}"
         )
-        await interface.display_text_box(
+        await interface.add_text_box(
             text=header, language="markdown", title="Resumed session"
         )
 
@@ -339,8 +339,9 @@ async def session_list(
     """List stored sessions."""
     sessions = await session_manager.list_sessions()
     if not sessions:
-        await interface.display_info(
-            "No saved sessions. Sessions are auto-saved after each response."
+        await interface.print(
+            "No saved sessions. Sessions are auto-saved after each response.",
+            level=Level.INFO,
         )
         return
 
@@ -351,7 +352,7 @@ async def session_list(
             f"{s['total_tokens_sent'] + s['total_tokens_received']:>5} tokens"
         )
 
-    await interface.display_text_box("\n".join(lines), title="Sessions")
+    await interface.add_text_box("\n".join(lines), title="Sessions")
 
 
 @subcommand("/session store", "/store", section="session", detail=True)
@@ -364,7 +365,7 @@ async def session_store(
 ) -> None:
     """Store the current session (with optional name)."""
     filename = await session_manager.store(conversation, name=name.strip() or None)
-    await interface.display_success(f"Session stored as {filename}")
+    await interface.print(f"Session stored as {filename}", level=Level.SUCCESS)
 
 
 @subcommand("/session delete", section="session", detail=True)
@@ -377,9 +378,9 @@ async def session_delete(
     try:
         filename = await session_manager.delete(name.strip())
     except FileNotFoundError as e:
-        await interface.display_error(str(e))
+        await interface.print(str(e), level=Level.ERROR)
         return
-    await interface.display_success(f"Deleted session {filename}")
+    await interface.print(f"Deleted session {filename}", level=Level.SUCCESS)
 
 
 @subcommand("/session resume", "/resume", section="session", detail=True)
@@ -394,9 +395,9 @@ async def session_resume(
     try:
         session_data = await session_manager.load(name.strip() or None)
     except FileNotFoundError as e:
-        await interface.display_error(str(e))
+        await interface.print(str(e), level=Level.ERROR)
         return
 
     await session_manager.announce_resumed_session(session_data, interface)
     await conversation.load(session_data["messages"], session_data["usage"])
-    await interface.display_success("Session resumed.")
+    await interface.print("Session resumed.", level=Level.SUCCESS)

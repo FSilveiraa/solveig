@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
+from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
@@ -55,10 +56,10 @@ class EditTool(BaseTool):
 
     async def display_header(self, interface: "SolveigInterface") -> None:
         await self.display_path_info(interface, self.path)
-        await interface.display_text(_preview(self.old_string), prefix="Find:")
-        await interface.display_text(_preview(self.new_string), prefix="Replace:")
+        await interface.print(_preview(self.old_string), prefix="Find:")
+        await interface.print(_preview(self.new_string), prefix="Replace:")
         if self.replace_all:
-            await interface.display_text("(all occurrences)", prefix="Mode:")
+            await interface.print("(all occurrences)", prefix="Mode:")
 
     async def execute(
         self, config: SolveigConfig, interface: "SolveigInterface"
@@ -91,22 +92,24 @@ class EditTool(BaseTool):
         unwritable); return the error `ToolResult`, or `None` to proceed."""
         decision, _ = check_path_security(str(abs_path), config)
         if decision == ConsentDecision.BLOCKED:
-            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            await interface.print(
+                f"Path blocked by ignored_paths: {abs_path}", level=Level.ERROR
+            )
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError) as e:
-            await interface.display_error(f"Cannot read {abs_path}: {e}")
+            await interface.print(f"Cannot read {abs_path}: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
         if await Filesystem.is_dir(abs_path):
-            await interface.display_error("Cannot edit a directory")
+            await interface.print("Cannot edit a directory", level=Level.ERROR)
             return ToolResult(issues=["cannot edit a directory"])
         try:
             await Filesystem.validate_write_access(
                 abs_path, min_disk_size_left=config.min_disk_space_left
             )
         except (PermissionError, OSError) as e:
-            await interface.display_error(f"Cannot write to {abs_path}: {e}")
+            await interface.print(f"Cannot write to {abs_path}: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
         return None
 
@@ -119,23 +122,25 @@ class EditTool(BaseTool):
         try:
             read_result = await Filesystem.read_file(abs_path)
             if read_result.encoding != "text":
-                await interface.display_error("Cannot edit binary files")
+                await interface.print("Cannot edit binary files", level=Level.ERROR)
                 return ToolResult(issues=["cannot edit binary files"])
             original_content = read_result.content
         except Exception as e:
-            await interface.display_error(f"Failed to read file: {e}")
+            await interface.print(f"Failed to read file: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
         occurrences_found = original_content.count(self.old_string)
         if occurrences_found == 0:
-            await interface.display_error(
-                f"String not found in file: {_preview(self.old_string)}"
+            await interface.print(
+                f"String not found in file: {_preview(self.old_string)}",
+                level=Level.ERROR,
             )
             return ToolResult(issues=[f"string not found: {_preview(self.old_string)}"])
         if occurrences_found > 1 and not self.replace_all:
-            await interface.display_error(
+            await interface.print(
                 f"String appears {occurrences_found} times. "
-                f"Use replace_all=true or make the search string more specific."
+                f"Use replace_all=true or make the search string more specific.",
+                level=Level.ERROR,
             )
             return ToolResult(
                 issues=[f"string appears {occurrences_found} times, replace_all=false"]
@@ -158,27 +163,29 @@ class EditTool(BaseTool):
         """Get approval (auto-allowed paths bypass it) and write the file."""
         decision, _ = check_path_security(str(abs_path), config)
         if decision == ConsentDecision.AUTO_ALLOWED:
-            await interface.display_info(
-                f"Auto-applying edit ({occurrences_replaced} replacement(s)) since path is auto-allowed."
+            await interface.print(
+                f"Auto-applying edit ({occurrences_replaced} replacement(s)) since path is auto-allowed.",
+                level=Level.INFO,
             )
         elif (
             await interface.ask_choice(
                 f"Apply edit ({occurrences_replaced} replacement(s))?", ["Yes", "No"]
             )
         ) != 0:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined the edit.")
 
         try:
             await Filesystem.write_file_text(
                 abs_path, new_content, min_space_left=config.min_disk_space_left
             )
-            await interface.display_success(
-                f"Edit applied: {occurrences_replaced} replacement(s)"
+            await interface.print(
+                f"Edit applied: {occurrences_replaced} replacement(s)",
+                level=Level.SUCCESS,
             )
             return ToolResult(
                 content=f"Edited {abs_path}: {occurrences_replaced} replacement(s)"
             )
         except Exception as e:
-            await interface.display_error(f"Failed to write file: {e}")
+            await interface.print(f"Failed to write file: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])

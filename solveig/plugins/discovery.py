@@ -17,7 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from solveig.config import SolveigConfig
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 
 from .hooks import clear_hooks, hooks_config_map
 from .subcommands import clear_subcommands
@@ -119,36 +119,42 @@ async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     time just to have the errors in hand."""
     async with interface.with_group("Plugins") as group:
         for error in LAST_SCAN.errors:
-            await group.display_error(error)
+            await group.print(error, level=Level.ERROR)
         # A refused trigger is not a failed load, so it is a warning, not an error.
         for collision in LAST_SCAN.collisions:
-            await group.display_warning(collision)
+            await group.print(collision, level=Level.WARNING)
 
         async with group.with_group("Tools") as tools_group:
             for name in sorted(plugin_tool_name(entry) for entry in PLUGIN_TOOLS):
                 if config.is_tool_enabled(name):
-                    await tools_group.display_success(f"'{name}': loaded")
+                    await tools_group.print(f"'{name}': loaded", level=Level.SUCCESS)
                 else:
-                    await tools_group.display_info(f"'{name}': loaded (disabled)")
+                    await tools_group.print(
+                        f"'{name}': loaded (disabled)", level=Level.INFO
+                    )
             # PRESERVE + WARN: config for a plugin that wasn't discovered is kept
             # (see PreservingSection.undiscovered) so /config save never strips it, but is
             # flagged here — a typo or a plugin missing on this machine, not an error.
             for name in sorted(config.plugins.tools.undiscovered):
-                await tools_group.display_warning(
-                    f"'{name}': config present but plugin not discovered (preserved)"
+                await tools_group.print(
+                    f"'{name}': config present but plugin not discovered (preserved)",
+                    level=Level.WARNING,
                 )
 
         async with group.with_group("Hooks") as hooks_group:
             for name in sorted(hooks_config_map()):
                 if config.is_hook_enabled(name):
-                    await hooks_group.display_success(f"'{name}': loaded")
+                    await hooks_group.print(f"'{name}': loaded", level=Level.SUCCESS)
                 else:
-                    await hooks_group.display_info(f"'{name}': loaded (disabled)")
+                    await hooks_group.print(
+                        f"'{name}': loaded (disabled)", level=Level.INFO
+                    )
             # Same PRESERVE + WARN as tools: a hook config block for an undiscovered
             # hook is kept (PreservingSection) and flagged, never silently dropped.
             for name in sorted(config.plugins.hooks.undiscovered):
-                await hooks_group.display_warning(
-                    f"'{name}': config present but hook not discovered (preserved)"
+                await hooks_group.print(
+                    f"'{name}': config present but hook not discovered (preserved)",
+                    level=Level.WARNING,
                 )
 
 

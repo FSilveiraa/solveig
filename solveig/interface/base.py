@@ -1,14 +1,19 @@
-"""
-The display protocol for Solveig's frontends.
+"""The display protocol for Solveig's frontends.
 
 `SolveigInterface` is what a UI (CLI, web, desktop, headless mock) implements:
-render (display_*), ask (ask_*), scope output (with_group), status and
-animations, and theming. It
-deliberately also carries the two concerns every interactive frontend shares
-- the user-message queue (the interface's output channel for typed input)
-and cancellation (with_cancellable + the _active_tasks registry + the
-cancel_task verb). Command dispatch lives OUTSIDE the interface - the queue's
-prompt gate routes /commands before insertion.
+render (`print`, `display_*`, `add_*`), ask (`ask_*`), scope output
+(`with_group`), status and animations, and theming. It also carries two
+concerns every interactive frontend shares — the user-message queue (the
+interface's output channel for typed input) and cancellation
+(`with_cancellable` + the `_active_tasks` registry + `cancel_task`). Command
+dispatch lives OUTSIDE the interface — the queue's prompt gate routes
+/commands before insertion.
+
+Naming conventions:
+- `print`   — text output, void
+- `add_`    — returns an object (add_text_box → MutableTextBox, add_stat → Stat)
+- `with_`   — async context manager (with_group, with_animation, with_cancellable)
+- `display_`— complex void rendering (display_tree, display_diff)
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
+from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from solveig.exceptions import UserCancel
@@ -26,6 +32,14 @@ if TYPE_CHECKING:
     from solveig.interface.themes import Palette
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
+
+
+class Level(Enum):
+    TEXT = auto()
+    INFO = auto()
+    WARNING = auto()
+    ERROR = auto()
+    SUCCESS = auto()
 
 
 class Stat:
@@ -120,10 +134,9 @@ class EditableMessage:
 
 
 class SolveigInterface(ABC):
-    """
-    The display protocol any UI implementation (CLI, web, desktop, headless
+    """The display protocol any UI implementation (CLI, web, desktop, headless
     mock) provides: render, ask, scope, status/animation, theme, and the
-    and the conversation it displays (handed in at construction).
+    conversation it displays (handed in at construction).
 
     Two cross-cutting concerns are protocol-level ON PURPOSE (every UI with
     user input shares them, so a frontend never re-implements them):
@@ -140,56 +153,26 @@ class SolveigInterface(ABC):
     e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
     """
 
-    # The interface's output channel: typed input goes here. Set by
-    # constructor (real frontends) or post-construction by the composition
-    # root (injected test/demo interfaces). None until wired; `_handle_input`
-    # no-ops without it.
-    user_message_queue: UserMessageQueue | None = None
-
-    _root_ref: SolveigInterface | None = None
-    _active_tasks_ref: dict[asyncio.Task, None] | None = None
-
-    # The history this frontend displays, handed to the root at construction.
-    # Read-side only: the transcript verbs below address messages by id, so a
-    # frontend needs the history to look them up (and to hand to an editable
-    # widget, which writes a user's edit straight back). The frontend does NOT
-    # observe it - SessionDisplay does that and calls the verbs.
-    _conversation: Conversation | None = None
+    def __init__(self) -> None:
+        self._active_tasks: dict[asyncio.Task, None] = {}
+        self.user_message_queue: UserMessageQueue | None = None
+        self._conversation: Conversation | None = None
 
     @property
     def conversation(self) -> Conversation | None:
-        """The root's conversation - a scoped child (with_group) shares it."""
-        return self._root._conversation
+        return self._conversation
+
+    # -- theming (no-op defaults, override per frontend) ---------------------
 
     def set_theme(self, theme: Palette) -> None:
-        """Re-theme the live interface (the colours used for both CSS and Rich
-        markup). Concrete UIs override this; a headless interface leaves it as
-        the no-op default."""
+        """Re-theme the live interface. No-op default; concrete UIs override."""
         return None
 
     def set_code_theme(self, code_theme: str) -> None:
-        """Update the pygments theme used for Syntax/code blocks. New renders
-        pick it up; concrete UIs may also refresh already-mounted code views
-        in place. Must not remount the conversation tree. Default is a no-op."""
+        """Update the pygments theme. No-op default; concrete UIs override."""
         return None
 
-    @property
-    def _root(self) -> SolveigInterface:
-        """The top-level interface backing this scope - itself, unless this
-        is a scoped child (e.g. a GroupInterface) returned by with_group()."""
-        return self._root_ref if self._root_ref is not None else self
-
-    @property
-    def _active_tasks(self) -> dict[asyncio.Task, None]:
-        """Registration-ordered set of in-flight cancellable TASKS, shared by
-        every scope rooted at this interface (a group's `with_cancellable`
-        registers on the root, so cancellation works no matter which scope
-        declared the task). A dict for O(1) targeted removal; insertion order
-        gives "latest" for the untargeted cancel."""
-        root = self._root
-        if root._active_tasks_ref is None:
-            root._active_tasks_ref = {}
-        return root._active_tasks_ref
+    # -- cancellation (protocol-level, concrete) -----------------------------
 
     def get_active_tasks(self) -> dict[asyncio.Task, None]:
         """The in-flight cancellable tasks, registration-ordered. Empty is
@@ -239,59 +222,28 @@ class SolveigInterface(ABC):
         finally:
             self._active_tasks.pop(task, None)
 
-    async def start(self) -> None:
-        """Start the interface. Delegates to the root - only the root
-        interface is ever actually started."""
-        await self._root._start()
-
-    async def _start(self) -> None:
-        raise NotImplementedError("Subclass must implement _start")
-
-    async def stop(self) -> None:
-        """Stop the interface explicitly. Delegates to the root."""
-        await self._root._stop()
-
-    async def _stop(self) -> None:
-        raise NotImplementedError("Subclass must implement _stop")
-
-    async def wait_until_ready(self):
-        """Wait until the interface is ready to be used. Delegates to the root."""
-        return await self._root._wait_until_ready()
-
-    async def _wait_until_ready(self):
-        raise NotImplementedError("Subclass must implement _wait_until_ready")
-
-    # Core display methods
-    @abstractmethod
-    async def display_text(self, text: str, prefix: str | None = None) -> None:
-        """Display text with optional styling."""
-        ...
+    # -- text ----------------------------------------------------------------
 
     @abstractmethod
-    async def display_error(self, error: str | Exception) -> None:
-        """Display an error message with standard formatting."""
+    async def print(
+        self,
+        text: str,
+        level: Level = Level.TEXT,
+        *,
+        prefix: str | None = None,
+    ) -> None:
+        """Print text with a severity level and optional prefix.
+
+        Ephemeral — never persisted in the conversation. Tool failures are
+        captured in `ToolResult.issues` and returned via `to_tool_return()`;
+        this call is a side-channel notification for the user's eyes only.
+        """
         ...
 
-    @abstractmethod
-    async def display_warning(self, warning: str) -> None:
-        """Display a warning message with standard formatting."""
-        ...
-
-    @abstractmethod
-    async def display_success(self, message: str) -> None:
-        """Display a success message with standard formatting."""
-        ...
-
-    @abstractmethod
-    async def display_info(self, message: str) -> None:
-        """Display a system message."""
-        ...
-
-    # -- transcript ----------------------------------------------------------
-    # The three verbs SessionDisplay drives. It decides WHAT should be visible
-    # (including which parts it draws itself, e.g. a recorded tool call); a
-    # frontend only materializes what it is handed, and never subscribes to the
-    # conversation itself.
+    # -- transcript verbs ----------------------------------------------------
+    # The three verbs the conversation observer drives. It decides WHAT should
+    # be visible; a frontend only materializes what it is handed, and never
+    # subscribes to the conversation itself.
 
     @abstractmethod
     async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
@@ -300,7 +252,7 @@ class SolveigInterface(ABC):
         does not know, or need to know, which those are).
 
         Finer-grained than the other two because it is the only one with
-        anything to interleave: SessionDisplay may draw a part itself in the
+        anything to interleave: the observer may draw a part itself in the
         middle of a message, so it has to hand parts over one at a time to keep
         them in order."""
         ...
@@ -319,27 +271,17 @@ class SolveigInterface(ABC):
         record of what it mounted."""
         ...
 
+    # -- complex display -----------------------------------------------------
+
     @abstractmethod
     async def display_tree(
         self,
         metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
-        expand_root=True,
+        expand_root: bool = True,
     ) -> None:
-        """Display a tree structure of a directory"""
-        ...
-
-    @abstractmethod
-    async def display_text_box(
-        self,
-        text: str,
-        title: str | None = None,
-        language: str | None = None,
-        italic: bool = False,
-        collapsed: bool = False,
-    ) -> MutableTextBox:
-        """Display a text block with optional title."""
+        """Display a tree structure of a directory."""
         ...
 
     @abstractmethod
@@ -353,7 +295,98 @@ class SolveigInterface(ABC):
         """Display a unified diff view with syntax highlighting."""
         ...
 
-    # Input methods
+    # -- add (returns object) ------------------------------------------------
+
+    @abstractmethod
+    async def add_text_box(
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        italic: bool = False,
+        collapsed: bool = False,
+    ) -> MutableTextBox:
+        """Add a text block with optional title. Returns a live box the
+        caller can append to."""
+        ...
+
+    @abstractmethod
+    def add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        """Declare a stat and hand it back. The interface CREATES it, so a
+        frontend can return its own subclass carrying whatever it needs to
+        place one. The caller keeps the returned object as its handle -
+        identity is the object, never a name."""
+        ...
+
+    # -- with (context managers) ---------------------------------------------
+
+    @asynccontextmanager
+    @abstractmethod
+    async def with_group(
+        self, title: str, auto_collapse: bool = False
+    ) -> AsyncGenerator[SolveigInterface, Any]:
+        """Context manager for grouping related output. Yields a
+        SolveigInterface scoped to this group — local calls land inside the
+        group; global calls transparently affect the root."""
+        yield self  # pragma: no cover - makes this a valid generator
+
+    @asynccontextmanager
+    @abstractmethod
+    async def with_animation(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
+    ) -> AsyncGenerator[None]:
+        """Context manager for displaying animation during async operations."""
+        ...
+        yield  # pragma: no cover - makes this a valid generator
+
+    # -- status & stats ------------------------------------------------------
+
+    @abstractmethod
+    async def set_status(
+        self,
+        status: str | None,
+        duration: float | None = None,
+    ) -> None:
+        """Set the status line, with an optional flash duration. Pass
+        `duration` to show `status` as a flash that reverts after N seconds."""
+        ...
+
+    @abstractmethod
+    def refresh_stats(self) -> None:
+        """Re-read every stat and redraw. Sync, not async: an owner calls it
+        from a config observer or a timer tick, and a redraw should never be
+        something the caller has to await."""
+        ...
+
+    # -- lifecycle -----------------------------------------------------------
+
+    @abstractmethod
+    async def start(self) -> None:
+        """Start the interface."""
+        ...
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """Stop the interface explicitly."""
+        ...
+
+    @abstractmethod
+    async def wait_until_ready(self) -> None:
+        """Wait until the interface is ready to be used."""
+        ...
+
+    # -- input (concrete wrapping + abstract hooks) --------------------------
+
     async def ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing.
 
@@ -370,7 +403,7 @@ class SolveigInterface(ABC):
         policy (inside its `_ask_*`): a terminal may lock, Textual can show
         stacked prompts, a web UI stacks cards.
         """
-        task = asyncio.ensure_future(self._root._ask_question(question, default))
+        task = asyncio.ensure_future(self._ask_question(question, default))
         self._active_tasks[task] = None
         try:
             return await task
@@ -379,8 +412,8 @@ class SolveigInterface(ABC):
         finally:
             self._active_tasks.pop(task, None)
 
-    async def _ask_question(self, question: str, default: str = "") -> str:
-        raise NotImplementedError("Subclass must implement _ask_question")
+    @abstractmethod
+    async def _ask_question(self, question: str, default: str = "") -> str: ...
 
     async def ask_choice(
         self, question: str, choices: Iterable[str], add_cancel: bool = True
@@ -390,14 +423,14 @@ class SolveigInterface(ABC):
         other (see ask_question for the full why): Esc during a choice is
         translated to UserCancel at the boundary, i.e. the same control flow
         as picking the appended "Cancel processing" item - call sites handle
-        both identically. The answer is echoed via `self.display_text`, so
-        it lands in the caller's own scope (e.g. inside a tool's group)
-        rather than always at the root."""
+        both identically. The answer is echoed via `print`, so it lands in
+        the caller's own scope (e.g. inside a tool's group) rather than
+        always at the root."""
         choices_list = list(choices)
         if add_cancel:
             choices_list.append("Cancel processing")
 
-        task = asyncio.ensure_future(self._root._ask_choice(question, choices_list))
+        task = asyncio.ensure_future(self._ask_choice(question, choices_list))
         self._active_tasks[task] = None
         try:
             choice_index = await task
@@ -405,127 +438,10 @@ class SolveigInterface(ABC):
             raise UserCancel from None
         finally:
             self._active_tasks.pop(task, None)
-        await self.display_text(choices_list[choice_index], prefix=question)
+        await self.print(choices_list[choice_index], prefix=question)
         if add_cancel and choice_index == len(choices_list) - 1:
             raise UserCancel()
         return choice_index
 
-    async def _ask_choice(self, question: str, choices: list[str]) -> int:
-        raise NotImplementedError("Subclass must implement _ask_choice")
-
-    # Additional methods for compatibility
-    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
-        """Display a section header. Delegates to the root interface."""
-        await self._root._display_section(title, even_if_repeated)
-
-    async def _display_section(
-        self, title: str, even_if_repeated: bool = False
-    ) -> None:
-        raise NotImplementedError("Subclass must implement _display_section")
-
-    @asynccontextmanager
-    async def with_group(
-        self, title: str, auto_collapse: bool = False
-    ) -> AsyncGenerator[SolveigInterface, Any]:
-        """Context manager for grouping related output. Yields a
-        SolveigInterface scoped to this group - local display calls made on
-        it land inside the group; global calls (ask_choice, set_status,
-        etc.) transparently affect the root."""
-        raise NotImplementedError("Subclass must implement with_group")
-        yield  # This line will never execute but makes it a valid generator
-
-    @asynccontextmanager
-    async def with_animation(
-        self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-        suffix: str | None = None,
-    ) -> AsyncGenerator[None]:
-        """Context manager for displaying animation during async operations.
-        Delegates to the root interface - there is only one status bar."""
-        async with self._root._with_animation(
-            status, final_status, timeout, suffix
-        ) as value:
-            yield value
-
-    @asynccontextmanager
-    async def _with_animation(
-        self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-        suffix: str | None = None,
-    ) -> AsyncGenerator[None]:
-        raise NotImplementedError("Subclass must implement _with_animation")
-        yield  # pragma: no cover - unreachable, makes this a valid generator
-
-    async def set_status(
-        self,
-        status: str | None,
-        duration: float | None = None,
-    ) -> None:
-        """Set the status line in the header, with an optional flash duration.
-
-        Delegates to the root interface - there is only one status line.
-        Pass `duration` to show `status` as a flash message: it reverts to
-        whatever the status was before this call once `duration` seconds
-        pass, unless something else has changed the status in the meantime.
-        """
-        await self._root._set_status(status, duration)
-
-    async def _set_status(
-        self,
-        status: str | None,
-        duration: float | None = None,
-    ) -> None:
-        raise NotImplementedError("Subclass must implement _set_status")
-
-    def add_stat(
-        self,
-        label: str,
-        get: Callable[[], Any],
-        on_click: Callable[[], Awaitable[None]] | None = None,
-        render: Callable[[Any], str] | None = None,
-    ) -> Stat:
-        """Declare a stat and hand it back.
-
-        The interface CREATES it, so a frontend can return its own subclass
-        carrying whatever it needs to place one (the Textual bar attaches a
-        cell; a web UI might not have the concept). The caller keeps the
-        returned object as its handle - identity is the object, never a name,
-        so a typo cannot address a stat that does not exist and two owners
-        cannot collide.
-
-        The default builds a plain `Stat` and displays nothing, which is what a
-        headless interface should do: declaring a stat must not require a UI.
-        Delegates to the root - there is one stats display, and a scoped
-        interface from `with_group` must not start a second one.
-        """
-        return self._root._add_stat(label, get, on_click, render)
-
-    def _add_stat(
-        self,
-        label: str,
-        get: Callable[[], Any],
-        on_click: Callable[[], Awaitable[None]] | None = None,
-        render: Callable[[Any], str] | None = None,
-    ) -> Stat:
-        return Stat(label, get, on_click, render)
-
-    def refresh_stats(self) -> None:
-        """Re-read every stat and redraw.
-
-        Deliberately not "this stat changed": a stat holds no value, so there
-        is nothing to hand over, and with a handful of entries re-reading all
-        of them costs nothing. Per-stat invalidation is a later refinement, and
-        it would need the frontend to map a stat to a cell - which it can,
-        since it made the stat.
-
-        Sync, not async: an owner calls it from a config observer or a timer
-        tick, and a redraw should never be something the caller has to await.
-        """
-        self._root._refresh_stats()
-
-    def _refresh_stats(self) -> None:
-        return None
+    @abstractmethod
+    async def _ask_choice(self, question: str, choices: list[str]) -> int: ...

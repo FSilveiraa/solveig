@@ -1,6 +1,19 @@
+"""Mock interface for testing — captures all output without a Textual app.
+
+Implements the full SolveigInterface contract by recording into lists instead
+of rendering. Transcript verbs record into `shown` and `transcript_events`;
+stats record into `stats_updates`; everything else appends to `outputs`.
+
+The "awaiting input" detection in _set_status drives the autonomous loop in
+end-to-end tests: when the loop signals "awaiting input", the mock feeds the
+next test-configured user input or stops.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import json
-from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import fields, is_dataclass
 from os import PathLike
@@ -10,13 +23,10 @@ import anyio
 from pydantic import BaseModel
 from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
-from solveig.interface.base import Stat
-from solveig.interface.cli.interface import TerminalInterface
+from solveig.interface.base import Level, MutableTextBox, SolveigInterface, Stat
 
 
 def _dump_field(obj: Any) -> Any:
-    """Recursively convert a value (dataclass, pydantic model, path, list,
-    dict) into something JSON-serializable, for test-display purposes only."""
     if is_dataclass(obj) and not isinstance(obj, type):
         return {f.name: _dump_field(getattr(obj, f.name)) for f in fields(obj)}
     elif isinstance(obj, BaseModel):
@@ -32,8 +42,6 @@ def _dump_field(obj: Any) -> Any:
 
 
 def _part_text(part: Any) -> str | None:
-    """The non-empty conversational text a part would render, or None (empty,
-    or a tool call/return - which a frontend never draws)."""
     if isinstance(part, UserPromptPart) and isinstance(part.content, str):
         text = part.content
     elif isinstance(part, (TextPart, ThinkingPart)):
@@ -43,32 +51,16 @@ def _part_text(part: Any) -> str | None:
     return text if text.strip() else None
 
 
-class MockInterface(TerminalInterface):
-    """
-    Mock interface for testing - captures all output without external dependencies.
-    Implements the complete SolveigInterface contract for async testing.
+class MockInterface(SolveigInterface):
+    """Mock interface for testing — captures all output without external deps.
 
-    You may reasonably ask why do we have a ~250 mock, and certainly this must be over-mocking
-    Solveig uses a Textual interface that is very difficult to reliably test
-    For now I have decided that testing the interface's display is outside the scope of the project
-    However, because of how Textual works with bindings, it has to be the foreground task
-    Otherwise, whatever we set as the foreground task will capture the signals
-    that should be handled by Textual, and it will conflict with behavior like Ctrl+C
-    Because of that, the interface ends up being responsible for some core behavior like
-    handling signals, handling user input, coordinating a graceful shutdown - lot more than drawing boxes
+    Implements the complete SolveigInterface contract for async testing. Does
+    NOT call super().__init__() from TerminalInterface — calls
+    SolveigInterface.__init__() directly, so no Textual App is created.
 
-    Solveig runs on an autonomous loop, there is no enforcement of turn-based communication or a clear "end"
-    In normal operations this is fine, but in tests that run this core loop, there is no way to know that
-    processing has ended and we can return the cycle, because there is no clear point where the app asks
-    the mock interface "what's next?" and it checks "I have nothing else to reply with, time to shut down"
-
-    So the way we do this is to have the mock interface detect when a status update comes in for "awaiting input",
-    which signals the app is awaiting the next user input. At that point the mock interface gets the next
-    test-configured user input and responds with it. If there is none, or if it's /exit, the mock interface
-    stops and the test gets to inspect the full run's output.
-
-    My point is, I also don't love over-mocking, but this is the cleanest possible way I found to support
-    a fully autonomous agentic loop and end-to-end tests that don't block
+    The "awaiting input" detection in _set_status drives the autonomous loop
+    in end-to-end tests: when the loop signals "awaiting input", the mock
+    feeds the next test-configured user input or stops.
     """
 
     def __init__(
@@ -79,7 +71,7 @@ class MockInterface(TerminalInterface):
         conversation=None,
         **kwargs,
     ) -> None:
-        # Do not call super().__init__() since that would init() the Textual App
+        super().__init__()  # SolveigInterface.__init__ — _active_tasks, etc.
         self._conversation = conversation
         self.shown: dict[str, list[str]] = {}
         self.transcript_events: list[tuple] = []
@@ -87,23 +79,20 @@ class MockInterface(TerminalInterface):
         self.user_inputs = user_inputs or []
         self.choices = choices or []
         self.questions: list[str] = []
-        self.sections: list[str] = []
         self.stats_updates: list[dict[str, Any]] = []
         self.groups: list[str] = []
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
 
-    # Core async display methods
+    # -- lifecycle -----------------------------------------------------------
+
     async def start(self) -> None:
         self.outputs.append("INTERFACE_STARTED")
-
         try:
-            # Use a timeout to prevent tests from hanging
             await asyncio.wait_for(
                 self._stop_event.wait(), timeout=self._timeout_seconds
             )
         except TimeoutError as e:
-            # Only raise if the timeout wasn't explicitly configured
             if self._timeout_seconds is None:
                 raise TimeoutError(
                     "Interface timed out waiting for stop event. "
@@ -111,36 +100,28 @@ class MockInterface(TerminalInterface):
                     "with no ToolCallPart to create_mock_model(...)"
                 ) from e
 
-    async def wait_until_ready(self):
+    async def wait_until_ready(self) -> None:
         self.outputs.append("INTERFACE_READY")
 
     async def stop(self) -> None:
         self.outputs.append("INTERFACE_STOPPED")
         self._stop_event.set()
 
-    async def display_text(self, text: str, prefix: str | None = None) -> None:
+    # -- text ----------------------------------------------------------------
+
+    async def print(
+        self,
+        text: str,
+        level: Level = Level.TEXT,
+        *,
+        prefix: str | None = None,
+    ) -> None:
         if prefix:
             self.outputs.append(f"[PREFIX: {prefix}] {text}")
         else:
             self.outputs.append(f"[TEXT] {text}")
 
-    async def display_error(self, error: str | Exception) -> None:
-        self.outputs.append(f"❌ Error: {error}")
-
-    async def display_warning(self, warning: str) -> None:
-        self.outputs.append(f"⚠  Warning: {warning}")
-
-    async def display_success(self, message: str) -> None:
-        self.outputs.append(f"✅ {message}")
-
-    async def display_info(self, message: str) -> None:
-        self.outputs.append(f"ℹ️  Info: {message}")
-
-    # -- transcript verbs -----------------------------------------------------
-    # Headless materialization: record what SessionDisplay asked for instead of
-    # drawing it, so the full Conversation -> observer -> frontend chain stays
-    # assertable without Textual. `shown` mirrors what a real frontend would
-    # have on screen, keyed by message.
+    # -- transcript verbs ----------------------------------------------------
 
     async def show_message_part(self, message_id: str, part_index: int) -> None:
         message = self.conversation.get(message_id) if self.conversation else None
@@ -164,6 +145,20 @@ class MockInterface(TerminalInterface):
             self.shown.pop(message_id, None)
         self.transcript_events.append(("drop", tuple(message_ids)))
 
+    # -- complex display -----------------------------------------------------
+
+    async def display_tree(
+        self,
+        metadata,
+        title: str | None = None,
+        display_metadata: bool = False,
+        expand_root: bool = True,
+    ) -> None:
+        tree_title = title or str(metadata.path)
+        self.outputs.append(f"Tree: {tree_title}")
+        serializable_dict = _dump_field(metadata)
+        self.outputs.append(json.dumps(serializable_dict, default=str))
+
     async def display_diff(
         self,
         old_content: str,
@@ -174,31 +169,16 @@ class MockInterface(TerminalInterface):
         title_str = f" ({title})" if title else ""
         self.outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
 
-    async def display_tree(
-        self,
-        metadata,  # FileMetadata type
-        title: str | None = None,
-        display_metadata: bool = False,
-        expand_root=True,
-    ) -> None:
-        tree_title = title or str(metadata.path)
-        self.outputs.append(f"Tree: {tree_title}")
+    # -- add (returns object) ------------------------------------------------
 
-        # Correctly serialize using the project's two-step standard:
-        # 1. Convert complex objects to a JSON-serializable dict.
-        serializable_dict = _dump_field(metadata)
-        # 2. Dump the dict to a JSON string. `default=str` matches how
-        # SessionManager writes anything to_jsonable_python left behind.
-        self.outputs.append(json.dumps(serializable_dict, default=str))
-
-    async def display_text_box(
+    async def add_text_box(
         self,
         text: str,
         title: str | None = None,
         language: str | None = None,
         italic: bool = False,
         collapsed: bool = False,
-    ):
+    ) -> MutableTextBox:
         if title:
             self.outputs.append(f"📋 {title}")
         self.outputs.append(f"{language + ': ' if language else ''}{text}")
@@ -213,47 +193,12 @@ class MockInterface(TerminalInterface):
 
         return _Box()
 
-    async def display_section(self, title: str, even_if_repeated: bool = False) -> None:
-        # Mirrors TerminalInterface._display_section's de-dup: a section header
-        # only actually renders when the title changes (or even_if_repeated).
-        if even_if_repeated or self.sections[-1:] != [title]:
-            self.sections.append(title)
-            self.outputs.append(f"=== {title} ===")
+    # -- with (context managers) ---------------------------------------------
 
-    # Input methods
-    async def ask_question(self, question: str, default: str = "") -> str:
-        """Ask for specific input, preserving any current typing."""
-        self.questions.append(question)
-        if not self.user_inputs:
-            raise ValueError("No further user input configured for ask_question")
-
-        # Let this raise an exception if not handled, it's likely an actual error in a test
-        response = self.user_inputs.pop(0)
-        if response is None or response == "/exit":
-            await self.stop()
-            # Return empty string to unblock the loop, which will then terminate
-            return ""
-
-        self.outputs.append(f"Question: {question} → {response}")
-        return response
-
-    async def ask_choice(
-        self, question: str, choices: Iterable[str], add_cancel: bool = True
-    ) -> int:
-        """Ask a multiple-choice question, returns the index for the selected option (starting at 0)."""
-        self.questions.append(f"{question} {list(choices)}")
-        if not self.choices:
-            raise ValueError("No further choices configured for ask_choice")
-
-        choice_index = self.choices.pop(0)
-        self.outputs.append(
-            f"Choice: {question} → {list(choices)[choice_index]} (index {choice_index})"
-        )
-        return choice_index
-
-    # Context managers
     @asynccontextmanager
-    async def with_group(self, title: str, auto_collapse: bool = False):
+    async def with_group(
+        self, title: str, auto_collapse: bool = False
+    ) -> AsyncGenerator[SolveigInterface]:
         self.groups.append(f"START: {title}")
         self.outputs.append(f"┏━ {title}")
         try:
@@ -262,8 +207,39 @@ class MockInterface(TerminalInterface):
             self.groups.append(f"END: {title}")
             self.outputs.append("┗━━")
 
-    # -- stats overrides: no Textual app, so record instead of rendering --
-    def _add_stat(
+    @asynccontextmanager
+    async def with_animation(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
+    ) -> AsyncGenerator[None]:
+        await self.set_status(status=status)
+        try:
+            yield
+        finally:
+            await self.set_status(final_status)
+
+    # -- status & stats ------------------------------------------------------
+
+    async def set_status(
+        self,
+        status: str | None,
+        duration: float | None = None,
+    ) -> None:
+        self.stats_updates.append({"status": status, "duration": duration})
+        if status and "awaiting input" in status.lower():
+            try:
+                user_input = self.user_inputs.pop(0)
+            except IndexError:
+                user_input = None
+            if user_input is None or user_input == "/exit":
+                await self.stop()
+            else:
+                await self._handle_input(user_input)
+
+    def add_stat(
         self,
         label: str,
         get: Callable[[], Any],
@@ -274,60 +250,56 @@ class MockInterface(TerminalInterface):
         self.stats_updates.append({"add_stat": label})
         return stat
 
-    def _refresh_stats(self) -> None:
+    def refresh_stats(self) -> None:
         self.stats_updates.append({"refresh": True})
 
-    async def _set_status(
-        self,
-        status: str | None,
-        duration: float | None = None,
-    ) -> None:
-        self.stats_updates.append({"status": status, "duration": duration})
-        if status and "awaiting input" in status.lower():
-            # app is awaiting user input, insert it by calling the callback for user input
-            try:
-                user_input = self.user_inputs.pop(0)
-            except IndexError:
-                user_input = None
-            if user_input is None or user_input == "/exit":
-                await self.stop()
-            else:
-                await self._handle_input(user_input)
+    # -- input ---------------------------------------------------------------
 
-    @asynccontextmanager
-    async def with_animation(
-        self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-        suffix: str | None = None,
-    ) -> AsyncGenerator[None, Any]:
-        await self.set_status(status=status)
-        try:
-            yield
-        finally:
-            await self.set_status(final_status)
+    async def _ask_question(self, question: str, default: str = "") -> str:
+        self.questions.append(question)
+        if not self.user_inputs:
+            raise ValueError("No further user input configured for ask_question")
+        response = self.user_inputs.pop(0)
+        if response is None or response == "/exit":
+            await self.stop()
+            return ""
+        self.outputs.append(f"Question: {question} → {response}")
+        return response
 
-    # Test helper methods
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+        self.questions.append(f"{question} {list(choices)}")
+        if not self.choices:
+            raise ValueError("No further choices configured for ask_choice")
+        choice_index = self.choices.pop(0)
+        self.outputs.append(
+            f"Choice: {question} → {list(choices)[choice_index]} (index {choice_index})"
+        )
+        return choice_index
+
+    async def _handle_input(self, user_input: str):
+        if self.user_message_queue is not None:
+            await self.user_message_queue.put(user_input)
+
+    # -- test helpers --------------------------------------------------------
+
     def get_all_output(self) -> str:
-        """Get all captured output as single string"""
         return "\n".join(self.outputs)
 
     def get_all_questions(self) -> str:
         return "\n".join(self.questions)
 
     def get_all_sections(self) -> list[str]:
-        return self.sections.copy()
+        return []  # sections removed
 
     def get_all_status_updates(self) -> str:
         return "\n".join(str(stats) for stats in self.stats_updates)
 
     def clear(self) -> None:
-        """Clear all captured data"""
         self.outputs.clear()
         self.user_inputs.clear()
         self.choices.clear()
         self.questions.clear()
-        self.sections.clear()
         self.stats_updates.clear()
         self.groups.clear()
+        self.shown.clear()
+        self.transcript_events.clear()

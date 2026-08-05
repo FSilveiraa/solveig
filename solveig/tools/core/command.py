@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, ClassVar, Self
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
+from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.shell import ShellExecution, get_persistent_shell
@@ -69,11 +70,11 @@ class CommandTool(BaseTool[CommandConfig]):
         return f"Command {self.command}"
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        await interface.display_text(
+        await interface.print(
             f"{self.timeout}s" if self.timeout > 0.0 else "None (detached process)",
             prefix="Timeout:",
         )
-        await interface.display_text_box(self.command, title="Command")
+        await interface.add_text_box(self.command, title="Command")
 
     async def execute(
         self, config: "SolveigConfig", interface: "SolveigInterface"
@@ -85,8 +86,9 @@ class CommandTool(BaseTool[CommandConfig]):
         for pattern in self.settings(config).auto_execute:
             if pattern.match(self.command):
                 run = True
-                await interface.display_info(
-                    "Running command and sending output since it matches config.tools.command.auto_execute"
+                await interface.print(
+                    "Running command and sending output since it matches config.tools.command.auto_execute",
+                    level=Level.INFO,
                 )
                 break
         else:
@@ -109,7 +111,7 @@ class CommandTool(BaseTool[CommandConfig]):
                 inspect = choice == 1
 
         if not run:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to run the command.")
 
         output = ""
@@ -123,7 +125,7 @@ class CommandTool(BaseTool[CommandConfig]):
             async for line in execution:
                 lines.append(line)
                 if box is None and line.strip():
-                    box = await interface.display_text_box(line, title="Output")
+                    box = await interface.add_text_box(line, title="Output")
                 elif box is not None:
                     box.append(line)
             return "".join(lines).strip(), execution.stderr
@@ -144,21 +146,21 @@ class CommandTool(BaseTool[CommandConfig]):
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        await interface.display_error(
-                            f"Found error when running command: {e}"
+                        await interface.print(
+                            f"Found error when running command: {e}", level=Level.ERROR
                         )
                         return ToolResult(issues=[e])
         except asyncio.CancelledError:
-            await interface.display_warning("Command cancelled by user")
+            await interface.print("Command cancelled by user", level=Level.WARNING)
             return ToolResult(issues=["command cancelled by user"])
 
         if is_detached:
-            await interface.display_info("Detached process launched")
+            await interface.print("Detached process launched", level=Level.INFO)
         elif not output:
-            await interface.display_info("No output")
+            await interface.print("No output", level=Level.INFO)
 
         if error:
-            await interface.display_text_box(error, title="Error")
+            await interface.add_text_box(error, title="Error")
 
         if (
             inspect
@@ -166,12 +168,12 @@ class CommandTool(BaseTool[CommandConfig]):
             and (await interface.ask_choice("Allow sending output?", ["Yes", "No"]))
             == 1
         ):
-            await interface.display_warning("Output hidden from assistant")
+            await interface.print("Output hidden from assistant", level=Level.WARNING)
             return ToolResult(
                 content="User ran the command but declined to send the output."
             )
 
-        await interface.display_success("Accepted")
+        await interface.print("Accepted", level=Level.SUCCESS)
         result = f"stdout:\n{output}"
         if error:
             result += f"\nstderr:\n{error}"

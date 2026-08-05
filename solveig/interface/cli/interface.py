@@ -1,4 +1,16 @@
-"""Main TerminalInterface implementation."""
+"""TerminalInterface and GroupInterface — the Textual frontend.
+
+TerminalInterface is the root: owns the SolveigTextualApp, spinners, and the
+prompt-serialization lock. GroupInterface is the scoped child returned by
+with_group(): inherits all container-level methods (they use self._container),
+overrides root-level methods with one-liner delegations to self._root.
+
+_container is where Textual mounts widgets — the root's is the main
+conversation area, a group's is its own collapsible contents. _root is the
+TerminalInterface that owns the app — the root's _root is itself.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import difflib
@@ -11,11 +23,17 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
-from solveig.interface.base import MutableTextBox, SolveigInterface, Stat
+from solveig.interface.base import (
+    Level,
+    MutableTextBox,
+    SolveigInterface,
+    Stat
+)
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.conversation import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
+from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
@@ -25,75 +43,133 @@ if TYPE_CHECKING:
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
 
+# Level → (style, prefix emoji) mapping for the Textual frontend.
+_LEVEL_STYLES: dict[Level, tuple[str, str]] = {
+    Level.TEXT: ("text", ""),
+    Level.INFO: ("info", ""),
+    Level.WARNING: ("warning", "⚠  Warning: "),
+    Level.ERROR: ("error", "🗙 Error: "),
+    Level.SUCCESS: ("info", "✓ "),
+}
 
-class LocalDisplay(SolveigInterface):
-    """The "local display" half of a Textual `SolveigInterface`: implements
-    every display_*/with_group method - everything that only needs
-    `app`/`theme`/`code_theme` and a `_container` to mount into. Shared,
-    unchanged, by both `TerminalInterface` (the root, whose `_container` is
-    the top-level conversation area) and `GroupInterface` (a scope whose
-    `_container` is its own group's contents) - the two differ only in what
-    they pass to `__init__` and how they implement `_container`, not in any
-    of the display logic itself.
 
-    `TerminalInterface`/`GroupInterface` each subclass this directly and add
-    the root-delegating global methods (`_ask_question`, `_set_status`,
-    ...) that `SolveigInterface` still leaves unimplemented.
+class TerminalInterface(SolveigInterface):
+    """CLI interface backed by a Textual app.
+
+    The root of the interface tree: owns the SolveigTextualApp, spinners, and
+    the CLI's prompt-serialization lock. Container-level methods (print,
+    display_tree, display_diff, add_text_box, transcript verbs) use
+    self._container and are inherited unchanged by GroupInterface. Root-level
+    methods (ask_question, set_status, add_stat, refresh_stats, with_animation,
+    start, stop, wait_until_ready) are overridden in GroupInterface with
+    one-liner delegations to self._root.
     """
 
     def __init__(
         self,
-        app: SolveigTextualApp,
-        theme: Palette,
-        code_theme: str,
-        root_ref: "SolveigInterface | None" = None,
-    ):
-        self.app = app
+        theme: Palette = DEFAULT_THEME,
+        code_theme: str = DEFAULT_CODE_THEME,
+        base_indent: int = 2,
+        user_message_queue: UserMessageQueue | None = None,
+        config=None,
+        conversation: Conversation | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        self.user_message_queue = user_message_queue
+        self._conversation = conversation
+        self._root: SolveigInterface = self
         self.theme = theme
         self.code_theme = code_theme
-        self._root_ref = root_ref
+
+        app = SolveigTextualApp(
+            theme=theme,
+            input_callback=self._handle_input,
+            interface_ref=self,
+            config=config,
+            user_message_queue=user_message_queue,
+            **kwargs,
+        )
+        self.app = app
+        self.base_indent = base_indent
+
+        if config is not None:
+
+            @config.on_change("interface.theme")
+            async def _on_theme(config, paths):
+                self.set_theme(config.interface.theme)
+
+            @config.on_change("interface.code_theme")
+            async def _on_code_theme(config, paths):
+                self.set_code_theme(config.interface.code_theme)
+
+        # CLI prompt serialization: one visible prompt at a time (a terminal
+        # constraint — the protocol leaves this policy to the frontend).
+        self._choice_lock = asyncio.Lock()
+
+        # Rich's implementation forces us to create custom spinners by
+        # starting from an existing spinner and altering it
+        growing_spinner = Spinner("dots", speed=1.0)
+        growing_spinner.frames = ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
+        growing_spinner.interval = 150
+
+        cool_spinner = Spinner("dots", speed=1.0)
+        cool_spinner.frames = ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
+        cool_spinner.interval = 120
+
+        self.spinners = {
+            "star": Spinner("star", speed=1.0),
+            "dots3": Spinner("dots3", speed=1.0),
+            "dots10": Spinner("dots10", speed=1.0),
+            "balloon": Spinner("balloon", speed=1.0),
+            "growing": growing_spinner,
+            "cool": cool_spinner,
+        }
+
+    # -- container -----------------------------------------------------------
 
     @property
     def _container(self):
-        raise NotImplementedError("Subclass must implement _container")
+        return (
+            self.app._conversation_area._current_section_container
+            or self.app._conversation_area
+        )
+
+    # -- message display (root-level, shared via _root) ---------------------
+
+    _message_display: MessageDisplay | None = None
+
+    @property
+    def _messages(self) -> MessageDisplay | None:
+        root = self._root
+        return root._message_display if isinstance(root, TerminalInterface) else None
+
+    # -- theming -------------------------------------------------------------
 
     def set_theme(self, theme: Palette) -> None:
-        # Palette drives Rich markup (info/error colours); app.theme re-resolves
-        # the CSS $variables against the newly-selected Textual theme.
         self.theme = theme
         self.app.theme = theme.name
 
+    def set_code_theme(self, code_theme: str) -> None:
+        root = self._root if self._root is not self else self
+        if isinstance(root, TerminalInterface):
+            root.code_theme = code_theme
+        if self._root is self:
+            self._refresh_mounted_syntax(code_theme)
+
     def _live_code_theme(self) -> str:
-        """Code theme is owned by the root LocalDisplay; groups read it live so
-        a runtime `/config set interface.code_theme` paints nested scopes without
-        remounting or tracking live GroupInterface instances."""
-        root = self._root_ref if self._root_ref is not None else self
-        if isinstance(root, LocalDisplay):
+        root = self._root
+        if isinstance(root, TerminalInterface):
             return root.code_theme
         return self.code_theme
 
-    def set_code_theme(self, code_theme: str) -> None:
-        """Keep the root `code_theme` in sync for future Syntax(...) builds and
-        best-effort restyle already-mounted code/diff boxes without touching
-        the reactive conversation tree."""
-        root = self._root_ref if self._root_ref is not None else self
-        if isinstance(root, LocalDisplay):
-            root.code_theme = code_theme
-        else:
-            self.code_theme = code_theme
-        if self._root_ref is None:
-            self._refresh_mounted_syntax(code_theme)
-
     def _refresh_mounted_syntax(self, code_theme: str) -> None:
         """In-place restyle of Static widgets holding a Rich Syntax renderable."""
-        from rich.syntax import Syntax
-
-        from solveig.interface.cli.collapsible_widgets import CollapsibleTextBox
-
         try:
             boxes = self.app.query(CollapsibleTextBox)
         except Exception:
             return
+
         for box in boxes:
             container = getattr(box, "_text_container", None)
             if container is None:
@@ -111,91 +187,51 @@ class LocalDisplay(SolveigInterface):
             container.update(Syntax(code, lexer=lexer_name, theme=code_theme))
             box.refresh(layout=True)
 
-    async def _display_text(
-        self, text: str, style: str = "text", prefix: str | None = None
+    # -- text (container-level) ---------------------------------------------
+
+    async def print(
+        self,
+        text: str,
+        level: Level = Level.TEXT,
+        *,
+        prefix: str | None = None,
     ) -> None:
-        to_display = text
+        style, emoji = _LEVEL_STYLES.get(level, ("text", ""))
+        to_display = f"{emoji}{text}" if emoji else text
         if prefix:
             to_display = f"[{self.theme.info}]{prefix}[/]  {to_display}"
         await self.app._conversation_area.add_text(
             to_display, style, markup=prefix is not None, container=self._container
         )
 
-    async def display_text(self, text: str, prefix: str | None = None) -> None:
-        await self._display_text(text, style="text", prefix=prefix)
+    # -- transcript verbs (root-level, shared via _root) ---------------------
 
-    async def display_error(self, error: str | Exception) -> None:
-        await self._display_text(f"🗙 Error: {error}", style="error")
-
-    async def display_warning(self, warning: str) -> None:
-        await self._display_text(f"⚠  Warning: {warning}", style="warning")
-
-    async def display_success(self, message: str) -> None:
-        await self.display_info(f"✓ {message}")
-
-    async def display_info(self, message: str) -> None:
-        await self._display_text(message, style="info")
-
-    # The root's message display - a scoped child (with_group) shares it, same
-    # as `conversation`. None until the app is up (see _wait_until_ready), so
-    # the three transcript verbs below no-op before there is a screen.
-    _message_display: "MessageDisplay | None" = None
-
-    @property
-    def _messages(self) -> "MessageDisplay | None":
-        root = self._root
-        return root._message_display if isinstance(root, LocalDisplay) else None
-
-    async def show_message_part(self, message_id: "MessageId", part_index: int) -> None:
+    async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
         if self._messages is not None:
             await self._messages.show_part(message_id, part_index)
 
-    async def update_message(self, message_id: "MessageId") -> None:
+    async def update_message(self, message_id: MessageId) -> None:
         if self._messages is not None:
             await self._messages.update(message_id)
 
-    async def drop_messages(self, message_ids: list["MessageId"]) -> None:
+    async def drop_messages(self, message_ids: list[MessageId]) -> None:
         if self._messages is not None:
             await self._messages.drop(message_ids)
+
+    # -- complex display (container-level) ----------------------------------
 
     async def display_tree(
         self,
         metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
-        expand_root=True,
+        expand_root: bool = True,
     ) -> None:
         await self.app._conversation_area.add_tree_display(
             metadata,
             title=title or str(metadata.path),
             display_metadata=display_metadata,
             expand_root=expand_root,
-            container=self._container,
-        )
-
-    async def display_text_box(
-        self,
-        text: str,
-        title: str | None = None,
-        language: str | None = None,
-        italic: bool = False,
-        collapsed: bool = False,
-    ) -> MutableTextBox:
-        to_display: str | Syntax | Markdown = text
-        if language:
-            language_name = get_language(language.lstrip("."))
-            if language_name == "markdown":
-                to_display = Markdown(text)
-            elif language_name:
-                to_display = Syntax(
-                    text, lexer=language_name, theme=self._live_code_theme()
-                )
-
-        return await self.app._conversation_area.add_text_box(
-            to_display,
-            title=title,
-            collapsed=collapsed,
-            italic=italic,
             container=self._container,
         )
 
@@ -229,19 +265,45 @@ class LocalDisplay(SolveigInterface):
             to_display, title=title or "Diff", container=self._container
         )
 
+    # -- add (returns object, container-level) -------------------------------
+
+    async def add_text_box(
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        italic: bool = False,
+        collapsed: bool = False,
+    ) -> MutableTextBox:
+        to_display: str | Syntax | Markdown = text
+        if language:
+            language_name = get_language(language.lstrip("."))
+            if language_name == "markdown":
+                to_display = Markdown(text)
+            elif language_name:
+                to_display = Syntax(
+                    text, lexer=language_name, theme=self._live_code_theme()
+                )
+
+        return await self.app._conversation_area.add_text_box(
+            to_display,
+            title=title,
+            collapsed=collapsed,
+            italic=italic,
+            container=self._container,
+        )
+
+    # -- with (context managers) ---------------------------------------------
+
     @asynccontextmanager
     async def with_group(
         self, title: str, auto_collapse: bool = False
-    ) -> AsyncGenerator["SolveigInterface", Any]:
+    ) -> AsyncGenerator[SolveigInterface, Any]:
         group_widget = await self.app._conversation_area.enter_group(
             title, container=self._container
         )
         try:
-            # root is always a TerminalInterface here - this method is only
-            # ever reached via a TerminalInterface or GroupInterface, and
-            # _root_ref (set by GroupInterface.__init__) always points back
-            # to the TerminalInterface that ultimately owns this scope.
-            root = self._root_ref if self._root_ref is not None else self
+            root = self._root
             assert isinstance(root, TerminalInterface)
             yield GroupInterface(root=root, group_widget=group_widget)
         finally:
@@ -249,155 +311,43 @@ class LocalDisplay(SolveigInterface):
                 group_widget, auto_collapse=auto_collapse
             )
 
-
-class TerminalInterface(LocalDisplay):
-    """
-    CLI interface that implements SolveigInterface and contains a SolveigTextualApp.
-
-    The root of the interface tree: owns the `SolveigTextualApp`, spinners,
-    and the CLI's prompt-serialization lock. Cancellation (the
-    `_active_tasks` registry + `cancel_task`) is protocol-level in
-    `SolveigInterface` - every UI with input has both a per-operation and a
-    global untargeted cancel. `LocalDisplay` supplies the "local display"
-    implementation (display_text, display_text_box, with_group, etc.),
-    shared unchanged with `GroupInterface` (defined below) - only
-    `_container` differs between the two.
-    """
-
-    def __init__(
+    @asynccontextmanager
+    async def with_animation(
         self,
-        theme: Palette = DEFAULT_THEME,
-        code_theme: str = DEFAULT_CODE_THEME,
-        base_indent: int = 2,
-        user_message_queue: "UserMessageQueue | None" = None,
-        config=None,
-        conversation: "Conversation | None" = None,
-        **kwargs,
-    ):
-        # The interface's output channel: typed input lands here via `put`.
-        self.user_message_queue = user_message_queue
-        # Displayed once the app is up - see _wait_until_ready.
-        self._conversation = conversation
-        app = SolveigTextualApp(
-            theme=theme,
-            input_callback=self._handle_input,
-            interface_ref=self,
-            config=config,
-            user_message_queue=user_message_queue,
-            **kwargs,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+        suffix: str | None = None,
+    ) -> AsyncGenerator[None]:
+        final_status = (
+            final_status
+            if final_status is not None
+            else self.app._stats_dashboard._status
         )
-        super().__init__(app=app, theme=theme, code_theme=code_theme)
-        self.base_indent = base_indent
+        await self.set_status(status)
+        await asyncio.sleep(0)
 
-        if config is not None:
+        spinner = random.choice(list(self.spinners.values()))
+        self.app._stats_dashboard.start_status_animation(
+            spinner, timeout=timeout, suffix=suffix
+        )
+        try:
+            yield
+        finally:
+            self.app._stats_dashboard.stop_status_animation()
+            await self.set_status(final_status)
 
-            @config.on_change("interface.theme")
-            async def _on_theme(config, paths):
-                self.set_theme(config.interface.theme)
-
-            @config.on_change("interface.code_theme")
-            async def _on_code_theme(config, paths):
-                self.set_code_theme(config.interface.code_theme)
-
-        # Section title for tracking
-        self._section_title: str = ""
-        # CLI prompt serialization: one visible prompt at a time (a terminal
-        # constraint - the protocol leaves this policy to the frontend).
-        self._choice_lock = asyncio.Lock()
-
-        # Rich's implementation forces us to create custom spinners by
-        # starting from an existing spinner and altering it
-        growing_spinner = Spinner("dots", speed=1.0)
-        growing_spinner.frames = ["🤆", "🤅", "🤄", "🤃", "🤄", "🤅", "🤆"]
-        growing_spinner.interval = 150
-
-        cool_spinner = Spinner("dots", speed=1.0)
-        cool_spinner.frames = ["⨭", "⨴", "⨂", "⦻", "⨂", "⨵", "⨮", "⨁"]
-        cool_spinner.interval = 120
-
-        # Available spinner options (built-in + custom)
-        self.spinners = {
-            "star": Spinner("star", speed=1.0),
-            "dots3": Spinner("dots3", speed=1.0),
-            "dots10": Spinner("dots10", speed=1.0),
-            "balloon": Spinner("balloon", speed=1.0),
-            # Add custom spinners by creating them manually
-            "growing": growing_spinner,
-            "cool": cool_spinner,
-        }
+    # -- status & stats (root-level) -----------------------------------------
 
     @property
     def stats(self):
         return self.app._stats_dashboard
 
-    # SolveigInterface implementation
-    async def _start(self) -> None:
-        """Start the interface."""
-        await self.app.run_async()
-
-    async def _stop(self) -> None:
-        """Stop the interface explicitly."""
-        self.app.exit()
-
-    async def _handle_input(self, user_input: str):
-        """The Textual app's input callback: hand the user's text to the
-        session UserMessageQueue. The queue's prompt gate routes /commands
-        before insertion; the interface never knows the difference."""
-        if self.user_message_queue is not None:
-            await self.user_message_queue.put(user_input)
-
-    @property
-    def _container(self):
-        return (
-            self.app._conversation_area._current_section_container
-            or self.app._conversation_area
-        )
-
-    async def _ask_question(self, question: str, default: str = "") -> str:
-        """Ask for specific input, preserving any current typing. Serialized
-        through the CLI's own lock (one visible prompt at a time)."""
-        async with self._choice_lock:
-            return await self.app.ask_user(question, default)
-
-    async def _ask_choice(self, question: str, choices: list[str]) -> int:
-        """Prompt with the given choices (already final - "Cancel processing"
-        appended, if any), returns the raw selected index. The base class's
-        `ask_choice` owns building that list, echoing the answer, and
-        raising UserCancel - see SolveigInterface.ask_choice."""
-        async with self._choice_lock:
-            return await self.app.ask_choice(question, choices)
-
-    def _add_stat(
-        self,
-        label: str,
-        get: Callable[[], Any],
-        on_click: Callable[[], Awaitable[None]] | None = None,
-        render: Callable[[Any], str] | None = None,
-    ) -> Stat:
-        """Build a Textual stat and hand it to the bar.
-
-        Returns `TextualStat`, which carries the placement this frontend needs
-        and another would not - the bar knows the model belongs in a specific
-        cell, a web UI might render a side list. That knowledge stays here
-        rather than being a parameter a caller has to supply."""
-        stat = TextualStat(label, get, on_click, render)
-        self.app._stats_dashboard.add_stat(stat)
-        return stat
-
-    def _refresh_stats(self) -> None:
-        self.app._stats_dashboard.refresh_stats()
-
-    async def _set_status(
+    async def set_status(
         self,
         status: str | None,
         duration: float | None = None,
     ) -> None:
-        """Set the status line, with an optional flash duration.
-
-        Pass `duration` to show `status` as a flash message: it reverts to
-        whatever the status was before this call once `duration` seconds
-        pass, unless something else has changed the status in the meantime.
-        """
         dashboard = self.app._stats_dashboard
         previous_status = dashboard._status if duration else None
         dashboard.set_status(status)
@@ -406,80 +356,140 @@ class TerminalInterface(LocalDisplay):
 
             async def _restore_status() -> None:
                 if dashboard._status == status:
-                    await self._set_status(previous_status)
+                    await self.set_status(previous_status)
 
             self.app.set_timer(duration, _restore_status)
 
-    async def _wait_until_ready(self):
+    def add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        stat = TextualStat(label, get, on_click, render)
+        self.app._stats_dashboard.add_stat(stat)
+        return stat
+
+    def refresh_stats(self) -> None:
+        self.app._stats_dashboard.refresh_stats()
+
+    # -- lifecycle (root-level) ----------------------------------------------
+
+    async def start(self) -> None:
+        await self.app.run_async()
+
+    async def stop(self) -> None:
+        self.app.exit()
+
+    async def wait_until_ready(self) -> None:
         await self.app.is_ready.wait()
-        # HACK - Set active_app context since the interface was started from a separate asyncio task
+        # HACK — Set active_app context since the interface was started from
+        # a separate asyncio task
         from textual._context import active_app
 
         active_app.set(self.app)
-        # Build the message display now, not at construction: it needs the
-        # app's conversation area, which does not exist until the app is up.
-        # That timing is this frontend's problem, so it is solved here rather
-        # than by a handshake every other frontend has to implement. The
-        # transcript verbs no-op until it exists - nothing can be shown before
-        # there is a screen to show it on.
         if self._conversation is not None and self._message_display is None:
             self._message_display = MessageDisplay(
                 self._conversation, self.app._conversation_area, self
             )
-        # Print banner
-        await self.display_text(BANNER)
+        await self.print(BANNER)
 
-    async def _display_section(
-        self, title: str, even_if_repeated: bool = False
+    # -- input (root-level) --------------------------------------------------
+
+    async def _handle_input(self, user_input: str):
+        """The Textual app's input callback: hand the user's text to the
+        session UserMessageQueue."""
+        if self.user_message_queue is not None:
+            await self.user_message_queue.put(user_input)
+
+    async def _ask_question(self, question: str, default: str = "") -> str:
+        """Ask for specific input. Serialized through the CLI's own lock
+        (one visible prompt at a time)."""
+        async with self._choice_lock:
+            return await self.app.ask_user(question, default)
+
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+        """Prompt with the given choices (already final — "Cancel processing"
+        appended, if any), returns the raw selected index."""
+        async with self._choice_lock:
+            return await self.app.ask_choice(question, choices)
+
+
+class GroupInterface(TerminalInterface):
+    """The SolveigInterface returned by with_group(). Satisfies the full
+    contract (a tool body can't tell it apart from the root), but its
+    container-level calls mount into its own group's container instead of
+    wherever the root currently mounts content.
+
+    Container-level methods (print, display_tree, display_diff, add_text_box,
+    transcript verbs) are INHERITED from TerminalInterface — they use
+    self._container, which GroupInterface sets to its own group's contents.
+
+    Root-level methods (ask_question, set_status, add_stat, refresh_stats,
+    with_animation, start, stop, wait_until_ready) are overridden with
+    one-liner delegations to self._root.
+    """
+
+    def __init__(
+        self, root: TerminalInterface, group_widget: CustomCollapsible
     ) -> None:
-        """Display a section header with line extending to the right."""
-        if even_if_repeated or self._section_title != title:
-            self._section_title = title
-            await self.app._conversation_area.add_section_header(title)
+        super().__init__()  # SolveigInterface.__init__ — sets _active_tasks etc.
+        self._root: TerminalInterface = root
+        self.app = root.app
+        self.theme = root.theme
+        self.code_theme = root.code_theme
+        self._conversation = root._conversation
+        self._active_tasks = root._active_tasks
+        self._group_container = group_widget.query_one(Collapsible.Contents)
+
+    @property
+    def _container(self):
+        return self._group_container
+
+    # -- root-level delegations ----------------------------------------------
+
+    async def _ask_question(self, question: str, default: str = "") -> str:
+        return await self._root._ask_question(question, default)
+
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+        return await self._root._ask_choice(question, choices)
+
+    async def set_status(
+        self, status: str | None, duration: float | None = None
+    ) -> None:
+        await self._root.set_status(status, duration)
+
+    def add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat:
+        return self._root.add_stat(label, get, on_click, render)
+
+    def refresh_stats(self) -> None:
+        self._root.refresh_stats()
 
     @asynccontextmanager
-    async def _with_animation(
+    async def with_animation(
         self,
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
         suffix: str | None = None,
-    ):
-        """Context manager for displaying animation during async operations."""
-        final_status = (
-            final_status
-            if final_status is not None
-            else self.app._stats_dashboard._status
-        )
-        await self._set_status(status)
-        await asyncio.sleep(0)
+    ) -> AsyncGenerator[None]:
+        async with self._root.with_animation(
+            status, final_status, timeout=timeout, suffix=suffix
+        ) as value:
+            yield value
 
-        spinner = random.choice(list(self.spinners.values()))
-        self.stats.start_status_animation(spinner, timeout=timeout, suffix=suffix)
-        try:
-            yield
-        finally:
-            self.stats.stop_status_animation()
-            await self._set_status(final_status)
+    async def start(self) -> None:
+        await self._root.start()
 
+    async def stop(self) -> None:
+        await self._root.stop()
 
-class GroupInterface(LocalDisplay):
-    """The SolveigInterface returned by with_group(). Satisfies the full
-    contract (a tool body can't tell it apart from the root), but its local
-    display calls mount into its own group's container instead of wherever the
-    root currently mounts content.
-
-    A group never owns its own `SolveigTextualApp` or spinners - it borrows
-    the root's, which `LocalDisplay.__init__` takes directly instead of
-    constructing them.
-    """
-
-    def __init__(self, root: "TerminalInterface", group_widget: "CustomCollapsible"):
-        self._group_container = group_widget.query_one(Collapsible.Contents)
-        super().__init__(
-            app=root.app, theme=root.theme, code_theme=root.code_theme, root_ref=root
-        )
-
-    @property
-    def _container(self):
-        return self._group_container
+    async def wait_until_ready(self) -> None:
+        await self._root.wait_until_ready()

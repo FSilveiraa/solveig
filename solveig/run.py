@@ -20,7 +20,7 @@ from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.config.editor import register_config_stat
-from solveig.interface.base import SolveigInterface, Stat
+from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.cli.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import connect_all
@@ -144,7 +144,7 @@ async def _display_setup(
     await asyncio.sleep(0)
 
     for warning in startup_warnings:
-        await interface.display_warning(warning)
+        await interface.print(warning, level=Level.WARNING)
 
     # Plugins are already loaded and composed - `parse_config_and_prompt` scanned
     # before the config was built, because the schema has to exist before the
@@ -159,7 +159,7 @@ async def _display_setup(
     await connect_all(config=config, interface=interface)
 
     sys_prompt = await get_system_prompt(config)
-    await interface.display_text_box(
+    await interface.add_text_box(
         sys_prompt,
         title="System Prompt",
         collapsed=True,
@@ -172,11 +172,12 @@ async def _display_setup(
             await session_manager.announce_resumed_session(session_data, interface)
             await conversation.load(session_data["messages"], session_data["usage"])
         except FileNotFoundError as e:
-            await interface.display_error(f"Could not resume session: {e}")
+            await interface.print(f"Could not resume session: {e}", level=Level.ERROR)
 
     if config.api.model is None:
-        await interface.display_warning(
-            "No model configured. Use /model list to check available models and /model set <name> to set one."
+        await interface.print(
+            "No model configured. Use /model list to check available models and /model set <name> to set one.",
+            level=Level.WARNING,
         )
     else:
         await client.refresh(config)
@@ -239,8 +240,9 @@ async def main_loop(
         # run_turn adopts it into the conversation - no predicted display here.
 
         if config.api.model is None:
-            await interface.display_error(
-                "No model set. Use /model set <name> or /config set model <name>."
+            await interface.print(
+                "No model set. Use /model set <name> or /config set model <name>.",
+                level=Level.ERROR,
             )
             continue
 

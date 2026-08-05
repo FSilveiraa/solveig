@@ -11,7 +11,7 @@ from pydantic_ai.providers import Provider
 
 from solveig.api.types import ModelInfo
 from solveig.config import SolveigConfig
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
 
 
@@ -123,14 +123,14 @@ async def model_list(
     try:
         models = await config.api.type.list_models(client.provider)
     except NotImplementedError as e:
-        await interface.display_error(str(e))
+        await interface.print(str(e), level=Level.ERROR)
         return
     except Exception as e:
-        await interface.display_error(f"Could not list models: {e}")
+        await interface.print(f"Could not list models: {e}", level=Level.ERROR)
         return
 
     if not models:
-        await interface.display_info("No models available.")
+        await interface.print("No models available.", level=Level.INFO)
         return
 
     current = config.api.model
@@ -139,7 +139,7 @@ async def model_list(
         prefix = "→ " if m == current else "  "
         lines.append(f"{prefix}{m}")
 
-    await interface.display_text_box(
+    await interface.add_text_box(
         "\n".join(lines), title=f"Models ({type(config.api.type).__name__})"
     )
 
@@ -161,7 +161,9 @@ async def model_info(
     """Show current model details."""
     info = client.model_info
     if info is None:
-        await interface.display_info("No model info loaded. Run /model refresh.")
+        await interface.print(
+            "No model info loaded. Run /model refresh.", level=Level.INFO
+        )
         return
 
     lines = [f"Model:           {info.model}"]
@@ -172,7 +174,7 @@ async def model_info(
     if info.output_price is not None:
         lines.append(f"Output price:   ${info.output_price:.2f}/M tokens")
 
-    await interface.display_text_box("\n".join(lines), title="Model Info")
+    await interface.add_text_box("\n".join(lines), title="Model Info")
 
 
 @subcommand("/model refresh", section="model", detail=True)

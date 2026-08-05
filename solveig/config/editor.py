@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.exceptions import UserCancel
 from solveig.interface import themes
-from solveig.interface.base import SolveigInterface, Stat
+from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.subcommands.base import subcommand
 from solveig.utils import dotted
 
@@ -218,7 +218,7 @@ async def config_list(config: SolveigConfig, interface: SolveigInterface) -> Non
         value = config.get(field_name)
         display = display_config_value(value)
         lines.append(f"{field_name:<32} = {display}")
-    await interface.display_text_box("\n".join(lines), title="Config (editable fields)")
+    await interface.add_text_box("\n".join(lines), title="Config (editable fields)")
 
 
 @subcommand("/config get", section="config", detail=True)
@@ -229,13 +229,16 @@ async def config_get(
     field_name = field.strip()
     fields = editable_fields(config)
     if field_name not in fields:
-        await interface.display_error(
-            f"Unknown field: '{field_name}'. Use /config list to see all fields."
+        await interface.print(
+            f"Unknown field: '{field_name}'. Use /config list to see all fields.",
+            level=Level.ERROR,
         )
         return
     value = config.get(field_name)
     display = display_config_value(value)
-    await interface.display_info(f"{field_name} = {display}  ({fields[field_name]})")
+    await interface.print(
+        f"{field_name} = {display}  ({fields[field_name]})", level=Level.INFO
+    )
 
 
 @subcommand("/config set", section="config", detail=True)
@@ -257,9 +260,10 @@ async def config_set(
         value = (inline,) if inline else ()
 
     if field_name not in editable_fields(config):
-        await interface.display_error(
+        await interface.print(
             f"Unknown or non-editable field: '{field_name}'. "
-            "Use /config list to see all options."
+            "Use /config list to see all options.",
+            level=Level.ERROR,
         )
         return
 
@@ -291,17 +295,18 @@ async def config_save(
         # A declared path with nothing behind it means preservation failed, not
         # that a plugin is absent — an absent plugin's block is kept and dumps
         # normally. Refuse rather than write a file that silently lost a value.
-        await interface.display_error(
+        await interface.print(
             f"Refusing to save: {e.path} was set but has no value to write "
-            f"(missing '{e.segment}'). Saving now would drop it."
+            f"(missing '{e.segment}'). Saving now would drop it.",
+            level=Level.ERROR,
         )
         return
     try:
         sources.save_config(data, target)
     except OSError as e:
-        await interface.display_error(f"Could not save config: {e}")
+        await interface.print(f"Could not save config: {e}", level=Level.ERROR)
         return
-    await interface.display_success(f"Config saved to {target}")
+    await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
+from solveig.interface.base import Level
 from solveig.plugins.tools import tool
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
@@ -45,13 +46,15 @@ class TreeTool(BaseTool):
         abs_path = Filesystem.get_absolute_path(self.path)
 
         if Filesystem.path_matches_patterns(abs_path, config.ignored_paths):
-            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            await interface.print(
+                f"Path blocked by ignored_paths: {abs_path}", level=Level.ERROR
+            )
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
-            await interface.display_error(f"Cannot access {abs_path}: {e}")
+            await interface.print(f"Cannot access {abs_path}: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
         choice_read_tree = await interface.ask_choice(
@@ -64,7 +67,7 @@ class TreeTool(BaseTool):
         )
 
         if choice_read_tree > 1:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to read the tree.")
 
         metadata = await Filesystem.read_metadata(
@@ -79,8 +82,9 @@ class TreeTool(BaseTool):
         )
         if path_matches or choice_read_tree == 0:
             if path_matches and choice_read_tree != 0:
-                await interface.display_info(
-                    f"Sending tree since {abs_path} matches config.auto_allowed_paths"
+                await interface.print(
+                    f"Sending tree since {abs_path} matches config.auto_allowed_paths",
+                    level=Level.INFO,
                 )
             allow_send = True
         else:
@@ -89,8 +93,8 @@ class TreeTool(BaseTool):
             )
 
         if not allow_send:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to send the tree.")
 
-        await interface.display_success("Accepted")
+        await interface.print("Accepted", level=Level.SUCCESS)
         return ToolResult(content=metadata)

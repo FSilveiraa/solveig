@@ -32,7 +32,7 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.context import SolveigContext, get_introspection_context
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
 from solveig.subcommands.base import subcommand
 
@@ -114,10 +114,12 @@ async def connect(
         ) as task:
             await task
     except asyncio.CancelledError:
-        await interface.display_info(f"MCP connection to {display_prefix} cancelled")
+        await interface.print(
+            f"MCP connection to {display_prefix} cancelled", level=Level.INFO
+        )
         return None
     except Exception as err:
-        await interface.display_error(f"MCP '{display_prefix}': {err}")
+        await interface.print(f"MCP '{display_prefix}': {err}", level=Level.ERROR)
         return None
 
     conn.server_name = mcp_toolset.server_info.name
@@ -127,8 +129,8 @@ async def connect(
         tools = await toolset.get_tools(get_introspection_context(deps))
     except Exception as err:
         await toolset.__aexit__(None, None, None)
-        await interface.display_error(
-            f"MCP '{display_prefix}': failed to list tools: {err}"
+        await interface.print(
+            f"MCP '{display_prefix}': failed to list tools: {err}", level=Level.ERROR
         )
         return None
 
@@ -187,8 +189,9 @@ async def mcp_list(
 ) -> None:
     """List configured and connected MCP servers."""
     if not config.mcp and not MCP_CONNECTIONS:
-        await interface.display_info(
-            "No MCP servers configured. Use /mcp connect <url> to connect."
+        await interface.print(
+            "No MCP servers configured. Use /mcp connect <url> to connect.",
+            level=Level.INFO,
         )
         return
 
@@ -205,7 +208,7 @@ async def mcp_list(
             name = cfg.name or url
             lines.append(f"○ {name}  (configured, not connected)")
 
-    await interface.display_text_box("\n".join(lines), title="MCP Servers")
+    await interface.add_text_box("\n".join(lines), title="MCP Servers")
 
 
 @subcommand("/mcp connect", section="mcp", detail=True)
@@ -230,8 +233,8 @@ async def mcp_disconnect(
     identifier = identifier.strip()
     conn = find_connection(identifier)
     if conn is None:
-        await interface.display_error(
-            f"No connected MCP server matching '{identifier}'."
+        await interface.print(
+            f"No connected MCP server matching '{identifier}'.", level=Level.ERROR
         )
         return
     await disconnect(conn.url, config, interface)

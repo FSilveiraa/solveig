@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
+from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
@@ -75,7 +76,7 @@ class ReadTool(BaseTool):
         return f"Read {self.path}"
 
     async def display_header(self, interface: "SolveigInterface") -> None:
-        await interface.display_text(
+        await interface.print(
             str(Filesystem.get_absolute_path(self.path)), prefix="Path:"
         )
 
@@ -84,13 +85,15 @@ class ReadTool(BaseTool):
     ) -> ToolResult:
         decision, abs_path = check_path_security(self.path, config)
         if decision == ConsentDecision.BLOCKED:
-            await interface.display_error(f"Path blocked by ignored_paths: {abs_path}")
+            await interface.print(
+                f"Path blocked by ignored_paths: {abs_path}", level=Level.ERROR
+            )
             return ToolResult(issues=[f"path blocked by ignored_paths: {abs_path}"])
 
         try:
             await Filesystem.validate_read_access(abs_path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
-            await interface.display_error(f"Cannot access {abs_path}: {e}")
+            await interface.print(f"Cannot access {abs_path}: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])
 
         auto_allowed = decision == ConsentDecision.AUTO_ALLOWED
@@ -112,7 +115,9 @@ class ReadTool(BaseTool):
             await interface.display_tree(metadata=metadata)
 
         if auto_allowed:
-            await interface.display_info("Sending metadata since path is auto-allowed.")
+            await interface.print(
+                "Sending metadata since path is auto-allowed.", level=Level.INFO
+            )
             send_metadata = True
         else:
             send_metadata = (
@@ -121,10 +126,10 @@ class ReadTool(BaseTool):
             )
 
         if not send_metadata:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to send metadata.")
 
-        await interface.display_success("Accepted")
+        await interface.print("Accepted", level=Level.SUCCESS)
         return ToolResult(content=metadata)
 
     async def _read_content(
@@ -138,15 +143,15 @@ class ReadTool(BaseTool):
         line_ranges = self.line_ranges
         if line_ranges:
             request_desc = ", ".join(f"{start} to {end}" for start, end in line_ranges)
-            await interface.display_text(
+            await interface.print(
                 f"Lines {request_desc} and metadata", prefix="Requesting:"
             )
         else:
-            await interface.display_text("Content and metadata", prefix="Requesting:")
+            await interface.print("Content and metadata", prefix="Requesting:")
 
         if auto_allowed:
-            await interface.display_info(
-                "Reading and sending file since path is auto-allowed."
+            await interface.print(
+                "Reading and sending file since path is auto-allowed.", level=Level.INFO
             )
             choice = 0  # "Read and send"
         else:
@@ -161,11 +166,11 @@ class ReadTool(BaseTool):
             )
 
         if choice == 2:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content=metadata)
 
         if choice == 3:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to send anything.")
 
         # choice in (0, 1): read and display the content before deciding further
@@ -175,10 +180,10 @@ class ReadTool(BaseTool):
                     abs_path, ranges=line_ranges
                 )
             except ValueError as e:
-                await interface.display_error(f"Invalid line range: {e}")
+                await interface.print(f"Invalid line range: {e}", level=Level.ERROR)
                 return ToolResult(issues=[e])
             for start, end, text in content_ranges:
-                await interface.display_text_box(
+                await interface.add_text_box(
                     text,
                     title=f"Content: {abs_path} (lines {start} to {end})",
                     language=abs_path.suffix,
@@ -191,7 +196,7 @@ class ReadTool(BaseTool):
                 if read_result.encoding == "text"
                 else "(binary content)"
             )
-            await interface.display_text_box(
+            await interface.add_text_box(
                 content_str,
                 title=f"Content: {abs_path}",
                 language=abs_path.suffix,
@@ -199,7 +204,7 @@ class ReadTool(BaseTool):
             )
 
         if choice == 0:
-            await interface.display_success("Accepted")
+            await interface.print("Accepted", level=Level.SUCCESS)
             return ToolResult(content=content_str)
 
         # choice == 1: inspect first, then decide
@@ -208,10 +213,10 @@ class ReadTool(BaseTool):
             ["Send content and metadata", "Send metadata only", "Don't send anything"],
         )
         if send_choice == 0:
-            await interface.display_success("Accepted")
+            await interface.print("Accepted", level=Level.SUCCESS)
             return ToolResult(content=content_str)
         if send_choice == 1:
-            await interface.display_warning("Rejected")
+            await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content=metadata)
-        await interface.display_warning("Rejected")
+        await interface.print("Rejected", level=Level.WARNING)
         return ToolResult(content="User declined to send anything.")

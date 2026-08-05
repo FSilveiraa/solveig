@@ -1,7 +1,7 @@
 """trafilatura hook - converts HTML response bodies to markdown after an HTTP request."""
 
 from solveig.config import SolveigConfig
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import after_tool
 from solveig.tools.core.http import HttpTool
 from solveig.tools.result import ToolResult
@@ -31,14 +31,15 @@ async def trafilatura(
         return result
 
     if _trafilatura is None:
-        await interface.display_warning(
+        await interface.print(
             "trafilatura plugin is enabled but the library is not installed. "
-            "Run: pip install trafilatura"
+            "Run: pip install trafilatura",
+            level=Level.WARNING,
         )
         return result
 
     original_size = len(body)
-    await interface.display_text(f"{original_size:,} chars", prefix="HTML size:")
+    await interface.print(f"{original_size:,} chars", prefix="HTML size:")
 
     if (
         await interface.ask_choice(
@@ -62,15 +63,18 @@ async def trafilatura(
         include_comments=plugin_config.get("include_comments", False),
     )
     if not markdown:
-        await interface.display_warning(
-            "trafilatura could not extract main content from this page."
+        await interface.print(
+            "trafilatura could not extract main content from this page.",
+            level=Level.WARNING,
         )
         return result
 
     new_size = len(markdown)
     savings = round((1 - new_size / original_size) * 100)
-    await interface.display_success(f"{new_size:,} chars — {savings}% smaller")
-    await interface.display_text_box(
+    await interface.print(
+        f"{new_size:,} chars — {savings}% smaller", level=Level.SUCCESS
+    )
+    await interface.add_text_box(
         title="Markdown Response",
         text=markdown,
         collapsed=True,

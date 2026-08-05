@@ -42,7 +42,7 @@ from pydantic_settings.exceptions import SettingsError
 
 from solveig.config import SolveigConfig
 from solveig.exceptions import PluginException, ToolDisabledError
-from solveig.interface.base import SolveigInterface
+from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import HookKind, hook_name, hooks_for
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
@@ -130,7 +130,7 @@ async def run_untyped_tool(
     visible without labeling the group — and a plain-function plugin tool
     isn't MCP at all)."""
     async with open_tool_group(interface, call.tool_name, config) as group:
-        await group.display_text_box(
+        await group.add_text_box(
             json.dumps(args, indent=2, default=str), title="Args", language="json"
         )
 
@@ -144,15 +144,15 @@ async def run_untyped_tool(
         )
 
         if choice == 2:
-            await group.display_warning("Rejected")
+            await group.print("Rejected", level=Level.WARNING)
             return "User declined to run this tool."
 
         result = await handler(args)
 
-        await group.display_text_box(str(result), title="Result", collapsed=choice == 0)
+        await group.add_text_box(str(result), title="Result", collapsed=choice == 0)
 
         if choice == 0:
-            await group.display_success("Accepted")
+            await group.print("Accepted", level=Level.SUCCESS)
             return result
 
         # choice == 1: ran and displayed the result above, now decide whether
@@ -160,10 +160,10 @@ async def run_untyped_tool(
         if (
             await group.ask_choice("Send this result to the assistant?", ["Yes", "No"])
         ) == 0:
-            await group.display_success("Accepted")
+            await group.print("Accepted", level=Level.SUCCESS)
             return result
 
-        await group.display_warning("Rejected")
+        await group.print("Rejected", level=Level.WARNING)
         return "User inspected the result and declined to send it to the assistant."
 
 
@@ -179,15 +179,16 @@ def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[None]]:
         try:
             instance = tool_cls.from_cli_tokens(list(tokens))
         except (SettingsError, ValidationError) as e:
-            await interface.display_error(str(e))
-            await interface.display_info(
-                f"Usage: {tool_cls.subcommands[0]} {tool_cls.subcommand_usage()}"
+            await interface.print(str(e), level=Level.ERROR)
+            await interface.print(
+                f"Usage: {tool_cls.subcommands[0]} {tool_cls.subcommand_usage()}",
+                level=Level.INFO,
             )
             return
         try:
             await run_tool_and_hooks(instance, config, interface)
         except (PluginException, ToolDisabledError) as e:
-            await interface.display_error(str(e))
+            await interface.print(str(e), level=Level.ERROR)
 
     return handler
 

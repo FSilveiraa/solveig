@@ -308,7 +308,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
             if line_count is not None
             else (metadata.line_count if metadata else None)
         )
-        await interface.display_text(
+        await interface.print(
             format_path_info(
                 path=path,
                 abs_path=abs_path,
