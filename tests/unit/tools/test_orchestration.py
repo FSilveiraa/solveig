@@ -16,10 +16,10 @@ class _EchoTool(BaseTool):
 
     async def execute(self, config, interface) -> ToolResult:
         # Prove this tool received the *scoped* interface, not the root:
-        # display_text should land inside its own group's output, and the
+        # print should land inside its own group's output, and the
         # object identity should differ from the interface passed into
         # run_tool_and_hooks (which is the root).
-        await interface.display_text(self.message)
+        await interface.print(self.message)
         return ToolResult(content=self.message, metadata={}, issues=[])
 
 
