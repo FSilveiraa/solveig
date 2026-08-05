@@ -171,10 +171,14 @@ class MockInterface(SolveigInterface):
         *,
         prefix: str | None = None,
     ) -> None:
+        # Record the severity as a label ([TEXT]/[INFO]/[WARNING]/[ERROR]/[SUCCESS])
+        # so a test can distinguish an error print from ordinary text. The TEXT
+        # label matches the historical format, so `[TEXT] hi` assertions hold.
+        label = level.name
         if prefix:
-            self.outputs.append(f"[PREFIX: {prefix}] {text}")
+            self.outputs.append(f"[{label}: {prefix}] {text}")
         else:
-            self.outputs.append(f"[TEXT] {text}")
+            self.outputs.append(f"[{label}] {text}")
 
     # -- transcript verbs ----------------------------------------------------
 

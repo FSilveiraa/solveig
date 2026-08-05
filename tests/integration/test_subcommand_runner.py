@@ -43,7 +43,7 @@ def make_registry(config=None, session_manager=_SENTINEL):
         else SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     )
     conversation = Conversation()
-    provider_ref = Client(provider=MagicMock())
+    provider_ref = Client(cfg, provider=MagicMock())
     interface = MockInterface()
     user_message_queue = UserMessageQueue()
     registry = SubcommandRegistry(
@@ -180,12 +180,12 @@ class TestConfigCommands:
     async def test_config_get_no_args_shows_error(self):
         registry, _, _ = make_registry()
         await registry("/config get")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
     async def test_config_get_unknown_field_shows_error(self):
         registry, _, _ = make_registry()
         await registry("/config get nonexistent_field")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
     async def test_config_set_known_field_with_value(self):
         registry, _, cfg = make_registry()
@@ -201,12 +201,12 @@ class TestConfigCommands:
     async def test_config_set_unknown_field_shows_error(self):
         registry, _, _ = make_registry()
         await registry("/config set nonexistent_field value")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
     async def test_config_set_no_args_shows_error(self):
         registry, _, _ = make_registry()
         await registry("/config set")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
     async def test_config_set_stream_bool(self):
         registry, _, cfg = make_registry()
@@ -328,7 +328,7 @@ class TestSessionCommandsWithManager:
         registry, _, _ = make_registry(session_manager=manager)
         await registry("/store mysession")
         manager.store.assert_called_once()
-        assert any("✅" in o for o in registry._interface.outputs)
+        assert any("Session stored as" in o for o in registry._interface.outputs)
 
     async def test_session_store_no_name(self):
         manager = self._make_mock_manager()
@@ -342,7 +342,7 @@ class TestSessionCommandsWithManager:
         registry._interface.choices = [0]  # 0 = "Yes"
         await registry("/session delete test")
         manager.delete.assert_called_once_with("test")
-        assert any("✅" in o for o in registry._interface.outputs)
+        assert any("Deleted session" in o for o in registry._interface.outputs)
 
     async def test_session_delete_not_found_shows_error(self):
         manager = self._make_mock_manager()
@@ -351,21 +351,21 @@ class TestSessionCommandsWithManager:
         )
         registry, _, _ = make_registry(session_manager=manager)
         await registry("/session delete ghost")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
     async def test_session_resume_loads_session(self):
         manager = self._make_mock_manager()
         registry, _, _ = make_registry(session_manager=manager)
         await registry("/resume")
         manager.load.assert_called_once()
-        assert any("✅" in o for o in registry._interface.outputs)
+        assert any("Session resumed." in o for o in registry._interface.outputs)
 
     async def test_session_resume_not_found_shows_error(self):
         manager = self._make_mock_manager()
         manager.load = AsyncMock(side_effect=FileNotFoundError("No sessions found"))
         registry, _, _ = make_registry(session_manager=manager)
         await registry("/resume")
-        assert any("Error" in o for o in registry._interface.outputs)
+        assert any("ERROR" in o for o in registry._interface.outputs)
 
 
 # ---------------------------------------------------------------------------
@@ -375,10 +375,15 @@ class TestSessionCommandsWithManager:
 
 class TestToolSubcommands:
     async def test_tool_subcommands_registered(self):
-        """At least some tool subcommands should be present in the registry."""
+        """At least some tool subcommands should be present in the registry's store."""
+        from solveig.subcommands.base import SUBCOMMANDS
+
         registry, _, _ = make_registry()
-        assert len(registry._subcommands) > 0
+        assert len(SUBCOMMANDS.all()) > 0
 
     async def test_command_tool_subcommand_registered(self):
+        from solveig.subcommands.base import SUBCOMMANDS
+
         registry, _, _ = make_registry()
-        assert "/command" in registry._registry or "/cmd" in registry._registry
+        names = [name for s in SUBCOMMANDS.all() for name in s.subcommands]
+        assert "/command" in names or "/cmd" in names
