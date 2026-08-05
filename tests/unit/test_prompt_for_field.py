@@ -3,7 +3,7 @@ from solveig.config import SolveigConfig
 
 import pytest
 
-from solveig.api.types import API_TYPES
+from solveig.api.types import APIType, TYPE_BY_NAME
 from solveig.config.editor import prompt_for_field
 from solveig.interface import themes
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -51,11 +51,11 @@ async def test_code_theme_returns_string():
 
 
 async def test_api_type_returns_api_type_value():
-    """prompt_for_field for 'api_type' returns the corresponding API type."""
-    api_type_values = list(API_TYPES.values())
+    """prompt_for_field for 'api.type' returns the corresponding APIType instance."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     result = await prompt_for_field("api.type", config, MockInterface(choices=[0]))
-    assert result is api_type_values[0]
+    assert isinstance(result, APIType)
+    assert result.display_value() in TYPE_BY_NAME
 
 
 # ---------------------------------------------------------------------------

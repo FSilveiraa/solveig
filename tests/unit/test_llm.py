@@ -1,29 +1,119 @@
+"""Tests for the api type system and Client (the live provider holder).
+
+`APIType` is now a base class with one subclass per API (OpenAI, Anthropic,
+Gemini); `config.api.type` holds an instance. String → instance resolution is
+`TYPE_BY_NAME` + `resolve_api_type`. `Client(config, provider=...)` builds the
+provider (or uses an injected one) and subscribes to config changes reactively.
 """
-Unit tests for solveig.api module.
-Tests API type parsing.
-"""
+
+from unittest.mock import MagicMock
 
 import pytest
+from pydantic_ai.providers import Provider
 
-from solveig.api.types import APIType, parse_api_type
+from solveig.api.client import Client
+from solveig.api.types import (
+    TYPE_BY_NAME,
+    Anthropic,
+    Gemini,
+    ModelInfo,
+    OpenAI,
+    resolve_api_type,
+)
+from solveig.config import SolveigConfig
+from tests.mocks import MockInterface
 
-pytestmark = [pytest.mark.anyio]
+
+def _cfg(**api) -> SolveigConfig:
+    return SolveigConfig(
+        cli_args=[], api={"url": "http://x", "key": "test-key", **api}
+    )
 
 
-class TestAPITypeParsing:
-    """Test API type parsing."""
+# ---------------------------------------------------------------------------
+# APIType resolution
+# ---------------------------------------------------------------------------
 
-    async def test_valid_api_types(self):
-        """Test parsing valid API types."""
-        assert parse_api_type("openai") == APIType.OPENAI
-        assert parse_api_type("OPENAI") == APIType.OPENAI  # Case insensitive
-        assert parse_api_type("anthropic") == APIType.ANTHROPIC
-        assert parse_api_type("gemini") == APIType.GEMINI
 
-    async def test_invalid_api_type(self):
-        """Test invalid API type raises error."""
+class TestResolveApiType:
+    async def test_names_map_to_subclasses(self):
+        assert isinstance(resolve_api_type("openai"), OpenAI)
+        assert isinstance(resolve_api_type("anthropic"), Anthropic)
+        assert isinstance(resolve_api_type("gemini"), Gemini)
+
+    async def test_case_insensitive(self):
+        assert isinstance(resolve_api_type("OPENAI"), OpenAI)
+
+    async def test_unknown_raises(self):
         with pytest.raises(ValueError, match="Unknown API type"):
-            parse_api_type("invalid")
+            resolve_api_type("bogus")
 
-        with pytest.raises(ValueError, match="Unknown API type"):
-            parse_api_type("")
+    async def test_display_value_is_lowercased_class_name(self):
+        assert OpenAI().display_value() == "openai"
+        assert Gemini().display_value() == "gemini"
+
+    async def test_type_by_name_matches_resolve(self):
+        for name, cls in TYPE_BY_NAME.items():
+            assert isinstance(resolve_api_type(name), cls)
+
+
+# ---------------------------------------------------------------------------
+# Client construction
+# ---------------------------------------------------------------------------
+
+
+class TestClientConstruction:
+    async def test_one_arg_builds_provider_from_config(self):
+        client = Client(_cfg())
+        assert isinstance(client.provider, Provider)
+        assert client.model_info is None
+
+    async def test_injected_provider_is_used(self):
+        provider = MagicMock()
+        client = Client(_cfg(), provider=provider)
+        assert client.provider is provider
+
+    async def test_registers_config_change_observer(self):
+        config = _cfg()
+        Client(config)
+        assert len(config._observers) == 1
+        _fn, filt = config._observers[-1]
+        assert filt == frozenset({"api.model", "api.url", "api.type"})
+
+
+# ---------------------------------------------------------------------------
+# Client.refresh — atomic swap, network mocked
+# ---------------------------------------------------------------------------
+
+
+class TestClientRefresh:
+    async def test_success_installs_model_info_and_notifies_interface(
+        self, monkeypatch
+    ):
+        config = _cfg(model="m")
+        interface = MockInterface()
+        client = Client(config, interface=interface)
+        info = ModelInfo(model="m", context_length=8192)
+
+        async def fake_details(provider, model):
+            return info
+
+        monkeypatch.setattr(config.api.type, "get_model_details", fake_details)
+
+        await client.refresh(config)
+        assert client.model_info is info
+        assert interface.stats_updates  # refresh_stats notified the interface
+
+    async def test_failure_reverts_model_to_last_good(self, monkeypatch):
+        config = _cfg(model="bad")
+        client = Client(config)
+        client.model_info = ModelInfo(model="old-good")
+
+        async def boom(provider, model):
+            raise RuntimeError("network down")
+
+        monkeypatch.setattr(config.api.type, "get_model_details", boom)
+
+        await client.refresh(config)
+        assert client.model_info.model == "old-good"  # kept
+        assert config.api.model == "old-good"  # reverted by _revert

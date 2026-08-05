@@ -4,7 +4,6 @@ from pydantic import ValidationError
 pytestmark = pytest.mark.anyio
 
 from solveig import bootstrap
-from solveig.api.types import APIType
 from solveig.config import SolveigConfig
 from solveig.config.models import (
     ApiConfig,
@@ -26,7 +25,7 @@ def _compose_for_models():
 
 async def test_api_type_from_string_and_serializes_to_name():
     c = ApiConfig(type="anthropic")
-    assert c.type is APIType.ANTHROPIC
+    assert c.type.display_value() == "anthropic"
     assert c.model_dump()["type"] == "anthropic"
 
 
@@ -91,7 +90,7 @@ async def test_http_and_command_inherit_enabled_from_base():
 
 
 async def test_system_prompt_defaults():
-    from solveig.system_prompt import DEFAULT_SYSTEM_PROMPT
+    from solveig.config import DEFAULT_SYSTEM_PROMPT
 
     sp = SystemPromptConfig()
     assert sp.content == DEFAULT_SYSTEM_PROMPT

@@ -18,11 +18,17 @@ from solveig.utils import shell
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 from tests.mocks import MockInterface
 
-# Make the whole suite run on the asyncio backend, so no module needs to
-# remember `pytestmark = pytest.mark.anyio`. A module's async tests just declare
-# `async def test_...`; sync tests keep working (anyio runs them too). This is
-# the "enforced, not remembered" version of the old per-module marker papercut.
-pytestmark = pytest.mark.anyio
+# Run the whole suite on anyio's asyncio backend so no module needs to remember
+# `pytestmark = pytest.mark.anyio`. A plain `pytestmark` in this conftest does
+# NOT reach test modules (anyio's plugin only honours the marker on the item),
+# so this hooks collection and stamps the marker on every test it hasn't
+# already got. Async tests just declare `async def test_...`; sync tests keep
+# working (anyio runs them too). This is the enforced-not-remembered version
+# of the per-module marker papercut.
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if item.get_closest_marker("anyio") is None:
+            item.add_marker(pytest.mark.anyio)
 
 
 @pytest.fixture

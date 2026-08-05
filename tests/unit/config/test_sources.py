@@ -24,8 +24,16 @@ def test_load_paths_legacy_hard_breaks(tmp_path):
 def test_resolve_uses_search_and_explicit(tmp_path, monkeypatch):
     monkeypatch.setattr(sources, "DEFAULT_CONFIG_SEARCH", [str(tmp_path / "config")])
     anyconfig.dump({"api": {"url": "u"}}, str(tmp_path / "config.yaml"))
-    assert sources.resolve_config_files(None) == [str(tmp_path / "config.yaml")]
-    assert sources.resolve_config_files("/x/y.json") == ["/x/y.json"]
+    # No explicit --config → the search runs (basename × every extension).
+    assert sources.resolve_config_files([]) == [str(tmp_path / "config.yaml")]
+
+    # An explicit --config short-circuits the search entirely.
+    explicit = tmp_path / "e.json"
+    anyconfig.dump({"api": {"url": "u"}}, str(explicit))
+    assert sources.resolve_config_files([str(explicit)]) == [str(explicit)]
+
+    # A non-existent explicit path is dropped (the record lives in argv).
+    assert sources.resolve_config_files(["/x/y.json"]) == []
 
 
 def test_plugin_paths_union_across_files(tmp_path):

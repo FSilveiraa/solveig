@@ -86,9 +86,16 @@ def _unwrap_optional(tp: Any) -> Any:
 
 
 def _leaf_type(config: SolveigConfig, path: str) -> Any:
-    """The (optional-unwrapped) declared type of a dotted field's leaf."""
+    """The (optional-unwrapped) declared type of a dotted field's leaf.
+
+    Read from `model_fields` — pydantic has already resolved the annotation to a
+    real type there, exactly as `_field_infos` does for its walk. NOT via
+    `typing.get_type_hints(type(obj))`, which evaluates every annotation on the
+    class and dies on unresolvable forward refs (e.g. `CliPositionalArg[str]` on
+    `prompt`), taking `/config set` down with it.
+    """
     obj, leaf = dotted.owner_of(config, path)
-    return _unwrap_optional(typing.get_type_hints(type(obj))[leaf])
+    return _unwrap_optional(type(obj).model_fields[leaf].annotation)
 
 
 def _parse_field_value(tp: Any, raw: str) -> Any:
