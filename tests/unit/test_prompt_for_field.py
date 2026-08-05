@@ -55,7 +55,7 @@ async def test_api_type_returns_api_type_value():
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     result = await prompt_for_field("api.type", config, MockInterface(choices=[0]))
     assert isinstance(result, APIType)
-    assert result.display_value() in TYPE_BY_NAME
+    assert result.name in TYPE_BY_NAME
 
 
 # ---------------------------------------------------------------------------

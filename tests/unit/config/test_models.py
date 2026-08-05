@@ -25,7 +25,7 @@ def _compose_for_models():
 
 async def test_api_type_from_string_and_serializes_to_name():
     c = ApiConfig(type="anthropic")
-    assert c.type.display_value() == "anthropic"
+    assert c.type.name == "anthropic"
     assert c.model_dump()["type"] == "anthropic"
 
 

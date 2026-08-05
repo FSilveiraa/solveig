@@ -16,7 +16,7 @@ async def test_defaults_and_nesting_dotted_flags():
         ["--api.url", "http://x", "hello world"]
     )
     assert c.api.url == "http://x"
-    assert c.api.type.display_value() == "openai"  # inferred default
+    assert c.api.type.name == "openai"  # inferred default
     assert c.tools.command.enabled is True
     assert c.tools.http.max_response_bytes == 50_000
     assert c.session.dir == ".solveig/sessions"
@@ -38,7 +38,7 @@ async def test_cli_shortcuts_long_aliases():
             "anthropic",
         ]
     )
-    assert (c.api.url, c.api.model, c.api.key.get_secret_value(), c.api.type.display_value()) == (
+    assert (c.api.url, c.api.model, c.api.key.get_secret_value(), c.api.type.name) == (
         "http://y",
         "gpt-4.1",
         "sk",

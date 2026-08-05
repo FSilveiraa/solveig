@@ -36,12 +36,10 @@ class ModelNotFound(Exception):
 
 
 class APIType:
-    """Base: override default_url and provider/model methods per API."""
+    """Base: override default_url, name and the provider/model methods per API."""
 
     default_url: str = ""
-
-    def display_value(self) -> str:
-        return type(self).__name__.lower()
+    name: str = ""
 
     def get_provider(
         self, url: str | None = None, api_key: str | None = None
@@ -61,6 +59,7 @@ class APIType:
 
 
 class OpenAI(APIType):
+    name = "openai"
     default_url = "https://api.openai.com/v1"
 
     def get_provider(
@@ -106,6 +105,7 @@ class OpenAI(APIType):
 
 
 class Anthropic(APIType):
+    name = "anthropic"
     default_url = "https://api.anthropic.com/v1"
 
     def get_provider(
@@ -122,6 +122,7 @@ class Anthropic(APIType):
 
 
 class Gemini(APIType):
+    name = "gemini"
     default_url = "https://generativelanguage.googleapis.com/v1beta"
 
     def get_provider(

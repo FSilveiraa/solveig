@@ -140,7 +140,7 @@ def parse_config_value(config: SolveigConfig, path: str, raw: str) -> Any:
 # typed code_theme resolves options from the same registry its validator uses.
 _CHOICES_BY_TYPE: list[tuple[Any, Callable[[], list[str]], Callable[[Any], str]]] = [
     (themes.Palette, lambda: list(themes.THEMES.keys()), lambda v: v.name),
-    (APIType, lambda: list(TYPE_BY_NAME.keys()), lambda v: type(v).__name__.lower()),
+    (APIType, lambda: list(TYPE_BY_NAME.keys()), lambda v: v.name),
 ]
 
 

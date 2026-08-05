@@ -48,9 +48,9 @@ class TestResolveApiType:
         with pytest.raises(ValueError, match="Unknown API type"):
             resolve_api_type("bogus")
 
-    async def test_display_value_is_lowercased_class_name(self):
-        assert OpenAI().display_value() == "openai"
-        assert Gemini().display_value() == "gemini"
+    async def test_name_is_lowercased_class_name(self):
+        assert OpenAI.name == "openai"
+        assert Gemini.name == "gemini"
 
     async def test_type_by_name_matches_resolve(self):
         for name, cls in TYPE_BY_NAME.items():
@@ -102,6 +102,7 @@ class TestClientRefresh:
 
         await client.refresh(config)
         assert client.model_info is info
+        assert config.api.max_context == 8192  # applied: max_context was -1 (unset)
         assert interface.stats_updates  # refresh_stats notified the interface
 
     async def test_failure_reverts_model_to_last_good(self, monkeypatch):

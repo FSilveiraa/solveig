@@ -26,6 +26,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from solveig.api.types import APIType
 from solveig.config import DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
     ApiConfig,
@@ -106,8 +107,10 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 
 def display_config_value(value: object) -> str:
     """Format a config value for display, driven by type — never by field name.
-    Types we own (Palette, APIType) carry their own display_value() method;
+    Owned types (APIType via `name`, Palette via `display_value`) and
     third-party types (SecretStr, ByteSize, re.Pattern) are dispatched here."""
+    if isinstance(value, APIType):
+        return value.name
     if hasattr(value, "display_value"):
         return value.display_value()
     if isinstance(value, SecretStr):

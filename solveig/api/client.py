@@ -72,7 +72,7 @@ class Client:
         try:
             new_provider = api_type.get_provider(
                 url=config.api.url,
-                api_key=config.api.key.get_secret_value(),
+                api_key=config.api.key.get_secret_value() or None,
             )
             info = await api_type.get_model_details(
                 provider=new_provider, model=config.api.model
@@ -92,8 +92,9 @@ class Client:
         # are stale until told, and this is the moment it stopped being true.
         if self._interface is not None:
             self._interface.refresh_stats()
-        # Apply the model's max context length if the user didn't specify one
-        if info.context_length is not None and config.api.max_context is None:
+        # Apply the model's max context length if the user didn't specify a
+        # limit (-1 is the "model's limit" sentinel; None can never occur).
+        if info.context_length is not None and config.api.max_context == -1:
             await config.set("api.max_context", info.context_length)
 
     @staticmethod
