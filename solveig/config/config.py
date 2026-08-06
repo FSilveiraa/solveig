@@ -39,6 +39,7 @@ from solveig.config.models import (
     SystemPromptConfig,
     _ComposedSection,
 )
+from solveig.interface.themes import Palette
 from solveig.utils import dotted
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 from solveig.utils.misc import CLI_SETTINGS_OPTS
@@ -107,12 +108,10 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 
 def display_config_value(value: object) -> str:
     """Format a config value for display, driven by type — never by field name.
-    Owned types (APIType via `name`, Palette via `display_value`) and
-    third-party types (SecretStr, ByteSize, re.Pattern) are dispatched here."""
-    if isinstance(value, APIType):
+    Owned types (`APIType`, `Palette`) both carry a `name`; third-party types
+    (SecretStr, ByteSize, re.Pattern) are dispatched below."""
+    if isinstance(value, APIType | Palette):
         return value.name
-    if hasattr(value, "display_value"):
-        return value.display_value()
     if isinstance(value, SecretStr):
         return "***" if value.get_secret_value() else "(not set)"
     if isinstance(value, ByteSize):

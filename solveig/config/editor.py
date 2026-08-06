@@ -85,20 +85,25 @@ def _unwrap_optional(tp: Any) -> Any:
     return tp
 
 
-def _leaf_type(config: SolveigConfig, path: str) -> Any:
-    """The (optional-unwrapped) declared type of a dotted field's leaf.
+def _leaf_type(config: SolveigConfig, path: str) -> tuple[Any, bool]:
+    """The declared type of a dotted field's leaf, and whether it is optional.
 
-    Read from `model_fields` — pydantic has already resolved the annotation to a
-    real type there, exactly as `_field_infos` does for its walk. NOT via
-    `typing.get_type_hints(type(obj))`, which evaluates every annotation on the
-    class and dies on unresolvable forward refs (e.g. `CliPositionalArg[str]` on
-    `prompt`), taking `/config set` down with it.
+    Optionality is returned rather than discarded: `str | None` unwraps to `str`, and a
+    caller that only saw `str` had no way to tell that an empty answer means None for
+    `api.model` but means the empty string for a plain str field.
+
+    Read from `model_fields` — pydantic has already resolved the annotation there,
+    exactly as `_field_infos` does for its walk. NOT via `typing.get_type_hints(...)`,
+    which evaluates every annotation on the class and dies on unresolvable forward refs
+    (e.g. `CliPositionalArg[str]` on `prompt`), taking `/config set` down with it.
     """
     obj, leaf = dotted.owner_of(config, path)
-    return _unwrap_optional(type(obj).model_fields[leaf].annotation)
+    annotation = type(obj).model_fields[leaf].annotation
+    unwrapped = _unwrap_optional(annotation)
+    return unwrapped, unwrapped is not annotation
 
 
-def _parse_field_value(tp: Any, raw: str) -> Any:
+def _parse_field_value(tp: Any, raw: str, optional: bool = False) -> Any:
     """
     Parse a raw string into the correct Python value for the given field type.
 
@@ -119,29 +124,56 @@ def _parse_field_value(tp: Any, raw: str) -> Any:
     if tp is list or typing.get_origin(tp) is list:
         return [s.strip() for s in raw.split(",") if s.strip()]
     if tp is str:
-        return raw
-    # Richer-typed field (APIType, Palette, ByteSize, str | None): pass the raw
-    # string through and let validate_assignment coerce it; empty string → None.
+        return (raw or None) if optional else raw
+    # Richer-typed field (APIType, Palette, ByteSize): pass the raw string
+    # through and let validate_assignment coerce it; empty string → None.
     return raw or None
 
 
 def parse_config_value(config: SolveigConfig, path: str, raw: str) -> Any:
     """Parse a raw `/config set <field> <value>` string into the leaf field's
     Python type. The subsequent setattr validates it."""
-    return _parse_field_value(_leaf_type(config, path), raw)
+    tp, optional = _leaf_type(config, path)
+    return _parse_field_value(tp, raw, optional)
 
 
 # ---------------------------------------------------------------------------
 # Type-aware UI prompting
 # ---------------------------------------------------------------------------
 
-# Constrained choices are a property of the field's TYPE, not its name: a
-# field declared `theme: Palette` prompts with every registered palette; str-
-# typed code_theme resolves options from the same registry its validator uses.
-_CHOICES_BY_TYPE: list[tuple[Any, Callable[[], list[str]], Callable[[Any], str]]] = [
-    (themes.Palette, lambda: list(themes.THEMES.keys()), lambda v: v.name),
-    (APIType, lambda: list(TYPE_BY_NAME.keys()), lambda v: v.name),
+# Constrained choices are a property of the field's TYPE, not its name. Each entry is
+# (type, options, display, parse): what to offer, how to show the current value, and how
+# to turn the chosen option back into a value. All four come from the entry, so the loop
+# below serves types it knows nothing about - which is what "a third one just works"
+# means. The parse callable is the load-bearing one: without it the loop had to name
+# APIType explicitly and treat everything else as a Palette.
+type _ChoiceEntry = tuple[
+    Any, Callable[[], list[str]], Callable[[Any], str], Callable[[str], Any]
 ]
+
+_CHOICES_BY_TYPE: list[_ChoiceEntry] = [
+    (
+        themes.Palette,
+        lambda: sorted(themes.THEMES),
+        lambda palette: palette.name,
+        lambda name: themes.THEMES[name],
+    ),
+    (
+        APIType,
+        lambda: sorted(TYPE_BY_NAME),
+        lambda api_type: api_type.name,
+        resolve_api_type,
+    ),
+]
+
+
+def _resolve_choice(entry: _ChoiceEntry, index: int) -> Any:
+    """The value behind the option at `index`, via the entry's own parser.
+
+    Options are read from the same callable the prompt offered, so the index the
+    user picked and the index parsed here address the same list."""
+    _type, options_of, _display_of, parse = entry
+    return parse(options_of()[index])
 
 
 async def prompt_for_field(
@@ -160,7 +192,7 @@ async def prompt_for_field(
     Returns the parsed Python value ready to be set on config.
     Raises ValueError if the raw input cannot be parsed.
     """
-    raw_type = _leaf_type(config, field_name)
+    raw_type, optional = _leaf_type(config, field_name)
     description = editable_fields(config).get(field_name, field_name)
     current = config.get(field_name)
 
@@ -178,15 +210,15 @@ async def prompt_for_field(
         return declared_choices[idx]
 
     # --- Constrained-choice fields, driven by the leaf's declared type ---
-    for choice_type, options_of, display_of in _CHOICES_BY_TYPE:
+    for entry in _CHOICES_BY_TYPE:
+        choice_type, options_of, display_of, _parse = entry
         if raw_type is choice_type:
-            keys = options_of()
             idx = await interface.ask_choice(
-                f"{description} (current: {display_of(current)})", keys, add_cancel=True
+                f"{description} (current: {display_of(current)})",
+                options_of(),
+                add_cancel=True,
             )
-            if choice_type is APIType:
-                return resolve_api_type(keys[idx])
-            return list(themes.THEMES.values())[idx]
+            return _resolve_choice(entry, idx)
 
     # --- Bool fields ---
     if raw_type is bool:
@@ -207,7 +239,7 @@ async def prompt_for_field(
 
     # --- Free-text fields (str, int, float, str | None) ---
     raw = await interface.ask_question(f"{description} (current: {current}):")
-    return _parse_field_value(raw_type, raw)
+    return _parse_field_value(raw_type, raw, optional)
 
 
 # ---------------------------------------------------------------------------

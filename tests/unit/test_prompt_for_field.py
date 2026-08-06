@@ -4,11 +4,27 @@ from solveig.config import SolveigConfig
 import pytest
 
 from solveig.api.types import APIType, TYPE_BY_NAME
+from solveig.config import editor
 from solveig.config.editor import prompt_for_field
 from solveig.interface import themes
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
+
+
+async def test_a_third_constrained_type_resolves_through_its_own_parser():
+    """The table's parse callable must be what turns a choice back into a value.
+    The loop used to special-case APIType and hand everything else a Palette, so a
+    new entry silently returned the wrong type."""
+
+    class Flavour:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+    entry = (Flavour, lambda: ["salt", "vanilla"], lambda v: v.name, Flavour)
+    chosen = editor._resolve_choice(entry, index=1)
+    assert isinstance(chosen, Flavour)
+    assert chosen.name == "vanilla"
 
 
 # ---------------------------------------------------------------------------
@@ -36,10 +52,14 @@ async def test_bool_field_returns_false():
 
 
 async def test_theme_returns_theme_object():
-    """prompt_for_field for 'theme' returns the corresponding Palette object."""
+    """prompt_for_field for 'theme' returns the corresponding Palette object.
+
+    Options are offered sorted by name, so the first choice is the alphabetically
+    first theme, not insertion order."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
     result = await prompt_for_field("interface.theme", config, MockInterface(choices=[0]))
-    assert result is list(themes.THEMES.values())[0]
+    first_name = sorted(themes.THEMES)[0]
+    assert result is themes.THEMES[first_name]
 
 
 async def test_code_theme_returns_string():
