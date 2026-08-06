@@ -34,7 +34,7 @@ from solveig.session.conversation import (
     MessageId,
     parse_conversation_blob,
 )
-from solveig.subcommands.base import subcommand
+from solveig.subcommands import subcommand
 from solveig.utils.file import Filesystem
 
 if TYPE_CHECKING:
