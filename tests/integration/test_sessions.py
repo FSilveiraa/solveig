@@ -291,14 +291,14 @@ class TestStore:
         assert all(json.loads(line) for line in lines)
 
 
-class TestCheckpoint:
+class TestWriteCheckpoint:
     async def test_checkpoint_creates_new_file_without_touching_current_path(
         self, tmp_path
     ):
         manager, _ = make_manager(tmp_path)
         await manager.store(Conversation())
         live_path = manager.current_path
-        checkpoint_name = await manager.checkpoint(Conversation())
+        checkpoint_name = await manager.write_checkpoint(Conversation())
         assert manager.current_path == live_path
         assert checkpoint_name != live_path.name
         assert (tmp_path / "sessions" / checkpoint_name).exists()
@@ -310,11 +310,25 @@ class TestCheckpoint:
         full = Conversation()
         await full.append(ModelRequest(parts=[UserPromptPart(content="before-branch")]))
         await manager.store(Conversation())
-        checkpoint_name = await manager.checkpoint(full)
+        checkpoint_name = await manager.write_checkpoint(full)
         await manager.store(Conversation())  # auto-save past the branch point
         loaded = await manager.load(checkpoint_name.removesuffix(".jsonl"))
         assert len(loaded["messages"]) == 1
         assert loaded["messages"][0].parts[0].content == "before-branch"
+
+
+class TestAppendUsage:
+    async def test_append_usage_adds_a_meta_line_without_rewriting(self, tmp_path):
+        """The two names were backwards: the one called `write_checkpoint` wrote
+        no file, and the one that wrote a file was called `checkpoint`.
+        `append_usage` appends token totals to the live file; `write_checkpoint`
+        writes a new one."""
+        manager, _ = make_manager(tmp_path)
+        conversation = Conversation()
+        await manager.store(conversation)
+        await manager.append_usage(conversation)
+        content = (await Filesystem.read_file(manager.current_path)).content
+        assert content.count('"session_meta"') == 2
 
 
 # ---------------------------------------------------------------------------

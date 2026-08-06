@@ -54,3 +54,10 @@ async def test_run_tool_and_hooks_passes_a_scoped_interface_to_execute():
     # yields a distinct GroupInterface instead, covered by
     # tests/unit/interface/test_conversation_area.py.
     assert seen_interfaces[0] is root
+
+
+def test_zero_content_survives_alongside_issues():
+    """`if self.content:` dropped a real 0 or '' whenever there was anything
+    else to render."""
+    result = ToolResult(content=0, issues=["careful"])
+    assert "0" in result.to_assistant_text()

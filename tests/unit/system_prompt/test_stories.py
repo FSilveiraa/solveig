@@ -12,6 +12,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from solveig.system_prompt import compose
 from solveig.system_prompt.compose import load_story, render_as_example
 
 pytestmark = pytest.mark.anyio
@@ -69,6 +70,22 @@ class TestLoadStory:
     async def test_unknown_story_raises(self):
         with pytest.raises(FileNotFoundError):
             await load_story("does-not-exist")
+
+    @pytest.mark.no_file_mocking
+    async def test_a_story_is_parsed_once(self, monkeypatch):
+        """Stories are static once read - the prompt is recomposed every turn and
+        was re-reading and re-validating the same JSONL each time."""
+        calls = []
+        original = compose.parse_conversation_blob
+        monkeypatch.setattr(
+            compose,
+            "parse_conversation_blob",
+            lambda text: calls.append(text) or original(text),
+        )
+        compose._clear_story_cache()
+        await compose.load_story("sync_review")
+        await compose.load_story("sync_review")
+        assert len(calls) == 1
 
 
 class TestDefaultSystemPrompt:

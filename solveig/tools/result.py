@@ -72,7 +72,10 @@ class ToolResult:
             return self.content
 
         sections = []
-        if self.content:
+        # NOTE: `is not None`, not truthiness: a tool that legitimately returns
+        # 0 or an empty string had its content dropped whenever there was also
+        # metadata or an issue to render.
+        if self.content is not None:
             sections.append(str(self.content))
         if self.metadata:
             lines = "\n".join(f"- {k}: {v}" for k, v in self.metadata.items())

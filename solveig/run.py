@@ -389,7 +389,7 @@ async def run_async(
     finally:
         if session_manager and config.session.auto_save:
             try:
-                await session_manager.write_checkpoint(conversation)
+                await session_manager.append_usage(conversation)
             except Exception:
                 pass  # best-effort; the session file already has all messages
         if loop_task:

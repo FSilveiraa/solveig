@@ -48,18 +48,35 @@ def get_basic_os_info():
     )
 
 
+_STORY_CACHE: dict[str, list[ModelMessage]] = {}
+
+
+def _clear_story_cache() -> None:
+    """Drop the parsed-story cache. Only a test has any reason to call this -
+    a story file does not change while the process runs."""
+    _STORY_CACHE.clear()
+
+
 async def load_story(name: str) -> list[ModelMessage]:
     """Read system_prompt/stories/<name>.jsonl and return its messages.
 
     Story files are the exact same blob shape a stored session uses (see
     solveig.session.conversation.parse_conversation_blob) - a real session file
     can be copied into stories/ verbatim and loaded the same way.
+
+    Cached: a story file ships with the package and does not change while the
+    process runs, and `get_system_prompt` recomposes on every turn - so an
+    uncached read re-parsed and re-validated the same JSONL once per message.
+    The cache is a dict rather than `functools.cache` because this is a
+    coroutine: caching the call would cache an awaitable, not the result.
     """
-    path = _STORIES_DIR / f"{name}.jsonl"
-    if not await Filesystem.exists(path):
-        raise FileNotFoundError(f"No story named '{name}' in {_STORIES_DIR}")
-    file_content = await Filesystem.read_file(path)
-    return parse_conversation_blob(file_content.content)["messages"]
+    if name not in _STORY_CACHE:
+        path = _STORIES_DIR / f"{name}.jsonl"
+        if not await Filesystem.exists(path):
+            raise FileNotFoundError(f"No story named '{name}' in {_STORIES_DIR}")
+        file_content = await Filesystem.read_file(path)
+        _STORY_CACHE[name] = parse_conversation_blob(file_content.content)["messages"]
+    return _STORY_CACHE[name]
 
 
 def render_as_example(messages: list[ModelMessage]) -> str:

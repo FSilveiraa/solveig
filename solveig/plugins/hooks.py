@@ -80,7 +80,13 @@ HookTree = list[Hook] | dict[str, "HookTree"]
 hooks narrow by tool name, so `BEFORE_TOOL` holds `{tool_name: [hooks]}`; a kind
 with nothing to narrow by holds `[hooks]` directly, and one that narrows twice
 nests twice. Fixing a single level here would make the first kind that doesn't
-fit rewrite everything that walks it."""
+fit rewrite everything that walks it.
+
+TODO: collapse to `dict[HookKind, dict[str, list[Hook]]]` if no kind with a
+different depth has appeared by the time a third is added. Both current kinds
+nest exactly one level, and the recursive union costs three asserts (stripped
+under -O) plus a `type: ignore` in `_add_hook` to serve generality nothing
+uses yet."""
 
 HOOKS: dict[HookKind, HookTree] = {}
 

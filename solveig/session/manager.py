@@ -105,7 +105,7 @@ class SessionManager(ConversationObserver):
     ) -> None:
         """Branch: preserve the pre-rewind conversation in its own file first,
         then rewrite the live session at its new, shorter length."""
-        await self.checkpoint(previous)
+        await self.write_checkpoint(previous)
         if self._auto_save:
             await self.store(self.conversation)
 
@@ -169,7 +169,7 @@ class SessionManager(ConversationObserver):
     # ------------------------------------------------------------------
 
     async def store(self, conversation: Conversation, name: str | None = None) -> str:
-        """Full write: all messages + checkpoint meta line.
+        """Full write: all messages + a usage meta line.
 
         Used for the initial session creation (first autosave after a new
         session), explicit /store, and named saves. Resets _saved_count.
@@ -188,8 +188,8 @@ class SessionManager(ConversationObserver):
         """Append only new messages (since last save) to the session file.
 
         The steady-state autosave path: O(new content) only. Creates the file
-        on first call (no current_path yet). Does NOT write a checkpoint line —
-        that happens at session-end or explicit /store.
+        on first call (no current_path yet). Does NOT write a usage meta line —
+        that happens at session-end (`append_usage`) or explicit /store.
         """
         if self.current_path is None:
             # First call for a new session: fall through to store (full write).
@@ -202,18 +202,20 @@ class SessionManager(ConversationObserver):
         await Filesystem.write_file_text(self.current_path, lines, append=True)
         self._saved_count = len(conversation.messages)
 
-    async def write_checkpoint(self, conversation: Conversation) -> None:
-        """Append a session_meta line with current token totals.
+    async def append_usage(self, conversation: Conversation) -> None:
+        """Append a session_meta line with the current token totals to the live
+        file.
 
         Called at clean session exit and from /store. The last meta line in
-        the file is authoritative on resume. Append-only — never rewrites.
+        the file is authoritative on resume. Append-only — never rewrites, and
+        writes no file of its own (that is `write_checkpoint`).
         """
         if self.current_path is None:
             return
         meta_line = self._serialize_meta(conversation)
         await Filesystem.write_file_text(self.current_path, meta_line, append=True)
 
-    async def checkpoint(self, conversation: Conversation) -> str:
+    async def write_checkpoint(self, conversation: Conversation) -> str:
         """Write a snapshot to a NEW timestamped file, leaving current_path alone.
 
         Unlike store(), this never overwrites the live session file, so the
