@@ -35,14 +35,14 @@ async def test_cli_shortcuts_long_aliases():
             "--key",
             "sk",
             "--api-type",
-            "anthropic",
+            "openai",
         ]
     )
     assert (c.api.url, c.api.model, c.api.key.get_secret_value(), c.api.type.name) == (
         "http://y",
         "gpt-4.1",
         "sk",
-        "anthropic",
+        "openai",
     )
 
 
@@ -65,10 +65,10 @@ async def test_file_and_cli_deep_merge(tmp_path):
 
 async def test_model_dump_excludes_cli_and_runtime_fields():
     c = await bootstrap.parse_config_and_prompt(
-        ["--url", "http://x", "--api-type", "anthropic"]
+        ["--url", "http://x", "--api-type", "openai"]
     )
     d = c.model_dump()
-    assert d["api"]["type"] == "anthropic"
+    assert d["api"]["type"] == "openai"
     assert isinstance(d["interface"]["theme"], str)
     # CLI-only + runtime fields never persist (exclude=True / PrivateAttr):
     for k in ("model_info", "config_files", "resume", "startup_mcp_servers"):
@@ -161,7 +161,7 @@ async def test_declared_config_saves_only_declared_serialized():
             "--key",
             "sk-secret",
             "--api-type",
-            "anthropic",
+            "openai",
             "--tools.command.auto_execute",
             "^ls",
             "--min_disk_space_left",
@@ -170,7 +170,7 @@ async def test_declared_config_saves_only_declared_serialized():
     )
     saved = c.declared_config()
     assert saved == {
-        "api": {"url": "http://x", "key": "sk-secret", "type": "anthropic"},
+        "api": {"url": "http://x", "key": "sk-secret", "type": "openai"},
         "tools": {"command": {"auto_execute": ["^ls"]}},
         "min_disk_space_left": 2 * 1024**3,
     }

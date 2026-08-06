@@ -45,7 +45,7 @@ class ApiConfig(BaseModel):
 
     @field_serializer("type")
     def _ser_type(self, v: APIType) -> str:
-        return type(v).__name__.lower()
+        return v.name
 
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).

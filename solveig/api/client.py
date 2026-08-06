@@ -145,7 +145,7 @@ async def model_list(
         lines.append(f"{prefix}{m}")
 
     await interface.add_text_box(
-        "\n".join(lines), title=f"Models ({type(config.api.type).__name__})"
+        "\n".join(lines), title=f"Models ({config.api.type.name})"
     )
 
 

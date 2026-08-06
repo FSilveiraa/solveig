@@ -14,7 +14,6 @@ from pydantic_ai.providers import Provider
 from solveig.api.client import Client
 from solveig.api.types import (
     TYPE_BY_NAME,
-    Anthropic,
     Gemini,
     ModelInfo,
     OpenAI,
@@ -38,8 +37,10 @@ def _cfg(**api) -> SolveigConfig:
 class TestResolveApiType:
     async def test_names_map_to_subclasses(self):
         assert isinstance(resolve_api_type("openai"), OpenAI)
-        assert isinstance(resolve_api_type("anthropic"), Anthropic)
-        assert isinstance(resolve_api_type("gemini"), Gemini)
+        # Anthropic is declared but deliberately excluded from TYPE_BY_NAME (no
+        # model introspection yet) - the failure must name what IS available.
+        with pytest.raises(ValueError, match="Unknown API type.*openai"):
+            resolve_api_type("anthropic")
 
     async def test_case_insensitive(self):
         assert isinstance(resolve_api_type("OPENAI"), OpenAI)
@@ -55,6 +56,21 @@ class TestResolveApiType:
     async def test_type_by_name_matches_resolve(self):
         for name, cls in TYPE_BY_NAME.items():
             assert isinstance(resolve_api_type(name), cls)
+
+
+def test_type_registry_is_derived_from_the_classvar_name():
+    """One fact, one home: `name` is it. The registry, the serializer and the
+    /model list title all used to derive it from __name__ separately."""
+    from solveig.api import types
+
+    assert types.TYPE_BY_NAME == {cls.name: cls for cls in (types.OpenAI,)}
+
+
+def test_serializing_api_type_uses_its_name():
+    from tests.mocks import DEFAULT_CONFIG
+
+    config = DEFAULT_CONFIG.model_copy(deep=True)
+    assert config.model_dump(mode="json")["api"]["type"] == config.api.type.name
 
 
 # ---------------------------------------------------------------------------

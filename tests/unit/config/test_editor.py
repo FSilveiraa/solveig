@@ -39,8 +39,8 @@ class TestDottedGetSet:
 
     async def test_validate_assignment_coerces(self):
         c = _cfg()
-        await c.set("api.type", "anthropic")
-        assert c.api.type.name == "anthropic"
+        await c.set("api.type", "openai")
+        assert c.api.type.name == "openai"
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +52,9 @@ class TestParseConfigValue:
     async def test_api_type_passthrough(self):
         c = _cfg()
         # APIType is not coarse-parsed; validate_assignment does the real work.
-        value = parse_config_value(c, "api.type", "gemini")
+        value = parse_config_value(c, "api.type", "openai")
         await c.set("api.type", value)
-        assert c.api.type.name == "gemini"
+        assert c.api.type.name == "openai"
 
     async def test_bool_false(self):
         c = _cfg()

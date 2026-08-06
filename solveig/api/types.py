@@ -138,11 +138,15 @@ class Gemini(APIType):
         return GoogleModel(model_name, provider=provider)
 
 
-TYPE_BY_NAME: dict[str, type[APIType]] = {
-    "openai": OpenAI,
-    # "anthropic": Anthropic,
-    # "gemini": Gemini,
-}
+#: Every provider Solveig can talk to, keyed by its own `name`.
+#:
+#: NOTE: Anthropic and Gemini are declared above but deliberately absent here. They
+#: implement provider and model construction, but not the model introspection
+#: (`get_model_details`, `list_models`) the client needs, so selecting one gives a
+#: session with no model info, no price and no context limit. Re-add an entry the
+#: moment its introspection lands - the name comes from the class, so that is the
+#: whole change.
+TYPE_BY_NAME: dict[str, type[APIType]] = {cls.name: cls for cls in (OpenAI,)}
 """String → subclass for config validation and editor choices."""
 
 

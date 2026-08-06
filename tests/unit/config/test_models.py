@@ -24,9 +24,9 @@ def _compose_for_models():
 
 
 async def test_api_type_from_string_and_serializes_to_name():
-    c = ApiConfig(type="anthropic")
-    assert c.type.name == "anthropic"
-    assert c.model_dump()["type"] == "anthropic"
+    c = ApiConfig(type="openai")
+    assert c.type.name == "openai"
+    assert c.model_dump()["type"] == c.type.name
 
 
 async def test_theme_from_string_serializes_to_name():
