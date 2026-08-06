@@ -116,9 +116,151 @@ layers = [
     "solveig.subcommands.registry",
     "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
     "solveig.interface.base : solveig.interface.cli : solveig.session.conversation : solveig.context : solveig.api.client",
+    "solveig.subcommands.base : solveig.user_message_queue",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
     "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types",
 ]
+
+# --- Coverage: every module in the package is placed ----------------------
+# A `layers` contract only constrains the modules it names, so an unnamed
+# module is silently unchecked. The contracts below use `exhaustive = true`
+# with one container per package: import-linter then FAILS if any child of
+# that package is missing from the layer list. Every package in solveig/ is a
+# container here, so every module is declared somewhere and a new file has to
+# be placed when it is created, not when something breaks.
+# They are also real layerings, not rubber stamps: within each package the
+# order is the actual dependency direction.
+
+[[tool.importlinter.contracts]]
+name = "Every top-level module is placed"
+type = "layers"
+containers = ["solveig"]
+exhaustive = true
+# Coarser than "Solveig layers" above (which layers the sub-modules): at
+# package granularity session/tools/interface are mutually entangled by
+# design (interface.base reads session.conversation, session.display reads
+# tools), so they share one non-independent layer here.
+layers = [
+    "run",
+    "bootstrap",
+    "agent",
+    "subcommands : session : tools : mcp_servers : plugins : system_prompt : config : interface : context : api : user_message_queue",
+    "utils | exceptions",
+]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.api module is placed"
+type = "layers"
+containers = ["solveig.api"]
+exhaustive = true
+layers = ["client", "types"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.config module is placed"
+type = "layers"
+containers = ["solveig.config"]
+exhaustive = true
+layers = ["editor", "config", "models | sources"]
+# NOTE: `models` reads DEFAULT_SYSTEM_PROMPT, a static constant declared in
+# config/__init__ ABOVE the `.config` re-export (the noqa: E402 block) — it does
+# not depend on config.config, but the package edge makes it look that way. Only
+# this shim edge is ignored; a direct `models -> config.config` import still fails.
+ignore_imports = ["solveig.config.models -> solveig.config"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.interface module is placed"
+type = "layers"
+containers = ["solveig.interface"]
+exhaustive = true
+layers = ["cli", "base", "themes"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.interface.base module is placed"
+type = "layers"
+containers = ["solveig.interface.base"]
+exhaustive = true
+layers = ["interface", "widgets"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.interface.cli module is placed"
+type = "layers"
+containers = ["solveig.interface.cli"]
+exhaustive = true
+layers = [
+    "interface",
+    "app",
+    "message_display | queued_messages | stats_bar",
+    "conversation_area",
+    "collapsible_widgets",
+    "widgets",
+    "buttons | input_bar | tree_display",
+]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.mcp_servers module is placed"
+type = "layers"
+containers = ["solveig.mcp_servers"]
+exhaustive = true
+layers = ["client"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.plugins module is placed"
+type = "layers"
+containers = ["solveig.plugins"]
+exhaustive = true
+# `hooks : tools` (siblings that may reach each other) rather than independent:
+# plugins.tools -> tools.orchestration -> plugins.hooks is the designed round
+# trip — orchestration runs the hooks and gives plugin tools their subcommand.
+layers = ["discovery", "utils", "library", "hooks : tools : subcommands"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.plugins.library module is placed"
+type = "layers"
+containers = ["solveig.plugins.library"]
+exhaustive = true
+layers = ["shellcheck | trafilatura | tree"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.session module is placed"
+type = "layers"
+containers = ["solveig.session"]
+exhaustive = true
+layers = ["display | manager", "conversation"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.subcommands module is placed"
+type = "layers"
+containers = ["solveig.subcommands"]
+exhaustive = true
+layers = ["registry", "base"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.system_prompt module is placed"
+type = "layers"
+containers = ["solveig.system_prompt"]
+exhaustive = true
+layers = ["compose"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.tools module is placed"
+type = "layers"
+containers = ["solveig.tools"]
+exhaustive = true
+layers = ["available", "core", "orchestration", "base", "result"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.tools.core module is placed"
+type = "layers"
+containers = ["solveig.tools.core"]
+exhaustive = true
+layers = ["command | copy | delete | edit | http | move | read | task | write"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.utils module is placed"
+type = "layers"
+containers = ["solveig.utils"]
+exhaustive = true
+layers = ["dotted | misc | shell", "file"]
 
 [[tool.importlinter.contracts]]
 name = "Frontends depend only on the protocol"

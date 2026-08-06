@@ -354,6 +354,12 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
 - **Import-cycle law:** tools top-level-import `solveig.config`; config must not
   import tools at module level (hence the function-local import in
   `config/__init__.py`). Respect the two-phase bootstrap ordering.
+- **Every module appears in the layers.** `[tool.importlinter]` carries one
+  `exhaustive` layers contract per package, so a module that is not placed in a
+  layer fails `just import` instead of sitting silently unchecked. A new module
+  is placed when it is created, not when something breaks — and it is placed at
+  the layer its imports actually justify, never at whichever layer makes the
+  contract pass.
 - **Pinned external invariants** get a dedicated regression test, e.g.
   `test_pydantic_ai_preserves_message_history_object_identity` (adopt-by-identity).
   Any new pydantic-ai behavior the code depends on should be pinned the same way.
