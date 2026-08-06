@@ -308,6 +308,22 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
 
 ## Conventions that matter (do not regress)
 
+- **Work inline, not through sub-agents.** Do the work in the main conversation
+  unless explicitly asked otherwise. Delegating hides the reasoning behind a
+  summary; the point of working together is being able to stop and question a
+  decision while it is made, not after it has landed.
+
+- **Assistant-facing names follow industry consensus.** Tool names, argument names
+  and enum values are prompt surface: a model is measurably better at a tool whose
+  vocabulary matches what it has seen across other agent CLIs, so diverging costs
+  accuracy and buys nothing but our preference. Read the real schemas — Claude
+  Code, gemini-cli, Hermes, openclaw — before naming, then adopt the term
+  project-wide, with no internal synonym kept "because we prefer it": a
+  translation layer between our word and the model's word is exactly the
+  duplication this codebase keeps deleting. Applies only where a consensus
+  exists; Solveig's own concepts (consent, groups, `issues`/`private`) get the
+  clearest name we can invent.
+
 - **No compat shims; big-bang cutovers.** Migrations go red mid-flight and green at
   the end. Commit per task even while red.
 - **No `setup()`/`wire_*()` post-init methods.** If an object needs a dependency,
