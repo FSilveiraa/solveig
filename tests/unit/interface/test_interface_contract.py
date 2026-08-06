@@ -98,11 +98,16 @@ async def test_entering_a_group_builds_no_second_app():
 
     Pinned because GroupInterface used to inherit from the class whose
     constructor builds the app: its `super().__init__()` silently constructed
-    and threw away a whole Textual App per tool call.
+    and threw away a whole Textual App per tool call. The fix was structural —
+    both classes now descend from the constructor-free TerminalDisplay — so the
+    MRO assertion is the one that keeps it fixed.
     """
+    assert TerminalInterface not in GroupInterface.__mro__
+
     interface = TerminalInterface()
     with patch("solveig.interface.cli.interface.SolveigTextualApp") as app_cls:
         group = GroupInterface(root=interface, group_widget=_FakeGroupWidget())
     app_cls.assert_not_called()
     assert group.app is interface.app
     assert group._active_tasks is interface._active_tasks
+    assert group.user_message_queue is interface.user_message_queue
