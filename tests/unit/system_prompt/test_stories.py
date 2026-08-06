@@ -69,3 +69,25 @@ class TestLoadStory:
     async def test_unknown_story_raises(self):
         with pytest.raises(FileNotFoundError):
             await load_story("does-not-exist")
+
+
+class TestDefaultSystemPrompt:
+    """The default prompt must not describe a response format that no longer
+    exists - it is sent on every turn, so a stale instruction is a live one."""
+
+    @pytest.mark.parametrize(
+        "phrase", ["Response format", "`comment`", "comment:", "tools:"]
+    )
+    def test_does_not_describe_the_retired_response_schema(self, phrase):
+        from solveig.config import DEFAULT_SYSTEM_PROMPT
+
+        assert phrase not in DEFAULT_SYSTEM_PROMPT
+
+    def test_names_the_tasks_tool_as_it_is_actually_registered(self):
+        """The prompt tells the model to call `tasks`; a rename would make that
+        instruction point at nothing, and nothing else would fail."""
+        from solveig.config import DEFAULT_SYSTEM_PROMPT
+        from solveig.tools.available import CORE_TOOLS
+
+        assert "tasks" in {tool.tool_name() for tool in CORE_TOOLS}
+        assert "`tasks`" in DEFAULT_SYSTEM_PROMPT
