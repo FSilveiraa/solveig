@@ -27,12 +27,40 @@ class ModelInfo:
     output_price: float | None = None  # per million tokens
 
 
-class ModelNotFound(Exception):
+class APIError(Exception):
+    """A failure talking to the configured provider, classified so the UI can say
+    WHICH thing is wrong rather than 'something failed'.
+
+    The kinds are three different user actions: the endpoint can't be reached (fix
+    the URL or the network), the endpoint answered and refused (fix the key or the
+    account), or the endpoint answered fine and the model isn't there (fix the model
+    name). A caller that only knew 'it failed' could not say any of them."""
+
+
+class APIUnreachable(APIError):
+    """No answer from the endpoint - bad URL, DNS failure, refused connection, timeout."""
+
+
+class APIRejected(APIError):
+    """The endpoint answered and refused - auth, quota, permissions."""
+
+
+class ProviderCapabilityMissing(APIError):
+    """This APIType doesn't implement the introspection the caller asked for.
+
+    Not a connection failure: the provider subclass exists and can build a model, it
+    simply has no model-listing support yet (see TYPE_BY_NAME's note on why such a
+    provider is not offered)."""
+
+
+class ModelNotFound(APIError):
     """The requested model was not found in the provider's model list."""
 
     def __init__(self, model_name: str, available: list[str] | None = None) -> None:
         self.model_name = model_name
         self.available = sorted(available) if available else []
+        hint = f" Available: {', '.join(self.available[:10])}" if self.available else ""
+        super().__init__(f"Model '{model_name}' not found at this endpoint.{hint}")
 
 
 class APIType:
@@ -44,18 +72,18 @@ class APIType:
     def get_provider(
         self, url: str | None = None, api_key: str | None = None
     ) -> Provider:
-        raise NotImplementedError
+        raise ProviderCapabilityMissing(f"{self.name} cannot build a provider")
 
     def get_model(self, provider: Provider, model_name: str) -> Model:
-        raise NotImplementedError
+        raise ProviderCapabilityMissing(f"{self.name} cannot build a model")
 
     async def get_model_details(
         self, provider: Provider, model: str | None
     ) -> ModelInfo | None:
-        raise NotImplementedError
+        raise ProviderCapabilityMissing(f"{self.name} cannot report model details")
 
     async def list_models(self, provider: Provider) -> list[str]:
-        raise NotImplementedError
+        raise ProviderCapabilityMissing(f"{self.name} cannot list models")
 
 
 class OpenAI(APIType):
@@ -75,9 +103,10 @@ class OpenAI(APIType):
         return OpenAIChatModel(model_name, provider=provider)
 
     async def get_model_details(
-        self, provider: Provider, model_name: str | None
+        self, provider: Provider, model: str | None
     ) -> ModelInfo | None:
         models_list = await provider.client.models.list()
+        model_name = model
         if model_name:
             model_obj = next((m for m in models_list.data if m.id == model_name), None)
             if model_obj is None:

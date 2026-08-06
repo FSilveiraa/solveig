@@ -9,10 +9,31 @@ from __future__ import annotations
 
 from pydantic_ai.providers import Provider
 
-from solveig.api.types import ModelInfo
+from solveig.api.types import (
+    APIError,
+    APIRejected,
+    APIUnreachable,
+    ModelInfo,
+    ModelNotFound,
+    ProviderCapabilityMissing,
+)
 from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
+
+
+def _classify(err: Exception) -> APIError:
+    """Sort a provider-client exception into the user-actionable kinds.
+
+    NOTE: keyed on whether a RESPONSE came back, not on message text. The OpenAI SDK
+    wraps httpx and re-raises its own types (`APIConnectionError` has no `.response`;
+    `AuthenticationError`/`APIStatusError` carry `.response.status_code`) - but "the
+    server answered with a status" vs "nothing answered" is the distinction that
+    actually separates a bad URL from a bad key, independent of the wrapper type."""
+    status = getattr(getattr(err, "response", None), "status_code", None)
+    if status is not None:
+        return APIRejected(f"The endpoint refused the request (HTTP {status}): {err}")
+    return APIUnreachable(f"Could not reach the endpoint: {err}")
 
 
 class Client:
@@ -58,6 +79,31 @@ class Client:
             return
         await self.refresh(config)
 
+    async def fetch_model_info(
+        self, config: SolveigConfig
+    ) -> tuple[Provider, ModelInfo]:
+        """Build a provider from config and ask it about the configured model.
+
+        Raises a classified `APIError`; the caller decides whether to display, revert,
+        or both. Classification lives here because this is the only place holding both
+        the request and the provider that made it."""
+        api_type = config.api.type
+        provider = api_type.get_provider(
+            url=config.api.url,
+            api_key=config.api.key.get_secret_value() or None,
+        )
+        try:
+            info = await api_type.get_model_details(
+                provider=provider, model=config.api.model
+            )
+        except APIError:
+            raise
+        except Exception as err:
+            raise _classify(err) from err
+        if info is None:
+            raise ModelNotFound(config.api.model or "(unset)")
+        return provider, info
+
     async def refresh(self, config: SolveigConfig) -> None:
         """Build provider from config, fetch model details, atomic swap.
 
@@ -68,29 +114,16 @@ class Client:
         so `config.set` returned early, no notification, and the bad name stayed
         on screen as though it had been accepted."""
         last_good = self.model_info.model if self.model_info else None
-        api_type = config.api.type
         try:
-            new_provider = api_type.get_provider(
-                url=config.api.url,
-                api_key=config.api.key.get_secret_value() or None,
-            )
-            info = await api_type.get_model_details(
-                provider=new_provider, model=config.api.model
-            )
-        except Exception as e:
+            new_provider, info = await self.fetch_model_info(config)
+        except APIError as err:
             if self._interface is not None:
-                await self._interface.print(
-                    f"Could not connect to {config.api.url}: {e}", level=Level.ERROR
-                )
-            await self._revert(config, last_good)
-            return
-
-        if info is None:
+                await self._interface.print(str(err), level=Level.ERROR)
             await self._revert(config, last_good)
             return
 
         self.provider = new_provider
-        self.type = api_type
+        self.type = config.api.type
         self.model_info = info
         # model_info is now the new model's - stats reading it (price, context)
         # are stale until told, and this is the moment it stopped being true.
@@ -105,10 +138,9 @@ class Client:
     async def _revert(config: SolveigConfig, last_good: str | None) -> None:
         """Put the last working model back, if there was one.
 
-        `None` means nothing has ever resolved (a bad model at startup), so
-        there is nothing to revert TO - leaving the failing name in place is
-        better than blanking the config, and the caller already surfaced the
-        failure."""
+        `None` means nothing has ever resolved (a bad model at startup), so there is
+        nothing to revert TO - leaving the failing name in place is better than
+        blanking the config even though it keeps a broken name on screen."""
         if last_good is not None:
             await config.set("api.model", last_good)
 
@@ -127,7 +159,7 @@ async def model_list(
     """List available models from the provider."""
     try:
         models = await config.api.type.list_models(client.provider)
-    except NotImplementedError as e:
+    except ProviderCapabilityMissing as e:
         await interface.print(str(e), level=Level.ERROR)
         return
     except Exception as e:
