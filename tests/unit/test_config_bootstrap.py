@@ -55,7 +55,7 @@ async def test_bootstrap_composes_core_tools():
         "move",
         "command",
         "http",
-        "tasks",
+        "todo",
     ):
         assert name in tools_annotation.model_fields, f"missing core tool field: {name}"
 

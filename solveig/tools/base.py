@@ -93,7 +93,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     `settings() -> ToolConfig` (just `enabled`)."""
 
     # Optional explicit tool name; when None it's derived from the class name
-    # (`EditTool` -> `edit`, `TasksTool` -> `tasks`).
+    # (`EditTool` -> `edit`, `TodoTool` -> `todo`).
     name: ClassVar[str | None] = None
 
     # Trigger names that opt this tool in to a user-invokable command, e.g.

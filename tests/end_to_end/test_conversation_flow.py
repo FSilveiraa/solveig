@@ -3,10 +3,10 @@ Agent, driven by `run_async` + a `FunctionModel`-scripted response sequence.
 
 Scripting a tool call means emitting a `ModelResponse` with a `ToolCallPart`
 (`tool_name`, `args`) - not the old `AssistantMessage(tools=[...])` schema
-field, which no longer exists. `Task`/`TasksTool` is a tool call now too (per
-the migration log's Phase-2 reframing: "no single JSON blob to hang a `tasks`
-field off of" under native tool-calling), so a task-plan update is scripted as
-its own `TasksTool` `ToolCallPart`, not a `tasks=` kwarg alongside the comment.
+field, which no longer exists. `TodoItem`/`TodoTool` is a tool call now too — under
+native tool-calling there is no single JSON blob to hang a `todos` field off of — so
+a todo-list update is scripted as its own `TodoTool` `ToolCallPart`, not a `todos=`
+kwarg alongside the comment.
 
 `run_async`/`setup_loop` already calls `initialize_plugins()` internally, so
 these tests set `config.plugins` and let it load them - no manual
@@ -176,8 +176,8 @@ class TestConversationFlow:
         assert "not found" in output  # command error output, imperative
         assert "nonexistent_command" in output
 
-    async def test_task_plan_displayed_via_tool_call(self):
-        """A TasksTool call renders the task plan - tasks are a tool call now,
+    async def test_todo_list_displayed_via_tool_call(self):
+        """A TodoTool call renders the todo list - todos are a tool call now,
         not an AssistantMessage field."""
         config = DEFAULT_CONFIG
         model = create_mock_model(
@@ -185,14 +185,14 @@ class TestConversationFlow:
                 parts=[
                     TextPart(content="Let me track this work"),
                     _tool_call(
-                        "tasks",
+                        "todo",
                         "c1",
-                        tasks=[
+                        todos=[
                             {
-                                "description": "Check current directory",
-                                "status": "ongoing",
+                                "content": "Check current directory",
+                                "status": "in_progress",
                             },
-                            {"description": "List files", "status": "pending"},
+                            {"content": "List files", "status": "pending"},
                         ],
                     ),
                 ]

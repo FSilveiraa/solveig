@@ -27,7 +27,7 @@ from .edit import EditTool
 from .http import HttpTool
 from .move import MoveTool
 from .read import ReadTool
-from .task import TasksTool
+from .todo import TodoTool
 from .write import WriteTool
 
 CORE_TOOLS: list[type[BaseTool]] = [
@@ -39,7 +39,7 @@ CORE_TOOLS: list[type[BaseTool]] = [
     MoveTool,
     CommandTool,
     HttpTool,
-    TasksTool,
+    TodoTool,
 ]
 
 for _tool in CORE_TOOLS:
@@ -58,5 +58,5 @@ __all__ = [
     "MoveTool",
     "CommandTool",
     "HttpTool",
-    "TasksTool",
+    "TodoTool",
 ]

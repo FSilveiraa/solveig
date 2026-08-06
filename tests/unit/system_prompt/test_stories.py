@@ -100,11 +100,11 @@ class TestDefaultSystemPrompt:
 
         assert phrase not in DEFAULT_SYSTEM_PROMPT
 
-    def test_names_the_tasks_tool_as_it_is_actually_registered(self):
-        """The prompt tells the model to call `tasks`; a rename would make that
+    def test_names_the_todo_tool_as_it_is_actually_registered(self):
+        """The prompt tells the model to call `todo`; a rename would make that
         instruction point at nothing, and nothing else would fail."""
         from solveig.config import DEFAULT_SYSTEM_PROMPT
         from solveig.tools.available import CORE_TOOLS
 
-        assert "tasks" in {tool.tool_name() for tool in CORE_TOOLS}
-        assert "`tasks`" in DEFAULT_SYSTEM_PROMPT
+        assert "todo" in {tool.tool_name() for tool in CORE_TOOLS}
+        assert "`todo`" in DEFAULT_SYSTEM_PROMPT

@@ -118,7 +118,7 @@ layers = [
     "solveig.interface.base : solveig.interface.cli : solveig.session.conversation : solveig.context : solveig.api.client",
     "solveig.subcommands.base : solveig.user_message_queue",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
-    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types",
+    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo",
 ]
 
 # --- Coverage: every module in the package is placed ----------------------
@@ -145,7 +145,9 @@ layers = [
     "bootstrap",
     "agent",
     "subcommands : session : tools : mcp_servers : plugins : system_prompt : config : interface : context : api : user_message_queue",
-    "utils | exceptions",
+    # `todo` sits at the bottom beside `utils` on purpose: the todo list is a
+    # Solveig concept both tools and frontends name, owned by neither.
+    "utils | exceptions | todo",
 ]
 
 [[tool.importlinter.contracts]]
@@ -253,7 +255,7 @@ name = "Every solveig.tools.core module is placed"
 type = "layers"
 containers = ["solveig.tools.core"]
 exhaustive = true
-layers = ["command | copy | delete | edit | http | move | read | task | write"]
+layers = ["command | copy | delete | edit | http | move | read | todo | write"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.utils module is placed"

@@ -76,7 +76,7 @@ async def test_every_core_tool_has_an_entry_and_is_enabled_by_default():
         "delete",
         "copy",
         "move",
-        "tasks",
+        "todo",
     ):
         assert getattr(t, name).enabled is True
 
