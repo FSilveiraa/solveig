@@ -222,6 +222,13 @@ class MockInterface(SolveigInterface):
         self.outputs.append(json.dumps(serializable_dict, default=str))
         return _MockTreeBox(self.outputs, tree_title)
 
+    async def display_todos(self, todos) -> None:
+        # Records the VALUES, deliberately: a test asserting on an arrow or a marker
+        # here would be pinning the terminal's choices to every frontend.
+        self.todos = list(todos)
+        for todo in todos:
+            self.outputs.append(f"TODO {todo.status.value}: {todo.content}")
+
     async def display_diff(
         self,
         old_content: str,

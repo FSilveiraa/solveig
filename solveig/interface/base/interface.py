@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base.widgets import DiffBox, TextBox, TreeBox
+from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
@@ -262,6 +263,23 @@ class SolveigInterface(ABC):
         `max_depth` and `ignore_patterns` control what renders initially,
         not what was read. Lazy expansion is handled internally by the
         frontend."""
+        ...
+
+    @abstractmethod
+    async def display_todos(self, todos: list[TodoItem]) -> None:
+        """Draw Solveig's todo list, replacing whatever was shown before.
+
+        Takes the todos as VALUES, not as drawn text. Everything about how a list
+        looks is this method's to decide — the ordering glyphs, whether the
+        in-progress item is marked with an arrow, a colour, or an animation, whether
+        a cancelled item is struck through. `TodoStatus.marker` is available as a
+        sensible default and may be ignored entirely.
+
+        NOTE: what the caller still owns is WHAT to show and WHEN. `TodoTool` decides
+        the list is worth drawing and hands over the whole of it; it must not decide
+        that the current item is an arrow, because a frontend that cannot draw arrows
+        would have no way to disagree.
+        """
         ...
 
     @abstractmethod

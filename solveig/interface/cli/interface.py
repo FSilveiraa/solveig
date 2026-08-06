@@ -48,6 +48,7 @@ from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
 from solveig.interface.cli.tree_display import TreeDisplay
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
+from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
@@ -165,6 +166,15 @@ class TerminalDisplay(SolveigInterface):
             await self._messages.drop(message_ids)
 
     # -- complex display -----------------------------------------------------
+
+    async def display_todos(self, todos: list[TodoItem]) -> None:
+        # How a todo list looks in a terminal: one line each, numbered, the status
+        # marker as its glyph, and an arrow on the item in progress. All four of
+        # those are decisions this frontend is entitled to make and another is not
+        # obliged to copy.
+        for index, todo in enumerate(todos, 1):
+            arrow = "→" if todo.status is TodoStatus.IN_PROGRESS else " "
+            await self.print(f"{arrow}  {todo.status.marker} {index}. {todo.content}")
 
     async def display_tree(
         self,
