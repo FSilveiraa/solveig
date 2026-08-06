@@ -5,18 +5,25 @@ import os
 import pwd
 import shutil
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path as SyncPath
 from pathlib import PurePath
 from typing import ClassVar, Literal
 
 from anyio import Path
-from pydantic import Field
 
 
 @dataclass
 class FileMetadata:
+    """A filesystem entry as read, not as validated.
+
+    NOTE: a dataclass on purpose - nothing here is parsed from user or model
+    input (`Filesystem` builds every instance from a real `stat`), so pydantic
+    would only add a validation pass over data that has already been trusted.
+    `from_jsonable` is the one boundary where it comes back from JSON, and it
+    reconstructs field by field."""
+
     owner_name: str
     group_name: str
     path: str
@@ -24,9 +31,8 @@ class FileMetadata:
     is_directory: bool
     is_readable: bool
     is_writable: bool
-    modified_time: int = Field(
-        ...,
-        description="Last modified time for file or dir as UNIX timestamp",
+    modified_time: int = field(
+        metadata={"description": "Last modified time for file or dir as UNIX timestamp"}
     )
     encoding: Literal["text", "base64"] | None = None  # set after reading a file
     listing: dict[str, "FileMetadata"] | None = None
