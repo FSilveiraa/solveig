@@ -229,7 +229,7 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 
 ## Sessions
 
-`sessions/manager.py` — one JSON blob per session file in `config.session.dir`
+`session/manager.py` — one JSON blob per session file in `config.session.dir`
 (default `.solveig/sessions`). `store`/`checkpoint`/`load`/`_fuzzy_find` +
 `announce_resumed_session`. Serialization is pydantic-ai's own
 `ModelMessagesTypeAdapter` + `to_jsonable_python`; usage comes from the shared
