@@ -2,7 +2,7 @@
 
 Turns a message part into a widget in the ConversationArea, keyed by message_id,
 and keeps the bookkeeping that needs (which widgets belong to which message, and
-which role the last section header announced).
+which role each was drawn as).
 
 This is NOT an observer. `SessionDisplay` watches the conversation and calls
 `TerminalInterface`'s three transcript verbs, which delegate here - so nothing
@@ -33,7 +33,7 @@ from textual.widgets import Markdown as MarkdownWidget
 from solveig.session.conversation import Conversation, MessageId
 
 from .collapsible_widgets import CollapsibleTextBox
-from .widgets import EditableComment, SectionHeader
+from .widgets import EditableComment
 
 if TYPE_CHECKING:
     from pydantic_ai.messages import (
@@ -74,8 +74,8 @@ def _renderable_content(part: ModelRequestPart | ModelResponsePart) -> str | Non
 @dataclass
 class _Mounted:
     """What this frontend knows about one message it drew: the widgets it put on
-    screen and the role it announced. ONE record, so a drop forgets both at once
-    - two dicts keyed by message id would be two things to keep in step."""
+    screen and the role it drew them as. ONE record, so a drop forgets both at
+    once - two dicts keyed by message id would be two things to keep in step."""
 
     role: str | None
     widgets: list[Widget] = field(default_factory=list)
@@ -96,13 +96,9 @@ class MessageDisplay:
         # conversation already describes the state AFTER the change, which for a
         # load is a history that has not been drawn yet.
         self._mounted: dict[MessageId, _Mounted] = {}
-        self._last_section_role: str | None = None
 
     async def display(self, message_id: MessageId, *part_indexes: int) -> None:
-        """Mount one part's widget, emitting a section header first if this
-        message opens a new role. Called once per part, in order, so the header
-        check has to be idempotent - it is, since it only fires on a genuine
-        role change."""
+        """Mount one part's widget. Called once per part, in order."""
         message = self.conversation.get(message_id)
         if message is None or any(
             index >= len(message.parts) for index in part_indexes
@@ -110,12 +106,6 @@ class MessageDisplay:
             return
         role = _role_of(message)
         mounted = self._mounted.setdefault(message_id, _Mounted(role=role))
-
-        if role is not None and role != self._last_section_role:
-            header = SectionHeader(role.capitalize())
-            await self._mount_widget(header)
-            mounted.widgets.append(header)
-            self._last_section_role = role
 
         widgets = [
             widget
@@ -140,15 +130,14 @@ class MessageDisplay:
         role = _role_of(message)
         mounted = self._mounted.setdefault(message_id, _Mounted(role=role))
         existing = mounted.widgets
-        content_widgets = [w for w in existing if not isinstance(w, SectionHeader)]
 
         rendered = 0
         for part_index, part in enumerate(message.parts):
             content = _renderable_content(part)
             if content is None:
                 continue
-            if rendered < len(content_widgets):
-                await self._update_widget(content_widgets[rendered], content)
+            if rendered < len(existing):
+                await self._update_widget(existing[rendered], content)
             else:
                 widget = self._make_widget(part, message_id, part_index, role)
                 if widget is not None:
@@ -181,11 +170,10 @@ class MessageDisplay:
         if doomed:
             async with self._area.batch():
                 await self._area.remove_children(doomed)
-        self._last_section_role = self._recompute_section_role()
 
     def _forget(self, message_id: MessageId) -> _Mounted:
         """Drop this message's record and hand it back - one pop, so the
-        widgets and the role it announced can never fall out of step."""
+        widgets and the role it was drawn as can never fall out of step."""
         return self._mounted.pop(message_id, _Mounted(role=None))
 
     # -- helpers ------------------------------------------------------------
@@ -229,14 +217,3 @@ class MessageDisplay:
         elif isinstance(widget, CollapsibleTextBox):
             widget.clear()
             widget.append(content)
-
-    def _recompute_section_role(self) -> str | None:
-        """The role of the last still-MOUNTED role-bearing message, so the next
-        part shown emits a section header only on a genuine role change. Read
-        from this object's own records, never from the conversation: after a
-        load the conversation holds messages nothing has drawn yet, and
-        trusting it there swallows the opening section header."""
-        for mounted in reversed(self._mounted.values()):
-            if mounted.role is not None:
-                return mounted.role
-        return None

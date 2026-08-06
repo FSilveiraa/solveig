@@ -156,7 +156,6 @@ async def test_display_records_every_mounted_widget():
     interface = MockInterface(conversation=conv)
     area = ConversationArea()
     display = MessageDisplay(conv, area, interface)
-    display._last_section_role = "assistant"  # section header already emitted
 
     class _HarnessApp(App):
         def compose(self) -> ComposeResult:
@@ -166,6 +165,34 @@ async def test_display_records_every_mounted_widget():
         await display.display(message_id, 0, 1)
 
     assert len(display._mounted[message_id].widgets) == 2
+
+
+@pytest.mark.anyio
+async def test_a_role_change_mounts_no_header_widget():
+    """Role is carried by the comment's own tint now; the section rule is gone."""
+    conv = Conversation()
+    user_message_id = await conv.append(
+        ModelRequest(parts=[UserPromptPart(content="hi")])
+    )
+    assistant_message_id = await conv.append(
+        ModelResponse(parts=[TextPart(content="hello")])
+    )
+    interface = MockInterface(conversation=conv)
+    area = ConversationArea()
+    display = MessageDisplay(conv, area, interface)
+
+    class _HarnessApp(App):
+        def compose(self) -> ComposeResult:
+            yield area
+
+    async with _HarnessApp().run_test():
+        await display.display(user_message_id, 0)
+        await display.display(assistant_message_id, 0)
+
+        assert all(type(w).__name__ != "SectionHeader" for w in area.children)
+
+    assert len(display._mounted[user_message_id].widgets) == 1
+    assert len(display._mounted[assistant_message_id].widgets) == 1
 
 
 def _drops(interface: MockInterface):

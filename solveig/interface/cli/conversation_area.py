@@ -13,7 +13,7 @@ from .collapsible_widgets import (
     CustomCollapsible,
 )
 from .tree_display import TreeDisplay
-from .widgets import Comment, SectionHeader
+from .widgets import Comment
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
 # appears to keep extending down, fading out row by row, until exit_group()
@@ -197,8 +197,7 @@ class ConversationArea(ScrollableContainer):
 
         .group {
             height: auto;
-            /* Section content: 1 on all four sides. Collapses with siblings;
-               header top-2 wins between sections. */
+            /* 1 on all four sides, collapsing (max) with siblings. */
             margin: 1;
             padding-bottom: 0;
         }
@@ -244,6 +243,5 @@ class ConversationArea(ScrollableContainer):
             + MessageButton.get_css()
             + CustomCollapsible.get_css()
             + CollapsibleTextBox.get_css()
-            + SectionHeader.get_css()
             + TreeDisplay.get_css()
         )

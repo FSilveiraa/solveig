@@ -32,9 +32,8 @@ class Comment(Static):
     def get_css(cls) -> str:
         return """
         .text_comment {
-            /* Section content: 1 on all four sides. Vertically this collapses
-               (max) with neighbours - a section header's top-2 wins at a
-               section boundary, giving 2 between sections and 1 within. */
+            /* 1 on all four sides. Vertically this collapses (max) with
+               neighbours, so adjacent margins never stack. */
             margin: 1;
         }
 
@@ -193,64 +192,5 @@ class CopyButton(Static):
 
         CopyButton:hover {
             color: $section;
-        }
-        """
-
-
-class SectionHeader(Static):
-    """A section header with responsive line extending to the right."""
-
-    def __init__(self, title: str):
-        self._title = title
-        super().__init__("")
-
-    def on_mount(self):
-        """Update content when first mounted."""
-        self._update_content()
-
-    def on_resize(self):
-        """Recalculate line when terminal resizes."""
-        self._update_content()
-
-    def _update_content(self):
-        """Generate section line based on current width.
-
-        NOTE: Recalculated on every resize (cheap; resize events are rare).
-        Rule/border-bottom/fill-container were all rejected - none does an inline
-        decorative fill alongside text.
-        """
-        # Use this widget's own rendered width, not the parent's - the parent
-        # doesn't account for this widget's margin or a reserved scrollbar
-        # gutter, both of which shrink the space actually available here.
-        width = self.size.width or 80
-
-        header = f"━━━━ {self._title} "
-        # Over-fill rather than compute an exact count and let CSS
-        # text-overflow: clip trim the excess - the run of "━" has no
-        # spaces, so Rich would otherwise treat it as one unbreakable word
-        # and wrap the whole thing to a new row if the count is ever off by
-        # even one character.
-        line = "━" * width
-        self.update(f"{header}{line}")
-
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for SectionHeader."""
-        return """
-        SectionHeader {
-            color: $section;
-            text-style: bold;
-            /* Spacing model: 2 rows above a section, 1 below. Textual collapses
-               adjacent sibling margins to the max, so this composes with the
-               1/1 margins on comments/boxes/groups to give "2 above sections,
-               1 everywhere else" without ever stacking. */
-            margin: 2 0 1 0;
-            text-wrap: nowrap;
-            text-overflow: clip;
-        }
-
-        /* No leading gap at the very top of the scroll. */
-        SectionHeader:first-of-type {
-            margin-top: 0;
         }
         """
