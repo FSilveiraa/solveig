@@ -251,12 +251,22 @@ membership change). Untyped MCP calls route through `run_untyped_tool`.
 
 ## Subcommands
 
-**Push model.** Every subcommand source pushes a template into a module-level list
-(`_PENDING` in `subcommand/base.py`) at import time. The `@subcommand` decorator on
-a plain function does it; `BaseTool.__pydantic_init_subclass__` does it for tools.
-The registry reads the list, inspects each function's signature, separates injected
-deps (matched by type) from CLI args (parsed via `CliSettingsSource`), and binds a
-handler. No fetch, no iterate, no two-author split in dispatch.
+**One store per source; the decorator you import decides which.** A declaration
+writes a finished `Subcommand` straight into a `SubcommandStore` at import time —
+no inbox, no later pass. `declaring_into(store)` builds the `@subcommand`
+decorator, so the DESTINATION is settled by which module the author imported from,
+never by an argument they could forget: core code imports `subcommand` from
+`solveig.subcommands`, a plugin imports it from `solveig.plugins`. `Subcommand.from_handler`
+inspects the signature, separating injected deps (matched by type) from CLI args
+(parsed via `CliSettingsSource`).
+
+**Position is precedence.** `SUBCOMMANDS` is a `SubcommandStores` over
+`BUILTIN_SUBCOMMANDS`, `CORE_TOOL_SUBCOMMANDS`, `PLUGIN_SUBCOMMANDS`, in that order.
+It holds a `ChainMap` *view* — references, not a merge — so a store replaced by a
+plugin reload is visible immediately with nothing to invalidate. One collision rule
+for every arrival: a trigger already claimed by ANOTHER store is refused with a
+warning rather than shadowed (losing a plugin's command beats a plugin quietly
+taking over `/config`); re-declaring into the same store just overwrites.
 
 **Built-in commands** are standalone functions in the module that owns the behaviour:
 
@@ -277,19 +287,24 @@ Injected types (`SolveigConfig`, `SolveigInterface`, `Conversation`, `Client`,
 no `deps` dict parameter, no `interface=` kwarg on dispatch. Bool params with
 defaults become `--flag/--no-flag`. `*rest` maps to a greedy positional list.
 
-**Tool commands** push the same way — `BaseTool.__pydantic_init_subclass__` pushes a
-template with `tool_cls` set; the registry binds a handler that parses via
-`from_cli_tokens` → `CliSettingsSource` and orchestrates via `run_tool_and_hooks`.
+A parameter whose type is neither CLI-expressible nor injectable is a **declaration
+error**: `_resolve_dep` raises `UnknownDependency`, the registry warns at construction
+naming the command and the parameter, and dispatch reports it instead of handing the
+handler a `None`.
+
+**Tool commands** declare the same way — a `BaseTool` subclass registers into
+`CORE_TOOL_SUBCOMMANDS`; the handler parses via `from_cli_tokens` → `CliSettingsSource`
+and orchestrates via `run_tool_and_hooks`, so a hand-typed `/command` runs the same
+hooks a model call does.
 
 The registry also owns the **prompt gate**: it self-registers as the queue's
-`prompt_handler` in its constructor. `/commands typed as user input are dispatched
+`prompt_handler` in its constructor. `/commands` typed as user input are dispatched
 before insertion; prompts pass through unchanged.
 
-`subcommand/base.py` — the `_PENDING` list, `_SubcommandTemplate` dataclass,
-`@subcommand` decorator, and `Subcommand` runtime dispatch object.
-`subcommand/registry.py` — `SubcommandRegistry`: reads `_PENDING`, binds handlers,
-dispatches via longest-prefix match, generates `/help`, self-registers as the
-queue's prompt gate.
+`subcommands/base.py` — the `Subcommand` dataclass (`from_handler`), `SubcommandStore`
+/ `SubcommandStores`, the module-level stores, and `declaring_into`.
+`subcommands/registry.py` — `SubcommandRegistry`: binds handlers, dispatches via
+longest-prefix match, generates `/help`, self-registers as the queue's prompt gate.
 
 ## Conventions that matter (do not regress)
 
