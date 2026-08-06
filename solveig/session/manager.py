@@ -272,8 +272,13 @@ class SessionManager(ConversationObserver):
             ),
         }
 
-    async def list_sessions(self) -> list[dict]:
-        """Return metadata for all stored sessions, newest first."""
+    async def list_sessions(self, interface: SolveigInterface) -> list[dict]:
+        """Metadata for all stored sessions, newest first.
+
+        A session file that cannot be read is reported and skipped, never
+        dropped in silence: it is the only signal the user gets that a session
+        they remember storing is gone or corrupt.
+        """
         result = []
         for path_str, mtime in await self._get_sessions():
             try:
@@ -290,8 +295,11 @@ class SessionManager(ConversationObserver):
                         "_path": path_str,
                     }
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                await interface.print(
+                    f"Could not read session file {path_str}: {e}",
+                    level=Level.ERROR,
+                )
         return result
 
     async def delete(self, name: str) -> str:
@@ -337,7 +345,7 @@ async def session_list(
     interface: SolveigInterface,
 ) -> None:
     """List stored sessions."""
-    sessions = await session_manager.list_sessions()
+    sessions = await session_manager.list_sessions(interface)
     if not sessions:
         await interface.print(
             "No saved sessions. Sessions are auto-saved after each response.",

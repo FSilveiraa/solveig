@@ -98,7 +98,9 @@ async def get_briefing_content(
 ) -> str:
     """Read briefing files and return their contents joined with double newlines.
 
-    Missing or unreadable files are silently skipped.
+    A file that cannot be read is reported and skipped, never in silence: the
+    briefing is part of every prompt, so losing one silently changes the model's
+    behaviour for a whole session.
     """
     parts = []
     for path_str in briefing_files or []:

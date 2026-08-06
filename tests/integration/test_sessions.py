@@ -27,6 +27,7 @@ from pydantic_ai.usage import RunUsage
 
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager
+from solveig.utils.file import Filesystem
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
@@ -209,20 +210,20 @@ class TestStoreLoad:
 class TestListDelete:
     async def test_list_returns_empty_when_no_sessions(self, tmp_path):
         manager, _ = make_manager(tmp_path)
-        sessions = await manager.list_sessions()
+        sessions = await manager.list_sessions(MockInterface())
         assert sessions == []
 
     async def test_list_returns_stored_sessions(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         await manager.store(Conversation(), "alpha")
         await manager.store(Conversation(), "beta")
-        sessions = await manager.list_sessions()
+        sessions = await manager.list_sessions(MockInterface())
         assert len(sessions) == 2
 
     async def test_list_includes_stored_session(self, tmp_path):
         manager, _ = make_manager(tmp_path)
         await manager.store(Conversation())
-        sessions = await manager.list_sessions()
+        sessions = await manager.list_sessions(MockInterface())
         assert len(sessions) == 1
         assert sessions[0]["id"] == manager.current_path.name.removesuffix(".jsonl")
 
@@ -240,16 +241,24 @@ class TestListDelete:
             await manager.delete("nonexistent")
 
     async def test_list_sessions_skips_corrupted_file(self, tmp_path):
-        """list_sessions() silently skips files with invalid JSON content."""
+        """A corrupt session file is reported and skipped, not dropped silently."""
         manager, _ = make_manager(tmp_path)
         await manager.store(Conversation(), "good")
 
         sessions_dir = tmp_path / "sessions"
-        (sessions_dir / "broken.jsonl").write_text("not valid json {{{{")
+        await Filesystem.write_file_text(
+            sessions_dir / "broken.jsonl", "not valid json {{{{"
+        )
 
-        sessions = await manager.list_sessions()
+        interface = MockInterface()
+        sessions = await manager.list_sessions(interface)
         assert len(sessions) == 1
         assert "good" in sessions[0]["id"]
+        assert any(
+            "broken.jsonl" in line
+            for line in interface.outputs
+            if line.startswith("[ERROR]")
+        ), interface.outputs
 
 
 # ---------------------------------------------------------------------------
