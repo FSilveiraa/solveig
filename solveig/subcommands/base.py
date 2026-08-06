@@ -306,6 +306,12 @@ def declaring_into(store: SubcommandStore) -> Callable[..., Callable]:
         """Mark an async function as a subcommand handler. The signature IS the
         argument spec: parameters whose type a command line can express are
         parsed from what the user typed, the rest are injected by the registry.
+
+        The injectable types are fixed - SolveigConfig, SolveigInterface,
+        Conversation, Client, SessionManager. A parameter annotated with
+        anything else is neither CLI-expressible nor injectable, and the
+        registry refuses the command at startup with a warning naming it.
+
         Bool parameters with defaults become ``--flag/--no-flag``; ``*rest``
         maps to a greedy positional list."""
 

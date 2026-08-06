@@ -6,10 +6,50 @@ CliSettingsSource, reached through `Subcommand.parse()`. The old case list here
 just runs through the real parsing path now.
 """
 
+import warnings
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
+from solveig.api.client import Client
 from solveig.config import SolveigConfig
-from solveig.subcommands.base import Subcommand, SubcommandStore, SubcommandStores
+from solveig.session.conversation import Conversation
+from solveig.subcommands.base import (
+    BUILTIN_SUBCOMMANDS,
+    SUBCOMMANDS,
+    Subcommand,
+    SubcommandStore,
+    SubcommandStores,
+)
+from solveig.subcommands.registry import SubcommandRegistry
+from solveig.user_message_queue import UserMessageQueue
+from tests.mocks import DEFAULT_CONFIG, MockInterface
+
+
+@pytest.fixture
+def restored_subcommand_stores():
+    """SUBCOMMANDS is module-level and shared by the whole suite, so a test that
+    declares a subcommand has to put every store back exactly as it found it -
+    otherwise its throwaway command shows up in the next test's /help."""
+    saved = [(store, dict(store)) for store in SUBCOMMANDS.subcommands.maps]
+    yield
+    for store, contents in saved:
+        store.clear()
+        store.update(contents)
+
+
+def _make_registry() -> SubcommandRegistry:
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
+    session_manager = MagicMock()
+    session_manager.list_sessions = AsyncMock(return_value=[])
+    return SubcommandRegistry(
+        config=config,
+        conversation=Conversation(),
+        interface=MockInterface(),
+        client=Client(config, provider=MagicMock()),
+        session_manager=session_manager,
+        user_message_queue=UserMessageQueue(),
+    )
 
 
 async def _no_args() -> None: ...
@@ -158,3 +198,40 @@ class TestStores:
         s = Subcommand.from_handler(_no_args, subcommands=["/k"])
         stores.register(b, [s])  # b is the LOWER-precedence store
         assert stores.subcommands["/k"] is s  # visible once registered anywhere
+
+
+# ---------------------------------------------------------------------------
+# Dependency injection — a parameter nothing can fill
+# ---------------------------------------------------------------------------
+
+
+async def test_a_subcommand_asking_for_an_uninjectable_type_is_refused(
+    restored_subcommand_stores,
+):
+    """Signature is the contract, so a parameter the registry cannot fill is a
+    declaration error - not a silent None handed to the handler."""
+
+    class NotInjectable:
+        pass
+
+    async def handler(thing: NotInjectable) -> None:
+        raise AssertionError("must never run")
+
+    SUBCOMMANDS.add(
+        BUILTIN_SUBCOMMANDS,
+        Subcommand.from_handler(handler, subcommands=["/bogus"]),
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        registry = _make_registry()
+
+    # (a) reported at construction, next to whoever declared it
+    assert any("/bogus" in str(w.message) for w in caught)
+
+    # (b) refused at dispatch, naming the type, without reaching the handler
+    assert await registry("/bogus") is True
+    assert any(
+        o.startswith("[ERROR]") and "NotInjectable" in o
+        for o in registry._interface.outputs
+    )

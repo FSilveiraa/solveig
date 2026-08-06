@@ -19,6 +19,7 @@ whoever declared it.
 from __future__ import annotations
 
 import shlex
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -44,6 +45,16 @@ from solveig.subcommands.base import (
 
 if TYPE_CHECKING:
     from solveig.user_message_queue import UserMessageQueue
+
+
+class UnknownDependency(Exception):
+    """A handler asked for a type the registry does not hold.
+
+    A declaration error, not a runtime condition: the injectable set is fixed at
+    construction, so a parameter that cannot be filled will never be fillable.
+    Handing over `None` instead only moved the failure into the handler, where it
+    surfaced as an AttributeError with no mention of the subcommand that caused it.
+    """
 
 
 def _build_sections(subs: list[Subcommand]) -> list[tuple[str, str]]:
@@ -87,6 +98,18 @@ class SubcommandRegistry:
         # NOTE: Self-register as the queue's prompt gate: /commands are
         # dispatched before insertion; prompts pass through unchanged.
         user_message_queue.prompt_handler = self.handle_prompt
+        # Report a broken declaration where it can still be tied to whoever made
+        # it, rather than when someone happens to type the command. Warn rather
+        # than raise: one bad plugin command must not stop the app from starting.
+        for sub in SUBCOMMANDS.all():
+            for name, annotation in sub.dependencies.items():
+                try:
+                    self._resolve_dep(annotation)
+                except UnknownDependency as err:
+                    warnings.warn(
+                        f"'{sub.subcommands[0]}' parameter '{name}': {err}",
+                        stacklevel=2,
+                    )
 
     async def _help_handler(self) -> None:
         await self.help()
@@ -99,9 +122,14 @@ class SubcommandRegistry:
         """The app object a handler parameter asked for, matched by type (or by
         name, for a module that stringifies its annotations)."""
         if isinstance(annotation, str):
-            cls = self._dep_by_name.get(annotation)
-            return self._deps[cls] if cls else None
-        return self._deps.get(annotation)
+            annotation = self._dep_by_name.get(annotation, annotation)
+        try:
+            return self._deps[annotation]
+        except (KeyError, TypeError):
+            raise UnknownDependency(
+                f"No injectable value for {annotation!r}. Injectable types: "
+                + ", ".join(sorted(t.__name__ for t in self._deps))
+            ) from None
 
     async def _invoke(self, sub: Subcommand, tokens: list[str]) -> None:
         """Parse, fill in the dependencies, call. The single error posture for
@@ -116,10 +144,14 @@ class SubcommandRegistry:
             )
             return
 
-        injected = {
-            name: self._resolve_dep(annotation)
-            for name, annotation in sub.dependencies.items()
-        }
+        try:
+            injected = {
+                name: self._resolve_dep(annotation)
+                for name, annotation in sub.dependencies.items()
+            }
+        except UnknownDependency as err:
+            await self._interface.print(str(err), level=Level.ERROR)
+            return
 
         if sub.var_positional is None:
             await sub.handler(**injected, **parsed)

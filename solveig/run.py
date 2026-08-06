@@ -335,14 +335,22 @@ async def run_async(
     # The registry owns the prompt gate: /commands are dispatched before
     # insertion, prompts pass through unchanged. Self-registers on the queue
     # in its constructor.
-    SubcommandRegistry(
-        config=config,
-        conversation=conversation,
-        interface=interface,
-        client=client,
-        session_manager=session_manager,
-        user_message_queue=user_message_queue,
-    )
+    #
+    # It also vets every subcommand declaration as it builds, and a declaration
+    # it cannot satisfy leaves as a warning - captured here so it reaches the
+    # interface with the rest of the startup warnings instead of stderr, which
+    # under a Textual app nobody sees.
+    with warnings.catch_warnings(record=True) as caught_declarations:
+        warnings.simplefilter("always")
+        SubcommandRegistry(
+            config=config,
+            conversation=conversation,
+            interface=interface,
+            client=client,
+            session_manager=session_manager,
+            user_message_queue=user_message_queue,
+        )
+    startup_warnings += tuple(str(w.message) for w in caught_declarations)
 
     # Changing where plugins are LOADED FROM changes the plugin set, so it has
     # to reload — until now `/config set plugins.paths` did nothing until the
