@@ -1,4 +1,3 @@
-from solveig.config import SolveigConfig
 """Integration tests for the `WriteTool` tool.
 
 `WriteTool(path=..., is_directory=..., content=None)` is constructed (field
@@ -26,6 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.tools.core.write import WriteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

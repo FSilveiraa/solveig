@@ -11,7 +11,7 @@ top-level tool arguments to the model, but the body receives a *validated*
 `SomeModel` instance (field validators run inside pydantic-ai's own validation
 pass). The same class round-trips for replay via `model_validate(stored_args)`.
 This is a first-class pydantic-ai mechanism (`_function_schema._build_schema`'s
-`is_model_like` branch), not an accident - see the migration log.
+`is_model_like` branch), not an accident.
 """
 
 import typing
@@ -61,8 +61,9 @@ def check_path_security(
 class ToolConfig(BaseModel):
     """Base config every tool's config extends — the universal `enabled` flag
     (on by default). A tool with extra settings subclasses it (e.g. `HttpConfig`
-    in http.py) and points `config_model` at the subclass; a plugin tool does the
-    same. `bootstrap.compose_core_tools()` reads each tool's `config_model` to build
+    in http.py) and names it in its `BaseTool[HttpConfig]` generic argument; a
+    plugin tool does the same.
+    `bootstrap.compose_core_tools()` reads each tool's `config_model` to build
     the `tools` section at runtime, so core and plugin tools are identical here —
     which is what makes "add a core tool" == "add a plugin tool"."""
 
@@ -76,18 +77,11 @@ class ToolConfig(BaseModel):
 # import the private `pydantic_settings.sources.types._CliPositionalArg` path.
 _CLI_POSITIONAL_MARKER = typing.get_args(CliPositionalArg)[1]
 
-# Options handed to `CliSettingsSource` when parsing a `/tool` line.
-# Lives in config.py; imported here so adding a tool flag doesn't need
-# a second edit.  Source-only (no env/dotenv/secrets layering - those
-# would let a stray env var override a tool arg, see the migration log).
-
 
 # `ToolConfigType` (the PEP 695 parameter below) is threaded through BaseTool so a
 # tool's `settings(config)` is statically typed to its own config type (`HttpTool`
-# -> `HttpConfig`). The argument is ERASED at runtime — pydantic rewrites a generic
-# model's bases — so composition can't recover it from the generic; each tool also
-# sets `config_model` explicitly for the runtime side. See `settings()` /
-# `compose_core_tools()`.
+# -> `HttpConfig`). `__pydantic_init_subclass__` recovers the same argument at
+# runtime into `config_model`, so the config type is declared exactly once.
 class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     """Declarative tool: fields are the tool's arguments, `execute()` is the
     live behaviour, `display_header()` is the intent shown before execution and
@@ -163,8 +157,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         return getattr(config.tools, self.tool_name())
 
     # ------------------------------------------------------------------
-    # `/tool` subcommand support (see the migration log's "Subcommand
-    # revival" design section)
+    # `/tool` subcommand support
     # ------------------------------------------------------------------
 
     @classmethod

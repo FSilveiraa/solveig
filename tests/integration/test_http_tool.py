@@ -1,4 +1,3 @@
-from solveig.config import SolveigConfig
 """Integration tests for the `HttpTool` tool.
 
 `HttpTool(url=..., method="GET", headers=None, body=None,
@@ -28,6 +27,7 @@ import httpx
 import pytest
 from aiohttp import web
 
+from solveig.config import SolveigConfig
 from solveig.tools.core.http import HttpTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

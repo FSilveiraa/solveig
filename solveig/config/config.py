@@ -48,11 +48,6 @@ __all__ = [
     "SolveigConfig",
 ]
 
-# Options for CliSettingsSource — one home for how CLI parsing behaves across config
-# boot, built-in subcommand parsing, and tool subcommand parsing.  "cli_avoid_json"
-# is NOT here: the config boot path merges it on top (nested SolveigConfig fields
-# need dotted flags), but subcommands parse flat models where it's a no-op.
-
 # Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
 _CLI_SHORTCUTS: dict[str, str] = {
     "api.url": "url",
@@ -217,12 +212,9 @@ class SolveigConfig(BaseSettings):
     # The config files actually loaded — resolved (existence-checked) `--config`
     # paths, or the default search results when no --config was passed. Stamped
     # by ConfigFileSource at parse; [0] is the /config save target. The one home
-    # for "which config files were loaded".
-    # FIXED: defaulted to DEFAULT_CONFIG_PATHS, which is the SEARCH LIST (with
-    # an unexpanded `~`), not files that were loaded. On a machine with no
-    # config file — or any path where ConfigFileSource doesn't run — the default
-    # survived and `_record_declared` tried to open a literal `<cwd>/~/.solveig/
-    # config.yaml`, crashing startup. "Nothing loaded" is [].
+    # for "which config files were loaded", so "nothing loaded" is []. NOT
+    # `DEFAULT_CONFIG_PATHS`: that is the SEARCH list, and it holds an
+    # unexpanded `~` that no reader here would resolve.
     config_files: list[str] = Field(default_factory=list, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
@@ -337,7 +329,7 @@ class SolveigConfig(BaseSettings):
         return getattr(obj, leaf)
 
     async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
-        """The single user-edit write seam.  Record in *_declared* and — when
+        """The single user-edit write seam.  Record in *_declared_fields* and — when
         the value actually changed — notify observers.  Pass *notify=False* for
         internal writes (e.g. max_context from a model-fetch) that must be
         visible but shouldn't re-trigger dependent observers."""
@@ -521,7 +513,7 @@ class SolveigConfig(BaseSettings):
 
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
-        `/config set`, tracked in `_declared`) — what `/config save` persists.
+        `/config set`, tracked in `_declared_fields`) — what `/config save` persists.
         Each declared path is copied out of `model_dump(mode="json")` (which
         applies the field serializers: key un-masked, enums → names, byte
         sizes → ints, command patterns → source strings).
@@ -539,7 +531,7 @@ class SolveigConfig(BaseSettings):
         return out
 
     def _record_declared(self) -> None:
-        """Populate `_declared` with the dotted paths explicitly provided by the
+        """Populate `_declared_fields` with the dotted paths explicitly provided by the
         config file(s) and the command line (`cli_args`) — what `/config save`
         persists. Excludes env vars and CLI-only fields (`exclude=True`)"""
         declared = dotted.to_leaves(sources.load_paths(self.config_files))

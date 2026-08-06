@@ -10,10 +10,9 @@ of those becomes a no-op nested increment/decrement as long as this
 module's own hold is still outstanding.
 
 `MCP_CONNECTIONS` is the single source of truth for connected servers. The
-dict lives in `mcp_servers/__init__.py` so `tools/available.py` (which this
-module imports to trigger rebuilds on connect/disconnect) can read the same
-shared object at top level without a circular import: this module holds its
-own reference, and only *other* modules import the dict from the package.
+dict lives in `mcp_servers/__init__.py` so `tools/available.py` can read the
+same shared object at top level without a circular import: this module holds
+its own reference, and only *other* modules import the dict from the package.
 `tools.available.build_toolset()` derives the toolset list it needs
 (`[c.toolset for c in MCP_CONNECTIONS.values()]`) from this dict directly
 rather than a second list kept in sync by hand.
@@ -92,7 +91,7 @@ async def connect(
     config: SolveigConfig,
     interface: SolveigInterface,
 ) -> MCPConnection | None:
-    """Connect to an MCP server, register its tools, and rebuild the toolset.
+    """Connect to an MCP server and register its tools.
 
     Displays success or error directly. Returns None on failure/cancellation
     rather than raising, since callers don't need to react programmatically.
@@ -153,7 +152,7 @@ async def connect(
 async def disconnect(
     url: str, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
-    """Disconnect from an MCP server by URL and rebuild the toolset."""
+    """Disconnect from an MCP server by URL."""
     conn = MCP_CONNECTIONS.pop(url, None)
     if conn is None:
         return

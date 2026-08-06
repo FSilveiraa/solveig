@@ -28,6 +28,8 @@ class TreeDisplay(Tree):
     Satisfies the ``TreeBox`` protocol structurally — a Textual widget cannot
     inherit a Protocol (unrelated metaclasses); ``interface.py`` declares this
     is what ``display_tree`` returns, and that is where it is checked.
+    ``replace`` is defined below; ``refresh`` is Textual's own, inherited, so
+    the signature mypy checks against the protocol is the real one.
 
     The full metadata tree is already read (the filesystem operation happened
     before the interface call).  At construction only the root and its first
@@ -97,10 +99,6 @@ class TreeDisplay(Tree):
         self._build_initial(self.root, metadata, depth=0)
         self.root.expand()
         self.refresh(layout=True)
-
-    def refresh(self, *args, **kwargs):  # noqa: D401 — keep TreeBox signature
-        """Redraw the tree (TreeBox contract)."""
-        return super().refresh(*args, **kwargs)
 
     # ------------------------------------------------------------------ #
     # Label formatting

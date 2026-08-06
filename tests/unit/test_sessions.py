@@ -1,8 +1,8 @@
 """Pin the session-file format contract: legacy blob + log format.
 
 The reader (`parse_conversation_blob`) must handle both formats transparently
-so old session files and story files keep loading after the D1 cutover to
-append-only JSONL.
+so old session files and story files keep loading alongside the append-only
+JSONL a live session writes.
 """
 
 import json

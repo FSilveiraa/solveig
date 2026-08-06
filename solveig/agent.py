@@ -420,7 +420,7 @@ async def run_turn(
     equal-content request object for the prompt during the run; `_Reconciler`
     folds that into the echo's id so `adopt` never mounts a duplicate.
     Everything else adopts by object identity, and a finally syncs once more so
-    a mid-run cancel commits whatever completed (spec §8)."""
+    a mid-run cancel commits whatever completed."""
     echo_id = await conversation.append(
         ModelRequest(parts=[UserPromptPart(content=prompt)])
     )
@@ -565,8 +565,7 @@ def _tool_instance(args: dict[str, Any]) -> BaseTool | None:
 def build_tool_execution_capability() -> Hooks[SolveigContext]:
     """Per-tool-call capability: opens each call's collapsible group, runs the
     plugin `@before_tool`/`@after_tool` hooks, and renders the `ToolResult` into a
-    `ToolReturn`. Replaces the old `HookRunner`/`Finalizer` `WrapperToolset`
-    stack with pydantic-ai's native `wrap_tool_execute` hook.
+    `ToolReturn`, all through pydantic-ai's native `wrap_tool_execute` hook.
 
     The group + hook flow itself lives in `run_tool_and_hooks`
     (`solveig/tools/orchestration.py`), shared with the `/tool` subcommand path

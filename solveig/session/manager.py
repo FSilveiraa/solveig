@@ -1,8 +1,10 @@
 """Session persistence.
 
-Stores/restores `Conversation` as a single JSON blob per session file
-(whole-list `ModelMessagesTypeAdapter` dump) - pydantic-ai's own sanctioned
-serialize/restore pair, not a bespoke format.
+Stores/restores `Conversation` as an append-only JSONL file: one message per
+line, plus a trailing `session_meta` line carrying the token totals. Messages
+are serialized by pydantic-ai's own `to_jsonable_python`/`ModelMessagesTypeAdapter`
+pair, not a bespoke format. `parse_conversation_blob` also still reads the
+single-object blob a story file uses.
 
 Replay is not this module's business: `Conversation.load()` repopulates the
 messages and fires `conversation_loaded`, and `SessionDisplay` (this manager's
@@ -321,8 +323,8 @@ class SessionManager(ConversationObserver):
     ) -> None:
         """Show the "Resumed session" banner (message + token counts). The
         session's messages themselves render reactively: `conversation.load()`
-        fires `message_added` per message and the transcript replays each -
-        closed content via render nodes, tool calls via the tool's own
+        fires `conversation_loaded`, and `SessionDisplay` walks the loaded
+        history - closed content via render nodes, tool calls via the tool's own
         `replay()`. Replay isn't a special imperative path anymore."""
         usage = session_data["usage"]
         header = (

@@ -1,4 +1,3 @@
-from solveig.config import SolveigConfig
 """End-to-end tests for complete conversation loops through the real pydantic-ai
 Agent, driven by `run_async` + a `FunctionModel`-scripted response sequence.
 
@@ -19,6 +18,7 @@ import pytest
 from anyio import Path
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
+from solveig.config import SolveigConfig
 from solveig.run import run_async
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 

@@ -1,4 +1,3 @@
-from solveig.config import SolveigConfig
 """Integration tests for the `CommandTool` tool.
 
 `CommandTool(command=..., timeout=10.0)` is constructed (field validators run
@@ -23,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from solveig.config import SolveigConfig
 from solveig.tools.core.command import CommandTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

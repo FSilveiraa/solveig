@@ -1,19 +1,17 @@
-from solveig.config import SolveigConfig
 """Integration tests for SessionManager.
 
 `SessionManager.store()`/`load()` (de)serialize a `Conversation`
 (`messages: list[ModelMessage]` + `usage: RunUsage`) via pydantic-ai's own
-`ModelMessagesTypeAdapter`/`to_jsonable_python`, one JSON blob per session
-file - not the removed `MessageHistory`. Message reconstruction from a stored
-blob is pydantic-ai's own job now (`ModelMessagesTypeAdapter.validate_python`),
-so there's nothing Solveig-specific left to unit test there; `load()`'s
-round-trip is exercised via `store()` + `load()` below instead of by hand-
-building request/response dicts.
+`ModelMessagesTypeAdapter`/`to_jsonable_python`, one message per JSONL line
+plus a trailing meta line. Message reconstruction is pydantic-ai's job
+(`ModelMessagesTypeAdapter.validate_python`), so `load()`'s round-trip is
+exercised via `store()` + `load()` rather than by hand-building
+request/response dicts.
 
-Resume is reactive: `Conversation.load()` repopulates the messages and the
-transcript replays each (see `tests/unit/interface/test_transcript.py`).
-`announce_resumed_session()` only shows the banner - this file covers that plus
-store/load round-tripping.
+Resume is reactive: `Conversation.load()` repopulates the messages and fires
+`conversation_loaded`, which `SessionDisplay` reacts to (see
+`tests/unit/interface/test_transcript.py`). `announce_resumed_session()` only
+shows the banner - this file covers that plus store/load round-tripping.
 """
 
 import json
@@ -25,6 +23,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import RunUsage
 
+from solveig.config import SolveigConfig
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager
 from solveig.utils.file import Filesystem

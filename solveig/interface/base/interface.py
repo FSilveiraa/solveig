@@ -11,7 +11,7 @@ dispatch lives OUTSIDE the interface — the queue's prompt gate routes
 
 Naming conventions:
 - `print`   — text output, void
-- `add_`    — returns an object (add_text_box → MutableTextBox, add_stat → Stat)
+- `add_`    — returns an object (add_text_box → TextBox, add_stat → Stat)
 - `with_`   — async context manager (with_group, with_animation, with_cancellable)
 - `display_`— complex rendering, returns a box (display_tree → TreeBox, display_diff → DiffBox)
 """

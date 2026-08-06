@@ -104,9 +104,9 @@ class PreservingSection(_ComposedSection):
 
 
 class CoreToolsConfig(_ComposedSection):
-    """Placeholder for `config.tools` — composed from `CORE_TOOLS` at import
-    time (`config/__init__._compose_core_tools()`), so a core tool's config
-    validates like any other."""
+    """Placeholder for `config.tools` — composed from `CORE_TOOLS` by
+    `bootstrap.compose_core_tools()`, so a core tool's config validates like
+    any other."""
 
 
 class PluginToolsConfig(PreservingSection):
@@ -188,7 +188,7 @@ class InterfaceConfig(BaseModel):
     code_theme: str = Field(
         default=themes.DEFAULT_CODE_THEME,
         description="Code syntax highlighting theme",
-        # Choices declared on the FIELD (D0), read generically by the config
+        # Choices declared on the FIELD, read generically by the config
         # editor's prompt. Sorted at declaration; a future user-styles registry
         # changes this one line, not the editor.
         json_schema_extra={"choices": sorted(themes.CODE_THEMES)},

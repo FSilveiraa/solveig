@@ -251,32 +251,13 @@ class TestModelCommands:
         assert cfg.api.model == "new-model-name"
 
 
-# ---------------------------------------------------------------------------
-# /session commands (no session_manager)
-# ---------------------------------------------------------------------------
-
-
-class TestSessionCommandsNoManager:
-    async def test_session_list_no_manager_shows_error(self):
-        registry, _, _ = make_registry(session_manager=None)
-        # session_manager=None → AttributeError when calling list_sessions()
-        with pytest.raises(AttributeError):
-            await registry("/session list")
-
-    async def test_session_store_no_manager_shows_error(self):
-        registry, _, _ = make_registry(session_manager=None)
-        with pytest.raises(Exception):
-            await registry("/store")
-
-    async def test_session_resume_no_manager_shows_error(self):
-        registry, _, _ = make_registry(session_manager=None)
-        with pytest.raises(Exception):
-            await registry("/resume")
-
-    async def test_session_delete_no_manager_shows_error(self):
-        registry, _, _ = make_registry(session_manager=None)
-        with pytest.raises(Exception):
-            await registry("/session delete myname")
+# NOTE: there is no "no session_manager" class here any more. It passed
+# `session_manager=None` — a value the registry's own constructor signature
+# forbids — and asserted the bare `AttributeError` that surfaced deep inside a
+# handler. That failure mode is gone: an unfillable parameter is refused as a
+# declaration error, pinned by
+# `test_a_subcommand_asking_for_an_uninjectable_type_is_refused`
+# in tests/unit/test_subcommand_base.py.
 
 
 # ---------------------------------------------------------------------------

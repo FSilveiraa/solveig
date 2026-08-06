@@ -1,10 +1,9 @@
-from solveig.config import SolveigConfig
 """Unit tests for config.editor.prompt_for_field."""
 
 import pytest
 
 from solveig.api.types import APIType, TYPE_BY_NAME
-from solveig.config import editor
+from solveig.config import SolveigConfig, editor
 from solveig.config.editor import prompt_for_field
 from solveig.interface import themes
 from tests.mocks import DEFAULT_CONFIG, MockInterface

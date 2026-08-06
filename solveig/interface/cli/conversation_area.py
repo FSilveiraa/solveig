@@ -76,10 +76,6 @@ class ConversationArea(ScrollableContainer):
             if group is not None:
                 group.collapsed = not group.collapsed
 
-    async def clear(self) -> None:
-        """Remove all mounted content, in preparation for a full redraw."""
-        await self.remove_children()
-
     async def add_element(self, container: Widget, *elements: Widget) -> None:
         """Mount widgets into the given container.
 

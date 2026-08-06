@@ -1,9 +1,9 @@
 # Run `just --list` to see all available recipes.
 
-# Paths for lint/format/check: the package plus the mock test infra. The rest
-# of tests/ is deliberately excluded (deferred test-restoration debt would
-# otherwise fail the suite).
-src := "solveig/ tests/mocks/"
+# Paths for lint/format/check: the package, the mock test infra, and the root
+# conftest (shared fixtures, so a dead import there misleads every test module).
+# The rest of tests/ is deliberately excluded (deferred test-restoration debt).
+src := "solveig/ tests/mocks/ tests/conftest.py"
 
 # Auto-format code (pass extra flags, e.g. `just format --check`)
 format *flags:

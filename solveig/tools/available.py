@@ -100,7 +100,7 @@ def tool_classes() -> dict[str, type[BaseTool]]:
 
     Used by session replay to reconstruct a stored call's typed instance from
     its persisted args (`cls.model_validate(call.args_as_dict())`) - the only
-    other place besides `rebuild()` that needs a full tool listing. A plain
+    other place besides `build_toolset()` that needs a full tool listing. A plain
     tool function (should a plugin author write one that way) has no entry
     here; replay falls back to a generic render for those.
     """

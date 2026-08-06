@@ -348,8 +348,6 @@ async def config_save(
     await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
 
 
-# ---------------------------------------------------------------------------
-# Subcommands — declared here because the config editor owns config editing.
 def register_config_stat(
     interface: SolveigInterface,
     config: SolveigConfig,
@@ -359,9 +357,7 @@ def register_config_stat(
     """Show `path` in the stats display, editable by clicking it.
 
     `path` is a full dotted path (`api.model`, not `model`) - the same one
-    `config.set` takes. The old stats bar carried short names in a row->field
-    table and `config.set("model", ...)` raised `AttributeError`, so
-    click-to-edit was broken for every row it offered.
+    `config.set` takes, so a short name will not resolve.
 
     Reads through the path on every render rather than caching, so `config` stays
     the single home for the value; the observer below only says "redraw", never

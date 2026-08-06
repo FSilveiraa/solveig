@@ -21,18 +21,19 @@ project *simpler or better*, never the shortest or easiest.
 ## Commands (via `just`)
 
 ```bash
-just ci        # format + check (ruff lint, mypy) + test with coverage — the CI gate
-just format    # ruff format solveig/ tests/mocks/
+just ci        # format + check + import + test with coverage — the CI gate
+just format    # ruff format
 just check     # ruff check + mypy (both always run)
+just import    # lint-imports: the import-layering contracts
 just test      # pytest --cov=solveig  (pass extra paths/flags through)
 just mock      # interactive TUI against a mock LLM (you type, canned replies)
 just demo      # hands-free auto-typed replay of a recorded story/session
 just mcp       # start the local mock MCP server for /mcp connect testing
 ```
 
-Lint/type scope is `solveig/ tests/mocks/` (the rest of `tests/` is deferred
-migration debt and intentionally excluded). `mypy` has `warn_unused_ignores` —
-a stale `# type: ignore` is an error.
+Lint/type scope is `solveig/ tests/mocks/ tests/conftest.py` (the rest of
+`tests/` is deferred migration debt and intentionally excluded). `mypy` has
+`warn_unused_ignores` — a stale `# type: ignore` is an error.
 
 ## Architecture — the spine
 
@@ -49,18 +50,20 @@ agent.py      build_agent() builds a fresh pydantic-ai Agent PER TURN (cheap; th
               Two Hooks capabilities: build_loop_capability (the "Thinking" animation
               around a NON-streamed request) and build_tool_execution_capability
               (per-tool-call group + plugin hooks + ToolResult→ToolReturn).
-conversation.py  The reactive single source of truth. ONE insertion-ordered
+session/conversation.py  The reactive single source of truth. ONE insertion-ordered
               dict[MessageId, ModelMessage] is simultaneously the ordered list handed
               to pydantic-ai and the O(1) id-index — drift is structurally impossible.
               Mutations (append/edit/truncate_from/adopt/load/begin|update|finalize_stream)
-              await registered observers. ReactiveTranscript (interface/reactive.py)
-              subscribes and reduces conversation display to three hooks:
-              mount / rerender / remove.
+              await registered observers.
+session/display.py  SessionDisplay — the observer that puts a conversation on
+              screen, and the peer of SessionManager (one shows it, one saves it).
+              Interface-agnostic: it reduces display to the interface's protocol
+              verbs, and redraws a recorded tool call ONLY on conversation_loaded.
 context.py    SolveigContext = the RunContext deps dataclass — exactly {config,
               interface}. Nothing else; capabilities read ctx.deps live at call time.
-api.py        APIType (base class with OpenAI/Anthropic/Gemini subclasses), Client
-              (runtime provider holder, reactive to config), ModelInfo, model
-              subcommands. Flattened from the old llm/ package.
+api/          api/types.py: APIType (base class with OpenAI/Anthropic/Gemini
+              subclasses), ModelInfo. api/client.py: Client (runtime provider
+              holder, reactive to config) + the model subcommands.
 user_message_queue.py  UserMessageQueue — asyncio.Queue[str] + a prompt gate on
               put() (routes /commands before insertion) + an on_change doorbell
               (self-registered by the queued-messages display widget).
@@ -74,9 +77,10 @@ run/inspect/decline choices). Tool calls are forced sequential
 (`Agent.parallel_tool_call_execution_mode("sequential")`) because the consent UI is
 single-flight.
 
-**Replay is not a special path.** `Conversation.load()` fires the same
-`message_added` events a live turn does; a session file, a `system_prompt/stories`
-story, and a live conversation share one blob shape (`parse_conversation_blob`).
+**Replay is not a special path.** `Conversation.load()` fires `conversation_loaded`
+and `SessionDisplay` walks the loaded history through the same interface verbs a
+live turn uses; a session file, a `system_prompt/stories` story, and a live
+conversation share one parse contract (`parse_conversation_blob`).
 `--add-examples` renders a recorded story mechanically, so examples can't drift.
 
 ## Design
@@ -90,7 +94,7 @@ These are not style preferences — they are the seams the codebase is built on.
   surface; the framework binds it.
 
 - **Declarative, not imperative.** Components declare what they care about and
-  react to changes. The reactive transcript (`conversation.py` → observers) is
+  react to changes. `SessionDisplay` (`session/conversation.py` → observers) is
   the canonical example: one insertion-ordered dict is the single source of
   truth; mutations fire observers; the UI renders the diff. Config changes
   follow the same pattern: `@config.on_change(...)` registers a callback,
@@ -135,16 +139,18 @@ These are not style preferences — they are the seams the codebase is built on.
   tool's config statically typed.
 - **`tools/orchestration.py` — the single execution seam.** `run_tool_and_hooks`
   opens the call's collapsible group (`open_tool_group`, the one auto-collapse
-  policy), shows the header, runs `@before`/`@after` plugin hooks, runs the body —
+  policy), shows the header, runs `@before_tool`/`@after_tool` plugin hooks, runs the body —
   shared by the LLM path AND a user-typed `/tool` subcommand (a hand-typed
   `/command` runs the same shellcheck a model call does). It is also the one
   enable/disable enforcement point (`ToolDisabledError`). `run_untyped_tool` gives
   a plain-function/MCP call the same group + 3-way consent generically.
-- **`tools/available.py` — `AVAILABLE_TOOLS`.** A `CombinedToolset([FilteredToolset(
-  FunctionToolset), *mcp_toolsets])`. `rebuild(config)` is needed ONLY after a genuine
-  membership change (plugin rescan, MCP connect/disconnect) — a `tools.<name>.enabled`
-  toggle is decided live per step by the FilteredToolset reading `ctx.deps.config`,
-  no rebuild. `tool_classes()` feeds session replay.
+- **`tools/available.py` — `build_toolset(config)`.** Returns a plain
+  `CombinedToolset([FilteredToolset(FunctionToolset), *mcp_toolsets])`, derived fresh
+  per turn (`build_agent()` builds a new Agent each turn anyway), so a membership
+  change — plugin rescan, MCP connect/disconnect — is picked up on its own and
+  nothing has to announce it. There is no cached singleton and nothing to rebuild.
+  A `tools.<name>.enabled` toggle is decided live per step by the FilteredToolset
+  reading `ctx.deps.config`. `tool_classes()` feeds session replay.
 - **`tools/result.py` — `ToolResult`.** The one contract a tool returns:
   `content` (Any, the real output), `metadata` (unconditionally assistant-visible if
   non-empty), `issues` (chronological warnings/errors), `private` (never reaches the
@@ -162,19 +168,22 @@ These are not style preferences — they are the seams the codebase is built on.
   `./.solveig/config.{json,yaml,yml,toml}` (local) layered over `~/.solveig/config.*`
   (global), deep-merged by anyconfig (`config/sources.py`). Legacy flat keys are a
   **hard break** with an explicit old→new map.
-- **Runtime schema composition:** config never hand-enumerates tools. `_compose_section`
-  builds `config.tools` (from `CORE_TOOLS`, at import via a sorter-proof function-local
-  import in `config/__init__`), and `config.plugins.tools`/`config.plugins.hooks` (from
-  discovered plugins/hooks) in the **two-phase bootstrap** inside
-  `parse_config_and_prompt` (parse → `discover_plugins` → compose → reparse). Adding a
-  core tool == adding a plugin tool == adding a hook: config is untouched.
+- **Runtime schema composition:** config never hand-enumerates tools.
+  `_compose_section` (`config/config.py`) builds each section; `bootstrap.py` is what
+  feeds it, because config must not import the tool or plugin packages back —
+  `compose_core_tools()` from `CORE_TOOLS`, and `compose_plugin_sections()` for
+  `config.plugins.tools`/`config.plugins.hooks`, the latter subscribed to plugin
+  discovery's `ON_SCANNED` so the schema is a REACTION to the plugin set changing,
+  not a step a caller must remember. The **two-phase bootstrap** in
+  `parse_config_and_prompt` is parse → `discover_plugins` → compose → reparse.
+  Adding a core tool == adding a plugin tool == adding a hook: config is untouched.
 - **Enablement:** `is_tool_enabled(name)` spans `tools.*` + `plugins.tools.*`;
   `is_hook_enabled(name)` covers `plugins.hooks.*`. One rule each, consulted by both
   the schema filter and the execution guard.
 - **PRESERVE+WARN:** the composed plugin sections use `extra="allow"` — a config block
   for an undiscovered plugin survives in `model_extra`, round-trips `/config save`,
   and gets a load-time warning (never silently dropped). CLI stays strict.
-- **`/config save` persists only `_declared` fields** (explicitly set via file/CLI/
+- **`/config save` persists only `_declared_fields`** (explicitly set via file/CLI/
   `/config set`), tracked as dotted paths; `declared_config()` copies those leaves out
   of `model_dump`. Pass `--full`/`--all` to dump the complete config including defaults
   (export/onboarding). `plugins.paths` UNIONs local+global. `model_info` is a `PrivateAttr`
@@ -200,10 +209,11 @@ Dual architecture in `solveig/plugins/`:
 
 - **Tool plugins** (`plugins/tools/`, e.g. `tree.py`) — new capabilities, declared as
   `BaseTool` subclasses or via `@tool(config_model=…)`.
-- **Hook plugins** (`plugins/hooks/`, e.g. `shellcheck.py` `@before`, `trafilatura.py`
-  `@after`) — intercept a tool call for validation/transformation. A hook is a plain
-  function; its config type comes from `@before/@after(config_model=…)` or bare
-  `ToolConfig`. Hooks target a tool by name and are enabled-by-default.
+- **Hook plugins** (`plugins/hooks/`, e.g. `shellcheck.py` `@before_tool`,
+  `trafilatura.py` `@after_tool`) — intercept a tool call for validation/transformation.
+  A hook is a plain function; its config type comes from
+  `@before_tool/@after_tool(config_model=…)` or bare `ToolConfig`. Hooks target a tool
+  by name and are enabled-by-default.
 
 `discover_plugins(config)` is idempotent and UI-free (folds external `plugins.paths`
 into the built-in packages, then scans); `report_plugins` renders the Plugins dialog
@@ -212,12 +222,18 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 
 ## Interface
 
-- `interface/base.py` — `SolveigInterface` (ABC): the display protocol + the
-  user-message queue (the interface's output channel for typed input) + the
-  cancellation registry. `interface/reactive.py` — `ReactiveTranscript`,
-  the pure observer base (mount/rerender/remove). `interface/cli/` — the Textual
-  materialization (`transcript.py` maps a message part → widget; `app.py` holds the
-  static theme-independent CSS).
+- `interface/base/interface.py` — `SolveigInterface` (ABC): the display protocol +
+  the user-message queue (the interface's output channel for typed input) + the
+  cancellation registry. `interface/base/widgets.py` — the four `@runtime_checkable`
+  box handles a display verb hands back (`TextBox`, `DiffBox`, `TreeBox`,
+  `EditableMessage`); a missing method fails rather than no-ops. The observer that
+  decides *what* to show is `session/display.py`, not the interface.
+- `interface/cli/` — the Textual materialization. `interface.py` holds a
+  three-class split: `TerminalDisplay` (everything that renders into a container of
+  an app it does NOT own — deliberately constructor-free), `TerminalInterface` (the
+  root: owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a
+  scoped display fixed to one collapsible group). `message_display.py` maps a
+  message part → widget; `app.py` holds the static theme-independent CSS.
 - **Two surfaces, kept separate:** the reactive transcript (state → view) and the
   transient imperative UI (consent prompts, status bar, animations) — they never tangle.
 - The **group-as-interface** trick: `interface.with_group(title)` yields a scoped
@@ -229,14 +245,20 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 
 ## Sessions
 
-`session/manager.py` — one JSON blob per session file in `config.session.dir`
-(default `.solveig/sessions`). `store`/`checkpoint`/`load`/`_fuzzy_find` +
-`announce_resumed_session`. Serialization is pydantic-ai's own
-`ModelMessagesTypeAdapter` + `to_jsonable_python`; usage comes from the shared
-`RunUsage`. Resume replays through the reactive transcript (tool calls via each
-`BaseTool.replay()`). Filenames are timestamped. Sessions and
-`system_prompt/stories/*.jsonl` story files share one parse contract
-(`parse_conversation_blob`), so a stored session doubles as a replayable story/demo.
+`session/manager.py` — one append-only JSONL file per session in
+`config.session.dir` (default `.solveig/sessions`): one message per line, plus a
+trailing `session_meta` line with the token totals. `SessionManager` is itself a
+`ConversationObserver`, so nothing has to remember to save: a finished message
+appends (O(new content)), and only the rare destructive events (an edit, a rewind)
+rewrite the file. `store`/`append`/`append_usage`/`write_checkpoint`/`load`/
+`resolve` (name → path, absolute first then fuzzy) + `announce_resumed_session`.
+Serialization is pydantic-ai's own `ModelMessagesTypeAdapter` +
+`to_jsonable_python`; usage comes from the shared `RunUsage`. Resume replays
+through `SessionDisplay` (tool calls via each `BaseTool.replay()`). Filenames are
+timestamped. Sessions and `system_prompt/stories/*.jsonl` story files share one
+parse contract (`parse_conversation_blob` — it reads both the JSONL log and the
+single-object blob a story uses), so a stored session doubles as a replayable
+story/demo.
 
 ## MCP
 
@@ -246,8 +268,9 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 source of truth) lives in `mcp_servers/__init__.py` — a dependency-free holder both
 `client.py` and `tools/available.py` import at top level (this is the established
 cycle-breaking pattern; do not reintroduce a `connections.py` or import the dict from
-`client`). `connect`/`disconnect` trigger `AVAILABLE_TOOLS.rebuild()` (a genuine
-membership change). Untyped MCP calls route through `run_untyped_tool`.
+`client`). `connect`/`disconnect` just mutate that dict — `build_toolset()` reads it
+on the next turn, so there is nothing to notify. Untyped MCP calls route through
+`run_untyped_tool`.
 
 ## Subcommands
 
@@ -331,10 +354,10 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   over objects created later. Objects self-register their observers in `__init__`
   or `on_mount`.
 - **Seam comments explain *why*.** The load-bearing, non-obvious invariants are
-  documented at the seam (see `Conversation.adopt`'s object-identity note, the
-  `_compose_core_tools` import-order note, `_thinking`'s two-sites rationale). Keep
-  them accurate when you change the code — several existing docstrings were allowed
-  to go stale and had to be corrected.
+  documented at the seam (see `Conversation.adopt`'s object-identity note,
+  `compose_plugin_sections`'s why-it-lives-in-bootstrap note, `_thinking`'s
+  two-sites rationale). A seam comment says why the code is CORRECT — it never
+  narrates how it got that way. Keep them accurate when you change the code.
 - **Highlighted comment prefixes** project-wide (PyCharm highlights all four).
   Each means a different thing and they are not interchangeable:
   - `NOTE:` — something a developer needs to know and could not have guessed.
@@ -352,8 +375,8 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   now, not banked (see "Never bank an improper shape" in the philosophy above).
   An annotation is the floor, not the goal.
 - **Import-cycle law:** tools top-level-import `solveig.config`; config must not
-  import tools at module level (hence the function-local import in
-  `config/__init__.py`). Respect the two-phase bootstrap ordering.
+  import tools or plugins at all — `bootstrap.py` sits above both and does the
+  feeding. Respect the two-phase bootstrap ordering.
 - **Every module appears in the layers.** `[tool.importlinter]` carries one
   `exhaustive` layers contract per package, so a module that is not placed in a
   layer fails `just import` instead of sitting silently unchecked. A new module
@@ -381,10 +404,11 @@ UI (`solveig/interface/cli/*`) is excluded from coverage.
 
 ## Known justified type hacks
 
-Documented in `CLAUDE.md`; the live set includes `tools/base.py`'s
+The live set includes `tools/base.py`'s and `subcommands/base.py`'s
 `CliSettingsSource(cls, …)` (`type: ignore[arg-type]` — typed for `BaseSettings`,
-accepts a `BaseModel` at runtime), `interface/cli/queued_messages.py`'s
-`queue._queue` peek, `api.py`'s `GoogleProvider(api_key=None)`, the optional-dep
+accepts a `BaseModel` at runtime), `user_message_queue.py`'s `self._queue` peek
+(asyncio.Queue exposes no public read; confined to the class that owns the queue),
+`api/types.py`'s `GoogleProvider(api_key=None)`, the optional-dep
 `_trafilatura = None`, and `interface/cli/collapsible_widgets.py`'s framework-private
 `CollapsibleTitle` import (marked `# HACK:`, re-verify on Textual upgrades).
 `warn_unused_ignores` keeps them honest — remove an ignore the moment it's stale.

@@ -25,7 +25,7 @@ second base. Nothing here is inherited; conformance is structural.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from solveig.utils.file import FileMetadata
@@ -76,13 +76,17 @@ class TreeBox(Protocol):
         """Replace the tree with new metadata."""
         ...
 
-    def refresh(self) -> None:
+    def refresh(self, *args: Any, **kwargs: Any) -> object:
         """Redraw the tree.
 
         The one member here a frontend may legitimately leave as a no-op: a
         frontend that redraws on its own (Textual repaints on mutation) has
         nothing to do. It stays on the contract because a caller that DID
         mutate out of band needs somewhere to say so.
+
+        Returns `object`, and callers discard it: a frontend widget's own
+        `refresh` is usually fluent (Textual's returns `Self`), and pinning
+        `None` here would reject it for a value no caller wants.
         """
         ...
 

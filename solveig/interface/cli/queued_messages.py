@@ -31,7 +31,7 @@ class QueuedMessagesDisplay(Vertical):
     Shows a count when collapsed, lists messages when expanded.
     Only visible when there are messages in the queue. Re-renders via the
     UserMessageQueue's `on_change` doorbell (self-registered at mount) - any mutation
-    from any consumer, no per-call-site notification (D5).
+    from any consumer, no per-call-site notification.
     """
 
     def __init__(self, queue: UserMessageQueue, theme: Palette, **kwargs):

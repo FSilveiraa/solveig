@@ -13,11 +13,10 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
-from solveig.config import SolveigConfig
 from solveig.plugins.discovery import clear_plugins, discover_plugins
 from solveig.utils import shell
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
-from tests.mocks import MockInterface
+
 
 # Run the whole suite on anyio's asyncio backend so no module needs to remember
 # `pytestmark = pytest.mark.anyio`. A plain `pytestmark` in this conftest does
