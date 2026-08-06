@@ -36,7 +36,7 @@ from solveig.interface.cli.collapsible_widgets import (
     CollapsibleDiffBox,
     CollapsibleTextBox,
 )
-from solveig.interface.cli.conversation import BANNER
+from solveig.interface.cli.conversation_area import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
 from solveig.interface.cli.tree_display import TreeDisplay

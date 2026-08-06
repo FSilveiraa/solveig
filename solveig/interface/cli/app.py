@@ -11,7 +11,7 @@ from solveig.interface.themes import DEFAULT_THEME, THEMES, Palette, to_textual_
 from solveig.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
-from .conversation import ConversationArea
+from .conversation_area import ConversationArea
 from .input_bar import InputBar
 from .queued_messages import QueuedMessagesDisplay
 from .stats_bar import StatsBar

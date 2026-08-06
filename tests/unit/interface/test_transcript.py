@@ -19,7 +19,10 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.usage import RunUsage
+from textual.app import App, ComposeResult
 
+from solveig.interface.cli.conversation_area import ConversationArea
+from solveig.interface.cli.message_display import MessageDisplay
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from tests.mocks import MockInterface
@@ -140,6 +143,29 @@ async def test_conversation_loaded_replays_recorded_tool_call():
     out = interface.get_all_output()
     assert "not_a_real_tool" in out
     assert "file contents" in out
+
+
+@pytest.mark.anyio
+async def test_display_records_every_mounted_widget():
+    """`extend` takes one iterable - `extend(*widgets)` unpacked it and tried to
+    iterate a Widget. Two parts in one call is what makes the difference visible."""
+    conv = Conversation()
+    message_id = await conv.append(
+        ModelResponse(parts=[ThinkingPart(content="hmm"), TextPart(content="hello")])
+    )
+    interface = MockInterface(conversation=conv)
+    area = ConversationArea()
+    display = MessageDisplay(conv, area, interface)
+    display._last_section_role = "assistant"  # section header already emitted
+
+    class _HarnessApp(App):
+        def compose(self) -> ComposeResult:
+            yield area
+
+    async with _HarnessApp().run_test():
+        await display.display(message_id, 0, 1)
+
+    assert len(display._mounted[message_id].widgets) == 2
 
 
 def _drops(interface: MockInterface):

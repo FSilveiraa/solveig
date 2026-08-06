@@ -158,7 +158,7 @@ async def _display_setup(
     # MCP servers, which also need the interface for display.
     await connect_all(config=config, interface=interface)
 
-    sys_prompt = await get_system_prompt(config)
+    sys_prompt = await get_system_prompt(config, interface)
     await interface.add_text_box(
         sys_prompt,
         title="System Prompt",
@@ -246,7 +246,7 @@ async def main_loop(
             )
             continue
 
-        system_prompt_text = await get_system_prompt(config)
+        system_prompt_text = await get_system_prompt(config, interface)
         ok = await run_turn_with_retry(
             config=config,
             client=client,

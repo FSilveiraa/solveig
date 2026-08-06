@@ -84,7 +84,7 @@ class SubcommandRegistry:
                 description="Show this help.",
             ),
         )
-        # HACK: Self-register as the queue's prompt gate: /commands are
+        # NOTE: Self-register as the queue's prompt gate: /commands are
         # dispatched before insertion; prompts pass through unchanged.
         user_message_queue.prompt_handler = self.handle_prompt
 

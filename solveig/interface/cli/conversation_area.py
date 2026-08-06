@@ -7,8 +7,6 @@ from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 
-from solveig.utils.file import FileMetadata
-
 from .buttons import MessageButton
 from .collapsible_widgets import (
     CollapsibleTextBox,
@@ -128,25 +126,6 @@ class ConversationArea(ScrollableContainer):
         )
         await self.add_element(container, box)
         return box
-
-    async def add_tree_display(
-        self,
-        metadata: FileMetadata,
-        title: str | None = None,
-        display_metadata: bool = False,
-        expand_root=True,
-        *,
-        container,
-    ):
-        """Add an interactive tree display widget."""
-        tree_widget = TreeDisplay(
-            metadata=metadata,
-            display_metadata=display_metadata,
-            expand_root=expand_root,
-        )
-        if title:
-            tree_widget.border_title = title
-        await self.add_element(container, tree_widget)
 
     async def enter_group(self, title: str, *, container) -> CustomCollapsible:
         """Mount a new collapsible group into container. Returns the group

@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     from solveig.interface.base import SolveigInterface
 
-    from .conversation import ConversationArea
+    from .conversation_area import ConversationArea
 
 
 def _role_of(message: ModelMessage | None) -> str | None:
@@ -99,7 +99,6 @@ class MessageDisplay:
         self._last_section_role: str | None = None
 
     async def display(self, message_id: MessageId, *part_indexes: int) -> None:
-        # async def display(self, message_id: MessageId, part_index: int | None = None) -> None:
         """Mount one part's widget, emitting a section header first if this
         message opens a new role. Called once per part, in order, so the header
         check has to be idempotent - it is, since it only fires on a genuine
@@ -128,7 +127,7 @@ class MessageDisplay:
         ]
         if widgets:
             await self._mount_widget(*widgets)
-            mounted.widgets.append(*widgets)
+            mounted.widgets.extend(widgets)
 
     async def update(self, message_id: MessageId) -> None:
         """Update this message's widgets in place (edit or streaming). Content

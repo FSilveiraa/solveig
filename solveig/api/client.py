@@ -77,7 +77,11 @@ class Client:
             info = await api_type.get_model_details(
                 provider=new_provider, model=config.api.model
             )
-        except Exception:
+        except Exception as e:
+            if self._interface is not None:
+                await self._interface.print(
+                    f"Could not connect to {config.api.url}: {e}", level=Level.ERROR
+                )
             await self._revert(config, last_good)
             return
 

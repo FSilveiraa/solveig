@@ -140,8 +140,8 @@ class Gemini(APIType):
 
 TYPE_BY_NAME: dict[str, type[APIType]] = {
     "openai": OpenAI,
-    "anthropic": Anthropic,
-    "gemini": Gemini,
+    # "anthropic": Anthropic,
+    # "gemini": Gemini,
 }
 """String → subclass for config validation and editor choices."""
 

@@ -22,6 +22,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig.config import SolveigConfig
+from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import parse_conversation_blob
 from solveig.utils.file import Filesystem
 
@@ -92,7 +93,9 @@ def get_examples_info(story: list[ModelMessage]) -> str:
     )
 
 
-async def get_briefing_content(briefing_files: list[str]) -> str:
+async def get_briefing_content(
+    briefing_files: list[str], interface: SolveigInterface
+) -> str:
     """Read briefing files and return their contents joined with double newlines.
 
     Missing or unreadable files are silently skipped.
@@ -105,14 +108,16 @@ async def get_briefing_content(briefing_files: list[str]) -> str:
             content = file_content.content.strip()
             if content:
                 parts.append(content)
-        except Exception:
-            pass  # silently skip missing / unreadable files
+        except Exception as e:
+            await interface.print(
+                f"Could not read briefing file {path_str}: {e}", level=Level.ERROR
+            )
     return "\n\n".join(parts)
 
 
-async def get_system_prompt(config: SolveigConfig) -> str:
+async def get_system_prompt(config: SolveigConfig, interface: SolveigInterface) -> str:
     system_prompt = config.system_prompt.content.strip()
-    if briefing_content := await get_briefing_content(config.briefing):
+    if briefing_content := await get_briefing_content(config.briefing, interface):
         system_prompt += "\n\n" + briefing_content
     if config.system_prompt.add_os_info and (os_info := get_basic_os_info()):
         system_prompt += "\n\n" + os_info
