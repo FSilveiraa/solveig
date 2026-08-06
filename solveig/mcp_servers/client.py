@@ -34,7 +34,7 @@ from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.context import SolveigContext, get_introspection_context
 from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
-from solveig.subcommands.base import subcommand
+from solveig.subcommands import subcommand
 
 
 def _default_tool_prefix(url: str) -> str:

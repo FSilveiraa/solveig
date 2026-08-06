@@ -21,7 +21,7 @@ from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.exceptions import UserCancel
 from solveig.interface import themes
 from solveig.interface.base import Level, SolveigInterface, Stat
-from solveig.subcommands.base import subcommand
+from solveig.subcommands import subcommand
 from solveig.utils import dotted
 
 from . import DEFAULT_CONFIG_PATHS, sources
