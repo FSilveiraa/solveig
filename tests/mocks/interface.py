@@ -61,9 +61,10 @@ def _part_text(part: Any) -> str | None:
 class _MockTextBox(TextBox):
     """Records `append`/`clear`/`replace` calls into the interface's outputs.
 
-    Subclasses the real `TextBox` contract so isinstance checks pass, but
-    needs no Textual app — every mutation lands in the captured `outputs`
-    list so tests can assert on what was shown.
+    Subclasses the `TextBox` protocol explicitly — nothing is inherited, but
+    a mock that drops a method then fails the type check instead of quietly
+    diverging from the frontend. Needs no Textual app: every mutation lands
+    in the captured `outputs` list so tests can assert on what was shown.
     """
 
     def __init__(self, outputs: list[str]) -> None:

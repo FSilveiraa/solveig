@@ -16,8 +16,6 @@ from textual.widgets import Collapsible, Markdown, Static
 # private module (tracked in CLAUDE.md "Known Justified Type Hacks").
 from textual.widgets._collapsible import CollapsibleTitle
 
-from solveig.interface.base import DiffBox, TextBox
-
 from .widgets import CopyButton
 
 
@@ -201,11 +199,16 @@ class CustomCollapsible(Collapsible):
         )
 
 
-class CollapsibleTextBox(Widget, TextBox):
+class CollapsibleTextBox(Widget):
     """A collapsible text block widget for reasoning, verbose output, etc.
 
     Similar to StatsBar pattern - a Widget that contains a Collapsible.
     Provides click-to-toggle functionality for long text content.
+
+    Satisfies the `TextBox` protocol structurally — it cannot inherit it, a
+    Textual widget's metaclass and a Protocol's are unrelated. `interface.py`
+    hands this out where a `TextBox` is declared, which is where the check
+    actually happens.
     """
 
     def __init__(
@@ -305,13 +308,14 @@ class CollapsibleTextBox(Widget, TextBox):
         )
 
 
-class CollapsibleDiffBox(CollapsibleTextBox, DiffBox):
+class CollapsibleDiffBox(CollapsibleTextBox):
     """A collapsible diff display — same rendering as CollapsibleTextBox but
     carries old/new content for the DiffBox.replace() contract.
 
     Inherits `get_css` from CollapsibleTextBox. The `replace()` here takes
-    (old_content, new_content) per DiffBox — the MRO picks this over
-    TextBox's `replace(text)` because it's defined on the most-derived class.
+    (old_content, new_content) per `DiffBox`, so this satisfies `DiffBox` and
+    NOT `TextBox` — the two protocols disagree on `replace`, and this is the
+    diff one.
     """
 
     def __init__(
@@ -328,8 +332,8 @@ class CollapsibleDiffBox(CollapsibleTextBox, DiffBox):
     def replace(self, old_content: str, new_content: str) -> None:  # type: ignore[override]
         """Replace both sides of the diff. Re-computes and re-renders.
 
-        Shadows TextBox.replace(text) — DiffBox's replace takes two args
-        because a diff has two sides. mypy can't reconcile the signatures
+        Shadows CollapsibleTextBox.replace(text) — a diff's replace takes two
+        args because a diff has two sides. mypy can't reconcile the signatures
         across the MRO, hence the type: ignore.
         """
         self._old_content = old_content

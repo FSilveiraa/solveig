@@ -1,4 +1,4 @@
-"""Abstract box contracts returned by interface display methods.
+"""Box contracts returned by interface display methods.
 
 Each is a handle the caller holds after the interface creates and mounts the
 box. The caller can call `replace()` to swap the contents — the frontend's
@@ -9,28 +9,47 @@ internal; the contract only covers "caller can update the content."
 - `DiffBox`      — read-only comparison (replace old + new)
 - `TreeBox`      — directory tree from metadata (replace metadata)
 - `EditableMessage` — message widget hosting Edit/Retry/Delete/Branch buttons
+
+All four are `Protocol`s, for the same reason `ConversationObserver` is: a
+contract with a default implementation is not a contract. As plain classes
+with empty bodies, a frontend that forgot a method got silence at runtime
+instead of an error. Structural typing makes "satisfies the contract"
+checkable at the boundary — where the interface declares it returns a
+`TextBox`, where a button declares it drives an `EditableMessage`.
+
+A `Protocol` rather than an ABC because every frontend implementation is
+already a Textual widget: Textual's `_MessagePumpMeta` and `ABCMeta` are
+unrelated metaclasses, so a widget physically cannot take one of these as a
+second base. Nothing here is inherited; conformance is structural.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from solveig.utils.file import FileMetadata
 
 
-class TextBox:
+@runtime_checkable
+class TextBox(Protocol):
+    """Editable text a caller keeps a handle on after the interface mounts it."""
+
     def append(self, text: str) -> None:
         """Append text to the end of the box."""
+        ...
 
     def clear(self) -> None:
         """Empty the box content."""
+        ...
 
     def replace(self, text: str) -> None:
         """Replace the entire content of the box."""
+        ...
 
 
-class DiffBox:
+@runtime_checkable
+class DiffBox(Protocol):
     """A diff comparison between two versions of content.
 
     Not interactive — a diff is a static comparison. The caller can replace
@@ -39,9 +58,11 @@ class DiffBox:
 
     def replace(self, old_content: str, new_content: str) -> None:
         """Replace both sides of the diff."""
+        ...
 
 
-class TreeBox:
+@runtime_checkable
+class TreeBox(Protocol):
     """A directory tree backed by FileMetadata.
 
     The full metadata is already read (the filesystem operation happened
@@ -53,25 +74,38 @@ class TreeBox:
 
     def replace(self, metadata: FileMetadata) -> None:
         """Replace the tree with new metadata."""
+        ...
 
     def refresh(self) -> None:
-        """Redraw the tree. No-op by default."""
+        """Redraw the tree.
+
+        The one member here a frontend may legitimately leave as a no-op: a
+        frontend that redraws on its own (Textual repaints on mutation) has
+        nothing to do. It stays on the contract because a caller that DID
+        mutate out of band needs somewhere to say so.
+        """
+        ...
 
 
-class EditableMessage:
+@runtime_checkable
+class EditableMessage(Protocol):
     """What a message widget must implement to host action buttons
     (Edit/Retry/Delete/Branch)."""
 
     async def begin_edit(self) -> None:
         """Prompt for replacement text and overwrite this message in place."""
+        ...
 
     async def retry(self) -> None:
         """Drop this message and everything after it, then resubmit its
         text as a fresh prompt."""
+        ...
 
     async def delete_from_here(self) -> None:
         """Drop this message and everything after it."""
+        ...
 
     async def branch_from_here(self) -> None:
         """Store the current conversation as a checkpoint, then drop this
         message and everything after it."""
+        ...

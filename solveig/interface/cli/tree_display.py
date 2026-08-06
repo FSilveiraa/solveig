@@ -18,13 +18,16 @@ from pathlib import PurePath
 from pydantic import ByteSize
 from textual.widgets import Tree
 
-from solveig.interface.base import TreeBox
 from solveig.utils.file import FileMetadata
 
 
-class TreeDisplay(Tree, TreeBox):
+class TreeDisplay(Tree):
     """Interactive tree widget that displays directory structures from
     ``FileMetadata`` with lazy expansion.
+
+    Satisfies the ``TreeBox`` protocol structurally — a Textual widget cannot
+    inherit a Protocol (unrelated metaclasses); ``interface.py`` declares this
+    is what ``display_tree`` returns, and that is where it is checked.
 
     The full metadata tree is already read (the filesystem operation happened
     before the interface call).  At construction only the root and its first

@@ -8,6 +8,7 @@ what is protocol-level and worth pinning here is the interface CONTRACT itself.
 """
 
 import asyncio
+import typing
 from unittest.mock import patch
 
 import pytest
@@ -24,6 +25,22 @@ def test_mock_interface_implements_the_whole_contract():
     abstract method is concrete on the subclass, and the instance is real."""
     assert not MockInterface.__abstractmethods__
     assert isinstance(MockInterface(), SolveigInterface)
+
+
+def test_box_contracts_are_protocols_not_silent_no_ops():
+    """A missing method must fail, not return None. These are the only
+    'contracts' in the project that were plain classes with empty bodies."""
+    from solveig.interface.base import widgets
+
+    for contract in (
+        widgets.TextBox,
+        widgets.DiffBox,
+        widgets.TreeBox,
+        widgets.EditableMessage,
+    ):
+        assert isinstance(contract, type(typing.Protocol))
+        with pytest.raises(TypeError):
+            contract()  # a Protocol cannot be instantiated into a no-op
 
 
 async def test_ask_question_wraps_and_cleans_up_its_task():

@@ -8,7 +8,6 @@ from textual.events import Click
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import EditableMessage
 from solveig.utils.misc import copy_to_clipboard
 
 from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
@@ -66,14 +65,18 @@ class Comment(Static):
         """
 
 
-class EditableComment(Comment, EditableMessage):
+class EditableComment(Comment):
     """A Comment tied to a conversation message by its stable `message_id`
     (and the `part_index` within it), with Edit/Retry/Delete/Branch action
     buttons. Mutations go through the Conversation by id; the reactive
     transcript reconciles the displayed widgets in place - the widget never
     redraws the conversation itself. Retry only makes sense for user turns -
     regenerating an assistant response is Edit+Retry on the preceding user
-    message instead."""
+    message instead.
+
+    Satisfies the `EditableMessage` protocol structurally — a Textual widget
+    cannot inherit a Protocol (unrelated metaclasses). The buttons below
+    declare `owner: EditableMessage`, so a missing method fails there."""
 
     def __init__(
         self,
