@@ -448,12 +448,20 @@ class GroupInterface(TerminalInterface):
     def __init__(
         self, root: TerminalInterface, group_widget: CustomCollapsible
     ) -> None:
-        super().__init__()  # SolveigInterface.__init__ — sets _active_tasks etc.
+        # NOTE: SolveigInterface's constructor, NOT super(). A group borrows the
+        # root's app; `TerminalInterface.__init__` - which super() reaches - BUILDS
+        # one, and the line below then discards it. Adding a field to
+        # TerminalInterface.__init__ does not mean adding a super() call here: set
+        # it from `root` alongside the others.
+        SolveigInterface.__init__(self)
         self._root: TerminalInterface = root
         self.app = root.app
         self.theme = root.theme
         self.code_theme = root.code_theme
         self._conversation = root._conversation
+        self.user_message_queue = root.user_message_queue
+        # shared by reference on purpose — a cancel issued anywhere must reach
+        # work started inside a group
         self._active_tasks = root._active_tasks
         self._group_container = group_widget.query_one(Collapsible.Contents)
 

@@ -8,11 +8,13 @@ what is protocol-level and worth pinning here is the interface CONTRACT itself.
 """
 
 import asyncio
+from unittest.mock import patch
 
 import pytest
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
+from solveig.interface.cli.interface import GroupInterface, TerminalInterface
 from tests.mocks import MockInterface
 
 
@@ -78,3 +80,29 @@ async def test_add_stat_returns_a_renderable_stat():
     stat = mi.add_stat("Model", get=lambda: "gpt-4o", render=lambda v: f"*{v}*")
     assert stat.text == "*gpt-4o*"
     assert stat.label == "Model"
+
+
+class _FakeGroupWidget:
+    """Stands in for CustomCollapsible: GroupInterface only asks it for its
+    contents container."""
+
+    def __init__(self) -> None:
+        self.contents = object()
+
+    def query_one(self, _selector):
+        return self.contents
+
+
+async def test_entering_a_group_builds_no_second_app():
+    """A group is a scope over the root's app, not an interface that owns one.
+
+    Pinned because GroupInterface used to inherit from the class whose
+    constructor builds the app: its `super().__init__()` silently constructed
+    and threw away a whole Textual App per tool call.
+    """
+    interface = TerminalInterface()
+    with patch("solveig.interface.cli.interface.SolveigTextualApp") as app_cls:
+        group = GroupInterface(root=interface, group_widget=_FakeGroupWidget())
+    app_cls.assert_not_called()
+    assert group.app is interface.app
+    assert group._active_tasks is interface._active_tasks
