@@ -185,7 +185,10 @@ class SubcommandRegistry:
         if not tokens:
             return False
 
-        for n in (2, 1):
+        # Longest-prefix match, bounded by the longest trigger actually
+        # registered rather than a number written here — a three-word command
+        # dispatches the day someone declares one.
+        for n in range(SUBCOMMANDS.longest_trigger, 0, -1):
             key = " ".join(tokens[:n])
             sub = SUBCOMMANDS.subcommands.get(key)
             if sub is not None:

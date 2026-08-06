@@ -248,6 +248,16 @@ class SubcommandStores:
             warnings += self.add(store, sub)
         return warnings
 
+    @property
+    def longest_trigger(self) -> int:
+        """Word count of the longest registered trigger — how many leading
+        tokens dispatch must try before giving up.
+
+        Derived, not stored: a plugin reload replaces a whole store, and a
+        cached maximum would outlive the command that set it. The view is a
+        ChainMap over live stores, so this is always current."""
+        return max((len(name.split()) for name in self.subcommands), default=1)
+
     def _holder(self, name: str) -> SubcommandStore | None:
         for store in self.subcommands.maps:
             if name in store:

@@ -13,6 +13,7 @@ import pytest
 
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
+from solveig.interface.base import SolveigInterface
 from solveig.session.conversation import Conversation
 from solveig.subcommands.base import (
     BUILTIN_SUBCOMMANDS,
@@ -191,6 +192,22 @@ class TestStores:
         stores.add(a, second)
         assert stores.subcommands["/x"] is second  # re-declaration wins locally
 
+    def test_longest_trigger_follows_a_replaced_store(self):
+        """Derived, not cached: a store replaced wholesale (a plugin reload) must
+        take the bound with it, in both directions."""
+        a = SubcommandStore("a")
+        stores = self.make(a)
+        assert stores.longest_trigger == 1  # nothing registered yet
+
+        stores.register(
+            a,
+            [Subcommand.from_handler(_no_args, subcommands=["/config plugins reload"])],
+        )
+        assert stores.longest_trigger == 3
+
+        stores.register(a, [Subcommand.from_handler(_no_args, subcommands=["/one"])])
+        assert stores.longest_trigger == 1  # the long trigger left with its store
+
     def test_position_is_precedence(self):
         a = SubcommandStore("a")
         b = SubcommandStore("b")
@@ -235,3 +252,25 @@ async def test_a_subcommand_asking_for_an_uninjectable_type_is_refused(
         o.startswith("[ERROR]") and "NotInjectable" in o
         for o in registry._interface.outputs
     )
+
+
+# ---------------------------------------------------------------------------
+# Dispatch depth — how many leading tokens a trigger may span
+# ---------------------------------------------------------------------------
+
+
+async def test_a_three_word_trigger_dispatches(restored_subcommand_stores):
+    """Dispatch must follow the longest trigger actually registered, not a
+    hardcoded two."""
+    seen = []
+
+    async def handler(interface: SolveigInterface) -> None:
+        seen.append(True)
+
+    SUBCOMMANDS.add(
+        BUILTIN_SUBCOMMANDS,
+        Subcommand.from_handler(handler, subcommands=["/config plugins reload"]),
+    )
+    assert SUBCOMMANDS.longest_trigger >= 3
+    assert await _make_registry()("/config plugins reload") is True
+    assert seen == [True]
