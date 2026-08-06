@@ -6,7 +6,8 @@ task plan is just another tool the assistant calls whenever it wants to
 show/update one - same shape as every other tool.
 """
 
-from typing import TYPE_CHECKING, ClassVar, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -17,12 +18,31 @@ if TYPE_CHECKING:
     from solveig.config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
-TASK_STATUS_MAP = {
-    "pending": "⚪",
-    "ongoing": "🔵",
-    "completed": "🟢",
-    "failed": "🔴",
-}
+
+class TaskStatus(StrEnum):
+    """A task's state, and how it is drawn.
+
+    A StrEnum so the LLM schema still shows plain strings ("pending",
+    "ongoing", ...) while the codebase addresses members. The marker is a
+    member attribute rather than a dict keyed by the same four strings a
+    second time - a status and its icon are declared once, together.
+    """
+
+    marker: str
+
+    def __new__(cls, value: str, marker: str) -> "TaskStatus":
+        # NOTE: StrEnum's own __new__ concatenates every argument into the
+        # value, so a member carrying a second attribute has to build the str
+        # itself and keep `_value_` the bare name the LLM sees.
+        status = str.__new__(cls, value)
+        status._value_ = value
+        status.marker = marker
+        return status
+
+    PENDING = ("pending", "⚪")
+    ONGOING = ("ongoing", "🔵")
+    COMPLETED = ("completed", "🟢")
+    FAILED = ("failed", "🔴")
 
 
 class Task(BaseModel):
@@ -31,8 +51,8 @@ class Task(BaseModel):
     description: str = Field(
         ..., description="Clear description of what needs to be done"
     )
-    status: Literal["pending", "ongoing", "completed", "failed"] = Field(
-        default="pending", description="Current status of this task"
+    status: TaskStatus = Field(
+        default=TaskStatus.PENDING, description="Current status of this task"
     )
 
 
@@ -57,7 +77,8 @@ class TasksTool(BaseTool):
         self, config: "SolveigConfig", interface: "SolveigInterface"
     ) -> ToolResult:
         for i, task in enumerate(self.tasks, 1):
-            status_emoji = TASK_STATUS_MAP[task.status]
-            arrow = "→" if task.status == "ongoing" else " "
-            await interface.print(f"{arrow}  {status_emoji} {i}. {task.description}")
+            arrow = "→" if task.status is TaskStatus.ONGOING else " "
+            await interface.print(
+                f"{arrow}  {task.status.marker} {i}. {task.description}"
+            )
         return ToolResult(content=f"Displayed {len(self.tasks)} task(s).")
