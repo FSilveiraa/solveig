@@ -129,6 +129,18 @@ async def test_str_or_none_empty_returns_none():
     assert result is None
 
 
+async def test_plain_str_empty_returns_empty_string():
+    """Empty input for a genuinely non-optional str field (url) returns "", not None.
+
+    api.model is `str | None` and empty input means "unset". api.url is plain `str`
+    with no None in its annotation, so the same empty input must stay the empty
+    string — this is the branch `_parse_field_value`'s `optional` flag distinguishes,
+    and it has no coverage without a non-optional str field in the mix."""
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"api.url": "http://x"})
+    result = await prompt_for_field("api.url", config, MockInterface(user_inputs=[""]))
+    assert result == ""
+
+
 async def test_int_field_returns_int():
     """Free-text input for an int field is parsed to int."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump() | {"api.max_context": 4096})
