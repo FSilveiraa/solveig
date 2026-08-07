@@ -11,6 +11,7 @@ from .buttons import MessageButton
 from .collapsible_widgets import (
     CollapsibleTextBox,
     CustomCollapsible,
+    TextBoxWidget,
 )
 from .tree_display import TreeDisplay
 from .widgets import Comment
@@ -116,11 +117,14 @@ class ConversationArea(ScrollableContainer):
         *,
         container,
     ):
-        """Add a collapsible text block (for reasoning, verbose output, etc.)."""
+        """Add a collapsible text block (for reasoning, verbose output, etc.).
+
+        Mounts the widget and returns the HANDLE: the caller gets the three
+        methods `TextBox` promises, not the Textual widget behind them."""
         box = CollapsibleTextBox(
             content, title=title, italic=italic, collapsed=collapsed
         )
-        await self.add_element(container, box)
+        await self.add_element(container, box.widget)
         return box
 
     async def enter_group(self, title: str, *, container) -> CustomCollapsible:
@@ -238,6 +242,6 @@ class ConversationArea(ScrollableContainer):
             + Comment.get_css()
             + MessageButton.get_css()
             + CustomCollapsible.get_css()
-            + CollapsibleTextBox.get_css()
+            + TextBoxWidget.get_css()
             + TreeDisplay.get_css()
         )

@@ -42,12 +42,12 @@ from solveig.interface.base import (
 from solveig.interface.cli.app import SolveigTextualApp
 from solveig.interface.cli.collapsible_widgets import (
     CollapsibleDiffBox,
-    CollapsibleTextBox,
+    TextBoxWidget,
 )
 from solveig.interface.cli.conversation_area import BANNER
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
-from solveig.interface.cli.tree_display import TreeDisplay
+from solveig.interface.cli.tree_display import FileTree
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
@@ -116,7 +116,8 @@ class TerminalDisplay(SolveigInterface):
     def _refresh_mounted_syntax(self, code_theme: str) -> None:
         """In-place restyle of Static widgets holding a Rich Syntax renderable."""
         try:
-            boxes = self.app.query(CollapsibleTextBox)
+            # By WIDGET type, not by handle: a handle is not in the widget tree.
+            boxes = self.app.query(TextBoxWidget)
         except Exception:
             return
 
@@ -207,16 +208,16 @@ class TerminalDisplay(SolveigInterface):
         expand_root: bool = True,
         max_depth: int = -1,
     ) -> TreeBox:
-        tree_widget = TreeDisplay(
+        tree = FileTree(
             metadata=metadata,
             display_metadata=display_metadata,
             expand_root=expand_root,
             max_depth=max_depth,
         )
         if title:
-            tree_widget.border_title = title
-        await self.app._conversation_area.add_element(self._container, tree_widget)
-        return tree_widget
+            tree.widget.border_title = title
+        await self.app._conversation_area.add_element(self._container, tree.widget)
+        return tree
 
     async def display_diff(
         self,
@@ -250,7 +251,7 @@ class TerminalDisplay(SolveigInterface):
             new_content=new_content,
             title=title or "Diff",
         )
-        await self.app._conversation_area.add_element(self._container, box)
+        await self.app._conversation_area.add_element(self._container, box.widget)
         return box
 
     # -- add (returns object) ------------------------------------------------

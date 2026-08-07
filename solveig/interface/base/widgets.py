@@ -17,15 +17,27 @@ instead of an error. Structural typing makes "satisfies the contract"
 checkable at the boundary — where the interface declares it returns a
 `TextBox`, where a button declares it drives an `EditableMessage`.
 
-A `Protocol` rather than an ABC because every frontend implementation is
-already a Textual widget: Textual's `_MessagePumpMeta` and `ABCMeta` are
-unrelated metaclasses, so a widget physically cannot take one of these as a
-second base. Nothing here is inherited; conformance is structural.
+A `Protocol` rather than an ABC because `EditableMessage`'s implementer IS a
+Textual widget: Textual's `_MessagePumpMeta` and `ABCMeta` are unrelated
+metaclasses, so a widget physically cannot take one of these as a second base.
+
+Which half inherits, and why it matters:
+
+- `TextBox`, `DiffBox`, `TreeBox` are inherited EXPLICITLY. Their implementers
+  (`CollapsibleTextBox`, `CollapsibleDiffBox`, `FileTree`) own a widget rather
+  than being one, so there is no metaclass conflict — and mypy then checks
+  conformance at the class definition instead of only where `interface.py`
+  annotates a return type. That distinction is not academic: `TreeBox.refresh`
+  was once widened to `(*args, **kwargs) -> object` to accommodate a Textual
+  widget's fluent `refresh`, and a return-site check had nothing to object to.
+- `EditableMessage` is NOT inherited; conformance stays structural. Its
+  implementer (`EditableComment`) is a Textual widget by design — it is not a
+  handle passed across the boundary, it is the widget hosting its own buttons.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from solveig.utils.file import FileMetadata
@@ -76,17 +88,13 @@ class TreeBox(Protocol):
         """Replace the tree with new metadata."""
         ...
 
-    def refresh(self, *args: Any, **kwargs: Any) -> object:
-        """Redraw the tree.
+    def refresh(self) -> None:
+        """Redraw the tree after an out-of-band mutation.
 
         The one member here a frontend may legitimately leave as a no-op: a
-        frontend that redraws on its own (Textual repaints on mutation) has
-        nothing to do. It stays on the contract because a caller that DID
-        mutate out of band needs somewhere to say so.
-
-        Returns `object`, and callers discard it: a frontend widget's own
-        `refresh` is usually fluent (Textual's returns `Self`), and pinning
-        `None` here would reject it for a value no caller wants.
+        frontend that redraws on its own has nothing to do. It stays on the
+        contract because a caller that DID mutate out of band needs somewhere
+        to say so.
         """
         ...
 

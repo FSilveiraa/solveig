@@ -17,6 +17,7 @@ from pathlib import PurePath
 from pydantic import ByteSize
 from textual.widgets import Tree
 
+from solveig.interface.base.widgets import TreeBox
 from solveig.utils.file import FileMetadata
 
 
@@ -24,11 +25,10 @@ class TreeDisplay(Tree):
     """Interactive tree widget that displays directory structures from
     ``FileMetadata`` with lazy expansion.
 
-    Satisfies the ``TreeBox`` protocol structurally — a Textual widget cannot
-    inherit a Protocol (unrelated metaclasses); ``interface.py`` declares this
-    is what ``display_tree`` returns, and that is where it is checked.
-    ``replace`` is defined below; ``refresh`` is Textual's own, inherited, so
-    the signature mypy checks against the protocol is the real one.
+    NOTE: a widget, not the ``TreeBox`` protocol implementer — ``FileTree``
+    below owns one of these and is what crosses the boundary. This class stays a
+    Textual ``Tree`` because that is what draws, handles expansion and anchors
+    the CSS by type name.
 
     The full metadata tree is already read (the filesystem operation happened
     before the interface call).  At construction only the root and its first
@@ -213,3 +213,36 @@ class TreeDisplay(Tree):
             color: $foreground;
         }
         """
+
+
+class FileTree(TreeBox):
+    """The `TreeBox` handed to a caller after the interface mounts a tree.
+
+    NOTE: inherits the protocol EXPLICITLY. `TreeDisplay` could not — a Textual
+    widget's metaclass and a Protocol's are unrelated — so conformance was only
+    checked where `display_tree`'s return annotation said `TreeBox`. That is
+    precisely how `refresh` drifted: the protocol was widened to
+    `(*args, **kwargs) -> object` to accommodate Textual's fluent `refresh`,
+    and a return-site check had nothing to object to. Owning the widget instead
+    of being one lets `refresh() -> None` mean what it says again.
+    """
+
+    def __init__(
+        self,
+        metadata: FileMetadata,
+        display_metadata: bool = False,
+        expand_root: bool = True,
+        max_depth: int = -1,
+    ) -> None:
+        self.widget = TreeDisplay(
+            metadata=metadata,
+            display_metadata=display_metadata,
+            expand_root=expand_root,
+            max_depth=max_depth,
+        )
+
+    def replace(self, metadata: FileMetadata) -> None:
+        self.widget.replace(metadata)
+
+    def refresh(self) -> None:
+        self.widget.refresh(layout=True)

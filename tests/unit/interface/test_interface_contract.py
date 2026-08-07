@@ -43,6 +43,35 @@ def test_box_contracts_are_protocols_not_silent_no_ops():
             contract()  # a Protocol cannot be instantiated into a no-op
 
 
+def test_box_handles_inherit_their_protocol_and_are_not_widgets():
+    """The three handles own a widget rather than being one.
+
+    Both halves matter. Explicit inheritance is what moves mypy's conformance
+    check to the class definition — a return-site check is only as good as the
+    annotations on both sides, and that is exactly the hole `TreeBox.refresh`
+    drifted through when it was widened to `(*args, **kwargs) -> object` to
+    accommodate a Textual widget. Not being a `Widget` is what stops a caller
+    holding a three-method `TextBox` from reaching `.mount()`, `.remove()` or
+    `.parent` — the whole framework under a name that promises three methods.
+    """
+    from textual.widget import Widget
+
+    from solveig.interface.base import widgets
+    from solveig.interface.cli.collapsible_widgets import (
+        CollapsibleDiffBox,
+        CollapsibleTextBox,
+    )
+    from solveig.interface.cli.tree_display import FileTree
+
+    for handle, contract in (
+        (CollapsibleTextBox, widgets.TextBox),
+        (CollapsibleDiffBox, widgets.DiffBox),
+        (FileTree, widgets.TreeBox),
+    ):
+        assert issubclass(handle, contract)
+        assert not issubclass(handle, Widget)
+
+
 async def test_ask_question_wraps_and_cleans_up_its_task():
     mi = MockInterface(user_inputs=["answer"])
     assert await mi.ask_question("Path?", default="d") == "answer"

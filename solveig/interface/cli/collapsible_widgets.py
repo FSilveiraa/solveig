@@ -16,6 +16,8 @@ from textual.widgets import Collapsible, Markdown, Static
 # private module (tracked in CLAUDE.md "Known Justified Type Hacks").
 from textual.widgets._collapsible import CollapsibleTitle
 
+from solveig.interface.base.widgets import DiffBox, TextBox
+
 from .widgets import CopyButton
 
 
@@ -199,16 +201,19 @@ class CustomCollapsible(Collapsible):
         )
 
 
-class CollapsibleTextBox(Widget):
-    """A collapsible text block widget for reasoning, verbose output, etc.
+class TextBoxWidget(Widget):
+    """The Textual widget that draws a collapsible text block.
 
-    Similar to StatsBar pattern - a Widget that contains a Collapsible.
-    Provides click-to-toggle functionality for long text content.
+    NOTE: deliberately NOT the `TextBox` protocol implementer. This class is a
+    widget - it composes, it is queried by type for the live code-theme restyle,
+    it carries the CSS - and a widget handed across the protocol would give app
+    code `.mount()`, `.remove()`, `.parent` and the rest of Textual under a name
+    that promises three methods. `CollapsibleTextBox` owns one of these and is
+    what crosses the boundary.
 
-    Satisfies the `TextBox` protocol structurally — it cannot inherit it, a
-    Textual widget's metaclass and a Protocol's are unrelated. `interface.py`
-    hands this out where a `TextBox` is declared, which is where the check
-    actually happens.
+    Frontend code inside `interface/cli/` talks to this directly (see
+    `message_display`, which mounts one for a reasoning part) - that is not a
+    boundary crossing and needs no handle.
     """
 
     def __init__(
@@ -254,21 +259,19 @@ class CollapsibleTextBox(Widget):
             yield self._text_container
 
     # Note: by coincidence, both Markdown and Static have an update(str) method, so the interface doesn't break
-    # and we don't need `isintance()` checks in append/clear
+    # and we don't need `isintance()` checks in update_content
 
-    def append(self, line: str) -> None:
-        """Append a line to the content and scroll the conversation to the end."""
-        self._text_container.update(f"{self.content}\n{line.rstrip('\n')}")
-        self._on_content_changed()
-
-    def clear(self) -> None:
-        """Empty the box content."""
-        self._text_container.update("")
-        self._on_content_changed()
-
-    def replace(self, text: str) -> None:
-        """Replace the entire content."""
-        self._text_container.update(text)
+    def update_content(self, renderable: str | Syntax) -> None:
+        """Set the rendered content and settle the layout."""
+        if isinstance(renderable, str):
+            # Both Static and Markdown take a str, so no narrowing is needed.
+            self._text_container.update(renderable)
+        else:
+            # A Rich renderable only reaches a Static: `compose` builds a
+            # Markdown container solely for content that arrived as Markdown,
+            # and nothing re-renders that as Syntax.
+            assert isinstance(self._text_container, Static)
+            self._text_container.update(renderable)
         self._on_content_changed()
 
     def _on_content_changed(self):
@@ -285,10 +288,10 @@ class CollapsibleTextBox(Widget):
 
     @classmethod
     def get_css(cls) -> str:
-        """Generate CSS for CollapsibleTextBox."""
+        """Generate CSS for TextBoxWidget."""
         return (
             """
-        CollapsibleTextBox {
+        TextBoxWidget {
             /* Section content: 1 on all four sides. */
             margin: 1;
             height: auto;
@@ -308,14 +311,49 @@ class CollapsibleTextBox(Widget):
         )
 
 
-class CollapsibleDiffBox(CollapsibleTextBox):
-    """A collapsible diff display — same rendering as CollapsibleTextBox but
-    carries old/new content for the DiffBox.replace() contract.
+class CollapsibleTextBox(TextBox):
+    """The `TextBox` handed to a caller after the interface mounts a text block.
 
-    Inherits `get_css` from CollapsibleTextBox. The `replace()` here takes
-    (old_content, new_content) per `DiffBox`, so this satisfies `DiffBox` and
-    NOT `TextBox` — the two protocols disagree on `replace`, and this is the
-    diff one.
+    NOTE: inherits the protocol EXPLICITLY, which the old widget-based version
+    could not - `_MessagePumpMeta` and a Protocol's metaclass are unrelated, so
+    while this class WAS a widget the conformance check could only happen at
+    `interface.py`'s return annotation. Owning a widget instead of being one
+    moves the check to this class definition, which is the hole
+    `TreeBox.refresh` drifted through.
+
+    Delegation is one hop: this is not a wrapper around a bigger object with the
+    same job, it is the API half of a class that used to have two jobs.
+    """
+
+    def __init__(
+        self,
+        content: str | Syntax | Markdown,
+        title: str | None = None,
+        collapsed: bool = False,
+        italic: bool = False,
+    ) -> None:
+        self.widget = TextBoxWidget(
+            content, title=title, collapsed=collapsed, italic=italic
+        )
+
+    def append(self, text: str) -> None:
+        self.widget.update_content(f"{self.widget.content}\n{text.rstrip('\n')}")
+
+    def clear(self) -> None:
+        self.widget.update_content("")
+
+    def replace(self, text: str) -> None:
+        self.widget.update_content(text)
+
+
+class CollapsibleDiffBox(DiffBox):
+    """The `DiffBox` handed to a caller after the interface mounts a diff.
+
+    Renders through the same widget as `CollapsibleTextBox` but is a peer, not a
+    subclass: `replace()` takes two arguments because a diff has two sides, and
+    inheriting the text box's one-argument `replace` meant an incompatible
+    override that only a `type: ignore` held together. Two protocols disagreeing
+    on a method name is a sign the classes are siblings.
     """
 
     def __init__(
@@ -325,17 +363,12 @@ class CollapsibleDiffBox(CollapsibleTextBox):
         new_content: str,
         title: str | None = None,
     ) -> None:
-        super().__init__(content, title=title)
+        self.widget = TextBoxWidget(content, title=title)
         self._old_content = old_content
         self._new_content = new_content
 
-    def replace(self, old_content: str, new_content: str) -> None:  # type: ignore[override]
-        """Replace both sides of the diff. Re-computes and re-renders.
-
-        Shadows CollapsibleTextBox.replace(text) — a diff's replace takes two
-        args because a diff has two sides. mypy can't reconcile the signatures
-        across the MRO, hence the type: ignore.
-        """
+    def replace(self, old_content: str, new_content: str) -> None:
+        """Replace both sides of the diff. Re-computes and re-renders."""
         self._old_content = old_content
         self._new_content = new_content
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
@@ -346,24 +379,22 @@ class CollapsibleDiffBox(CollapsibleTextBox):
             )
         )
         if diff_text.strip():
-            assert isinstance(self._text_container, Static)
-            self._text_container.update(
+            self.widget.update_content(
                 Syntax(diff_text, lexer="diff", theme=self._live_code_theme())
             )
         else:
-            self._text_container.update("(Same content)")
-        self._on_content_changed()
+            self.widget.update_content("(Same content)")
 
     def _live_code_theme(self) -> str:
         """Resolve the active code theme via the app's interface ref.
 
         ``SolveigTextualApp`` stores the interface as ``_interface_ref`` (not
-        ``interface``), so a direct ``self.app.interface`` lookup silently
-        fell back to ``"monokai"``.  Reach the real interface and let its
+        ``interface``), so a direct ``app.interface`` lookup silently fell back
+        to ``"monokai"``.  Reach the real interface and let its
         ``_live_code_theme`` resolve the root, matching how the rest of the
         frontend reads the live theme.
         """
-        interface = getattr(self.app, "_interface_ref", None)
+        interface = getattr(self.widget.app, "_interface_ref", None)
         if interface is not None and hasattr(interface, "_live_code_theme"):
             return interface._live_code_theme()
         return "monokai"

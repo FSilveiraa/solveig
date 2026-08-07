@@ -32,7 +32,7 @@ from textual.widgets import Markdown as MarkdownWidget
 
 from solveig.session.conversation import Conversation, MessageId
 
-from .collapsible_widgets import CollapsibleTextBox
+from .collapsible_widgets import TextBoxWidget
 from .widgets import EditableComment
 
 if TYPE_CHECKING:
@@ -196,7 +196,9 @@ class MessageDisplay:
         if content is None:
             return None
         if isinstance(part, ThinkingPart):
-            return CollapsibleTextBox(
+            # The widget, not a `TextBox` handle: this is the frontend mounting
+            # into its own transcript, not a value crossing the protocol.
+            return TextBoxWidget(
                 content, title="Reasoning", italic=True, collapsed=True
             )
         return EditableComment(
@@ -214,6 +216,5 @@ class MessageDisplay:
             for markdown in widget.query(MarkdownWidget):
                 await markdown.update(f"🗩 ⠀{content}")
                 break
-        elif isinstance(widget, CollapsibleTextBox):
-            widget.clear()
-            widget.append(content)
+        elif isinstance(widget, TextBoxWidget):
+            widget.update_content(content)
