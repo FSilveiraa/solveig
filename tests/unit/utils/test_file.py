@@ -118,3 +118,34 @@ class TestPathPatterns:
 
     def test_no_patterns_matches_nothing(self):
         assert not Filesystem.path_matches_patterns(Path("/home/u/x"), [])
+
+    def test_naming_a_directory_covers_everything_inside_it(self):
+        """`ignored_paths: ["~/.ssh"]` has to block `~/.ssh/id_rsa`. Blocking the
+        directory node alone and letting its contents through is the failure mode
+        that makes a safety rule theatre."""
+        blocked = [Path("/home/u/.ssh")]
+        assert Filesystem.path_matches_patterns(Path("/home/u/.ssh"), blocked)
+        assert Filesystem.path_matches_patterns(Path("/home/u/.ssh/id_rsa"), blocked)
+        assert Filesystem.path_matches_patterns(
+            Path("/home/u/.ssh/keys/backup/id_rsa"), blocked
+        )
+
+    def test_a_covered_directory_does_not_leak_to_its_siblings(self):
+        blocked = [Path("/home/u/.ssh")]
+        assert not Filesystem.path_matches_patterns(Path("/home/u/.sshfoo"), blocked)
+        assert not Filesystem.path_matches_patterns(Path("/home/u"), blocked)
+        assert not Filesystem.path_matches_patterns(Path("/home/u/notes.md"), blocked)
+
+    def test_a_glob_directory_also_covers_its_contents(self):
+        """One rule for both cases: ancestors are checked, so a pattern with glob
+        characters covers a subtree exactly the way a literal one does."""
+        assert Filesystem.path_matches_patterns(
+            Path("/home/u/proj/a/secrets/key.pem"), [Path("/home/u/proj/*/secrets")]
+        )
+
+    def test_trailing_slash_is_the_same_pattern(self):
+        """People should not have to fight path patterns; pathlib normalizes the
+        trailing slash away on construction, so both spellings agree."""
+        target = Path("/home/u/.ssh/id_rsa")
+        assert Filesystem.path_matches_patterns(target, [Path("/home/u/.ssh/")])
+        assert Filesystem.path_matches_patterns(target, [Path("/home/u/.ssh")])

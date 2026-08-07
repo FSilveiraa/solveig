@@ -534,7 +534,13 @@ class Filesystem:
 
     @classmethod
     def path_matches_patterns(cls, abs_path: Path, patterns: list[Path]) -> bool:
-        """Check if a file path matches any of the given glob patterns (sync operation).
+        """Does this path fall under any of these patterns? (sync operation)
+
+        NOTE: the path matches if IT or ANY ANCESTOR matches, which is what makes
+        naming a directory cover everything inside it - `~/.ssh` has to block
+        `~/.ssh/id_rsa`, or the rule is theatre. Checking ancestors rather than
+        sniffing a pattern for glob characters keeps one rule for both cases:
+        `~/proj/*/secrets` covers `~/proj/a/secrets/key.pem` the same way.
 
         NOTE: `full_match`, never `match`. `PurePath.match` treats `**` as a
         single `*`, so `proj/**/*.log` would match one level down only - an
@@ -542,7 +548,12 @@ class Filesystem:
         `full_match` also anchors the whole path rather than matching from the
         right, which is what makes an absolute pattern mean what it looks like.
         """
-        return any(abs_path.full_match(str(pattern)) for pattern in patterns)
+        candidates = (abs_path, *abs_path.parents)
+        return any(
+            candidate.full_match(str(pattern))
+            for pattern in patterns
+            for candidate in candidates
+        )
 
     # =============================================================================
     # LINE READING - Efficient line-based file operations
