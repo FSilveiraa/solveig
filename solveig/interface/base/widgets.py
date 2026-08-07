@@ -102,22 +102,32 @@ class TreeBox(Protocol):
 @runtime_checkable
 class EditableMessage(Protocol):
     """What a message widget must implement to host action buttons
-    (Edit/Retry/Delete/Branch)."""
+    (Edit/Retry/Delete/Branch).
+
+    NOTE: each method below states what the button PROMISES, not how the
+    implementer keeps it. That is the contract's job: a button knows it invokes
+    "edit this message" and must not know that editing means prompting, then
+    mutating the conversation, then letting the transcript react. `begin_edit`
+    is the clearest case — the frontend owns HOW to ask (in place, a modal, a
+    textarea) and the app owns what the answer means, which is exactly why a
+    generic `add_button(name, callback)` was rejected: it could not express
+    "ask first, then hand me the answer" without app code learning how each
+    frontend prompts.
+    """
 
     async def begin_edit(self) -> None:
-        """Prompt for replacement text and overwrite this message in place."""
+        """Let the user rewrite this message."""
         ...
 
     async def retry(self) -> None:
-        """Drop this message and everything after it, then resubmit its
-        text as a fresh prompt."""
+        """Ask for this message to be answered again."""
         ...
 
     async def delete_from_here(self) -> None:
-        """Drop this message and everything after it."""
+        """Discard this message and what followed it."""
         ...
 
     async def branch_from_here(self) -> None:
-        """Store the current conversation as a checkpoint, then drop this
-        message and everything after it."""
+        """Take the conversation in a new direction from here, without losing
+        the one being left behind."""
         ...

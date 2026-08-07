@@ -364,7 +364,12 @@ class SolveigInterface(ABC):
     ) -> AsyncGenerator[SolveigInterface, Any]:
         """Context manager for grouping related output. Yields a
         SolveigInterface scoped to this group — local calls land inside the
-        group; global calls transparently affect the root."""
+        group; global calls transparently affect the root.
+
+        NOTE: `auto_collapse` is the caller's INTENT ("folding this away loses
+        nothing"), not an instruction. Whether a frontend folds it, and whether
+        the user has turned that off, is display policy the frontend reads for
+        itself — app code never consults an `interface.*` setting."""
         yield self  # pragma: no cover - makes this a valid generator
 
     @asynccontextmanager

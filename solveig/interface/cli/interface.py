@@ -295,8 +295,13 @@ class TerminalDisplay(SolveigInterface):
         try:
             yield GroupInterface(root=self._root, group_widget=group_widget)
         finally:
+            # The caller said whether folding this away is acceptable; THIS side
+            # says whether the terminal does it. Read at close time, not at open,
+            # so toggling `interface.auto_collapse_tools` mid-run applies to the
+            # very next group to finish.
             await self.app._conversation_area.exit_group(
-                group_widget, auto_collapse=auto_collapse
+                group_widget,
+                auto_collapse=auto_collapse and self._root.auto_collapse_tools,
             )
 
 
@@ -324,6 +329,12 @@ class TerminalInterface(TerminalDisplay):
         self._root = self
         self.theme = theme
         self.code_theme = code_theme
+        #: Display policy, not a caller's business: whether a group that says it
+        #: MAY be folded away actually is. Groups read it through `_root` at the
+        #: moment they close.
+        self.auto_collapse_tools = (
+            config.interface.auto_collapse_tools if config is not None else True
+        )
 
         self.app = SolveigTextualApp(
             theme=theme,
@@ -343,6 +354,14 @@ class TerminalInterface(TerminalDisplay):
             @config.on_change("interface.code_theme")
             async def _on_code_theme(config, paths):
                 self.set_code_theme(config.interface.code_theme)
+
+            @config.on_change("interface.auto_collapse_tools")
+            async def _on_auto_collapse(config, paths):
+                # Only groups that close AFTER this. A group the user is reading
+                # right now must not snap shut under them, and one they opened by
+                # hand must not be re-folded — the setting is a default, not a
+                # command to redraw.
+                self.auto_collapse_tools = config.interface.auto_collapse_tools
 
         # CLI prompt serialization: one visible prompt at a time (a terminal
         # constraint — the protocol leaves this policy to the frontend).

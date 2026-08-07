@@ -52,17 +52,19 @@ from solveig.tools.result import ToolResult
 def open_tool_group(
     interface: SolveigInterface,
     title: str,
-    config: SolveigConfig,
     *,
     auto_collapse: bool = True,
 ):
-    """Open a tool call's collapsible group with the shared auto-collapse policy:
-    the config toggle AND the caller's own opt-out (a tool declares its own via
-    `BaseTool.auto_collapse`). The single place the group + auto_collapse
-    convention lives for both the typed and untyped execution paths below."""
-    return interface.with_group(
-        title, auto_collapse=config.interface.auto_collapse_tools and auto_collapse
-    )
+    """Open a tool call's collapsible group, passing the caller's INTENT.
+
+    NOTE: `auto_collapse` here says only "this tool's output is fine folded
+    away" (a tool declares its own via `BaseTool.auto_collapse`; TodoTool opts
+    out because its output IS the point). Whether the frontend honours that is
+    display POLICY and is read there — `interface.auto_collapse_tools` is a
+    display setting, and a tool deciding how a terminal draws is the leak this
+    seam exists to prevent. The single place the group convention lives for both
+    the typed and untyped execution paths below."""
+    return interface.with_group(title, auto_collapse=auto_collapse)
 
 
 async def run_tool_and_hooks(
@@ -90,7 +92,6 @@ async def run_tool_and_hooks(
     async with open_tool_group(
         interface,
         instance.title,
-        config,
         auto_collapse=instance.auto_collapse,
     ) as group:
         # Intent first (file header, command text, URL) so a @before hook's
@@ -129,7 +130,7 @@ async def run_untyped_tool(
     name carries its server prefix from `PrefixedToolset`, so the origin is
     visible without labeling the group — and a plain-function plugin tool
     isn't MCP at all)."""
-    async with open_tool_group(interface, call.tool_name, config) as group:
+    async with open_tool_group(interface, call.tool_name) as group:
         await group.add_text_box(
             json.dumps(args, indent=2, default=str), title="Args", language="json"
         )

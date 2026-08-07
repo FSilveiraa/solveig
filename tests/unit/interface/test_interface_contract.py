@@ -186,3 +186,51 @@ def test_with_animation_takes_no_cancel_hint():
 
     params = inspect.signature(SolveigInterface.with_animation).parameters
     assert "suffix" not in params
+
+
+def test_opening_a_tool_group_passes_intent_and_reads_no_display_config():
+    """`open_tool_group` used to compute `config.interface.auto_collapse_tools
+    and auto_collapse` — app code reading a display setting to decide how a
+    terminal draws. It now forwards the tool's own intent and nothing else; the
+    frontend applies its policy at close time."""
+    import inspect
+
+    from solveig.tools import orchestration
+
+    params = inspect.signature(orchestration.open_tool_group).parameters
+    assert "config" not in params
+    source = inspect.getsource(orchestration.open_tool_group)
+    assert "auto_collapse_tools" not in source.split('"""')[-1]
+
+
+async def test_frontend_policy_gates_the_callers_intent():
+    """Both halves have to hold: a tool that opts OUT is never folded, and a
+    user who turns the setting off is never overridden by a tool that opted in.
+
+    Drives the real `with_group`, so what is asserted is the value that reaches
+    `exit_group` — the frontend's decision, not a restatement of it.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from solveig.interface.cli.interface import TerminalInterface
+
+    async def collapsed_with(*, tool_intent: bool, policy: bool) -> bool:
+        interface = TerminalInterface.__new__(TerminalInterface)  # no Textual app
+        interface._root = interface
+        interface._conversation = None
+        interface._active_tasks = {}
+        interface.user_message_queue = None
+        interface.auto_collapse_tools = policy
+        area = MagicMock()
+        area.enter_group = AsyncMock(return_value=_FakeGroupWidget())
+        area.exit_group = AsyncMock()
+        interface.app = MagicMock(_conversation_area=area)
+
+        async with interface.with_group("t", auto_collapse=tool_intent):
+            pass
+        return area.exit_group.await_args.kwargs["auto_collapse"]
+
+    assert await collapsed_with(tool_intent=True, policy=True) is True
+    assert await collapsed_with(tool_intent=False, policy=True) is False  # TodoTool
+    assert await collapsed_with(tool_intent=True, policy=False) is False  # the user
+    assert await collapsed_with(tool_intent=False, policy=False) is False
