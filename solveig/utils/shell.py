@@ -138,7 +138,7 @@ class PersistentShell:
         self.shell = shell
         self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
-        self.current_cwd = Filesystem.get_current_directory()
+        self.current_cwd = Filesystem.get_simple_path()
 
     async def start(self) -> None:
         """Start the persistent shell process if not already running."""

@@ -34,7 +34,7 @@ def get_basic_os_info():
         "os_name": platform.system(),
         "os_release": platform.release(),
         "os_version": platform.version(),
-        "cwd": Filesystem.get_current_directory(simplify=True),
+        "cwd": Filesystem.get_simple_path(simplify=True),
     }
     try:
         info["username"] = os.getlogin()

@@ -39,9 +39,7 @@ def format_path_info(
     something a reader of the line needs to see twice. A `None` size or line count is
     a fact that could not be read, so its segment is omitted rather than guessed at.
     """
-    # NOTE: `get_current_directory` shortens any absolute path to its ~ form; the
-    # name is about its no-argument default, not about what it does here.
-    shown = Filesystem.get_current_directory(Path(abs_path), simplify=True)
+    shown = Filesystem.get_simple_path(Path(abs_path), simplify=True)
     path_info = f"{'🗁 ' if is_dir else '🗎'} {shown}"
     if size is not None:
         path_info += f"  |  ⛁ {ByteSize(size).human_readable()}"

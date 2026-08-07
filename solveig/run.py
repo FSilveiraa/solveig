@@ -70,7 +70,7 @@ def _register_stats(
     interface.add_stat(
         "Path",
         get=lambda: shell.cwd if (shell := get_running_shell()) else None,
-        render=lambda cwd: f"🗁  {Filesystem.get_current_directory(cwd, simplify=True)}",
+        render=lambda cwd: f"🗁  {Filesystem.get_simple_path(cwd, simplify=True)}",
     )
 
     register_config_stat(interface, config, "Endpoint", "api.url")

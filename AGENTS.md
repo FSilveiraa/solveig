@@ -64,6 +64,12 @@ context.py    SolveigContext = the RunContext deps dataclass — exactly {config
 api/          api/types.py: APIType (base class with OpenAI/Anthropic/Gemini
               subclasses), ModelInfo. api/client.py: Client (runtime provider
               holder, reactive to config) + the model subcommands.
+todo.py       Layer 0, beside utils/file.FileMetadata: TodoItem/TodoStatus. The todo
+              list is Solveig's, not TodoTool's — an agent that works autonomously has
+              to say what it intends, what it is doing and what it dropped, and the
+              tool is merely the surface the assistant edits it through. Tools and
+              frontends both name it; neither owns it. Its vocabulary is the industry's
+              (see Conventions), not ours.
 user_message_queue.py  UserMessageQueue — asyncio.Queue[str] + a prompt gate on
               put() (routes /commands before insertion) + an on_change doorbell
               (self-registered by the queued-messages display widget).
@@ -234,6 +240,14 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   root: owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a
   scoped display fixed to one collapsible group). `message_display.py` maps a
   message part → widget; `app.py` holds the static theme-independent CSS.
+- **Display verbs take domain values, never formatted text.** `display_todos` takes
+  `list[TodoItem]`, `display_file_metadata` takes a `FileMetadata`, `display_tree`
+  takes the metadata. The caller decides WHAT to show and WHEN; the frontend decides
+  the glyphs, the separators, the ordering marks and how much of a path to show. A
+  tool that emits `f"→ 🔵 {i}. {text}"` has already made every decision a non-terminal
+  frontend needed to make differently — a web UI wanting to animate the in-progress
+  todo has no way to disagree with a string. When a value cannot be read
+  (`metadata=None`), that is a real state to render, not a caller being lazy.
 - **Two surfaces, kept separate:** the reactive transcript (state → view) and the
   transient imperative UI (consent prompts, status bar, animations) — they never tangle.
 - The **group-as-interface** trick: `interface.with_group(title)` yields a scoped
@@ -346,6 +360,12 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   duplication this codebase keeps deleting. Applies only where a consensus
   exists; Solveig's own concepts (consent, groups, `issues`/`private`) get the
   clearest name we can invent.
+
+- **`PathLike` for typing, `anyio.Path` for implementation.** Accept broadly, build
+  concretely: a parameter types as `str | PathLike`, and code that actually touches a
+  path constructs an `anyio.Path`. `pathlib.Path` is not the base here — the project
+  is fully async, and a stdlib `Path` in a signature invites blocking calls. There is
+  pre-`anyio` `pathlib` usage still in the tree; convert it when you touch it.
 
 - **No compat shims; big-bang cutovers.** Migrations go red mid-flight and green at
   the end. Commit per task even while red.
