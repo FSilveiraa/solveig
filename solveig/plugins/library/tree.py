@@ -71,7 +71,9 @@ class TreeTool(BaseTool):
             return ToolResult(content="User declined to read the tree.")
 
         metadata = await Filesystem.read_metadata(
-            abs_path, descend_level=self.max_depth
+            abs_path,
+            descend_level=self.max_depth,
+            ignored_paths=config.ignored_paths,
         )
         await interface.display_tree(
             metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"

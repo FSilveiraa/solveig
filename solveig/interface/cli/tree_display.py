@@ -11,7 +11,6 @@ Textual nodes up front).
 
 from __future__ import annotations
 
-import fnmatch
 from datetime import datetime
 from pathlib import PurePath
 
@@ -52,10 +51,6 @@ class TreeDisplay(Tree):
         initially and everything deeper is lazy.  ``> 0`` pre-renders (and
         auto-expands) down to that depth; nodes below it are still created as
         expandable branches whose children load lazily on expand.
-    ignore_patterns:
-        Glob patterns matched with :func:`fnmatch.fnmatch` against both the
-        entry's basename and full path — any node whose path matches is
-        skipped, along with its subtree.
     """
 
     def __init__(
@@ -64,12 +59,10 @@ class TreeDisplay(Tree):
         display_metadata: bool = False,
         expand_root: bool = True,
         max_depth: int = -1,
-        ignore_patterns: list[str] | None = None,
         **kwargs,
     ):
         self._display_metadata = display_metadata
         self._max_depth = max_depth
-        self._ignore_patterns = list(ignore_patterns or [])
         # TreeNode ids whose children have already been materialised.  Tracked
         # on the widget (not on the nodes) so ``replace()`` can reset the set
         # and so we don't rely on ``TreeNode`` allowing arbitrary attributes.
@@ -126,20 +119,6 @@ class TreeDisplay(Tree):
         return label
 
     # ------------------------------------------------------------------ #
-    # Filtering
-    # ------------------------------------------------------------------ #
-
-    def _should_ignore(self, metadata: FileMetadata) -> bool:
-        """True if the entry's path matches any ignore pattern."""
-        if not self._ignore_patterns:
-            return False
-        name = PurePath(metadata.path).name
-        return any(
-            fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(metadata.path, pattern)
-            for pattern in self._ignore_patterns
-        )
-
-    # ------------------------------------------------------------------ #
     # Lazy population
     # ------------------------------------------------------------------ #
 
@@ -158,10 +137,10 @@ class TreeDisplay(Tree):
         if not metadata or not metadata.is_directory or not metadata.listing:
             return
 
+        # NOTE: no filtering here. An ignored path is pruned by
+        # `Filesystem.read_metadata` before it ever becomes metadata, so a
+        # listing that reached this widget is already the whole truth.
         for _sub_path, sub_metadata in sorted(metadata.listing.items()):
-            if self._should_ignore(sub_metadata):
-                continue
-
             label = self._format_node_label(sub_metadata, self._display_metadata)
 
             if sub_metadata.is_directory and sub_metadata.listing:

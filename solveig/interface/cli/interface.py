@@ -206,14 +206,12 @@ class TerminalDisplay(SolveigInterface):
         display_metadata: bool = False,
         expand_root: bool = True,
         max_depth: int = -1,
-        ignore_patterns: list[str] | None = None,
     ) -> TreeBox:
         tree_widget = TreeDisplay(
             metadata=metadata,
             display_metadata=display_metadata,
             expand_root=expand_root,
             max_depth=max_depth,
-            ignore_patterns=ignore_patterns or [],
         )
         if title:
             tree_widget.border_title = title

@@ -149,3 +149,51 @@ class TestPathPatterns:
         target = Path("/home/u/.ssh/id_rsa")
         assert Filesystem.path_matches_patterns(target, [Path("/home/u/.ssh/")])
         assert Filesystem.path_matches_patterns(target, [Path("/home/u/.ssh")])
+
+
+@pytest.mark.no_file_mocking
+class TestIgnoredPathsPruneTheListing:
+    """The listing is what reaches the assistant, so an ignored entry has to be
+    absent from the metadata - not merely undrawn by a frontend."""
+
+    async def test_ignored_entry_is_absent_from_the_listing(self, tmp_path):
+        (tmp_path / "keep.txt").touch()
+        (tmp_path / ".ssh").mkdir()
+        (tmp_path / ".ssh" / "id_rsa").touch()
+
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(tmp_path),
+            ignored_paths=[Filesystem.get_absolute_path(tmp_path / ".ssh")],
+        )
+
+        assert metadata.listing is not None
+        names = {SyncPath(p).name for p in metadata.listing}
+        assert names == {"keep.txt"}
+
+    async def test_ignored_subtree_is_never_walked(self, tmp_path):
+        """Pruning happens before the recursion, so the excluded directory costs
+        nothing and cannot raise on the way past."""
+        (tmp_path / "secret").mkdir()
+        (tmp_path / "secret" / "deep").mkdir()
+        (tmp_path / "secret" / "deep" / "key.pem").touch()
+        (tmp_path / "visible").mkdir()
+
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(tmp_path),
+            descend_level=-1,
+            ignored_paths=[Filesystem.get_absolute_path(tmp_path / "secret")],
+        )
+
+        assert metadata.listing is not None
+        assert {SyncPath(p).name for p in metadata.listing} == {"visible"}
+
+    async def test_no_patterns_lists_everything(self, tmp_path):
+        (tmp_path / "a.txt").touch()
+        (tmp_path / "b.txt").touch()
+
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(tmp_path)
+        )
+
+        assert metadata.listing is not None
+        assert {SyncPath(p).name for p in metadata.listing} == {"a.txt", "b.txt"}

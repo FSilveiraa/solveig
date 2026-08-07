@@ -355,8 +355,23 @@ class Filesystem:
             return False
 
     @classmethod
-    async def read_metadata(cls, abs_path: Path, descend_level=1) -> FileMetadata:
-        """Async read metadata and dir structure from filesystem using AnyIO."""
+    async def read_metadata(
+        cls,
+        abs_path: Path,
+        descend_level=1,
+        ignored_paths: Sequence[Path] = (),
+    ) -> FileMetadata:
+        """Async read metadata and dir structure from filesystem using AnyIO.
+
+        NOTE: `ignored_paths` prunes the LISTING, not the display. An ignored
+        entry has to be absent from the metadata itself, because the metadata is
+        what reaches the model - a frontend that merely declines to draw a node
+        hides it from the one party that was never going to look at the screen.
+        Pruning before recursing also means an ignored subtree is never walked,
+        so a directory the user excluded cannot cost time or raise permission
+        errors on the way past. Patterns arrive as a value, never as a config:
+        this layer knows what a path is and nothing about who configured it.
+        """
         # Use AnyIO for stat operations
         stats = await abs_path.stat()
         is_dir = await cls.is_dir(abs_path)
@@ -370,7 +385,13 @@ class Filesystem:
             tasks = []
             for sub_path in sub_paths:
                 abs_sub_path = cls.get_absolute_path(sub_path)
-                task = cls.read_metadata(abs_sub_path, descend_level=descend_level - 1)
+                if cls.path_matches_patterns(abs_sub_path, ignored_paths):
+                    continue
+                task = cls.read_metadata(
+                    abs_sub_path,
+                    descend_level=descend_level - 1,
+                    ignored_paths=ignored_paths,
+                )
                 tasks.append((abs_sub_path, task))
 
             # Await all down-tree reading tasks, then index their results by their calling paths
@@ -533,7 +554,7 @@ class Filesystem:
             await cls._delete_file(abs_path)
 
     @classmethod
-    def path_matches_patterns(cls, abs_path: Path, patterns: list[Path]) -> bool:
+    def path_matches_patterns(cls, abs_path: Path, patterns: Sequence[Path]) -> bool:
         """Does this path fall under any of these patterns? (sync operation)
 
         NOTE: the path matches if IT or ANY ANCESTOR matches, which is what makes

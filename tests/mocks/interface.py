@@ -218,7 +218,6 @@ class MockInterface(SolveigInterface):
         display_metadata: bool = False,
         expand_root: bool = True,
         max_depth: int = -1,
-        ignore_patterns: list[str] | None = None,
     ) -> TreeBox:
         tree_title = title or str(metadata.path)
         self.outputs.append(f"Tree: {tree_title}")

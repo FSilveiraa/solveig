@@ -97,7 +97,11 @@ class ReadTool(BaseTool):
             return ToolResult(issues=[e])
 
         auto_allowed = decision == ConsentDecision.AUTO_ALLOWED
-        metadata = await Filesystem.read_metadata(abs_path)
+        # An ignored path is pruned from the listing, not hidden from the
+        # display: the metadata is what reaches the assistant.
+        metadata = await Filesystem.read_metadata(
+            abs_path, ignored_paths=config.ignored_paths
+        )
 
         if metadata.is_directory or self.metadata_only:
             return await self._read_metadata_only(interface, auto_allowed, metadata)

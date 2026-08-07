@@ -258,13 +258,16 @@ class SolveigInterface(ABC):
         display_metadata: bool = False,
         expand_root: bool = True,
         max_depth: int = -1,
-        ignore_patterns: list[str] | None = None,
     ) -> TreeBox:
         """Display a directory tree. Returns a TreeBox the caller can
         `replace()` with new metadata. The full metadata is already read;
-        `max_depth` and `ignore_patterns` control what renders initially,
-        not what was read. Lazy expansion is handled internally by the
-        frontend."""
+        `max_depth` controls what renders initially, not what was read. Lazy
+        expansion is handled internally by the frontend.
+
+        NOTE: there is no ignore/filter argument, deliberately. Deciding an
+        entry should not be seen is a filesystem concern, not a drawing one -
+        `Filesystem.read_metadata` prunes it, so what arrives here is already
+        everything the caller is willing to show AND to send."""
         ...
 
     @abstractmethod
