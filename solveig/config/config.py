@@ -396,8 +396,12 @@ class SolveigConfig(BaseSettings):
         `cd ..` would be an escape from an ignored subtree. A rule the subject
         can move by walking is not a rule. `resolve()` keeps glob metacharacters
         intact, so `*.log` anchors without being expanded.
+
+        `resolve_pattern` owns the one exception (a bare name like `node_modules`
+        is stored as written, so it keeps meaning "wherever this appears"); config
+        states WHEN patterns are settled, not what a pattern means.
         """
-        return [Filesystem.get_absolute_path(p) for p in v] if v else []
+        return [Filesystem.resolve_pattern(p) for p in v] if v else []
 
     @field_validator("briefing", mode="before")
     @classmethod

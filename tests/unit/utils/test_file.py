@@ -197,3 +197,41 @@ class TestIgnoredPathsPruneTheListing:
 
         assert metadata.listing is not None
         assert {SyncPath(p).name for p in metadata.listing} == {"a.txt", "b.txt"}
+
+
+@pytest.mark.no_file_mocking
+class TestBareNamePatterns:
+    """gitignore's rule, because it is the one users already have in their
+    fingers: no separator means "wherever this appears", any separator anchors."""
+
+    def test_bare_name_matches_at_any_depth(self):
+        ignored = [Filesystem.resolve_pattern("node_modules")]
+        assert Filesystem.path_matches_patterns(Path("/proj/node_modules/x"), ignored)
+        assert Filesystem.path_matches_patterns(
+            Path("/proj/src/a/node_modules/deep/x"), ignored
+        )
+
+    def test_bare_name_is_stored_unanchored(self):
+        """Anchoring it would silently shrink `node_modules` to the single
+        top-level copy - the failure this rule exists to prevent."""
+        assert str(Filesystem.resolve_pattern("node_modules")) == "node_modules"
+
+    def test_a_pattern_naming_a_directory_still_anchors(self):
+        resolved = Filesystem.resolve_pattern("~/.ssh")
+        assert resolved.is_absolute()
+        assert Filesystem.path_matches_patterns(
+            Filesystem.get_absolute_path("~/.ssh/id_rsa"), [resolved]
+        )
+        assert not Filesystem.path_matches_patterns(
+            Path("/somewhere/else/.ssh/id_rsa"), [resolved]
+        )
+
+    def test_bare_glob_matches_by_name(self):
+        ignored = [Filesystem.resolve_pattern("*.pem")]
+        assert Filesystem.path_matches_patterns(Path("/proj/keys/server.pem"), ignored)
+        assert not Filesystem.path_matches_patterns(Path("/proj/keys/server.txt"), ignored)
+
+    def test_bare_name_does_not_match_a_partial_component(self):
+        ignored = [Filesystem.resolve_pattern(".git")]
+        assert Filesystem.path_matches_patterns(Path("/proj/src/.git/config"), ignored)
+        assert not Filesystem.path_matches_patterns(Path("/proj/.gitignore"), ignored)

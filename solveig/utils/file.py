@@ -553,25 +553,59 @@ class Filesystem:
         else:
             await cls._delete_file(abs_path)
 
+    @staticmethod
+    def _is_bare_name(pattern: str | PathLike) -> bool:
+        """A pattern naming no directory at all: `node_modules`, `*.pem`, `.git`."""
+        parts = PurePath(str(pattern)).parts
+        return len(parts) == 1 and not PurePath(str(pattern)).is_absolute()
+
+    @classmethod
+    def resolve_pattern(cls, pattern: str | PathLike) -> Path:
+        """The one way a user-written path pattern becomes a stored one.
+
+        An anchored pattern is resolved NOW (see the config validator: Solveig's
+        working directory moves, so a pattern resolved later would mean something
+        else after every `cd`). A bare name is stored as written - anchoring it
+        would silently shrink `node_modules` to the single top-level copy, and it
+        needs no anchoring to be safe, since naming no directory it cannot be
+        walked out of.
+
+        Pairs with `path_matches_patterns`, which reads the same distinction back.
+        """
+        if cls._is_bare_name(pattern):
+            return Path(pattern)
+        return cls.get_absolute_path(pattern)
+
     @classmethod
     def path_matches_patterns(cls, abs_path: Path, patterns: Sequence[Path]) -> bool:
         """Does this path fall under any of these patterns? (sync operation)
+
+        Two spellings, gitignore's, because that is the one every user already
+        knows and a pattern language nobody guesses right is a safety rule that
+        silently does not apply:
+
+        - **no separator** (`node_modules`, `*.pem`) matches by NAME at any depth
+        - **any separator** (`~/.ssh`, `/etc/*.conf`) is anchored where it says
 
         NOTE: the path matches if IT or ANY ANCESTOR matches, which is what makes
         naming a directory cover everything inside it - `~/.ssh` has to block
         `~/.ssh/id_rsa`, or the rule is theatre. Checking ancestors rather than
         sniffing a pattern for glob characters keeps one rule for both cases:
-        `~/proj/*/secrets` covers `~/proj/a/secrets/key.pem` the same way.
+        `~/proj/*/secrets` covers `~/proj/a/secrets/key.pem` the same way, and a
+        bare `node_modules` covers everything beneath every copy of it.
 
-        NOTE: `full_match`, never `match`. `PurePath.match` treats `**` as a
-        single `*`, so `proj/**/*.log` would match one level down only - an
-        ignore pattern written that way blocks nothing and says nothing about it.
-        `full_match` also anchors the whole path rather than matching from the
-        right, which is what makes an absolute pattern mean what it looks like.
+        NOTE: `full_match` for anchored patterns, never `match`. `PurePath.match`
+        treats `**` as a single `*`, so `proj/**/*.log` would match one level down
+        only - an ignore pattern written that way blocks nothing and says nothing
+        about it. `full_match` also anchors the whole path rather than matching
+        from the right. A bare name is the one case where matching from the right
+        is exactly what is wanted, so it uses `match` deliberately.
         """
         candidates = (abs_path, *abs_path.parents)
         return any(
-            candidate.full_match(str(pattern))
+            candidate.match(str(pattern))
+            if cls._is_bare_name(str(pattern))
+            else candidate.full_match(str(pattern))
             for pattern in patterns
             for candidate in candidates
         )
