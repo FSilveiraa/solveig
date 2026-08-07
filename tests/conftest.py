@@ -45,12 +45,16 @@ async def sandboxed_shell(tmp_path: Path):
     """
     Provides a PersistentShell instance that is already sandboxed
     by having its working directory set to the test's tmp_path.
+
+    Going through `shell.run("cd ...")` rather than chdir'ing directly is the
+    point: it moves BOTH the subshell and Solveig, the same way a model-issued
+    `cd` does, so a test starts in a sandbox that is consistent end to end.
     """
     shell = await get_persistent_shell()
     # Use the shell's own logic to move into the sandbox
     async for _ in shell.run(f"cd {tmp_path}"):
         pass
-    # The shell's CWD is now the temp path
+    # Both the subshell and the process are now in the temp path
     return shell
 
 
@@ -94,6 +98,21 @@ def free_tcp_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+@pytest.fixture(autouse=True)
+def restore_working_directory():
+    """Put the process back where it started after every test.
+
+    The working directory is Solveig's single source of truth for "where am I"
+    (`Filesystem.change_current_dir`), which makes it shared mutable state for
+    the duration of the suite: a test that moves and then fails would otherwise
+    leave every test after it resolving relative paths somewhere else. Restoring
+    is cheap; debugging an order-dependent failure is not."""
+    origin = os.getcwd()
+    yield
+    with contextlib.suppress(OSError):
+        os.chdir(origin)
 
 
 @pytest.fixture(autouse=True)

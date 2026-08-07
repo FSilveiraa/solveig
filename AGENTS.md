@@ -367,6 +367,22 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   is fully async, and a stdlib `Path` in a signature invites blocking calls. There is
   pre-`anyio` `pathlib` usage still in the tree; convert it when you touch it.
 
+- **One working directory, and it moves.** The **process cwd is the single source of
+  truth** for where Solveig is — not a copy kept beside it, because a copy desyncs.
+  `Filesystem.change_current_dir` is the only writer and therefore the only place
+  that handles the OS refusing to move; `get_absolute_path()` / `get_simple_path()`
+  with no argument are the readers and carry no fallback of their own. A `cd` inside
+  a command moves the file tools with it (`PersistentShell._parse_marker` reports
+  through that one writer), which is decades of shell behaviour and what a model
+  expects when it moves. The rule for paths: **what the human typed at startup means
+  what it meant at startup; what the assistant types means where the assistant is.**
+  So every human-configured path (`ignored_paths`, `auto_allowed_paths`,
+  `session.dir`, `briefing`, `plugins.paths`) resolves to absolute in a validator
+  *when set*, and only the assistant's tool arguments resolve against the current
+  directory. That anchoring is load-bearing for the safety patterns, not tidiness —
+  a pattern that resolved lazily would make `cd ..` an escape from an ignored
+  subtree, and a rule the subject can move by walking is not a rule.
+
 - **No compat shims; big-bang cutovers.** Migrations go red mid-flight and green at
   the end. Commit per task even while red.
 - **No `setup()`/`wire_*()` post-init methods.** If an object needs a dependency,

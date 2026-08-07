@@ -5,6 +5,7 @@ import pytest
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
+from solveig.utils.file import Filesystem
 from tests.mocks import DEFAULT_CONFIG
 
 # The full startup parse returns JUST the SolveigConfig (prompt/resume are
@@ -131,8 +132,14 @@ async def test_model_info_lives_on_client_not_config():
 
 
 async def test_default_plugin_paths_local_over_global():
+    """Local before global, and both anchored when set - Solveig's working
+    directory moves with the assistant, so a discovery path left as `./…` would
+    scan somewhere else after a `cd`."""
     c = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
-    assert c.plugins.paths == ["./.solveig/plugins", "~/.solveig/plugins"]
+    assert c.plugins.paths == [
+        str(Filesystem.get_absolute_path("./.solveig/plugins")),
+        str(Filesystem.get_absolute_path("~/.solveig/plugins")),
+    ]
 
 
 @pytest.mark.no_file_mocking

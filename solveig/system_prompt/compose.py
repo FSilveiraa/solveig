@@ -34,7 +34,9 @@ def get_basic_os_info():
         "os_name": platform.system(),
         "os_release": platform.release(),
         "os_version": platform.version(),
-        "cwd": Filesystem.get_simple_path(simplify=True),
+        # Recomposed every turn, so a `cd` in the previous turn's command is
+        # already reflected here - the process cwd moved with it.
+        "cwd": Filesystem.get_simple_path(),
     }
     try:
         info["username"] = os.getlogin()

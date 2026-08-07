@@ -388,7 +388,25 @@ class SolveigConfig(BaseSettings):
     @field_validator("auto_allowed_paths", "ignored_paths", mode="before")
     @classmethod
     def _abs_paths(cls, v: Any) -> Any:
+        """Anchor the safety patterns the moment they are set.
+
+        NOTE: load-bearing, not tidiness. Solveig's working directory MOVES - a
+        `cd` inside a command takes the file tools with it - so a pattern that
+        resolved lazily would mean something different after every `cd`, and
+        `cd ..` would be an escape from an ignored subtree. A rule the subject
+        can move by walking is not a rule. `resolve()` keeps glob metacharacters
+        intact, so `*.log` anchors without being expanded.
+        """
         return [Filesystem.get_absolute_path(p) for p in v] if v else []
+
+    @field_validator("briefing", mode="before")
+    @classmethod
+    def _abs_briefing(cls, v: Any) -> Any:
+        """Anchored for the same reason, plus one of its own: the briefing is
+        re-read every turn, so a relative `AGENTS.md` would silently become
+        `docs/AGENTS.md` once the assistant moved, changing its own instructions
+        mid-session."""
+        return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
 
     @field_validator("mcp", mode="before")
     @classmethod

@@ -27,17 +27,18 @@ class TestInit:
         shell = PersistentShell()
         assert shell.shell == "/bin/bash"
         assert shell.proc is None
-        assert shell.current_cwd is not None
         assert isinstance(shell._lock, asyncio.Lock)
 
     async def test_custom_shell(self):
         shell = PersistentShell(shell="/bin/zsh")
         assert shell.shell == "/bin/zsh"
 
-    async def test_cwd_property_mirrors_current_cwd(self):
-        shell = PersistentShell()
-        shell.current_cwd = "/test/path"
-        assert shell.cwd == "/test/path"
+    @pytest.mark.no_file_mocking
+    async def test_starting_cwd_moves_solveig(self, tmp_path):
+        """A shell asked to start somewhere moves the process there, rather than
+        remembering a second answer to "where are we"."""
+        PersistentShell(cwd=str(tmp_path))
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -45,50 +46,55 @@ class TestInit:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.no_file_mocking
 class TestMarkerParsing:
-    async def test_valid_marker_updates_cwd(self):
-        shell = PersistentShell()
-        shell._parse_marker(f"{STDOUT_MARKER}:/new/directory")
-        assert shell.current_cwd == "/new/directory"
+    """The marker is how a `cd` inside a command reaches Solveig, so these assert
+    against the process's real working directory - the single source of truth -
+    rather than against a copy the shell used to keep."""
 
-    async def test_marker_with_colon_in_path(self):
+    async def test_valid_marker_moves_solveig(self, tmp_path):
+        shell = PersistentShell()
+        shell._parse_marker(f"{STDOUT_MARKER}:{tmp_path}")
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(tmp_path)
+
+    async def test_marker_with_colon_in_path(self, tmp_path):
         """Paths containing colons are preserved (split on first colon only)."""
+        target = tmp_path / "with:colons"
+        target.mkdir()
         shell = PersistentShell()
-        shell._parse_marker(f"{STDOUT_MARKER}:/path/with:colons")
-        assert shell.current_cwd == "/path/with:colons"
+        shell._parse_marker(f"{STDOUT_MARKER}:{target}")
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(target)
 
-    async def test_marker_with_spaces_in_path(self):
+    async def test_marker_with_spaces_in_path(self, tmp_path):
+        target = tmp_path / "with spaces in it"
+        target.mkdir()
         shell = PersistentShell()
-        shell._parse_marker(f"{STDOUT_MARKER}:/path/with spaces/in it")
-        assert shell.current_cwd == "/path/with spaces/in it"
+        shell._parse_marker(f"{STDOUT_MARKER}:{target}")
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(target)
 
-    async def test_marker_with_trailing_slash(self):
+    async def test_marker_with_trailing_slash(self, tmp_path):
         shell = PersistentShell()
-        shell._parse_marker(f"{STDOUT_MARKER}:/path/trailing/")
-        assert shell.current_cwd == "/path/trailing/"
+        shell._parse_marker(f"{STDOUT_MARKER}:{tmp_path}/")
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(tmp_path)
 
-    async def test_invalid_marker_no_colon(self):
+    @pytest.mark.parametrize(
+        "marker_line",
+        [
+            f"{STDOUT_MARKER}",  # no colon
+            "WRONG_MARKER:/path",
+            "",
+            f"{STDOUT_MARKER}:",  # empty path
+            f"{STDOUT_MARKER}:/nonexistent/directory",
+        ],
+        ids=["no-colon", "wrong-marker", "empty", "empty-path", "missing-dir"],
+    )
+    async def test_unusable_marker_leaves_us_where_we_were(self, marker_line):
+        """Including a directory that does not exist: a marker we cannot honour
+        must not move Solveig anywhere, least of all silently."""
         shell = PersistentShell()
-        original = shell.current_cwd
-        shell._parse_marker(f"{STDOUT_MARKER}")
-        assert shell.current_cwd == original
-
-    async def test_wrong_marker_name(self):
-        shell = PersistentShell()
-        original = shell.current_cwd
-        shell._parse_marker("WRONG_MARKER:/path")
-        assert shell.current_cwd == original
-
-    async def test_empty_string(self):
-        shell = PersistentShell()
-        original = shell.current_cwd
-        shell._parse_marker("")
-        assert shell.current_cwd == original
-
-    async def test_empty_path_after_colon(self):
-        shell = PersistentShell()
-        shell._parse_marker(f"{STDOUT_MARKER}:")
-        assert shell.current_cwd == ""
+        original = Filesystem.get_absolute_path()
+        shell._parse_marker(marker_line)
+        assert Filesystem.get_absolute_path() == original
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +109,7 @@ class TestProcessLifecycle:
 
         mock_asyncio_subprocess.exec.assert_called_once_with(
             "/bin/bash",
-            cwd=Filesystem.get_current_directory(),
+            cwd=Filesystem.get_absolute_path(),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -253,14 +259,17 @@ class TestCommandExecution:
         )
         mock_asyncio_subprocess.mock_process.stdin.drain.assert_called_once()
 
-    async def test_updates_cwd_from_marker(self, mock_asyncio_subprocess):
+    @pytest.mark.no_file_mocking
+    async def test_command_that_cds_moves_solveig(
+        self, mock_asyncio_subprocess, tmp_path
+    ):
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{STDOUT_MARKER}:/home/user/projects\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:{tmp_path}\n".encode()],
         )
 
-        await shell.run("cd /home/user/projects")
+        await shell.run(f"cd {tmp_path}")
 
-        assert shell.cwd == "/home/user/projects"
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(tmp_path)
 
     async def test_starts_process_automatically_if_none(self, mock_asyncio_subprocess):
         mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
@@ -276,24 +285,28 @@ class TestCommandExecution:
         mock_asyncio_subprocess.exec.assert_called_once()
         assert shell.proc == mock_asyncio_subprocess.mock_process
 
-    async def test_cwd_persists_across_commands(self, mock_asyncio_subprocess):
+    @pytest.mark.no_file_mocking
+    async def test_cwd_persists_across_commands(
+        self, mock_asyncio_subprocess, tmp_path
+    ):
+        moved = Filesystem.get_absolute_path(tmp_path)
         shell = mock_asyncio_subprocess.configure(
-            stdout_lines=[f"{STDOUT_MARKER}:/home/user/projects\n".encode()],
+            stdout_lines=[f"{STDOUT_MARKER}:{tmp_path}\n".encode()],
         )
-        await shell.run("cd /home/user/projects")
-        assert shell.cwd == "/home/user/projects"
+        await shell.run(f"cd {tmp_path}")
+        assert Filesystem.get_absolute_path() == moved
 
         mock_asyncio_subprocess.mock_process.stdout.readline.side_effect = [
             b"file1.txt\n",
             b"file2.txt\n",
-            f"{STDOUT_MARKER}:/home/user/projects\n".encode(),
+            f"{STDOUT_MARKER}:{tmp_path}\n".encode(),
         ]
         mock_asyncio_subprocess.mock_process.stderr.readline.side_effect = [b""]
 
         stdout, _ = await shell.run("ls")
         assert "file1.txt" in stdout
         assert "file2.txt" in stdout
-        assert shell.cwd == "/home/user/projects"
+        assert Filesystem.get_absolute_path() == moved
 
     async def test_run_detached_uses_shell_and_devnull(self, mock_asyncio_subprocess):
         shell = PersistentShell()
@@ -301,6 +314,7 @@ class TestCommandExecution:
 
         mock_asyncio_subprocess.shell.assert_called_once_with(
             "echo hello",
+            cwd=Filesystem.get_absolute_path(),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
             start_new_session=True,

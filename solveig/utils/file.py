@@ -281,32 +281,49 @@ class Filesystem:
     # =============================================================================
 
     @staticmethod
-    def get_absolute_path(path: str | PathLike) -> Path:
-        """Convert path to absolute path with user expansion (sync operation)."""
-        return Path(SyncPath(path).expanduser().resolve())
+    def change_current_dir(path: str | PathLike) -> Path:
+        """Move Solveig to `path`, and answer where it landed.
+
+        NOTE: the ONE writer of the working directory, and therefore the one
+        place that deals with the OS refusing to move (missing, not a directory,
+        no permission). The process cwd is the single source of truth for "where
+        is Solveig" - not a copy of the shell's, which would be a mirror, and
+        mirrors desync. `os.chdir` is process-wide, so relative resolution, the
+        anyio thread pool and every spawned child follow it at once.
+
+        Because this is the only way to move, a reader can assume it is standing
+        in a directory that exists and carry no fallback logic of its own.
+        """
+        abs_path = Filesystem.get_absolute_path(path)
+        os.chdir(abs_path)
+        return abs_path
 
     @staticmethod
-    def get_simple_path(path: Path | None = None, simplify: bool = False) -> str:
-        """Get directory path in user-friendly format (with ~ for home).
+    def get_absolute_path(path: str | PathLike | None = None) -> Path:
+        """Convert path to absolute path with user expansion (sync operation).
 
-        Args:
-            path: Optional canonical absolute path to format. If None, uses current working directory.
+        No argument asks the other question this class can answer: where Solveig
+        currently is. A relative path resolves against exactly that, so the two
+        readings are the same fact.
         """
-        if path is None:
-            current_dir = SyncPath.cwd()
-        else:
-            # Path should already be absolute and canonical from upstream
-            current_dir = SyncPath(path)
+        return Path(SyncPath(path if path is not None else ".").expanduser().resolve())
 
-        if simplify:
-            # If current directory is within home, use ~ notation
-            try:
-                relative_to_home = current_dir.relative_to(SyncPath.home())
-                return f"~/{relative_to_home}" if str(relative_to_home) != "." else "~"
-            except ValueError:
-                # Not within home directory, return full path
-                return str(current_dir)
-        else:
+    @staticmethod
+    def get_simple_path(path: str | PathLike | None = None) -> str:
+        """The same path, shortened to `~` for a human to read.
+
+        NOTE: separate from `get_absolute_path` rather than a `simplify` flag on
+        it, because the return value is NOT a usable path - `~/x` does not open.
+        One function whose result is sometimes openable and sometimes only
+        printable is a trap; two functions with the same calling convention are
+        not.
+        """
+        current_dir = SyncPath(Filesystem.get_absolute_path(path))
+        try:
+            relative_to_home = current_dir.relative_to(SyncPath.home())
+            return f"~/{relative_to_home}" if str(relative_to_home) != "." else "~"
+        except ValueError:
+            # Not within home directory, return full path
             return str(current_dir)
 
     @staticmethod
@@ -356,8 +373,12 @@ class Filesystem:
                 task = cls.read_metadata(abs_sub_path, descend_level=descend_level - 1)
                 tasks.append((abs_sub_path, task))
 
+            # Await all down-tree reading tasks, then index their results by their calling paths
             results = await asyncio.gather(*(task for _, task in tasks))
-            listing = {str(p): r for (p, _), r in zip(tasks, results, strict=False)}
+            listing = {
+                str(path): result
+                for (path, _), result in zip(tasks, results, strict=False)
+            }
         else:
             listing = None
 
@@ -378,12 +399,13 @@ class Filesystem:
         if not is_dir and is_readable:
             try:
                 raw = await abs_path.read_bytes()
-                if b"\x00" not in raw[:512]:  # text file heuristic
+                # HACK: somehow the best heuristic for checking if a file is text
+                if b"\x00" not in raw[:512]:
                     line_count = raw.count(b"\n") + (
                         1 if raw and not raw.endswith(b"\n") else 0
                     )
             except Exception:
-                pass
+                pass  # Binary file, no line count
 
         return FileMetadata(
             path=str(abs_path),
@@ -512,8 +534,15 @@ class Filesystem:
 
     @classmethod
     def path_matches_patterns(cls, abs_path: Path, patterns: list[Path]) -> bool:
-        """Check if a file path matches any of the given glob patterns (sync operation)."""
-        return any(abs_path.match(str(pattern)) for pattern in patterns)
+        """Check if a file path matches any of the given glob patterns (sync operation).
+
+        NOTE: `full_match`, never `match`. `PurePath.match` treats `**` as a
+        single `*`, so `proj/**/*.log` would match one level down only - an
+        ignore pattern written that way blocks nothing and says nothing about it.
+        `full_match` also anchors the whole path rather than matching from the
+        right, which is what makes an absolute pattern mean what it looks like.
+        """
+        return any(abs_path.full_match(str(pattern)) for pattern in patterns)
 
     # =============================================================================
     # LINE READING - Efficient line-based file operations

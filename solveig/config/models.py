@@ -15,6 +15,7 @@ from pydantic import (
 import solveig.interface.themes as themes
 from solveig.api.types import APIType, OpenAI, resolve_api_type
 from solveig.config import DEFAULT_SYSTEM_PROMPT
+from solveig.utils.file import Filesystem
 
 _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 # Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow"). Used
@@ -148,6 +149,13 @@ class PluginsConfig(BaseModel):
     tools: PluginToolsConfig = Field(default_factory=PluginToolsConfig)
     hooks: PluginHooksConfig = Field(default_factory=PluginHooksConfig)
 
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _abs_paths(cls, v: Any) -> Any:
+        """Anchored when set, so a `/plugins reload` after the assistant moved
+        still scans the directories the user meant."""
+        return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
+
 
 class MCPServerConfig(BaseModel):
     model_config = _MUTABLE
@@ -178,6 +186,14 @@ class SessionConfig(BaseModel):
     auto_save: bool = Field(
         default=True, description="Auto-save the session after each response"
     )
+
+    @field_validator("dir", mode="before")
+    @classmethod
+    def _abs_dir(cls, v: Any) -> Any:
+        """`SessionManager.sessions_dir` re-reads this on every access, so the
+        default `.solveig/sessions` would follow the assistant around and scatter
+        a single conversation's files across whatever directories it visited."""
+        return str(Filesystem.get_absolute_path(v)) if v else v
 
 
 class InterfaceConfig(BaseModel):

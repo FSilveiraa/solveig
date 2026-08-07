@@ -24,6 +24,7 @@ import pytest
 
 from solveig.config import SolveigConfig
 from solveig.tools.core.command import CommandTool
+from solveig.utils.file import Filesystem
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = [
@@ -250,13 +251,35 @@ class TestWorkingDirectoryTracking:
         )
         assert result.issues == []
 
-        # Real state: the shell moved. The Path stat is a getter over exactly
+        # Real state: Solveig moved. The Path stat is a getter over exactly
         # this, so asserting the display received a path would only test that
         # the tool passed a value along - which it no longer does, and no
         # longer should.
-        assert str(sandboxed_shell.cwd) == str(subdir)
+        assert Filesystem.get_absolute_path() == Filesystem.get_absolute_path(subdir)
         # And the display was told to re-read. It carries no value.
         assert any("refresh" in update for update in interface.stats_updates)
+
+    async def test_cd_moves_where_a_relative_path_resolves(
+        self, sandboxed_shell, tmp_path: Path
+    ):
+        """The bug this whole seam exists for: the assistant `cd`s, then reads
+        `./x`. Before the process cwd became the single source of truth, the
+        shell moved and path resolution did not, so the read either failed or
+        silently returned the wrong file."""
+        interface = MockInterface(choices=[0])
+        subdir = tmp_path / "docs"
+        subdir.mkdir()
+        (subdir / "README.md").write_text("the one in docs")
+        (tmp_path / "README.md").write_text("the one at the root")
+
+        result = await CommandTool(command=f"cd {subdir.name}").execute(
+            *make_ctx(interface=interface)
+        )
+        assert result.issues == []
+
+        resolved = Filesystem.get_absolute_path("./README.md")
+        assert resolved == Filesystem.get_absolute_path(subdir / "README.md")
+        assert (await Filesystem.read_file(resolved)).content == "the one in docs"
 
     async def test_detached_command_no_stats_update(self, sandboxed_shell):
         interface = MockInterface(choices=[0])

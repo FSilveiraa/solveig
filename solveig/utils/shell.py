@@ -138,7 +138,11 @@ class PersistentShell:
         self.shell = shell
         self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
-        self.current_cwd = Filesystem.get_simple_path()
+        # NOTE: the shell stores no directory of its own. The process cwd is the
+        # single source of truth, so a shell asked to start somewhere moves
+        # Solveig there rather than remembering a second answer.
+        if cwd is not None:
+            Filesystem.change_current_dir(cwd)
 
     async def start(self) -> None:
         """Start the persistent shell process if not already running."""
@@ -146,7 +150,7 @@ class PersistentShell:
             return
         self.proc = await asyncio.create_subprocess_exec(
             self.shell,
-            cwd=self.current_cwd,
+            cwd=Filesystem.get_absolute_path(),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -163,23 +167,32 @@ class PersistentShell:
         """Spawn a detached background process. Returns immediately with no output."""
         await asyncio.create_subprocess_shell(
             cmd,
+            cwd=Filesystem.get_absolute_path(),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
             start_new_session=True,
         )
 
     def _parse_marker(self, marker_line: str) -> None:
-        """Parse marker line to update current working directory."""
+        """Move Solveig to wherever the command left the shell.
+
+        A `cd` inside a command has to move the file tools with it - decades of
+        shell behaviour say the next command runs where the last one ended, and a
+        model that moves expects `./x` to mean the same thing the shell does.
+        """
         try:
             if ":" in marker_line:
                 marker, cwd = marker_line.split(":", 1)
                 if marker.strip() == STDOUT_MARKER:
-                    self.current_cwd = cwd.strip()
-        except (ValueError, AttributeError):
+                    Filesystem.change_current_dir(cwd.strip())
+        except (ValueError, AttributeError, OSError):
             pass
 
     async def restart(self) -> None:
-        """Kill and restart the shell, restoring current_cwd."""
+        """Kill and restart the shell, which comes back up where we are.
+
+        Nothing to restore: `start()` reads the process cwd, which never stopped
+        being the answer while the process was dead."""
         if self.proc:
             try:
                 self.proc.kill()
@@ -203,11 +216,6 @@ class PersistentShell:
                 pass
             await self.proc.wait()
             self.proc = None
-
-    @property
-    def cwd(self) -> str:
-        """Current working directory of the shell."""
-        return self.current_cwd
 
 
 # Global singleton instance
