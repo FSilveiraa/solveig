@@ -31,6 +31,8 @@ from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     from solveig.interface.themes import Palette
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
@@ -263,6 +265,29 @@ class SolveigInterface(ABC):
         `max_depth` and `ignore_patterns` control what renders initially,
         not what was read. Lazy expansion is handled internally by the
         frontend."""
+        ...
+
+    @abstractmethod
+    async def display_file_metadata(
+        self,
+        abs_path: str | PathLike,
+        metadata: FileMetadata | None = None,
+        prefix: str | None = None,
+        is_directory: bool = False,
+    ) -> None:
+        """Draw one filesystem entry as a header line.
+
+        Takes the metadata as a VALUE: the caller does the filesystem work, because
+        reading a `stat` is not a display concern. The glyphs, the separators, which
+        fields are worth showing and how long a path may get are all this method's.
+
+        `metadata` is the source of truth for everything it carries — path,
+        directory-ness, size, line count. `None` is a real state, not a caller being
+        lazy: the entry could not be read, either because it does not exist yet
+        (`write` creating one) or because replay is redrawing a call whose file has
+        since gone. The remaining arguments are the fallbacks for exactly that case,
+        never overrides — when metadata is present it wins.
+        """
         ...
 
     @abstractmethod

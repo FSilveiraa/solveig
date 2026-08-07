@@ -53,7 +53,17 @@ class TestWriteValidation:
             path=str(test_file), is_directory=False, content="hi"
         ).display_header(interface)
 
-        assert str(test_file) in interface.get_all_output()
+        # the file does not exist yet, so there is no metadata to read: the tool's
+        # is_directory is the fallback the frontend draws from
+        assert interface.file_lines == [
+            {
+                "path": str(test_file),
+                "is_directory": False,
+                "size": None,
+                "line_count": None,
+                "prefix": "Path:",
+            }
+        ]
 
     async def test_header_shows_path_for_directory(self, tmp_path):
         test_dir = tmp_path / "dir"
@@ -61,7 +71,9 @@ class TestWriteValidation:
 
         await WriteTool(path=str(test_dir), is_directory=True).display_header(interface)
 
-        assert str(test_dir) in interface.get_all_output()
+        assert [
+            (line["path"], line["is_directory"]) for line in interface.file_lines
+        ] == [(str(test_dir), True)]
 
 
 class TestFileOperations:

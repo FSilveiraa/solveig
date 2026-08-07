@@ -43,7 +43,9 @@ class TestDeleteValidation:
 
         await DeleteTool(path=str(test_file)).display_header(interface)
 
-        assert str(test_file) in interface.get_all_output()
+        # the header crosses as metadata now, so assert on the fact rather than on
+        # the glyphs and home-shortening the terminal would wrap it in
+        assert [line["path"] for line in interface.file_lines] == [str(test_file)]
 
     async def test_execute_shows_permanence_warning(self, tmp_path):
         test_file = tmp_path / "delete_me.txt"

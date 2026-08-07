@@ -28,7 +28,7 @@ from pydantic_settings import CliPositionalArg, CliSettingsSource
 from solveig.context import SolveigContext
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
-from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake, format_path_info
+from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
 
 if TYPE_CHECKING:
     from anyio import Path
@@ -271,17 +271,17 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         path: str,
         prefix: str = "Path:",
         is_directory: bool | None = None,
-        line_count: int | None = None,
     ) -> FileMetadata | None:
-        """Fetch metadata for `path`, display the formatted file-header line, and
-        return the metadata. Shared by every path-based tool's `display_header`.
+        """Read metadata for `path`, hand it to the interface to draw, and return it.
+        Shared by every path-based tool's `display_header`.
 
-        Pass `is_directory` to override the is-dir flag when the file doesn't
-        exist yet (e.g. `write` creating a new file/directory). Pass
-        `line_count` to override the displayed line count (e.g. show incoming
-        content size rather than the existing file's). On replay the file may be
-        gone or changed - metadata is read live, and a missing file degrades to
-        just the path line."""
+        Reading is this side's job; drawing is not. What comes back goes across as a
+        value, so the frontend decides the glyphs and how much of a path to show.
+
+        Pass `is_directory` for a path that does not exist yet (`write` creating a
+        new file or directory) - it is the fallback the frontend uses when there is
+        no metadata to read it from. On replay the file may be gone or changed, so
+        metadata is read live and a missing file degrades to just the path line."""
         abs_path = Filesystem.get_absolute_path(path)
         try:
             metadata = (
@@ -291,25 +291,11 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
             )
         except PermissionError:
             metadata = None
-        is_dir = (
-            is_directory
-            if is_directory is not None
-            else (metadata.is_directory if metadata else False)
-        )
-        displayed_line_count = (
-            line_count
-            if line_count is not None
-            else (metadata.line_count if metadata else None)
-        )
-        await interface.print(
-            format_path_info(
-                path=path,
-                abs_path=abs_path,
-                is_dir=is_dir,
-                size=metadata.size if metadata else None,
-                line_count=displayed_line_count,
-            ),
+        await interface.display_file_metadata(
+            abs_path=abs_path,
+            metadata=metadata,
             prefix=prefix,
+            is_directory=bool(is_directory),
         )
         return metadata
 

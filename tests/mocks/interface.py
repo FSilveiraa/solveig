@@ -137,6 +137,10 @@ class MockInterface(SolveigInterface):
         self.questions: list[str] = []
         self.stats_updates: list[dict[str, Any]] = []
         self.groups: list[str] = []
+        #: What crossed the display seam as VALUES, so a test can assert on the
+        #: facts without pinning the terminal's glyphs.
+        self.todos: list[Any] = []
+        self.file_lines: list[dict[str, Any]] = []
         self._stop_event = asyncio.Event()
         self._timeout_seconds = timeout_seconds
 
@@ -221,6 +225,26 @@ class MockInterface(SolveigInterface):
         serializable_dict = _dump_field(metadata)
         self.outputs.append(json.dumps(serializable_dict, default=str))
         return _MockTreeBox(self.outputs, tree_title)
+
+    async def display_file_metadata(
+        self,
+        abs_path,
+        metadata=None,
+        prefix: str | None = None,
+        is_directory: bool = False,
+    ) -> None:
+        # Records the resolved facts, not a drawn line: the glyphs and the
+        # home-shortening are the terminal's, and a test asserting on them here
+        # would pin one frontend's choices to every other.
+        self.file_lines.append(
+            {
+                "path": str(metadata.path if metadata else abs_path),
+                "is_directory": metadata.is_directory if metadata else is_directory,
+                "size": metadata.size if metadata else None,
+                "line_count": metadata.line_count if metadata else None,
+                "prefix": prefix,
+            }
+        )
 
     async def display_todos(self, todos) -> None:
         # Records the VALUES, deliberately: a test asserting on an arrow or a marker

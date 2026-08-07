@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from os import PathLike
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pyperclip
+from anyio import Path
 from pydantic import ByteSize
 
-if TYPE_CHECKING:
-    from anyio import Path
+from solveig.utils.file import Filesystem
 
 
 def format_age(mtime: int) -> str:
@@ -28,16 +28,21 @@ def format_age(mtime: int) -> str:
 
 
 def format_path_info(
-    path: str | PathLike,
-    abs_path: Path,
+    abs_path: str | PathLike,
     is_dir: bool,
     size: int | None = None,
     line_count: int | None = None,
 ) -> str:
-    """Format a filesystem path into a single display line with optional metadata."""
-    path_info = f"{'🗁 ' if is_dir else '🗎'} {path}"
-    if str(abs_path) != str(path):
-        path_info += f"  ({abs_path})"
+    """One filesystem entry as a display line, home-shortened.
+
+    Takes only the absolute path: what the model typed is a tool's business, not
+    something a reader of the line needs to see twice. A `None` size or line count is
+    a fact that could not be read, so its segment is omitted rather than guessed at.
+    """
+    # NOTE: `get_current_directory` shortens any absolute path to its ~ form; the
+    # name is about its no-argument default, not about what it does here.
+    shown = Filesystem.get_current_directory(Path(abs_path), simplify=True)
+    path_info = f"{'🗁 ' if is_dir else '🗎'} {shown}"
     if size is not None:
         path_info += f"  |  ⛁ {ByteSize(size).human_readable()}"
     if line_count is not None:

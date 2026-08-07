@@ -26,6 +26,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
+from anyio import Path
 from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
@@ -50,9 +51,11 @@ from solveig.interface.cli.tree_display import TreeDisplay
 from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
-from solveig.utils.misc import get_language
+from solveig.utils.misc import format_path_info, get_language
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     from solveig.interface.cli.collapsible_widgets import CustomCollapsible
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
@@ -166,6 +169,26 @@ class TerminalDisplay(SolveigInterface):
             await self._messages.drop(message_ids)
 
     # -- complex display -----------------------------------------------------
+
+    async def display_file_metadata(
+        self,
+        abs_path: str | PathLike,
+        metadata: FileMetadata | None = None,
+        prefix: str | None = None,
+        is_directory: bool = False,
+    ) -> None:
+        # Resolving metadata-or-fallback is this side's job; drawing the line is
+        # `format_path_info`'s. `metadata` wins wherever it has something to say, so
+        # the arguments only ever cover the entry that could not be read.
+        await self.print(
+            format_path_info(
+                abs_path=Path(metadata.path) if metadata else abs_path,
+                is_dir=metadata.is_directory if metadata else is_directory,
+                size=metadata.size if metadata else None,
+                line_count=metadata.line_count if metadata else None,
+            ),
+            prefix=prefix,
+        )
 
     async def display_todos(self, todos: list[TodoItem]) -> None:
         # How a todo list looks in a terminal: one line each, numbered, the status
