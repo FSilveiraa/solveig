@@ -45,6 +45,7 @@ from solveig.interface.cli.collapsible_widgets import (
     TextBoxWidget,
 )
 from solveig.interface.cli.conversation_area import BANNER
+from solveig.interface.cli.keys import cancel_hint
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
 from solveig.interface.cli.tree_display import FileTree
@@ -378,7 +379,6 @@ class TerminalInterface(TerminalDisplay):
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
-        suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         final_status = (
             final_status
@@ -388,6 +388,11 @@ class TerminalInterface(TerminalDisplay):
         await self.set_status(status)
         await asyncio.sleep(0)
 
+        # The hint is this frontend's to write, and only when there is something
+        # to cancel: `with_cancellable` registers the task before starting the
+        # animation, so an empty registry means a plain animation with no keys
+        # to offer. Derived from the real bindings, so a rebind cannot make it lie.
+        suffix = cancel_hint() if self.get_active_tasks() else None
         spinner = random.choice(list(self.spinners.values()))
         self.app._stats_dashboard.start_status_animation(
             spinner, timeout=timeout, suffix=suffix
@@ -534,10 +539,9 @@ class GroupInterface(TerminalDisplay):
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
-        suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         async with self._root.with_animation(
-            status=status, final_status=final_status, timeout=timeout, suffix=suffix
+            status=status, final_status=final_status, timeout=timeout
         ) as value:
             yield value
 

@@ -157,3 +157,32 @@ async def test_entering_a_group_builds_no_second_app():
     assert group.app is interface.app
     assert group._active_tasks is interface._active_tasks
     assert group.user_message_queue is interface.user_message_queue
+
+
+def test_cancel_hint_is_derived_from_the_bindings_that_implement_it():
+    """The hint names a key, which is a promise about behaviour.
+
+    It used to be the literal "(Esc/Ctrl+C to cancel)" passed through the
+    protocol as `with_animation(suffix=...)`, and it was WRONG: Escape cancels a
+    waiting prompt (`InputBar.on_key`) but never an in-flight task, which only
+    `SolveigTextualApp.on_key` cancels. Deriving both from the same tuples is
+    what stops the text and the handler drifting apart again.
+    """
+    from solveig.interface.cli import keys
+
+    assert keys.cancel_hint(keys.TASK_CANCEL_KEYS) == "(Ctrl+C to cancel)"
+    assert keys.cancel_hint(keys.PROMPT_CANCEL_KEYS) == "(Esc/Ctrl+C to cancel)"
+    # A key nobody labelled still prints, rather than vanishing from the hint.
+    assert keys.cancel_hint(("ctrl+q",)) == "(ctrl+q to cancel)"
+
+
+def test_with_animation_takes_no_cancel_hint():
+    """The protocol carries the capability, not the vocabulary. `with_cancellable`
+    registering the task is what tells a frontend the work can be stopped; how a
+    user reaches that is the frontend's own word."""
+    import inspect
+
+    from solveig.interface.base import SolveigInterface
+
+    params = inspect.signature(SolveigInterface.with_animation).parameters
+    assert "suffix" not in params

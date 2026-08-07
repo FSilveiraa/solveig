@@ -298,7 +298,6 @@ class MockInterface(SolveigInterface):
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
-        suffix: str | None = None,
     ) -> AsyncGenerator[None]:
         await self.set_status(status=status)
         try:

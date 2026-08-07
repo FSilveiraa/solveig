@@ -13,6 +13,7 @@ from solveig.utils.misc import copy_to_clipboard
 
 from .conversation_area import ConversationArea
 from .input_bar import InputBar
+from .keys import TASK_CANCEL_KEYS
 from .queued_messages import QueuedMessagesDisplay
 from .stats_bar import StatsBar
 
@@ -126,11 +127,12 @@ class SolveigTextualApp(TextualApp):
     async def on_key(self, event) -> None:
         """Handle key events directly.
 
-        Ctrl+C behavior:
+        A task-cancel key (see `keys.TASK_CANCEL_KEYS`, which the status hint is
+        also built from):
         - If there's an active network request: cancel it
         - Otherwise: exit the application
         """
-        if event.key == "ctrl+c":
+        if event.key in TASK_CANCEL_KEYS:
             # Check if there's an active operation via the interface
             interface = self._interface_ref
             if interface is not None and interface.get_active_tasks():

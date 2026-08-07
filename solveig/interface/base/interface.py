@@ -180,8 +180,13 @@ class SolveigInterface(ABC):
         task, register it in `_active_tasks`, show `status` while it runs,
         unregister when done. Cancellation mechanics live HERE (cancel_task,
         targeted or latest) - every UI with input has both a per-task cancel
-        (a button) and a global untargeted one (Esc, Ctrl+.), so the registry
-        and the verb are protocol, not per-frontend rewrites.
+        (a button) and a global untargeted one, so the registry and the verb are
+        protocol, not per-frontend rewrites.
+
+        NOTE: what the trigger is CALLED is not protocol. Registering the task
+        already tells the frontend this work is cancellable; how a user reaches
+        that - which keystroke, spelled how, or a ✕ button instead - only the
+        frontend knows, and only the frontend can keep the name honest.
         """
         task = asyncio.ensure_future(coro)
         self._active_tasks[task] = None
@@ -191,7 +196,6 @@ class SolveigInterface(ABC):
                     status,
                     final_status,
                     timeout=timeout,
-                    suffix="(Esc/Ctrl+C to cancel)",
                 ):
                     yield task
             else:
@@ -370,9 +374,12 @@ class SolveigInterface(ABC):
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
-        suffix: str | None = None,
     ) -> AsyncGenerator[None]:
-        """Context manager for displaying animation during async operations."""
+        """Context manager for displaying animation during async operations.
+
+        NOTE: no cancel-hint argument. A frontend that wants to say how to stop
+        the work reads `get_active_tasks()` - registration is the fact, and the
+        wording is the frontend's own business."""
         yield  # pragma: no cover - makes this a valid generator
 
     # -- status & stats ------------------------------------------------------

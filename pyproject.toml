@@ -196,6 +196,7 @@ layers = [
     "collapsible_widgets",
     "widgets",
     "buttons | input_bar | tree_display",
+    "keys",
 ]
 
 [[tool.importlinter.contracts]]

@@ -14,6 +14,8 @@ from textual.widgets import OptionList, TextArea
 from solveig.exceptions import UserCancel
 from solveig.interface.themes import Palette
 
+from .keys import PROMPT_CANCEL_KEYS
+
 
 class InputMode(Enum):
     """Input widget modes."""
@@ -170,7 +172,7 @@ class InputBar(Container):
         """Escape/Ctrl+C cancel an active question or choice prompt, from either
         the text input or the option list - this is the common ancestor of both.
         """
-        if event.key not in ("escape", "ctrl+c"):
+        if event.key not in PROMPT_CANCEL_KEYS:
             return
         if self._mode == InputMode.QUESTION and self._question_future:
             if not self._question_future.done():
