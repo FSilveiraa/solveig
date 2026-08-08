@@ -181,7 +181,7 @@ name = "Every solveig.interface.base module is placed"
 type = "layers"
 containers = ["solveig.interface.base"]
 exhaustive = true
-layers = ["interface", "widgets"]
+layers = ["interface", "widgets | actions"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface.tui module is placed"

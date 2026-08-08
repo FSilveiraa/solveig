@@ -12,6 +12,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 from textual.app import App, ComposeResult
 
 from solveig.exceptions import UserCancel
+from solveig.interface.base import Role
 from solveig.interface.tui.buttons import (
     BranchButton,
     DeleteButton,
@@ -32,9 +33,9 @@ async def _conversation() -> tuple[Conversation, str, str]:
     return conv, user_id, assistant_id
 
 
-def _comment(conv, message_id, *, role, interface=None):
+def _comment(conv, message_id, *, role: Role, interface=None):
     return EditableComment(
-        "hi" if role == "user" else "hello",
+        "hi" if role is Role.USER else "hello",
         conversation=conv,
         interface=interface or MockInterface(conversation=conv),
         message_id=message_id,
@@ -55,7 +56,7 @@ class _HarnessApp(App):
 @pytest.mark.anyio
 async def test_user_message_mounts_edit_retry_delete_branch():
     conv, user_id, _ = await _conversation()
-    comment = _comment(conv, user_id, role="user")
+    comment = _comment(conv, user_id, role=Role.USER)
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert comment.query_one(RetryButton)
@@ -66,7 +67,7 @@ async def test_user_message_mounts_edit_retry_delete_branch():
 @pytest.mark.anyio
 async def test_assistant_message_has_no_retry_button():
     conv, _, assistant_id = await _conversation()
-    comment = _comment(conv, assistant_id, role="assistant")
+    comment = _comment(conv, assistant_id, role=Role.ASSISTANT)
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert comment.query_one(DeleteButton)
@@ -78,7 +79,7 @@ async def test_assistant_message_has_no_retry_button():
 async def test_begin_edit_updates_conversation_and_display():
     conv, user_id, _ = await _conversation()
     interface = MockInterface(conversation=conv, user_inputs=["edited"])
-    comment = _comment(conv, user_id, role="user", interface=interface)
+    comment = _comment(conv, user_id, role=Role.USER, interface=interface)
 
     await comment.begin_edit()
 
@@ -89,7 +90,7 @@ async def test_begin_edit_updates_conversation_and_display():
 @pytest.mark.anyio
 async def test_delete_from_here_truncates_conversation():
     conv, _, assistant_id = await _conversation()
-    comment = _comment(conv, assistant_id, role="assistant")
+    comment = _comment(conv, assistant_id, role=Role.ASSISTANT)
 
     await comment.delete_from_here()
 
@@ -109,7 +110,7 @@ async def test_begin_edit_cancel_does_not_crash_or_mutate():
     """Regression: cancelling the Edit prompt must not propagate UserCancel
     unhandled, and must leave the conversation untouched."""
     conv, user_id, _ = await _conversation()
-    comment = _comment(conv, user_id, role="user", interface=_CancellingInterface())
+    comment = _comment(conv, user_id, role=Role.USER, interface=_CancellingInterface())
 
     await comment.begin_edit()  # must not raise
 
@@ -121,7 +122,7 @@ async def test_retry_truncates_and_requeues_prompt():
     conv, user_id, _ = await _conversation()
     interface = MockInterface(conversation=conv)
     interface.user_message_queue = UserMessageQueue()
-    comment = _comment(conv, user_id, role="user", interface=interface)
+    comment = _comment(conv, user_id, role=Role.USER, interface=interface)
 
     await comment.retry()
 

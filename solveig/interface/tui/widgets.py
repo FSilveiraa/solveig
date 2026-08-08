@@ -1,13 +1,14 @@
-"""Basic UI widgets for the Textual CLI interface."""
+"""Basic UI widgets for the Textual interface."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from textual.containers import Horizontal
 from textual.events import Click
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
+from solveig.interface.base.actions import Role
 from solveig.utils.misc import copy_to_clipboard
 
 from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
@@ -86,7 +87,7 @@ class EditableComment(Comment):
         interface: "SolveigInterface",
         message_id: str,
         part_index: int,
-        role: Literal["user", "assistant"],
+        role: Role,
     ):
         super().__init__(comment)
         self.conversation = conversation
@@ -105,7 +106,7 @@ class EditableComment(Comment):
         with Horizontal(classes="comment-actions"):
             yield CopyButton(lambda: self.comment)
             yield EditButton(self)
-            if self.role == "user":
+            if self.role is Role.USER:
                 yield RetryButton(self)
             yield DeleteButton(self)
             yield BranchButton(self)

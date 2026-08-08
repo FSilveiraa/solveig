@@ -30,6 +30,7 @@ from pydantic_ai.messages import (
 from textual.widget import Widget
 from textual.widgets import Markdown as MarkdownWidget
 
+from solveig.interface.base.actions import Role
 from solveig.session.conversation import Conversation, MessageId
 
 from .collapsible_widgets import TextBoxWidget
@@ -47,16 +48,16 @@ if TYPE_CHECKING:
     from .conversation_area import ConversationArea
 
 
-def _role_of(message: ModelMessage | None) -> str | None:
-    """user / assistant for closed conversational turns; None for a message
-    that carries no closed content of its own (e.g. a tool-return request), or
-    for a missing message."""
+def _role_of(message: ModelMessage | None) -> Role | None:
+    """The role for closed conversational turns; None for a message that
+    carries no closed content of its own (e.g. a tool-return request), or for a
+    missing message."""
     if isinstance(message, ModelResponse):
-        return "assistant"
+        return Role.ASSISTANT
     if isinstance(message, ModelRequest) and any(
         isinstance(part, UserPromptPart) for part in message.parts
     ):
-        return "user"
+        return Role.USER
     return None
 
 
@@ -77,7 +78,7 @@ class _Mounted:
     screen and the role it drew them as. ONE record, so a drop forgets both at
     once - two dicts keyed by message id would be two things to keep in step."""
 
-    role: str | None
+    role: Role | None
     widgets: list[Widget] = field(default_factory=list)
 
 
@@ -186,7 +187,7 @@ class MessageDisplay:
         part: ModelRequestPart | ModelResponsePart,
         message_id: MessageId,
         part_index: int,
-        role: str | None,
+        role: Role | None,
     ) -> Widget | None:
         """The one widget a conversational part becomes, or None if it carries
         no closed content to show (empty, or a tool call/return - a tool owns
@@ -207,7 +208,7 @@ class MessageDisplay:
             interface=self._interface,
             message_id=message_id,
             part_index=part_index,
-            role="user" if role == "user" else "assistant",
+            role=role or Role.ASSISTANT,
         )
 
     async def _update_widget(self, widget: Widget, content: str) -> None:
