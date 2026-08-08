@@ -324,7 +324,9 @@ async def run_async(
 
     # The conversation's two observers, both self-registering: one shows it,
     # one saves it. SessionDisplay is built after the interface because it
-    # drives the interface's transcript verbs.
+    # drives the interface's transcript verbs. It takes the queue because a
+    # retried message is re-submitted through it — handed over here rather than
+    # read off the interface, which owns display and not the session's channels.
     SessionDisplay(conversation, interface, user_message_queue)
 
     # The registry owns the prompt gate: /commands are dispatched before

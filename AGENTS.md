@@ -59,6 +59,10 @@ session/display.py  SessionDisplay — the observer that puts a conversation on
               screen, and the peer of SessionManager (one shows it, one saves it).
               Interface-agnostic: it reduces display to the interface's protocol
               verbs, and redraws a recorded tool call ONLY on conversation_loaded.
+              Also where a model message stops being one: part → text, message →
+              Role, and the buttons a message offers → closures over its id. It
+              holds the MessageBox handles it got back, one insertion-ordered
+              dict answering what is up, what to restate and what to remove.
 context.py    SolveigContext = the RunContext deps dataclass — exactly {config,
               interface}. Nothing else; capabilities read ctx.deps live at call time.
 api/          api/types.py: APIType (base class with OpenAI/Anthropic/Gemini
@@ -168,12 +172,25 @@ These are not style preferences — they are the seams the codebase is built on.
 `SolveigConfig(BaseSettings)` (`config/config.py`) with nested sub-models in
 `config/models.py`: `api`, `system_prompt`, `tools`, `plugins`, `mcp`, `session`,
 `interface`, plus top-level `briefing`/`min_disk_space_left`/`auto_allowed_paths`/
-`ignore_paths`/`disable_autonomy`.
+`ignore_paths`/`disable_autonomy`/`stream`.
 
+- **A section is named after the subsystem it configures, never the technology.**
+  `interface.*` holds ONE SECTION PER FRONTEND — `interface.tui` (theme, code_theme,
+  tree_expand_root, tree_max_depth, diff_context_lines, auto_copy_selection) and
+  `interface.web` (host, port) — because a Textual palette means nothing to a
+  browser and a listen port means nothing to a terminal. A key directly under
+  `interface` names a frontend; it never names a setting that happens to be about
+  the UI. That rule is what told `stream` it did not belong there (there is no
+  frontend called "stream") and it stays top-level: it is not an API parameter
+  either, since nothing about it is sent to the provider. `auto_collapse_tools` is
+  the one field that stays at `interface.*` — every frontend that can fold a group
+  can honour it.
 - **Sources & precedence:** CLI > env (`SOLVEIG_API__KEY`) > config files. Files are
   `./.solveig/config.{json,yaml,yml,toml}` (local) layered over `~/.solveig/config.*`
-  (global), deep-merged by anyconfig (`config/sources.py`). Legacy flat keys are a
-  **hard break** with an explicit old→new map.
+  (global), deep-merged by anyconfig (`config/sources.py`). Legacy keys are a
+  **hard break** with an explicit old→new map, checked over the loaded config's LEAF
+  PATHS so a key that moved between sections (`interface.theme` →
+  `interface.tui.theme`) reports the same way a pre-nesting flat key does.
 - **Runtime schema composition:** config never hand-enumerates tools.
   `_compose_section` (`config/config.py`) builds each section; `bootstrap.py` is what
   feeds it, because config must not import the tool or plugin packages back —
@@ -228,12 +245,26 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 
 ## Interface
 
+- **The protocol carries content and capability; the frontend draws.** A frontend
+  never holds the conversation, never sees a message id, and never decodes a model
+  message. `add_message(text, role, actions)` and `add_reasoning(text)` hand over
+  everything needed to draw and give back a `MessageBox` — and the HANDLE is the
+  identity, so restating (an edit, the next token of a stream) and removing (a
+  rewind) go through it rather than through an id the frontend would have to keep a
+  map for. The machine check is the import contract: `solveig.interface.tui` and
+  `solveig.session.conversation` are declared INDEPENDENT (`|`), so wiring them back
+  together fails `just import`.
 - `interface/base/interface.py` — `SolveigInterface` (ABC): the display protocol +
   the user-message queue (the interface's output channel for typed input) + the
-  cancellation registry. `interface/base/widgets.py` — the four `@runtime_checkable`
+  cancellation registry. `interface/base/widgets.py` — the five `@runtime_checkable`
   box handles a display verb hands back (`TextBox`, `DiffBox`, `TreeBox`,
-  `EditableMessage`); a missing method fails rather than no-ops. The observer that
-  decides *what* to show is `session/display.py`, not the interface.
+  `MessageBox`, `EditableMessage`); a missing method fails rather than no-ops.
+  `interface/base/actions.py` — `Role` and `MessageActions`, the closures a message
+  may offer. An action that does not apply is ABSENT and no control is drawn for it,
+  which is how "an assistant turn cannot be retried" is expressed without a frontend
+  knowing what an assistant turn is. Refusing a mid-run mutation lives in the
+  closures too — it is app policy. The observer that decides *what* to show, decodes
+  parts and builds those closures is `session/display.py`, not the interface.
 - `interface/tui/` — the Textual materialization. Named for what it is: "CLI"
   already means argv parsing in this tree (`cli_args`, `CliPositionalArg`,
   `CliSettingsSource`, `from_cli_tokens`), and the package name matches its config
@@ -241,10 +272,11 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   three-class split: `TerminalDisplay` (everything that renders into a container of
   an app it does NOT own — deliberately constructor-free), `TerminalInterface` (the
   root: owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a
-  scoped display fixed to one collapsible group). `message_display.py` maps a
-  message part → widget; `app.py` holds the static theme-independent CSS.
+  scoped display fixed to one collapsible group). `message_boxes.py` holds the two
+  handles the transcript verbs hand back; `app.py` holds the static
+  theme-independent CSS.
 - **Display verbs take domain values, never formatted text.** `display_todos` takes
-  `list[TodoItem]`, `display_file_metadata` takes a `FileMetadata`, `display_tree`
+  `list[TodoItem]`, `display_file_metadata` takes a `FileMetadata`, `add_tree_box`
   takes the metadata. The caller decides WHAT to show and WHEN; the frontend decides
   the glyphs, the separators, the ordering marks and how much of a path to show. A
   tool that emits `f"→ 🔵 {i}. {text}"` has already made every decision a non-terminal

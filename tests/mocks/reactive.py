@@ -10,6 +10,9 @@ Textual app or a widget tree.
 Why a mock rather than reusing `SessionDisplay`: that renders through a
 `SolveigInterface` and resolves tool classes per load, dragging the whole
 display stack into a test whose subject is `Conversation`'s event contract.
+Its verbs are also deliberately id-keyed, which the display protocol's are
+not — here the id IS the subject, because what is under test is that the
+right event fired for the right message.
 
 The three verbs are public and async ON PURPOSE — a test that needs to observe
 *while* a stream is in flight subclasses one of them and calls `super()`
@@ -79,10 +82,10 @@ class RecordingTranscript(ConversationObserver):
         self.events.append(("rerender", message_id))
 
     async def remove(self, message_ids: tuple[MessageId, ...]) -> None:
-        """Batched on purpose - a truncation drops a whole tail and a load drops
-        everything, and a real frontend unmounts that in one pass
-        (`SolveigInterface.drop_messages`). One event per id would let a test
-        pass against a frontend that thrashed the widget tree."""
+        """Takes the whole tail at once because that is what the EVENT means -
+        a truncation drops a contiguous run and a load drops everything, and a
+        test asserting on one remove per id would be asserting on the order a
+        frontend happened to unmount in."""
         for message_id in message_ids:
             self.mounted.pop(message_id, None)
         self.events.append(("remove", message_ids))

@@ -220,7 +220,7 @@ class FileTree(TreeBox):
 
     NOTE: inherits the protocol EXPLICITLY. `TreeDisplay` could not — a Textual
     widget's metaclass and a Protocol's are unrelated — so conformance was only
-    checked where `display_tree`'s return annotation said `TreeBox`. That is
+    checked where `add_tree_box`'s return annotation said `TreeBox`. That is
     precisely how `refresh` drifted: the protocol was widened to
     `(*args, **kwargs) -> object` to accommodate Textual's fluent `refresh`,
     and a return-site check had nothing to object to. Owning the widget instead
