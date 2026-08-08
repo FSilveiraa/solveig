@@ -80,7 +80,7 @@ solveig = ["system_prompt/stories/*.jsonl"]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-omit = ["solveig/interface/cli/*"]
+omit = ["solveig/interface/tui/*"]
 
 [tool.coverage.report]
 show_missing = true
@@ -115,7 +115,7 @@ layers = [
     "solveig.agent",
     "solveig.subcommands.registry",
     "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
-    "solveig.interface.base : solveig.interface.cli : solveig.session.conversation : solveig.context : solveig.api.client",
+    "solveig.interface.base : solveig.interface.tui : solveig.session.conversation : solveig.context : solveig.api.client",
     "solveig.subcommands.base : solveig.user_message_queue",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
     "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo",
@@ -174,7 +174,7 @@ name = "Every solveig.interface module is placed"
 type = "layers"
 containers = ["solveig.interface"]
 exhaustive = true
-layers = ["cli", "base", "themes"]
+layers = ["tui", "base", "themes"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface.base module is placed"
@@ -184,9 +184,9 @@ exhaustive = true
 layers = ["interface", "widgets"]
 
 [[tool.importlinter.contracts]]
-name = "Every solveig.interface.cli module is placed"
+name = "Every solveig.interface.tui module is placed"
 type = "layers"
-containers = ["solveig.interface.cli"]
+containers = ["solveig.interface.tui"]
 exhaustive = true
 layers = [
     "interface",
@@ -268,7 +268,7 @@ layers = ["dotted | misc | shell", "file"]
 [[tool.importlinter.contracts]]
 name = "Frontends depend only on the protocol"
 type = "forbidden"
-source_modules = ["solveig.interface.base", "solveig.interface.cli"]
+source_modules = ["solveig.interface.base", "solveig.interface.tui"]
 forbidden_modules = [
     "solveig.session.manager",
     "solveig.session.display",

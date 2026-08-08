@@ -21,7 +21,7 @@ from solveig.api.client import Client
 from solveig.config import SolveigConfig
 from solveig.config.editor import register_config_stat
 from solveig.interface.base import Level, SolveigInterface, Stat
-from solveig.interface.cli.interface import TerminalInterface
+from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import connect_all
 from solveig.plugins.discovery import discover_plugins, report_plugins

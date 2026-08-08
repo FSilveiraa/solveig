@@ -3,10 +3,10 @@
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from solveig.interface.cli.collapsible_widgets import (
+from solveig.interface.themes import Palette
+from solveig.interface.tui.collapsible_widgets import (
     CustomCollapsible,
 )
-from solveig.interface.themes import Palette
 from solveig.user_message_queue import UserMessageQueue
 
 

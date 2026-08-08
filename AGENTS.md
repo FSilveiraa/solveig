@@ -234,7 +234,10 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   box handles a display verb hands back (`TextBox`, `DiffBox`, `TreeBox`,
   `EditableMessage`); a missing method fails rather than no-ops. The observer that
   decides *what* to show is `session/display.py`, not the interface.
-- `interface/cli/` — the Textual materialization. `interface.py` holds a
+- `interface/tui/` — the Textual materialization. Named for what it is: "CLI"
+  already means argv parsing in this tree (`cli_args`, `CliPositionalArg`,
+  `CliSettingsSource`, `from_cli_tokens`), and the package name matches its config
+  section, `interface.tui.*`. `interface.py` holds a
   three-class split: `TerminalDisplay` (everything that renders into a container of
   an app it does NOT own — deliberately constructor-free), `TerminalInterface` (the
   root: owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a
@@ -428,7 +431,7 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
 Pyramid: `tests/unit` (mocked), `tests/integration` (real subprocess/file markers),
 `tests/end_to_end`. "Mock by default"; `tests/mocks/` has the headless
 `RecordingTranscript`, mock interface/client, and the `just mock`/`just demo` harness.
-UI (`solveig/interface/cli/*`) is excluded from coverage.
+UI (`solveig/interface/tui/*`) is excluded from coverage.
 
 ## Commits
 
@@ -445,6 +448,6 @@ The live set includes `tools/base.py`'s and `subcommands/base.py`'s
 accepts a `BaseModel` at runtime), `user_message_queue.py`'s `self._queue` peek
 (asyncio.Queue exposes no public read; confined to the class that owns the queue),
 `api/types.py`'s `GoogleProvider(api_key=None)`, the optional-dep
-`_trafilatura = None`, and `interface/cli/collapsible_widgets.py`'s framework-private
+`_trafilatura = None`, and `interface/tui/collapsible_widgets.py`'s framework-private
 `CollapsibleTitle` import (marked `# HACK:`, re-verify on Textual upgrades).
 `warn_unused_ignores` keeps them honest — remove an ignore the moment it's stale.

@@ -15,7 +15,7 @@ import pytest
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface
-from solveig.interface.cli.interface import GroupInterface, TerminalInterface
+from solveig.interface.tui.interface import GroupInterface, TerminalInterface
 from tests.mocks import MockInterface
 
 
@@ -57,11 +57,11 @@ def test_box_handles_inherit_their_protocol_and_are_not_widgets():
     from textual.widget import Widget
 
     from solveig.interface.base import widgets
-    from solveig.interface.cli.collapsible_widgets import (
+    from solveig.interface.tui.collapsible_widgets import (
         CollapsibleDiffBox,
         CollapsibleTextBox,
     )
-    from solveig.interface.cli.tree_display import FileTree
+    from solveig.interface.tui.tree_display import FileTree
 
     for handle, contract in (
         (CollapsibleTextBox, widgets.TextBox),
@@ -151,7 +151,7 @@ async def test_entering_a_group_builds_no_second_app():
     assert TerminalInterface not in GroupInterface.__mro__
 
     interface = TerminalInterface()
-    with patch("solveig.interface.cli.interface.SolveigTextualApp") as app_cls:
+    with patch("solveig.interface.tui.interface.SolveigTextualApp") as app_cls:
         group = GroupInterface(root=interface, group_widget=_FakeGroupWidget())
     app_cls.assert_not_called()
     assert group.app is interface.app
@@ -168,7 +168,7 @@ def test_cancel_hint_is_derived_from_the_bindings_that_implement_it():
     `SolveigTextualApp.on_key` cancels. Deriving both from the same tuples is
     what stops the text and the handler drifting apart again.
     """
-    from solveig.interface.cli import keys
+    from solveig.interface.tui import keys
 
     assert keys.cancel_hint(keys.TASK_CANCEL_KEYS) == "(Ctrl+C to cancel)"
     assert keys.cancel_hint(keys.PROMPT_CANCEL_KEYS) == "(Esc/Ctrl+C to cancel)"
@@ -212,7 +212,7 @@ async def test_frontend_policy_gates_the_callers_intent():
     """
     from unittest.mock import AsyncMock, MagicMock
 
-    from solveig.interface.cli.interface import TerminalInterface
+    from solveig.interface.tui.interface import TerminalInterface
 
     async def collapsed_with(*, tool_intent: bool, policy: bool) -> bool:
         interface = TerminalInterface.__new__(TerminalInterface)  # no Textual app

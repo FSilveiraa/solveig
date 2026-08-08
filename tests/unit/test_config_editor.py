@@ -80,7 +80,6 @@ class TestEditableFields:
 
     async def test_plugin_sections_appear_after_parse(self):
         """Composed plugin sections are editable after a full bootstrap parse."""
-        from solveig.config import SolveigConfig
 
         config = await bootstrap.parse_config_and_prompt([])
         fields = editable_fields(config)

@@ -7,9 +7,9 @@ from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.config.models import (
     ApiConfig,
-    TuiConfig,
     MCPServerConfig,
     SystemPromptConfig,
+    TuiConfig,
 )
 from solveig.interface import themes
 from solveig.tools.base import ToolConfig

@@ -40,17 +40,17 @@ from solveig.interface.base import (
     TextBox,
     TreeBox,
 )
-from solveig.interface.cli.app import SolveigTextualApp
-from solveig.interface.cli.collapsible_widgets import (
+from solveig.interface.themes import Palette
+from solveig.interface.tui.app import SolveigTextualApp
+from solveig.interface.tui.collapsible_widgets import (
     CollapsibleDiffBox,
     TextBoxWidget,
 )
-from solveig.interface.cli.conversation_area import BANNER
-from solveig.interface.cli.keys import cancel_hint
-from solveig.interface.cli.message_display import MessageDisplay
-from solveig.interface.cli.stats_bar import TextualStat
-from solveig.interface.cli.tree_display import FileTree
-from solveig.interface.themes import Palette
+from solveig.interface.tui.conversation_area import BANNER
+from solveig.interface.tui.keys import cancel_hint
+from solveig.interface.tui.message_display import MessageDisplay
+from solveig.interface.tui.stats_bar import TextualStat
+from solveig.interface.tui.tree_display import FileTree
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import format_path_info, get_language
@@ -58,7 +58,7 @@ from solveig.utils.misc import format_path_info, get_language
 if TYPE_CHECKING:
     from os import PathLike
 
-    from solveig.interface.cli.collapsible_widgets import CustomCollapsible
+    from solveig.interface.tui.collapsible_widgets import CustomCollapsible
     from solveig.session.conversation import Conversation, MessageId
     from solveig.user_message_queue import UserMessageQueue
 

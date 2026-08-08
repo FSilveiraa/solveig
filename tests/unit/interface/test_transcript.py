@@ -4,7 +4,7 @@ Drives the REAL observer (SessionDisplay, session/display.py) headlessly through
 MockInterface. This replaces the old TextualTranscript widget tests: the display
 edge worth pinning is the reduction itself — which conversation event becomes
 which of the three interface verbs (show_message_part / update_message /
-drop_messages) — not Textual's materialization of it (interface/cli is
+drop_messages) — not Textual's materialization of it (interface/tui is
 coverage-excluded).
 """
 
@@ -21,8 +21,8 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import RunUsage
 from textual.app import App, ComposeResult
 
-from solveig.interface.cli.conversation_area import ConversationArea
-from solveig.interface.cli.message_display import MessageDisplay
+from solveig.interface.tui.conversation_area import ConversationArea
+from solveig.interface.tui.message_display import MessageDisplay
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from tests.mocks import MockInterface

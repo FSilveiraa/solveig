@@ -12,8 +12,13 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 from textual.app import App, ComposeResult
 
 from solveig.exceptions import UserCancel
-from solveig.interface.cli.buttons import BranchButton, DeleteButton, EditButton, RetryButton
-from solveig.interface.cli.widgets import EditableComment
+from solveig.interface.tui.buttons import (
+    BranchButton,
+    DeleteButton,
+    EditButton,
+    RetryButton,
+)
+from solveig.interface.tui.widgets import EditableComment
 from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import MockInterface

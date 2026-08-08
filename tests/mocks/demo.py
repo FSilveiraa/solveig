@@ -15,8 +15,8 @@ from pydantic_ai.messages import (
 )
 
 from solveig import bootstrap
-from solveig.interface.cli.input_bar import GrowingInput
-from solveig.interface.cli.interface import TerminalInterface
+from solveig.interface.tui.input_bar import GrowingInput
+from solveig.interface.tui.interface import TerminalInterface
 from solveig.run import run_async
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager

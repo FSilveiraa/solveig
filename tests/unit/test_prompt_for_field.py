@@ -2,7 +2,7 @@
 
 import pytest
 
-from solveig.api.types import APIType, TYPE_BY_NAME
+from solveig.api.types import TYPE_BY_NAME, APIType
 from solveig.config import SolveigConfig, editor
 from solveig.config.editor import prompt_for_field
 from solveig.interface import themes

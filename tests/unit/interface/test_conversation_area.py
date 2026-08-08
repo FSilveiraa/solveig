@@ -2,7 +2,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 
-from solveig.interface.cli.conversation_area import ConversationArea
+from solveig.interface.tui.conversation_area import ConversationArea
 
 
 class _HarnessApp(App):

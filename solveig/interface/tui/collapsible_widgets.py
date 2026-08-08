@@ -211,7 +211,7 @@ class TextBoxWidget(Widget):
     that promises three methods. `CollapsibleTextBox` owns one of these and is
     what crosses the boundary.
 
-    Frontend code inside `interface/cli/` talks to this directly (see
+    Frontend code inside `interface/tui/` talks to this directly (see
     `message_display`, which mounts one for a reasoning part) - that is not a
     boundary crossing and needs no handle.
     """
