@@ -626,6 +626,41 @@ class Filesystem:
             for candidate in candidates
         )
 
+    @classmethod
+    async def find_matches_within(
+        cls, abs_path: Path, patterns: Sequence[Path], limit: int = 10
+    ) -> list[Path]:
+        """Matching paths INSIDE this directory, up to `limit`.
+
+        The other side of `path_matches_patterns`: that asks whether a path is
+        covered, this asks what a whole-directory operation would sweep up. A
+        rule checked only on the path a tool was NAMED with is one the caller
+        walks around by naming the parent - copying `~/proj` carried
+        `~/proj/.env` out with nothing said about it.
+
+        Capped because it exists to inform a person: naming ten is as useful as
+        naming a thousand, and the walk stops as soon as it has them. Returns []
+        for a file, or when there are no patterns to match - the common case
+        costs one `is_dir`.
+        """
+        if not patterns:
+            return []
+        if not await cls.is_dir(abs_path):
+            return []
+
+        def _walk() -> list[Path]:
+            found: list[Path] = []
+            for parent, dir_names, file_names in os.walk(abs_path):
+                for name in (*dir_names, *file_names):
+                    candidate = Path(os.path.join(parent, name))
+                    if cls.path_matches_patterns(candidate, patterns):
+                        found.append(candidate)
+                        if len(found) >= limit:
+                            return found
+            return found
+
+        return await asyncio.to_thread(_walk)
+
     # =============================================================================
     # LINE READING - Efficient line-based file operations
     # =============================================================================

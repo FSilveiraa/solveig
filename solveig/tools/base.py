@@ -26,6 +26,7 @@ from pydantic_ai.messages import ToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
 from solveig.context import SolveigContext
+from solveig.interface.base import Level
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
@@ -56,6 +57,32 @@ def check_path_security(
     if Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths):
         return ConsentDecision.AUTO_ALLOWED, abs_path
     return ConsentDecision.NEEDS_CONSENT, abs_path
+
+
+async def warn_ignored_within(
+    abs_path: "Path", config: "SolveigConfig", interface: "SolveigInterface"
+) -> None:
+    """Say so when a whole-directory operation will act on ignored paths.
+
+    A warning and not a refusal, deliberately: an operation on a directory has
+    to leave that directory in the state it says it does - a copy that skipped
+    `.env` or a delete that left it behind would produce a result the user did
+    not ask for and did not see. So the containing operation proceeds under the
+    ordinary consent flow; what it must not do is proceed SILENTLY, which is
+    what naming the parent used to buy.
+
+    The path itself was already checked by `check_path_security` - being here
+    means the operation's own target is allowed and only its contents match.
+    """
+    ignored = await Filesystem.find_matches_within(abs_path, config.ignored_paths)
+    if not ignored:
+        return
+    shown = ", ".join(Filesystem.get_simple_path(p) for p in ignored)
+    await interface.print(
+        f"This acts on {len(ignored)}{'+' if len(ignored) >= 10 else ''} "
+        f"ignored path(s) inside {Filesystem.get_simple_path(abs_path)}: {shown}",
+        level=Level.WARNING,
+    )
 
 
 class ToolConfig(BaseModel):

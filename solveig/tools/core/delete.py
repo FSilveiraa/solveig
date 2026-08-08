@@ -6,7 +6,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.interface.base import Level
-from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
+from solveig.tools.base import (
+    BaseTool,
+    ConsentDecision,
+    check_path_security,
+    warn_ignored_within,
+)
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -57,6 +62,7 @@ class DeleteTool(BaseTool):
         await interface.print(
             "This operation is permanent and cannot be undone!", level=Level.WARNING
         )
+        await warn_ignored_within(abs_path, config, interface)
 
         noun = "directory" if is_directory else "file"
         if decision == ConsentDecision.AUTO_ALLOWED:

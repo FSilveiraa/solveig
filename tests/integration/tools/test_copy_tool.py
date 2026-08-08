@@ -263,6 +263,59 @@ class TestPathSecurity:
         assert Path(dest_file).read_text() == "Source file"
 
 
+class TestIgnoredPathsInsideADirectory:
+    """A rule checked only on the path a tool was NAMED with is one the caller
+    walks around by naming the parent."""
+
+    async def test_copying_a_directory_warns_about_the_ignored_paths_inside_it(
+        self, tmp_path
+    ):
+        """Regression: this copied `.env` out with nothing said about it, and no
+        prompt at all when the parent was auto-allowed.
+
+        The copy still happens and still carries the file — a copy that silently
+        skipped it would leave a backup the user believes is complete. What was
+        missing is that they were never told."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "code.py").write_text("print(1)")
+        (project / ".env").write_text("SECRET=hunter2")
+
+        config = DEFAULT_CONFIG.model_copy(deep=True)
+        config.ignored_paths = [(project / ".env").resolve()]
+        config.auto_allowed_paths = [tmp_path.resolve()]
+        interface = MockInterface()
+
+        result = await CopyTool(
+            source_path=str(project), destination_path=str(tmp_path / "backup")
+        ).execute(config, interface)
+
+        assert result.issues == []
+        assert (tmp_path / "backup" / ".env").exists()  # nothing left behind
+        output = interface.get_all_output()
+        assert "WARNING" in output
+        assert "ignored path" in output
+        assert ".env" in output
+
+    async def test_a_directory_with_nothing_ignored_inside_says_nothing(
+        self, tmp_path
+    ):
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "code.py").write_text("print(1)")
+
+        config = DEFAULT_CONFIG.model_copy(deep=True)
+        config.ignored_paths = [(tmp_path / "elsewhere" / ".env").resolve()]
+        config.auto_allowed_paths = [tmp_path.resolve()]
+        interface = MockInterface()
+
+        await CopyTool(
+            source_path=str(project), destination_path=str(tmp_path / "backup")
+        ).execute(config, interface)
+
+        assert "ignored path" not in interface.get_all_output()
+
+
 class TestIntegrationScenarios:
     async def test_copy_large_directory_tree(self, tmp_path):
         source_dir = tmp_path / "large_source"

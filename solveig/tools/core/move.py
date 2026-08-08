@@ -6,7 +6,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.interface.base import Level
-from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
+from solveig.tools.base import (
+    BaseTool,
+    ConsentDecision,
+    check_path_security,
+    warn_ignored_within,
+)
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -82,6 +87,8 @@ class MoveTool(BaseTool):
             new = (await Filesystem.read_file(abs_source_path)).content.strip()
             await interface.add_diff_box(old_content=old, new_content=new)
             await interface.print("Overwriting existing file", level=Level.WARNING)
+
+        await warn_ignored_within(abs_source_path, config, interface)
 
         noun = "directory" if is_dir else "file"
         if auto_move:
