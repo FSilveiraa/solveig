@@ -50,7 +50,6 @@ class SolveigTextualApp(TextualApp):
         theme: Palette = DEFAULT_THEME,
         input_callback=None,
         user_message_queue: UserMessageQueue | None = None,
-        auto_copy_selection: bool = True,
         interface_ref: SolveigInterface | None = None,
         config=None,
         **kwargs,
@@ -59,7 +58,6 @@ class SolveigTextualApp(TextualApp):
         self._input_callback = input_callback
         self._theme = theme
         self._user_message_queue = user_message_queue
-        self._auto_copy_selection = auto_copy_selection
         self._interface_ref = interface_ref
         self._config = config
 
@@ -144,7 +142,12 @@ class SolveigTextualApp(TextualApp):
     async def on_event(self, event) -> None:
         """Intercept mouse-up to auto-copy a completed click-drag text selection."""
         await super().on_event(event)
-        if self._auto_copy_selection and isinstance(event, events.MouseUp):
+        # Read live rather than cached at construction, so toggling the setting
+        # takes effect on the next selection instead of the next launch.
+        auto_copy = (
+            self._config is None or self._config.interface.tui.auto_copy_selection
+        )
+        if auto_copy and isinstance(event, events.MouseUp):
             selected_text = self.screen.get_selected_text()
             if selected_text:
                 copy_to_clipboard(selected_text)

@@ -132,7 +132,7 @@ def build_loop_capability() -> Hooks[SolveigContext]:
         # Non-stream: wrap the network round trip so Esc/Ctrl+C cancels exactly
         # the model call in flight. Streaming steps aside - run_turn owns the
         # reader-side animation instead (see _thinking for the full why).
-        if ctx.deps.config.interface.stream:
+        if ctx.deps.config.stream:
             return await handler(request_context)
         async with _thinking(
             ctx.deps.interface, handler(request_context), ctx.deps.config.api.timeout
@@ -441,7 +441,18 @@ async def run_turn(
         try:
             node = run.next_node
             while not isinstance(node, End):
-                if deps.config.interface.stream and Agent.is_model_request_node(node):
+                # NOTE: `config.stream` is a user-set flag because upstream offers
+                # nothing to derive it from - streaming is chosen by WHICH METHOD
+                # you call, `Model` exposes `request_stream` unconditionally and
+                # neither it nor `ModelProfile` reports whether an endpoint will
+                # honour it. Only the wire tells you, and by then the request is
+                # spent. So an endpoint that cannot stream is handled by turning
+                # this off, which drops to the plain node run: the response is
+                # adopted whole and the reactive transcript draws it. Deliberately
+                # not a TODO - there is no upstream cleanup pending.
+                # `is_model_request_node` is NOT part of that decision; it only
+                # says which node we are at, which matters either way.
+                if deps.config.stream and Agent.is_model_request_node(node):
                     try:
                         async with _thinking(
                             deps.interface,

@@ -219,8 +219,6 @@ class MockInterface(SolveigInterface):
         metadata,
         title: str | None = None,
         display_metadata: bool = False,
-        expand_root: bool = True,
-        max_depth: int = -1,
     ) -> TreeBox:
         tree_title = title or str(metadata.path)
         self.outputs.append(f"Tree: {tree_title}")
@@ -260,7 +258,6 @@ class MockInterface(SolveigInterface):
         old_content: str,
         new_content: str,
         title: str | None = None,
-        context_lines: int = 3,
     ) -> DiffBox:
         title_str = f" ({title})" if title else ""
         self.outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")

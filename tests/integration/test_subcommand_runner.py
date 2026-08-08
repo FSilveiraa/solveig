@@ -210,8 +210,8 @@ class TestConfigCommands:
 
     async def test_config_set_stream_bool(self):
         registry, _, cfg = make_registry()
-        await registry("/config set interface.stream true")
-        assert cfg.interface.stream is True
+        await registry("/config set stream true")
+        assert cfg.stream is True
 
     async def test_config_get_api_key_masked(self):
         registry, _, _ = make_registry()

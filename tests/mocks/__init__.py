@@ -3,7 +3,7 @@ from pydantic import ByteSize, SecretStr
 from solveig import bootstrap
 from solveig.api.types import OpenAI
 from solveig.config import SolveigConfig
-from solveig.config.models import ApiConfig, InterfaceConfig, SessionConfig
+from solveig.config.models import ApiConfig, SessionConfig
 
 from .client import create_mock_model
 from .interface import MockInterface
@@ -28,7 +28,7 @@ DEFAULT_CONFIG = SolveigConfig(
     # failure. Individual tests that genuinely exercise the check set their own.
     min_disk_space_left=ByteSize(0),
     session=SessionConfig(auto_save=False),
-    interface=InterfaceConfig(stream=False),
+    stream=False,
 )
 
 VERBOSE_CONFIG = DEFAULT_CONFIG

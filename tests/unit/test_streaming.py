@@ -17,9 +17,7 @@ pytestmark = pytest.mark.anyio
 
 
 def _deps(conv, *, stream=True, interface=None):
-    config = DEFAULT_CONFIG.model_copy(
-        update={"interface": DEFAULT_CONFIG.interface.model_copy(update={"stream": stream})}
-    )
+    config = DEFAULT_CONFIG.model_copy(update={"stream": stream})
     return SolveigContext(config=config, interface=interface or MockInterface())
 
 

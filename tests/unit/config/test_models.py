@@ -7,7 +7,7 @@ from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.config.models import (
     ApiConfig,
-    InterfaceConfig,
+    TuiConfig,
     MCPServerConfig,
     SystemPromptConfig,
 )
@@ -31,7 +31,7 @@ async def test_api_type_from_string_and_serializes_to_name():
 
 async def test_theme_from_string_serializes_to_name():
     name = next(iter(themes.THEMES))
-    c = InterfaceConfig(theme=name)
+    c = TuiConfig(theme=name)
     assert c.theme is themes.THEMES[name]
     assert c.model_dump()["theme"] == themes.THEMES[name].name
 
@@ -46,7 +46,7 @@ async def test_command_enabled_default_true_and_regex_validated():
 
 
 async def test_validate_assignment_reparses_theme():
-    c = InterfaceConfig()
+    c = TuiConfig()
     name = next(iter(themes.THEMES))
     c.theme = name  # assignment must re-run the validator
     assert c.theme is themes.THEMES[name]

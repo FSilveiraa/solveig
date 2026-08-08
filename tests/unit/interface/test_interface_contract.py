@@ -217,7 +217,7 @@ async def test_frontend_policy_gates_the_callers_intent():
     async def collapsed_with(*, tool_intent: bool, policy: bool) -> bool:
         interface = TerminalInterface.__new__(TerminalInterface)  # no Textual app
         interface._root = interface
-        interface._conversation = None
+        interface.conversation = None
         interface._active_tasks = {}
         interface.user_message_queue = None
         interface.auto_collapse_tools = policy

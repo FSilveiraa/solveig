@@ -56,7 +56,7 @@ async def test_theme_returns_theme_object():
     Options are offered sorted by name, so the first choice is the alphabetically
     first theme, not insertion order."""
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("interface.theme", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("interface.tui.theme", config, MockInterface(choices=[0]))
     first_name = sorted(themes.THEMES)[0]
     assert result is themes.THEMES[first_name]
 
@@ -65,7 +65,7 @@ async def test_code_theme_returns_string():
     """prompt_for_field for 'code_theme' returns a valid code theme string."""
     code_theme_options = sorted(themes.CODE_THEMES)
     config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump())
-    result = await prompt_for_field("interface.code_theme", config, MockInterface(choices=[0]))
+    result = await prompt_for_field("interface.tui.code_theme", config, MockInterface(choices=[0]))
     assert result == code_theme_options[0]
 
 

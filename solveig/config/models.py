@@ -196,7 +196,14 @@ class SessionConfig(BaseModel):
         return str(Filesystem.get_absolute_path(v)) if v else v
 
 
-class InterfaceConfig(BaseModel):
+class TuiConfig(BaseModel):
+    """Settings only the terminal frontend can honour.
+
+    A palette of Textual colors and a Pygments lexer theme mean nothing to a
+    browser, and a listen port means nothing to a terminal - so neither sits at
+    `interface.*`, where every frontend would have to pretend to read it.
+    """
+
     model_config = _MUTABLE
     theme: themes.Palette = Field(
         default_factory=lambda: themes.DEFAULT_THEME, description="UI color theme"
@@ -209,12 +216,19 @@ class InterfaceConfig(BaseModel):
         # changes this one line, not the editor.
         json_schema_extra={"choices": sorted(themes.CODE_THEMES)},
     )
-    stream: bool = Field(
-        default=True,
-        description="Stream assistant output token-by-token as it's generated",
+    tree_expand_root: bool = Field(
+        default=True, description="Expand the root node of a file tree on display"
     )
-    auto_collapse_tools: bool = Field(
-        default=True, description="Auto-collapse tool groups after approval"
+    tree_max_depth: int = Field(
+        default=-1,
+        description=(
+            "Depth of a file tree to render eagerly (-1 for all). "
+            "Deeper levels stay collapsed and load when opened; this never "
+            "changes what was read, only what is drawn up front."
+        ),
+    )
+    diff_context_lines: int = Field(
+        default=3, description="Unchanged lines to keep around each diff hunk"
     )
     auto_copy_selection: bool = Field(
         default=True,
@@ -229,3 +243,31 @@ class InterfaceConfig(BaseModel):
     @field_serializer("theme")
     def _ser_theme(self, v: themes.Palette) -> str:
         return v.name
+
+
+class WebConfig(BaseModel):
+    """Settings only a browser frontend can honour. Nothing serves these yet -
+    they are here because they are what makes `interface.tui` a section rather
+    than a prefix: the two frontends have genuinely disjoint knobs."""
+
+    model_config = _MUTABLE
+    host: str = Field(default="127.0.0.1", description="Address to serve the web UI on")
+    port: int = Field(default=8080, description="Port to serve the web UI on")
+
+
+class InterfaceConfig(BaseModel):
+    """One section per frontend, plus the settings every frontend must answer.
+
+    A KEY here names a frontend; it never names a setting that happens to be
+    about the UI. That is the rule that told `stream` it did not belong here
+    (there is no frontend called "stream") and it holds in the other direction
+    too: a field stays at this level only if a terminal, a browser and a
+    headless recorder could each act on it.
+    """
+
+    model_config = _MUTABLE
+    auto_collapse_tools: bool = Field(
+        default=True, description="Auto-collapse tool groups after approval"
+    )
+    tui: TuiConfig = Field(default_factory=TuiConfig)
+    web: WebConfig = Field(default_factory=WebConfig)

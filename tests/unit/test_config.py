@@ -70,7 +70,7 @@ async def test_model_dump_excludes_cli_and_runtime_fields():
     )
     d = c.model_dump()
     assert d["api"]["type"] == "openai"
-    assert isinstance(d["interface"]["theme"], str)
+    assert isinstance(d["interface"]["tui"]["theme"], str)
     # CLI-only + runtime fields never persist (exclude=True / PrivateAttr):
     for k in ("model_info", "config_files", "resume", "startup_mcp_servers"):
         assert k not in d

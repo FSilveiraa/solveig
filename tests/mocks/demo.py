@@ -152,8 +152,7 @@ async def run_async_mock(
     # against it).
     config.api.model = "fake-model"
     interface = DemoInterface(
-        theme=config.interface.theme,
-        code_theme=config.interface.code_theme,
+        config=config,
         user_messages=(user_messages or []) if auto_type else [],
     )
 

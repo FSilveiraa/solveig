@@ -4,10 +4,14 @@ import os
 
 import anyconfig
 
+from solveig.utils.dotted import to_leaves
+
 DEFAULT_CONFIG_SEARCH: list[str] = ["./.solveig/config", "~/.solveig/config"]
 _EXTS: tuple[str, ...] = ("json", "yaml", "yml", "toml")
 
-# Old flat key -> new dotted path. Presence of any at the top level is a hard error.
+# Old key -> where it lives now. Either side may be dotted: the check runs over
+# the loaded config's leaf paths, so a key that MOVED BETWEEN SECTIONS is caught
+# the same way a pre-nesting flat key is. Presence of any is a hard error.
 LEGACY_KEY_MAP: dict[str, str] = {
     "url": "api.url",
     "api_type": "api.type",
@@ -22,11 +26,14 @@ LEGACY_KEY_MAP: dict[str, str] = {
     "auto_execute_commands": "tools.command.auto_execute",
     "sessions_dir": "session.dir",
     "auto_save_session": "session.auto_save",
-    "theme": "interface.theme",
-    "code_theme": "interface.code_theme",
-    "stream": "interface.stream",
+    "theme": "interface.tui.theme",
+    "code_theme": "interface.tui.code_theme",
     "auto_collapse_tools": "interface.auto_collapse_tools",
-    "auto_copy_selection": "interface.auto_copy_selection",
+    "auto_copy_selection": "interface.tui.auto_copy_selection",
+    "interface.theme": "interface.tui.theme",
+    "interface.code_theme": "interface.tui.code_theme",
+    "interface.auto_copy_selection": "interface.tui.auto_copy_selection",
+    "interface.stream": "stream",
     "mcp_servers": "mcp.servers",
     "ignore_paths": "ignored_paths",
     "verbose": "(removed)",
@@ -55,7 +62,10 @@ def resolve_config_files(explicit: list[str]) -> list[str]:
 
 
 def _check_legacy(data: dict) -> None:
-    legacy = [k for k in data if k in LEGACY_KEY_MAP]
+    # Top-level keys AND leaf paths: a flat pre-nesting key is a leaf of its
+    # own, and a key that moved between sections is only visible as a path.
+    present = to_leaves(data) | set(data)
+    legacy = sorted(present & LEGACY_KEY_MAP.keys())
     if legacy:
         lines = "\n".join(f"  - '{k}'  ->  {LEGACY_KEY_MAP[k]}" for k in legacy)
         raise ValueError(

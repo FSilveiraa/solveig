@@ -31,6 +31,7 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
+from solveig.config.models import TuiConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -49,7 +50,7 @@ from solveig.interface.cli.keys import cancel_hint
 from solveig.interface.cli.message_display import MessageDisplay
 from solveig.interface.cli.stats_bar import TextualStat
 from solveig.interface.cli.tree_display import FileTree
-from solveig.interface.themes import DEFAULT_CODE_THEME, DEFAULT_THEME, Palette
+from solveig.interface.themes import Palette
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import format_path_info, get_language
@@ -234,7 +235,6 @@ class TerminalDisplay(SolveigInterface):
         old_content: str,
         new_content: str,
         title: str | None = None,
-        context_lines: int = 3,
     ) -> DiffBox:
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
         new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
@@ -245,7 +245,7 @@ class TerminalDisplay(SolveigInterface):
                 new_lines,
                 fromfile="original",
                 tofile="modified",
-                n=context_lines,
+                n=self._root.tui.diff_context_lines,
             )
         )
         diff_text = "".join(diff_lines)
@@ -269,14 +269,12 @@ class TerminalDisplay(SolveigInterface):
         metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
-        expand_root: bool = True,
-        max_depth: int = -1,
     ) -> TreeBox:
         tree = FileTree(
             metadata=metadata,
             display_metadata=display_metadata,
-            expand_root=expand_root,
-            max_depth=max_depth,
+            expand_root=self._root.tui.tree_expand_root,
+            max_depth=self._root.tui.tree_max_depth,
         )
         if title:
             tree.widget.border_title = title
@@ -316,8 +314,6 @@ class TerminalInterface(TerminalDisplay):
 
     def __init__(
         self,
-        theme: Palette = DEFAULT_THEME,
-        code_theme: str = DEFAULT_CODE_THEME,
         user_message_queue: UserMessageQueue | None = None,
         config=None,
         conversation: Conversation | None = None,
@@ -325,10 +321,19 @@ class TerminalInterface(TerminalDisplay):
     ) -> None:
         super().__init__()
         self.user_message_queue = user_message_queue
-        self._conversation = conversation
+        self.conversation = conversation
         self._root = self
-        self.theme = theme
-        self.code_theme = code_theme
+        # Every startup value comes out of `config`, never out of a constructor
+        # argument a caller could disagree with it about. The defaults below are
+        # for a frontend built without one at all (a test, a bare harness).
+        #: The live `interface.tui` section — the same object config holds, so a
+        #: `/config set` lands here without anything being notified. Theme and
+        #: code theme are the exception: they are COPIED out below because
+        #: changing one has to repaint what is already mounted, which is a
+        #: reaction, not a read (see the on_change handlers).
+        self.tui = config.interface.tui if config is not None else TuiConfig()
+        self.theme = self.tui.theme
+        self.code_theme = self.tui.code_theme
         #: Display policy, not a caller's business: whether a group that says it
         #: MAY be folded away actually is. Groups read it through `_root` at the
         #: moment they close.
@@ -337,7 +342,7 @@ class TerminalInterface(TerminalDisplay):
         )
 
         self.app = SolveigTextualApp(
-            theme=theme,
+            theme=self.theme,
             input_callback=self._handle_input,
             interface_ref=self,
             config=config,
@@ -347,13 +352,13 @@ class TerminalInterface(TerminalDisplay):
 
         if config is not None:
 
-            @config.on_change("interface.theme")
+            @config.on_change("interface.tui.theme")
             async def _on_theme(config, paths):
-                self.set_theme(config.interface.theme)
+                self.set_theme(config.interface.tui.theme)
 
-            @config.on_change("interface.code_theme")
+            @config.on_change("interface.tui.code_theme")
             async def _on_code_theme(config, paths):
-                self.set_code_theme(config.interface.code_theme)
+                self.set_code_theme(config.interface.tui.code_theme)
 
             @config.on_change("interface.auto_collapse_tools")
             async def _on_auto_collapse(config, paths):
@@ -474,9 +479,9 @@ class TerminalInterface(TerminalDisplay):
         from textual._context import active_app
 
         active_app.set(self.app)
-        if self._conversation is not None and self._message_display is None:
+        if self.conversation is not None and self._message_display is None:
             self._message_display = MessageDisplay(
-                self._conversation, self.app._conversation_area, self
+                self.conversation, self.app._conversation_area, self
             )
         await self.print(BANNER)
 
@@ -516,7 +521,7 @@ class GroupInterface(TerminalDisplay):
         super().__init__()
         self._root = root
         self.app = root.app
-        self._conversation = root._conversation
+        self.conversation = root.conversation
         self.user_message_queue = root.user_message_queue
         # shared by reference on purpose — a cancel issued anywhere must reach
         # work started inside a group

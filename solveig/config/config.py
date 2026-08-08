@@ -204,6 +204,10 @@ class SolveigConfig(BaseSettings):
     disable_autonomy: bool = Field(
         default=False, description="Require user approval between agentic steps"
     )
+    stream: bool = Field(
+        default=True,
+        description="Stream assistant output token-by-token as it's generated",
+    )
 
     # ------------------------------------------------------------
     # CLI-only fields

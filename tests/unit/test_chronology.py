@@ -47,7 +47,7 @@ async def _two_tools_then_text(
 
 def _config(**overrides):
     config = DEFAULT_CONFIG.model_copy(deep=True)
-    config.interface.stream = False
+    config.stream = False
     for key, value in overrides.items():
         setattr(config, key, value)
     return config

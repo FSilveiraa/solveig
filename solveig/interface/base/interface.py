@@ -297,9 +297,12 @@ class SolveigInterface(ABC):
         old_content: str,
         new_content: str,
         title: str | None = None,
-        context_lines: int = 3,
     ) -> DiffBox:
-        """Add a diff text box that he caller can `replace()` with new old/new content."""
+        """Add a diff text box the caller can `replace()` with new old/new content.
+
+        How much unchanged context surrounds a hunk is the frontend's own
+        setting, not the caller's - a caller asking for a diff has no view on
+        how tall it should be."""
         ...
 
     @abstractmethod
@@ -308,13 +311,15 @@ class SolveigInterface(ABC):
         metadata: FileMetadata,
         title: str | None = None,
         display_metadata: bool = False,
-        expand_root: bool = True,
-        max_depth: int = -1,
     ) -> TreeBox:
         """Display a directory tree. Returns a TreeBox the caller can
-        `replace()` with new metadata. The full metadata is already read;
-        `max_depth` controls what renders initially, not what was read. Lazy
-        expansion is handled internally by the frontend.
+        `replace()` with new metadata.
+
+        `display_metadata` stays a parameter because asking for sizes and line
+        counts is content selection - the caller knows whether they are part of
+        what it is showing. How deep the tree opens and whether the root starts
+        expanded are NOT: they are the frontend's own settings, and the metadata
+        handed over is complete either way.
 
         NOTE: there is no ignore/filter argument, deliberately. Deciding an
         entry should not be seen is a filesystem concern, not a drawing one -

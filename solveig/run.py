@@ -311,9 +311,6 @@ async def run_async(
     # as ever - nothing is wired after the fact.
     if interface is None:
         interface = TerminalInterface(
-            theme=config.interface.theme,
-            code_theme=config.interface.code_theme,
-            auto_copy_selection=config.interface.auto_copy_selection,
             user_message_queue=user_message_queue,
             config=config,
             conversation=conversation,
