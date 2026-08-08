@@ -75,7 +75,7 @@ class TreeTool(BaseTool):
             descend_level=self.max_depth,
             ignored_paths=config.ignored_paths,
         )
-        await interface.display_tree(
+        await interface.add_tree_box(
             metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
         )
 

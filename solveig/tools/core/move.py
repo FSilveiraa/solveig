@@ -80,7 +80,7 @@ class MoveTool(BaseTool):
         if dest_exists:
             old = (await Filesystem.read_file(abs_destination_path)).content.strip()
             new = (await Filesystem.read_file(abs_source_path)).content.strip()
-            await interface.display_diff(old_content=old, new_content=new)
+            await interface.add_diff_box(old_content=old, new_content=new)
             await interface.print("Overwriting existing file", level=Level.WARNING)
 
         noun = "directory" if is_dir else "file"

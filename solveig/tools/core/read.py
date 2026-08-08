@@ -116,7 +116,7 @@ class ReadTool(BaseTool):
     ) -> ToolResult:
         """Directory or metadata_only request: offer to send just the file/dir metadata."""
         if metadata.is_directory:
-            await interface.display_tree(metadata=metadata)
+            await interface.add_tree_box(metadata=metadata)
 
         if auto_allowed:
             await interface.print(

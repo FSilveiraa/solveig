@@ -78,7 +78,7 @@ class EditTool(BaseTool):
             return prepared
         original_content, new_content, occurrences = prepared
 
-        await interface.display_diff(
+        await interface.add_diff_box(
             old_content=original_content,
             new_content=new_content,
             title=f"Edit: {abs_path}",

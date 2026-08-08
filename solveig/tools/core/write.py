@@ -68,7 +68,7 @@ class WriteTool(BaseTool):
         if not self.is_directory and self.content:
             if already_exists:
                 old = (await Filesystem.read_file(abs_path)).content.strip()
-                await interface.display_diff(old_content=old, new_content=self.content)
+                await interface.add_diff_box(old_content=old, new_content=self.content)
             else:
                 await interface.add_text_box(
                     self.content, language=abs_path.suffix.lstrip("."), title="Content"

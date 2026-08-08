@@ -128,7 +128,7 @@ class MockInterface(SolveigInterface):
         **kwargs,
     ) -> None:
         super().__init__()  # SolveigInterface.__init__ — _active_tasks, etc.
-        self._conversation = conversation
+        self.conversation = conversation
         self.shown: dict[str, list[str]] = {}
         self.transcript_events: list[tuple] = []
         self.outputs: list[str] = []
@@ -187,14 +187,17 @@ class MockInterface(SolveigInterface):
 
     # -- transcript verbs ----------------------------------------------------
 
-    async def show_message_part(self, message_id: str, part_index: int) -> None:
+    async def show_message_part(self, message_id: str, *part_indexes: int) -> None:
         message = self.conversation.get(message_id) if self.conversation else None
-        if message is None or part_index >= len(message.parts):
+        if message is None:
             return
-        text = _part_text(message.parts[part_index])
-        if text is not None:
-            self.shown.setdefault(message_id, []).append(text)
-        self.transcript_events.append(("show", message_id, part_index))
+        for part_index in part_indexes:
+            if part_index >= len(message.parts):
+                continue
+            text = _part_text(message.parts[part_index])
+            if text is not None:
+                self.shown.setdefault(message_id, []).append(text)
+            self.transcript_events.append(("show", message_id, part_index))
 
     async def update_message(self, message_id: str) -> None:
         message = self.conversation.get(message_id) if self.conversation else None
@@ -211,7 +214,7 @@ class MockInterface(SolveigInterface):
 
     # -- complex display -----------------------------------------------------
 
-    async def display_tree(
+    async def add_tree_box(
         self,
         metadata,
         title: str | None = None,
@@ -252,7 +255,7 @@ class MockInterface(SolveigInterface):
         for todo in todos:
             self.outputs.append(f"TODO {todo.status.value}: {todo.content}")
 
-    async def display_diff(
+    async def add_diff_box(
         self,
         old_content: str,
         new_content: str,
@@ -270,7 +273,6 @@ class MockInterface(SolveigInterface):
         text: str,
         title: str | None = None,
         language: str | None = None,
-        italic: bool = False,
         collapsed: bool = False,
     ) -> TextBox:
         if title:

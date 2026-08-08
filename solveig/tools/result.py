@@ -104,7 +104,7 @@ class ToolResult:
         the two paths render identically."""
         metadata = FileMetadata.from_result_content(self.content)
         if metadata is not None and not self.issues and not self.metadata:
-            await interface.display_tree(metadata=metadata)
+            await interface.add_tree_box(metadata=metadata)
             return
         text = self.to_assistant_text()
         if not text:

@@ -158,9 +158,11 @@ class TerminalDisplay(SolveigInterface):
 
     # -- transcript verbs ----------------------------------------------------
 
-    async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
+    async def show_message_part(
+        self, message_id: MessageId, *part_indexes: int
+    ) -> None:
         if self._messages is not None:
-            await self._messages.display(message_id, part_index)
+            await self._messages.display(message_id, *part_indexes)
 
     async def update_message(self, message_id: MessageId) -> None:
         if self._messages is not None:
@@ -201,26 +203,33 @@ class TerminalDisplay(SolveigInterface):
             arrow = "→" if todo.status is TodoStatus.IN_PROGRESS else " "
             await self.print(f"{arrow}  {todo.status.marker} {index}. {todo.content}")
 
-    async def display_tree(
-        self,
-        metadata: FileMetadata,
-        title: str | None = None,
-        display_metadata: bool = False,
-        expand_root: bool = True,
-        max_depth: int = -1,
-    ) -> TreeBox:
-        tree = FileTree(
-            metadata=metadata,
-            display_metadata=display_metadata,
-            expand_root=expand_root,
-            max_depth=max_depth,
-        )
-        if title:
-            tree.widget.border_title = title
-        await self.app._conversation_area.add_element(self._container, tree.widget)
-        return tree
+    # -- add (returns object) ------------------------------------------------
 
-    async def display_diff(
+    async def add_text_box(
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        collapsed: bool = False,
+    ) -> TextBox:
+        to_display: str | Syntax | Markdown = text
+        if language:
+            language_name = get_language(language.lstrip("."))
+            if language_name == "markdown":
+                to_display = Markdown(text)
+            elif language_name:
+                to_display = Syntax(
+                    text, lexer=language_name, theme=self._live_code_theme()
+                )
+
+        return await self.app._conversation_area.add_text_box(
+            to_display,
+            title=title,
+            collapsed=collapsed,
+            container=self._container,
+        )
+
+    async def add_diff_box(
         self,
         old_content: str,
         new_content: str,
@@ -255,33 +264,24 @@ class TerminalDisplay(SolveigInterface):
         await self.app._conversation_area.add_element(self._container, box.widget)
         return box
 
-    # -- add (returns object) ------------------------------------------------
-
-    async def add_text_box(
+    async def add_tree_box(
         self,
-        text: str,
+        metadata: FileMetadata,
         title: str | None = None,
-        language: str | None = None,
-        italic: bool = False,
-        collapsed: bool = False,
-    ) -> TextBox:
-        to_display: str | Syntax | Markdown = text
-        if language:
-            language_name = get_language(language.lstrip("."))
-            if language_name == "markdown":
-                to_display = Markdown(text)
-            elif language_name:
-                to_display = Syntax(
-                    text, lexer=language_name, theme=self._live_code_theme()
-                )
-
-        return await self.app._conversation_area.add_text_box(
-            to_display,
-            title=title,
-            collapsed=collapsed,
-            italic=italic,
-            container=self._container,
+        display_metadata: bool = False,
+        expand_root: bool = True,
+        max_depth: int = -1,
+    ) -> TreeBox:
+        tree = FileTree(
+            metadata=metadata,
+            display_metadata=display_metadata,
+            expand_root=expand_root,
+            max_depth=max_depth,
         )
+        if title:
+            tree.widget.border_title = title
+        await self.app._conversation_area.add_element(self._container, tree.widget)
+        return tree
 
     # -- with (context managers) ---------------------------------------------
 

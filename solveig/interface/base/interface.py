@@ -133,11 +133,7 @@ class SolveigInterface(ABC):
     def __init__(self) -> None:
         self._active_tasks: dict[asyncio.Task, None] = {}
         self.user_message_queue: UserMessageQueue | None = None
-        self._conversation: Conversation | None = None
-
-    @property
-    def conversation(self) -> Conversation | None:
-        return self._conversation
+        self.conversation: Conversation | None = None
 
     # -- theming (no-op defaults, override per frontend) ---------------------
 
@@ -222,12 +218,11 @@ class SolveigInterface(ABC):
         ...
 
     # -- transcript verbs ----------------------------------------------------
-    # The three verbs the conversation observer drives. It decides WHAT should
-    # be visible; a frontend only materializes what it is handed, and never
-    # subscribes to the conversation itself.
 
     @abstractmethod
-    async def show_message_part(self, message_id: MessageId, part_index: int) -> None:
+    async def show_message_part(
+        self, message_id: MessageId, *part_indexes: int
+    ) -> None:
         """Materialize one part of `self.conversation`'s message. Called in part
         order; a part this frontend has no rendering for is a no-op (the caller
         does not know, or need to know, which those are).
@@ -252,27 +247,7 @@ class SolveigInterface(ABC):
         record of what it mounted."""
         ...
 
-    # -- complex display (returns a box) -------------------------------------
-
-    @abstractmethod
-    async def display_tree(
-        self,
-        metadata: FileMetadata,
-        title: str | None = None,
-        display_metadata: bool = False,
-        expand_root: bool = True,
-        max_depth: int = -1,
-    ) -> TreeBox:
-        """Display a directory tree. Returns a TreeBox the caller can
-        `replace()` with new metadata. The full metadata is already read;
-        `max_depth` controls what renders initially, not what was read. Lazy
-        expansion is handled internally by the frontend.
-
-        NOTE: there is no ignore/filter argument, deliberately. Deciding an
-        entry should not be seen is a filesystem concern, not a drawing one -
-        `Filesystem.read_metadata` prunes it, so what arrives here is already
-        everything the caller is willing to show AND to send."""
-        ...
+    # -- complex display -----------------------------------------------------
 
     @abstractmethod
     async def display_file_metadata(
@@ -314,19 +289,38 @@ class SolveigInterface(ABC):
         """
         ...
 
+    # -- add (returns object) ------------------------------------------------
+
     @abstractmethod
-    async def display_diff(
+    async def add_diff_box(
         self,
         old_content: str,
         new_content: str,
         title: str | None = None,
         context_lines: int = 3,
     ) -> DiffBox:
-        """Display a unified diff. Returns a read-only DiffBox the caller can
-        `replace()` with new old/new content."""
+        """Add a diff text box that he caller can `replace()` with new old/new content."""
         ...
 
-    # -- add (returns object) ------------------------------------------------
+    @abstractmethod
+    async def add_tree_box(
+        self,
+        metadata: FileMetadata,
+        title: str | None = None,
+        display_metadata: bool = False,
+        expand_root: bool = True,
+        max_depth: int = -1,
+    ) -> TreeBox:
+        """Display a directory tree. Returns a TreeBox the caller can
+        `replace()` with new metadata. The full metadata is already read;
+        `max_depth` controls what renders initially, not what was read. Lazy
+        expansion is handled internally by the frontend.
+
+        NOTE: there is no ignore/filter argument, deliberately. Deciding an
+        entry should not be seen is a filesystem concern, not a drawing one -
+        `Filesystem.read_metadata` prunes it, so what arrives here is already
+        everything the caller is willing to show AND to send."""
+        ...
 
     @abstractmethod
     async def add_text_box(
@@ -334,7 +328,6 @@ class SolveigInterface(ABC):
         text: str,
         title: str | None = None,
         language: str | None = None,
-        italic: bool = False,
         collapsed: bool = False,
     ) -> TextBox:
         """Add a text block with optional title. Returns a live box the
