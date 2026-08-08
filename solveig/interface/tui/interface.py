@@ -35,6 +35,9 @@ from solveig.config.models import TuiConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
+    MessageActions,
+    MessageBox,
+    Role,
     SolveigInterface,
     Stat,
     TextBox,
@@ -48,9 +51,10 @@ from solveig.interface.tui.collapsible_widgets import (
 )
 from solveig.interface.tui.conversation_area import BANNER
 from solveig.interface.tui.keys import cancel_hint
-from solveig.interface.tui.message_display import MessageDisplay
+from solveig.interface.tui.message_boxes import CommentBox, ReasoningBox
 from solveig.interface.tui.stats_bar import TextualStat
 from solveig.interface.tui.tree_display import FileTree
+from solveig.interface.tui.widgets import EditableComment
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import format_path_info, get_language
@@ -59,7 +63,7 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from solveig.interface.tui.collapsible_widgets import CustomCollapsible
-    from solveig.session.conversation import Conversation, MessageId
+    from solveig.session.conversation import Conversation
     from solveig.user_message_queue import UserMessageQueue
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
@@ -94,12 +98,6 @@ class TerminalDisplay(SolveigInterface):
     @abstractmethod
     def _container(self):
         """The Textual container this display mounts widgets into."""
-
-    # -- message display (root-owned, reached via _root) ---------------------
-
-    @property
-    def _messages(self) -> MessageDisplay | None:
-        return self._root._message_display
 
     # -- theming -------------------------------------------------------------
 
@@ -159,19 +157,20 @@ class TerminalDisplay(SolveigInterface):
 
     # -- transcript verbs ----------------------------------------------------
 
-    async def show_message_part(
-        self, message_id: MessageId, *part_indexes: int
-    ) -> None:
-        if self._messages is not None:
-            await self._messages.display(message_id, *part_indexes)
+    async def add_message(
+        self, text: str, role: Role, actions: MessageActions
+    ) -> MessageBox:
+        widget = EditableComment(text, interface=self, role=role, actions=actions)
+        await self.app._conversation_area.add_element(self._container, widget)
+        return CommentBox(widget)
 
-    async def update_message(self, message_id: MessageId) -> None:
-        if self._messages is not None:
-            await self._messages.update(message_id)
-
-    async def drop_messages(self, message_ids: list[MessageId]) -> None:
-        if self._messages is not None:
-            await self._messages.drop(message_ids)
+    async def add_reasoning(self, text: str) -> MessageBox:
+        # Italic and folded away: this frontend's answer to "show that this is
+        # thinking, not speech". Another frontend is free to answer differently
+        # — which is exactly why the caller no longer passes `italic`.
+        widget = TextBoxWidget(text, title="Reasoning", italic=True, collapsed=True)
+        await self.app._conversation_area.add_element(self._container, widget)
+        return ReasoningBox(widget)
 
     # -- complex display -----------------------------------------------------
 
@@ -308,9 +307,6 @@ class TerminalInterface(TerminalDisplay):
     state, the spinners and the CLI's prompt-serialization lock, and implements
     the root-level half of the protocol that TerminalDisplay leaves abstract.
     """
-
-    #: Built once the app is ready (see wait_until_ready); groups read it via _root.
-    _message_display: MessageDisplay | None = None
 
     def __init__(
         self,
@@ -479,10 +475,6 @@ class TerminalInterface(TerminalDisplay):
         from textual._context import active_app
 
         active_app.set(self.app)
-        if self.conversation is not None and self._message_display is None:
-            self._message_display = MessageDisplay(
-                self.conversation, self.app._conversation_area, self
-            )
         await self.print(BANNER)
 
     # -- input ---------------------------------------------------------------

@@ -191,7 +191,7 @@ exhaustive = true
 layers = [
     "interface",
     "app",
-    "message_display | queued_messages | stats_bar",
+    "message_boxes | queued_messages | stats_bar",
     "conversation_area",
     "collapsible_widgets",
     "widgets",

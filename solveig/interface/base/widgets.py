@@ -8,9 +8,10 @@ internal; the contract only covers "caller can update the content."
 - `TextBox`      — editable text (append, clear, replace)
 - `DiffBox`      — read-only comparison (replace old + new)
 - `TreeBox`      — directory tree from metadata (replace metadata)
+- `MessageBox`   — one drawn message or reasoning block (replace, remove)
 - `EditableMessage` — message widget hosting Edit/Retry/Delete/Branch buttons
 
-All four are `Protocol`s, for the same reason `ConversationObserver` is: a
+All five are `Protocol`s, for the same reason `ConversationObserver` is: a
 contract with a default implementation is not a contract. As plain classes
 with empty bodies, a frontend that forgot a method got silence at runtime
 instead of an error. Structural typing makes "satisfies the contract"
@@ -23,8 +24,9 @@ metaclasses, so a widget physically cannot take one of these as a second base.
 
 Which half inherits, and why it matters:
 
-- `TextBox`, `DiffBox`, `TreeBox` are inherited EXPLICITLY. Their implementers
-  (`CollapsibleTextBox`, `CollapsibleDiffBox`, `FileTree`) own a widget rather
+- `TextBox`, `DiffBox`, `TreeBox`, `MessageBox` are inherited EXPLICITLY. Their
+  implementers (`CollapsibleTextBox`, `CollapsibleDiffBox`, `FileTree`,
+  `CommentBox`/`ReasoningBox`) own a widget rather
   than being one, so there is no metaclass conflict — and mypy then checks
   conformance at the class definition instead of only where `interface.py`
   annotates a return type. That distinction is not academic: `TreeBox.refresh`
@@ -96,6 +98,29 @@ class TreeBox(Protocol):
         contract because a caller that DID mutate out of band needs somewhere
         to say so.
         """
+        ...
+
+
+@runtime_checkable
+class MessageBox(Protocol):
+    """One message the transcript has drawn.
+
+    The handle IS the identity: whoever added it holds this and needs no id, no
+    index and no way to ask the frontend "which widget was that again". Two
+    methods, because a transcript only ever does two things to a message it
+    already drew - restate it (an edit, or the next token of a stream) and take
+    it back (a rewind).
+
+    Both are async: mounting was, and a caller that drops a tail before redrawing
+    it needs the removal to have actually happened first.
+    """
+
+    async def replace(self, text: str) -> None:
+        """Restate this message with new text."""
+        ...
+
+    async def remove(self) -> None:
+        """Take this message off the transcript."""
         ...
 
 

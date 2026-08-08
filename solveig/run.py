@@ -325,7 +325,7 @@ async def run_async(
     # The conversation's two observers, both self-registering: one shows it,
     # one saves it. SessionDisplay is built after the interface because it
     # drives the interface's transcript verbs.
-    SessionDisplay(conversation, interface)
+    SessionDisplay(conversation, interface, user_message_queue)
 
     # The registry owns the prompt gate: /commands are dispatched before
     # insertion, prompts pass through unchanged. Self-registers on the queue

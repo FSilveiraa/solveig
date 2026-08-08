@@ -1,14 +1,15 @@
 """SessionDisplay test — the one event→verb reduction a frontend sees.
 
 Drives the REAL observer (SessionDisplay, session/display.py) headlessly through
-MockInterface. This replaces the old TextualTranscript widget tests: the display
-edge worth pinning is the reduction itself — which conversation event becomes
-which of the three interface verbs (show_message_part / update_message /
-drop_messages) — not Textual's materialization of it (interface/tui is
-coverage-excluded).
+MockInterface. The display edge worth pinning is the reduction itself — which
+conversation event becomes which of the two interface verbs (add_message /
+add_reasoning) and which handle call — not Textual's materialization of it
+(interface/tui is coverage-excluded).
+
+What the assertions deliberately never touch: a message id. The mock has no way
+to reach one, which is the property this seam exists to have.
 """
 
-import pytest
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
@@ -19,71 +20,92 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.usage import RunUsage
-from textual.app import App, ComposeResult
 
-from solveig.interface.tui.conversation_area import ConversationArea
-from solveig.interface.tui.message_display import MessageDisplay
+from solveig.interface.base import Role
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from tests.mocks import MockInterface
 
 
 async def _session(conversation: Conversation) -> MockInterface:
-    interface = MockInterface(conversation=conversation)
+    interface = MockInterface()
     SessionDisplay(conversation, interface)
     return interface
 
 
-async def test_message_added_shows_each_part_in_order():
+def _texts(interface: MockInterface) -> list[str]:
+    return [box.text for box in interface.shown]
+
+
+async def test_message_added_draws_each_part_in_order():
     conv = Conversation()
     interface = await _session(conv)
 
-    uid = await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
-    assert ("show", uid, 0) in interface.transcript_events
-    assert interface.shown[uid] == ["hi"]
+    await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
+    assert _texts(interface) == ["hi"]
+    assert interface.shown[0].role is Role.USER
 
-    aid = await conv.append(
+    await conv.append(
         ModelResponse(parts=[ThinkingPart(content="hmm"), TextPart(content="hello")])
     )
-    assert ("show", aid, 0) in interface.transcript_events  # thinking
-    assert ("show", aid, 1) in interface.transcript_events  # text
-    assert interface.shown[aid] == ["hmm", "hello"]
+    assert _texts(interface) == ["hi", "hmm", "hello"]
+    # reasoning is its own verb, and carries no role
+    assert ("reasoning", "hmm") in interface.transcript_events
+    assert interface.shown[1].role is None
+    assert interface.shown[2].role is Role.ASSISTANT
 
 
-async def test_streaming_reduces_to_show_then_update():
+async def test_streaming_replaces_through_the_handle():
+    """A stream must not redraw: the first token adds a box, every token after
+    restates THAT box."""
     conv = Conversation()
     interface = await _session(conv)
 
-    sid = await conv.begin_stream(ModelResponse(parts=[TextPart(content="Hel")]))
-    assert ("show", sid, 0) in interface.transcript_events  # stream_began -> show
+    await conv.begin_stream(ModelResponse(parts=[TextPart(content="Hel")]))
+    box = interface.shown[0]
+    assert box.text == "Hel"
 
     await conv.stream_updated(ModelResponse(parts=[TextPart(content="Hello")]))
-    assert ("update", sid) in interface.transcript_events
+    await conv.finalize_stream(ModelResponse(parts=[TextPart(content="Hello!")]))
 
-    await conv.finalize_stream(ModelResponse(parts=[TextPart(content="Hello")]))
-    assert ("update", sid) in interface.transcript_events  # completion -> update
+    assert interface.shown == [box]  # same handle throughout
+    assert box.text == "Hello!"
 
 
-async def test_edit_and_truncate_map_to_update_and_drop():
+async def test_edit_restates_and_truncate_removes_the_tail():
     conv = Conversation()
     interface = await _session(conv)
 
     a = await conv.append(ModelResponse(parts=[TextPart(content="a")]))
     b = await conv.append(ModelResponse(parts=[TextPart(content="b")]))
-    c = await conv.append(ModelResponse(parts=[TextPart(content="c")]))
+    await conv.append(ModelResponse(parts=[TextPart(content="c")]))
+    first, second, third = interface.shown
 
     await conv.edit(a, 0, "A")
-    assert ("update", a) in interface.transcript_events
+    assert first.text == "A"
 
     await conv.truncate_from(b)
-    # truncated_from -> drop the tail after b in ONE batched drop
-    assert any(set(ids) == {b, c} for ids in _drops(interface))
-    assert set(interface.shown) == {a}
+    assert interface.shown == [first]
+    assert (second.removed, third.removed) == (True, True)
 
 
-async def test_live_tool_call_shows_parts_not_replayed():
-    """On a live append nothing is replayed (execute drew it live) - the parts
-    are shown as-is, so there is no double render."""
+async def test_only_a_user_turn_is_offered_retry():
+    """The rule lives in the closures, so an assistant message simply arrives
+    without a retry action and no frontend renders a button for it."""
+    conv = Conversation()
+    interface = await _session(conv)
+
+    await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
+    await conv.append(ModelResponse(parts=[TextPart(content="hello")]))
+    user_box, assistant_box = interface.shown
+
+    assert user_box.offered == {"edit", "retry", "delete", "branch"}
+    assert assistant_box.offered == {"edit", "delete", "branch"}
+
+
+async def test_live_tool_call_is_not_replayed():
+    """On a live append nothing is replayed (execute drew it live) - only the
+    text parts are drawn, so there is no double render."""
     conv = Conversation()
     interface = await _session(conv)
 
@@ -95,8 +117,7 @@ async def test_live_tool_call_shows_parts_not_replayed():
             ]
         )
     )
-    # shown as parts, NOT re-rendered by replay
-    assert any(e[0] == "show" for e in interface.transcript_events)
+    assert _texts(interface) == ["let me read"]
     assert "t" not in interface.get_all_output()
 
 
@@ -134,67 +155,9 @@ async def test_conversation_loaded_replays_recorded_tool_call():
         RunUsage(),
     )
 
-    comments = []
-    for shown in interface.shown.values():
-        comments.extend(shown)
-    assert "Review test.py" in comments
-    assert "It's safe to run." in comments
+    assert "Review test.py" in _texts(interface)
+    assert "It's safe to run." in _texts(interface)
     # the recorded tool call replayed itself (result present)
     out = interface.get_all_output()
     assert "not_a_real_tool" in out
     assert "file contents" in out
-
-
-@pytest.mark.anyio
-async def test_display_records_every_mounted_widget():
-    """`extend` takes one iterable - `extend(*widgets)` unpacked it and tried to
-    iterate a Widget. Two parts in one call is what makes the difference visible."""
-    conv = Conversation()
-    message_id = await conv.append(
-        ModelResponse(parts=[ThinkingPart(content="hmm"), TextPart(content="hello")])
-    )
-    interface = MockInterface(conversation=conv)
-    area = ConversationArea()
-    display = MessageDisplay(conv, area, interface)
-
-    class _HarnessApp(App):
-        def compose(self) -> ComposeResult:
-            yield area
-
-    async with _HarnessApp().run_test():
-        await display.display(message_id, 0, 1)
-
-    assert len(display._mounted[message_id].widgets) == 2
-
-
-@pytest.mark.anyio
-async def test_a_role_change_mounts_no_header_widget():
-    """Role is carried by the comment's own tint now; the section rule is gone."""
-    conv = Conversation()
-    user_message_id = await conv.append(
-        ModelRequest(parts=[UserPromptPart(content="hi")])
-    )
-    assistant_message_id = await conv.append(
-        ModelResponse(parts=[TextPart(content="hello")])
-    )
-    interface = MockInterface(conversation=conv)
-    area = ConversationArea()
-    display = MessageDisplay(conv, area, interface)
-
-    class _HarnessApp(App):
-        def compose(self) -> ComposeResult:
-            yield area
-
-    async with _HarnessApp().run_test():
-        await display.display(user_message_id, 0)
-        await display.display(assistant_message_id, 0)
-
-        assert all(type(w).__name__ != "SectionHeader" for w in area.children)
-
-    assert len(display._mounted[user_message_id].widgets) == 1
-    assert len(display._mounted[assistant_message_id].widgets) == 1
-
-
-def _drops(interface: MockInterface):
-    """The ids-tuples of every drop event."""
-    return [e[1] for e in interface.transcript_events if e[0] == "drop"]

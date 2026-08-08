@@ -1,18 +1,23 @@
-"""EditableComment widget tests — the per-message action buttons.
+"""The per-message actions, from both ends of the seam.
 
-The action methods (edit / retry / delete) run headlessly through MockInterface
-(conversation-bound): they mutate the Conversation by id, exactly as the real
-widget path does, with no Textual App needed. Only the two button-MOUNT tests
-spin up the App, to assert which buttons render for which role. (The old
-section-container harness was deleted with section machinery.)
+Two halves that no longer know about each other, tested separately on purpose:
+
+- `EditableComment` renders a control per action it was HANDED, and nothing
+  else. It is given `MessageActions` directly here — there is no conversation
+  in sight, which is the property worth pinning.
+- the closures `SessionDisplay` builds are what actually mutate the
+  conversation. They are driven through the boxes a headless MockInterface
+  recorded, i.e. exactly the objects a real frontend would have clicked.
 """
+
+import asyncio
 
 import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from textual.app import App, ComposeResult
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import Role
+from solveig.interface.base import MessageActions, Role
 from solveig.interface.tui.buttons import (
     BranchButton,
     DeleteButton,
@@ -21,27 +26,23 @@ from solveig.interface.tui.buttons import (
 )
 from solveig.interface.tui.widgets import EditableComment
 from solveig.session.conversation import Conversation
+from solveig.session.display import SessionDisplay
 from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import MockInterface
 
 
-async def _conversation() -> tuple[Conversation, str, str]:
-    """A two-message conversation; returns it plus (user_id, assistant_id)."""
+async def _drawn(
+    queue: UserMessageQueue | None = None, interface: MockInterface | None = None
+):
+    """A two-message conversation, drawn: returns it plus the user and
+    assistant boxes the interface was handed."""
     conv = Conversation()
-    user_id = await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
-    assistant_id = await conv.append(ModelResponse(parts=[TextPart(content="hello")]))
-    return conv, user_id, assistant_id
-
-
-def _comment(conv, message_id, *, role: Role, interface=None):
-    return EditableComment(
-        "hi" if role is Role.USER else "hello",
-        conversation=conv,
-        interface=interface or MockInterface(conversation=conv),
-        message_id=message_id,
-        part_index=0,
-        role=role,
-    )
+    interface = interface or MockInterface()
+    SessionDisplay(conv, interface, queue)
+    await conv.append(ModelRequest(parts=[UserPromptPart(content="hi")]))
+    await conv.append(ModelResponse(parts=[TextPart(content="hello")]))
+    user_box, assistant_box = interface.shown
+    return conv, user_box, assistant_box
 
 
 class _HarnessApp(App):
@@ -53,10 +54,23 @@ class _HarnessApp(App):
         yield self._comment
 
 
+def _comment(interface, actions: MessageActions, role: Role = Role.USER):
+    return EditableComment("hi", interface=interface, role=role, actions=actions)
+
+
+# -- the widget draws what it was handed -----------------------------------
+
+
 @pytest.mark.anyio
-async def test_user_message_mounts_edit_retry_delete_branch():
-    conv, user_id, _ = await _conversation()
-    comment = _comment(conv, user_id, role=Role.USER)
+async def test_a_button_appears_for_each_action_handed_over():
+    async def _noop() -> None: ...
+
+    comment = _comment(
+        MockInterface(),
+        MessageActions(
+            edit=lambda text: _noop(), retry=_noop, delete=_noop, branch=_noop
+        ),
+    )
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert comment.query_one(RetryButton)
@@ -65,66 +79,123 @@ async def test_user_message_mounts_edit_retry_delete_branch():
 
 
 @pytest.mark.anyio
-async def test_assistant_message_has_no_retry_button():
-    conv, _, assistant_id = await _conversation()
-    comment = _comment(conv, assistant_id, role=Role.ASSISTANT)
+async def test_an_action_not_handed_over_renders_no_button():
+    """The widget never asks WHY retry is missing — an assistant turn is not a
+    concept it knows."""
+
+    async def _noop() -> None: ...
+
+    comment = _comment(
+        MockInterface(),
+        MessageActions(edit=lambda text: _noop(), delete=_noop, branch=_noop),
+        role=Role.ASSISTANT,
+    )
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
-        assert comment.query_one(DeleteButton)
-        assert comment.query_one(BranchButton)
         assert len(comment.query(RetryButton)) == 0
 
 
-@pytest.mark.anyio
-async def test_begin_edit_updates_conversation_and_display():
-    conv, user_id, _ = await _conversation()
-    interface = MockInterface(conversation=conv, user_inputs=["edited"])
-    comment = _comment(conv, user_id, role=Role.USER, interface=interface)
-
-    await comment.begin_edit()
-
-    assert comment.comment == "edited"
-    assert conv.get(user_id).parts[0].content == "edited"
+# -- the closures do the work ----------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_delete_from_here_truncates_conversation():
-    conv, _, assistant_id = await _conversation()
-    comment = _comment(conv, assistant_id, role=Role.ASSISTANT)
+async def test_edit_rewrites_the_message_and_restates_the_box():
+    conv, user_box, _ = await _drawn()
 
-    await comment.delete_from_here()
+    await user_box.actions.edit("edited")
 
-    assert len(conv.messages) == 1  # the user prompt remains
-
-
-class _CancellingInterface(MockInterface):
-    """The user pressed Escape during the edit prompt - ask_question raises
-    UserCancel, as the real input path does."""
-
-    async def _ask_question(self, question, default=""):
-        raise UserCancel()
+    assert conv.messages[0].parts[0].content == "edited"
+    assert user_box.text == "edited"  # the transcript restated it, not the widget
 
 
 @pytest.mark.anyio
 async def test_begin_edit_cancel_does_not_crash_or_mutate():
     """Regression: cancelling the Edit prompt must not propagate UserCancel
     unhandled, and must leave the conversation untouched."""
-    conv, user_id, _ = await _conversation()
-    comment = _comment(conv, user_id, role=Role.USER, interface=_CancellingInterface())
+
+    class _CancellingInterface(MockInterface):
+        async def _ask_question(self, question, default=""):
+            raise UserCancel()
+
+    interface = _CancellingInterface()
+    conv, user_box, _ = await _drawn(interface=interface)
+    comment = _comment(interface, user_box.actions)
 
     await comment.begin_edit()  # must not raise
 
-    assert conv.get(user_id).parts[0].content == "hi"
+    assert conv.messages[0].parts[0].content == "hi"
 
 
 @pytest.mark.anyio
-async def test_retry_truncates_and_requeues_prompt():
-    conv, user_id, _ = await _conversation()
-    interface = MockInterface(conversation=conv)
-    interface.user_message_queue = UserMessageQueue()
-    comment = _comment(conv, user_id, role=Role.USER, interface=interface)
+async def test_delete_truncates_from_that_message():
+    conv, _, assistant_box = await _drawn()
 
-    await comment.retry()
+    await assistant_box.actions.delete()
 
-    assert len(conv.messages) == 0  # truncated
-    assert interface.user_message_queue.get_nowait() == "hi"
+    assert len(conv.messages) == 1  # the user prompt remains
+
+
+@pytest.mark.anyio
+async def test_retry_truncates_and_requeues_the_prompt():
+    queue = UserMessageQueue()
+    conv, user_box, _ = await _drawn(queue)
+
+    await user_box.actions.retry()
+
+    assert len(conv.messages) == 0
+    assert queue.get_nowait() == "hi"
+
+
+@pytest.mark.anyio
+async def test_retry_resubmits_the_edited_text():
+    """The text is read from the conversation when retry runs. Captured at draw
+    time instead, an edit-then-retry would resend the text the user replaced."""
+    queue = UserMessageQueue()
+    _, user_box, _ = await _drawn(queue)
+
+    await user_box.actions.edit("edited")
+    await user_box.actions.retry()
+
+    assert queue.get_nowait() == "edited"
+
+
+@pytest.mark.anyio
+async def test_retry_is_not_re_routed_through_the_subcommand_gate():
+    """A retried prompt has already been through the gate once. If the registry
+    gained a trigger since (a plugin reload, an MCP connect), re-gating would
+    swallow the stored prompt as a command and it would simply vanish."""
+    queue = UserMessageQueue()
+
+    async def _swallow_everything(text: str) -> str | None:
+        return None
+
+    queue.prompt_handler = _swallow_everything
+    _, user_box, _ = await _drawn(queue)
+
+    await user_box.actions.retry()
+
+    assert queue.get_nowait() == "hi"
+
+
+@pytest.mark.anyio
+async def test_a_mid_run_action_is_refused_by_the_closure():
+    """Refusal is app policy: a rewind mid-run is reconciled away by adopt().
+    The frontend is not consulted and holds no rule about it."""
+    interface = MockInterface()
+    conv, user_box, _ = await _drawn(interface=interface)
+
+    async def _busy() -> None: ...
+
+    task = asyncio.ensure_future(_busy())
+    interface._active_tasks[task] = None
+    try:
+        await user_box.actions.delete()
+    finally:
+        interface._active_tasks.pop(task, None)
+        await task
+
+    assert len(conv.messages) == 2  # nothing was dropped
+    assert any(
+        "Finish or cancel" in str(update.get("status"))
+        for update in interface.stats_updates
+    )

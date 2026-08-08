@@ -6,8 +6,8 @@ unchanged (the main loop `await`s `get()`, the mid-turn gate drains via
 
 - **A prompt gate.** `put` runs the text through `prompt_handler` first: it
   returns the (possibly transformed) text to enqueue, or `None` to swallow
-  the input (e.g. it was a /command, already executed). `put_nowait` is the
-  ungated sync path for internal injection that bypasses routing.
+  the input (e.g. it was a /command, already executed). A caller with text
+  that has already been through the gate passes `check_subcommand=False`.
 - **A doorbell.** `_put`/`_get` are the internal hooks EVERY public mutator
   funnels through (verified in the CPython 3.13 asyncio source: `put`,
   `put_nowait`, `get`, `get_nowait` all bottom out in them), so the sync
@@ -42,10 +42,18 @@ class UserMessageQueue(asyncio.Queue[str]):
         # whoever displays the queue; fires after every put/get.
         self.on_change: Callable[[], None] | None = None
 
-    async def put(self, text: str) -> None:
+    async def put(self, text: str, check_subcommand: bool = True) -> None:
         """Gated insert: the prompt handler decides what actually lands in
-        the queue (or swallows the input entirely)."""
-        if self.prompt_handler is not None:
+        the queue (or swallows the input entirely).
+
+        `check_subcommand=False` skips the gate, for text that has already been
+        through it once (a retried prompt). It is an explicit argument and NOT
+        `put_nowait`: whether something is routed as a command is a routing
+        decision, and sync-vs-async is an execution-context one. Letting the
+        second silently carry the first is how a caller ends up choosing a
+        routing rule by choosing a calling convention.
+        """
+        if check_subcommand and self.prompt_handler is not None:
             gated = await self.prompt_handler(text)
             if gated is None:
                 return

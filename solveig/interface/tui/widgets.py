@@ -8,14 +8,13 @@ from textual.events import Click
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base.actions import Role
+from solveig.interface.base.actions import MessageActions, Role
 from solveig.utils.misc import copy_to_clipboard
 
 from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
 
 if TYPE_CHECKING:
     from solveig.interface.base import SolveigInterface
-    from solveig.session.conversation import Conversation
 
 
 class Comment(Static):
@@ -67,13 +66,13 @@ class Comment(Static):
 
 
 class EditableComment(Comment):
-    """A Comment tied to a conversation message by its stable `message_id`
-    (and the `part_index` within it), with Edit/Retry/Delete/Branch action
-    buttons. Mutations go through the Conversation by id; the reactive
-    transcript reconciles the displayed widgets in place - the widget never
-    redraws the conversation itself. Retry only makes sense for user turns -
-    regenerating an assistant response is Edit+Retry on the preceding user
-    message instead.
+    """A Comment that offers the actions it was handed.
+
+    It knows the text, who said it, and what may be done to it - not which
+    message it is, nor that a conversation exists. Every button below is
+    rendered because an action for it arrived; "an assistant turn cannot be
+    retried" is expressed by no retry action being handed over, not by this
+    widget re-deriving the rule from a role.
 
     Satisfies the `EditableMessage` protocol structurally — a Textual widget
     cannot inherit a Protocol (unrelated metaclasses). The buttons below
@@ -83,18 +82,14 @@ class EditableComment(Comment):
         self,
         comment: str,
         *,
-        conversation: "Conversation",
         interface: "SolveigInterface",
-        message_id: str,
-        part_index: int,
         role: Role,
+        actions: MessageActions,
     ):
         super().__init__(comment)
-        self.conversation = conversation
         self.interface = interface
-        self.message_id = message_id
-        self.part_index = part_index
         self.role = role
+        self.actions = actions
         # Role class carries the section tint (user turns get a lighter band),
         # now that comments mount flat rather than inside a tinted container.
         self.add_class(f"role-{role}")
@@ -105,24 +100,20 @@ class EditableComment(Comment):
         # text above by a top border (see .comment-actions in Comment.get_css).
         with Horizontal(classes="comment-actions"):
             yield CopyButton(lambda: self.comment)
-            yield EditButton(self)
-            if self.role is Role.USER:
+            if self.actions.edit is not None:
+                yield EditButton(self)
+            if self.actions.retry is not None:
                 yield RetryButton(self)
-            yield DeleteButton(self)
-            yield BranchButton(self)
-
-    async def _flash_finish_run_first(self) -> None:
-        """Explain why a click was ignored: a history mutation mid-run is
-        reconciled away when adopt() re-syncs the conversation at run end, and
-        a mid-run retry would be drained into the running turn as an
-        interjection instead of starting fresh."""
-        await self.interface.set_status(
-            "Finish or cancel the current run first", duration=3
-        )
+            if self.actions.delete is not None:
+                yield DeleteButton(self)
+            if self.actions.branch is not None:
+                yield BranchButton(self)
 
     async def begin_edit(self) -> None:
-        if self.interface.get_active_tasks():
-            await self._flash_finish_run_first()
+        """Collect the new text - HOW to ask is this frontend's alone - and
+        hand it over. What an edit then means is the app's business, including
+        whether it is allowed right now."""
+        if self.actions.edit is None:
             return
         try:
             new_text = await self.interface.ask_question(
@@ -130,34 +121,19 @@ class EditableComment(Comment):
             )
         except UserCancel:
             return
-        self.comment = new_text
-        await self.conversation.edit(self.message_id, self.part_index, new_text)
+        await self.actions.edit(new_text)
 
     async def retry(self) -> None:
-        if self.interface.get_active_tasks():
-            await self._flash_finish_run_first()
-            return
-        text = self.comment
-        await self.conversation.truncate_from(self.message_id)
-        # Resubmit through the session UserMessageQueue - the same path typed
-        # input takes (prompt gate routes /commands before insertion).
-        if self.interface.user_message_queue is not None:
-            await self.interface.user_message_queue.put(text)
+        if self.actions.retry is not None:
+            await self.actions.retry()
 
     async def delete_from_here(self) -> None:
-        if self.interface.get_active_tasks():
-            await self._flash_finish_run_first()
-            return
-        await self.conversation.truncate_from(self.message_id)
+        if self.actions.delete is not None:
+            await self.actions.delete()
 
     async def branch_from_here(self) -> None:
-        if self.interface.get_active_tasks():
-            await self._flash_finish_run_first()
-            return
-        # `branch_from` rather than `truncate_from`: same rewind, different
-        # event, so persistence can preserve what's being dropped. Whether that
-        # means a file is written is none of this widget's business.
-        await self.conversation.branch_from(self.message_id)
+        if self.actions.branch is not None:
+            await self.actions.branch()
 
 
 class CopyButton(Static):

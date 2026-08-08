@@ -26,7 +26,8 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base.widgets import DiffBox, TextBox, TreeBox
+from solveig.interface.base.actions import MessageActions, Role
+from solveig.interface.base.widgets import DiffBox, MessageBox, TextBox, TreeBox
 from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from solveig.interface.themes import Palette
-    from solveig.session.conversation import Conversation, MessageId
+    from solveig.session.conversation import Conversation
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -220,31 +221,30 @@ class SolveigInterface(ABC):
     # -- transcript verbs ----------------------------------------------------
 
     @abstractmethod
-    async def show_message_part(
-        self, message_id: MessageId, *part_indexes: int
-    ) -> None:
-        """Materialize one part of `self.conversation`'s message. Called in part
-        order; a part this frontend has no rendering for is a no-op (the caller
-        does not know, or need to know, which those are).
+    async def add_message(
+        self, text: str, role: Role, actions: MessageActions
+    ) -> MessageBox:
+        """Draw one message and hand back the handle to it.
 
-        Finer-grained than the other two because it is the only one with
-        anything to interleave: the observer may draw a part itself in the
-        middle of a message, so it has to hand parts over one at a time to keep
-        them in order."""
+        Everything needed to draw it arrives here: the TEXT (already decoded -
+        a frontend never sees a model message), WHO it is from, and WHAT may be
+        done to it. A frontend renders a control per action it was handed and
+        decides nothing about which ones exist.
+
+        Restating or removing this message later goes through the returned
+        handle, so nothing addresses a message by id and no frontend keeps a
+        map of what it drew."""
         ...
 
     @abstractmethod
-    async def update_message(self, message_id: MessageId) -> None:
-        """Redraw an already-shown message in place - a streamed token landed,
-        a stream finished, or the user edited it. Parts that appeared since the
-        last call are appended."""
-        ...
+    async def add_reasoning(self, text: str) -> MessageBox:
+        """Draw the assistant's reasoning and hand back the handle.
 
-    @abstractmethod
-    async def drop_messages(self, message_ids: list[MessageId]) -> None:
-        """Remove these messages from the display. The ids may already be gone
-        from the conversation, so this must work from the frontend's own
-        record of what it mounted."""
+        Its own verb rather than a flag on `add_message`, because a frontend
+        that cannot tell reasoning apart cannot present it differently, and the
+        old protocol's answer to that was `italic=True` - one frontend's styling
+        decision made by the caller. Reasoning carries no role and no actions:
+        it is not a turn and cannot be edited or retried."""
         ...
 
     # -- complex display -----------------------------------------------------

@@ -21,11 +21,13 @@ from typing import Any
 
 import anyio
 from pydantic import BaseModel
-from pydantic_ai.messages import TextPart, ThinkingPart, UserPromptPart
 
 from solveig.interface.base import (
     DiffBox,
     Level,
+    MessageActions,
+    MessageBox,
+    Role,
     SolveigInterface,
     Stat,
     TextBox,
@@ -46,16 +48,6 @@ def _dump_field(obj: Any) -> Any:
         return {_dump_field(k): _dump_field(v) for k, v in obj.items()}
     else:
         return obj
-
-
-def _part_text(part: Any) -> str | None:
-    if isinstance(part, UserPromptPart) and isinstance(part.content, str):
-        text = part.content
-    elif isinstance(part, (TextPart, ThinkingPart)):
-        text = part.content
-    else:
-        return None
-    return text if text.strip() else None
 
 
 class _MockTextBox(TextBox):
@@ -90,6 +82,48 @@ class _MockDiffBox(DiffBox):
     def replace(self, old_content: str, new_content: str) -> None:
         title_str = f" ({self._title})" if self._title else ""
         self._outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
+
+
+class _MockMessageBox(MessageBox):
+    """One drawn message, recorded as the VALUES that crossed the seam.
+
+    A test asserts on `text`, `role` and which actions were offered — the facts
+    the protocol carries. There is no message id here and no conversation to
+    look one up in, which is the point: this mock could not decode a model
+    message if it wanted to.
+    """
+
+    def __init__(
+        self,
+        interface: MockInterface,
+        text: str,
+        role: Role | None,
+        actions: MessageActions,
+    ) -> None:
+        self._interface = interface
+        self.text = text
+        self.role = role
+        self.actions = actions
+        self.removed = False
+
+    async def replace(self, text: str) -> None:
+        self.text = text
+        self._interface.transcript_events.append(("replace", text))
+
+    async def remove(self) -> None:
+        self.removed = True
+        if self in self._interface.shown:
+            self._interface.shown.remove(self)
+        self._interface.transcript_events.append(("remove", self.text))
+
+    @property
+    def offered(self) -> set[str]:
+        """The action names a frontend would draw a control for."""
+        return {
+            name
+            for name in ("edit", "retry", "delete", "branch")
+            if getattr(self.actions, name) is not None
+        }
 
 
 class _MockTreeBox(TreeBox):
@@ -129,7 +163,9 @@ class MockInterface(SolveigInterface):
     ) -> None:
         super().__init__()  # SolveigInterface.__init__ — _active_tasks, etc.
         self.conversation = conversation
-        self.shown: dict[str, list[str]] = {}
+        #: The messages currently up, in draw order. Boxes, not text: removal
+        #: goes through the handle, exactly as it does for a real frontend.
+        self.shown: list[_MockMessageBox] = []
         self.transcript_events: list[tuple] = []
         self.outputs: list[str] = []
         self.user_inputs = user_inputs or []
@@ -187,30 +223,19 @@ class MockInterface(SolveigInterface):
 
     # -- transcript verbs ----------------------------------------------------
 
-    async def show_message_part(self, message_id: str, *part_indexes: int) -> None:
-        message = self.conversation.get(message_id) if self.conversation else None
-        if message is None:
-            return
-        for part_index in part_indexes:
-            if part_index >= len(message.parts):
-                continue
-            text = _part_text(message.parts[part_index])
-            if text is not None:
-                self.shown.setdefault(message_id, []).append(text)
-            self.transcript_events.append(("show", message_id, part_index))
+    async def add_message(
+        self, text: str, role: Role, actions: MessageActions
+    ) -> MessageBox:
+        box = _MockMessageBox(self, text, role, actions)
+        self.shown.append(box)
+        self.transcript_events.append(("add", role, text))
+        return box
 
-    async def update_message(self, message_id: str) -> None:
-        message = self.conversation.get(message_id) if self.conversation else None
-        if message is None:
-            return
-        texts = [_part_text(part) for part in message.parts]
-        self.shown[message_id] = [text for text in texts if text is not None]
-        self.transcript_events.append(("update", message_id))
-
-    async def drop_messages(self, message_ids: list[str]) -> None:
-        for message_id in message_ids:
-            self.shown.pop(message_id, None)
-        self.transcript_events.append(("drop", tuple(message_ids)))
+    async def add_reasoning(self, text: str) -> MessageBox:
+        box = _MockMessageBox(self, text, None, MessageActions())
+        self.shown.append(box)
+        self.transcript_events.append(("reasoning", text))
+        return box
 
     # -- complex display -----------------------------------------------------
 
