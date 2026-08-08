@@ -18,6 +18,8 @@ from textual.app import App, ComposeResult
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import MessageActions, Role
+from solveig.interface.themes import DEFAULT_THEME
+from solveig.interface.tui.app import SolveigTextualApp
 from solveig.interface.tui.buttons import (
     BranchButton,
     DeleteButton,
@@ -93,6 +95,57 @@ async def test_an_action_not_handed_over_renders_no_button():
     async with _HarnessApp(comment).run_test():
         assert comment.query_one(EditButton)
         assert len(comment.query(RetryButton)) == 0
+
+
+# -- the two turns are told apart by shape, not only by colour --------------
+
+
+@pytest.mark.anyio
+async def test_the_turns_lean_on_opposite_sides():
+    """Asserted as GEOMETRY, because that is the claim: a user turn is inset
+    from the left with its controls under its right edge, an assistant turn is
+    inset from the right with its controls on the left. Reading the CSS back
+    would only restate the rules; this measures what Textual did with them.
+
+    Runs against the real app so the theme variables the CSS refers to exist.
+    """
+
+    async def _noop() -> None: ...
+
+    actions = MessageActions(
+        edit=lambda text: _noop(), retry=_noop, delete=_noop, branch=_noop
+    )
+    app = SolveigTextualApp(theme=DEFAULT_THEME)
+    async with app.run_test(size=(80, 40)) as pilot:
+        area = app._conversation_area
+        user = EditableComment("hi", interface=None, role=Role.USER, actions=actions)
+        assistant = EditableComment(
+            "hello", interface=None, role=Role.ASSISTANT, actions=actions
+        )
+        await area.mount(user)
+        await area.mount(assistant)
+        await pilot.pause()
+
+        # Measured against the scrollable content region, not the widget: the
+        # stable scrollbar gutter owns a column and is nobody's margin.
+        content = area.scrollable_content_region
+        user_gaps = (user.region.x - content.x, content.right - user.region.right)
+        assistant_gaps = (
+            assistant.region.x - content.x,
+            content.right - assistant.region.right,
+        )
+        assert user_gaps == assistant_gaps[::-1]  # mirrored
+        assert user_gaps[0] > user_gaps[1]  # and the user is the one pushed right
+
+        # the user's controls end at the right edge of their own turn; the
+        # assistant's start at the left edge of theirs
+        user_row = user.query_one(".comment-actions")
+        assistant_row = assistant.query_one(".comment-actions")
+        assert user_row.region.right == user.region.right
+        assert assistant_row.region.x == assistant.region.x
+
+        # a user turn gets 2 rows of vertical margin, not 1
+        assert assistant.region.y - user.region.bottom == 2
 
 
 # -- the closures do the work ----------------------------------------------

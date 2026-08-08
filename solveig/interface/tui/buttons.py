@@ -5,10 +5,13 @@ on click, calls one method on that owner. No shared dispatch mechanism -
 swap a button's behavior by editing its `on_click` override.
 """
 
+from collections.abc import Callable
+
 from textual.events import Click
 from textual.widgets import Static
 
 from solveig.interface.base import EditableMessage
+from solveig.utils.misc import copy_to_clipboard
 
 
 class MessageButton(Static):
@@ -77,3 +80,43 @@ class BranchButton(MessageButton):
     def on_click(self, event: Click) -> None:
         event.stop()
         self.call_after_refresh(self.owner.branch_from_here)
+
+
+class CopyButton(Static):
+    """A small clickable widget that copies text to the clipboard."""
+
+    def __init__(self, content: str | Callable[[], str], **kwargs):
+        super().__init__("⧉ Copy", markup=False, classes="copy-button")
+        self._copy_content = content
+
+    @property
+    def copy_content(self):
+        return (
+            self._copy_content()
+            if isinstance(self._copy_content, Callable)
+            else self._copy_content
+        )
+
+    def on_click(self, event: Click) -> None:
+        event.stop()
+        # Copy to clipboard
+        copy_to_clipboard(self.copy_content)
+        # Display a success message for 1s
+        _content = self.content
+        self.update("✓ Copied!")
+        self.set_timer(1.0, lambda: self.update(_content))
+
+    @classmethod
+    def get_css(cls) -> str:
+        return """
+        CopyButton {
+            color: $foreground;
+            text-align: right;
+            padding: 0 1;
+            height: 1;
+        }
+
+        CopyButton:hover {
+            color: $section;
+        }
+        """

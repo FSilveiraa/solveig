@@ -14,7 +14,7 @@ from .collapsible_widgets import (
     TextBoxWidget,
 )
 from .tree_display import TreeDisplay
-from .widgets import Comment
+from .widgets import EditableComment
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
 # appears to keep extending down, fading out row by row, until exit_group()
@@ -186,15 +186,6 @@ class ConversationArea(ScrollableContainer):
             padding: 0;
         }
 
-        /* The user-turn tint lives on the comment TEXT only, not the action
-           buttons under it - so tint the Markdown child, not the whole
-           EditableComment. Horizontal inset comes from .text_comment's margin;
-           this padding is just breathing room for the text inside the tint. */
-        .role-user > Markdown {
-            background: $user-turn-bg;
-            padding: 0 1;
-        }
-
         .group {
             height: auto;
             /* 1 on all four sides, collapsing (max) with siblings. */
@@ -239,7 +230,7 @@ class ConversationArea(ScrollableContainer):
             color: $section;
         }
         """
-            + Comment.get_css()
+            + EditableComment.get_css()
             + MessageButton.get_css()
             + CustomCollapsible.get_css()
             + TextBoxWidget.get_css()

@@ -1,72 +1,21 @@
 """Basic UI widgets for the Textual interface."""
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from textual.containers import Horizontal
-from textual.events import Click
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base.actions import MessageActions, Role
-from solveig.utils.misc import copy_to_clipboard
 
-from .buttons import BranchButton, DeleteButton, EditButton, RetryButton
+from .buttons import BranchButton, CopyButton, DeleteButton, EditButton, RetryButton
 
 if TYPE_CHECKING:
     from solveig.interface.base import SolveigInterface
 
 
-class Comment(Static):
-    def __init__(self, comment: str):
-        super().__init__()
-        self.comment = comment
-        self.add_class("text_comment")
-
-    def compose(self):
-        yield Markdown(f"🗩 ⠀{self.comment}")
-        yield CopyButton(self.comment)
-
-    @classmethod
-    def get_css(cls) -> str:
-        return """
-        .text_comment {
-            /* 1 on all four sides. Vertically this collapses (max) with
-               neighbours, so adjacent margins never stack. */
-            margin: 1;
-        }
-
-        Markdown {
-            color: $foreground;
-            padding: 0;
-        }
-
-        MarkdownBlock:last-of-type {
-            margin-bottom: 0;
-        }
-
-        /* Action buttons on one row, with a top border (in the box-border
-           colour) separating them from the message text above. width: auto so
-           the row - and its separator border - is only as wide as the buttons,
-           not the full comment; height: auto so it's just the 1-row buttons. */
-        .comment-actions {
-            width: auto;
-            height: auto;
-            border-top: solid $box;
-        }
-
-        /* Each button only as wide as its label, so they pack left-to-right
-           in the row. (MessageButton is action-row-only and set globally; the
-           shared CopyButton is scoped here so box/title-bar copies keep their
-           own right-alignment.) */
-        .comment-actions CopyButton {
-            width: auto;
-        }
-        """
-
-
-class EditableComment(Comment):
-    """A Comment that offers the actions it was handed.
+class EditableComment(Static):
+    """One drawn message: its text, and the actions it was handed.
 
     It knows the text, who said it, and what may be done to it - not which
     message it is, nor that a conversation exists. Every button below is
@@ -86,28 +35,37 @@ class EditableComment(Comment):
         role: Role,
         actions: MessageActions,
     ):
-        super().__init__(comment)
+        # NOTE: no content passed up. This is a CONTAINER - the text is drawn by
+        # the Markdown child in compose(). Handing it to Static as well would
+        # render it twice, once unstyled behind the other.
+        super().__init__()
+        self.comment = comment
         self.interface = interface
         self.role = role
         self.actions = actions
-        # Role class carries the section tint (user turns get a lighter band),
-        # now that comments mount flat rather than inside a tinted container.
+        # The role decides the inset and the tint, and nothing else: which
+        # buttons appear is decided by which actions arrived.
         self.add_class(f"role-{role}")
 
     def compose(self):
         yield Markdown(f"🗩 ⠀{self.comment}")
-        # Action buttons share one horizontal row, separated from the message
-        # text above by a top border (see .comment-actions in Comment.get_css).
-        with Horizontal(classes="comment-actions"):
-            yield CopyButton(lambda: self.comment)
-            if self.actions.edit is not None:
-                yield EditButton(self)
-            if self.actions.retry is not None:
-                yield RetryButton(self)
-            if self.actions.delete is not None:
-                yield DeleteButton(self)
-            if self.actions.branch is not None:
-                yield BranchButton(self)
+        # Two rows, not one: the outer is full width and decides WHERE the
+        # buttons sit (a user turn puts them on the right), the inner is only
+        # as wide as the buttons so its separator border is too. Alignment in
+        # Textual moves a container's children as a group, so an auto-width row
+        # cannot right-align itself against a full-width sibling - it needs a
+        # full-width parent of its own to move inside.
+        with Horizontal(classes="comment-actions-row"):
+            with Horizontal(classes="comment-actions"):
+                yield CopyButton(lambda: self.comment)
+                if self.actions.edit is not None:
+                    yield EditButton(self)
+                if self.actions.retry is not None:
+                    yield RetryButton(self)
+                if self.actions.delete is not None:
+                    yield DeleteButton(self)
+                if self.actions.branch is not None:
+                    yield BranchButton(self)
 
     async def begin_edit(self) -> None:
         """Collect the new text - HOW to ask is this frontend's alone - and
@@ -135,42 +93,74 @@ class EditableComment(Comment):
         if self.actions.branch is not None:
             await self.actions.branch()
 
-
-class CopyButton(Static):
-    """A small clickable widget that copies text to the clipboard."""
-
-    def __init__(self, content: str | Callable[[], str], **kwargs):
-        super().__init__("⧉ Copy", markup=False, classes="copy-button")
-        self._copy_content = content
-
-    @property
-    def copy_content(self):
-        return (
-            self._copy_content()
-            if isinstance(self._copy_content, Callable)
-            else self._copy_content
-        )
-
-    def on_click(self, event: Click) -> None:
-        event.stop()
-        # Copy to clipboard
-        copy_to_clipboard(self.copy_content)
-        # Display a success message for 1s
-        _content = self.content
-        self.update("✓ Copied!")
-        self.set_timer(1.0, lambda: self.update(_content))
-
     @classmethod
     def get_css(cls) -> str:
         return """
-        CopyButton {
-            color: $foreground;
-            text-align: right;
-            padding: 0 1;
-            height: 1;
+        /* Every comment: 1 on all four sides. Vertically this collapses (max)
+           with neighbours, so adjacent margins never stack. The role rules
+           below override it - they are type+class, so they win on specificity
+           without !important. */
+        EditableComment {
+            margin: 1;
         }
 
-        CopyButton:hover {
-            color: $section;
+        /* The two turns lean on opposite sides, which is what makes a glance
+           down the transcript readable: the shape says who is speaking before
+           any colour does. Mirrored insets, so neither turn is the odd one.
+           The user also gets 2 rows of vertical margin instead of 1 - their
+           turn is where a reader looks to find the start of an exchange. */
+        EditableComment.role-user {
+            margin: 2 1 2 12;
+        }
+
+        /* The user's controls sit under the right edge of their own turn, so
+           the eye follows one side of the transcript rather than crossing it. */
+        EditableComment.role-user .comment-actions-row {
+            align-horizontal: right;
+        }
+
+        EditableComment.role-assistant {
+            margin: 1 12 1 1;
+        }
+
+        /* The tint is on the comment TEXT only, never the action buttons under
+           it - so it goes on the Markdown child, not the whole comment. */
+        EditableComment.role-user > Markdown {
+            background: $user-turn-bg;
+            padding: 0 1;
+        }
+
+        Markdown {
+            color: $foreground;
+            padding: 0;
+        }
+
+        MarkdownBlock:last-of-type {
+            margin-bottom: 0;
+        }
+
+        /* Full width and no styling of its own: it exists only to give the
+           button row room to sit somewhere other than hard left. */
+        .comment-actions-row {
+            width: 100%;
+            height: auto;
+        }
+
+        /* Action buttons on one row, with a top border (in the box-border
+           colour) separating them from the message text above. width: auto so
+           the row - and its separator border - is only as wide as the buttons,
+           not the full comment; height: auto so it's just the 1-row buttons. */
+        .comment-actions {
+            width: auto;
+            height: auto;
+            border-top: solid $box;
+        }
+
+        /* Each button only as wide as its label, so they pack left-to-right
+           in the row. (MessageButton is action-row-only and set globally; the
+           shared CopyButton is scoped here so box/title-bar copies keep their
+           own right-alignment.) */
+        .comment-actions CopyButton {
+            width: auto;
         }
         """
