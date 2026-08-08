@@ -12,6 +12,7 @@ from pathlib import Path as SyncPath
 import pytest
 from anyio import Path
 
+import solveig.utils.file as file_module
 from solveig.utils.file import FileMetadata, Filesystem
 
 pytestmark = pytest.mark.anyio
@@ -197,6 +198,49 @@ class TestIgnoredPathsPruneTheListing:
 
         assert metadata.listing is not None
         assert {SyncPath(p).name for p in metadata.listing} == {"a.txt", "b.txt"}
+
+
+@pytest.mark.no_file_mocking
+class TestReadingMetadataStaysBounded:
+    """Metadata is read for EVERY entry of a listing, in parallel. Anything
+    proportional to file CONTENT here is multiplied by the whole directory."""
+
+    async def test_a_large_file_is_not_read_to_count_its_lines(
+        self, tmp_path, monkeypatch
+    ):
+        """Regression: line_count read the entire file, so listing a directory
+        pulled every byte of every file into memory at once - two 300MB files
+        peaked at 632MB RSS. Over the cap the count is unknown, which is a
+        state the display already renders."""
+        big = tmp_path / "big.log"
+        big.write_text("a line\n" * 4)
+
+        reads: list[str] = []
+        original = Path.read_bytes
+
+        async def _spy(self):
+            reads.append(str(self))
+            return await original(self)
+
+        monkeypatch.setattr(Path, "read_bytes", _spy)
+        monkeypatch.setattr(file_module, "_MAX_LINE_COUNT_BYTES", 4)
+
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(big)
+        )
+
+        assert metadata.line_count is None
+        assert reads == []  # the file was never opened for its content
+
+    async def test_a_small_file_still_reports_its_lines(self, tmp_path):
+        small = tmp_path / "small.txt"
+        small.write_text("one\ntwo\nthree")
+
+        metadata = await Filesystem.read_metadata(
+            Filesystem.get_absolute_path(small)
+        )
+
+        assert metadata.line_count == 3
 
 
 @pytest.mark.no_file_mocking

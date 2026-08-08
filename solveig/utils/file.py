@@ -13,6 +13,17 @@ from typing import ClassVar, Literal
 
 from anyio import Path
 
+#: How much of a file is enough to tell text from binary. The null-byte test
+#: only ever looks at the start, so reading more buys nothing.
+_SNIFF_BYTES = 512
+
+#: Files above this are reported with `line_count=None`. Counting newlines
+#: means reading every byte, and metadata is read for EVERY entry of a
+#: directory listing, in parallel — so an uncapped count makes listing a
+#: directory cost the sum of the files in it, in memory and in I/O, for a
+#: number nobody asked for. Unknown is a real state the display already draws.
+_MAX_LINE_COUNT_BYTES = 8 * 1024 * 1024
+
 
 @dataclass
 class FileMetadata:
@@ -188,10 +199,15 @@ class Filesystem:
         await asyncio.to_thread(shutil.rmtree, PurePath(abs_path))
 
     @staticmethod
-    async def _is_text_file(abs_path: Path, _blocksize: int = 512) -> bool:
-        """Async text file detection using AnyIO."""
-        chunk = await abs_path.read_bytes()
-        chunk = chunk[:_blocksize]  # Limit to blocksize
+    async def _is_text_file(abs_path: Path, _blocksize: int = _SNIFF_BYTES) -> bool:
+        """Whether the START of the file looks like text.
+
+        Reads only the sniff window: this used to pull the whole file in and
+        then slice it, which on a large binary meant loading it entirely to
+        look at its first 512 bytes.
+        """
+        async with await abs_path.open("rb") as handle:
+            chunk = await handle.read(_blocksize)
         if b"\x00" in chunk:
             return False
         try:
@@ -417,11 +433,11 @@ class Filesystem:
         )
 
         line_count: int | None = None
-        if not is_dir and is_readable:
+        if not is_dir and is_readable and stats.st_size <= _MAX_LINE_COUNT_BYTES:
             try:
                 raw = await abs_path.read_bytes()
                 # HACK: somehow the best heuristic for checking if a file is text
-                if b"\x00" not in raw[:512]:
+                if b"\x00" not in raw[:_SNIFF_BYTES]:
                     line_count = raw.count(b"\n") + (
                         1 if raw and not raw.endswith(b"\n") else 0
                     )

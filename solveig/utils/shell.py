@@ -206,7 +206,14 @@ class PersistentShell:
         await self.start()
 
     async def stop(self) -> None:
-        """Stop the persistent shell process."""
+        """Stop the persistent shell process, killing it if it will not leave.
+
+        The `exit` is a request, and a shell whose last command left something
+        in the foreground will not honour it. Waiting unbounded on that turns a
+        stuck child into a shutdown that never returns, so the wait is bounded
+        exactly as `restart`'s is, and the fallback is the one `force_reset`
+        already uses.
+        """
         if self.proc:
             try:
                 if self.proc.stdin:
@@ -214,7 +221,13 @@ class PersistentShell:
                     await self.proc.stdin.drain()
             except Exception:
                 pass
-            await self.proc.wait()
+            try:
+                await asyncio.wait_for(self.proc.wait(), timeout=2.0)
+            except Exception:  # TimeoutError, or a process already gone
+                with contextlib.suppress(Exception):
+                    self.proc.kill()
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(self.proc.wait(), timeout=2.0)
             self.proc = None
 
 

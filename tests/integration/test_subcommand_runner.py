@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import time
+
 import pytest
 
 from solveig.api.client import Client
@@ -296,6 +298,9 @@ class TestSessionCommandsWithManager:
                     "message_count": 5,
                     "total_tokens_sent": 100,
                     "total_tokens_received": 50,
+                    # `list_sessions` always stamps this; the listing shows an
+                    # age so a user picking one to resume can tell which is recent.
+                    "_mtime": int(time.time()) - 3600,
                 }
             ]
         )
@@ -303,6 +308,7 @@ class TestSessionCommandsWithManager:
         await registry("/session list")
         output = registry._interface.get_all_output()
         assert "my-session" in output
+        assert "1 hour ago" in output
 
     async def test_session_store_calls_manager(self):
         manager = self._make_mock_manager()

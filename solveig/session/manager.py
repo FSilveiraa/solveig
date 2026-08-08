@@ -38,6 +38,7 @@ from solveig.session.conversation import (
 )
 from solveig.subcommands import subcommand
 from solveig.utils.file import Filesystem
+from solveig.utils.misc import format_age
 
 if TYPE_CHECKING:
     from solveig.config import SolveigConfig
@@ -361,7 +362,8 @@ async def session_list(
     for s in sessions:
         lines.append(
             f"{s['id']:<36}  {s['message_count']:>3} msgs  "
-            f"{s['total_tokens_sent'] + s['total_tokens_received']:>5} tokens"
+            f"{s['total_tokens_sent'] + s['total_tokens_received']:>5} tokens  "
+            f"{format_age(s['_mtime'])}"
         )
 
     await interface.add_text_box("\n".join(lines), title="Sessions")
