@@ -115,7 +115,15 @@ layers = [
     "solveig.agent",
     "solveig.subcommands.registry",
     "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.editor",
-    "solveig.interface.base : solveig.interface.tui : solveig.session.conversation : solveig.context : solveig.api.client",
+    "solveig.context : solveig.api.client",
+    # `|`, not `:`. A frontend and the conversation are INDEPENDENT: a frontend
+    # is handed text, a role and a set of actions, and has no business naming a
+    # message. This delimiter is the machine check on that — `:` would permit
+    # the import in both directions again. The protocol sits one layer down
+    # because a frontend does of course import it (and import-linter refuses to
+    # mix the two delimiters within one layer).
+    "solveig.interface.tui | solveig.session.conversation",
+    "solveig.interface.base",
     "solveig.subcommands.base : solveig.user_message_queue",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
     "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo",

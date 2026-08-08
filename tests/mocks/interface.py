@@ -158,11 +158,9 @@ class MockInterface(SolveigInterface):
         user_inputs: list[str | None] | None = None,
         choices: list[int] | None = None,
         timeout_seconds: float | None = 10,
-        conversation=None,
         **kwargs,
     ) -> None:
         super().__init__()  # SolveigInterface.__init__ — _active_tasks, etc.
-        self.conversation = conversation
         #: The messages currently up, in draw order. Boxes, not text: removal
         #: goes through the handle, exactly as it does for a real frontend.
         self.shown: list[_MockMessageBox] = []

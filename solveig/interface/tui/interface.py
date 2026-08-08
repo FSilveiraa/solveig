@@ -63,7 +63,6 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from solveig.interface.tui.collapsible_widgets import CustomCollapsible
-    from solveig.session.conversation import Conversation
     from solveig.user_message_queue import UserMessageQueue
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
@@ -312,12 +311,10 @@ class TerminalInterface(TerminalDisplay):
         self,
         user_message_queue: UserMessageQueue | None = None,
         config=None,
-        conversation: Conversation | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.user_message_queue = user_message_queue
-        self.conversation = conversation
         self._root = self
         # Every startup value comes out of `config`, never out of a constructor
         # argument a caller could disagree with it about. The defaults below are
@@ -513,7 +510,6 @@ class GroupInterface(TerminalDisplay):
         super().__init__()
         self._root = root
         self.app = root.app
-        self.conversation = root.conversation
         self.user_message_queue = root.user_message_queue
         # shared by reference on purpose — a cancel issued anywhere must reach
         # work started inside a group

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from solveig.interface.themes import Palette
-    from solveig.session.conversation import Conversation
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -112,9 +111,14 @@ class Stat:
 
 
 class SolveigInterface(ABC):
-    """The display protocol any UI implementation (CLI, web, desktop, headless
-    mock) provides: render, ask, scope, status/animation, theme, and the
-    conversation it displays (handed in at construction).
+    """The display protocol any UI implementation (terminal, web, desktop,
+    headless mock) provides: render, ask, scope, status/animation, theme.
+
+    It holds no conversation, and none of its verbs names a message. Everything
+    a frontend needs to draw arrives as an argument - text, a role, the actions
+    a message offers - so implementing one requires knowing nothing about
+    pydantic-ai's message model, and the observer on the other side of this
+    protocol can be swapped without a frontend noticing.
 
     Two cross-cutting concerns are protocol-level ON PURPOSE (every UI with
     user input shares them, so a frontend never re-implements them):
@@ -134,7 +138,6 @@ class SolveigInterface(ABC):
     def __init__(self) -> None:
         self._active_tasks: dict[asyncio.Task, None] = {}
         self.user_message_queue: UserMessageQueue | None = None
-        self.conversation: Conversation | None = None
 
     # -- theming (no-op defaults, override per frontend) ---------------------
 
