@@ -594,8 +594,8 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
     so a manually-typed `/command` runs the same shellcheck a model call does.
     This capability supplies the LLM-specific parts: the body is pydantic-ai's
     own `handler(args)`, a blocking `PluginException` becomes a `ModelRetry`
-    (the model's cue to react), and the terminal `ToolResult.to_tool_return()`
-    renders the value the model sees.
+    (the model's cue to react), and the terminal step wraps the result's
+    `to_assistant_text()` into the `ToolReturn` the model sees.
 
     A plain-function tool (e.g. an MCP tool, or one a plugin author writes
     that way) has no `BaseTool` instance, so it can't go through
@@ -663,6 +663,9 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         # model reads, `private` rides along as metadata it never sees. Handing
         # back the ToolResult raw would serialize the whole dataclass into the
         # model's context, `private` included.
-        return result.to_tool_return()
+        return PydanticAIToolReturn(
+            return_value=result.to_assistant_text(),
+            metadata=result.private,
+        )
 
     return hooks

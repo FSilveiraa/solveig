@@ -337,8 +337,8 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         annotations` in the defining module.
 
         The `return` annotation is `ToolReturn` - the type the model actually
-        ends up receiving after the tool-execution capability calls
-        `ToolResult.to_tool_return()`. It is deliberately NOT `ToolResult` (the
+        ends up receiving, since the tool-execution capability wraps the result
+        before it goes out. It is deliberately NOT `ToolResult` (the
         dataclass `run` literally returns): pydantic-ai tries to build a return
         schema from this annotation, and a plain dataclass makes it emit a
         `UserWarning` and fall back to an unconstrained schema, once per tool

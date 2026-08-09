@@ -38,10 +38,9 @@ from pydantic_ai.messages import (
     ToolCallPart,
     ToolReturnPart,
 )
-from pydantic_settings.exceptions import SettingsError
 
 from solveig.config import SolveigConfig
-from solveig.exceptions import PluginException, ToolDisabledError
+from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import HookKind, hook_name, hooks_for
 from solveig.subcommands.base import Subcommand
@@ -172,28 +171,30 @@ async def run_untyped_tool(
         )
 
 
-def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[None]]:
+def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[str | None]]:
     """A tool's `/command` as a plain subcommand handler: it declares the two
     dependencies it needs by annotating them, takes the raw words, and runs the
     tool through the ONE execution seam - so a hand-typed `/read` gets the same
-    consent, hooks and group posture a model-issued call does."""
+    consent, hooks and group posture a model-issued call does.
+
+    Returns the result's assistant text, which the prompt gate puts on the
+    queue: a tool YOU ran is context you staged, and it reaches the assistant
+    through the same channel a typed comment uses. There is no `ToolReturn`
+    here because there is no `ToolCallPart` to answer - nobody asked for this
+    call, so it contributes a user turn rather than answering one.
+
+    Parsing failures and refusals are deliberately NOT caught: `SettingsError`/
+    `ValidationError` and `PluginException`/`ToolDisabledError` all travel to
+    `SubcommandRegistry._invoke`, which owns the one error posture every
+    subcommand shares. Catching them here is what had this function printing
+    its own copy of the usage line."""
 
     async def handler(
         config: SolveigConfig, interface: SolveigInterface, *tokens: str
-    ) -> None:
-        try:
-            instance = tool_cls.from_cli_tokens(list(tokens))
-        except (SettingsError, ValidationError) as e:
-            await interface.print(str(e), level=Level.ERROR)
-            await interface.print(
-                f"Usage: {tool_cls.subcommands[0]} {tool_cls.subcommand_usage()}",
-                level=Level.INFO,
-            )
-            return
-        try:
-            await run_tool_and_hooks(instance, config, interface)
-        except (PluginException, ToolDisabledError) as e:
-            await interface.print(str(e), level=Level.ERROR)
+    ) -> str | None:
+        instance = tool_cls.from_cli_tokens(list(tokens))
+        result = await run_tool_and_hooks(instance, config, interface)
+        return result.to_assistant_text()
 
     return handler
 

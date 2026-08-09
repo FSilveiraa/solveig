@@ -60,4 +60,4 @@ def test_zero_content_survives_alongside_issues():
     """`if self.content:` dropped a real 0 or '' whenever there was anything
     else to render."""
     result = ToolResult(content=0, issues=["careful"])
-    assert "0" in result._to_assistant_text()
+    assert "0" in result.to_assistant_text()

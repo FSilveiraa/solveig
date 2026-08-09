@@ -27,7 +27,7 @@ from pydantic_settings.exceptions import SettingsError
 
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
-from solveig.exceptions import UserCancel
+from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import Conversation
 
@@ -131,10 +131,24 @@ class SubcommandRegistry:
                 + ", ".join(sorted(t.__name__ for t in self._deps))
             ) from None
 
-    async def _invoke(self, sub: Subcommand, tokens: list[str]) -> None:
-        """Parse, fill in the dependencies, call. The single error posture for
-        every subcommand lives here: a parse failure shows the message and the
-        command's own usage line."""
+    async def _invoke(self, sub: Subcommand, tokens: list[str]) -> str | None:
+        """Parse, fill in the dependencies, call, and hand back whatever the
+        handler wants to CONTRIBUTE - text to send on to the assistant, or None
+        for a command whose effect was its own (`/config set`, `/help`).
+
+        The single error posture for every subcommand lives here, and that is
+        the whole reason a handler does not catch these itself: a parse failure
+        shows the message plus the command's own usage line, and a refusal
+        (`PluginException` from a `@before_tool` hook, `ToolDisabledError`)
+        shows the reason. `_tool_handler` used to duplicate both because it
+        parsed its own tokens; it now lets them travel here."""
+        # -h/--help short-circuits to a usage line for any subcommand before
+        # the handler parses — otherwise argparse (tool path) would print to
+        # stdout and raise SystemExit.
+        if any(t in ("-h", "--help") for t in tokens):
+            await self._interface.print(f"Usage: {sub.help_line()}", level=Level.INFO)
+            return None
+
         try:
             parsed = sub.parse(tokens)
         except (SettingsError, ValidationError) as e:
@@ -142,7 +156,7 @@ class SubcommandRegistry:
             await self._interface.print(
                 f"Usage: {sub.subcommands[0]} {sub.usage}".rstrip(), level=Level.INFO
             )
-            return
+            return None
 
         try:
             injected = {
@@ -151,11 +165,24 @@ class SubcommandRegistry:
             }
         except UnknownDependency as err:
             await self._interface.print(str(err), level=Level.ERROR)
-            return
+            return None
 
+        try:
+            return await self._run_handler(sub, injected, parsed, tokens)
+        except (PluginException, ToolDisabledError) as err:
+            await self._interface.print(str(err), level=Level.ERROR)
+            return None
+
+    async def _run_handler(
+        self,
+        sub: Subcommand,
+        injected: dict[str, Any],
+        parsed: dict[str, Any],
+        tokens: list[str],
+    ) -> str | None:
+        """Call the handler, positionally when it declares a greedy tail."""
         if sub.var_positional is None:
-            await sub.handler(**injected, **parsed)
-            return
+            return await sub.handler(**injected, **parsed)
 
         # A *rest handler is called positionally, so the tail can be handed over
         # RAW - CliSettingsSource would coerce it (a trailing "false" becoming a
@@ -171,19 +198,26 @@ class SubcommandRegistry:
             else:
                 leading.append(parsed[name])
                 consumed += 1
-        await sub.handler(*leading, *tokens[consumed:])
+        return await sub.handler(*leading, *tokens[consumed:])
 
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------
 
-    async def __call__(self, command_line: str) -> bool:
+    def _match(self, command_line: str) -> tuple[Subcommand, list[str]] | None:
+        """The subcommand this line names and the tokens left over, or None if
+        it names none - i.e. it is an ordinary prompt.
+
+        Split from invoking so a caller can tell "not a command" from "a command
+        that contributed nothing": both would be a bare None otherwise, and the
+        prompt gate has to pass the first through untouched while swallowing
+        the second."""
         try:
             tokens = shlex.split(command_line)
         except ValueError:
             tokens = command_line.split()
         if not tokens:
-            return False
+            return None
 
         # Longest-prefix match, bounded by the longest trigger actually
         # registered rather than a number written here — a three-word command
@@ -192,31 +226,31 @@ class SubcommandRegistry:
             key = " ".join(tokens[:n])
             sub = SUBCOMMANDS.subcommands.get(key)
             if sub is not None:
-                remaining = tokens[n:]
-                # -h/--help short-circuits to a usage line for any subcommand
-                # before the handler parses — otherwise argparse (tool path)
-                # would print to stdout and raise SystemExit.
-                if any(t in ("-h", "--help") for t in remaining):
-                    await self._interface.print(
-                        f"Usage: {sub.help_line()}", level=Level.INFO
-                    )
-                    return True
-                await self._invoke(sub, remaining)
-                return True
+                return sub, tokens[n:]
 
-        return False
+        return None
 
     # ------------------------------------------------------------------
     # Prompt gate — the queue's prompt_handler
     # ------------------------------------------------------------------
 
     async def handle_prompt(self, text: str) -> str | None:
-        """Run /commands through the executor, pass prompts through unchanged.
-        Returns the (possibly transformed) text to enqueue, or None to
-        swallow (was a /command, already dispatched)."""
+        """Decide what actually lands on the queue: a prompt passes through
+        untouched, a /command runs and contributes whatever it returns.
+
+        A tool subcommand returning its result text is how a `/read` the USER
+        ran reaches the assistant - the same channel a typed comment uses, so
+        it interleaves into the message being assembled at the next tool
+        boundary rather than needing a path of its own. A command with nothing
+        to say (`/config set`, `/help`) returns None and is swallowed, which is
+        also what a cancelled one does: the user stopped it, so there is
+        nothing to report."""
+        match = self._match(text)
+        if match is None:
+            return text  # not a command - an ordinary prompt
+
         try:
-            if await self(text):
-                return None
+            return await self._invoke(*match) or None
         except UserCancel:
             return None
         except Exception as e:
@@ -225,7 +259,6 @@ class SubcommandRegistry:
                 level=Level.ERROR,
             )
             return None
-        return text
 
     # ------------------------------------------------------------------
     # Help

@@ -246,8 +246,11 @@ async def test_a_subcommand_asking_for_an_uninjectable_type_is_refused(
     # (a) reported at construction, next to whoever declared it
     assert any("/bogus" in str(w.message) for w in caught)
 
-    # (b) refused at dispatch, naming the type, without reaching the handler
-    assert await registry("/bogus") is True
+    # (b) refused at dispatch, naming the type, without reaching the handler.
+    # Swallowed (None), not passed through as a prompt: it WAS a command, it
+    # just could not be run - sending "/bogus" on to the assistant would be
+    # reporting our own declaration error to the model.
+    assert await registry.handle_prompt("/bogus") is None
     assert any(
         o.startswith("[ERROR]") and "NotInjectable" in o
         for o in registry._interface.outputs
@@ -272,5 +275,5 @@ async def test_a_three_word_trigger_dispatches(restored_subcommand_stores):
         Subcommand.from_handler(handler, subcommands=["/config plugins reload"]),
     )
     assert SUBCOMMANDS.longest_trigger >= 3
-    assert await _make_registry()("/config plugins reload") is True
-    assert seen == [True]
+    assert await _make_registry().handle_prompt("/config plugins reload") is None
+    assert seen == [True]  # the 3-word handler ran, not a 1- or 2-word prefix

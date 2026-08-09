@@ -1,19 +1,20 @@
-"""The tool result contract - what a tool hands back, and how it renders itself
-into the `ToolReturn` pydantic-ai sends to the model.
+"""The tool result contract - what a tool hands back, and the two projections
+of it: one for the model to read, one for the user to see.
 
-A tool's `execute()` returns a `ToolResult`; `@before_tool`/`@after_tool` plugin hooks
-(dispatched by the tool-execution capability in `solveig/agent.py`)
-also deal in `ToolResult`, never in `pydantic_ai.messages.ToolReturn` directly.
-The `ToolResult` renders *itself* into a `ToolReturn` via `to_tool_return()`;
-that call happens exactly once, as the terminal step of the
-`tool_execute` hook, after every plugin `@after_tool` hook has had its chance
-to transform the structured result.
+A tool's `execute()` returns a `ToolResult`; `@before_tool`/`@after_tool` plugin
+hooks (dispatched by the tool-execution capability in `solveig/agent.py`) deal
+in `ToolResult` too.
+
+NOTE: nothing here imports pydantic-ai, deliberately. This is domain data, and
+whoever is talking to pydantic-ai does the crossing - the `tool_execute` hook
+wraps `to_assistant_text()` in a `ToolReturn` because it has a `ToolCallPart` to
+answer (and can carry `private` as that return's metadata), while a tool the
+USER ran has no call outstanding and contributes the same text as a user turn.
+Which transport a result ends up in is the caller's business, not the result's.
 """
 
 from dataclasses import dataclass, field
 from typing import Any
-
-from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 
 from solveig.interface.base import Level, SolveigInterface
 from solveig.utils.file import FileMetadata
@@ -52,7 +53,7 @@ class ToolResult:
     issues: list[Exception | str] = field(default_factory=list)
     private: dict[str, Any] = field(default_factory=dict)
 
-    def _to_assistant_text(self) -> str:
+    def to_assistant_text(self) -> str:
         """Build what the assistant actually reads from this result.
 
         `content` passes through untouched - even as a raw non-str object -
@@ -78,15 +79,6 @@ class ToolResult:
             sections.append(f"Issues:\n{lines}")
         return "\n---\n".join(sections)
 
-    def to_tool_return(self) -> PydanticAIToolReturn:
-        """Render into the `ToolReturn` pydantic-ai sends to the model: the
-        assistant text as `return_value`, `private` as `metadata` (persisted in
-        the message history but never shown to the model). The single place a
-        `ToolResult` crosses over into pydantic-ai's message layer."""
-        return PydanticAIToolReturn(
-            return_value=self._to_assistant_text(), metadata=self.private
-        )
-
     async def display_content(self, interface: "SolveigInterface") -> None:
         """Render this result's body on session replay - the result-centric
         counterpart to a tool's `display_header`, and the post-migration home
@@ -100,7 +92,7 @@ class ToolResult:
         identically.
 
         NOTE: what the USER sees, built from the fields directly. It must not
-        reach for `_to_assistant_text()` - that is the MODEL's projection of
+        reach for `to_assistant_text()` - that is the MODEL's projection of
         the same result, and rendering one audience's screen out of the other's
         wire format ties the two together for no reason."""
         # The body, ONE branch: recognized file metadata draws as a tree,
