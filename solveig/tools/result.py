@@ -11,20 +11,13 @@ to transform the structured result.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from pydantic_ai.messages import ToolReturn
+from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 
+from solveig.interface.base import Level, SolveigInterface
 from solveig.utils.file import FileMetadata
-
-if TYPE_CHECKING:
-    from solveig.interface.base import SolveigInterface
-
-
-def _issue_line(issue: Exception | str) -> str:
-    if isinstance(issue, Exception):
-        return f"{issue.__class__.__name__}: {issue}"
-    return str(issue)
+from solveig.utils.misc import error_to_text
 
 
 @dataclass
@@ -59,7 +52,7 @@ class ToolResult:
     issues: list[Exception | str] = field(default_factory=list)
     private: dict[str, Any] = field(default_factory=dict)
 
-    def to_assistant_text(self) -> Any:
+    def _to_assistant_text(self) -> str:
         """Build what the assistant actually reads from this result.
 
         `content` passes through untouched - even as a raw non-str object -
@@ -81,16 +74,18 @@ class ToolResult:
             lines = "\n".join(f"- {k}: {v}" for k, v in self.metadata.items())
             sections.append(f"Metadata:\n{lines}")
         if self.issues:
-            lines = "\n".join(f"- {_issue_line(issue)}" for issue in self.issues)
+            lines = "\n".join(f"- {error_to_text(issue)}" for issue in self.issues)
             sections.append(f"Issues:\n{lines}")
         return "\n---\n".join(sections)
 
-    def to_tool_return(self) -> ToolReturn:
+    def to_tool_return(self) -> PydanticAIToolReturn:
         """Render into the `ToolReturn` pydantic-ai sends to the model: the
         assistant text as `return_value`, `private` as `metadata` (persisted in
         the message history but never shown to the model). The single place a
         `ToolResult` crosses over into pydantic-ai's message layer."""
-        return ToolReturn(return_value=self.to_assistant_text(), metadata=self.private)
+        return PydanticAIToolReturn(
+            return_value=self._to_assistant_text(), metadata=self.private
+        )
 
     async def display_content(self, interface: "SolveigInterface") -> None:
         """Render this result's body on session replay - the result-centric
@@ -99,18 +94,29 @@ class ToolResult:
 
         Reproduces how the value was shown live: a directory/tree `FileMetadata`
         (which survives persistence as a plain dict) as a tree, multi-line
-        output in a box, and anything else as a single prefixed line. Shared by
-        `BaseTool.replay` and the tool-not-found fallback in session replay, so
-        the two paths render identically."""
+        output in a box, and anything else as a single prefixed line, with any
+        issues after it as warnings. Shared by `BaseTool.replay` and the
+        tool-not-found fallback in session replay, so the two paths render
+        identically.
+
+        NOTE: what the USER sees, built from the fields directly. It must not
+        reach for `_to_assistant_text()` - that is the MODEL's projection of
+        the same result, and rendering one audience's screen out of the other's
+        wire format ties the two together for no reason."""
+        # The body, ONE branch: recognized file metadata draws as a tree,
+        # anything else as its own text.
         metadata = FileMetadata.from_result_content(self.content)
-        if metadata is not None and not self.issues and not self.metadata:
+        if metadata is not None:
             await interface.add_tree_box(metadata=metadata)
-            return
-        text = self.to_assistant_text()
-        if not text:
-            return
-        text = str(text)
-        if "\n" in text:
-            await interface.add_text_box(text, title="Result")
-        else:
-            await interface.print(text, prefix="Result:")
+        elif self.content is not None:
+            content = str(self.content)
+            if "\n" in content:
+                await interface.add_text_box(content, title="Result")
+            else:
+                await interface.print(content, prefix="Result")
+
+        # NOTE: after the body and outside that branch, deliberately - the tree
+        # path used to `return` here, so a result carrying both a tree and a
+        # warning replayed without the warning the live run had shown.
+        for issue in self.issues:
+            await interface.print(error_to_text(issue), level=Level.WARNING)

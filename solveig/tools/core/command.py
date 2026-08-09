@@ -1,12 +1,12 @@
 """Command tool - executes shell commands."""
 
-import asyncio
 import re
 from typing import TYPE_CHECKING, ClassVar, Self
 
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
+from solveig.exceptions import UserCancel
 from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ToolConfig
 from solveig.tools.result import ToolResult
@@ -118,41 +118,47 @@ class CommandTool(BaseTool[CommandConfig]):
         error = ""
         shell = await get_persistent_shell()
 
-        async def _execute() -> tuple[str, str]:
-            box = None
-            lines: list[str] = []
-            execution: ShellExecution = shell.run(self.command, timeout=self.timeout)
-            async for line in execution:
-                lines.append(line)
-                if box is None and line.strip():
-                    box = await interface.add_text_box(line, title="Output")
-                elif box is not None:
-                    box.append(line)
-            return "".join(lines).strip(), execution.stderr
-
         try:
             if is_detached:
                 await shell.run_detached(self.command)
             else:
+                # The streaming read is the cancellable unit, written inline:
+                # a cancel stops it wherever it got to, and the lines already
+                # shown stay shown. It used to be a closure handed to
+                # `with_cancellable` purely to have an object to pass.
                 async with interface.with_cancellable(
-                    _execute(), status="Executing", timeout=self.timeout or None
-                ) as task:
+                    status="Executing", timeout=self.timeout or None
+                ):
                     try:
-                        output, error = await task
+                        box = None
+                        lines: list[str] = []
+                        execution: ShellExecution = shell.run(
+                            self.command, timeout=self.timeout
+                        )
+                        async for line in execution:
+                            lines.append(line)
+                            if box is None and line.strip():
+                                box = await interface.add_text_box(line, title="Output")
+                            elif box is not None:
+                                box.append(line)
+                        output, error = "".join(lines).strip(), execution.stderr
                         # A command may have cd'd. The Path stat reads the
                         # shell's cwd itself, so this only has to say "redraw"
                         # - it never carries the value.
                         interface.refresh_stats()
-                    except asyncio.CancelledError:
-                        raise
                     except Exception as e:
                         await interface.print(
                             f"Found error when running command: {e}", level=Level.ERROR
                         )
                         return ToolResult(issues=[e])
-        except asyncio.CancelledError:
+        # Say what happened, then let it travel: what a cancel MEANS is the
+        # caller's to decide - the agent owes the model a return part and stops
+        # the run, a `/command` subcommand just unwinds to the registry. A tool
+        # that answered that question itself would make Esc mean "skip this
+        # step" for the two tools most likely to hang.
+        except UserCancel:
             await interface.print("Command cancelled by user", level=Level.WARNING)
-            return ToolResult(issues=["command cancelled by user"])
+            raise
 
         if is_detached:
             await interface.print("Detached process launched", level=Level.INFO)

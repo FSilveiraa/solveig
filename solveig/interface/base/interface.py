@@ -1,8 +1,9 @@
 """The display protocol for Solveig's frontends.
 
-`SolveigInterface` is what a UI (CLI, web, desktop, headless mock) implements:
-render (`print`, `display_*`, `add_*`), ask (`ask_*`), scope output
-(`with_group`), status and animations, and theming. It also carries two
+`SolveigInterface` is the contract that any UI (TUI, web, desktop GUI, headless logger,
+voice bot) implements:
+render (`print`, `display_*`, `add_*`), ask (`ask_*`), scope (`with_group`),
+work (`with_cancellable`), and theming. It also carries two
 concerns every interactive frontend shares — the user-message queue (the
 interface's output channel for typed input) and cancellation
 (`with_cancellable` + the `_active_tasks` registry + `cancel_task`). Command
@@ -13,18 +14,19 @@ Naming conventions:
 - `print`   — text output, void
 - `add_`    — returns a handle the caller keeps (add_text_box → TextBox,
               add_tree_box → TreeBox, add_message → MessageBox, add_stat → Stat)
-- `with_`   — async context manager (with_group, with_animation, with_cancellable)
+- `with_`   — async context manager (with_group, with_cancellable)
 - `display_`— draws and hands back nothing (display_todos, display_file_metadata)
 """
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
+
+from anyio import CancelScope
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base.actions import MessageActions, Role
@@ -129,15 +131,15 @@ class SolveigInterface(ABC):
       decides what actually lands (prompts vs swallowed /commands).
     - **Cancellation** (`with_cancellable`, the `_active_tasks`
       registry, `cancel_task`, `get_active_tasks`) - every interactive UI has
-      both a per-task cancel (a button) and a global untargeted one (Esc,
-      Ctrl+.), so the registry and the verb live here.
+      both a targeted cancel (a button) and a global untargeted one (Esc,
+      Ctrl+C), so the registry and the verb live here.
 
     What is NOT here: prompt serialization policy (each frontend's own,
     e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
     """
 
     def __init__(self) -> None:
-        self._active_tasks: dict[asyncio.Task, None] = {}
+        self._active_tasks: dict[CancelScope, None] = {}
         self.user_message_queue: UserMessageQueue | None = None
 
     # -- theming (no-op defaults, override per frontend) ---------------------
@@ -152,57 +154,95 @@ class SolveigInterface(ABC):
 
     # -- cancellation (protocol-level, concrete) -----------------------------
 
-    def get_active_tasks(self) -> dict[asyncio.Task, None]:
+    def get_active_tasks(self) -> dict[CancelScope, None]:
         """The in-flight cancellable tasks, registration-ordered. Empty is
-        falsy, so `if interface.get_active_tasks():` is the busy check."""
+        falsy, so `if interface.get_active_tasks():` is the busy check.
+
+        NOTE: a "task" here is a unit of work the user started, and the handle
+        for it is the `CancelScope` that block runs under - NOT an
+        `asyncio.Task`. The protocol keeps the domain word deliberately: what a
+        frontend needs to know is that something cancellable is in flight, and
+        which async primitive expresses that is not its business."""
         return self._active_tasks
 
-    def cancel_task(self, task: asyncio.Task | None = None) -> bool:
-        """Cancel one in-flight task: the GIVEN one (a per-task button), or
-        the LATEST registered when None (Esc/Ctrl+. - an untargeted keystroke
+    def cancel_task(self, task: CancelScope | None = None) -> bool:
+        """Cancel one in-flight task: the GIVEN one (a per-task ✕ button), or
+        the LATEST registered when None (Esc/Ctrl+C - an untargeted keystroke
         can only mean "the most recent thing"). Same verb at both targeting
         resolutions, like list.pop() with and without an index."""
         candidates = [task] if task is not None else reversed(list(self._active_tasks))
-        for t in candidates:
-            if t is not None and not t.done():
-                t.cancel()
+        for scope in candidates:
+            if scope is not None and not scope.cancel_called:
+                scope.cancel()
                 return True
         return False
 
     @asynccontextmanager
     async def with_cancellable(
         self,
-        coro: Any,
-        status: str | None = None,
+        status: str,
         final_status: str | None = None,
         timeout: float | None = None,
-    ) -> AsyncGenerator[asyncio.Task]:
-        """Declare `coro` a busy, user-cancellable piece of work: run it as a
-        task, register it in `_active_tasks`, show `status` while it runs,
-        unregister when done. Cancellation mechanics live HERE (cancel_task,
-        targeted or latest) - every UI with input has both a per-task cancel
-        (a button) and a global untargeted one, so the registry and the verb are
-        protocol, not per-frontend rewrites.
+    ) -> AsyncGenerator[CancelScope]:
+        """Run this BLOCK as busy, user-cancellable work: show `status` while it
+        runs, and let a cancel stop it wherever it has got to.
 
-        NOTE: what the trigger is CALLED is not protocol. Registering the task
+        The cancellable unit is the block, not a coroutine handed in - so the
+        consent prompt, the setup and the read loop inside it are all covered,
+        and a caller no longer packages a region of code as an object just to
+        have something to hand over. An `anyio.CancelScope` cancels at the next
+        checkpoint inside itself and then ABSORBS the CancelledError (calling
+        task.uncancel()), so the caller's task survives and this can report the
+        cancel as a raised `UserCancel` instead. Same machinery as
+        `asyncio.timeout()`, which is a cancel scope carrying a deadline.
+
+        Raising rather than handing back `scope.cancel_called` to check: the
+        behaviour you get by writing nothing has to be the safe one. Forget a
+        check and execution falls into code that assumes the work happened;
+        forget the catch and the turn aborts, which is what a cancel means. It
+        also keeps ONE cancellation vocabulary - a cancelled prompt already
+        raises UserCancel, and `agent.py` already treats the two as one thing.
+
+        NOTE: the scope is created and REGISTERED before the animation starts,
+        and only entered inside it. Both halves of that are load-bearing.
+        Registration first, because a frontend deciding whether to offer a
+        cancel hint reads `get_active_tasks()` while starting the animation -
+        registering after would make the hint silently never appear. Entered
+        inside, because a cancelled scope raises at every subsequent await
+        within it: were the animation's teardown inside the scope, its own
+        `await set_status(...)` would be cancelled too and the status line
+        would keep showing the cancelled work's status forever.
+
+        NOTE: what the trigger is CALLED is not protocol. Registering the scope
         already tells the frontend this work is cancellable; how a user reaches
         that - which keystroke, spelled how, or a ✕ button instead - only the
         frontend knows, and only the frontend can keep the name honest.
         """
-        task = asyncio.ensure_future(coro)
-        self._active_tasks[task] = None
+        scope = CancelScope()
+        self._active_tasks[scope] = None
         try:
-            if status is not None:
-                async with self.with_animation(
-                    status,
-                    final_status,
-                    timeout=timeout,
-                ):
-                    yield task
-            else:
-                yield task
+            async with self._animate(status, final_status, timeout=timeout):
+                with scope:
+                    yield scope
         finally:
-            self._active_tasks.pop(task, None)
+            self._active_tasks.pop(scope, None)
+        if scope.cancel_called:
+            raise UserCancel()
+
+    @asynccontextmanager
+    @abstractmethod
+    async def _animate(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+    ) -> AsyncGenerator[None]:
+        """Context manager for displaying animation during async operations.
+
+        NOTE: no cancel-hint argument. A frontend that wants to say how to stop
+        the work reads `get_active_tasks()` - registration is the fact, and the
+        wording is the frontend's own business."""
+        yield  # pragma: no cover - makes this a valid generator
 
     # -- text ----------------------------------------------------------------
 
@@ -214,12 +254,7 @@ class SolveigInterface(ABC):
         *,
         prefix: str | None = None,
     ) -> None:
-        """Print text with a severity level and optional prefix.
-
-        Ephemeral — never persisted in the conversation. Tool failures are
-        captured in `ToolResult.issues` and returned via `to_tool_return()`;
-        this call is a side-channel notification for the user's eyes only.
-        """
+        """Print text with a severity level and optional prefix."""
         ...
 
     # -- transcript verbs ----------------------------------------------------
@@ -357,7 +392,7 @@ class SolveigInterface(ABC):
         identity is the object, never a name."""
         ...
 
-    # -- with (context managers) ---------------------------------------------
+    # -- groups -------------------------------------------------------------
 
     @asynccontextmanager
     @abstractmethod
@@ -373,21 +408,6 @@ class SolveigInterface(ABC):
         the user has turned that off, is display policy the frontend reads for
         itself — app code never consults an `interface.*` setting."""
         yield self  # pragma: no cover - makes this a valid generator
-
-    @asynccontextmanager
-    @abstractmethod
-    async def with_animation(
-        self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-    ) -> AsyncGenerator[None]:
-        """Context manager for displaying animation during async operations.
-
-        NOTE: no cancel-hint argument. A frontend that wants to say how to stop
-        the work reads `get_active_tasks()` - registration is the fact, and the
-        wording is the frontend's own business."""
-        yield  # pragma: no cover - makes this a valid generator
 
     # -- status & stats ------------------------------------------------------
 
@@ -430,27 +450,28 @@ class SolveigInterface(ABC):
     async def ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input, preserving any current typing.
 
-        A user-addressable wait is a registered task like any other: while
-        the prompt is open it sits in `_active_tasks`, so a targeted cancel
-        (a per-prompt ✕) or an untargeted one (Esc -> cancel_task()) reaches
-        it through the SAME machinery as background work - but prompts are
-        NOT wrapped in `with_cancellable` (they're waits, not work; no
-        spinner, and no "callers must remember to wrap" burden - the
-        registration lives here, at the one seam). A cancel at the prompt
-        boundary is translated CancelledError -> UserCancel: to the caller,
-        Esc during a question is the user ANSWERING "cancel", identical to
-        picking a Cancel menu item. Prompt CONCURRENCY is each frontend's
+        A user-addressable wait is a registered task like any other: while the
+        prompt is open its scope sits in `_active_tasks`, so a targeted cancel
+        (a per-prompt ✕) or an untargeted one (Esc -> cancel_task()) reaches it
+        through the SAME machinery as background work - but prompts are NOT
+        wrapped in `with_cancellable` (they're waits, not work; no spinner, and
+        no "callers must remember to wrap" burden - the registration lives
+        here, at the one seam). A cancelled prompt raises UserCancel: to the
+        caller, Esc during a question is the user ANSWERING "cancel", identical
+        to picking a Cancel menu item. Prompt CONCURRENCY is each frontend's
         policy (inside its `_ask_*`): a terminal may lock, Textual can show
         stacked prompts, a web UI stacks cards.
         """
-        task = asyncio.ensure_future(self._ask_question(question, default))
-        self._active_tasks[task] = None
+        scope = CancelScope()
+        self._active_tasks[scope] = None
         try:
-            return await task
-        except asyncio.CancelledError:
-            raise UserCancel from None
+            with scope:
+                answer = await self._ask_question(question, default)
         finally:
-            self._active_tasks.pop(task, None)
+            self._active_tasks.pop(scope, None)
+        if scope.cancel_called:
+            raise UserCancel()
+        return answer
 
     @abstractmethod
     async def _ask_question(self, question: str, default: str = "") -> str: ...
@@ -460,24 +481,24 @@ class SolveigInterface(ABC):
     ) -> int:
         """Ask a multiple-choice question, returns the index for the selected
         option (starting at 0). The prompt-wait is a cancellable like any
-        other (see ask_question for the full why): Esc during a choice is
-        translated to UserCancel at the boundary, i.e. the same control flow
-        as picking the appended "Cancel processing" item - call sites handle
-        both identically. The answer is echoed via `print`, so it lands in
-        the caller's own scope (e.g. inside a tool's group) rather than
-        always at the root."""
+        other (see ask_question for the full why): Esc during a choice raises
+        UserCancel, i.e. the same control flow as picking the appended
+        "Cancel processing" item - call sites handle both identically. The
+        answer is echoed via `print`, so it lands in the caller's own scope
+        (e.g. inside a tool's group) rather than always at the root."""
         choices_list = list(choices)
         if add_cancel:
             choices_list.append("Cancel processing")
 
-        task = asyncio.ensure_future(self._ask_choice(question, choices_list))
-        self._active_tasks[task] = None
+        scope = CancelScope()
+        self._active_tasks[scope] = None
         try:
-            choice_index = await task
-        except asyncio.CancelledError:
-            raise UserCancel from None
+            with scope:
+                choice_index = await self._ask_choice(question, choices_list)
         finally:
-            self._active_tasks.pop(task, None)
+            self._active_tasks.pop(scope, None)
+        if scope.cancel_called:
+            raise UserCancel()
         await self.print(choices_list[choice_index], prefix=question)
         if add_cancel and choice_index == len(choices_list) - 1:
             raise UserCancel()

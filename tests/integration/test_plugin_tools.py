@@ -1,13 +1,12 @@
 """Tests for the tool plugin system — current API (list-based PLUGIN_TOOLS)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
 from solveig.plugins.discovery import discover_plugins
-from solveig.plugins.library.tree import TreeTool
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
 from solveig.tools.base import ToolConfig
 

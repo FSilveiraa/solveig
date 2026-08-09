@@ -71,13 +71,16 @@ async def run_tool_and_hooks(
     instance: BaseTool,
     config: SolveigConfig,
     interface: SolveigInterface,
-) -> Any:
-    """Open *instance*'s group, run it with its `@before_tool`/`@after_tool` hooks, and
-    return whatever `execute()` produced, after any `@after_tool` hook has
-    transformed it (a non-`ToolResult` body result - e.g. from an MCP tool -
-    passes through the after-hooks untouched). A `@before_tool` hook raising
-    `PluginException` propagates out for the caller to translate; `UserCancel`
-    (not a `PluginException`) propagates as a real cancellation.
+) -> ToolResult:
+    """Open *instance*'s group, run it with its `@before_tool`/`@after_tool` hooks,
+    and return what `execute()` produced once every `@after_tool` hook has had
+    its chance to transform it.
+
+    Exceptions travel: a `@before_tool` hook's `PluginException` and a disabled
+    tool's `ToolDisabledError` propagate out for the caller to translate (the
+    agent turns both into a `ModelRetry`, the `/tool` subcommand displays them),
+    and `UserCancel` propagates as a real cancellation. This function's job is
+    to run the tool, not to decide what a failure means to whoever asked.
     """
     tool_name = instance.tool_name()
     # The single enable/disable enforcement point: both the LLM path and the
@@ -105,8 +108,6 @@ async def run_tool_and_hooks(
                 await before_hook(instance.model_dump(), config, group)
 
         result = await instance.execute(config, group)
-        if not isinstance(result, ToolResult):
-            return result
 
         for after_hook in hooks_for(HookKind.AFTER_TOOL, tool_name):
             if config.is_hook_enabled(hook_name(after_hook)):
@@ -119,8 +120,8 @@ async def run_untyped_tool(
     interface: SolveigInterface,
     call: ToolCallPart,
     args: dict[str, Any],
-    handler: Any,
-) -> Any:
+    handler: Callable[[dict[str, Any]], Awaitable[Any]],
+) -> ToolResult:
     """Group + approve + display a plain-function/MCP tool call - same
     visibility/consent posture as a BaseTool, but with no typed schema to build a
     proper header or decline ToolResult from. Mirrors ReadTool's run+send /
@@ -146,18 +147,19 @@ async def run_untyped_tool(
 
         if choice == 2:
             await group.print("Rejected", level=Level.WARNING)
-            return "User declined to run this tool."
+            return ToolResult(issues=["User declined to run this tool."])
 
-        result = await handler(args)
+        result = ToolResult(content=await handler(args))
 
-        await group.add_text_box(str(result), title="Result", collapsed=choice == 0)
+        await group.add_text_box(
+            str(result.content), title="Result", collapsed=choice == 0
+        )
 
         if choice == 0:
             await group.print("Accepted", level=Level.SUCCESS)
             return result
 
-        # choice == 1: ran and displayed the result above, now decide whether
-        # to actually send it on.
+        # choice == 1: ran and displayed the result above, now decide whether to send it
         if (
             await group.ask_choice("Send this result to the assistant?", ["Yes", "No"])
         ) == 0:
@@ -165,7 +167,9 @@ async def run_untyped_tool(
             return result
 
         await group.print("Rejected", level=Level.WARNING)
-        return "User inspected the result and declined to send it to the assistant."
+        return ToolResult(
+            issues=["User declined to send tool results to the assistant."]
+        )
 
 
 def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[None]]:

@@ -31,6 +31,7 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.context import SolveigContext, get_introspection_context
+from solveig.exceptions import UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
 from solveig.subcommands import subcommand
@@ -109,10 +110,10 @@ async def connect(
 
     try:
         async with interface.with_cancellable(
-            toolset.__aenter__(), status=f"MCP connecting to {display_prefix}"
-        ) as task:
-            await task
-    except asyncio.CancelledError:
+            status=f"MCP connecting to {display_prefix}"
+        ):
+            await toolset.__aenter__()
+    except UserCancel:
         await interface.print(
             f"MCP connection to {display_prefix} cancelled", level=Level.INFO
         )

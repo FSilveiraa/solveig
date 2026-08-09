@@ -1,6 +1,5 @@
 """HTTP tool - makes HTTP requests."""
 
-import asyncio
 import json
 from typing import TYPE_CHECKING, ClassVar
 
@@ -9,6 +8,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
+from solveig.exceptions import UserCancel
 from solveig.interface.base import Level
 from solveig.tools.base import (
     BaseTool,
@@ -126,24 +126,24 @@ class HttpTool(BaseTool[HttpConfig]):
     async def _send_request(
         self, interface: "SolveigInterface", http_timeout: float
     ) -> "httpx.Response | ToolResult":
-        async def _request() -> httpx.Response:
-            async with httpx.AsyncClient(
-                timeout=http_timeout, follow_redirects=self.follow_redirects
-            ) as client:
-                return await client.request(
-                    method=self.method,
-                    url=self.url,
-                    headers=self.headers or {},
-                    content=self.body.encode() if self.body else None,
-                )
-
         try:
             async with interface.with_cancellable(
-                _request(), status="Sending request", timeout=http_timeout
-            ) as task:
-                return await task
-        except asyncio.CancelledError:
-            return ToolResult(issues=["request cancelled by user."])
+                status="Sending request", timeout=http_timeout
+            ):
+                async with httpx.AsyncClient(
+                    timeout=http_timeout, follow_redirects=self.follow_redirects
+                ) as client:
+                    return await client.request(
+                        method=self.method,
+                        url=self.url,
+                        headers=self.headers or {},
+                        content=self.body.encode() if self.body else None,
+                    )
+        # Reported, then re-raised - see CommandTool for why a tool does not get
+        # to decide what a cancel means to its caller.
+        except UserCancel:
+            await interface.print("Request cancelled by user", level=Level.WARNING)
+            raise
         except httpx.TimeoutException as e:
             await interface.print(f"Request timed out: {e}", level=Level.ERROR)
             return ToolResult(issues=[e])

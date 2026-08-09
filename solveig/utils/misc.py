@@ -123,3 +123,9 @@ CLI_SETTINGS_OPTS: dict[str, Any] = {
     "case_sensitive": True,
     "cli_enforce_required": False,
 }
+
+
+def error_to_text(error: Exception | str) -> str:
+    if isinstance(error, Exception):
+        return f"{error.__class__.__name__}: {error}"
+    return str(error)

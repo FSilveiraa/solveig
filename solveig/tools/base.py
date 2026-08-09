@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import RunContext
-from pydantic_ai.messages import ToolReturn
+from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
 from solveig.context import SolveigContext
@@ -351,7 +351,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         run.__annotations__ = {
             "ctx": RunContext[SolveigContext],
             "params": cls,
-            "return": ToolReturn,
+            "return": PydanticAIToolReturn,
         }
         run.__name__ = cls.tool_name()
         run.__doc__ = cls.__doc__

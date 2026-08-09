@@ -9,7 +9,6 @@ import json
 
 import pytest
 from pydantic_ai.messages import (
-    ModelMessage,
     ModelRequest,
     ModelResponse,
     TextPart,
@@ -43,8 +42,9 @@ class TestLegacyBlob:
     @pytest.mark.no_file_mocking
     async def test_story_file_still_loads(self):
         """The real story file (single JSON object with messages key) keeps loading."""
-        from solveig.utils.file import Filesystem
         from anyio import Path
+
+        from solveig.utils.file import Filesystem
 
         story_path = Path(__file__).parent.parent.parent / "solveig" / "system_prompt" / "stories" / "sync_review.jsonl"
         content = await Filesystem.read_file(story_path)
@@ -54,7 +54,6 @@ class TestLegacyBlob:
 
     async def test_legacy_blob_with_totals(self):
         """A legacy session blob with totals round-trips correctly."""
-        from pydantic_ai.messages import ModelMessagesTypeAdapter
 
         msgs = [ModelRequest(parts=[UserPromptPart(content="hi")])]
         serialized = to_jsonable_python(msgs)

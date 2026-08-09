@@ -315,7 +315,7 @@ class MockInterface(SolveigInterface):
             self.outputs.append("┗━━")
 
     @asynccontextmanager
-    async def with_animation(
+    async def _animate(
         self,
         status: str = "Processing",
         final_status: str | None = None,

@@ -32,16 +32,16 @@ from solveig.agent import (
     build_tool_execution_capability,
     run_turn,
 )
-from solveig.context import SolveigContext
-from solveig.session.conversation import Conversation
-from solveig.user_message_queue import UserMessageQueue
 from solveig.config import SolveigConfig
+from solveig.context import SolveigContext
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after_tool, before_tool, clear_hooks
+from solveig.session.conversation import Conversation
 from solveig.tools.available import build_toolset, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
 from solveig.tools.result import ToolResult
+from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 
 pytestmark = pytest.mark.anyio
@@ -279,7 +279,8 @@ async def test_mcp_style_tool_inspect_first_then_withhold():
 
     assert called is True  # it did run, just wasn't sent
     returns = _tool_returns(result)
-    assert "declined to send it" in returns[0].content
+    assert "declined to send" in returns[0].content
+    assert "['a', 'b']" not in returns[0].content  # the real output stayed here
 
 
 async def test_capability_renders_tool_result_to_tool_return():

@@ -43,6 +43,9 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_ai.messages import (
+    ToolReturn as PydanticAIToolReturn,
+)
 from pydantic_ai.models import Model
 from pydantic_ai.tools import ToolDefinition
 from pydantic_graph import End
@@ -101,9 +104,9 @@ def build_agent(
     )
 
 
-def _thinking(interface: SolveigInterface, awaitable: Any, timeout: float | None):
+def _thinking(interface: SolveigInterface, timeout: float | None):
     """The single 'Thinking' animation + cancellable policy (status text +
-    timeout), invoked from the two irreducible sites below.
+    timeout), entered at the two irreducible sites below.
 
     Why two sites and not one: pydantic-ai's documented streaming pattern is
     `async for node in run` with `node.stream()` inside. A NON-streamed model
@@ -112,8 +115,12 @@ def _thinking(interface: SolveigInterface, awaitable: Any, timeout: float | None
     must cancel the READER (in run_turn), never the parked stream handler:
     cancelling the handler would tear the open HTTP stream mid-read (ReadError)
     and leave a stray partial that adopt() duplicates - so it can't go through the
-    hook. Same animation either way; kept here so the policy is single-sourced."""
-    return interface.with_cancellable(awaitable, status="Thinking", timeout=timeout)
+    hook. Same animation either way; kept here so the policy is single-sourced.
+
+    NOTE: the two sites now differ only in WHICH BLOCK they wrap, which is the
+    distinction that was always meant - the cancellable region is named by where
+    `async with` sits, not by which coroutine someone remembered to hand in."""
+    return interface.with_cancellable(status="Thinking", timeout=timeout)
 
 
 def build_loop_capability() -> Hooks[SolveigContext]:
@@ -134,10 +141,8 @@ def build_loop_capability() -> Hooks[SolveigContext]:
         # reader-side animation instead (see _thinking for the full why).
         if ctx.deps.config.stream:
             return await handler(request_context)
-        async with _thinking(
-            ctx.deps.interface, handler(request_context), ctx.deps.config.api.timeout
-        ) as task:
-            return await task
+        async with _thinking(ctx.deps.interface, ctx.deps.config.api.timeout):
+            return await handler(request_context)
 
     return hooks
 
@@ -454,12 +459,11 @@ async def run_turn(
                 # says which node we are at, which matters either way.
                 if deps.config.stream and Agent.is_model_request_node(node):
                     try:
-                        async with _thinking(
-                            deps.interface,
-                            _stream_response(conversation, node, run.ctx, sync),
-                            deps.config.api.timeout,
-                        ) as task:
-                            await task
+                        # The READER is the cancellable block (see `_thinking`):
+                        # Esc stops us consuming the stream, never the parked
+                        # handler that owns the open HTTP response.
+                        async with _thinking(deps.interface, deps.config.api.timeout):
+                            await _stream_response(conversation, node, run.ctx, sync)
                     finally:
                         # Reconcile the in-flight snapshot with pydantic-ai's own
                         # response object under the same id, so neither the outer
@@ -489,6 +493,13 @@ async def run_turn(
                     await _assemble_tool_returns(
                         conversation, node, run.ctx, inbox, reconciler.placed
                     )
+                    # The cancel the tool_execute hook could not raise (it owed
+                    # the model a return part, now landed above). Stopping HERE
+                    # rather than there is what keeps the history well-formed:
+                    # every call the assistant made has its result, and nothing
+                    # further is asked of the model.
+                    if deps.cancelled:
+                        raise UserCancel()
 
                 # Advancing fires the node hooks, so reconciliation happens on
                 # the way out of every node without a call here.
@@ -606,43 +617,52 @@ def build_tool_execution_capability() -> Hooks[SolveigContext]:
         tool_def: ToolDefinition,
         args: dict[str, Any],
         handler: Any,
-    ) -> Any:
+    ) -> PydanticAIToolReturn:
         config, interface = ctx.deps.config, ctx.deps.interface
-        instance = _tool_instance(args)
+        tool_instance = _tool_instance(args)
 
         # The ONE execution entrypoint for every tool call (typed and MCP):
         # cancellable here, so Esc kills a network call (MCP) or a tool body
-        # alike. A consent PROMPT inside the body registers itself as the
-        # latest task (ask_* -> _active_tasks), so Esc during a prompt still
-        # hits the prompt (decline via UserCancel) rather than the body.
+        # alike. A consent PROMPT inside the body opens its own scope INSIDE
+        # this one, so Esc during a prompt cancels the prompt first.
+        #
+        # The try wraps the `async with` rather than sitting inside it, and it
+        # has to: a cancelled block never resumes, so `with_cancellable` can
+        # only report at its EXIT. A handler inside the block would catch a
+        # declined prompt and miss the Esc that cancelled the tool itself.
         try:
-            async with interface.with_cancellable(
-                _dispatch(instance, config, interface, call, args, handler),
-                status="Executing",
-            ) as task:
-                result = await task
+            async with interface.with_cancellable("Executing"):
+                if tool_instance is None:
+                    result = await run_untyped_tool(
+                        config, interface, call, args, handler
+                    )
+                else:
+                    result = await run_tool_and_hooks(tool_instance, config, interface)
+
+        # NOTE: before the generic clause, and load-bearing - both are
+        # Exceptions, so this order is the whole difference between a disabled
+        # tool reaching the model as something it can retry and it arriving as
+        # a flat error string.
         except (PluginException, ToolDisabledError) as e:
             raise ModelRetry(str(e)) from e
+        # A cancel has to do two things that cannot compose in one statement:
+        # RETURN (a ToolCallPart whose ToolReturnPart never arrives is a
+        # malformed history, and providers reject it on the next request) and
+        # STOP. So it returns here and records the intent on the deps; run_turn
+        # raises `UserCancel` once this return part has landed. Declining a tool
+        # outright ("No") is NOT this - that is an ordinary ToolResult from the
+        # tool body, and the run carries on.
+        except UserCancel:
+            ctx.deps.cancelled = True
+            result = ToolResult(issues=["User cancelled this tool execution."])
+        except Exception as e:
+            result = ToolResult(issues=[str(e)])
 
-        if isinstance(result, ToolResult):
-            return result.to_tool_return()
-        return result
+        # The one crossover into pydantic-ai's message layer, and the terminal
+        # step by contract (see tools/result.py): `return_value` is what the
+        # model reads, `private` rides along as metadata it never sees. Handing
+        # back the ToolResult raw would serialize the whole dataclass into the
+        # model's context, `private` included.
+        return result.to_tool_return()
 
     return hooks
-
-
-async def _dispatch(
-    instance: Any,
-    config: SolveigConfig,
-    interface: SolveigInterface,
-    call: ToolCallPart,
-    args: dict[str, Any],
-    handler: Any,
-) -> Any:
-    """Route one tool call to its execution seam: a typed BaseTool through
-    `run_tool_and_hooks`, anything else (MCP, plain-function plugin) through
-    `run_untyped_tool`. Exists so the capability can wrap BOTH branches in
-    one with_cancellable - the single entrypoint all tool execution shares."""
-    if instance is None:
-        return await run_untyped_tool(config, interface, call, args, handler)
-    return await run_tool_and_hooks(instance, config, interface)

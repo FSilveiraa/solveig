@@ -32,13 +32,12 @@ from solveig.plugins.discovery import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
     HOOKS,
     HookKind,
-    hooks_for,
     after_tool,
     before_tool,
     clear_hooks,
     hook_name,
+    hooks_for,
 )
-from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
 

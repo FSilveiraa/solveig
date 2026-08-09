@@ -8,6 +8,7 @@ from pydantic_ai.toolsets.function import FunctionToolset
 
 from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
+from solveig.exceptions import UserCancel
 from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
@@ -130,7 +131,7 @@ async def test_create_mock_model_streams_reasoning_and_text():
 
 async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
     """Cancelling a streaming response (Esc/Ctrl+C) must raise a clean
-    CancelledError (so run_turn_with_retry treats it as a cancel, not an API
+    UserCancel (so run_turn_with_retry treats it as a cancel, not an API
     failure), keep the animation, and leave exactly ONE partial response entry -
     not a duplicate. Regression: the model_request hook used to wrap the parked
     request handler in with_cancellable; cancelling it tore the stream mid-read
@@ -159,7 +160,7 @@ async def test_cancel_mid_stream_is_clean_and_leaves_one_partial():
     assert interface.get_active_tasks()
     assert interface.cancel_task()
 
-    with pytest.raises(asyncio.CancelledError):
+    with pytest.raises(UserCancel):
         await turn
 
     # Exactly one partial ModelResponse survives - no duplicate box.

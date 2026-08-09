@@ -8,7 +8,14 @@ processing errors, and security issues.
 
 
 class UserCancel(Exception):
-    """Event signaling the user decided to cancel processing"""
+    """Event signaling the user decided to cancel processing.
+
+    Raised at the two boundaries where a cancel becomes an ANSWER rather than a
+    teardown: a prompt (`ask_question`/`ask_choice` - Esc means the user said
+    "cancel") and a cancellable block (`with_cancellable` - the work did not
+    happen). Both are places the caller opted into explicitly, so an ordinary
+    Exception is the right shape: it is caught deliberately, not by accident.
+    """
 
     pass
 

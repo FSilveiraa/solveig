@@ -391,7 +391,7 @@ class TerminalInterface(TerminalDisplay):
     # -- animation -----------------------------------------------------------
 
     @asynccontextmanager
-    async def with_animation(
+    async def _animate(
         self,
         status: str = "Processing",
         final_status: str | None = None,
@@ -406,7 +406,7 @@ class TerminalInterface(TerminalDisplay):
         await asyncio.sleep(0)
 
         # The hint is this frontend's to write, and only when there is something
-        # to cancel: `with_cancellable` registers the task before starting the
+        # to cancel: `with_cancellable` registers the scope before starting the
         # animation, so an empty registry means a plain animation with no keys
         # to offer. Derived from the real bindings, so a rebind cannot make it lie.
         suffix = cancel_hint() if self.get_active_tasks() else None
@@ -546,13 +546,13 @@ class GroupInterface(TerminalDisplay):
         self._root.refresh_stats()
 
     @asynccontextmanager
-    async def with_animation(
+    async def _animate(
         self,
         status: str = "Processing",
         final_status: str | None = None,
         timeout: float | None = None,
     ) -> AsyncGenerator[None]:
-        async with self._root.with_animation(
+        async with self._root._animate(
             status=status, final_status=final_status, timeout=timeout
         ) as value:
             yield value

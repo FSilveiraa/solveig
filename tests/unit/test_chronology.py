@@ -25,6 +25,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
+from solveig.exceptions import UserCancel
 from solveig.session.conversation import Conversation
 from solveig.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface
@@ -180,16 +181,21 @@ async def test_comment_on_a_step_that_ran_no_tools_still_reaches_the_model():
 
 
 async def test_comment_survives_a_cancelled_run():
-    """A comment placed mid-tools must not be lost when the run is cancelled.
+    """A cancelled run keeps a well-formed history: the comment placed mid-tools
+    survives, AND the call that was cancelled still gets a result.
 
-    It survives for a non-obvious reason, which is why this is pinned: the
-    entry `_assemble_tool_returns` builds is a REAL conversation entry, not a
-    staging buffer. A cancel only means pydantic-ai's canonical version never
+    The comment survives for a non-obvious reason, which is why this is pinned:
+    the entry `_assemble_tool_returns` builds is a REAL conversation entry, not
+    a staging buffer. A cancel only means pydantic-ai's canonical version never
     arrives to replace it, so the comment is already where it needs to be — and
     the next run sends `conversation.messages` as history.
 
-    Nothing handles cancellation explicitly. If the assembled entry ever
-    becomes provisional in a way that a cancel discards, this fails.
+    The cancelled call's result is pinned for a harder reason: a `ToolCallPart`
+    whose `ToolReturnPart` never arrives is a malformed history, and a provider
+    rejects it on the next request — so a cancel that skipped it would make the
+    conversation unresumable. That is why the `tool_execute` hook RETURNS a
+    "user cancelled" result and records the intent on `deps.cancelled`, and
+    `run_turn` raises only once the return part has landed.
     """
     config = _config()
     conversation = Conversation()
@@ -216,12 +222,14 @@ async def test_comment_survives_a_cancelled_run():
             if interface.get_active_tasks():
                 break
         assert interface.cancel_task()
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(UserCancel):
             await turn
 
     assert _shape(_tool_return_message(conversation)) == [
         "ToolReturnPart:result 1",
         "UserPromptPart:how much longer?",
+        # The cancelled call still gets its result, in the order it happened.
+        "ToolReturnPart:Issues:\n- User cancelled this tool execution.",
     ]
 
 

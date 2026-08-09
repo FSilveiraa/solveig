@@ -94,24 +94,82 @@ async def test_ask_choice_cancel_index_raises_user_cancel():
 
 
 async def test_cancel_during_ask_question_is_translated_to_user_cancel():
+    """Esc at an open prompt is the user ANSWERING "cancel", so the waiting
+    caller sees UserCancel rather than a torn-down task - identical control
+    flow to picking a Cancel menu item."""
+    class _NeverAnswers(MockInterface):
+        async def _ask_question(self, question, default=""):
+            await asyncio.Event().wait()
+            return ""
+
+    mi = _NeverAnswers()
+    asking = asyncio.ensure_future(mi.ask_question("Q?"))
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        if mi.get_active_tasks():  # the prompt registers itself while open
+            break
+    assert mi.cancel_task()
+
+    with pytest.raises(UserCancel):
+        await asking
+
+
+async def test_a_foreign_cancellation_is_not_disguised_as_a_user_cancel():
+    """Only OUR cancel becomes UserCancel. A CancelledError we did not ask for
+    means someone is tearing this task down, and reporting that as "the user
+    declined" would let a shutdown read as an answer. The scope re-raises
+    anything it did not request - which the old blanket
+    `except CancelledError -> UserCancel` could not distinguish."""
+
     class _CancelAsk(MockInterface):
         async def _ask_question(self, question, default=""):
             raise asyncio.CancelledError()
 
-    with pytest.raises(UserCancel):
+    with pytest.raises(asyncio.CancelledError):
         await _CancelAsk().ask_question("Q?")
 
 
 async def test_with_cancellable_registers_and_cancel_task_reaches_it():
+    """The BLOCK is the cancellable unit: nothing is handed in, the work is
+    written inline, and a cancel stops it wherever it got to and surfaces as
+    UserCancel once the block has unwound."""
+    mi = MockInterface()
+    reached_the_end = False
+
+    with pytest.raises(UserCancel):
+        async with mi.with_cancellable(status="working") as scope:
+            assert scope in mi.get_active_tasks()
+            assert mi.cancel_task() is True  # latest-untargeted cancel reaches it
+            await asyncio.Event().wait()  # never completes on its own
+            reached_the_end = True
+
+    assert not reached_the_end  # the block stopped at the await, not after it
+    assert mi.get_active_tasks() == {}  # unregistered after the block
+
+
+async def test_a_cancelled_block_leaves_its_task_alive():
+    """The scope absorbs the CancelledError and calls task.uncancel(), which is
+    what lets the cancel be reported as a plain exception - the caller keeps
+    running and can recover, instead of being torn down with the work."""
     mi = MockInterface()
 
-    async def work():
-        await asyncio.Event().wait()  # never completes on its own
+    async def run() -> str:
+        try:
+            async with mi.with_cancellable(status="working"):
+                await asyncio.Event().wait()
+        except UserCancel:
+            return "recovered"
+        return "not cancelled"
 
-    async with mi.with_cancellable(work(), status="working") as task:
-        assert task in mi.get_active_tasks()
-        assert mi.cancel_task() is True  # latest-untargeted cancel reaches it
-    assert mi.get_active_tasks() == {}  # unregistered after the block
+    task = asyncio.ensure_future(run())
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        if mi.get_active_tasks():
+            break
+    assert mi.cancel_task() is True
+
+    assert await task == "recovered"
+    assert not task.cancelled()
 
 
 async def test_with_group_yields_the_interface_and_marks_start_end():
@@ -184,7 +242,7 @@ def test_with_animation_takes_no_cancel_hint():
 
     from solveig.interface.base import SolveigInterface
 
-    params = inspect.signature(SolveigInterface.with_animation).parameters
+    params = inspect.signature(SolveigInterface._animate).parameters
     assert "suffix" not in params
 
 

@@ -27,11 +27,12 @@ from solveig.plugins.hooks import HOOKS, HookKind, clear_hooks, hook_name, hooks
 from solveig.plugins.library.shellcheck import is_obviously_dangerous, shellcheck
 from solveig.tools.core.command import CommandTool
 from solveig.tools.orchestration import run_tool_and_hooks
-from tests.mocks import DEFAULT_CONFIG, MockInterface
+from tests.mocks import MockInterface
 
 pytestmark = pytest.mark.anyio
 
 import shutil
+
 _needs_shellcheck = pytest.mark.skipif(
     shutil.which("shellcheck") is None,
     reason="shellcheck binary not installed",

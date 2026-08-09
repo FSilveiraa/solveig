@@ -1,8 +1,7 @@
 """Integration tests for SubcommandRegistry dispatch and handlers."""
 
-from unittest.mock import AsyncMock, MagicMock
-
 import time
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
