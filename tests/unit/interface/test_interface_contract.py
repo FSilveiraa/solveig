@@ -98,7 +98,7 @@ async def test_cancel_during_ask_question_is_translated_to_user_cancel():
     caller sees UserCancel rather than a torn-down task - identical control
     flow to picking a Cancel menu item."""
     class _NeverAnswers(MockInterface):
-        async def _ask_question(self, question, default=""):
+        async def _ask_question(self, question, default="", title=None):
             await asyncio.Event().wait()
             return ""
 
@@ -122,7 +122,7 @@ async def test_a_foreign_cancellation_is_not_disguised_as_a_user_cancel():
     `except CancelledError -> UserCancel` could not distinguish."""
 
     class _CancelAsk(MockInterface):
-        async def _ask_question(self, question, default=""):
+        async def _ask_question(self, question, default="", title=None):
             raise asyncio.CancelledError()
 
     with pytest.raises(asyncio.CancelledError):
@@ -210,7 +210,7 @@ async def test_entering_a_group_builds_no_second_app():
 
     interface = TerminalInterface()
     with patch("solveig.interface.tui.interface.SolveigTextualApp") as app_cls:
-        group = GroupInterface(root=interface, group_widget=_FakeGroupWidget())
+        group = GroupInterface(root=interface, container_widget=_FakeGroupWidget())
     app_cls.assert_not_called()
     assert group.app is interface.app
     assert group._active_tasks is interface._active_tasks

@@ -171,7 +171,9 @@ async def run_untyped_tool(
         )
 
 
-def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[str | None]]:
+def _tool_subcommand_handler(
+    tool_cls: type[BaseTool],
+) -> Callable[..., Awaitable[str | None]]:
     """A tool's `/command` as a plain subcommand handler: it declares the two
     dependencies it needs by annotating them, takes the raw words, and runs the
     tool through the ONE execution seam - so a hand-typed `/read` gets the same
@@ -192,9 +194,9 @@ def _tool_handler(tool_cls: type[BaseTool]) -> Callable[..., Awaitable[str | Non
     async def handler(
         config: SolveigConfig, interface: SolveigInterface, *tokens: str
     ) -> str | None:
-        instance = tool_cls.from_cli_tokens(list(tokens))
-        result = await run_tool_and_hooks(instance, config, interface)
-        return result.to_assistant_text()
+        tool = tool_cls.from_cli_tokens(list(tokens))
+        result = await run_tool_and_hooks(tool, config, interface)
+        return f"User tool: `{tool.title}`\n---\n{result.to_assistant_text()}"
 
     return handler
 
@@ -217,7 +219,7 @@ def tool_subcommand(tool_cls: object) -> Subcommand | None:
     if not tool_cls.subcommands:
         return None
     return Subcommand.from_handler(
-        _tool_handler(tool_cls),
+        _tool_subcommand_handler(tool_cls),
         subcommands=list(tool_cls.subcommands),
         section="tools",
         description=tool_cls.subcommand_description(),

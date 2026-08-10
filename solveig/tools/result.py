@@ -13,6 +13,7 @@ USER ran has no call outstanding and contributes the same text as a user turn.
 Which transport a result ends up in is the caller's business, not the result's.
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -62,21 +63,30 @@ class ToolResult:
         Otherwise content, metadata and issues are rendered into one sectioned
         string (`---`-separated, since tool output is often itself multi-line).
         """
-        if not self.metadata and not self.issues:
-            return self.content
-
         sections = []
-        # NOTE: `is not None`, not truthiness: a tool that legitimately returns
-        # 0 or an empty string had its content dropped whenever there was also
-        # metadata or an issue to render.
-        if self.content is not None:
-            sections.append(str(self.content))
+
+        # Content
+        # Accepts legitimate results like 0 or [], skips None and ""
+        if self.content is not None and self.content != "":
+            if type(self.content) in {list, dict, tuple}:
+                try:
+                    content = json.dumps(self.content)
+                except (TypeError, ValueError):
+                    content = str(self.content)
+            else:
+                content = str(self.content)
+            sections.append(content)
+
+        # Metadata
         if self.metadata:
             lines = "\n".join(f"- {k}: {v}" for k, v in self.metadata.items())
             sections.append(f"Metadata:\n{lines}")
+
+        # Issues
         if self.issues:
             lines = "\n".join(f"- {error_to_text(issue)}" for issue in self.issues)
             sections.append(f"Issues:\n{lines}")
+
         return "\n---\n".join(sections)
 
     async def display_content(self, interface: "SolveigInterface") -> None:

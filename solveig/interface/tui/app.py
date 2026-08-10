@@ -158,10 +158,12 @@ class SolveigTextualApp(TextualApp):
                         duration=2,
                     )
 
-    async def ask_user(self, question: str, default: str = "") -> str:
+    async def ask_question(
+        self, question: str, default: str = "", title: str | None = None
+    ) -> str:
         """Ask for any kind of input with a prompt."""
-        return await self._input_widget.ask_question(question, default)
+        return await self._input_widget.ask_question(question, default, title)
 
-    async def ask_choice(self, question: str, choices) -> int:
+    async def ask_choice(self, question: str, choices, title: str | None = None) -> int:
         """Ask a multiple-choice question using Select widget."""
-        return await self._input_widget.ask_choice(question, choices)
+        return await self._input_widget.ask_choice(question, choices, title)

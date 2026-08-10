@@ -289,7 +289,9 @@ class TerminalDisplay(SolveigInterface):
             title, container=self._container
         )
         try:
-            yield GroupInterface(root=self._root, group_widget=group_widget)
+            yield GroupInterface(
+                root=self._root, container_widget=group_widget, title=title
+            )
         finally:
             # The caller said whether folding this away is acceptable; THIS side
             # says whether the terminal does it. Read at close time, not at open,
@@ -482,17 +484,21 @@ class TerminalInterface(TerminalDisplay):
         if self.user_message_queue is not None:
             await self.user_message_queue.put(user_input)
 
-    async def _ask_question(self, question: str, default: str = "") -> str:
+    async def _ask_question(
+        self, question: str, default: str = "", title: str | None = None
+    ) -> str:
         """Ask for specific input. Serialized through the CLI's own lock
         (one visible prompt at a time)."""
         async with self._choice_lock:
-            return await self.app.ask_user(question, default)
+            return await self.app.ask_question(question, default, title)
 
-    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+    async def _ask_choice(
+        self, question: str, choices: list[str], title: str | None = None
+    ) -> int:
         """Prompt with the given choices (already final — "Cancel processing"
         appended, if any), returns the raw selected index."""
         async with self._choice_lock:
-            return await self.app.ask_choice(question, choices)
+            return await self.app.ask_choice(question, choices, title)
 
 
 class GroupInterface(TerminalDisplay):
@@ -502,7 +508,10 @@ class GroupInterface(TerminalDisplay):
     """
 
     def __init__(
-        self, root: TerminalInterface, group_widget: CustomCollapsible
+        self,
+        root: TerminalInterface,
+        container_widget: CustomCollapsible,
+        title: str | None = None,
     ) -> None:
         # NOTE: everything SolveigInterface.__init__ seeds has to be re-pointed
         # at the root below, or a group silently gets its own empty copy. That
@@ -514,7 +523,11 @@ class GroupInterface(TerminalDisplay):
         # shared by reference on purpose — a cancel issued anywhere must reach
         # work started inside a group
         self._active_tasks = root._active_tasks
-        self._group_container = group_widget.query_one(Collapsible.Contents)
+        self._group_container = container_widget.query_one(Collapsible.Contents)
+        # What a prompt raised in here says it is about. Kept rather than read
+        # back off the widget: the group's own title bar is display state a
+        # frontend may restyle, and this is the value `with_group` was given.
+        self.title = title
 
     @property
     def _container(self):
@@ -523,10 +536,10 @@ class GroupInterface(TerminalDisplay):
     # -- root-level delegations ----------------------------------------------
 
     async def _ask_question(self, question: str, default: str = "") -> str:
-        return await self._root._ask_question(question, default)
+        return await self._root._ask_question(question, default, self.title)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
-        return await self._root._ask_choice(question, choices)
+        return await self._root._ask_choice(question, choices, self.title)
 
     async def set_status(
         self, status: str | None, duration: float | None = None

@@ -204,7 +204,9 @@ async def test_mcp_style_tool_is_grouped_approved_and_displayed():
     assert any("Allow this tool call?" in q for q in interface.questions)
     returns = _tool_returns(result)
     assert len(returns) == 1
-    assert returns[0].content == {"results": ["a", "b"]}
+    # JSON, not a Python repr: `to_assistant_text` serializes plain containers
+    # so the model reads valid JSON rather than single-quoted `{'results': ...}`.
+    assert returns[0].content == '{"results": ["a", "b"]}'
 
 
 async def test_mcp_style_tool_decline_skips_the_call_entirely():
@@ -253,7 +255,9 @@ async def test_mcp_style_tool_inspect_first_then_send():
 
     assert any("Send this result to the assistant?" in q for q in interface.questions)
     returns = _tool_returns(result)
-    assert returns[0].content == {"results": ["a", "b"]}
+    # JSON, not a Python repr: `to_assistant_text` serializes plain containers
+    # so the model reads valid JSON rather than single-quoted `{'results': ...}`.
+    assert returns[0].content == '{"results": ["a", "b"]}'
 
 
 async def test_mcp_style_tool_inspect_first_then_withhold():

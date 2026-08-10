@@ -167,7 +167,7 @@ async def test_begin_edit_cancel_does_not_crash_or_mutate():
     unhandled, and must leave the conversation untouched."""
 
     class _CancellingInterface(MockInterface):
-        async def _ask_question(self, question, default=""):
+        async def _ask_question(self, question, default="", title=None):
             raise UserCancel()
 
     interface = _CancellingInterface()

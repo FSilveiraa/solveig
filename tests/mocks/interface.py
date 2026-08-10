@@ -169,6 +169,7 @@ class MockInterface(SolveigInterface):
         self.user_inputs = user_inputs or []
         self.choices = choices or []
         self.questions: list[str] = []
+        self.prompt_titles: list[str | None] = []
         self.stats_updates: list[dict[str, Any]] = []
         self.groups: list[str] = []
         #: What crossed the display seam as VALUES, so a test can assert on the
@@ -361,7 +362,13 @@ class MockInterface(SolveigInterface):
 
     # -- input ---------------------------------------------------------------
 
-    async def _ask_question(self, question: str, default: str = "") -> str:
+    async def _ask_question(
+        self, question: str, default: str = "", title: str | None = None
+    ) -> str:
+        # Recorded WITH its title: "which operation is this prompt about" is
+        # part of what a frontend is handed, so a test can assert a prompt
+        # raised inside a group says so.
+        self.prompt_titles.append(title)
         self.questions.append(question)
         if not self.user_inputs:
             raise ValueError("No further user input configured for ask_question")
@@ -372,7 +379,10 @@ class MockInterface(SolveigInterface):
         self.outputs.append(f"Question: {question} → {response}")
         return response
 
-    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+    async def _ask_choice(
+        self, question: str, choices: list[str], title: str | None = None
+    ) -> int:
+        self.prompt_titles.append(title)
         self.questions.append(f"{question} {list(choices)}")
         if not self.choices:
             raise ValueError("No further choices configured for ask_choice")

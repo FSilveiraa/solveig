@@ -9,7 +9,7 @@ from enum import Enum
 from textual.containers import Container
 from textual.events import Key
 from textual.message import Message
-from textual.widgets import OptionList, TextArea
+from textual.widgets import OptionList, Static, TextArea
 
 from solveig.exceptions import UserCancel
 from solveig.interface.themes import Palette
@@ -144,6 +144,11 @@ class InputBar(Container):
         self._text_input.placeholder = placeholder
         self._text_input.show_line_numbers = False
         self._select_widget: OptionList | None = None
+        # The framed box a prompt lives in: title on the border (which operation
+        # this is about), question inside. Owns whichever prompt widget is up,
+        # so tearing it down removes both.
+        self._prompt_box: Container | None = None
+        self._question_line: Static | None = None
 
         # Saved state for question mode
         self._saved_text: str = ""
@@ -223,15 +228,27 @@ class InputBar(Container):
         """Apply question input styling."""
         self._text_input.styles.border = ("solid", self._theme.warning)
 
-    async def ask_question(self, question: str, default: str = "") -> str:
-        """Switch to question mode and wait for response."""
+    async def ask_question(
+        self, question: str, default: str = "", title: str | None = None
+    ) -> str:
+        """Switch to question mode and wait for response.
+
+        Same framing as `ask_choice`: title on the border, question on its own
+        line inside. It used to live in the input's PLACEHOLDER, which vanished
+        the moment you typed - so the thing you were answering disappeared
+        exactly when you started answering it."""
         self._saved_text = self._text_input.text
 
         self._mode = InputMode.QUESTION
         self._question_future = asyncio.Future()
 
+        self._question_line = Static(question, classes="prompt_question")
+        self._prompt_box = Container(self._question_line, classes="prompt_box")
+        if title:
+            self._prompt_box.border_title = title
+        await self.mount(self._prompt_box, before=self._text_input)
+
         self._text_input.text = default
-        self._text_input.placeholder = question
         self._apply_question_style()
         self._text_input.focus()
 
@@ -241,13 +258,26 @@ class InputBar(Container):
         finally:
             self._mode = InputMode.FREE_FORM
             self._question_future = None
-            self._text_input.placeholder = self._initial_placeholder
+            if self._prompt_box is not None:
+                await self._prompt_box.remove()
+                self._prompt_box = None
+                self._question_line = None
             self._text_input.text = self._saved_text
             self._apply_free_form_style()
             self._text_input.focus()
 
-    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
-        """Show multiple choice selection and wait for response."""
+    async def ask_choice(
+        self, question: str, choices: Iterable[str], title: str | None = None
+    ) -> int:
+        """Show multiple choice selection and wait for response.
+
+        The BORDER carries the title (which operation this is about) and the
+        box carries the question. They are deliberately redundant: the title
+        only orients, and Textual truncates it to fit the border, while the
+        question states the full subject - two commands whose titles truncate
+        to the same 40 characters must still be told apart by the thing being
+        approved. A prompt raised outside any group has no title and simply
+        gets a plain border."""
         choices_list = list(choices)
 
         self._mode = InputMode.MULTIPLE_CHOICE
@@ -259,16 +289,22 @@ class InputBar(Container):
         # Create option list widget with choices and mount in place of input
         options = [f"{i + 1}. {choice}" for i, choice in enumerate(choices_list)]
         self._select_widget = OptionList(*options, id="choice_select")
-        if self._select_widget:
-            self._select_widget.border_title = question
+        # The border (and so the title) belongs to the wrapper, not the list:
+        # the question has to sit INSIDE the frame, above the options.
+        self._prompt_box = Container(
+            Static(question, classes="prompt_question"),
+            self._select_widget,
+            classes="prompt_box",
+        )
+        if title:
+            self._prompt_box.border_title = title
 
-            # Mount inside this container
-            await self.mount(self._select_widget)
-            self._select_widget.focus()
+        await self.mount(self._prompt_box)
+        self._select_widget.focus()
 
-            # Scroll conversation area to keep context visible after layout
-            conversation = self.app.query_one("#conversation")
-            self.call_after_refresh(conversation.scroll_end)
+        # Scroll conversation area to keep context visible after layout
+        conversation = self.app.query_one("#conversation")
+        self.call_after_refresh(conversation.scroll_end)
 
         try:
             selected_index = await self._choice_future
@@ -277,8 +313,10 @@ class InputBar(Container):
             # Clean up and restore text input
             self._mode = InputMode.FREE_FORM
             self._choice_future = None
-            if self._select_widget:
-                await self._select_widget.remove()
+            if self._prompt_box is not None:
+                # Removing the wrapper takes the option list with it.
+                await self._prompt_box.remove()
+                self._prompt_box = None
                 self._select_widget = None
             self._text_input.styles.display = "block"
             self._text_input.focus()
@@ -301,15 +339,39 @@ class InputBar(Container):
             margin: 0;
         }
 
-        InputBar > OptionList {
+        /* The frame a prompt lives in. The border carries the title of the
+           group the prompt belongs to (Textual truncates it to fit), so two
+           prompts open at once say which operation each is for. Without a
+           group there is simply no title and the border is plain. */
+        .prompt_box {
+            height: auto;
+            background: $background;
+            border: solid $box;
+            border-title-style: bold;
+            margin: 0;
+            padding: 0 1;
+        }
+
+        /* The question itself, inside the frame and never shortened - it names
+           the full subject being approved, which the title may not. */
+        .prompt_question {
+            height: auto;
+            width: 100%;
+            color: $foreground;
+            margin: 0 0 1 0;
+            padding: 0;
+        }
+
+        .prompt_box > OptionList {
             height: auto;
             color: $foreground;
             background: $background;
-            border: solid $box;
+            border: none;
             margin: 0;
+            padding: 0;
         }
 
-        InputBar > OptionList > *.option-list--option-highlighted {
+        .prompt_box > OptionList > *.option-list--option-highlighted {
             background: $input;
         }
 
