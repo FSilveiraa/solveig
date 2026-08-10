@@ -35,6 +35,7 @@ from pydantic import ValidationError
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
+    ModelResponse,
     ToolCallPart,
     ToolReturnPart,
 )
@@ -43,6 +44,7 @@ from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import HookKind, hook_name, hooks_for
+from solveig.session.conversation import Conversation
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
@@ -173,17 +175,34 @@ async def run_untyped_tool(
 
 def _tool_subcommand_handler(
     tool_cls: type[BaseTool],
-) -> Callable[..., Awaitable[str | None]]:
+) -> Callable[..., Awaitable[None]]:
     """A tool's `/command` as a plain subcommand handler: it declares the two
     dependencies it needs by annotating them, takes the raw words, and runs the
     tool through the ONE execution seam - so a hand-typed `/read` gets the same
     consent, hooks and group posture a model-issued call does.
 
-    Returns the result's assistant text, which the prompt gate puts on the
-    queue: a tool YOU ran is context you staged, and it reaches the assistant
-    through the same channel a typed comment uses. There is no `ToolReturn`
-    here because there is no `ToolCallPart` to answer - nobody asked for this
-    call, so it contributes a user turn rather than answering one.
+    The call lands in the conversation as an ORDINARY tool call - a
+    `ToolCallPart` and its `ToolReturnPart`, exactly the shape the assistant's
+    own calls take. It is not marked as user-initiated anywhere, deliberately:
+    the wire has no field for authorship (a provider is sent only the tool
+    name, the args and the result content), so saying so would mean inventing a
+    convention in the one place the model reads as fact. What is true either
+    way is that the tool ran and returned this, which is what the history now
+    records.
+
+    Everything follows from that with no special cases: the pair is drawn live
+    by `run_tool_and_hooks`' own group, the transcript ignores tool parts until
+    a reload, and `replay_tool_call` redraws it on resume - the same path an
+    assistant-initiated call already takes. Contributing the text as a user
+    message instead would have been drawn TWICE (the group, then a comment
+    holding the same output) and left the model liable to re-fetch what it did
+    not recognise as already fetched.
+
+    NOTE: `agent.iter(message_history=...)` seeds the history once, at turn
+    start, so a pair appended mid-turn reaches the model on the NEXT request,
+    not the one in flight. That is not a shortcut: a `ToolCallPart` has to live
+    in an assistant message, and inserting one between an existing `tool_use`
+    and its `tool_result` breaks the pairing every provider requires.
 
     Parsing failures and refusals are deliberately NOT caught: `SettingsError`/
     `ValidationError` and `PluginException`/`ToolDisabledError` all travel to
@@ -192,11 +211,33 @@ def _tool_subcommand_handler(
     its own copy of the usage line."""
 
     async def handler(
-        config: SolveigConfig, interface: SolveigInterface, *tokens: str
-    ) -> str | None:
+        config: SolveigConfig,
+        interface: SolveigInterface,
+        conversation: Conversation,
+        *tokens: str,
+    ) -> None:
         tool = tool_cls.from_cli_tokens(list(tokens))
         result = await run_tool_and_hooks(tool, config, interface)
-        return f"User tool: `{tool.title}`\n---\n{result.to_assistant_text()}"
+
+        # The tool's own fields ARE the call arguments - one model is the LLM
+        # schema and the CLI parser alike, so a hand-typed call serializes to
+        # exactly what a model-issued one would have sent.
+        call = ToolCallPart(
+            tool_name=tool.tool_name(), args=tool.model_dump(mode="json")
+        )
+        await conversation.append(ModelResponse(parts=[call]))
+        await conversation.append(
+            ModelRequest(
+                parts=[
+                    ToolReturnPart(
+                        tool_name=call.tool_name,
+                        content=result.to_assistant_text(),
+                        tool_call_id=call.tool_call_id,
+                        metadata=result.private,
+                    )
+                ]
+            )
+        )
 
     return handler
 

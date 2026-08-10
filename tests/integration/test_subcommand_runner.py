@@ -380,21 +380,33 @@ class TestWhatASubcommandContributes:
     USER ran reaches the assistant."""
 
     @pytest.mark.no_file_mocking
-    async def test_a_tool_subcommand_puts_its_result_on_the_queue(self, tmp_path):
-        """A `/read` you typed is context you staged: its text goes through the
-        same queue a typed comment does, so it interleaves into the message
-        being assembled instead of needing a path of its own."""
+    async def test_a_tool_subcommand_lands_as_an_ordinary_tool_call(self, tmp_path):
+        """A `/read` you typed enters the history as a real tool call and its
+        return - the same shape an assistant-issued call takes, and nothing
+        marks it as yours.
+
+        Pinned as a PAIR because that is what makes it legal: a `ToolReturnPart`
+        whose `tool_call_id` matches no preceding `ToolCallPart` is a malformed
+        history and every provider rejects it. It also has to stay off the
+        queue: as a user message the same output was drawn twice (the tool's
+        own group, then a comment repeating it)."""
         target = tmp_path / "note.txt"
         target.write_text("the file body")
 
         queue = UserMessageQueue()
         # consent to read, then send the content on
         interface = MockInterface(choices=[0, 0])
-        make_registry(user_message_queue=queue, interface=interface)
+        _, conversation, _ = make_registry(
+            user_message_queue=queue, interface=interface
+        )
 
         await queue.put(f"/read {target}")
 
-        assert "the file body" in " ".join(queue.pending)
+        assert queue.pending == ()  # not a comment
+        call, ret = (m.parts[0] for m in conversation.messages)
+        assert call.tool_name == ret.tool_name == "read"
+        assert call.tool_call_id == ret.tool_call_id  # the pairing providers require
+        assert "the file body" in ret.content
 
     async def test_a_command_with_nothing_to_say_leaves_the_queue_empty(self):
         """`/help` acts on the user's behalf and has no business in the
