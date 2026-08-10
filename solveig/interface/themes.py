@@ -49,7 +49,7 @@ terracotta = Palette(
     group="#869F89",  # pale green
     section="#BE5856",  # clay red
     box="#CB9D63",  # faded yellow
-    input="#CB9D63",  # faded yellow
+    input="#4B2828",  # faded red wine
     # Messages
     text="#FFF1DB",  # beige
     info="#CB9D63",  # faded yellow

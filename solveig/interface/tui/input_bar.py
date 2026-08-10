@@ -12,7 +12,6 @@ from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
 from solveig.exceptions import UserCancel
-from solveig.interface.themes import Palette
 
 from .keys import PROMPT_CANCEL_KEYS
 
@@ -122,14 +121,10 @@ class InputBar(Container):
         self,
         *,
         placeholder: str = "",
-        theme: Palette,
         free_form_callback=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-
-        # Theme and styling
-        self._theme = theme
 
         # Mode management
         self._mode = InputMode.FREE_FORM
@@ -160,7 +155,6 @@ class InputBar(Container):
 
     def on_mount(self):
         """Initialize styling when mounted."""
-        self._apply_free_form_style()
         self._text_input.focus()
         self.watch(self.screen, "focused", self._on_screen_focus_changed)
 
@@ -222,11 +216,11 @@ class InputBar(Container):
 
     def _apply_free_form_style(self):
         """Apply free-form input styling."""
-        self._text_input.styles.border = ("solid", self._theme.input)
+        self._text_input.remove_class("prompt_input")
 
     def _apply_question_style(self):
         """Apply question input styling."""
-        self._text_input.styles.border = ("solid", self._theme.warning)
+        self._text_input.add_class("prompt_input")
 
     async def ask_question(
         self, question: str, default: str = "", title: str | None = None
@@ -333,9 +327,9 @@ class InputBar(Container):
         InputBar > GrowingInput {
             height: auto;
             min-height: 3;
-            color: $foreground;
+            color: $text;
             background: $background;
-            border: solid $input;
+            border: solid $box;
             margin: 0;
         }
 
@@ -350,6 +344,14 @@ class InputBar(Container):
             border-title-style: bold;
             margin: 0;
             padding: 0 1;
+        }
+
+        /* The free-form input is a plain $box border; when a question prompt
+           raises it switches to $input. Both come from the theme via CSS, so
+           a runtime theme change re-resolves them (the border can not be set
+           inline - that would freeze the init-time Palette). */
+        InputBar > GrowingInput.prompt_input {
+            border: solid $input;
         }
 
         /* The question itself, inside the frame and never shortened - it names
@@ -373,6 +375,7 @@ class InputBar(Container):
 
         .prompt_box > OptionList > *.option-list--option-highlighted {
             background: $input;
+            color: $foreground;
         }
 
         InputBar > Static {

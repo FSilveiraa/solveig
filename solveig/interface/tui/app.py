@@ -91,7 +91,6 @@ class SolveigTextualApp(TextualApp):
 
         yield InputBar(
             placeholder=DEFAULT_INPUT_PLACEHOLDER,
-            theme=self._theme,
             free_form_callback=self._input_callback,
             id="input",
         )
