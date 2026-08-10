@@ -106,7 +106,7 @@ class EditTool(BaseTool):
             return ToolResult(issues=["cannot edit a directory"])
         try:
             await Filesystem.validate_write_access(
-                abs_path, min_disk_size_left=config.min_disk_space_left
+                abs_path, min_disk_size_left=config.minimum_disk_space_left
             )
         except (PermissionError, OSError) as e:
             await interface.print(f"Cannot write to {abs_path}: {e}", level=Level.ERROR)
@@ -177,7 +177,7 @@ class EditTool(BaseTool):
 
         try:
             await Filesystem.write_file_text(
-                abs_path, new_content, min_space_left=config.min_disk_space_left
+                abs_path, new_content, min_space_left=config.minimum_disk_space_left
             )
             await interface.print(
                 f"Edit applied: {occurrences_replaced} replacement(s)",

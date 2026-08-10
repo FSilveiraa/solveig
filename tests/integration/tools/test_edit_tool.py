@@ -156,7 +156,7 @@ class TestEditUserApproval:
     async def test_auto_allowed_path(self, tmp_path):
         test_file = tmp_path / "auto.txt"
         test_file.write_text("auto content")
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), minimum_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await EditTool(

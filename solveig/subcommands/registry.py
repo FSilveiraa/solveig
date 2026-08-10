@@ -255,7 +255,7 @@ class SubcommandRegistry:
             return None
         except Exception as e:
             await self._interface.print(
-                f"Found error when executing '{text}' sub-command: {e}",
+                f"Found {e.__class__.__name__} error when executing sub-command '{text}': {e}",
                 level=Level.ERROR,
             )
             return None

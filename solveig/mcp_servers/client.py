@@ -21,9 +21,7 @@ rather than a second list kept in sync by hand.
 from __future__ import annotations
 
 import asyncio
-import re
 import shlex
-from urllib.parse import urlparse
 
 from fastmcp.client.transports import StdioTransport
 from pydantic_ai.mcp import MCPToolset
@@ -35,27 +33,6 @@ from solveig.exceptions import UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
 from solveig.subcommands import subcommand
-
-
-def _default_tool_prefix(url: str) -> str:
-    """A model-friendly tool-name prefix derived from a server URL, used
-    when the config gives no explicit `name`.
-
-    `PrefixedToolset` joins this directly onto each tool name as
-    `f'{prefix}_{name}'` - using the raw URL (e.g.
-    `https://search.parallel.ai/mcp`) produces tool names like
-    `https://search.parallel.ai/mcp_web_search`, which models reliably
-    misparse (the `://` and `/` read as some kind of namespace syntax,
-    observed causing a model to repeatedly guess at how to call the tool
-    instead of just calling it). Derive a plain identifier instead: the
-    URL's hostname for network transports, the command name for `stdio://`.
-    """
-    if url.startswith("stdio://"):
-        command = shlex.split(url[len("stdio://") :])[0]
-        base = command.rsplit("/", 1)[-1]
-    else:
-        base = urlparse(url).hostname or url
-    return re.sub(r"[^a-zA-Z0-9_]+", "_", base).strip("_") or "mcp"
 
 
 def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
@@ -77,16 +54,6 @@ def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
     )
 
 
-def find_connection(identifier: str) -> MCPConnection | None:
-    """Look up a connection by URL (exact) or display_name (fallback)."""
-    if identifier in MCP_CONNECTIONS:
-        return MCP_CONNECTIONS[identifier]
-    for conn in MCP_CONNECTIONS.values():
-        if conn.display_name == identifier:
-            return conn
-    return None
-
-
 async def connect(
     server_config: MCPServerConfig,
     config: SolveigConfig,
@@ -96,33 +63,27 @@ async def connect(
 
     Displays success or error directly. Returns None on failure/cancellation
     rather than raising, since callers don't need to react programmatically.
-    """
-    # display_prefix is for human-facing messages below (readable name/URL);
-    # tool_prefix is what actually gets joined onto each tool's name, so it
-    # must be a plain identifier, not a URL - see _default_tool_prefix.
-    display_prefix = server_config.name or server_config.url
-    tool_prefix = server_config.name or _default_tool_prefix(server_config.url)
-    mcp_toolset = _build_mcp_toolset(server_config)
 
-    toolset: AbstractToolset = mcp_toolset.prefixed(tool_prefix)
+    The server's name is its identity throughout: the key it is stored under,
+    the prefix joined onto every tool it exposes, and the word used to address
+    it in a message or a subcommand. The server also reports a name of its own
+    over the wire, which is deliberately ignored — a server that renamed itself
+    mid-session would rename the tools the model had already been told about.
+    """
+    name = server_config.name
+    toolset: AbstractToolset = _build_mcp_toolset(server_config).prefixed(name)
 
     conn = MCPConnection(server_config=server_config, toolset=toolset)
 
     try:
-        async with interface.with_cancellable(
-            status=f"MCP connecting to {display_prefix}"
-        ):
+        async with interface.with_cancellable(status=f"MCP connecting to {name}"):
             await toolset.__aenter__()
     except UserCancel:
-        await interface.print(
-            f"MCP connection to {display_prefix} cancelled", level=Level.INFO
-        )
+        await interface.print(f"MCP connection to {name} cancelled", level=Level.INFO)
         return None
     except Exception as err:
-        await interface.print(f"MCP '{display_prefix}': {err}", level=Level.ERROR)
+        await interface.print(f"MCP '{name}': {err}", level=Level.ERROR)
         return None
-
-    conn.server_name = mcp_toolset.server_info.name
 
     try:
         deps = SolveigContext(config=config, interface=interface)
@@ -130,40 +91,33 @@ async def connect(
     except Exception as err:
         await toolset.__aexit__(None, None, None)
         await interface.print(
-            f"MCP '{display_prefix}': failed to list tools: {err}", level=Level.ERROR
+            f"MCP '{name}': failed to list tools: {err}", level=Level.ERROR
         )
         return None
 
     conn.tool_names = list(tools.keys())
 
-    # Only reached on success — replace any existing connection at this URL
-    if server_config.url in MCP_CONNECTIONS:
-        await disconnect(server_config.url, config, interface)
+    # Only reached on success — replace any existing connection under this name
+    if name in MCP_CONNECTIONS:
+        await disconnect(name, config, interface)
 
-    MCP_CONNECTIONS[server_config.url] = conn
+    MCP_CONNECTIONS[name] = conn
 
-    await interface.set_status(
-        f"MCP connected to {conn.server_name}",
-        duration=2,
-    )
+    await interface.set_status(f"MCP connected to {name}", duration=2)
     interface.refresh_stats()
     return conn
 
 
 async def disconnect(
-    url: str, config: SolveigConfig, interface: SolveigInterface
+    name: str, config: SolveigConfig, interface: SolveigInterface
 ) -> None:
-    """Disconnect from an MCP server by URL."""
-    conn = MCP_CONNECTIONS.pop(url, None)
+    """Disconnect from an MCP server by name."""
+    conn = MCP_CONNECTIONS.pop(name, None)
     if conn is None:
         return
-    server_name = conn.server_name
     await conn.toolset.__aexit__(None, None, None)
     interface.refresh_stats()
-    await interface.set_status(
-        f"MCP disconnected from {server_name}",
-        duration=2,
-    )
+    await interface.set_status(f"MCP disconnected from {name}", duration=2)
 
 
 async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> None:
@@ -182,7 +136,7 @@ async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> Non
 # ---------------------------------------------------------------------------
 
 
-@subcommand("/mcp list", section="mcp")
+@subcommand("/mcp", "/mcp list", section="mcp")
 async def mcp_list(
     config: SolveigConfig,
     interface: SolveigInterface,
@@ -196,16 +150,13 @@ async def mcp_list(
         return
 
     lines: list[str] = []
-    for conn in MCP_CONNECTIONS.values():
-        name = conn.display_name
-        tool_count = len(conn.tool_names)
-        lines.append(f"● {name}  ({tool_count} tools)")
+    for name, conn in MCP_CONNECTIONS.items():
+        lines.append(f"● {name}  ({len(conn.tool_names)} tools)")
         for tool in conn.tool_names:
             lines.append(f"    {tool}")
 
-    for url, cfg in config.mcp.items():
-        if url not in MCP_CONNECTIONS:
-            name = cfg.name or url
+    for name in config.mcp:
+        if name not in MCP_CONNECTIONS:
             lines.append(f"○ {name}  (configured, not connected)")
 
     await interface.add_text_box("\n".join(lines), title="MCP Servers")
@@ -215,11 +166,19 @@ async def mcp_list(
 async def mcp_connect(
     config: SolveigConfig,
     interface: SolveigInterface,
-    url: str,
+    target: str,
+    name: str = "",
 ) -> None:
-    """Connect to an MCP server by URL."""
-    url = url.strip()
-    server_config = config.mcp.get(url, MCPServerConfig(url=url))
+    """Connect to an MCP server, by configured name or by URL.
+
+    A configured name connects that server as configured. Anything else is
+    taken as a URL and connected ad hoc, under `name` if one was given and
+    otherwise under an identifier derived from the URL.
+    """
+    target = target.strip()
+    server_config = config.mcp.get(target) or MCPServerConfig.from_url(
+        target, name.strip()
+    )
     await connect(server_config, config, interface)
 
 
@@ -227,14 +186,13 @@ async def mcp_connect(
 async def mcp_disconnect(
     config: SolveigConfig,
     interface: SolveigInterface,
-    identifier: str,
+    name: str,
 ) -> None:
-    """Disconnect from an MCP server by URL or name."""
-    identifier = identifier.strip()
-    conn = find_connection(identifier)
-    if conn is None:
+    """Disconnect from an MCP server by name."""
+    name = name.strip()
+    if name not in MCP_CONNECTIONS:
         await interface.print(
-            f"No connected MCP server matching '{identifier}'.", level=Level.ERROR
+            f"No connected MCP server named '{name}'.", level=Level.ERROR
         )
         return
-    await disconnect(conn.url, config, interface)
+    await disconnect(name, config, interface)

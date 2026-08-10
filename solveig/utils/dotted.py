@@ -32,14 +32,28 @@ class MissingPath(KeyError):
         super().__init__(f"{path!r} has no {segment!r}")
 
 
-def to_leaves(data: dict[str, Any] | None, prefix: str = "") -> set[str]:
+def to_leaves(
+    data: dict[str, Any] | None,
+    prefix: str = "",
+    stop_at: frozenset[str] = frozenset(),
+) -> set[str]:
     """Flatten a nested dict into dotted leaf paths. An empty dict is itself a
-    leaf (it carries no children to describe)."""
+    leaf (it carries no children to describe).
+
+    `stop_at` names paths whose dict IS the value — a mapping keyed by the
+    user's own strings rather than by schema. Descending into one would mint
+    path segments out of arbitrary text, and a key containing the separator
+    yields a path nothing can read back: `extract` would split it and look for
+    a key that was never there.
+
+    The caller supplies the set because only a schema can say which dicts are
+    sections and which are values; this module stays pure and knows neither.
+    """
     out: set[str] = set()
     for key, value in (data or {}).items():
         path = f"{prefix}{key}"
-        if isinstance(value, dict) and value:
-            out |= to_leaves(value, f"{path}.")
+        if isinstance(value, dict) and value and path not in stop_at:
+            out |= to_leaves(value, f"{path}.", stop_at)
         else:
             out.add(path)
     return out

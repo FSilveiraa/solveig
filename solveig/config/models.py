@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import fnmatch
+import re
+import shlex
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from pydantic import (
     BaseModel,
@@ -27,6 +30,11 @@ _MUTABLE = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 _MUTABLE_ALLOW = ConfigDict(
     validate_assignment=True, arbitrary_types_allowed=True, extra="allow"
 )
+# An MCP server name is announced to the model as `<name>_<tool>`, so it is held
+# to the charset tool names are allowed across providers — letters, digits, `_`
+# and `-`. Notably NOT `.`, which every dotted-path language in this tree treats
+# as a separator.
+_MCP_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class ApiConfig(BaseModel):
@@ -158,13 +166,62 @@ class PluginsConfig(BaseModel):
 
 
 class MCPServerConfig(BaseModel):
+    """One MCP server, named and addressed.
+
+    The NAME is the server's identity: it keys `config.mcp`, it keys
+    `MCP_CONNECTIONS`, and it is the prefix every one of the server's tools is
+    announced to the model under (`<name>_<tool>`). The URL is only an address.
+    Keeping those apart is what lets a server be renamed, moved, or referred to
+    in a subcommand without four spellings of the same thing.
+
+    `name` is `exclude=True` because its home on disk is the KEY of the block
+    (`[mcp.parallel]`), which `SolveigConfig._normalize_mcp` injects back in on
+    load. Dumping it into the block as well would put one value in two places
+    and let them disagree.
+    """
+
     model_config = _MUTABLE
+    name: str = Field(exclude=True)
     url: str
-    name: str | None = None
     allowed_tools: list[str] = Field(default_factory=list)
     blocked_tools: list[str] = Field(default_factory=list)
     headers: dict[str, str] = Field(default_factory=dict)
     timeout: float = 30.0
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, v: str) -> str:
+        """The name is prompt surface, so it is held to the charset tool names
+        allow — which also keeps it free of the dotted-path separator that
+        `config.mcp`'s previous URL keys carried into `/config save`."""
+        if not _MCP_NAME.match(v):
+            raise ValueError(
+                f"MCP server name {v!r} is not a valid identifier. Servers are "
+                "keyed by name, with the URL as a field:\n"
+                '    [mcp.parallel]\n    url = "https://search.parallel.ai/mcp"\n'
+                "Names may use letters, digits, '_' and '-'."
+            )
+        return v
+
+    @classmethod
+    def from_url(cls, url: str, name: str = "") -> MCPServerConfig:
+        """An ad-hoc server for a URL that no config block names.
+
+        The derived name is a plain identifier rather than the URL, because the
+        name is joined onto every tool this server exposes. A raw URL there
+        produces `https://search.parallel.ai/mcp_web_search`, which models
+        reliably misparse — the `://` and `/` read as some kind of namespace
+        syntax, observed causing a model to repeatedly guess at how to call the
+        tool instead of just calling it. So: the hostname for network
+        transports, the command name for `stdio://`.
+        """
+        if not name:
+            if url.startswith("stdio://"):
+                base = shlex.split(url[len("stdio://") :])[0].rsplit("/", 1)[-1]
+            else:
+                base = urlparse(url).hostname or url
+            name = re.sub(r"[^a-zA-Z0-9_-]+", "_", base).strip("_") or "mcp"
+        return cls(name=name, url=url)
 
     def is_tool_allowed(self, tool_name: str) -> bool:
         if self.allowed_tools and not any(

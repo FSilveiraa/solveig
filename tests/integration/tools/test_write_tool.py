@@ -201,7 +201,7 @@ class TestDirectoryOperations:
 class TestAutoAllowedPaths:
     async def test_auto_allowed_file_creation(self, tmp_path):
         test_file = tmp_path / "auto_file.txt"
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), minimum_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(
@@ -217,7 +217,7 @@ class TestAutoAllowedPaths:
 
     async def test_auto_allowed_directory_creation(self, tmp_path):
         test_dir = tmp_path / "auto_directory"
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), minimum_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(path=str(test_dir), is_directory=True).execute(
@@ -231,7 +231,7 @@ class TestAutoAllowedPaths:
     async def test_auto_allowed_file_update(self, tmp_path):
         test_file = tmp_path / "existing_auto.txt"
         test_file.write_text("Original content")
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), minimum_disk_space_left=0, auto_allowed_paths=[f"{tmp_path}/**"])
         interface = MockInterface()
 
         result = await WriteTool(
@@ -284,7 +284,7 @@ class TestErrorHandling:
 
     async def test_disk_space_validation(self, tmp_path):
         test_file = tmp_path / "disk_space_test.txt"
-        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), min_disk_space_left="999TB")
+        config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), minimum_disk_space_left="999TB")
         interface = MockInterface()
 
         result = await WriteTool(

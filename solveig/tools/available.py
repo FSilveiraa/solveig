@@ -21,7 +21,7 @@ from typing import Any
 from pydantic_ai import FunctionToolset, RunContext, ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
-from solveig.config import SolveigConfig
+from solveig.config import MCPServerConfig, SolveigConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.plugins.tools import PLUGIN_TOOLS
@@ -49,11 +49,11 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
     announce that it changed, and no store has to know this module exists.
 
     MCP toolsets are wrapped in a live FilteredToolset that reads
-    config.mcp[server_url].is_tool_allowed() on every call — the same reactive
+    config.mcp[server_name].is_tool_allowed() on every call — the same reactive
     pattern as core tools.
     """
     mcp_toolsets: list[AbstractToolset] = []
-    for server_url, conn in MCP_CONNECTIONS.items():
+    for server_name, conn in MCP_CONNECTIONS.items():
         ts = conn.toolset
         # Apply allow/block live — predicate reads config fresh each call.
         # When both lists are empty, is_tool_allowed returns True (no-op).
@@ -61,9 +61,14 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
         def _mcp_active(
             ctx: RunContext[SolveigContext],
             td: ToolDefinition,
-            url: str = server_url,
+            name: str = server_name,
+            ad_hoc: MCPServerConfig = conn.server_config,
         ) -> bool:
-            return ctx.deps.config.mcp[url].is_tool_allowed(td.name)
+            # Read config live so an edited allow/block list applies without a
+            # reconnect — but fall back to the config the connection was opened
+            # with, because `/mcp connect <url>` connects a server that no
+            # config block names and `config.mcp[name]` would raise.
+            return ctx.deps.config.mcp.get(name, ad_hoc).is_tool_allowed(td.name)
 
         ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
         mcp_toolsets.append(ts)

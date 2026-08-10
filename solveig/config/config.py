@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import typing
 import warnings
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
 from anyio import Path
@@ -15,9 +16,11 @@ from pydantic import (
     PrivateAttr,
     SecretStr,
     create_model,
+    field_serializer,
     field_validator,
     model_validator,
 )
+from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
     CliPositionalArg,
@@ -60,6 +63,33 @@ _CLI_SHORTCUTS: dict[str, str] = {
     "system_prompt.add_os_info": "add-os-info",
     "startup_mcp_servers": "mcp-url",  # --mcp is taken by the mcp submodel
 }
+
+
+def walk_schema(
+    model: type[BaseModel], prefix: str = ""
+) -> Iterator[tuple[str, FieldInfo, bool]]:
+    """Every dotted path the config schema offers, with its `FieldInfo` and
+    whether the path is OPAQUE — a mapping keyed by user data rather than by
+    schema (`mcp`), which the walk names but does not descend into.
+
+    NOTE: the one home for where a dotted path stops. Two callers need that same
+    answer for unrelated reasons, and keeping a copy each is how they drifted:
+    `editable_fields` must not offer `mcp.<server>.timeout` as a settable field,
+    and `_record_declared` must not mint a declared path out of a key it cannot
+    read back — an MCP server was once keyed by URL, whose dots the path
+    language splits on, so `/config save` refused to save at all.
+    """
+    for name, info in model.model_fields.items():
+        if info.exclude:
+            continue
+        annotation = info.annotation
+        path = f"{prefix}{name}"
+        if typing.get_origin(annotation) is dict:
+            yield path, info, True
+        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield from walk_schema(annotation, f"{path}.")
+        else:
+            yield path, info, False
 
 
 def _split_config_path_from_cli_args(
@@ -188,8 +218,7 @@ class SolveigConfig(BaseSettings):
         default_factory=lambda: ["AGENTS.md"],
         description="Markdown files appended to the system prompt in order",
     )
-    # ByteSize parses human strings ("1GiB") natively and gives .human_readable()
-    min_disk_space_left: ByteSize = Field(
+    minimum_disk_space_left: ByteSize = Field(
         default=ByteSize(1024**3),  # 1 GiB
         description="Minimum free disk space before blocking writes",
     )
@@ -419,18 +448,21 @@ class SolveigConfig(BaseSettings):
     @field_validator("mcp", mode="before")
     @classmethod
     def _normalize_mcp(cls, v: Any) -> Any:
-        # Config files write a server block keyed by URL without repeating the
-        # URL inside it (`mcp."http://x" = {name=…}`); inject the key as the
-        # entry's `url` so every MCPServerConfig is complete.
+        # A server block is keyed by NAME and does not repeat it inside
+        # (`[mcp.parallel]` / `url = "…"`); inject the key so every
+        # MCPServerConfig is complete and can be handed around on its own. The
+        # mirror of this is `name`'s `exclude=True` — the key is where the name
+        # lives on disk, so dumping it back into the block would create a second
+        # home for it.
         if not isinstance(v, dict):
             return v
         out: dict[str, Any] = {}
-        for url, cfg in v.items():
+        for name, cfg in v.items():
             if isinstance(cfg, MCPServerConfig):
-                out[url] = cfg
+                out[name] = cfg
             else:
-                rest = {k: val for k, val in dict(cfg).items() if k != "url"}
-                out[url] = MCPServerConfig(url=url, **rest)
+                rest = {k: val for k, val in dict(cfg).items() if k != "name"}
+                out[name] = MCPServerConfig(name=name, **rest)
         return out
 
     @model_validator(mode="after")
@@ -447,6 +479,14 @@ class SolveigConfig(BaseSettings):
                 )
             self.api.url = default
         return self
+
+    @field_serializer("minimum_disk_space_left")
+    def _ser_min_disk(self, v: ByteSize) -> str:
+        # Human-readable so a --full/--all config dump exports the default as
+        # "1.0GiB" rather than 1073741824 (round-trips to the same value). The
+        # /config save path grafts the exact original from _declared_fields, so
+        # a user's "1GiB" is preserved verbatim there, not re-normalized here.
+        return v.human_readable()
 
     # ------------------------------------------------------------
     # Tool/Hook section schema
@@ -537,12 +577,23 @@ class SolveigConfig(BaseSettings):
     # Explicitly declared config fields
     # ------------------------------------------------------------
 
+    @classmethod
+    def opaque_paths(cls) -> frozenset[str]:
+        """The dotted paths that hold a value rather than a section — mappings
+        keyed by the user's own strings. A path stops here: `mcp` is addressable,
+        `mcp.<server>` is not.
+
+        Derived from the live schema, never listed, so a future mapping field is
+        covered the day it is declared.
+        """
+        return frozenset(path for path, _, opaque in walk_schema(cls) if opaque)
+
     def declared_config(self) -> dict[str, Any]:
         """The nested dict of only the explicitly-declared fields (file / CLI /
         `/config set`, tracked in `_declared_fields`) — what `/config save` persists.
         Each declared path is copied out of `model_dump(mode="json")` (which
         applies the field serializers: key un-masked, enums → names, byte
-        sizes → ints, command patterns → source strings).
+        sizes → their human-readable form, command patterns → source strings).
 
         NOTE: a declared path whose plugin is not installed still lands here —
         `PreservingSection` keeps the block and it dumps like any other value.
@@ -559,8 +610,17 @@ class SolveigConfig(BaseSettings):
     def _record_declared(self) -> None:
         """Populate `_declared_fields` with the dotted paths explicitly provided by the
         config file(s) and the command line (`cli_args`) — what `/config save`
-        persists. Excludes env vars and CLI-only fields (`exclude=True`)"""
-        declared = dotted.to_leaves(sources.load_paths(self.config_files))
+        persists. Excludes env vars and CLI-only fields (`exclude=True`)
+
+        Flattening stops at the schema's opaque mappings (`walk_schema`): `mcp` is
+        declared as one value, not one path per server, because its keys are the
+        user's names rather than schema segments — and a declared path is only
+        useful if `declared_config` can read it back out of `model_dump`.
+        """
+        opaque = self.opaque_paths()
+        declared = dotted.to_leaves(
+            sources.load_paths(self.config_files), stop_at=opaque
+        )
         if self.cli_args is not None:
             _, argv = _split_config_path_from_cli_args(
                 self.cli_args
@@ -573,7 +633,7 @@ class SolveigConfig(BaseSettings):
                     **CLI_SETTINGS_OPTS,
                     cli_avoid_json=True,
                 )
-                declared |= dotted.to_leaves(cli() or {})
+                declared |= dotted.to_leaves(cli() or {}, stop_at=opaque)
         self._declared_fields = {
             path
             for path in declared
@@ -613,6 +673,11 @@ class SolveigConfig(BaseSettings):
         cfg = cls.parse(cli_args)
         # config_files is already stamped (resolved paths) by ConfigFileSource.
         cfg._record_declared()
+        # `--mcp-url` names a server only by address, so it gets the same derived
+        # identifier an ad-hoc `/mcp connect <url>` would give it — and setdefault
+        # means a config block already using that name wins, rather than the flag
+        # silently replacing a configured server's allow/block lists.
         for url in cfg.startup_mcp_servers:
-            cfg.mcp.setdefault(url, MCPServerConfig(url=url))
+            server = MCPServerConfig.from_url(url)
+            cfg.mcp.setdefault(server.name, server)
         return cfg

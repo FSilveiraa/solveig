@@ -21,7 +21,7 @@ LEGACY_KEY_MAP: dict[str, str] = {
     "max_context": "api.max_context",
     "timeout": "api.timeout",
     "http_timeout": "tools.http.timeout",
-    "http_max_response_bytes": "tools.http.max_response_bytes",
+    "http_max_response_bytes": "tools.http.maximum_response_size",
     "no_commands": "tools.command.enabled (inverted)",
     "auto_execute_commands": "tools.command.auto_execute",
     "sessions_dir": "session.dir",

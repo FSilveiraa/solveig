@@ -15,7 +15,7 @@ import typing
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel
+import anyconfig
 
 from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
 from solveig.exceptions import UserCancel
@@ -25,7 +25,7 @@ from solveig.subcommands import subcommand
 from solveig.utils import dotted
 
 from . import DEFAULT_CONFIG_PATHS, sources
-from .config import SolveigConfig, display_config_value
+from .config import SolveigConfig, display_config_value, walk_schema
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.
@@ -33,19 +33,11 @@ from .config import SolveigConfig, display_config_value
 # A field with `exclude=True` opts out of runtime editing (one source of truth).
 
 
-def _is_container(annotation: Any) -> bool:
-    """Dict-of-models fields (e.g. `mcp`) are structural, not leaves:
-    edited by their own flows (/mcp connect), not one dotted path per entry."""
-    return typing.get_origin(annotation) is dict
-
-
 def editable_fields(config: SolveigConfig) -> dict[str, str]:
     """Walk the composed schema to every editable leaf: {dotted_path: description}.
 
-    A leaf is a field whose annotation isn't a BaseModel subclass (those are
-    recursed) and whose declaration doesn't opt out (`exclude=True`) or hold a
-    dict-of-models container. The description comes from the field's own
-    `Field(description=…)`; undescribed leaves fall back to their dotted path.
+    The description comes from the field's own `Field(description=…)`;
+    undescribed leaves fall back to their dotted path.
     """
     return {
         path: info.description or path for path, info in _field_infos(config).items()
@@ -54,25 +46,16 @@ def editable_fields(config: SolveigConfig) -> dict[str, str]:
 
 def _field_infos(config: SolveigConfig) -> dict[str, Any]:
     """The same walk as `editable_fields`, returning each leaf's FieldInfo
-    for readers that need more than the description (e.g. prompt choices)."""
-    out: dict[str, Any] = {}
+    for readers that need more than the description (e.g. prompt choices).
 
-    def walk(model: type[BaseModel], prefix: str) -> None:
-        for name, info in model.model_fields.items():
-            if info.exclude:
-                continue
-            annotation = info.annotation
-            if (
-                annotation is not None
-                and isinstance(annotation, type)
-                and issubclass(annotation, BaseModel)
-            ):
-                walk(annotation, f"{prefix}{name}.")
-            elif not _is_container(annotation):
-                out[f"{prefix}{name}"] = info
-
-    walk(type(config), "")
-    return out
+    An opaque path is dropped rather than offered: a mapping keyed by user data
+    (`mcp`) is edited through its own flow (`/mcp connect`), never one dotted
+    path per entry. `walk_schema` is where that rule lives — the same one
+    `_record_declared` reads, so the two cannot disagree about where a path ends.
+    """
+    return {
+        path: info for path, info, opaque in walk_schema(type(config)) if not opaque
+    }
 
 
 def _unwrap_optional(tp: Any) -> Any:
@@ -342,10 +325,15 @@ async def config_save(
         return
     try:
         sources.save_config(data, target)
+    except anyconfig.UnknownFileTypeError:
+        await interface.print(
+            "Could not save config to a file with an invalid extension. The exported config format is defined by the path extension. Use .json, .yaml or .toml",
+            level=Level.ERROR,
+        )
     except OSError as e:
         await interface.print(f"Could not save config: {e}", level=Level.ERROR)
-        return
-    await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
+    else:
+        await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
 
 
 def register_config_stat(

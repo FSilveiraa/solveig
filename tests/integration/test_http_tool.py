@@ -110,7 +110,7 @@ async def test_non_200_response_still_accepted(local_http_server):
 async def test_response_truncated_when_body_exceeds_limit(local_http_server):
     long_body = "x" * 100
     server = await local_http_server(_app_with_response(200, long_body))
-    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"http": {"max_response_bytes": 10}})
+    config = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), tools={"http": {"maximum_response_size": 10}})
     interface = MockInterface(choices=[0, 0])
 
     result = await HttpTool(url=str(server.make_url("/"))).execute(
@@ -214,7 +214,7 @@ async def test_output_file_accept_writes_response_to_disk(local_http_server, tmp
     ).execute(*make_ctx(
         config=SolveigConfig(
             cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
-            min_disk_space_left=0,
+            minimum_disk_space_left=0,
         ),
         interface=interface,
     ))
@@ -235,7 +235,7 @@ async def test_output_file_decline_leaves_no_file(local_http_server, tmp_path):
     ).execute(*make_ctx(
         config=SolveigConfig(
             cli_args=[], api=DEFAULT_CONFIG.api.model_dump(),
-            min_disk_space_left=0,
+            minimum_disk_space_left=0,
         ),
         interface=interface,
     ))

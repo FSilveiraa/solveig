@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING, ClassVar
 
 import httpx
-from pydantic import Field, field_validator
+from pydantic import ByteSize, Field, field_serializer, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.config import SolveigConfig
@@ -39,9 +39,18 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
 
 class HttpConfig(ToolConfig):
     timeout: float = Field(default=10.0, description="HTTP request timeout in seconds")
-    max_response_bytes: int = Field(
-        default=50_000, description="Truncate HTTP response bodies at this many bytes"
+    maximum_response_size: ByteSize = Field(
+        default=ByteSize(1024**3),  # 1 GiB
+        description="Truncate HTTP response bodies at this many bytes",
     )
+
+    @field_serializer("maximum_response_size")
+    def _ser_max_size(self, v: ByteSize) -> str:
+        # Human-readable so a --full/--all config dump exports "1.0GiB", not
+        # the raw byte int (round-trips to the same value). The /config save
+        # path doesn't even hit this: it grafts the original string stored in
+        # _declared_fields, so the user's exact "1GiB" survives there.
+        return v.human_readable()
 
 
 class HttpTool(BaseTool[HttpConfig]):
@@ -172,7 +181,7 @@ class HttpTool(BaseTool[HttpConfig]):
             await Filesystem.validate_write_access(
                 path=abs_path,
                 content=response.content,
-                min_disk_size_left=config.min_disk_space_left,
+                min_disk_size_left=config.minimum_disk_space_left,
             )
         except (OSError, PermissionError) as e:
             await interface.print(f"Cannot write to {abs_path}: {e}", level=Level.ERROR)
@@ -194,7 +203,7 @@ class HttpTool(BaseTool[HttpConfig]):
             await Filesystem.write_file_bytes(
                 abs_path,
                 content=response.content,
-                min_space_left=config.min_disk_space_left,
+                min_space_left=config.minimum_disk_space_left,
             )
             await interface.print(f"Saved to {abs_path}", level=Level.SUCCESS)
         except OSError as e:
@@ -216,10 +225,10 @@ class HttpTool(BaseTool[HttpConfig]):
         response_headers: dict[str, str],
     ) -> ToolResult:
         raw = response.text
-        max_response_bytes = self.settings(config).max_response_bytes
-        truncated = len(raw) > max_response_bytes
+        max_response_size = self.settings(config).maximum_response_size
+        truncated = len(raw) > max_response_size
         if truncated:
-            raw = raw[:max_response_bytes]
+            raw = raw[:max_response_size]
 
         send_choice = await interface.ask_choice(
             "Send response to assistant?", ["Send", "Inspect first", "Don't send"]
@@ -238,7 +247,7 @@ class HttpTool(BaseTool[HttpConfig]):
             )
             if truncated:
                 await interface.print(
-                    "Response body was truncated (see config.tools.http.max_response_bytes)",
+                    "Response body was truncated (see config.tools.http.maximum_response_size)",
                     level=Level.WARNING,
                 )
             if (

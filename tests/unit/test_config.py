@@ -19,7 +19,7 @@ async def test_defaults_and_nesting_dotted_flags():
     assert c.api.url == "http://x"
     assert c.api.type.name == "openai"  # inferred default
     assert c.tools.command.enabled is True
-    assert c.tools.http.max_response_bytes == 50_000
+    assert c.tools.http.maximum_response_size == 1024**3  # default is 1 GiB
     assert c.session.dir == ".solveig/sessions"
     assert c.prompt == "hello world"
     assert c.resume is None
@@ -157,10 +157,51 @@ async def test_declared_tracks_file_and_cli_fields(tmp_path):
     assert "startup_mcp_servers" not in c._declared_fields
 
 
+@pytest.mark.no_file_mocking
+async def test_declared_mcp_is_one_leaf_and_survives_a_save(tmp_path):
+    """An MCP block is declared as ONE path, and `/config save` can read it back.
+
+    A server used to be keyed by its URL, so `to_leaves` minted the declared path
+    `mcp.https://search.parallel.ai/mcp` — which `extract` then split on the dots
+    inside the URL, found no `https://search`, and raised `MissingPath`, making
+    `/config save` refuse to save anything at all. Servers are keyed by name now,
+    and `mcp` stops the walk regardless (`opaque_paths`), so neither half of that
+    can come back.
+    """
+    p = tmp_path / "c.json"
+    anyconfig.dump(
+        {"mcp": {"parallel": {"url": "https://search.parallel.ai/mcp"}}}, str(p)
+    )
+    c = await bootstrap.parse_config_and_prompt(["--config", str(p)])
+
+    assert "mcp" in c._declared_fields
+    assert not [path for path in c._declared_fields if path.startswith("mcp.")]
+    # the whole mapping round-trips, and the name is not repeated inside the block
+    assert c.declared_config()["mcp"] == {
+        "parallel": {
+            "url": "https://search.parallel.ai/mcp",
+            "allowed_tools": [],
+            "blocked_tools": [],
+            "headers": {},
+            "timeout": 30.0,
+        }
+    }
+
+
+@pytest.mark.no_file_mocking
+async def test_mcp_name_must_be_an_identifier(tmp_path):
+    # The old URL-keyed form is a hard break, and it fails at parse with a
+    # message showing the replacement rather than deep inside a save.
+    p = tmp_path / "c.json"
+    anyconfig.dump({"mcp": {"https://search.parallel.ai/mcp": {}}}, str(p))
+    with pytest.raises(ValueError, match="not a valid identifier"):
+        await bootstrap.parse_config_and_prompt(["--config", str(p)])
+
+
 async def test_declared_config_saves_only_declared_serialized():
     # /config save persists exactly the declared leaves, serialized: secret
-    # un-masked, api type as its name, byte size as int, command patterns as
-    # source strings — and nothing that wasn't explicitly set.
+    # un-masked, api type as its name, byte sizes as their human-readable form,
+    # command patterns as source strings — and nothing that wasn't explicitly set.
     c = await bootstrap.parse_config_and_prompt(
         [
             "--url",
@@ -171,7 +212,7 @@ async def test_declared_config_saves_only_declared_serialized():
             "openai",
             "--tools.command.auto_execute",
             "^ls",
-            "--min_disk_space_left",
+            "--minimum_disk_space_left",
             "2GiB",
         ]
     )
@@ -179,7 +220,7 @@ async def test_declared_config_saves_only_declared_serialized():
     assert saved == {
         "api": {"url": "http://x", "key": "sk-secret", "type": "openai"},
         "tools": {"command": {"auto_execute": ["^ls"]}},
-        "min_disk_space_left": 2 * 1024**3,
+        "minimum_disk_space_left": "2.0GiB",  # human-readable, not the raw int
     }
     # a field left at its default is not written
     assert "session" not in saved
@@ -198,12 +239,14 @@ async def test_env_layer_between_cli_and_file(monkeypatch):
 
 async def test_mcp_url_flag_populates_servers():
     # The repeatable startup flag is --mcp-url (startup_mcp_servers); build()
-    # turns it into the mcp dict keyed by URL.
+    # turns it into the mcp dict keyed by NAME, derived from the URL because the
+    # flag gives no other way to name a server — the same identifier an ad-hoc
+    # `/mcp connect <url>` would pick.
     c = await bootstrap.parse_config_and_prompt(
         ["--url", "http://x", "--mcp-url", "stdio://a", "--mcp-url", "stdio://b"]
     )
-    assert set(c.mcp) == {"stdio://a", "stdio://b"}
-    assert c.mcp["stdio://a"].url == "stdio://a"
+    assert set(c.mcp) == {"a", "b"}
+    assert c.mcp["a"].url == "stdio://a"
 
 
 async def test_build_with_no_config_file_anywhere(tmp_path, monkeypatch):

@@ -26,7 +26,7 @@ DEFAULT_CONFIG = SolveigConfig(
     # /tmp is a ~512MB tmpfs; the 1GB production default fires "Insufficient
     # disk space" on every file-writing tool test as a false environmental
     # failure. Individual tests that genuinely exercise the check set their own.
-    min_disk_space_left=ByteSize(0),
+    minimum_disk_space_left=ByteSize(0),
     session=SessionConfig(auto_save=False),
     stream=False,
 )

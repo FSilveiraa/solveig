@@ -99,7 +99,7 @@ def _register_stats(
 
     interface.add_stat(
         "MCP",
-        get=lambda: [conn.display_name for conn in MCP_CONNECTIONS.values()],
+        get=lambda: list(MCP_CONNECTIONS),
         render=lambda names: (
             "Disconnected"
             if not names
@@ -313,7 +313,6 @@ async def run_async(
         interface = TerminalInterface(
             user_message_queue=user_message_queue,
             config=config,
-            conversation=conversation,
         )
     else:
         # Test/demo code injected an interface it already constructed - wire

@@ -104,7 +104,7 @@ class CopyTool(BaseTool):
             await Filesystem.copy(
                 abs_source_path,
                 abs_destination_path,
-                min_space_left=config.min_disk_space_left,
+                min_space_left=config.minimum_disk_space_left,
             )
             await interface.print("Copied", level=Level.SUCCESS)
             return ToolResult(

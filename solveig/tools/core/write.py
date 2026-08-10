@@ -57,7 +57,7 @@ class WriteTool(BaseTool):
             await Filesystem.validate_write_access(
                 path=abs_path,
                 content=self.content,
-                min_disk_size_left=config.min_disk_space_left,
+                min_disk_size_left=config.minimum_disk_space_left,
             )
         except (OSError, PermissionError, IsADirectoryError) as e:
             await interface.print(f"Cannot write to {abs_path}: {e}", level=Level.ERROR)

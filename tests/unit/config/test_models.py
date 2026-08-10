@@ -53,15 +53,36 @@ async def test_validate_assignment_reparses_theme():
 
 
 async def test_tool_allow_block():
-    s = MCPServerConfig(url="u", allowed_tools=["get_*"], blocked_tools=["get_secret"])
+    s = MCPServerConfig(
+        name="s", url="u", allowed_tools=["get_*"], blocked_tools=["get_secret"]
+    )
     assert s.is_tool_allowed("get_page")
     assert not s.is_tool_allowed("get_secret")
     assert not s.is_tool_allowed("post_x")
 
 
+async def test_mcp_name_is_derived_from_the_url_when_not_given():
+    # The name is joined onto every tool the server exposes, so it must be a
+    # plain identifier even when the user only ever supplied an address.
+    assert MCPServerConfig.from_url("https://search.parallel.ai/mcp").name == (
+        "search_parallel_ai"
+    )
+    assert MCPServerConfig.from_url("stdio://uvx some-server --flag").name == "uvx"
+    # an explicit name is taken as-is, and still has to be a valid identifier
+    assert MCPServerConfig.from_url("https://x/mcp", "search").name == "search"
+    with pytest.raises(ValueError, match="not a valid identifier"):
+        MCPServerConfig.from_url("https://x/mcp", "not.a.name")
+
+
+async def test_mcp_name_is_not_dumped_into_its_own_block():
+    # The name's home on disk is the KEY of the block; writing it inside as well
+    # would be a second home for one value, free to disagree on the next edit.
+    assert "name" not in MCPServerConfig(name="s", url="u").model_dump()
+
+
 async def test_tools_nesting_defaults():
     t = SolveigConfig(cli_args=[]).tools
-    assert t.http.max_response_bytes == 50_000
+    assert t.http.maximum_response_size == 1024**3  # default is 1 GiB
     assert t.command.enabled is True
 
 
