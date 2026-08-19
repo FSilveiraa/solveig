@@ -241,8 +241,8 @@ class FileTree(TreeBox):
             max_depth=max_depth,
         )
 
-    def replace(self, metadata: FileMetadata) -> None:
+    async def replace(self, metadata: FileMetadata) -> None:
         self.widget.replace(metadata)
 
-    def refresh(self) -> None:
+    async def refresh(self) -> None:
         self.widget.refresh(layout=True)

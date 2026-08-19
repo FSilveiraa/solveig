@@ -1,0 +1,58 @@
+/* Solveig web UI — global styles and theme variables.
+   A dark, terminal-flavoured palette; CSS variables so the components
+   reference slots (like Textual's $box / $foreground) rather than literals. */
+
+:root {
+  --bg: #1e1e2e;
+  --assistant-bg: #2a2a3e;
+  --user-bg: #26263a;
+  --code-bg: #161622;
+  --input-bg: #26263a;
+  --box: #3a3a52;
+  --accent: #8aa2ff;
+  --foreground: #e0e0e8;
+  --muted: #9a9ab0;
+  --info: #7fd4ff;
+  --warning: #ffd387;
+  --error: #ff8a8a;
+  --success: #8affc1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+button {
+  border: 1px solid var(--box);
+  background: var(--assistant-bg);
+  color: var(--foreground);
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+button:hover {
+  border-color: var(--accent);
+}
+button.ghost {
+  background: transparent;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

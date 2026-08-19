@@ -125,13 +125,13 @@ class SessionDisplay(ConversationObserver):
         await self._display_message(message_id)
 
     async def stream_updated(self, message_id: MessageId) -> None:
-        await self._restate(message_id)
+        await self._update_message(message_id)
 
     async def stream_completed(self, message_id: MessageId) -> None:
-        await self._restate(message_id)
+        await self._update_message(message_id)
 
     async def message_edited(self, message_id: MessageId) -> None:
-        await self._restate(message_id)
+        await self._update_message(message_id)
 
     async def truncated_from(self, message_id: MessageId) -> None:
         await self._drop_from(message_id)
@@ -200,7 +200,7 @@ class SessionDisplay(ConversationObserver):
             if box is not None:
                 boxes.append(box)
 
-    async def _restate(self, message_id: MessageId) -> None:
+    async def _update_message(self, message_id: MessageId) -> None:
         """Bring an already-drawn message up to date - a streamed token landed,
         a stream finished, or the user edited it.
 

@@ -38,6 +38,11 @@ dependencies = [
     "pydantic-ai>=2.17,<3",
     "textual>=6.1.0",
     "rich>=14.0.0",
+    # The web frontend is a first-class interface alongside the TUI, so its
+    # HTTP server is core, not an optional extra: `pip install solveig` ships
+    # all three renderable surfaces. `build_app`/`serve` import these.
+    "blacksheep>=2.6.0",
+    "uvicorn>=0.51.0",
     "httpx>=0.28.0",
     "fastmcp>=3.2.0",
     "pyperclip>=1.9.0",
@@ -74,7 +79,13 @@ solveig = "solveig.run:main"
 include = ["solveig*"]
 
 [tool.setuptools.package-data]
-solveig = ["system_prompt/stories/*.jsonl"]
+solveig = [
+    "system_prompt/stories/*.jsonl",
+    # The served web SPA — vite's build output, `server.py` serves it from
+    # `static/`. Ships in the wheel so a web install needs nothing built.
+    "interface/web/static/*",
+    "interface/web/static/assets/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -182,7 +193,9 @@ name = "Every solveig.interface module is placed"
 type = "layers"
 containers = ["solveig.interface"]
 exhaustive = true
-layers = ["tui", "base", "themes"]
+# `wire` imports `base` (the protocol) and is imported by nothing internal yet —
+# it sits beside the frontends, speaking the same ABC.
+layers = ["tui", "web", "wire", "base", "themes"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface.base module is placed"

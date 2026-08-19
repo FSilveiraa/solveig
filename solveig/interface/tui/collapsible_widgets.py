@@ -336,13 +336,13 @@ class CollapsibleTextBox(TextBox):
             content, title=title, collapsed=collapsed, italic=italic
         )
 
-    def append(self, text: str) -> None:
+    async def append(self, text: str) -> None:
         self.widget.update_content(f"{self.widget.content}\n{text.rstrip('\n')}")
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         self.widget.update_content("")
 
-    def replace(self, text: str) -> None:
+    async def replace(self, text: str) -> None:
         self.widget.update_content(text)
 
 
@@ -367,7 +367,7 @@ class CollapsibleDiffBox(DiffBox):
         self._old_content = old_content
         self._new_content = new_content
 
-    def replace(self, old_content: str, new_content: str) -> None:
+    async def replace(self, old_content: str, new_content: str) -> None:
         """Replace both sides of the diff. Re-computes and re-renders."""
         self._old_content = old_content
         self._new_content = new_content

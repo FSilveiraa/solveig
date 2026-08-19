@@ -62,13 +62,13 @@ class _MockTextBox(TextBox):
     def __init__(self, outputs: list[str]) -> None:
         self._outputs = outputs
 
-    def append(self, text: str) -> None:
+    async def append(self, text: str) -> None:
         self._outputs.append(text.rstrip())
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         self._outputs.append("[TextBox cleared]")
 
-    def replace(self, text: str) -> None:
+    async def replace(self, text: str) -> None:
         self._outputs.append(text)
 
 
@@ -79,7 +79,7 @@ class _MockDiffBox(DiffBox):
         self._outputs = outputs
         self._title = title
 
-    def replace(self, old_content: str, new_content: str) -> None:
+    async def replace(self, old_content: str, new_content: str) -> None:
         title_str = f" ({self._title})" if self._title else ""
         self._outputs.append(f"DIFF{title_str}: {old_content} → {new_content}")
 
@@ -133,11 +133,11 @@ class _MockTreeBox(TreeBox):
         self._outputs = outputs
         self._title = title
 
-    def replace(self, metadata) -> None:
+    async def replace(self, metadata) -> None:
         self._outputs.append(f"Tree: {self._title}")
         self._outputs.append(json.dumps(_dump_field(metadata), default=str))
 
-    def refresh(self) -> None:
+    async def refresh(self) -> None:
         self._outputs.append(f"[Tree refreshed: {self._title}]")
 
 

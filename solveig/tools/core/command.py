@@ -140,7 +140,7 @@ class CommandTool(BaseTool[CommandConfig]):
                             if box is None and line.strip():
                                 box = await interface.add_text_box(line, title="Output")
                             elif box is not None:
-                                box.append(line)
+                                await box.append(line)
                         output, error = "".join(lines).strip(), execution.stderr
                         # A command may have cd'd. The Path stat reads the
                         # shell's cwd itself, so this only has to say "redraw"

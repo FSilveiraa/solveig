@@ -49,15 +49,15 @@ if TYPE_CHECKING:
 class TextBox(Protocol):
     """Editable text a caller keeps a handle on after the interface mounts it."""
 
-    def append(self, text: str) -> None:
+    async def append(self, text: str) -> None:
         """Append text to the end of the box."""
         ...
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Empty the box content."""
         ...
 
-    def replace(self, text: str) -> None:
+    async def replace(self, text: str) -> None:
         """Replace the entire content of the box."""
         ...
 
@@ -70,7 +70,7 @@ class DiffBox(Protocol):
     the old/new content to re-render with different inputs.
     """
 
-    def replace(self, old_content: str, new_content: str) -> None:
+    async def replace(self, old_content: str, new_content: str) -> None:
         """Replace both sides of the diff."""
         ...
 
@@ -86,11 +86,11 @@ class TreeBox(Protocol):
     exposes content replacement.
     """
 
-    def replace(self, metadata: FileMetadata) -> None:
+    async def replace(self, metadata: FileMetadata) -> None:
         """Replace the tree with new metadata."""
         ...
 
-    def refresh(self) -> None:
+    async def refresh(self) -> None:
         """Redraw the tree after an out-of-band mutation.
 
         The one member here a frontend may legitimately leave as a no-op: a
