@@ -20,7 +20,7 @@ async def test_defaults_and_nesting_dotted_flags():
     assert c.api.type.name == "openai"  # inferred default
     assert c.tools.command.enabled is True
     assert c.tools.http.maximum_response_size == 1024**3  # default is 1 GiB
-    assert c.session.dir == ".solveig/sessions"
+    assert c.session.path == ".solveig/sessions"
     assert c.prompt == "hello world"
     assert c.resume is None
 

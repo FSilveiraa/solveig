@@ -37,10 +37,10 @@ from solveig.config.models import (
     InterfaceConfig,
     MCPServerConfig,
     PluginsConfig,
-    PreservingSection,
+    PreservingConfigSection,
     SessionConfig,
     SystemPromptConfig,
-    _ComposedSection,
+    ComposedConfigSection,
 )
 from solveig.interface.themes import Palette
 from solveig.utils import dotted
@@ -153,7 +153,7 @@ def _compose_section(
     field_name: str,
     pairs: list[tuple[str, type]],
     model_name: str,
-    base: type[BaseModel] = _ComposedSection,
+    base: type[BaseModel] = ComposedConfigSection,
 ) -> None:
     """Build a composed model from (name, config_model) pairs and swap it into
     `target.<field_name>` — one field per entry, so adding a tool/hook needs
@@ -461,8 +461,10 @@ class SolveigConfig(BaseSettings):
             if isinstance(cfg, MCPServerConfig):
                 out[name] = cfg
             else:
-                rest = {k: val for k, val in dict(cfg).items() if k != "name"}
-                out[name] = MCPServerConfig(name=name, **rest)
+                # Re-create the MCP server config from a dict to a config model instance
+                mcp_config_nameless = dict(cfg)
+                mcp_config_nameless.pop("name")
+                out[name] = MCPServerConfig(name=name, **mcp_config_nameless)
         return out
 
     @model_validator(mode="after")
@@ -533,7 +535,7 @@ class SolveigConfig(BaseSettings):
         generic arg or FunctionTool.config_model), so plugin config validates
         like core config."""
         _compose_section(
-            PluginsConfig, "tools", pairs, "PluginToolsConfig", PreservingSection
+            PluginsConfig, "tools", pairs, "PluginToolsConfig", PreservingConfigSection
         )
         cls.model_rebuild(force=True)
 
@@ -547,7 +549,7 @@ class SolveigConfig(BaseSettings):
             "hooks",
             pairs,
             "PluginHooksConfig",
-            PreservingSection,
+            PreservingConfigSection,
         )
         cls.model_rebuild(force=True)
 
