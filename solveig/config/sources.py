@@ -24,7 +24,7 @@ LEGACY_KEY_MAP: dict[str, str] = {
     "http_max_response_bytes": "tools.http.maximum_response_size",
     "no_commands": "tools.command.enabled (inverted)",
     "auto_execute_commands": "tools.command.auto_execute",
-    "sessions_dir": "session.dir",
+    "sessions_dir": "session.path",
     "auto_save_session": "session.auto_save",
     "theme": "interface.tui.theme",
     "code_theme": "interface.tui.code_theme",
