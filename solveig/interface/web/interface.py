@@ -211,8 +211,10 @@ class WebInterface(SolveigInterface):
         #: A pending prompt, awaited by ask_question/ask_choice and resolved by
         #: the HTTP layer when the browser answers.
         self._pending: dict[str, asyncio.Future[str]] = {}
-        #: Open group ids, innermost last; tags an event's `group` field.
-        self._groups: list[str] = []
+        #: The group THIS interface represents. None for the root; a `_WebGroup`
+        #: sets it to its own id, so a `with_group` called HERE declares that as
+        #: its `parent`. It is the object's identity, never a stack position.
+        self._group_id: int | None = None
         self._status: str | None = None
         self._ready = asyncio.Event()
         self._server: uvicorn.Server | None = None
@@ -220,21 +222,25 @@ class WebInterface(SolveigInterface):
     # -- id + emit helpers ---------------------------------------------------
 
     def _emit(self, event: dict[str, Any]) -> None:
-        # Groups nest: an event emitted inside a group is tagged with the
-        # innermost open group so the browser can fold it correctly.
-        if self._groups:
-            event = {**event, "group": self._groups[-1]}
+        # Root-level emit: content emitted through the ROOT interface carries no
+        # group (it belongs to the transcript top level). Content drawn through
+        # a group reaches a `_WebGroup`, which pins its own id instead of using
+        # this path. No stack, no "innermost" — a group is an object you write
+        # to, never a position you happened to open last.
         self.stream.publish(event)
 
     @asynccontextmanager
     async def _scope(self, title: str, auto_collapse: bool = False):
         gid = next(self._ids)
-        self._groups.append(str(gid))
+        # `parent` is the group THIS interface represents — None for the root,
+        # this group's own id when `self` is a `_WebGroup`. It is WHO called
+        # with_group, not a stack peek, so a group opened inside a group pins
+        # its real parent even when sibling frames interleave.
+        parent = self._group_id
+        self._emit({"type": "group_start", "id": gid, "title": title, "parent": parent})
         try:
-            self._emit({"type": "group_start", "id": gid, "title": title})
             yield gid
         finally:
-            self._groups.pop()
             self._emit({"type": "group_end", "id": gid})
 
     # -- text ----------------------------------------------------------------
@@ -566,11 +572,34 @@ class _WebGroup(WebInterface):
     """
 
     def __init__(self, root: WebInterface, group_id: int) -> None:
-        super().__init__(stream=root.stream)
+        # Share the root's bus, id counter and registries; do NOT re-run
+        # WebInterface.__init__, which would mint a fresh counter and a fresh
+        # _message_actions the root's _resolve_action never consults. That
+        # isolation is the bug the wire _WireGroup's seam comment names: a
+        # message added inside the group would register its action closure in a
+        # dict the top of the app never reads, and its fresh id counter would
+        # collide with the root's. A group is a SCOPED VIEW of the root's
+        # screen, not a second interface with its own state.
         self._root = root
         self._gid = group_id
+        self._group_id = group_id
+        self._ids = root._ids
+        self._message_actions = root._message_actions
+        self._stats = root._stats
+        self._status = root._status
+        self._server = root._server
+        self._ready = root._ready
+        # Cancellation is shared too: a cancel issued anywhere must reach work
+        # started inside a group (same reasoning as the wire _WireGroup).
+        self._active_tasks = root._active_tasks
+        self.stream = root.stream
+        self.user_message_queue = root.user_message_queue
 
     def _emit(self, event: dict[str, Any]) -> None:
+        # This group's id is forced, not read off a shared stack: a nested or
+        # sibling caller holds THIS object, so ITS id travels. A `with_group`
+        # called on this group then declares `self._group_id` as the child's
+        # parent — object identity, the wire's `parent` linkage.
         event = {**event, "group": self._gid}
         self.stream.publish(event)
 
