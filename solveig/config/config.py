@@ -33,6 +33,7 @@ from solveig.api.types import APIType
 from solveig.config import DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
     ApiConfig,
+    ComposedConfigSection,
     CoreToolsConfig,
     InterfaceConfig,
     MCPServerConfig,
@@ -40,7 +41,6 @@ from solveig.config.models import (
     PreservingConfigSection,
     SessionConfig,
     SystemPromptConfig,
-    ComposedConfigSection,
 )
 from solveig.interface.themes import Palette
 from solveig.utils import dotted
@@ -463,7 +463,7 @@ class SolveigConfig(BaseSettings):
             else:
                 # Re-create the MCP server config from a dict to a config model instance
                 mcp_config_nameless = dict(cfg)
-                mcp_config_nameless.pop("name")
+                mcp_config_nameless.pop("name", None)
                 out[name] = MCPServerConfig(name=name, **mcp_config_nameless)
         return out
 

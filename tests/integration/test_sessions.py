@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.anyio, pytest.mark.no_file_mocking]
 
 
 def make_manager(tmp_path):
-    cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), session={"dir": str(tmp_path / "sessions")})
+    cfg = SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), session={"path": str(tmp_path / "sessions")})
     return SessionManager(config=cfg, conversation=Conversation()), cfg
 
 

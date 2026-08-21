@@ -3,7 +3,6 @@ from __future__ import annotations
 import fnmatch
 import re
 import shlex
-from os import PathLike
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
@@ -20,7 +19,6 @@ import solveig.interface.themes as themes
 from solveig.api.types import APIType, OpenAI, resolve_api_type
 from solveig.config import DEFAULT_SYSTEM_PROMPT
 from solveig.utils.file import Filesystem
-
 
 # Model configs - used by pydantic to inform model validation
 # Forces model re-validation on re-assignment and allows arbitrary types
@@ -40,7 +38,7 @@ _MUTABLE_ALLOW = ConfigDict(
     # Used for the composed `plugins.tools` section so a config file's block for a
     # missing plugin still gets exported through `/config save` instead of being dropped
     # (which would strip a teammate's plugin config on a machine lacking that plugin)
-    extra="allow"
+    extra="allow",
 )
 # TODO: review CLI behavior on init when setting plugin (and other) flags
 
@@ -58,6 +56,7 @@ class ConfigSection(BaseModel):
     Ensures fields accept arbitrary types and validate the pydantic model
     on re-assignment
     """
+
     model_config = _MUTABLE
 
 
@@ -98,6 +97,7 @@ class PreservingConfigSection(ComposedConfigSection):
 
 class ApiConfig(ConfigSection):
     """API configuration"""
+
     url: str = Field(default="", description="LLM API endpoint URL")
     type: APIType = Field(
         default_factory=OpenAI,
@@ -122,7 +122,9 @@ class ApiConfig(ConfigSection):
         default=None,
         description="LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
     )
-    temperature: float = Field(default=0.0, description="Model temperature (0.0 to 2.0)")
+    temperature: float = Field(
+        default=0.0, description="Model temperature (0.0 to 2.0)"
+    )
     max_context: int = Field(
         default=-1, description="Max context window in tokens (-1 = model's limit)"
     )
@@ -158,6 +160,7 @@ class PluginHooksConfig(PreservingConfigSection):
 
 class SystemPromptConfig(ConfigSection):
     """The system-prompt category (distinct from top-level `briefing`)."""
+
     # TODO: review briefing config, confirm whether integration into this section would make sense
 
     content: str = Field(
@@ -178,8 +181,7 @@ class PluginsConfig(ConfigSection):
 
     # Directories where to discover plugins
     paths: list[str] = Field(
-        default_factory=list,
-        description="Plugin discovery directories"
+        default_factory=list, description="Plugin discovery directories"
     )
     # Plugin sub-sections
     # TODO: review plugin config structure, does the tools/hooks distinction still make sense,
@@ -196,9 +198,11 @@ class PluginsConfig(ConfigSection):
         so a `/plugins reload` after the assistant moved still scans the directories
         the user meant.
         """
-        return [
-            str(Filesystem.get_absolute_path(path)) for path in _init_paths
-        ] if _init_paths else []
+        return (
+            [str(Filesystem.get_absolute_path(path)) for path in _init_paths]
+            if _init_paths
+            else []
+        )
 
 
 class MCPServerConfig(ConfigSection):
@@ -210,6 +214,7 @@ class MCPServerConfig(ConfigSection):
     of the server's tools announced to the agent (`<name>_<tool>`).
 
     """
+
     # TODO: review `name` with `exclude=True`, reasoning makes sense, but deserves revisiting
     #  and at least pinning with a test. In which situations is an MCP config even disagreeing
     #  about being dict vs model? Is re-deriving an MCP server's name a necessary thing?
@@ -277,8 +282,10 @@ class MCPServerConfig(ConfigSection):
 
 class SessionConfig(ConfigSection):
     """Config section for the session manager."""
+
     path: str = Field(
-        default=".solveig/sessions/", description="Directory for stored sessions"
+        default=".solveig/sessions/",
+        description="Directory for stored sessions",
         # TODO: consider renaming, "path" sounds like it could name a single file.
         #  Maybe it should be an acceptable edge case: if the user names a session file,
         #  use that as the single session, otherwise use it as a session storage dir
@@ -325,7 +332,8 @@ class TuiConfig(ConfigSection):
         ),
     )
     diff_context_lines: int = Field(
-        default=3, description="Unchanged lines to keep around each diff hunk"
+        default=3,
+        description="Unchanged lines to keep around each diff hunk",
         # TODO: rename, possibly move to high-level config or simply have the tools that care
         #  about diffs define how much context to show
     )
@@ -337,7 +345,11 @@ class TuiConfig(ConfigSection):
     @field_validator("theme", mode="before")
     @classmethod
     def _parse_theme(cls, _theme_name: Any) -> Any:
-        return themes.THEMES[_theme_name.strip().lower()] if isinstance(_theme_name, str) else _theme_name
+        return (
+            themes.THEMES[_theme_name.strip().lower()]
+            if isinstance(_theme_name, str)
+            else _theme_name
+        )
 
     @field_serializer("theme")
     def _serialize_theme(self, _theme: themes.Palette) -> str:
@@ -359,11 +371,12 @@ class BroadcastConfig(ConfigSection):
     When enabled (default), allows the agent to run in a daemon in the background,
     using the BroadcastInterface to handle concurrent connections over a single session
     """
+
     enabled: bool = Field(
         default=True,
-        description="Run agent as daemon, broadcast to connected interfaces"
+        description="Run agent as daemon, broadcast to connected interfaces",
     )
-    socket: PathLike = "/tmp/solveig.socket"
+    socket: str = "/tmp/solveig.socket"
     # timeout: int = Field(default=30)
     # TODO: consider whether a timeout makes sense for the broadcast interface
 
@@ -375,8 +388,7 @@ class InterfaceConfig(ConfigSection):
     """
 
     auto_collapse_tools: bool = Field(
-        default=True,
-        description="Auto-collapse tool groups after approval"
+        default=True, description="Auto-collapse tool groups after approval"
     )
     broadcast: BroadcastConfig = Field(default_factory=BroadcastConfig)
     tui: TuiConfig = Field(default_factory=TuiConfig)
