@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 
 class MissingPath(KeyError):
     """A dotted path did not resolve. Carries the path and the segment that
@@ -75,7 +77,7 @@ def split(path: str) -> tuple[list[str], str]:
     return parents, leaf
 
 
-def owner_of(root: Any, path: str) -> tuple[Any, str]:
+def owner_of(root: BaseModel, path: str) -> tuple[BaseModel, str]:
     """The object holding `path`'s leaf, and the leaf name. Raises
     `AttributeError` if an intermediate segment is missing - use `resolves` when
     absence is an expected answer rather than an error."""

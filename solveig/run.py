@@ -310,10 +310,7 @@ async def run_async(
     # replaced, because the price and context stats read that. Dependency order,
     # as ever - nothing is wired after the fact.
     if interface is None:
-        interface = TerminalInterface(
-            user_message_queue=user_message_queue,
-            config=config,
-        )
+        interface = TerminalInterface(config, user_message_queue)
     else:
         # Test/demo code injected an interface it already constructed - wire
         # its output channel to the session queue.

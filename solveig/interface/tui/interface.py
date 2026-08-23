@@ -31,6 +31,7 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Collapsible, Markdown
 
+from solveig.config import SolveigConfig
 from solveig.config.models import TuiConfig
 from solveig.interface.base import (
     DiffBox,
@@ -311,11 +312,10 @@ class TerminalInterface(TerminalDisplay):
 
     def __init__(
         self,
-        user_message_queue: UserMessageQueue | None = None,
-        config=None,
-        **kwargs,
+        config: SolveigConfig,
+        user_message_queue: UserMessageQueue,
     ) -> None:
-        super().__init__()
+        super().__init__(config, user_message_queue)
         self.user_message_queue = user_message_queue
         self._root = self
         # Every startup value comes out of `config`, never out of a constructor
@@ -342,26 +342,23 @@ class TerminalInterface(TerminalDisplay):
             interface_ref=self,
             config=config,
             user_message_queue=user_message_queue,
-            **kwargs,
         )
 
-        if config is not None:
+        @self.config.on_change("interface.tui.theme")
+        async def _on_theme(config, paths):
+            self.set_theme(config.interface.tui.theme)
 
-            @config.on_change("interface.tui.theme")
-            async def _on_theme(config, paths):
-                self.set_theme(config.interface.tui.theme)
+        @self.config.on_change("interface.tui.code_theme")
+        async def _on_code_theme(config, paths):
+            self.set_code_theme(config.interface.tui.code_theme)
 
-            @config.on_change("interface.tui.code_theme")
-            async def _on_code_theme(config, paths):
-                self.set_code_theme(config.interface.tui.code_theme)
-
-            @config.on_change("interface.auto_collapse_tools")
-            async def _on_auto_collapse(config, paths):
-                # Only groups that close AFTER this. A group the user is reading
-                # right now must not snap shut under them, and one they opened by
-                # hand must not be re-folded — the setting is a default, not a
-                # command to redraw.
-                self.auto_collapse_tools = config.interface.auto_collapse_tools
+        @self.config.on_change("interface.auto_collapse_tools")
+        async def _on_auto_collapse(config, paths):
+            # Only groups that close AFTER this. A group the user is reading
+            # right now must not snap shut under them, and one they opened by
+            # hand must not be re-folded — the setting is a default, not a
+            # command to redraw.
+            self.auto_collapse_tools = config.interface.auto_collapse_tools
 
         # CLI prompt serialization: one visible prompt at a time (a terminal
         # constraint — the protocol leaves this policy to the frontend).
@@ -516,7 +513,7 @@ class GroupInterface(TerminalDisplay):
         # NOTE: everything SolveigInterface.__init__ seeds has to be re-pointed
         # at the root below, or a group silently gets its own empty copy. That
         # is how `user_message_queue` went missing once already.
-        super().__init__()
+        super().__init__(root.config, root.user_message_queue)
         self._root = root
         self.app = root.app
         self.user_message_queue = root.user_message_queue

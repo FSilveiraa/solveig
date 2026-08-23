@@ -31,6 +31,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
+from solveig.config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -114,12 +115,10 @@ class WireInterface(SolveigInterface):
 
     def __init__(
         self,
+        config: SolveigConfig,
         user_message_queue: UserMessageQueue | None = None,
-        socket_path: str = "/tmp/solveig.sock",
     ) -> None:
-        super().__init__()
-        self.user_message_queue = user_message_queue
-        self._socket_path = socket_path
+        super().__init__(config, user_message_queue)
         self._server: asyncio.AbstractServer | None = None
         self._writers: set[asyncio.StreamWriter] = set()
         #: Every frame published, in order, so a client that connects late is
@@ -142,12 +141,26 @@ class WireInterface(SolveigInterface):
         self._group_id: int | None = None
         self._ready = asyncio.Event()
 
+        # Register a callback for whenever any interface config fields change
+        # that broadcasts it to all connected interfaces
+        @self.config.on_change("interface")
+        def on_config_update(_config: SolveigConfig, changed_paths: frozenset[str]):
+            self._publish({
+                "type": "config_update",
+                "updates": {
+                    # get the string representation of the field, not its object
+                    path: _config.get(path, as_field=True)
+                    for path in changed_paths
+                }
+            })
+
+
     # -- transport -----------------------------------------------------------
 
     async def start(self) -> None:
         """Bind the socket and serve clients until `stop()`."""
         self._server = await asyncio.start_unix_server(
-            self._on_connect, self._socket_path
+            self._on_connect, self.config.interface.broadcast.socket
         )
         self._ready.set()
         try:

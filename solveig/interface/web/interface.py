@@ -51,6 +51,7 @@ from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
 from .bus import EventStream
+from ...config import SolveigConfig
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -197,11 +198,11 @@ class WebInterface(SolveigInterface):
 
     def __init__(
         self,
-        user_message_queue: UserMessageQueue | None = None,
-        config=None,
+        config: SolveigConfig,
+        user_message_queue: UserMessageQueue,
         stream: EventStream | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(config, user_message_queue)
         self.user_message_queue = user_message_queue
         self.web = config.interface.web if config is not None else WebConfig()
         self.stream = stream or EventStream()

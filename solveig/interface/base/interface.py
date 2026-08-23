@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from anyio import CancelScope
 
+from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base.actions import MessageActions, Role
 from solveig.interface.base.widgets import DiffBox, MessageBox, TextBox, TreeBox
@@ -138,9 +139,10 @@ class SolveigInterface(ABC):
     e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config: SolveigConfig, user_message_queue: UserMessageQueue) -> None:
+        self.config: SolveigConfig = config
+        self.user_message_queue: UserMessageQueue = user_message_queue
         self._active_tasks: dict[CancelScope, None] = {}
-        self.user_message_queue: UserMessageQueue | None = None
 
     # -- theming (no-op defaults, override per frontend) ---------------------
 

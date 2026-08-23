@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import re
 import sys
 import typing
@@ -104,7 +105,7 @@ def _split_config_path_from_cli_args(
 
 
 # An async callback (config, changed_paths) — registered via @config.on_change.
-ConfigObserver = Callable[["SolveigConfig", frozenset[str]], Awaitable[None]]
+ConfigObserver = Callable[["SolveigConfig", frozenset[str]], Awaitable[None] | None]
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
@@ -274,7 +275,7 @@ class SolveigConfig(BaseSettings):
     # Config change observers — @config.on_change(*paths) decorator
     # ------------------------------------------------------------
 
-    async def notify_changed(self, paths: frozenset[str]) -> None:
+    async def _notify_changed(self, paths: frozenset[str]) -> None:
         """Notify all observers, filtered by registered config path.
 
         NOTE: iterates a COPY — a handler is allowed to register another
@@ -310,7 +311,9 @@ class SolveigConfig(BaseSettings):
             )
             if paths_to_notify:
                 try:
-                    await handler(self, paths_to_notify)
+                    _coroutine = handler(self, paths_to_notify)
+                    if asyncio.iscoroutine(_coroutine):
+                        await _coroutine
                 except Exception as e:  # noqa: BLE001 - isolation, see above
                     failures.append(e)
         if failures:
@@ -357,9 +360,27 @@ class SolveigConfig(BaseSettings):
                 out.setdefault(name, []).extend(missing)
         return out
 
-    def get(self, path: str) -> Any:
-        obj, leaf = dotted.owner_of(self, path)
-        return getattr(obj, leaf)
+    def get(self, path: str, *, as_field: bool = False) -> Any:
+        """
+        Find a config field given its path.
+
+        Some config objects are complex to serialize (like Palette which is an object,
+        serialized to/from single theme name). A caller that received an object and
+        wanted its field representation would have to be aware of pydantic serialization
+        intricacies, so that choice lives on `as_field` using `@field_serializer` as the
+        single source of truth for serialized representation.
+
+        :param path: The dotted path for the target field
+        :param as_field: Whether to return the target as its config object or serialized representation
+        :return: The target object in the config at `path`
+        """
+        owner, leaf = dotted.owner_of(self, path)
+        if not as_field:
+            return getattr(owner, leaf)
+        # Serialize the owner object, return the target
+        dumped = owner.model_dump(mode="json", include={leaf})
+        return dumped[leaf]
+
 
     async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
         """The single user-edit write seam.  Record in *_declared_fields* and — when
@@ -374,7 +395,7 @@ class SolveigConfig(BaseSettings):
             return False
         self._declared_fields.add(path)
         if notify:
-            await self.notify_changed(frozenset({path}))
+            await self._notify_changed(frozenset({path}))
         return True
 
     # ------------------------------------------------------------

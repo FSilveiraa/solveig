@@ -377,6 +377,7 @@ class BroadcastConfig(ConfigSection):
         description="Run agent as daemon, broadcast to connected interfaces",
     )
     socket: str = "/tmp/solveig.socket"
+    # TODO: make PathLike, see config path fields
     # timeout: int = Field(default=30)
     # TODO: consider whether a timeout makes sense for the broadcast interface
 

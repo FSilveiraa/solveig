@@ -59,10 +59,10 @@ class WireClient:
     """Connects a concrete `SolveigInterface` to a daemon's wire socket."""
 
     def __init__(
-        self, interface: SolveigInterface, socket_path: str = "/tmp/solveig.sock"
+        self, interface: SolveigInterface
     ) -> None:
         self.interface = interface
-        self._socket_path = socket_path
+        # self._socket_path = socket_path
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         #: Server handle id -> the real box the interface handed back.
@@ -80,7 +80,7 @@ class WireClient:
 
     async def start(self) -> None:
         self._reader, self._writer = await asyncio.open_unix_connection(
-            self._socket_path
+            self.interface.config.interface.broadcast.socket
         )
         try:
             while line := await self._reader.readline():
@@ -142,6 +142,8 @@ class WireClient:
             await self._on_group_end(frame)
         elif ftype == "refresh_stats":
             self.interface.refresh_stats()
+        elif ftype == "config_update":
+            await self._on_config_update(frame)
         # Unknown types are IGNORED — the forward-compat law of the format.
 
     def _target(self, frame: dict[str, Any]) -> SolveigInterface:
@@ -275,6 +277,10 @@ class WireClient:
         if task is not None:
             task.cancel()
 
+    async def _on_config_update(self, frame: dict[str, Any]) -> None:
+        """Change the interface's own config based on the received update."""
+        for path, value in frame.get("updates", {}).items():
+            await self.interface.config.set(path, value)
 
 class _GroupScope:
     """One open group on the client: the real interface's with_group entered.
