@@ -105,6 +105,20 @@ class _WireMessageBox(MessageBox, _WireBox):
 # --------------------------------------------------------------------------- #
 
 
+class _WireState:
+    server: asyncio.AbstractServer
+    # Connected client interfaces
+    writers: set[asyncio.StreamWriter] = set()
+    # List of published (sent) frames, allowing later replay
+    history: list[dict[str, Any]] = []
+    # Dict of frame ID to
+    message_actions: dict[int, MessageActions] = {}
+    ids: itertools.count[int] = itertools.count(1)
+    active_tasks: dict[]
+    # TODO should this still exist?
+    ready: asyncio.Event = asyncio.Event()
+
+
 class WireInterface(SolveigInterface):
     """A SolveigInterface whose screen is every connected client socket.
 
@@ -116,7 +130,7 @@ class WireInterface(SolveigInterface):
     def __init__(
         self,
         config: SolveigConfig,
-        user_message_queue: UserMessageQueue | None = None,
+        user_message_queue: UserMessageQueue,
     ) -> None:
         super().__init__(config, user_message_queue)
         self._server: asyncio.AbstractServer | None = None
@@ -532,7 +546,7 @@ class _WireGroup(WireInterface):
         object.__setattr__(self, "user_message_queue", root.user_message_queue)
         self._root = root
         #: This group's own id — what a `with_group` called HERE nests inside.
-        self._gid = group_id
+        self._group_id = group_id
         self._server = root._server
         self._writers = root._writers
         self._ids = root._widget_id
@@ -543,7 +557,7 @@ class _WireGroup(WireInterface):
     def _publish(self, frame: dict[str, Any]) -> None:
         # The group is forced, not read off a shared stack: a nested or sibling
         # caller holds THIS object, so ITS id is the one that travels.
-        self._root._publish({**frame, "group": self._gid})
+        self._root._publish({**frame, "group": self._group_id})
 
     async def set_status(self, status, duration=None) -> None:
         await self._root.set_status(status, duration)

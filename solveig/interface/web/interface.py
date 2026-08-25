@@ -203,8 +203,6 @@ class WebInterface(SolveigInterface):
         stream: EventStream | None = None,
     ) -> None:
         super().__init__(config, user_message_queue)
-        self.user_message_queue = user_message_queue
-        self.web = config.interface.web if config is not None else WebConfig()
         self.stream = stream or EventStream()
         self._ids: itertools.count[int] = itertools.count(1)
         self._message_actions: dict[int, MessageActions] = {}
@@ -447,7 +445,7 @@ class WebInterface(SolveigInterface):
         the foreground by run_async) exactly as Textual's event loop does."""
         from .server import serve
 
-        await serve(self, self.web.host, self.web.port)
+        await serve(self, self.config.interface.web.host, self.config.interface.web.port)
 
     async def stop(self) -> None:
         if self._server is not None:
@@ -582,7 +580,6 @@ class _WebGroup(WebInterface):
         # collide with the root's. A group is a SCOPED VIEW of the root's
         # screen, not a second interface with its own state.
         self._root = root
-        self._gid = group_id
         self._group_id = group_id
         self._ids = root._ids
         self._message_actions = root._message_actions
@@ -601,7 +598,7 @@ class _WebGroup(WebInterface):
         # sibling caller holds THIS object, so ITS id travels. A `with_group`
         # called on this group then declares `self._group_id` as the child's
         # parent — object identity, the wire's `parent` linkage.
-        event = {**event, "group": self._gid}
+        event = {**event, "group": self._group_id}
         self.stream.publish(event)
 
     async def set_status(self, status, duration=None) -> None:

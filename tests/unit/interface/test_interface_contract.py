@@ -284,7 +284,7 @@ async def test_frontend_policy_gates_the_callers_intent():
         area.exit_group = AsyncMock()
         interface.app = MagicMock(_conversation_area=area)
 
-        async with interface.with_group("t", auto_collapse=tool_intent):
+        async with interface.with_group("t", collapse_when_done=tool_intent):
             pass
         return area.exit_group.await_args.kwargs["auto_collapse"]
 

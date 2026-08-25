@@ -144,16 +144,6 @@ class SolveigInterface(ABC):
         self.user_message_queue: UserMessageQueue = user_message_queue
         self._active_tasks: dict[CancelScope, None] = {}
 
-    # -- theming (no-op defaults, override per frontend) ---------------------
-
-    def set_theme(self, theme: Palette) -> None:
-        """Re-theme the live interface. No-op default; concrete UIs override."""
-        return None
-
-    def set_code_theme(self, code_theme: str) -> None:
-        """Update the pygments theme. No-op default; concrete UIs override."""
-        return None
-
     # -- cancellation (protocol-level, concrete) -----------------------------
 
     def get_active_tasks(self) -> dict[CancelScope, None]:
@@ -399,7 +389,7 @@ class SolveigInterface(ABC):
     @asynccontextmanager
     @abstractmethod
     async def with_group(
-        self, title: str, auto_collapse: bool = False
+        self, title: str, collapse_when_done: bool = True
     ) -> AsyncGenerator[SolveigInterface, Any]:
         """Context manager for grouping related output. Yields a
         SolveigInterface scoped to this group — local calls land inside the

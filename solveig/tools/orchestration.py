@@ -54,7 +54,7 @@ def open_tool_group(
     interface: SolveigInterface,
     title: str,
     *,
-    auto_collapse: bool = True,
+    collapse_when_done: bool = True,
 ):
     """Open a tool call's collapsible group, passing the caller's INTENT.
 
@@ -65,7 +65,7 @@ def open_tool_group(
     display setting, and a tool deciding how a terminal draws is the leak this
     seam exists to prevent. The single place the group convention lives for both
     the typed and untyped execution paths below."""
-    return interface.with_group(title, auto_collapse=auto_collapse)
+    return interface.with_group(title=title, collapse_when_done=collapse_when_done)
 
 
 async def run_tool_and_hooks(
@@ -96,7 +96,7 @@ async def run_tool_and_hooks(
     async with open_tool_group(
         interface,
         instance.title,
-        auto_collapse=instance.auto_collapse,
+        collapse_when_done=instance.auto_collapse,
     ) as group:
         # Intent first (file header, command text, URL) so a @before hook's
         # prompt appears with the operation already visible above it.
@@ -304,6 +304,7 @@ async def replay_tool_call(
     """
     result = ToolResult(content=return_part.content, private=return_part.metadata or {})
 
+    instance = None
     if tool_cls is not None:
         try:
             instance = tool_cls.model_validate(call.args_as_dict())
@@ -314,9 +315,9 @@ async def replay_tool_call(
     # the result body is folded away by default (same as a live run finishing
     # under the default auto_collapse_tools) - the user expands what they want.
     if tool_cls is None:
-        async with interface.with_group(call.tool_name, auto_collapse=True) as group:
+        async with interface.with_group(call.tool_name, collapse_when_done=True) as group:
             await result.display_content(group)
         return
 
-    async with interface.with_group(instance.title, auto_collapse=True) as group:
+    async with interface.with_group(instance.title, collapse_when_done=True) as group:
         await instance.replay(group, result)
