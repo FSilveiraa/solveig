@@ -6,7 +6,7 @@ render (`print`, `display_*`, `add_*`), ask (`ask_*`), scope (`with_group`),
 work (`with_cancellable`), and theming. It also carries two
 concerns every interactive frontend shares — the user-message queue (the
 interface's output channel for typed input) and cancellation
-(`with_cancellable` + the `_active_tasks` registry + `cancel_task`). Command
+(`with_cancellable` + the `_tasks`/`_children` tree + `cancel_task`). Command
 dispatch lives OUTSIDE the interface — the queue's prompt gate routes
 /commands before insertion.
 
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
@@ -38,7 +38,6 @@ from solveig.utils.file import FileMetadata
 if TYPE_CHECKING:
     from os import PathLike
 
-    from solveig.interface.themes import Palette
     from solveig.user_message_queue import UserMessageQueue
 
 
@@ -130,52 +129,143 @@ class SolveigInterface(ABC):
     - **User-message queue** (`user_message_queue`) - the interface's output
       channel for typed input. The interface `put`s; the queue's prompt gate
       decides what actually lands (prompts vs swallowed /commands).
-    - **Cancellation** (`with_cancellable`, the `_active_tasks`
-      registry, `cancel_task`, `get_active_tasks`) - every interactive UI has
-      both a targeted cancel (a button) and a global untargeted one (Esc,
-      Ctrl+C), so the registry and the verb live here.
+    - **Cancellation** (`with_cancellable`, the `_tasks`/`_children` tree,
+      `cancel_task`, `get_active_tasks`) - every interactive UI has both a
+      targeted cancel (a button) and a global untargeted one (Esc, Ctrl+C), so
+      the registry and the verb live here. Work belongs to the interface it
+      started on, so cancelling is addressed by WHICH ONE you call it on.
 
     What is NOT here: prompt serialization policy (each frontend's own,
     e.g. the CLI's `_choice_lock`) and command dispatch (the queue gate's).
     """
 
-    def __init__(self, config: SolveigConfig, user_message_queue: UserMessageQueue) -> None:
+    def __init__(
+        self, config: SolveigConfig, user_message_queue: UserMessageQueue
+    ) -> None:
         self.config: SolveigConfig = config
         self.user_message_queue: UserMessageQueue = user_message_queue
-        self._active_tasks: dict[CancelScope, None] = {}
+        #: Cancellable work started on THIS interface. A group owns its own,
+        #: so cancelling addresses a receiver instead of searching one shared
+        #: list for "whose is this".
+        self._tasks: set[CancelScope] = set()
+        #: The interface this one was opened under; None on a root. The only
+        #: group fact the contract keeps, because the contract USES it - `root`
+        #: derives from it and the cancellation tree hangs off it. What a group
+        #: is CALLED is not here: a frontend already holds the group as `self`,
+        #: so it can use its own title, its own id, or its own widget, and the
+        #: contract has no business guessing which of those identifies it.
+        self._parent: SolveigInterface | None = None
+        #: Groups open under this one. `with_group` adds on entry and discards
+        #: in its teardown, so membership is exactly a group's lifetime — which
+        #: is what lets `cancel_task()` reach into it.
+        self._children: set[SolveigInterface] = set()
+
+    @property
+    def root(self) -> SolveigInterface:
+        return self._parent.root if self._parent is not None else self
 
     # -- cancellation (protocol-level, concrete) -----------------------------
 
-    def get_active_tasks(self) -> dict[CancelScope, None]:
-        """The in-flight cancellable tasks, registration-ordered. Empty is
-        falsy, so `if interface.get_active_tasks():` is the busy check.
+    def get_active_tasks(self) -> set[CancelScope]:
+        """This interface's in-flight work, plus everything running inside the
+        groups open under it. Empty is falsy, so
+        `if interface.get_active_tasks():` is still the busy check.
 
         NOTE: a "task" here is a unit of work the user started, and the handle
         for it is the `CancelScope` that block runs under - NOT an
         `asyncio.Task`. The protocol keeps the domain word deliberately: what a
         frontend needs to know is that something cancellable is in flight, and
-        which async primitive expresses that is not its business."""
-        return self._active_tasks
+        which async primitive expresses that is not its business.
 
-    def cancel_task(self, task: CancelScope | None = None) -> bool:
-        """Cancel one in-flight task: the GIVEN one (a per-task ✕ button), or
-        the LATEST registered when None (Esc/Ctrl+C - an untargeted keystroke
-        can only mean "the most recent thing"). Same verb at both targeting
-        resolutions, like list.pop() with and without an index."""
-        candidates = [task] if task is not None else reversed(list(self._active_tasks))
-        for scope in candidates:
-            if scope is not None and not scope.cancel_called:
+        NOTE: a SET, not an ordered mapping. Registration order carries no
+        meaning, and any rule that read one would be inferring which task the
+        user meant instead of being told."""
+        return self._tasks | {
+            task for child in self._children for task in child.get_active_tasks()
+        }
+
+    def cancel_task(self, *tasks: CancelScope) -> bool:
+        """Cancel the given tasks, or everything under THIS interface when none
+        are given. True if anything was actually cancelled.
+
+        NOTE: the address is the RECEIVER. `group.cancel_task()` stops that
+        group's work; `root.cancel_task()` stops the run. Nothing is inferred -
+        not from nesting depth, not from registration order, not by searching a
+        shared list. Same rule `with_group` follows: the object you are holding
+        IS the thing you are talking about.
+
+        Cancellation reaches DOWNWARD only. An interface cancels itself and the
+        groups inside it, and can never reach its parent - a tool has no
+        business stopping what contains it.
+
+        NOTE: which task an untargeted keystroke means is the frontend's own
+        business, because only it knows what has focus. This does not guess."""
+        cancelled = False
+        for scope in tasks or self.get_active_tasks():
+            if not scope.cancel_called:
                 scope.cancel()
-                return True
-        return False
+                cancelled = True
+        return cancelled
 
     @asynccontextmanager
-    async def with_cancellable(
+    async def _cancellable(
+        self, animation: AbstractAsyncContextManager[Any] | None = None
+    ) -> AsyncGenerator[CancelScope]:
+        """The ONE place a block becomes cancellable work on this interface:
+        open a scope, register it, run under it, unregister, and report a
+        cancel as `UserCancel`. `with_cancellable` and both prompts are this
+        with and without an animation, so the rules below are written once.
+
+        `animation` is held open AROUND the scope rather than around this whole
+        block, and that interleaving is load-bearing in both directions.
+        Registration comes FIRST because a frontend deciding whether to offer a
+        cancel hint reads `get_active_tasks()` while starting the animation -
+        registering after would make the hint silently never appear. The scope
+        is entered INSIDE it because a cancelled scope raises at every
+        subsequent await within it: were the animation's teardown inside the
+        scope, its own `await set_status(...)` would be cancelled too and the
+        status line would keep showing the cancelled work's status forever.
+        Two nested context managers cannot express that, which is why the
+        animation arrives as an argument instead of wrapping the call.
+
+        None for a prompt. A prompt is a WAIT, not work: it is already on
+        screen saying what it is, and a spinner over it would claim something
+        is running.
+        """
+        scope = CancelScope()
+        # On THIS interface, not the root's: work opened inside a group is that
+        # group's, so `group.cancel_task()` reaches it.
+        self._tasks.add(scope)
+        try:
+            async with animation if animation is not None else nullcontext():
+                with scope:
+                    yield scope
+        finally:
+            self._tasks.discard(scope)
+        if scope.cancel_called:
+            raise UserCancel()
+
+    @asynccontextmanager
+    @abstractmethod
+    async def _animate(
+        self,
+        status: str = "Processing",
+        final_status: str | None = None,
+        timeout: float | None = None,
+    ) -> AsyncGenerator[None]:
+        """Context manager for displaying animation during async operations.
+
+        NOTE: no cancel-hint argument. A frontend that wants to say how to stop
+        the work reads `get_active_tasks()` - registration is the fact, and the
+        wording is the frontend's own business."""
+        yield  # pragma: no cover - makes this a valid generator
+
+    def with_cancellable(
         self,
         status: str,
         final_status: str | None = None,
         timeout: float | None = None,
-    ) -> AsyncGenerator[CancelScope]:
+    ) -> AbstractAsyncContextManager[CancelScope]:
         """Run this BLOCK as busy, user-cancellable work: show `status` while it
         runs, and let a cancel stop it wherever it has got to.
 
@@ -195,46 +285,21 @@ class SolveigInterface(ABC):
         also keeps ONE cancellation vocabulary - a cancelled prompt already
         raises UserCancel, and `agent.py` already treats the two as one thing.
 
-        NOTE: the scope is created and REGISTERED before the animation starts,
-        and only entered inside it. Both halves of that are load-bearing.
-        Registration first, because a frontend deciding whether to offer a
-        cancel hint reads `get_active_tasks()` while starting the animation -
-        registering after would make the hint silently never appear. Entered
-        inside, because a cancelled scope raises at every subsequent await
-        within it: were the animation's teardown inside the scope, its own
-        `await set_status(...)` would be cancelled too and the status line
-        would keep showing the cancelled work's status forever.
+        The registration/animation/scope ordering this depends on lives in
+        `_cancellable`, along with why it cannot be written as nesting.
 
         NOTE: what the trigger is CALLED is not protocol. Registering the scope
         already tells the frontend this work is cancellable; how a user reaches
         that - which keystroke, spelled how, or a ✕ button instead - only the
         frontend knows, and only the frontend can keep the name honest.
+
+        NOTE: returns the context manager rather than being one. `_cancellable`
+        is the generator; this only decides that work gets an animation and a
+        prompt does not.
         """
-        scope = CancelScope()
-        self._active_tasks[scope] = None
-        try:
-            async with self._animate(status, final_status, timeout=timeout):
-                with scope:
-                    yield scope
-        finally:
-            self._active_tasks.pop(scope, None)
-        if scope.cancel_called:
-            raise UserCancel()
-
-    @asynccontextmanager
-    @abstractmethod
-    async def _animate(
-        self,
-        status: str = "Processing",
-        final_status: str | None = None,
-        timeout: float | None = None,
-    ) -> AsyncGenerator[None]:
-        """Context manager for displaying animation during async operations.
-
-        NOTE: no cancel-hint argument. A frontend that wants to say how to stop
-        the work reads `get_active_tasks()` - registration is the fact, and the
-        wording is the frontend's own business."""
-        yield  # pragma: no cover - makes this a valid generator
+        return self._cancellable(
+            self._animate(status=status, final_status=final_status, timeout=timeout)
+        )
 
     # -- text ----------------------------------------------------------------
 
@@ -370,7 +435,6 @@ class SolveigInterface(ABC):
         caller can append to or replace."""
         ...
 
-    @abstractmethod
     def add_stat(
         self,
         label: str,
@@ -382,7 +446,16 @@ class SolveigInterface(ABC):
         frontend can return its own subclass carrying whatever it needs to
         place one. The caller keeps the returned object as its handle -
         identity is the object, never a name."""
-        ...
+        return self.root._add_stat(label, get, on_click, render)
+
+    @abstractmethod
+    def _add_stat(
+        self,
+        label: str,
+        get: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> Stat: ...
 
     # -- groups -------------------------------------------------------------
 
@@ -395,6 +468,13 @@ class SolveigInterface(ABC):
         SolveigInterface scoped to this group — local calls land inside the
         group; global calls transparently affect the root.
 
+        IMPLEMENTATION CONTRACT: build the child with `_parent` set to `self`,
+        add it to `self._children` on entry, and discard it in the teardown that
+        already closes the group. That pair is what makes `cancel_task()` and
+        `get_active_tasks()` reach work started inside it. What the group is
+        called, and anything else that identifies one, is the frontend's to
+        keep on its own child.
+
         NOTE: `auto_collapse` is the caller's INTENT ("folding this away loses
         nothing"), not an instruction. Whether a frontend folds it, and whether
         the user has turned that off, is display policy the frontend reads for
@@ -403,7 +483,6 @@ class SolveigInterface(ABC):
 
     # -- status & stats ------------------------------------------------------
 
-    @abstractmethod
     async def set_status(
         self,
         status: str | None,
@@ -411,14 +490,23 @@ class SolveigInterface(ABC):
     ) -> None:
         """Set the status line, with an optional flash duration. Pass
         `duration` to show `status` as a flash that reverts after N seconds."""
-        ...
+        await self.root._set_status(status, duration)
 
     @abstractmethod
+    async def _set_status(
+        self,
+        status: str | None,
+        duration: float | None = None,
+    ) -> None: ...
+
     def refresh_stats(self) -> None:
         """Re-read every stat and redraw. Sync, not async: an owner calls it
         from a config observer or a timer tick, and a redraw should never be
         something the caller has to await."""
-        ...
+        self.root._refresh_stats()
+
+    @abstractmethod
+    def _refresh_stats(self) -> None: ...
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -443,30 +531,32 @@ class SolveigInterface(ABC):
         """Ask for specific input, preserving any current typing.
 
         A user-addressable wait is a registered task like any other: while the
-        prompt is open its scope sits in `_active_tasks`, so a targeted cancel
-        (a per-prompt ✕) or an untargeted one (Esc -> cancel_task()) reaches it
-        through the SAME machinery as background work - but prompts are NOT
-        wrapped in `with_cancellable` (they're waits, not work; no spinner, and
-        no "callers must remember to wrap" burden - the registration lives
-        here, at the one seam). A cancelled prompt raises UserCancel: to the
-        caller, Esc during a question is the user ANSWERING "cancel", identical
-        to picking a Cancel menu item. Prompt CONCURRENCY is each frontend's
-        policy (inside its `_ask_*`): a terminal may lock, Textual can show
-        stacked prompts, a web UI stacks cards.
+        prompt is open its scope sits in this interface's `_tasks` - so a
+        prompt raised inside a group is that group's work - and a targeted
+        cancel (a per-prompt ✕) or an untargeted one (Esc -> cancel_task())
+        reaches it through the SAME machinery as background work. It goes
+        through `_cancellable` WITHOUT an animation: a prompt is a wait, not
+        work, and the callers never have to remember to wrap one, because the
+        registration lives here at the one seam. A cancelled prompt raises
+        UserCancel: to the caller, Esc during a question is the user ANSWERING
+        "cancel", identical to picking a Cancel menu item. Prompt CONCURRENCY
+        is each frontend's policy (inside its `_ask_*`): a terminal may lock,
+        Textual can show stacked prompts, a web UI stacks cards.
         """
-        scope = CancelScope()
-        self._active_tasks[scope] = None
-        try:
-            with scope:
-                answer = await self._ask_question(question, default)
-        finally:
-            self._active_tasks.pop(scope, None)
-        if scope.cancel_called:
-            raise UserCancel()
+        async with self._cancellable():
+            answer = await self._ask_question(question, default)
         return answer
 
     @abstractmethod
-    async def _ask_question(self, question: str, default: str = "") -> str: ...
+    async def _ask_question(self, question: str, default: str = "") -> str:
+        """Collect one line of input.
+
+        NOTE: nothing identifies the group here, deliberately. `self` IS the
+        group the prompt was raised on, so a frontend that wants to say which
+        operation is asking reads whatever identifies one to IT - a title, a
+        group id, the widget it drew. Handing one of those down would have been
+        both redundant and a guess about which of them matters."""
+        ...
 
     async def ask_choice(
         self, question: str, choices: Iterable[str], add_cancel: bool = True
@@ -482,19 +572,16 @@ class SolveigInterface(ABC):
         if add_cancel:
             choices_list.append("Cancel processing")
 
-        scope = CancelScope()
-        self._active_tasks[scope] = None
-        try:
-            with scope:
-                choice_index = await self._ask_choice(question, choices_list)
-        finally:
-            self._active_tasks.pop(scope, None)
-        if scope.cancel_called:
-            raise UserCancel()
+        async with self._cancellable():
+            choice_index = await self._ask_choice(question, choices_list)
         await self.print(choices_list[choice_index], prefix=question)
         if add_cancel and choice_index == len(choices_list) - 1:
             raise UserCancel()
         return choice_index
 
     @abstractmethod
-    async def _ask_choice(self, question: str, choices: list[str]) -> int: ...
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
+        """Prompt with the given choices (already final), returning the raw
+        index. Same as `_ask_question`: `self` is the group, so nothing about
+        which group it is travels as an argument."""
+        ...

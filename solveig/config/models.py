@@ -388,8 +388,8 @@ class InterfaceConfig(ConfigSection):
     general visual configuration.
     """
 
-    auto_collapse_tools: bool = Field(
-        default=True, description="Auto-collapse tool groups after approval"
+    auto_collapse: bool = Field(
+        default=True, description="Auto-collapse groups when they complete"
     )
     broadcast: BroadcastConfig = Field(default_factory=BroadcastConfig)
     tui: TuiConfig = Field(default_factory=TuiConfig)

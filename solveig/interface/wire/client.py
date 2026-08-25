@@ -58,9 +58,7 @@ _TRANSLATE = {
 class WireClient:
     """Connects a concrete `SolveigInterface` to a daemon's wire socket."""
 
-    def __init__(
-        self, interface: SolveigInterface
-    ) -> None:
+    def __init__(self, interface: SolveigInterface) -> None:
         self.interface = interface
         # self._socket_path = socket_path
         self._reader: asyncio.StreamReader | None = None
@@ -281,6 +279,7 @@ class WireClient:
         """Change the interface's own config based on the received update."""
         for path, value in frame.get("updates", {}).items():
             await self.interface.config.set(path, value)
+
 
 class _GroupScope:
     """One open group on the client: the real interface's with_group entered.

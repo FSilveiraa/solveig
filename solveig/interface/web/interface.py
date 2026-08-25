@@ -34,7 +34,6 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
-from solveig.config.models import WebConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -50,8 +49,8 @@ from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
-from .bus import EventStream
 from ...config import SolveigConfig
+from .bus import EventStream
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -445,7 +444,9 @@ class WebInterface(SolveigInterface):
         the foreground by run_async) exactly as Textual's event loop does."""
         from .server import serve
 
-        await serve(self, self.config.interface.web.host, self.config.interface.web.port)
+        await serve(
+            self, self.config.interface.web.host, self.config.interface.web.port
+        )
 
     async def stop(self) -> None:
         if self._server is not None:

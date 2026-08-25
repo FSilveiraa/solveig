@@ -381,7 +381,6 @@ class SolveigConfig(BaseSettings):
         dumped = owner.model_dump(mode="json", include={leaf})
         return dumped[leaf]
 
-
     async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
         """The single user-edit write seam.  Record in *_declared_fields* and — when
         the value actually changed — notify observers.  Pass *notify=False* for

@@ -165,7 +165,9 @@ class MockInterface(SolveigInterface):
         config = kwargs.pop("config", None) or SolveigConfig()
         # TODO: wouldn't it make more sense to use the default test config,
         #  or just actually expect it to be passed non-optionally?
-        user_message_queue = kwargs.pop("user_message_queue", None) or UserMessageQueue()
+        user_message_queue = (
+            kwargs.pop("user_message_queue", None) or UserMessageQueue()
+        )
         super().__init__(config, user_message_queue)
         #: The messages currently up, in draw order. Boxes, not text: removal
         #: goes through the handle, exactly as it does for a real frontend.

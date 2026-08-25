@@ -31,6 +31,8 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
+from anyio import CancelScope
+
 from solveig.config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
@@ -114,7 +116,7 @@ class _WireState:
     # Dict of frame ID to
     message_actions: dict[int, MessageActions] = {}
     ids: itertools.count[int] = itertools.count(1)
-    active_tasks: dict[]
+    active_tasks: dict[CancelScope, None]
     # TODO should this still exist?
     ready: asyncio.Event = asyncio.Event()
 
@@ -159,15 +161,16 @@ class WireInterface(SolveigInterface):
         # that broadcasts it to all connected interfaces
         @self.config.on_change("interface")
         def on_config_update(_config: SolveigConfig, changed_paths: frozenset[str]):
-            self._publish({
-                "type": "config_update",
-                "updates": {
-                    # get the string representation of the field, not its object
-                    path: _config.get(path, as_field=True)
-                    for path in changed_paths
+            self._publish(
+                {
+                    "type": "config_update",
+                    "updates": {
+                        # get the string representation of the field, not its object
+                        path: _config.get(path, as_field=True)
+                        for path in changed_paths
+                    },
                 }
-            })
-
+            )
 
     # -- transport -----------------------------------------------------------
 

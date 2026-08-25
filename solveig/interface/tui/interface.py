@@ -1,19 +1,20 @@
-"""The Textual frontend: TerminalDisplay, TerminalInterface, GroupInterface.
+"""The Textual frontend: TerminalInterface and GroupInterface.
 
-TerminalDisplay is the container-level half — everything that mounts a widget
-into `self._container`, plus the theming that reads back out of it. It owns no
-app and constructs nothing, which is what makes it safe for both concrete
-classes below to inherit.
+Two classes, not three, and they differ only by DATA. `TerminalInterface` is
+the root: it builds the SolveigTextualApp and owns the prompt lock and the
+spinners. `GroupInterface` is what `with_group()` yields — the same interface
+with a parent, a title and its own collapsible widget. It inherits every verb
+unchanged; nothing is re-implemented to point at the root.
 
-TerminalInterface is the root: it builds the SolveigTextualApp and adds the
-root-level half (status, stats, prompts, animation, lifecycle). GroupInterface
-is the scoped child returned by with_group(): it borrows the root's app, mounts
-into its own collapsible's contents, and delegates the root-level half back.
+Everything root-owned is DERIVED, never copied. `root` walks the `_parent`
+chain (a root has no parent, so it is its own root), and `app`, `_choice_lock`
+and `spinners` are read through it at the moment they are used. That is the
+whole reason a group needs no field list: there is nothing to keep in step, and
+a fourth piece of root state added later needs no change here.
 
-_container is where Textual mounts widgets — the root's is the main
-conversation area, a group's is its own collapsible contents. _root is the
-TerminalInterface that owns the app — the root's _root is itself, so
-`self._root.x` reads one home for a fact from either class.
+`_display_container` is where Textual mounts — the root's is the conversation
+area, a group's is its own collapsible's contents. It is the one thing that
+makes a group draw somewhere else, and the only place the two classes disagree.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import difflib
 import random
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from anyio import Path
 from rich.spinner import Spinner
@@ -45,9 +46,9 @@ from solveig.interface.base import (
 from solveig.interface.tui.app import SolveigTextualApp
 from solveig.interface.tui.collapsible_widgets import (
     CollapsibleDiffBox,
+    CustomCollapsible,
     TextBoxWidget,
 )
-from solveig.interface.tui.collapsible_widgets import CustomCollapsible
 from solveig.interface.tui.conversation_area import BANNER
 from solveig.interface.tui.keys import cancel_hint
 from solveig.interface.tui.message_boxes import CommentBox, ReasoningBox
@@ -60,6 +61,7 @@ from solveig.utils.misc import format_path_info, get_language
 
 if TYPE_CHECKING:
     from os import PathLike
+
     from solveig.user_message_queue import UserMessageQueue
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
@@ -78,10 +80,6 @@ class TerminalInterface(SolveigInterface):
     the root-level half of the protocol that TerminalDisplay leaves abstract.
     """
 
-
-    _root: TerminalInterface
-    app: SolveigTextualApp
-
     def __init__(
         self,
         config: SolveigConfig,
@@ -89,9 +87,8 @@ class TerminalInterface(SolveigInterface):
     ) -> None:
         super().__init__(config, user_message_queue)
         # The interface that owns the app; the root's is itself.
-        self._root = self
         # The Textual app
-        self.app = SolveigTextualApp(
+        self._app = SolveigTextualApp(
             theme=self.config.interface.tui.theme,
             input_callback=self._handle_input,
             interface_ref=self,
@@ -107,6 +104,12 @@ class TerminalInterface(SolveigInterface):
         @self.config.on_change("interface.tui.code_theme")
         async def _on_code_theme_change(_config, paths):
             self._set_code_theme(_config.interface.tui.code_theme)
+
+        #: What a prompt raised on this interface says it is about — a group's
+        #: header, None at the root. This frontend's own answer to "which
+        #: operation is asking"; the contract keeps no such field, because a
+        #: group is already `self` wherever it matters.
+        self._title: str | None = None
 
         # CLI prompt serialization: one visible prompt at a time (a terminal
         # constraint — the protocol leaves this policy to the frontend).
@@ -135,6 +138,23 @@ class TerminalInterface(SolveigInterface):
     def _display_container(self):
         return self.app._conversation_area
 
+    if TYPE_CHECKING:
+        # The base can only promise the protocol; inside this frontend the root
+        # is always a TerminalInterface, which is what makes `self.root._app`
+        # and `self.root._choice_lock` below typecheck. Declaration only - the
+        # runtime property is the base's, so there is nothing here to drift.
+        @property
+        def root(self) -> TerminalInterface: ...
+
+    @property
+    def app(self) -> SolveigTextualApp:
+        """The one Textual app, wherever it is asked for.
+
+        Derived rather than copied into each group: an app is the root's, and a
+        group that stored its own reference would be one more field to keep in
+        step. Every `self.app` in this file works from either."""
+        return self.root._app
+
     # -- animation -----------------------------------------------------------
 
     @asynccontextmanager
@@ -157,7 +177,7 @@ class TerminalInterface(SolveigInterface):
         # animation, so an empty registry means a plain animation with no keys
         # to offer. Derived from the real bindings, so a rebind cannot make it lie.
         suffix = cancel_hint() if self.get_active_tasks() else None
-        spinner = random.choice(list(self.spinners.values()))
+        spinner = random.choice(list(self.root.spinners.values()))
         self.app._stats_dashboard.start_status_animation(
             spinner, timeout=timeout, suffix=suffix
         )
@@ -212,18 +232,23 @@ class TerminalInterface(SolveigInterface):
     # -- text ----------------------------------------------------------------
 
     async def print(
-            self,
-            text: str,
-            level: Level = Level.TEXT,
-            *,
-            prefix: str | None = None,
+        self,
+        text: str,
+        level: Level = Level.TEXT,
+        *,
+        prefix: str | None = None,
     ) -> None:
         style, emoji = _LEVEL_STYLES.get(level, ("text", ""))
         to_display = f"{emoji}{text}" if emoji else text
         if prefix:
-            to_display = f"[{self.config.interface.tui.theme.info}]{prefix}[/]  {to_display}"
+            to_display = (
+                f"[{self.config.interface.tui.theme.info}]{prefix}[/]  {to_display}"
+            )
         await self.app._conversation_area.add_text(
-            to_display, style, markup=prefix is not None, container=self._display_container
+            to_display,
+            style,
+            markup=prefix is not None,
+            container=self._display_container,
         )
 
     # -- input ---------------------------------------------------------------
@@ -234,21 +259,22 @@ class TerminalInterface(SolveigInterface):
         if self.user_message_queue is not None:
             await self.user_message_queue.put(user_input)
 
-    async def _ask_question(
-        self, question: str, default: str = "", title: str | None = None
-    ) -> str:
+    async def _ask_question(self, question: str, default: str = "") -> str:
         """Ask for specific input. Serialized through the CLI's own lock
-        (one visible prompt at a time)."""
-        async with self._choice_lock:
-            return await self.app.ask_question(question, default, title)
+        (one visible prompt at a time).
 
-    async def _ask_choice(
-        self, question: str, choices: list[str], title: str | None = None
-    ) -> int:
+        `self._title` is read here rather than handed down by the contract:
+        `self` IS the group the prompt was raised on, so this frontend picks
+        what identifies one to a terminal - the group's header. Another could
+        pick something else about the same object."""
+        async with self.root._choice_lock:
+            return await self.app.ask_question(question, default, self._title)
+
+    async def _ask_choice(self, question: str, choices: list[str]) -> int:
         """Prompt with the given choices (already final — "Cancel processing"
         appended, if any), returns the raw selected index."""
-        async with self._choice_lock:
-            return await self.app.ask_choice(question, choices, title)
+        async with self.root._choice_lock:
+            return await self.app.ask_choice(question, choices, self._title)
 
     # -- status & stats ------------------------------------------------------
 
@@ -256,7 +282,8 @@ class TerminalInterface(SolveigInterface):
     def stats(self):
         return self.app._stats_dashboard
 
-    async def set_status(
+    @override
+    async def _set_status(
         self,
         status: str | None,
         duration: float | None = None,
@@ -273,7 +300,8 @@ class TerminalInterface(SolveigInterface):
 
             self.app.set_timer(duration, _restore_status)
 
-    def add_stat(
+    @override
+    def _add_stat(
         self,
         label: str,
         get: Callable[[], Any],
@@ -284,13 +312,14 @@ class TerminalInterface(SolveigInterface):
         self.app._stats_dashboard.add_stat(stat)
         return stat
 
-    def refresh_stats(self) -> None:
+    @override
+    def _refresh_stats(self) -> None:
         self.app._stats_dashboard.refresh_stats()
 
     # -- transcript verbs ----------------------------------------------------
 
     async def add_message(
-            self, text: str, role: Role, actions: MessageActions
+        self, text: str, role: Role, actions: MessageActions
     ) -> MessageBox:
         widget = EditableComment(text, interface=self, role=role, actions=actions)
         await self.app._conversation_area.add_element(self._display_container, widget)
@@ -307,11 +336,11 @@ class TerminalInterface(SolveigInterface):
     # -- complex display -----------------------------------------------------
 
     async def display_file_metadata(
-            self,
-            abs_path: str | PathLike,
-            metadata: FileMetadata | None = None,
-            prefix: str | None = None,
-            is_directory: bool = False,
+        self,
+        abs_path: str | PathLike,
+        metadata: FileMetadata | None = None,
+        prefix: str | None = None,
+        is_directory: bool = False,
     ) -> None:
         # Resolving metadata-or-fallback is this side's job; drawing the line is
         # `format_path_info`'s. `metadata` wins wherever it has something to say, so
@@ -338,11 +367,11 @@ class TerminalInterface(SolveigInterface):
     # -- add (returns object) ------------------------------------------------
 
     async def add_text_box(
-            self,
-            text: str,
-            title: str | None = None,
-            language: str | None = None,
-            collapsed: bool = False,
+        self,
+        text: str,
+        title: str | None = None,
+        language: str | None = None,
+        collapsed: bool = False,
     ) -> TextBox:
         to_display: str | Syntax | Markdown = text
         if language:
@@ -351,7 +380,9 @@ class TerminalInterface(SolveigInterface):
                 to_display = Markdown(text)
             elif language_name:
                 to_display = Syntax(
-                    text, lexer=language_name, theme=self.config.interface.tui.code_theme
+                    text,
+                    lexer=language_name,
+                    theme=self.config.interface.tui.code_theme,
                 )
 
         return await self.app._conversation_area.add_text_box(
@@ -362,10 +393,10 @@ class TerminalInterface(SolveigInterface):
         )
 
     async def add_diff_box(
-            self,
-            old_content: str,
-            new_content: str,
-            title: str | None = None,
+        self,
+        old_content: str,
+        new_content: str,
+        title: str | None = None,
     ) -> DiffBox:
         old_lines = (old_content.rstrip() + "\n").splitlines(keepends=True)
         new_lines = (new_content.rstrip() + "\n").splitlines(keepends=True)
@@ -383,7 +414,9 @@ class TerminalInterface(SolveigInterface):
 
         to_display: str | Syntax = diff_text
         if diff_text.strip():
-            to_display = Syntax(diff_text, lexer="diff", theme=self.config.interface.tui.code_theme)
+            to_display = Syntax(
+                diff_text, lexer="diff", theme=self.config.interface.tui.code_theme
+            )
         else:
             to_display = "(Same content)"
         box = CollapsibleDiffBox(
@@ -392,14 +425,16 @@ class TerminalInterface(SolveigInterface):
             new_content=new_content,
             title=title or "Diff",
         )
-        await self.app._conversation_area.add_element(self._display_container, box.widget)
+        await self.app._conversation_area.add_element(
+            self._display_container, box.widget
+        )
         return box
 
     async def add_tree_box(
-            self,
-            metadata: FileMetadata,
-            title: str | None = None,
-            display_metadata: bool = False,
+        self,
+        metadata: FileMetadata,
+        title: str | None = None,
+        display_metadata: bool = False,
     ) -> TreeBox:
         tree = FileTree(
             metadata=metadata,
@@ -409,35 +444,49 @@ class TerminalInterface(SolveigInterface):
         )
         if title:
             tree.widget.border_title = title
-        await self.app._conversation_area.add_element(self._display_container, tree.widget)
+        await self.app._conversation_area.add_element(
+            self._display_container, tree.widget
+        )
         return tree
 
     # -- with (context managers) ---------------------------------------------
 
     @asynccontextmanager
     async def with_group(
-            self, title: str, collapse_when_done: bool = True
+        self, title: str, collapse_when_done: bool = True
     ) -> AsyncGenerator[SolveigInterface, Any]:
-        group_interface = GroupInterface(
+        group = GroupInterface(
             parent=self,
             title=title,
             collapse_when_done=collapse_when_done,
         )
-        async with group_interface:
-            yield group_interface
+        async with group:
+            # Membership for exactly the group's lifetime, which is what lets
+            # `self.cancel_task()` reach work started inside it.
+            self._children.add(group)
+            try:
+                yield group
+            finally:
+                self._children.discard(group)
 
 
 class GroupInterface(TerminalInterface):
-    def __init__(self, parent: TerminalInterface, title: str, collapse_when_done: bool = True) -> None:
-        # Init with base SolveigInterface, not TerminalInterface, to avoid instantiating a SolveigTextualApp
+    """One collapsible group: the same interface, drawing somewhere else.
+
+    Everything it borrows is DERIVED from its parent rather than copied - the
+    app, the prompt lock, the spinners and the root itself all resolve through
+    `root`, so there is no list of fields to keep in step. What it stores is
+    only what it IS: who contains it, what it is called, and the widget it drew
+    for itself.
+    """
+
+    def __init__(
+        self, parent: TerminalInterface, title: str, collapse_when_done: bool = True
+    ) -> None:
+        # The BASE constructor, not TerminalInterface's - that one builds a
+        # SolveigTextualApp, and a group draws into the one its parent owns.
         SolveigInterface.__init__(self, parent.config, parent.user_message_queue)
         self._parent = parent
-        # Duck-type all TerminalInterface fields delegating to the parent
-        self._root = parent._root
-        self.app = self._root.app
-        self._choice_lock = self._root._choice_lock
-        self.spinners = self._root.spinners
-        # Group-only fields
         self._title = title
         self._widget: CustomCollapsible | None = None
         self._collapse_when_done = collapse_when_done
@@ -452,9 +501,14 @@ class GroupInterface(TerminalInterface):
         return self._widget.query_one(CustomCollapsible.Contents)
 
     async def __aenter__(self) -> GroupInterface:
+        # The base types both as optional because a ROOT has neither; a group
+        # always does, and only this frontend knows its parent is one of these.
+        assert isinstance(self._parent, TerminalInterface)
+        assert self._title is not None
         self._widget = await self.app._conversation_area.enter_group(
             title=self._title,
-            # NOTE: this is likely the only situation where the display container isn't the interface's own
+            # NOTE: the one place a display container is not this interface's
+            # own - a group draws its collapsible INTO whatever contains it.
             container=self._parent._display_container,
         )
         return self
@@ -462,5 +516,6 @@ class GroupInterface(TerminalInterface):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.app._conversation_area.exit_group(
             group=self._widget,
-            auto_collapse=self._collapse_when_done and self.config.interface.auto_collapse_tools
+            auto_collapse=self._collapse_when_done
+            and self.config.interface.auto_collapse_tools,
         )

@@ -309,13 +309,15 @@ async def replay_tool_call(
         try:
             instance = tool_cls.model_validate(call.args_as_dict())
         except ValidationError:
-            tool_cls = None
+            pass
 
     # Replayed tool groups start collapsed: a resumed session is historical, so
     # the result body is folded away by default (same as a live run finishing
     # under the default auto_collapse_tools) - the user expands what they want.
-    if tool_cls is None:
-        async with interface.with_group(call.tool_name, collapse_when_done=True) as group:
+    if instance is None:
+        async with interface.with_group(
+            call.tool_name, collapse_when_done=True
+        ) as group:
             await result.display_content(group)
         return
 
