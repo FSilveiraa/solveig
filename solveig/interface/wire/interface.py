@@ -7,31 +7,32 @@ web UI, a telegram bot) — each verb is serialized to a wire frame and broadcas
 to all live connections; the box a verb hands back is a `RemoteBox` whose
 mutations are the next frame.
 
-The design keeps the wire vocabulary tool-agnostic: a verb names an ABC surface
-(`add_text_box(FileMetadata)`), never a tool, so a client renders any stream
-forever and needs no plugin config. Adds and boxes cross as ids — the server
-mints a global handle id, broadcasts the create verb under it, and the client
-keys its own local widget by that id, so a later `invoke` reaches every client
-(asherc_aide with the same id).
+The design keeps the wire vocabulary tool-agnostic: a frame names an ABC surface
+(`AddTreeBox(FileMetadata)`), never a tool, so a client renders any stream
+forever and needs no plugin config. Boxes cross as ids — the daemon mints a
+global handle id, broadcasts the create frame under it, and the client keys its
+own local widget by that id, so a later mutation frame reaches every client.
 
 Consent (`ask_*`) broadcasts to ALL clients, first answer wins; on resolve the
-server broadcasts an `ask_resolved` so every client cancels its pending prompt
+daemon broadcasts an `AskResolved` so every client cancels its pending prompt
 and shows the winner's answer — the retraction the design log demands.
 
-Frames are type-tagged JSONL; a client MUST ignore unknown types so daemons and
-clients at different feature levels share one stream.
+Every frame is a model from `protocol.py`, and inbound lines are validated
+against the CLIENT union only: this end cannot receive a frame it is supposed to
+send. A line whose kind this daemon does not know is skipped, which is what lets
+daemons and clients at different feature levels share one stream.
 """
 
 from __future__ import annotations
 
 import asyncio
 import itertools
-import json
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from anyio import CancelScope
+from pydantic import ValidationError
 
 from solveig.config import SolveigConfig
 from solveig.interface.base import (
@@ -54,52 +55,67 @@ if TYPE_CHECKING:
 
     from solveig.user_message_queue import UserMessageQueue
 
+
+def _encode(frame: protocol.ServerFrame) -> bytes:
+    """One frame as one JSONL line - the single place a frame becomes bytes."""
+    return frame.model_dump_json().encode() + b"\n"
+
+
 # --------------------------------------------------------------------------- #
-# Remote box handles — emit an `invoke` frame for each mutation.               #
+# Remote box handles — one frame per mutation, addressed to the handle id.     #
 # --------------------------------------------------------------------------- #
 
 
 class _WireBox:
+    """A box handle whose mutations are frames addressed to its id.
+
+    NOTE: publishes without draining, which is deliberate parity with how a
+    local box draws: `write()` already schedules the send, and `drain()` only
+    applies backpressure. A streamed message appends once per token, and
+    awaiting every client's buffer on each one would make the daemon's
+    throughput the slowest reader's.
+    """
+
     def __init__(self, server: WireInterface, handle_id: int) -> None:
         self._server = server
         self._id = handle_id
 
-    def _invoke(self, method: str, **args: Any) -> None:
-        self._server._publish(
-            {"type": "invoke", "id": self._id, "method": method, "args": args}
-        )
+    def _invoke(self, frame: protocol.BoxFrame) -> None:
+        self._server._publish(frame)
 
 
 class _WireTextBox(TextBox, _WireBox):
     async def append(self, text: str) -> None:
-        self._invoke("append", text=text)
+        self._invoke(protocol.TextAppend(id=self._id, text=text))
 
     async def clear(self) -> None:
-        self._invoke("clear")
+        self._invoke(protocol.TextClear(id=self._id))
 
     async def replace(self, text: str) -> None:
-        self._invoke("replace", text=text)
+        self._invoke(protocol.TextReplace(id=self._id, text=text))
 
 
 class _WireDiffBox(DiffBox, _WireBox):
     async def replace(self, old_content: str, new_content: str) -> None:
-        self._invoke("replace", old=old_content, new=new_content)
+        self._invoke(
+            protocol.DiffReplace(id=self._id, old=old_content, new=new_content)
+        )
 
 
 class _WireTreeBox(TreeBox, _WireBox):
     async def replace(self, metadata: FileMetadata) -> None:
-        self._invoke("replace", metadata=protocol.metadata_to_json(metadata))
+        self._invoke(protocol.TreeReplace(id=self._id, metadata=metadata))
 
     async def refresh(self) -> None:
-        self._invoke("refresh")
+        self._invoke(protocol.TreeRefresh(id=self._id))
 
 
 class _WireMessageBox(MessageBox, _WireBox):
     async def replace(self, text: str) -> None:
-        self._invoke("replace", text=text)
+        self._invoke(protocol.MessageReplace(id=self._id, text=text))
 
     async def remove(self) -> None:
-        self._invoke("remove")
+        self._invoke(protocol.MessageRemove(id=self._id))
 
 
 # --------------------------------------------------------------------------- #
@@ -107,18 +123,39 @@ class _WireMessageBox(MessageBox, _WireBox):
 # --------------------------------------------------------------------------- #
 
 
+@dataclass
 class _WireState:
-    server: asyncio.AbstractServer
-    # Connected client interfaces
-    writers: set[asyncio.StreamWriter] = set()
-    # List of published (sent) frames, allowing later replay
-    history: list[dict[str, Any]] = []
-    # Dict of frame ID to
-    message_actions: dict[int, MessageActions] = {}
-    ids: itertools.count[int] = itertools.count(1)
-    active_tasks: dict[CancelScope, None]
-    # TODO should this still exist?
-    ready: asyncio.Event = asyncio.Event()
+    """
+    The transport a root owns and every group under it reads.
+
+    ONE object rather than six fields, because a group reaches all of it the
+    same way (`self.root._state`) and there is nothing to copy or keep in step.
+    `default_factory` throughout: as bare class attributes these would be
+    SHARED by every root ever built, so two daemons in one process would write
+    to the same socket set and mint colliding ids.
+    """
+
+    # Connected clients. A frame is written to each; a closed one is dropped.
+    writers: set[asyncio.StreamWriter] = field(default_factory=set)
+    # Every frame published to connected clients, in order.
+    # Clients that connect later can replay a live stream from `history`
+    history: list[protocol.ServerFrame] = field(default_factory=list)
+    # Single counter for all transmitted widgets
+    ids: itertools.count[int] = field(default_factory=lambda: itertools.count(1))
+    # Message id -> action message Callables
+    message_actions: dict[int, MessageActions] = field(default_factory=dict)
+    # Ask id -> the future `ask_*` is waiting on. First answer in wins.
+    asks: dict[int, asyncio.Future[str]] = field(default_factory=dict)
+    # Group id -> the scoped interface, for the whole lifetime of that group.
+    # An inbound frame names a group by id (only `Cancel` does today), and this
+    # is what turns that id back into the object whose work it addresses.
+    groups: dict[int, WireInterface] = field(default_factory=dict)
+    # The stats registered on this root, in registration order. Held because a
+    # Stat pulls its value on demand and the wire has to push: a refresh
+    # re-reads every `read` and re-broadcasts, since no client can call one.
+    stats: list[_WireStat] = field(default_factory=list)
+    ready: asyncio.Event = field(default_factory=asyncio.Event)
+    server: asyncio.AbstractServer | None = None
 
 
 class WireInterface(SolveigInterface):
@@ -129,78 +166,70 @@ class WireInterface(SolveigInterface):
     handles and asks carry server-minted ids.
     """
 
+    if TYPE_CHECKING:
+        # The base can only promise the protocol; inside this frontend the root
+        # is always a WireInterface, which is what makes `self.root._state`
+        # typecheck. Declaration only - the runtime property is the base's.
+        @property
+        def root(self) -> WireInterface: ...
+
+    #: The group this interface draws into; None on the root. Every frame it
+    #: publishes carries it, so two parallel groups each tag their own.
+    _group_id: int | None = None
+
     def __init__(
         self,
         config: SolveigConfig,
         user_message_queue: UserMessageQueue,
     ) -> None:
         super().__init__(config, user_message_queue)
-        self._server: asyncio.AbstractServer | None = None
-        self._writers: set[asyncio.StreamWriter] = set()
-        #: Every frame published, in order, so a client that connects late is
-        #: replayed the same stream a client present from the start saw. This
-        #: is how a newcomer catches up: live broadcast starts (membership) but
-        #: the `ready` marker, sent after the retained history, is the line
-        #: between "replayed" and "live". The web EventStream retains the same
-        #: way; both put "replay is not a special path" on the wire.
-        self._history: list[dict[str, Any]] = []
-        self._widget_id: itertools.count[int] = itertools.count(1)
-        # Each message gets an ID which is indexed here against its MessageActions
-        # So when "edit" is called on a message, the _MessageBox
-        self._message_actions: dict[int, MessageActions] = {}
-        # Pending asks awaited by ask_question/ask_choice, keyed by ask id.
-        self._asks: dict[int, asyncio.Future[str]] = {}
-        # Remote box for each handle we minted.
-        self._boxes: dict[int, Any] = {}
-        # The group id this interface represents, used for nesting display
-        # methods inside groups. None for the root, a `_WireGroup` sets its own id.
-        self._group_id: int | None = None
-        self._ready = asyncio.Event()
+        self._state = _WireState()
 
-        # Register a callback for whenever any interface config fields change
-        # that broadcasts it to all connected interfaces
+        # Root-only: observers cannot be unregistered, so a group registering
+        # this too would multiply `config_update` frames per group ever opened.
         @self.config.on_change("interface")
         def on_config_update(_config: SolveigConfig, changed_paths: frozenset[str]):
             self._publish(
-                {
-                    "type": "config_update",
-                    "updates": {
+                protocol.ConfigUpdate(
+                    updates={
                         # get the string representation of the field, not its object
                         path: _config.get(path, as_field=True)
                         for path in changed_paths
-                    },
-                }
+                    }
+                )
             )
 
     # -- transport -----------------------------------------------------------
 
     async def start(self) -> None:
         """Bind the socket and serve clients until `stop()`."""
-        self._server = await asyncio.start_unix_server(
+        state = self.root._state
+        state.server = await asyncio.start_unix_server(
             self._on_connect, self.config.interface.broadcast.socket
         )
-        self._ready.set()
+        state.ready.set()
         try:
-            async with self._server:
-                await self._server.serve_forever()
+            async with state.server:
+                await state.server.serve_forever()
         finally:
-            self._ready.clear()
+            state.ready.clear()
 
     async def stop(self) -> None:
         # Close every connected client first so their handler loops end, THEN
         # the listening socket. Reversed, `wait_closed()` blocks forever on the
         # accepted connection's handler, which only returns when its client
         # goes away — and this daemon is the one deciding they all go now.
-        for writer in list(self._writers):
+        state = self.root._state
+        for writer in state.writers:
             writer.close()
-        self._writers.clear()
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
+        state.writers.clear()
+        if state.server is not None:
+            state.server.close()
+            await state.server.wait_closed()
+            state.server = None
 
     async def wait_until_ready(self) -> None:
-        await self._ready.wait()
+        await self.root._state.ready.wait()
 
     async def _on_connect(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -218,93 +247,106 @@ class WireInterface(SolveigInterface):
         wire server holds no conversation; parked until the daemon assembler
         exists.
         """
-        self._writers.add(writer)
-        for frame in self._history:
-            writer.write(json.dumps(frame).encode() + b"\n")
-        writer.write(json.dumps({"type": "ready"}).encode() + b"\n")
+        state = self.root._state
+        state.writers.add(writer)
+        for frame in state.history:
+            writer.write(_encode(frame))
+        writer.write(_encode(protocol.Ready()))
         await writer.drain()
         try:
             while line := await reader.readline():
-                frame = json.loads(line)
-                await self._on_frame(frame, writer)
+                try:
+                    inbound = protocol.CLIENT_FRAMES.validate_json(line)
+                except ValidationError:
+                    # A kind this daemon does not know, or a malformed line.
+                    # Skipping it is the forward-compat law; ending the
+                    # connection over it would let a newer client disconnect
+                    # itself just by greeting an older daemon.
+                    continue
+                await self._on_frame(inbound)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
-            self._writers.discard(writer)
+            state.writers.discard(writer)
 
     # -- fan-out -------------------------------------------------------------
 
-    def _publish(self, frame: dict[str, Any]) -> None:
-        # One emission path. The ONLY thing that tags a frame with a group is a
-        # _WireGroup scoped child shadowing this method — the root itself is a
-        # clean slate, which is what lets two parallel groups both draw through
-        # their own pinned id instead of arguing over a shared stack.
-        self._history.append(frame)
-        payload = json.dumps(frame) + "\n"
-        for writer in list(self._writers):
+    def _publish(self, frame: protocol.ServerFrame) -> None:
+        """The one emission path, root and group alike.
+
+        A group stamps every frame it publishes with its own id, and the root's
+        is None so its frames carry none. The tag comes from the OBJECT doing
+        the publishing, never from a stack, which is what lets two parallel
+        groups each draw into their own instead of arguing over "the latest".
+        """
+        if self._group_id is not None:
+            frame.group = self._group_id
+        state = self.root._state
+        state.history.append(frame)
+        payload = _encode(frame)
+        for writer in list(state.writers):
             try:
-                writer.write(payload.encode())
+                writer.write(payload)
             except (ConnectionError, RuntimeError):
                 continue
 
     async def _flush(self) -> None:
-        for writer in list(self._writers):
+        for writer in list(self.root._state.writers):
             try:
                 await writer.drain()
             except (ConnectionError, RuntimeError):
                 pass
 
-    async def _send_verb(self, verb: str, **args: Any) -> None:
-        self._publish({"type": "verb", "verb": verb, "args": args})
+    async def _emit(self, frame: protocol.ServerFrame) -> None:
+        """Publish and drain - the shape a verb uses when it has nothing else
+        to do, so the frame is on its way before the caller moves on."""
+        self._publish(frame)
         await self._flush()
 
     def _next_id(self) -> int:
-        return next(self._widget_id)
-
-    # -- wire "add" implementation: mint id, broadcast create, return proxy ----
-
-    async def _create_box(self, verb: str, **args: Any) -> int:
-        handle_id = self._next_id()
-        self._publish({"type": "verb", "verb": verb, "id": handle_id, "args": args})
-        await self._flush()
-        return handle_id
+        return next(self.root._state.ids)
 
     # -- inbound: answers, actions, input -------------------------------------
 
-    async def _on_frame(
-        self, frame: dict[str, Any], _writer: asyncio.StreamWriter
-    ) -> None:
-        ftype = frame.get("type")
-        if ftype == "answer":
-            ask_id = int(frame.get("id", 0))
-            future = self._asks.get(ask_id)
-            if future is not None and not future.done():
-                value = frame.get("value", "")
-                future.set_result(value)
-                # Retraction: broadcast the winner's answer so every other
-                # client cancels its pending prompt and shows it.
-                self._publish({"type": "ask_resolved", "id": ask_id, "answer": value})
-                await self._flush()
-        elif ftype == "input":
-            user_message_queue = self.user_message_queue
-            if user_message_queue is not None:
-                await user_message_queue.put(frame.get("text", ""))
-        elif ftype == "action":
-            await self._handle_message_action(frame)
+    async def _on_frame(self, frame: protocol.ClientFrameType) -> None:
+        match frame:
+            case protocol.Answer():
+                future = self.root._state.asks.get(frame.id)
+                if future is not None and not future.done():
+                    future.set_result(frame.value)
+                    # Retraction: broadcast the winner's answer so every other
+                    # client cancels its pending prompt and shows it.
+                    await self._emit(
+                        protocol.AskResolved(id=frame.id, answer=frame.value)
+                    )
+            case protocol.Input():
+                await self.user_message_queue.put(frame.text)
+            case protocol.Action():
+                await self._handle_message_action(frame)
+            case protocol.Cancel():
+                # Addressed by WHICH interface, exactly as a local cancel is:
+                # `cancel_task()` reaches everything under the object it is
+                # called on, so naming the group is the whole targeting.
+                target = (
+                    self.root._state.groups.get(frame.group, self.root)
+                    if frame.group is not None
+                    else self.root
+                )
+                target.cancel_task()
 
-    async def _handle_message_action(self, frame: dict[str, Any]) -> None:
-        actions = self._message_actions.get(int(frame.get("message_id", 0)))
+    async def _handle_message_action(self, frame: protocol.Action) -> None:
+        actions = self.root._state.message_actions.get(frame.message_id)
         if actions is None:
             return
-        name = frame.get("action")
-        if name == "edit" and actions.edit is not None:
-            await actions.edit(frame.get("text", ""))
-        elif name == "retry" and actions.retry is not None:
-            await actions.retry()
-        elif name == "delete" and actions.delete is not None:
-            await actions.delete()
-        elif name == "branch" and actions.branch is not None:
-            await actions.branch()
+        match frame.action:
+            case protocol.ActionName.EDIT if actions.edit is not None:
+                await actions.edit(frame.text or "")
+            case protocol.ActionName.RETRY if actions.retry is not None:
+                await actions.retry()
+            case protocol.ActionName.DELETE if actions.delete is not None:
+                await actions.delete()
+            case protocol.ActionName.BRANCH if actions.branch is not None:
+                await actions.branch()
 
     # ----------------------------------------------------------------------- #
     # SolveigInterface verbs                                                 #
@@ -317,41 +359,37 @@ class WireInterface(SolveigInterface):
         *,
         prefix: str | None = None,
     ) -> None:
-        await self._send_verb("print", text=text, level=level.name, prefix=prefix)
+        await self._emit(protocol.Print(text=text, level=level, prefix=prefix))
 
     async def add_message(
         self, text: str, role: Role, actions: MessageActions
     ) -> MessageBox:
         message_id = self._next_id()
-        self._message_actions[message_id] = actions
-        # Same shape as _create_box: the id sits at the TOP of the frame, the
-        # display args under `args`, so the client reads one id location.
-        self._publish(
-            {
-                "type": "verb",
-                "verb": "add_message",
-                "id": message_id,
-                "args": {
-                    "text": text,
-                    "role": role.value,
-                    "actions": [
-                        name
-                        for name, fn in (
-                            ("edit", actions.edit),
-                            ("retry", actions.retry),
-                            ("delete", actions.delete),
-                            ("branch", actions.branch),
-                        )
-                        if fn is not None
-                    ],
-                },
-            }
+        self.root._state.message_actions[message_id] = actions
+        await self._emit(
+            protocol.AddMessage(
+                id=message_id,
+                text=text,
+                role=role,
+                # Only the names, and only the ones actually offered - the real
+                # closures stay here, and an `Action` frame comes back to them.
+                actions=[
+                    name
+                    for name, fn in (
+                        (protocol.ActionName.EDIT, actions.edit),
+                        (protocol.ActionName.RETRY, actions.retry),
+                        (protocol.ActionName.DELETE, actions.delete),
+                        (protocol.ActionName.BRANCH, actions.branch),
+                    )
+                    if fn is not None
+                ],
+            )
         )
-        await self._flush()
         return _WireMessageBox(self, message_id)
 
     async def add_reasoning(self, text: str) -> MessageBox:
-        handle = await self._create_box("add_reasoning", text=text)
+        handle = self._next_id()
+        await self._emit(protocol.AddReasoning(id=handle, text=text))
         return _WireMessageBox(self, handle)
 
     async def display_file_metadata(
@@ -361,16 +399,15 @@ class WireInterface(SolveigInterface):
         prefix: str | None = None,
         is_directory: bool = False,
     ) -> None:
-        await self._send_verb(
-            "display_file_metadata",
-            path=str(metadata.path if metadata is not None else abs_path),
-            prefix=prefix,
+        await self._emit(
+            protocol.DisplayFileMetadata(
+                path=str(metadata.path if metadata is not None else abs_path),
+                prefix=prefix,
+            )
         )
 
     async def display_todos(self, todos: list[TodoItem]) -> None:
-        await self._send_verb(
-            "display_todos", todos=[protocol.todo_to_json(t) for t in todos]
-        )
+        await self._emit(protocol.DisplayTodos(todos=todos))
 
     async def add_diff_box(
         self,
@@ -378,8 +415,11 @@ class WireInterface(SolveigInterface):
         new_content: str,
         title: str | None = None,
     ) -> DiffBox:
-        handle = await self._create_box(
-            "add_diff_box", title=title, old=old_content, new=new_content
+        handle = self._next_id()
+        await self._emit(
+            protocol.AddDiffBox(
+                id=handle, title=title, old=old_content, new=new_content
+            )
         )
         return _WireDiffBox(self, handle)
 
@@ -389,11 +429,8 @@ class WireInterface(SolveigInterface):
         title: str | None = None,
         display_metadata: bool = False,
     ) -> TreeBox:
-        handle = await self._create_box(
-            "add_tree_box",
-            title=title,
-            metadata=protocol.metadata_to_json(metadata),
-        )
+        handle = self._next_id()
+        await self._emit(protocol.AddTreeBox(id=handle, title=title, metadata=metadata))
         return _WireTreeBox(self, handle)
 
     async def add_text_box(
@@ -403,64 +440,61 @@ class WireInterface(SolveigInterface):
         language: str | None = None,
         collapsed: bool = False,
     ) -> TextBox:
-        handle = await self._create_box(
-            "add_text_box",
-            title=title,
-            text=text,
-            language=language,
-            collapsed=collapsed,
+        handle = self._next_id()
+        await self._emit(
+            protocol.AddTextBox(
+                id=handle,
+                title=title,
+                text=text,
+                language=language,
+                collapsed=collapsed,
+            )
         )
         return _WireTextBox(self, handle)
 
-    def add_stat(
+    def _add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
-        # A Stat's value is computed server-side; the wire carries label + text.
-        value = get()
-        self._publish(
-            {
-                "type": "stat",
-                "label": label,
-                "text": render(value) if render else str(value),
-            }
-        )
-        return _WireStat(self)
+        # A Stat's value is computed daemon-side - it closes over a callable
+        # that only exists here - so what crosses is the label and the text it
+        # renders to right now. Held on the root so a refresh can re-read it:
+        # nothing on a client can call `read`, so a push is the only way a stat
+        # ever changes over the wire.
+        stat = _WireStat(self.root, label, read, on_click, render)
+        self.root._state.stats.append(stat)
+        self._publish(stat.as_frame())
+        return stat
 
     @asynccontextmanager
     async def with_group(
-        self, title: str, auto_collapse: bool = False
+        self, title: str, collapse_when_done: bool = True
     ) -> AsyncGenerator[SolveigInterface, Any]:
-        gid = self._next_id()
-        # `parent` is the group THIS interface represents — None for the root,
-        # the group id for a `_WireGroup`. It is WHO CALLED with_group, not a
-        # stack peek, so a group created on another group pins that one as its
-        # parent even when frames interleave with siblings.
-        parent: int | None = self._group_id
-        self._publish(
-            {"type": "group_start", "id": gid, "title": title, "parent": parent}
-        )
-        await self._flush()
-        try:
-            # Yield a SCOPED child that pins its own id on every frame it emits,
-            # rather than `self` — the caller's explicit reference IS the target,
-            # so two parallel open groups draw into their own group, never "the
-            # latest one".
-            yield _WireGroup(self, gid)
-        finally:
-            self._publish({"type": "group_end", "id": gid})
-            await self._flush()
+        group = _WireGroup(self, title, collapse_when_done)
+        async with group:
+            # Membership for exactly the group's lifetime, which is what lets
+            # `self.cancel_task()` reach work started inside it.
+            self._children.add(group)
+            try:
+                yield group
+            finally:
+                self._children.discard(group)
 
-    async def set_status(
+    async def _set_status(
         self, status: str | None, duration: float | None = None
     ) -> None:
-        await self._send_verb("set_status", status=status, duration=duration)
+        await self._emit(protocol.SetStatus(status=status, duration=duration))
 
-    def refresh_stats(self) -> None:
-        self._publish({"type": "refresh_stats"})
+    def _refresh_stats(self) -> None:
+        # Re-read every stat and push its current text. The bare marker frame
+        # this used to send carried no values at all, so a client had nothing
+        # to redraw WITH - the refresh has to be the values.
+        for stat in self.root._state.stats:
+            self._publish(stat.as_frame())
+        self._publish(protocol.RefreshStats())
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -479,109 +513,119 @@ class WireInterface(SolveigInterface):
 
     # -- input ---------------------------------------------------------------
 
-    async def _ask_question(self, question: str, default: str = "") -> str:
+    def _open_ask(self) -> tuple[int, asyncio.Future[str]]:
+        """Mint an ask id and the future the first answer resolves.
+
+        The frame itself is built by the caller, because the two asks are two
+        frame types now. Publishing it stamps THIS interface's group, which is
+        how a client draws a consent prompt inside the tool that raised it -
+        nothing identifying the group is passed anywhere, since the receiver IS
+        the group.
+        """
         ask_id = self._next_id()
-        future = asyncio.get_running_loop().create_future()
-        self._asks[ask_id] = future
-        self._publish(
-            {
-                "type": "ask",
-                "id": ask_id,
-                "kind": "question",
-                "question": question,
-                "default": default,
-            }
+        future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+        self.root._state.asks[ask_id] = future
+        return ask_id, future
+
+    async def _ask_question(self, question: str, default: str = "") -> str:
+        ask_id, future = self._open_ask()
+        await self._emit(
+            protocol.AskQuestion(id=ask_id, question=question, default=default)
         )
-        await self._flush()
         try:
             return await future
         finally:
-            self._asks.pop(ask_id, None)
+            self.root._state.asks.pop(ask_id, None)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
-        ask_id = self._next_id()
-        future = asyncio.get_running_loop().create_future()
-        self._asks[ask_id] = future
-        self._publish(
-            {
-                "type": "ask",
-                "id": ask_id,
-                "kind": "choice",
-                "question": question,
-                "choices": choices,
-            }
+        ask_id, future = self._open_ask()
+        await self._emit(
+            protocol.AskChoice(id=ask_id, question=question, choices=choices)
         )
-        await self._flush()
         try:
             answer = await future
             return int(answer) if answer.isdigit() else choices.index(answer)
         finally:
-            self._asks.pop(ask_id, None)
+            self.root._state.asks.pop(ask_id, None)
 
 
 class _WireStat(Stat):
-    """A Stat whose refresh re-broadcasts its value over the wire."""
+    """A Stat whose refresh re-broadcasts just its own value.
 
-    def __init__(self, server: WireInterface) -> None:
-        super().__init__("", lambda: None)
-        self._server = server
+    It keeps the real `read`/`render` the owner registered, so `text` pulls from
+    the live source exactly as a local stat does. `refresh()` addresses one
+    entry - which is the point of `add_stat` handing the object back - rather
+    than making every stat re-read because one of them changed.
+    """
+
+    def __init__(
+        self,
+        interface: WireInterface,
+        label: str,
+        read: Callable[[], Any],
+        on_click: Callable[[], Awaitable[None]] | None = None,
+        render: Callable[[Any], str] | None = None,
+    ) -> None:
+        super().__init__(label, read, on_click, render)
+        self._interface = interface
+
+    def as_frame(self) -> protocol.StatValue:
+        return protocol.StatValue(label=self.label, text=self.text)
 
     def refresh(self) -> None:
-        self._server.refresh_stats()
+        self._interface._publish(self.as_frame())
 
 
 class _WireGroup(WireInterface):
-    """The child `with_group` yields — every frame it emits is pinned to one id.
+    """One collapsible group on the wire: the same interface, tagging its id.
 
-    It is NOT a second server: it shares the root's socket, id counter and all
-    registries, and only shadows `_publish` so the tag on every frame is fixed
-    to this group's id. That is the whole point — a caller holding `g` from
-    `with_group(...)` can write to it even while a SIBLING group is also open,
-    and each lands in its own group, never "the latest one". A fresh state per
-    group here would be a bug: a message added inside the group would register
-    its action closure in a dict the root's `_resolve_action` never consults.
+    It borrows nothing. The transport, the id counter and every registry are
+    reached through `root`, so there is no field list to keep in step - the bug
+    the previous hand-copying version shipped, having missed four of them. What
+    it stores is only what it IS: who contains it, what it is called, and its
+    own id.
+
+    It announces itself, too: `group_start` on entry and `group_end` on exit,
+    published THROUGH THE PARENT so the frame that opens a group carries the
+    enclosing group's tag rather than its own.
     """
 
-    def __init__(self, root: WireInterface, group_id: int) -> None:
-        # Share the root's transport and registries; DO NOT run WireInterface's
-        # own __init__, which would mint a fresh server, id counter and action/
-        # ask maps — the very isolation a group must not have.
-        object.__setattr__(self, "user_message_queue", root.user_message_queue)
-        self._root = root
-        #: This group's own id — what a `with_group` called HERE nests inside.
-        self._group_id = group_id
-        self._server = root._server
-        self._writers = root._writers
-        self._ids = root._widget_id
-        self._message_actions = root._message_actions
-        self._asks = root._asks
-        self._boxes = root._boxes
+    def __init__(
+        self, parent: WireInterface, title: str, collapse_when_done: bool = True
+    ) -> None:
+        # The BASE constructor, not WireInterface's - that one builds a fresh
+        # transport and re-registers the config observer, which is exactly the
+        # isolation a group must not have.
+        SolveigInterface.__init__(self, parent.config, parent.user_message_queue)
+        self._parent = parent
+        self._title = title
+        self._collapse_when_done = collapse_when_done
+        self._group_id = self._next_id()
 
-    def _publish(self, frame: dict[str, Any]) -> None:
-        # The group is forced, not read off a shared stack: a nested or sibling
-        # caller holds THIS object, so ITS id is the one that travels.
-        self._root._publish({**frame, "group": self._group_id})
+    async def __aenter__(self) -> _WireGroup:
+        assert isinstance(self._parent, WireInterface)
+        assert self._group_id is not None
+        # Addressable for exactly its lifetime, so an inbound `Cancel` naming
+        # this id reaches the object whose work it means.
+        self.root._state.groups[self._group_id] = self
+        # `parent` is WHO CONTAINS this group, so nesting survives frames
+        # interleaving with siblings - it is never inferred from arrival order.
+        # Published THROUGH the parent, so the frame that opens a group carries
+        # the enclosing group's tag rather than its own.
+        self._parent._publish(
+            protocol.GroupStart(
+                id=self._group_id,
+                title=self._title,
+                parent=self._parent._group_id,
+                collapse_when_done=self._collapse_when_done,
+            )
+        )
+        await self._flush()
+        return self
 
-    async def set_status(self, status, duration=None) -> None:
-        await self._root.set_status(status, duration)
-
-    def refresh_stats(self) -> None:
-        self._root.refresh_stats()
-
-    def add_stat(self, *args) -> Stat:
-        return self._root.add_stat(*args)
-
-    async def _ask_question(self, question, default="") -> str:
-        return await self._root._ask_question(question, default)
-
-    async def _ask_choice(self, question, choices) -> int:
-        return await self._root._ask_choice(question, choices)
-
-    async def start(self) -> None:
-        await self._root.start()
-
-    async def stop(self) -> None:
-        await self._root.stop()
-
-    async def wait_until_ready(self) -> None:
-        await self._root.wait_until_ready()
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        assert isinstance(self._parent, WireInterface)
+        assert self._group_id is not None
+        self.root._state.groups.pop(self._group_id, None)
+        self._parent._publish(protocol.GroupEnd(id=self._group_id))
+        await self._flush()

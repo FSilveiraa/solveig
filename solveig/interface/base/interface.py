@@ -62,10 +62,17 @@ class Stat:
     stats by label or by registration order - a parallel structure to keep in
     step.
 
-    Holds NO value. `get` reads the live source, so `config.api.model` stays the
-    single home and there is nothing to drift or re-sync. A stat that cached its
-    value would need an observer to keep the copy honest, which is one more
-    thing than the observer that already exists.
+    Holds NO value: `read` PULLS from the live source, so `config.api.model`
+    stays the single home and there is nothing to drift or re-sync. Storing the
+    value instead would put a copy of the process cwd beside the process cwd
+    (`Path`), and would make a two-source cell inexpressible - `Context` reads
+    usage AND `api.max_context`, each with its own trigger, and a stored value
+    would force whichever one changed to also know the other. Pulling is also
+    self-healing: a blanket `refresh_stats()` re-reads everything, where stored
+    values would redraw stale copies.
+
+    Named `read`, not `get`: it is what the frontend does to the source, and a
+    verb-shaped name for a plain field reads like an action the caller performs.
 
     `on_click` takes nothing: whatever it needs (a config, an interface to
     prompt on) its owner closed over when registering. That is what keeps the
@@ -76,12 +83,12 @@ class Stat:
     def __init__(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> None:
         self.label = label
-        self.get = get
+        self.read = read
         self.on_click = on_click
         #: Value -> text. The OWNER knows a context stat reads "12/128k" or
         #: "Unlimited"; the frontend only knows where to put the result.
@@ -89,7 +96,7 @@ class Stat:
 
     @property
     def text(self) -> str:
-        value = self.get()
+        value = self.read()
         return self.render(value) if self.render else str(value)
 
     @property
@@ -438,7 +445,7 @@ class SolveigInterface(ABC):
     def add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
@@ -446,13 +453,13 @@ class SolveigInterface(ABC):
         frontend can return its own subclass carrying whatever it needs to
         place one. The caller keeps the returned object as its handle -
         identity is the object, never a name."""
-        return self.root._add_stat(label, get, on_click, render)
+        return self.root._add_stat(label, read, on_click, render)
 
     @abstractmethod
     def _add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat: ...

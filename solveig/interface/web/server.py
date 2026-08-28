@@ -141,7 +141,7 @@ async def serve(interface: WebInterface, host: str, port: int) -> None:
         timeout_graceful_shutdown=2,
     )
     server = uvicorn.Server(config)
-    interface._server = server
+    interface.root._state.server = server
     serve_task = asyncio.create_task(server.serve())
 
     try:

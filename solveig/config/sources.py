@@ -28,7 +28,7 @@ LEGACY_KEY_MAP: dict[str, str] = {
     "auto_save_session": "session.auto_save",
     "theme": "interface.tui.theme",
     "code_theme": "interface.tui.code_theme",
-    "auto_collapse_tools": "interface.auto_collapse_tools",
+    "auto_collapse_tools": "interface.auto_collapse",
     "auto_copy_selection": "interface.tui.auto_copy_selection",
     "interface.theme": "interface.tui.theme",
     "interface.code_theme": "interface.tui.code_theme",

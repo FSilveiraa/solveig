@@ -61,7 +61,7 @@ def open_tool_group(
     NOTE: `auto_collapse` here says only "this tool's output is fine folded
     away" (a tool declares its own via `BaseTool.auto_collapse`; TodoTool opts
     out because its output IS the point). Whether the frontend honours that is
-    display POLICY and is read there — `interface.auto_collapse_tools` is a
+    display POLICY and is read there — `interface.auto_collapse` is a
     display setting, and a tool deciding how a terminal draws is the leak this
     seam exists to prevent. The single place the group convention lives for both
     the typed and untyped execution paths below."""
@@ -313,7 +313,7 @@ async def replay_tool_call(
 
     # Replayed tool groups start collapsed: a resumed session is historical, so
     # the result body is folded away by default (same as a live run finishing
-    # under the default auto_collapse_tools) - the user expands what they want.
+    # under the default interface.auto_collapse) - the user expands what they want.
     if instance is None:
         async with interface.with_group(
             call.tool_name, collapse_when_done=True

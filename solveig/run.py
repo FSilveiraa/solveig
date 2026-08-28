@@ -67,7 +67,7 @@ def _register_stats(
     # is the only moment this can have changed.
     interface.add_stat(
         "Path",
-        get=Filesystem.get_simple_path,
+        read=Filesystem.get_simple_path,
         render=lambda cwd: f"🗁  {cwd}",
     )
 
@@ -75,7 +75,10 @@ def _register_stats(
 
     tokens = interface.add_stat(
         "Tokens",
-        get=lambda: (conversation.usage.input_tokens, conversation.usage.output_tokens),
+        read=lambda: (
+            conversation.usage.input_tokens,
+            conversation.usage.output_tokens,
+        ),
         render=lambda t: f"{t[0]}↑ / {t[1]}↓",
     )
 
@@ -85,7 +88,7 @@ def _register_stats(
     # not have expressed: usage is pushed, max_context is observed.
     context = interface.add_stat(
         "Context",
-        get=lambda: (conversation.usage.input_tokens, config.api.max_context),
+        read=lambda: (conversation.usage.input_tokens, config.api.max_context),
         render=lambda c: f"{c[0]} / {c[1] if c[1] else 'Unlimited'}",
     )
 
@@ -99,7 +102,7 @@ def _register_stats(
 
     interface.add_stat(
         "MCP",
-        get=lambda: list(MCP_CONNECTIONS),
+        read=lambda: list(MCP_CONNECTIONS),
         render=lambda names: (
             "Disconnected"
             if not names
@@ -113,7 +116,7 @@ def _register_stats(
     # the protocol, the interface and the widget, and no producer ever set them.
     interface.add_stat(
         "Price",
-        get=lambda: client.model_info,
+        read=lambda: client.model_info,
         render=lambda info: (
             f"${info.input_price or 0}/M↑ / ${info.output_price or 0}/M↓"
             if info

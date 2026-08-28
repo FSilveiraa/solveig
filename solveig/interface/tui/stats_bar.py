@@ -111,8 +111,8 @@ class StatsBar(Widget):
         """The header stat's text, read live like any other stat.
 
         No stored `_path` and no `set_path` writing into one: whoever changes
-        the directory calls `refresh_stats()` and the getter reads the new
-        value, same as every stat in the tables."""
+        the directory calls `refresh_stats()` and the stat's `read` pulls the
+        new value, same as every stat in the tables."""
         for stat in self._stats:
             if stat.cell is Slot.HEADER:
                 return stat.text

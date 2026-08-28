@@ -162,7 +162,7 @@ class MockInterface(SolveigInterface):
         timeout_seconds: float | None = 10,
         **kwargs,
     ) -> None:
-        config = kwargs.pop("config", None) or SolveigConfig()
+        config = kwargs.pop("config", None) or SolveigConfig(cli_args=[])
         # TODO: wouldn't it make more sense to use the default test config,
         #  or just actually expect it to be passed non-optionally?
         user_message_queue = (
@@ -313,7 +313,7 @@ class MockInterface(SolveigInterface):
 
     @asynccontextmanager
     async def with_group(
-        self, title: str, auto_collapse: bool = False
+        self, title: str, collapse_when_done: bool = True
     ) -> AsyncGenerator[SolveigInterface]:
         self.groups.append(f"START: {title}")
         self.outputs.append(f"┏━ {title}")
@@ -338,7 +338,7 @@ class MockInterface(SolveigInterface):
 
     # -- status & stats ------------------------------------------------------
 
-    async def set_status(
+    async def _set_status(
         self,
         status: str | None,
         duration: float | None = None,
@@ -354,18 +354,18 @@ class MockInterface(SolveigInterface):
             else:
                 await self._handle_input(user_input)
 
-    def add_stat(
+    def _add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
-        stat = Stat(label, get, on_click, render)
+        stat = Stat(label, read, on_click, render)
         self.stats_updates.append({"add_stat": label})
         return stat
 
-    def refresh_stats(self) -> None:
+    def _refresh_stats(self) -> None:
         self.stats_updates.append({"refresh": True})
 
     # -- input ---------------------------------------------------------------

@@ -7,52 +7,30 @@ to a daemon is "construct a WireClient over that UI" — the interchangeable hal
 the design log wants (broadcast interface for a daemon, TUI for a bare agent,
 same protocol, same ABC seam).
 
-Boxes cross as ids: when the daemon asks for a box under a handle id, this client
+Boxes cross as ids: when the daemon creates a box under a handle id, this client
 calls the interface's add verb, stores the returned real box under that id, and
-routes later `invoke` frames to it. Message actions cross as NAMES, so this
-client rebuilds a `MessageActions` whose closures forward an `action` frame back
-to the daemon. The retraction (`ask_resolved`) cancels the local pending ask so
+routes later mutation frames to it. Message actions cross as NAMES, so this
+client rebuilds a `MessageActions` whose closures forward an `Action` frame back
+to the daemon. The retraction (`AskResolved`) cancels the local pending ask so
 the other interface's winning answer is shown instead.
+
+**This client owns no state the agent owns.** It registers as the message
+queue's prompt gate and returns `None` from it, so typed input is forwarded as
+an `Input` frame and never lands in a local queue nobody reads. For the same
+reason it constructs no `SubcommandRegistry`: a client-side `/config set` would
+edit state that lives in the daemon.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 from contextlib import AbstractAsyncContextManager
 from typing import Any
 
-from solveig.interface.base import MessageActions, Role, SolveigInterface
+from pydantic import ValidationError
+
+from solveig.interface.base import MessageActions, SolveigInterface
 from solveig.interface.wire import protocol
-
-#: ABC verb name -> the method the concrete interface must implement.
-_METHODS = {
-    "print": "print",
-    "add_reasoning": "add_reasoning",
-    "display_file_metadata": "display_file_metadata",
-    "display_todos": "display_todos",
-    "add_diff_box": "add_diff_box",
-    "add_tree_box": "add_tree_box",
-    "add_text_box": "add_text_box",
-    "set_status": "set_status",
-}
-
-#: Verb -> a translator that turns the raw frame `args` into the args the
-#: concrete method wants (domain objects come back from their JSON form; the
-#: wire carries the `Level` NAME, the interface wants the enum).
-_TRANSLATE = {
-    "print": lambda a: {
-        **a,
-        "level": protocol.level_from_name(a["level"]),
-    },
-    "add_tree_box": lambda a: {
-        **a,
-        "metadata": protocol.metadata_from_json(a["metadata"]),
-    },
-    "display_todos": lambda a: {
-        "todos": [protocol.todo_from_json(t) for t in a["todos"]],
-    },
-}
 
 
 class WireClient:
@@ -60,7 +38,6 @@ class WireClient:
 
     def __init__(self, interface: SolveigInterface) -> None:
         self.interface = interface
-        # self._socket_path = socket_path
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         #: Server handle id -> the real box the interface handed back.
@@ -68,11 +45,20 @@ class WireClient:
         #: Pending ask id -> the interface's in-flight ask (for retraction).
         self._asks: dict[int, asyncio.Task[Any]] = {}
         #: Open group id -> the scoped interface the real `with_group` yielded.
-        #: Verbs tagged with a group id route here; the ROOT (no group) routes
-        #: to `self.interface`. Keyed by id, not stacked, so two parallel open
-        #: groups each keep their own target — exactly like the server side.
+        #: Verbs tagged with a group id route here; an untagged frame routes to
+        #: `self.interface`. Keyed by id, not stacked, so two parallel open
+        #: groups each keep their own target — exactly like the daemon side.
         self._groups: dict[int, _GroupScope] = {}
+        #: Stat label -> the daemon's latest value for it and the handle showing
+        #: it, as ONE entry: the text and the Stat are one fact about one label,
+        #: and two maps keyed the same way would be a pair to keep in step.
+        self._stats: dict[str, _PushedStat] = {}
         self._ready = asyncio.Event()
+
+        # The queue's gate, so typed input leaves as a frame instead of landing
+        # in a local queue no agent loop is reading. Returning None swallows it
+        # here; the daemon's queue is the only real one.
+        interface.user_message_queue.prompt_handler = self._forward_input
 
     # -- transport -----------------------------------------------------------
 
@@ -82,16 +68,23 @@ class WireClient:
         )
         try:
             while line := await self._reader.readline():
-                if not line:
-                    break
-                frame = json.loads(line)
-                if frame.get("type") == "ready":
-                    # The server replayed retained history then a `ready` marker:
-                    # everything before this frame is caught up, everything after
-                    # is live. Promoted now — wait_until_ready resolves from here.
-                    self._ready.set()
+                try:
+                    frame = protocol.SERVER_FRAMES.validate_json(line)
+                except ValidationError:
+                    # A kind this client does not know, or a malformed line:
+                    # skip it and keep reading. THE forward-compat law of the
+                    # format, and now the only thing it covers - a frame this
+                    # client should have handled fails at the match instead of
+                    # disappearing in here.
                     continue
-                await self._dispatch(frame)
+                try:
+                    await self._dispatch(frame)
+                except Exception:
+                    # One bad frame must not end the connection. Without this,
+                    # any error while drawing (a widget that refuses a value, a
+                    # cancelled prompt) silently turns a live client into a dead
+                    # one that is still holding a socket open.
+                    continue
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
@@ -114,191 +107,284 @@ class WireClient:
                 pass
             self._writer = None
 
-    def _send(self, frame: dict[str, Any]) -> None:
-        if self._writer is not None:
-            self._writer.write(json.dumps(frame).encode() + b"\n")
+    async def _send(self, frame: protocol.ClientFrame) -> None:
+        if self._writer is None:
+            return
+        self._writer.write(frame.model_dump_json().encode() + b"\n")
+        await self._writer.drain()
 
-    async def _flush(self) -> None:
-        if self._writer is not None:
-            await self._writer.drain()
+    # -- inbound -------------------------------------------------------------
 
-    # -- dispatch -------------------------------------------------------------
+    async def _dispatch(self, frame: protocol.ServerFrameType) -> None:
+        """One frame in, one interface call out.
 
-    async def _dispatch(self, frame: dict[str, Any]) -> None:
-        ftype = frame.get("type")
-        if ftype == "verb":
-            await self._on_verb(frame)
-        elif ftype == "invoke":
-            await self._on_invoke(frame)
-        elif ftype == "ask":
-            await self._on_ask(frame)
-        elif ftype == "ask_resolved":
-            self._cancel_ask(frame.get("id"))
-        elif ftype == "group_start":
-            await self._on_group_start(frame)
-        elif ftype == "group_end":
-            await self._on_group_end(frame)
-        elif ftype == "refresh_stats":
-            self.interface.refresh_stats()
-        elif ftype == "config_update":
-            await self._on_config_update(frame)
-        # Unknown types are IGNORED — the forward-compat law of the format.
+        A `match` over frame CLASSES, so a frame kind added to the union with
+        no arm here is a type error rather than a value silently falling
+        through - which is exactly how `stat` went unrendered for as long as it
+        did under the old string dispatch.
+        """
+        target = self._target(frame)
+        match frame:
+            # -- lifecycle
+            case protocol.Ready():
+                # Retained history has been replayed; everything after this is
+                # live. `wait_until_ready` resolves from here.
+                self._ready.set()
 
-    def _target(self, frame: dict[str, Any]) -> SolveigInterface:
+            # -- groups
+            case protocol.GroupStart():
+                await self._on_group_start(frame)
+            case protocol.GroupEnd():
+                scope = self._groups.pop(frame.id, None)
+                if scope is not None:
+                    await scope.close()
+
+            # -- display verbs
+            case protocol.Print():
+                await target.print(frame.text, frame.level, prefix=frame.prefix)
+            case protocol.AddReasoning():
+                self._boxes[frame.id] = await target.add_reasoning(frame.text)
+            case protocol.DisplayFileMetadata():
+                await target.display_file_metadata(frame.path, prefix=frame.prefix)
+            case protocol.DisplayTodos():
+                await target.display_todos(frame.todos)
+            case protocol.AddDiffBox():
+                self._boxes[frame.id] = await target.add_diff_box(
+                    frame.old, frame.new, frame.title
+                )
+            case protocol.AddTreeBox():
+                self._boxes[frame.id] = await target.add_tree_box(
+                    frame.metadata, frame.title
+                )
+            case protocol.AddTextBox():
+                self._boxes[frame.id] = await target.add_text_box(
+                    frame.text, frame.title, frame.language, frame.collapsed
+                )
+            case protocol.AddMessage():
+                self._boxes[frame.id] = await target.add_message(
+                    frame.text,
+                    frame.role,
+                    self._rebuild_actions(frame.id, frame.actions),
+                )
+            case protocol.SetStatus():
+                await target.set_status(frame.status, frame.duration)
+
+            # -- box mutations
+            case protocol.TextAppend():
+                await self._on_box(frame.id, "append", text=frame.text)
+            case protocol.TextClear():
+                await self._on_box(frame.id, "clear")
+            case protocol.TextReplace() | protocol.MessageReplace():
+                await self._on_box(frame.id, "replace", text=frame.text)
+            case protocol.DiffReplace():
+                await self._on_box(
+                    frame.id, "replace", old_content=frame.old, new_content=frame.new
+                )
+            case protocol.TreeReplace():
+                await self._on_box(frame.id, "replace", metadata=frame.metadata)
+            case protocol.TreeRefresh():
+                await self._on_box(frame.id, "refresh")
+            case protocol.MessageRemove():
+                await self._on_box(frame.id, "remove")
+
+            # -- consent
+            case protocol.AskQuestion() | protocol.AskChoice():
+                await self._on_ask(frame, target)
+            case protocol.AskResolved():
+                task = self._asks.pop(frame.id, None)
+                if task is not None:
+                    task.cancel()
+
+            # -- stats and config
+            case protocol.StatValue():
+                self._on_stat(frame)
+            case protocol.RefreshStats():
+                self.interface.refresh_stats()
+            case protocol.ConfigUpdate():
+                for path, value in frame.updates.items():
+                    await self.interface.config.set(path, value)
+
+    def _target(self, frame: protocol.ServerFrame) -> SolveigInterface:
         """The interface a frame draws into: its group's scope, or the root."""
-        gid = frame.get("group")
-        if gid is not None:
-            scope = self._groups.get(gid)
+        if frame.group is not None:
+            scope = self._groups.get(frame.group)
             if scope is not None:
                 return scope.interface
         return self.interface
 
-    async def _on_group_start(self, frame: dict[str, Any]) -> None:
-        gid, title = int(frame["id"]), frame["title"]
-        # Enter the REAL interface's group scope. The parent is the group whose
-        # scope we're inside (None => root); we open on the parent's interface.
-        parent = frame.get("parent")
-        owner = self._groups[parent].interface if parent is not None else self.interface
-        scope = _GroupScope(owner, title)
+    async def _on_box(self, box_id: int, method: str, **args: Any) -> None:
+        box = self._boxes.get(box_id)
+        if box is not None:
+            await getattr(box, method)(**args)
+
+    async def _on_group_start(self, frame: protocol.GroupStart) -> None:
+        # Enter the REAL interface's group scope. `parent` is the group that
+        # CONTAINS this one (None => root), so nesting is read from the frame
+        # rather than guessed from arrival order.
+        owner = (
+            self._groups[frame.parent].interface
+            if frame.parent is not None and frame.parent in self._groups
+            else self.interface
+        )
+        scope = _GroupScope(owner, frame.title, frame.collapse_when_done)
         await scope.enter()
-        self._groups[gid] = scope
+        self._groups[frame.id] = scope
 
-    async def _on_group_end(self, frame: dict[str, Any]) -> None:
-        scope = self._groups.pop(int(frame["id"]), None)
-        if scope is not None:
-            await scope.close()
+    def _on_stat(self, frame: protocol.StatValue) -> None:
+        """Register or update one stat the daemon pushed.
 
-    async def _on_verb(self, frame: dict[str, Any]) -> None:
-        verb = frame["verb"]
-        handle_id = frame.get("id")
-        target = self._target(frame)
-
-        if verb == "add_message":
-            # Actions cross as NAMES: rebuild MessageActions whose closures send
-            # an `action` frame back to the daemon (which holds the real ones).
-            args = frame.get("args") or {}
-            box = await target.add_message(
-                args.get("text", ""),
-                Role(args.get("role", "user")),
-                self._rebuild_actions(handle_id, args.get("actions", [])),
+        First frame for a label registers it, every later one updates it.
+        """
+        existing = self._stats.get(frame.label)
+        if existing is None:
+            self._stats[frame.label] = _PushedStat(
+                self.interface, frame.label, frame.text
             )
-            if handle_id is not None and box is not None:
-                self._boxes[handle_id] = box
-            return
+        else:
+            existing.update(frame.text)
 
-        method = _METHODS.get(verb)
-        if method is None:
-            return
-        args = dict(frame.get("args") or {})
-        translate = _TRANSLATE.get(verb)
-        if translate is not None:
-            args = translate(args)
-        box = await getattr(target, method)(**args)
-        if handle_id is not None and box is not None:
-            self._boxes[handle_id] = box
+    async def _on_ask(
+        self,
+        frame: protocol.AskQuestion | protocol.AskChoice,
+        target: SolveigInterface,
+    ) -> None:
+        """Raise the daemon's prompt locally and send back the answer.
+
+        Calls the PRIVATE `_ask_*`: the daemon already ran the public verb, so
+        whatever it appended (the "Cancel processing" choice) is in the text
+        that arrived. Going through the public one here would append it a
+        second time, and choosing it would raise `UserCancel` in a coroutine
+        whose only job is to answer a socket.
+        """
+        coro = (
+            target._ask_choice(frame.question, frame.choices)
+            if isinstance(frame, protocol.AskChoice)
+            else target._ask_question(frame.question, frame.default)
+        )
+        task: asyncio.Task[Any] = asyncio.ensure_future(coro)
+        self._asks[frame.id] = task
+        try:
+            value = await task
+        except asyncio.CancelledError:
+            return  # a concurrent answer elsewhere resolved this ask
+        finally:
+            # Popped on EVERY exit, not just cancellation - an answered ask
+            # that stayed in the map would be cancelled again at disconnect.
+            self._asks.pop(frame.id, None)
+        await self._send(protocol.Answer(id=frame.id, value=str(value)))
 
     def _rebuild_actions(
-        self, message_id: int | None, action_names: list[str]
+        self, message_id: int, action_names: list[protocol.ActionName]
     ) -> MessageActions:
         """Rebuild a MessageActions whose closures forward over the wire.
 
         The daemon holds the REAL closures; this client only carries the names
-        it offered, so invoking one is "send the daemon an action frame". The
+        it offered, so invoking one is "send the daemon an Action frame". The
         daemon resolves it against the real closure. Only the buttons the
         daemon said exist are offered.
         """
         offered = set(action_names)
 
         async def _edit(text: str) -> None:
-            self._send(
-                {
-                    "type": "action",
-                    "message_id": message_id,
-                    "action": "edit",
-                    "text": text,
-                }
+            await self._send(
+                protocol.Action(
+                    message_id=message_id,
+                    action=protocol.ActionName.EDIT,
+                    text=text,
+                )
             )
-            await self._flush()
 
-        async def _fire(name: str) -> None:
-            self._send({"type": "action", "message_id": message_id, "action": name})
-            await self._flush()
+        def _fire(name: protocol.ActionName):
+            async def _send() -> None:
+                await self._send(protocol.Action(message_id=message_id, action=name))
+
+            return _send
 
         return MessageActions(
-            edit=_edit if "edit" in offered else None,
-            retry=(lambda: _fire("retry")) if "retry" in offered else None,
-            delete=(lambda: _fire("delete")) if "delete" in offered else None,
-            branch=(lambda: _fire("branch")) if "branch" in offered else None,
+            edit=_edit if protocol.ActionName.EDIT in offered else None,
+            retry=(
+                _fire(protocol.ActionName.RETRY)
+                if protocol.ActionName.RETRY in offered
+                else None
+            ),
+            delete=(
+                _fire(protocol.ActionName.DELETE)
+                if protocol.ActionName.DELETE in offered
+                else None
+            ),
+            branch=(
+                _fire(protocol.ActionName.BRANCH)
+                if protocol.ActionName.BRANCH in offered
+                else None
+            ),
         )
 
-    async def _on_invoke(self, frame: dict[str, Any]) -> None:
-        box = self._boxes.get(int(frame.get("id", 0)))
-        if box is None:
-            return
-        args = dict(frame.get("args") or {})
-        # A tree's replace carries metadata, reconstructed before the call.
-        if frame.get("method") == "replace" and "metadata" in args:
-            args["metadata"] = protocol.metadata_from_json(args["metadata"])
-        method = getattr(box, frame["method"], None)
-        if method is not None:
-            await method(**args)
+    # -- outbound ------------------------------------------------------------
 
-    async def _on_ask(self, frame: dict[str, Any]) -> None:
-        ask_id = int(frame.get("id", 0))
-        task: asyncio.Task[Any]
-        if frame.get("kind") == "choice":
-            task = asyncio.ensure_future(
-                self.interface.ask_choice(frame["question"], frame.get("choices", []))
-            )
-        else:
-            task = asyncio.ensure_future(
-                self.interface.ask_question(frame["question"], frame.get("default", ""))
-            )
-        self._asks[ask_id] = task
-        try:
-            value = await task
-        except asyncio.CancelledError:
-            return  # a concurrent answer elsewhere resolved this ask
-        self._send(
-            {
-                "type": "answer",
-                "id": ask_id,
-                "value": str(value),
-            }
-        )
-        await self._flush()
+    async def _forward_input(self, text: str) -> str | None:
+        """The queue's prompt gate: send the text on, enqueue nothing here.
 
-    def _cancel_ask(self, ask_id: int | None) -> None:
-        if ask_id is None:
-            return
-        task = self._asks.pop(ask_id, None)
-        if task is not None:
-            task.cancel()
+        Returning `None` swallows the local insert, which is the point - the
+        agent loop draining a queue lives in the daemon, and a message parked
+        in this client's queue would never be read by anything.
+        """
+        await self._send(protocol.Input(text=text))
+        return None
 
-    async def _on_config_update(self, frame: dict[str, Any]) -> None:
-        """Change the interface's own config based on the received update."""
-        for path, value in frame.get("updates", {}).items():
-            await self.interface.config.set(path, value)
+    async def cancel(self, group: int | None = None) -> None:
+        """Ask the daemon to stop work. `None` means everything it is doing.
+
+        A request, not a cancellation: every cancel scope lives in the daemon
+        because that is where the agent loop, the tools and the model requests
+        run. Nothing here can stop work in another process.
+        """
+        await self._send(protocol.Cancel(group=group))
+
+
+class _PushedStat:
+    """One stat the daemon pushes, and the local Stat that shows it.
+
+    A `Stat` holds no value: `read` PULLS from a live source. Here there is no
+    such source - the value exists only as whatever arrived last - so this
+    object IS it, and `read` pulls from the text on this object. That keeps the
+    contract intact rather than teaching every frontend to store values for the
+    sake of the one that has to.
+
+    Constructed with its text already set, so `add_stat` can be called from
+    here and there is no moment where the handle exists without a value to
+    read.
+    """
+
+    def __init__(self, interface: SolveigInterface, label: str, text: str) -> None:
+        self.text = text
+        self.handle = interface.add_stat(label, lambda: self.text)
+
+    def update(self, text: str) -> None:
+        self.text = text
+        self.handle.refresh()
 
 
 class _GroupScope:
     """One open group on the client: the real interface's with_group entered.
 
     `with_group` is an async context manager, but its lifetime on the wire spans
-    many frames (everything tagged with the group id until group_end). So the
-    client drives it manually: enter it on `group_start` to get the scoped
-    child, keep it open across verb frames, exit it on `group_end`.
+    many frames (everything tagged with the group id until GroupEnd). So the
+    client drives it manually: enter it on `GroupStart` to get the scoped
+    child, keep it open across frames, exit it on `GroupEnd`.
     """
 
-    def __init__(self, owner: SolveigInterface, title: str) -> None:
+    def __init__(
+        self, owner: SolveigInterface, title: str, collapse_when_done: bool = True
+    ) -> None:
         self._owner = owner
         self._title = title
+        self._collapse_when_done = collapse_when_done
         self._cm: AbstractAsyncContextManager[SolveigInterface] | None = None
         #: The scoped child the real interface yielded; set on enter().
         self.interface: SolveigInterface = owner
 
     async def enter(self) -> None:
-        cm = self._owner.with_group(self._title)
+        cm = self._owner.with_group(self._title, self._collapse_when_done)
         self.interface = await cm.__aenter__()
         self._cm = cm
 

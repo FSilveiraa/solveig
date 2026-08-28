@@ -32,6 +32,7 @@ import asyncio
 import itertools
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from solveig.interface.base import (
@@ -187,6 +188,33 @@ class _WebReasoningBox(MessageBox):
 # --------------------------------------------------------------------------- #
 
 
+@dataclass
+class _WebState:
+    """The bus and registries a root owns and every group under it reads.
+
+    ONE object rather than seven fields, because a group reaches all of it the
+    same way (`self.root._state`) and there is nothing to copy or keep in step.
+    `default_factory` throughout: as bare class attributes these would be
+    SHARED by every root ever built.
+    """
+
+    #: The fan-out to open browsers. Injectable, so a test or the demo harness
+    #: can watch what a run emits.
+    stream: EventStream = field(default_factory=EventStream)
+    #: Ids for boxes, messages, groups and prompts alike - one counter, so
+    #: nothing this interface mints can collide with anything else it minted.
+    ids: itertools.count[int] = field(default_factory=lambda: itertools.count(1))
+    #: Message id -> the real closures. The browser POSTs back a NAME, which is
+    #: resolved against this.
+    message_actions: dict[int, MessageActions] = field(default_factory=dict)
+    stats: dict[str, Stat] = field(default_factory=dict)
+    #: Prompt id -> the future `ask_*` is waiting on, resolved by the HTTP layer.
+    pending: dict[str, asyncio.Future[str]] = field(default_factory=dict)
+    ready: asyncio.Event = field(default_factory=asyncio.Event)
+    status: str | None = None
+    server: uvicorn.Server | None = None
+
+
 class WebInterface(SolveigInterface):
     """A SolveigInterface whose "screen" is every open browser.
 
@@ -195,6 +223,17 @@ class WebInterface(SolveigInterface):
     configure. The group stack is internal state below.
     """
 
+    if TYPE_CHECKING:
+        # The base can only promise the protocol; inside this frontend the root
+        # is always a WebInterface, which is what makes `self.root._state`
+        # typecheck. Declaration only - the runtime property is the base's.
+        @property
+        def root(self) -> WebInterface: ...
+
+    #: The group this interface draws into; None on the root. Every event it
+    #: emits carries it, so two parallel groups each tag their own.
+    _group_id: int | None = None
+
     def __init__(
         self,
         config: SolveigConfig,
@@ -202,44 +241,38 @@ class WebInterface(SolveigInterface):
         stream: EventStream | None = None,
     ) -> None:
         super().__init__(config, user_message_queue)
-        self.stream = stream or EventStream()
-        self._ids: itertools.count[int] = itertools.count(1)
-        self._message_actions: dict[int, MessageActions] = {}
-        self._stats: dict[str, Stat] = {}
-        #: A pending prompt, awaited by ask_question/ask_choice and resolved by
-        #: the HTTP layer when the browser answers.
-        self._pending: dict[str, asyncio.Future[str]] = {}
-        #: The group THIS interface represents. None for the root; a `_WebGroup`
-        #: sets it to its own id, so a `with_group` called HERE declares that as
-        #: its `parent`. It is the object's identity, never a stack position.
-        self._group_id: int | None = None
-        self._status: str | None = None
-        self._ready = asyncio.Event()
-        self._server: uvicorn.Server | None = None
+        self._state = _WebState(stream=stream or EventStream())
 
     # -- id + emit helpers ---------------------------------------------------
 
-    def _emit(self, event: dict[str, Any]) -> None:
-        # Root-level emit: content emitted through the ROOT interface carries no
-        # group (it belongs to the transcript top level). Content drawn through
-        # a group reaches a `_WebGroup`, which pins its own id instead of using
-        # this path. No stack, no "innermost" — a group is an object you write
-        # to, never a position you happened to open last.
-        self.stream.publish(event)
+    @property
+    def stream(self) -> EventStream:
+        """The one bus, wherever it is asked for. Derived rather than copied
+        into each group: there is nothing to keep in step, and `server.py`
+        reads it off whichever interface it was handed."""
+        return self.root._state.stream
 
-    @asynccontextmanager
-    async def _scope(self, title: str, auto_collapse: bool = False):
-        gid = next(self._ids)
-        # `parent` is the group THIS interface represents — None for the root,
-        # this group's own id when `self` is a `_WebGroup`. It is WHO called
-        # with_group, not a stack peek, so a group opened inside a group pins
-        # its real parent even when sibling frames interleave.
-        parent = self._group_id
-        self._emit({"type": "group_start", "id": gid, "title": title, "parent": parent})
-        try:
-            yield gid
-        finally:
-            self._emit({"type": "group_end", "id": gid})
+    def _emit(self, event: dict[str, Any]) -> None:
+        """The one emission path, root and group alike.
+
+        A group tags every event it emits with its own id, and the root's is
+        None so its events carry none. The tag comes from the OBJECT doing the
+        emitting, never from a stack — a group is something you write to, not a
+        position you happened to open last.
+        """
+        if self._group_id is not None:
+            event = {**event, "group": self._group_id}
+        self.root._state.stream.publish(event)
+
+    def _emit_at_root(self, event: dict[str, Any]) -> None:
+        """Emit WITHOUT this interface's group tag.
+
+        For the app-wide surfaces: a status change or a stats redraw is not
+        part of whatever group happened to raise it, and a browser that saw one
+        tagged would file it under that group. The base already routes those
+        verbs to the root, so this only matters for `add_stat`'s own event.
+        """
+        self.root._state.stream.publish(event)
 
     # -- text ----------------------------------------------------------------
 
@@ -265,8 +298,8 @@ class WebInterface(SolveigInterface):
     async def add_message(
         self, text: str, role: Role, actions: MessageActions
     ) -> MessageBox:
-        mid = next(self._ids)
-        self._message_actions[mid] = actions
+        mid = next(self.root._state.ids)
+        self.root._state.message_actions[mid] = actions
         self._emit(
             {
                 "type": "message",
@@ -288,7 +321,7 @@ class WebInterface(SolveigInterface):
         return _WebMessageBox(self.stream, mid)
 
     async def add_reasoning(self, text: str) -> MessageBox:
-        rid = next(self._ids)
+        rid = next(self.root._state.ids)
         self._emit({"type": "reasoning", "id": rid, "text": text})
         return _WebReasoningBox(self.stream, rid)
 
@@ -332,7 +365,7 @@ class WebInterface(SolveigInterface):
         new_content: str,
         title: str | None = None,
     ) -> DiffBox:
-        box_id = next(self._ids)
+        box_id = next(self.root._state.ids)
         self._emit(
             {
                 "type": "diff",
@@ -350,7 +383,7 @@ class WebInterface(SolveigInterface):
         title: str | None = None,
         display_metadata: bool = False,
     ) -> TreeBox:
-        box_id = next(self._ids)
+        box_id = next(self.root._state.ids)
         self._emit(
             {
                 "type": "tree",
@@ -368,7 +401,7 @@ class WebInterface(SolveigInterface):
         language: str | None = None,
         collapsed: bool = False,
     ) -> TextBox:
-        box_id = next(self._ids)
+        box_id = next(self.root._state.ids)
         language_name = get_language(language.lstrip(".")) if language else None
         self._emit(
             {
@@ -382,45 +415,51 @@ class WebInterface(SolveigInterface):
         )
         return _WebTextBox(self.stream, box_id)
 
-    def add_stat(
+    def _add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
-        stat = _WebStat(label, get, on_click, render, self)
-        self._stats[label] = stat
-        self._emit({"type": "stats", "stats": self._stats_json()})
+        stat = _WebStat(label, read, on_click, render, self)
+        self.root._state.stats[label] = stat
+        self._emit_at_root({"type": "stats", "stats": self._stats_json()})
         return stat
 
     def _stats_json(self) -> list[dict[str, Any]]:
-        return [{"label": s.label, "text": s.text} for s in self._stats.values()]
+        return [
+            {"label": s.label, "text": s.text} for s in self.root._state.stats.values()
+        ]
 
     # -- groups --------------------------------------------------------------
 
     @asynccontextmanager
     async def with_group(
-        self, title: str, auto_collapse: bool = False
+        self, title: str, collapse_when_done: bool = True
     ) -> AsyncGenerator[SolveigInterface, Any]:
-        async with self._scope(title, auto_collapse) as gid:
-            # Scoped child: same bus, tagged with this group. Root-level verbs
-            # (status, stats, prompts) stay on the root.
-            child = _WebGroup(self, gid)
-            yield child
+        group = _WebGroup(self, title, collapse_when_done)
+        async with group:
+            # Membership for exactly the group's lifetime, which is what lets
+            # `self.cancel_task()` reach work started inside it.
+            self._children.add(group)
+            try:
+                yield group
+            finally:
+                self._children.discard(group)
 
     # -- status & stats ------------------------------------------------------
 
-    async def set_status(
+    async def _set_status(
         self,
         status: str | None,
         duration: float | None = None,
     ) -> None:
-        self._status = status
-        self._emit({"type": "status", "status": status, "duration": duration})
+        self.root._state.status = status
+        self._emit_at_root({"type": "status", "status": status, "duration": duration})
 
-    def refresh_stats(self) -> None:
-        self._emit({"type": "stats", "stats": self._stats_json()})
+    def _refresh_stats(self) -> None:
+        self._emit_at_root({"type": "stats", "stats": self._stats_json()})
 
     # -- animation -----------------------------------------------------------
 
@@ -449,25 +488,25 @@ class WebInterface(SolveigInterface):
         )
 
     async def stop(self) -> None:
-        if self._server is not None:
-            self._server.should_exit = True
+        if self.root._state.server is not None:
+            self.root._state.server.should_exit = True
 
     async def wait_until_ready(self) -> None:
-        await self._ready.wait()
+        await self.root._state.ready.wait()
 
     async def _mark_ready(self, *_: Any, **__: Any) -> None:
         """BlackSheep `on_start` hook: the server is accepting connections."""
-        self._ready.set()
+        self.root._state.ready.set()
 
     async def _mark_stopped(self, *_: Any, **__: Any) -> None:
-        self._ready.clear()
+        self.root._state.ready.clear()
 
     # -- input ---------------------------------------------------------------
 
     async def _ask_question(self, question: str, default: str = "") -> str:
-        prompt_id = f"q{next(self._ids)}"
+        prompt_id = f"q{next(self.root._state.ids)}"
         future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
-        self._pending[prompt_id] = future
+        self.root._state.pending[prompt_id] = future
         self._emit(
             {
                 "type": "ask_question",
@@ -479,12 +518,12 @@ class WebInterface(SolveigInterface):
         try:
             return await future
         finally:
-            self._pending.pop(prompt_id, None)
+            self.root._state.pending.pop(prompt_id, None)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
-        prompt_id = f"c{next(self._ids)}"
+        prompt_id = f"c{next(self.root._state.ids)}"
         future = asyncio.get_running_loop().create_future()
-        self._pending[prompt_id] = future
+        self.root._state.pending[prompt_id] = future
         self._emit(
             {
                 "type": "ask_choice",
@@ -497,20 +536,20 @@ class WebInterface(SolveigInterface):
             answer = await future
             return int(answer) if answer.isdigit() else choices.index(answer)
         finally:
-            self._pending.pop(prompt_id, None)
+            self.root._state.pending.pop(prompt_id, None)
 
     # -- the HTTP-facing actions (called by server.py) -----------------------
 
     def answer_prompt(self, prompt_id: str, value: str) -> bool:
         """Resolve a pending ask with the user's answer. False if unknown/idle."""
-        future = self._pending.pop(prompt_id, None)
+        future = self.root._state.pending.pop(prompt_id, None)
         if future is None or future.done():
             return False
         future.set_result(value)
         return True
 
     def cancel_prompt(self, prompt_id: str) -> bool:
-        future = self._pending.pop(prompt_id, None)
+        future = self.root._state.pending.pop(prompt_id, None)
         if future is None or future.done():
             return False
         future.cancel()
@@ -519,7 +558,7 @@ class WebInterface(SolveigInterface):
     async def _resolve_action(
         self, message_id: int, action: str, text: str | None
     ) -> bool:
-        actions = self._message_actions.get(message_id)
+        actions = self.root._state.message_actions.get(message_id)
         if actions is None:
             return False
         if action == "edit" and actions.edit is not None and text is not None:
@@ -538,7 +577,7 @@ class WebInterface(SolveigInterface):
 
     def retire_message(self, message_id: int) -> None:
         """Drop a message's action closures (its widget was removed)."""
-        self._message_actions.pop(message_id, None)
+        self.root._state.message_actions.pop(message_id, None)
 
 
 class _WebStat(Stat):
@@ -551,12 +590,12 @@ class _WebStat(Stat):
     def __init__(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None,
         render: Callable[[Any], str] | None,
         interface: WebInterface,
     ) -> None:
-        super().__init__(label, get, on_click, render)
+        super().__init__(label, read, on_click, render)
         self._interface = interface
 
     def refresh(self) -> None:
@@ -564,61 +603,46 @@ class _WebStat(Stat):
 
 
 class _WebGroup(WebInterface):
-    """The child `with_group` yields: same bus, events tagged with one group.
+    """One group in the transcript: the same interface, tagging its id.
 
-    Root-level verbs (status, stats, prompts, lifecycle) delegate back to the
-    root; everything that draws goes through the interface's emit path, which
-    tags with the group id.
+    It borrows nothing. The bus, the id counter and every registry are reached
+    through `root`, so there is no field list to keep in step - and the two
+    entries the previous hand-copying version got wrong (`_status` and
+    `_server`, both snapshots of values the root reassigns) cannot be written.
+    What it stores is only what it IS: who contains it, what it is called, and
+    its own id.
+
+    It announces itself, too: `group_start` on entry and `group_end` on exit,
+    emitted THROUGH THE PARENT so the event that opens a group carries the
+    enclosing group's tag rather than its own.
     """
 
-    def __init__(self, root: WebInterface, group_id: int) -> None:
-        # Share the root's bus, id counter and registries; do NOT re-run
-        # WebInterface.__init__, which would mint a fresh counter and a fresh
-        # _message_actions the root's _resolve_action never consults. That
-        # isolation is the bug the wire _WireGroup's seam comment names: a
-        # message added inside the group would register its action closure in a
-        # dict the top of the app never reads, and its fresh id counter would
-        # collide with the root's. A group is a SCOPED VIEW of the root's
-        # screen, not a second interface with its own state.
-        self._root = root
-        self._group_id = group_id
-        self._ids = root._ids
-        self._message_actions = root._message_actions
-        self._stats = root._stats
-        self._status = root._status
-        self._server = root._server
-        self._ready = root._ready
-        # Cancellation is shared too: a cancel issued anywhere must reach work
-        # started inside a group (same reasoning as the wire _WireGroup).
-        self._active_tasks = root._active_tasks
-        self.stream = root.stream
-        self.user_message_queue = root.user_message_queue
+    def __init__(
+        self, parent: WebInterface, title: str, collapse_when_done: bool = True
+    ) -> None:
+        # The BASE constructor, not WebInterface's - that one mints a fresh bus
+        # and a fresh registry the root's `_resolve_action` would never consult.
+        SolveigInterface.__init__(self, parent.config, parent.user_message_queue)
+        self._parent = parent
+        self._title = title
+        self._collapse_when_done = collapse_when_done
+        self._group_id = next(self.root._state.ids)
 
-    def _emit(self, event: dict[str, Any]) -> None:
-        # This group's id is forced, not read off a shared stack: a nested or
-        # sibling caller holds THIS object, so ITS id travels. A `with_group`
-        # called on this group then declares `self._group_id` as the child's
-        # parent — object identity, the wire's `parent` linkage.
-        event = {**event, "group": self._group_id}
-        self.stream.publish(event)
+    async def __aenter__(self) -> _WebGroup:
+        assert isinstance(self._parent, WebInterface)
+        # `parent` is WHO CONTAINS this group, so nesting survives events
+        # interleaving with siblings - it is never inferred from arrival order.
+        self._parent._emit(
+            {
+                "type": "group_start",
+                "id": self._group_id,
+                "title": self._title,
+                "parent": self._parent._group_id,
+                "collapse_when_done": self._collapse_when_done,
+            }
+        )
+        return self
 
-    async def set_status(self, status, duration=None) -> None:
-        await self._root.set_status(status, duration)
-
-    def refresh_stats(self) -> None:
-        self._root.refresh_stats()
-
-    def add_stat(self, *args) -> Stat:
-        return self._root.add_stat(*args)
-
-    async def _ask_question(self, question, default="") -> str:
-        return await self._root._ask_question(question, default)
-
-    async def _ask_choice(self, question, choices) -> int:
-        return await self._root._ask_choice(question, choices)
-
-    async def start(self) -> None:
-        await self._root.start()
-
-    async def stop(self) -> None:
-        await self._root.stop()
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        assert isinstance(self._parent, WebInterface)
+        self._parent._emit({"type": "group_end", "id": self._group_id})

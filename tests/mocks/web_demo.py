@@ -21,6 +21,7 @@ from pydantic_ai.messages import ModelResponse
 from solveig import bootstrap
 from solveig.interface.web import WebInterface
 from solveig.run import run_async
+from solveig.user_message_queue import UserMessageQueue
 
 from .client import create_mock_model
 from .demo import load_session_for_demo
@@ -60,8 +61,11 @@ async def run_web_demo(session: str | None = None, config=None) -> None:
     # makes.
     config.api.model = "fake-model"
 
-    interface = WebInterface(config=config)
-    url = f"http://{interface.web.host}:{interface.web.port}"
+    # `run_async` re-points the queue at the session's own; this one only has
+    # to satisfy the constructor, which no longer takes an optional queue.
+    interface = WebInterface(config=config, user_message_queue=UserMessageQueue())
+    web = config.interface.web
+    url = f"http://{web.host}:{web.port}"
 
     # The only sign a server is alive is its URL - print it up front (uvicorn
     # is log_level="warning", so a bare run would show nothing and read as a

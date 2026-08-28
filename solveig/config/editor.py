@@ -365,7 +365,7 @@ def register_config_stat(
         owner, leaf = dotted.owner_of(config, path)
         return getattr(owner, leaf)
 
-    stat = interface.add_stat(label, get=current, on_click=edit)
+    stat = interface.add_stat(label, read=current, on_click=edit)
 
     @config.on_change(path)
     async def _redraw(_config: SolveigConfig, _paths: frozenset[str]) -> None:

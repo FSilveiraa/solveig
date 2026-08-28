@@ -304,11 +304,11 @@ class TerminalInterface(SolveigInterface):
     def _add_stat(
         self,
         label: str,
-        get: Callable[[], Any],
+        read: Callable[[], Any],
         on_click: Callable[[], Awaitable[None]] | None = None,
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
-        stat = TextualStat(label, get, on_click, render)
+        stat = TextualStat(label, read, on_click, render)
         self.app._stats_dashboard.add_stat(stat)
         return stat
 
@@ -497,7 +497,7 @@ class GroupInterface(TerminalInterface):
         The thing that actually makes groups display in a different visual container than root.
         Root mounts elements inside its own conversation area. Groups mounts them in its own widget.
         """
-        assert self._widget is not None
+        assert self._widget is not None  # mypy quirk
         return self._widget.query_one(CustomCollapsible.Contents)
 
     async def __aenter__(self) -> GroupInterface:
@@ -514,8 +514,13 @@ class GroupInterface(TerminalInterface):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        assert self._widget is not None  # mypy quirk
         await self.app._conversation_area.exit_group(
             group=self._widget,
+            # The caller said whether folding this away is acceptable; THIS
+            # side says whether the terminal does it. Read at close time, not
+            # at open, so toggling the setting mid-run applies to the very next
+            # group to finish.
             auto_collapse=self._collapse_when_done
-            and self.config.interface.auto_collapse_tools,
+            and self.config.interface.auto_collapse,
         )

@@ -131,7 +131,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     subcommands: ClassVar[list[str]] = []
 
     # Whether this tool's group folds itself away once the call finishes (subject
-    # to `interface.auto_collapse_tools`). False for a tool whose output IS the
+    # to `interface.auto_collapse`). False for a tool whose output IS the
     # point of the call rather than a record of it — a task plan is meant to stay
     # on screen. Declared here rather than as an `isinstance` check inside the
     # execution seam: that made the posture a privilege of one core class, so no
