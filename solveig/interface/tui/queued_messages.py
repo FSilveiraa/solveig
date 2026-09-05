@@ -7,7 +7,7 @@ from solveig.interface.themes import Palette
 from solveig.interface.tui.collapsible_widgets import (
     CustomCollapsible,
 )
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 
 
 class QueuedMessageItem(Static):
@@ -44,7 +44,9 @@ class QueuedMessagesDisplay(Vertical):
     def on_mount(self) -> None:
         # Self-register the doorbell: any mutation from any consumer
         # (main loop get, gate drain, typed input put) re-renders the display.
-        self._queue.on_change = self.update_display
+        @self._queue.on_change
+        def _on_queue_change():
+            self.update_display()
 
     def compose(self):
         """Create the widget layout."""
@@ -68,8 +70,8 @@ class QueuedMessagesDisplay(Vertical):
 
         with self._collapsible:
             with self._content_container:
-                for comment in self._queue.pending:
-                    yield QueuedMessageItem(comment, classes="queued-message-item")
+                for comment in self._queue.entries:
+                    yield QueuedMessageItem(comment.text, classes="queued-message-item")
 
     def _get_title(self) -> str:
         """Generate the collapsible title based on queue state."""
@@ -90,9 +92,9 @@ class QueuedMessagesDisplay(Vertical):
         self._content_container.remove_children()
 
         # Add current user comments from queue
-        for comment in self._queue.pending:
+        for comment in self._queue.entries:
             self._content_container.mount(
-                QueuedMessageItem(comment, classes="queued-message-item")
+                QueuedMessageItem(comment.text, classes="queued-message-item")
             )
 
     def update_display(self):

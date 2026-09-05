@@ -135,9 +135,12 @@ layers = [
     # mix the two delimiters within one layer).
     "solveig.interface.tui | solveig.session.conversation",
     "solveig.interface.base",
-    "solveig.subcommands.base : solveig.user_message_queue",
+    "solveig.subcommands.base : solveig.pending.user_message_queue",
     "solveig.config.config : solveig.config.models : solveig.config.sources",
-    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo",
+    # `solveig.pending.user_message` sits here for the same reason `todo` does: a
+    # pending message is named by the queue that holds it, the frontend that draws
+    # and edits it, and the wire that replicates it, and is owned by none of them.
+    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo | solveig.pending.user_message",
 ]
 
 # --- Coverage: every module in the package is placed ----------------------
@@ -163,9 +166,7 @@ layers = [
     "run",
     "bootstrap",
     "agent",
-    "subcommands : session : tools : mcp_servers : plugins : system_prompt : config : interface : context : api : user_message_queue",
-    # `todo` sits at the bottom beside `utils` on purpose: the todo list is a
-    # Solveig concept both tools and frontends name, owned by neither.
+    "subcommands : session : tools : mcp_servers : plugins : system_prompt : config : interface : context : api : pending",
     "utils | exceptions | todo",
 ]
 
@@ -226,6 +227,13 @@ type = "layers"
 containers = ["solveig.mcp_servers"]
 exhaustive = true
 layers = ["client"]
+
+[[tool.importlinter.contracts]]
+name = "Every solveig.pending module is placed"
+type = "layers"
+containers = ["solveig.pending"]
+exhaustive = true
+layers = ["user_message_queue", "user_message"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.plugins module is placed"

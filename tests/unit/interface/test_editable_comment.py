@@ -29,7 +29,7 @@ from solveig.interface.tui.buttons import (
 from solveig.interface.tui.widgets import EditableComment
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from tests.mocks import MockInterface
 
 

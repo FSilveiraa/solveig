@@ -30,7 +30,7 @@ from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.file import Filesystem
 
 

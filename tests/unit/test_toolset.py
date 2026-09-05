@@ -41,7 +41,7 @@ from solveig.tools.available import build_toolset, tool_classes
 from solveig.tools.base import BaseTool
 from solveig.tools.core.edit import EditTool
 from solveig.tools.result import ToolResult
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 
 pytestmark = pytest.mark.anyio

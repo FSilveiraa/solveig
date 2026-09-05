@@ -23,7 +23,7 @@ from solveig.subcommands.base import (
     SubcommandStores,
 )
 from solveig.subcommands.registry import SubcommandRegistry
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 

@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     )
 
     from solveig.interface.base import SolveigInterface
-    from solveig.user_message_queue import UserMessageQueue
+    from solveig.pending.user_message_queue import UserMessageQueue
 
 
 def _role_of(message: ModelMessage | None) -> Role | None:

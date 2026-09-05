@@ -62,7 +62,7 @@ from solveig.utils.misc import format_path_info, get_language
 if TYPE_CHECKING:
     from os import PathLike
 
-    from solveig.user_message_queue import UserMessageQueue
+    from solveig.pending.user_message_queue import UserMessageQueue
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
 _LEVEL_STYLES: dict[Level, tuple[str, str]] = {

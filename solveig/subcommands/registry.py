@@ -44,7 +44,7 @@ from solveig.subcommands.base import (
 )
 
 if TYPE_CHECKING:
-    from solveig.user_message_queue import UserMessageQueue
+    from solveig.pending.user_message_queue import UserMessageQueue
 
 
 class UnknownDependency(Exception):
@@ -97,7 +97,11 @@ class SubcommandRegistry:
         )
         # NOTE: Self-register as the queue's prompt gate: /commands are
         # dispatched before insertion; prompts pass through unchanged.
-        user_message_queue.prompt_handler = self.handle_prompt
+        @user_message_queue.on_prompt
+        def _handle_prompt(prompt: str):
+            self.handle_prompt(prompt)
+
+        user_message_queue = self.handle_prompt
         # Report a broken declaration where it can still be tied to whoever made
         # it, rather than when someone happens to type the command. Warn rather
         # than raise: one bad plugin command must not stop the app from starting.
@@ -111,8 +115,35 @@ class SubcommandRegistry:
                         stacklevel=2,
                     )
 
-    async def _help_handler(self) -> None:
-        await self.help()
+    # ------------------------------------------------------------------
+    # Prompt gate — the queue's prompt_handler
+    # ------------------------------------------------------------------
+
+    async def handle_prompt(self, text: str) -> str | None:
+        """Decide what actually lands on the queue: a prompt passes through
+        untouched, a /command runs and contributes whatever it returns.
+
+        A tool subcommand returning its result text is how a `/read` the USER
+        ran reaches the assistant - the same channel a typed comment uses, so
+        it interleaves into the message being assembled at the next tool
+        boundary rather than needing a path of its own. A command with nothing
+        to say (`/config set`, `/help`) returns None and is swallowed, which is
+        also what a cancelled one does: the user stopped it, so there is
+        nothing to report."""
+        match = self._match(text)
+        if match is None:
+            return text  # not a command - an ordinary prompt
+
+        try:
+            return await self._invoke(*match) or None
+        except UserCancel:
+            return None
+        except Exception as e:
+            await self._interface.print(
+                f"Found {e.__class__.__name__} error when executing sub-command '{text}': {e}",
+                level=Level.ERROR,
+            )
+            return None
 
     # ------------------------------------------------------------------
     # Invocation
@@ -231,38 +262,12 @@ class SubcommandRegistry:
         return None
 
     # ------------------------------------------------------------------
-    # Prompt gate — the queue's prompt_handler
-    # ------------------------------------------------------------------
-
-    async def handle_prompt(self, text: str) -> str | None:
-        """Decide what actually lands on the queue: a prompt passes through
-        untouched, a /command runs and contributes whatever it returns.
-
-        A tool subcommand returning its result text is how a `/read` the USER
-        ran reaches the assistant - the same channel a typed comment uses, so
-        it interleaves into the message being assembled at the next tool
-        boundary rather than needing a path of its own. A command with nothing
-        to say (`/config set`, `/help`) returns None and is swallowed, which is
-        also what a cancelled one does: the user stopped it, so there is
-        nothing to report."""
-        match = self._match(text)
-        if match is None:
-            return text  # not a command - an ordinary prompt
-
-        try:
-            return await self._invoke(*match) or None
-        except UserCancel:
-            return None
-        except Exception as e:
-            await self._interface.print(
-                f"Found {e.__class__.__name__} error when executing sub-command '{text}': {e}",
-                level=Level.ERROR,
-            )
-            return None
-
-    # ------------------------------------------------------------------
     # Help
     # ------------------------------------------------------------------
+
+    # TODO: wtf is this? The only usage explanation is very weird
+    async def _help_handler(self) -> None:
+        await self.help()
 
     async def help(self) -> str:
         help_str = ""

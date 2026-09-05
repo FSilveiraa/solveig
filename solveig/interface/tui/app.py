@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 
 from solveig.interface.base import SolveigInterface
 from solveig.interface.themes import DEFAULT_THEME, THEMES, Palette, to_textual_theme
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
 from .conversation_area import ConversationArea

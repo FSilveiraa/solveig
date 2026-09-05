@@ -34,7 +34,7 @@ from solveig.interface.base import (
     TextBox,
     TreeBox,
 )
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 
 
 def _dump_field(obj: Any) -> Any:

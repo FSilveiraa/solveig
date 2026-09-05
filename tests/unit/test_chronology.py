@@ -27,7 +27,7 @@ from solveig.agent import build_agent, run_turn
 from solveig.context import SolveigContext
 from solveig.exceptions import UserCancel
 from solveig.session.conversation import Conversation
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio

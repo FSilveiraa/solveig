@@ -60,7 +60,7 @@ from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
 from solveig.tools.result import ToolResult
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 
 
 def build_agent(
@@ -310,9 +310,9 @@ async def _assemble_tool_returns(
             if not isinstance(event, FunctionToolResultEvent):
                 continue
             parts.append(event.part)
-            for comment in _drain_user_comments(inbox):
-                placed.append(_PlacedComment(comment, after=event.part.tool_call_id))
-                parts.append(UserPromptPart(content=comment))
+            for comment in inbox.drain():
+                placed.append(_PlacedComment(comment.text, after=event.part.tool_call_id))
+                parts.append(UserPromptPart(content=comment.text))
             message = ModelRequest(parts=list(parts))
             if conversation.assembling:
                 await conversation.assembly_updated(message)
@@ -331,20 +331,7 @@ async def _hold_for_autonomy(deps: SolveigContext, inbox: UserMessageQueue) -> s
     await deps.interface.set_status("Awaiting confirmation to continue")
     comment = await inbox.get()
     await deps.interface.set_status(None)
-    return comment
-
-
-def _drain_user_comments(inbox: UserMessageQueue) -> list[str]:
-    """Take everything typed since the last drain, oldest first.
-
-    Non-blocking by construction: an empty inbox yields an empty list, never a
-    wait. The caller decides where the comments go."""
-    comments: list[str] = []
-    while True:
-        try:
-            comments.append(inbox.get_nowait())
-        except asyncio.QueueEmpty:
-            return comments
+    return comment.text
 
 
 def build_run_capability(
@@ -377,7 +364,7 @@ def build_run_capability(
             comments.append(await _hold_for_autonomy(ctx.deps, inbox))
         # Always-on drain: anything typed while tools ran, or while the gate was
         # blocked, rides out with this request in any autonomy mode.
-        comments.extend(_drain_user_comments(inbox))
+        comments.extend([message.text for message in inbox.drain()])
         if comments:
             message = ModelRequest(
                 parts=[UserPromptPart(content=comment) for comment in comments]

@@ -12,7 +12,7 @@ from solveig.mcp_servers.client import mcp_list  # noqa: F401 — triggers @subc
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager, session_list  # noqa: F401
 from solveig.subcommands.registry import SubcommandRegistry
-from solveig.user_message_queue import UserMessageQueue
+from solveig.pending.user_message_queue import UserMessageQueue
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 
 pytestmark = pytest.mark.anyio
@@ -402,7 +402,7 @@ class TestWhatASubcommandContributes:
 
         await queue.put(f"/read {target}")
 
-        assert queue.pending == ()  # not a comment
+        assert queue.entries == ()  # not a comment
         call, ret = (m.parts[0] for m in conversation.messages)
         assert call.tool_name == ret.tool_name == "read"
         assert call.tool_call_id == ret.tool_call_id  # the pairing providers require
@@ -417,7 +417,7 @@ class TestWhatASubcommandContributes:
 
         await queue.put("/help")
 
-        assert queue.pending == ()
+        assert queue.entries == ()
 
     async def test_a_prompt_passes_through_untouched(self):
         """The gate must tell 'not a command' apart from 'a command that
@@ -428,4 +428,4 @@ class TestWhatASubcommandContributes:
 
         await queue.put("what does this file do?")
 
-        assert queue.pending == ("what does this file do?",)
+        assert queue.entries == ("what does this file do?",)

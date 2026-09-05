@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
     import uvicorn
 
-    from solveig.user_message_queue import UserMessageQueue
+    from solveig.pending.user_message_queue import UserMessageQueue
 
 #: How a Level becomes something a browser can style. The TUI picks an emoji
 #: prefix; the web picks a CSS class. Same decision, different frontend.

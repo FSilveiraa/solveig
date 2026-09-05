@@ -53,7 +53,7 @@ from solveig.utils.file import FileMetadata
 if TYPE_CHECKING:
     from os import PathLike
 
-    from solveig.user_message_queue import UserMessageQueue
+    from solveig.pending.user_message_queue import UserMessageQueue
 
 
 def _encode(frame: protocol.ServerFrame) -> bytes:
