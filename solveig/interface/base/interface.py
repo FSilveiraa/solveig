@@ -20,6 +20,7 @@ Naming conventions:
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
@@ -151,10 +152,12 @@ class SolveigInterface(ABC):
     ) -> None:
         self.config: SolveigConfig = config
         self.user_message_queue: UserMessageQueue = user_message_queue
-        #: Cancellable work started on THIS interface. A group owns its own,
-        #: so cancelling addresses a receiver instead of searching one shared
-        #: list for "whose is this".
-        self._tasks: set[CancelScope] = set()
+        # Cancellable work started on THIS interface. A group owns its own,
+        #  so cancelling addresses a receiver instead of searching one shared
+        #  dict for "whose is this". Maps CancelScope -> Task, the scope is
+        #  necessary for cancelling, the task needs to be held as a reference
+        #  so asyncio runs it at all in case the callers doesn't.
+        self._tasks: dict[CancelScope, asyncio.Task | None] = {}
         #: The interface this one was opened under; None on a root. The only
         #: group fact the contract keeps, because the contract USES it - `root`
         #: derives from it and the cancellation tree hangs off it. What a group
@@ -187,7 +190,7 @@ class SolveigInterface(ABC):
         NOTE: a SET, not an ordered mapping. Registration order carries no
         meaning, and any rule that read one would be inferring which task the
         user meant instead of being told."""
-        return self._tasks | {
+        return self._tasks.keys() | {
             task for child in self._children for task in child.get_active_tasks()
         }
 
@@ -240,15 +243,14 @@ class SolveigInterface(ABC):
         is running.
         """
         scope = CancelScope()
-        # On THIS interface, not the root's: work opened inside a group is that
-        # group's, so `group.cancel_task()` reaches it.
-        self._tasks.add(scope)
+        self._tasks[scope] = asyncio.current_task()
+
         try:
             async with animation if animation is not None else nullcontext():
                 with scope:
                     yield scope
         finally:
-            self._tasks.discard(scope)
+            self._tasks.pop(scope, None)
         if scope.cancel_called:
             raise UserCancel()
 
@@ -284,6 +286,18 @@ class SolveigInterface(ABC):
         task.uncancel()), so the caller's task survives and this can report the
         cancel as a raised `UserCancel` instead. Same machinery as
         `asyncio.timeout()`, which is a cancel scope carrying a deadline.
+
+        NOTE: The expected usage cares about 2 types of errors: UserCancel,
+        and everything else. Example:
+        ```python
+        try:
+            with interface.with_cancellable("Thinking..."):
+                print(agent.think(prompt))
+        except UserCancel:
+            await interface.print("User cancelled thinking.", level=Level.ERROR)
+        except BaseException as err:
+            await interface.print(f"Found error while thinking:\n{err}", level=Level.ERROR)
+        ```
 
         Raising rather than handing back `scope.cancel_called` to check: the
         behaviour you get by writing nothing has to be the safe one. Forget a

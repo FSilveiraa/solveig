@@ -18,6 +18,20 @@ to its group; the interface renders. Every interaction is event → reaction →
 event, never imperative fetch → check → act. Pick the option that makes the
 project *simpler or better*, never the shortest or easiest.
 
+Alongside that, one commitment shapes the UX: **the user can always see what is
+running, and stop any of it.** Solveig acts autonomously on someone's own
+machine, so every unit of work it starts — a tool call, an MCP connection, a
+subcommand the user typed — registers as a cancellable task and says so on
+screen. Work that runs invisibly is work nobody agreed to, and being quick or
+cheap is not a reason to hide it: a spinner nobody needed costs less than a
+process the user did not know about. This is why a caller never decides whether
+its work is displayed — it declares that the work is *cancellable*, and the
+interface alone decides how to show it (which is why `with_cancellable` has no
+"animate" argument). The direction this points is one task list showing every
+in-flight unit at once — three parallel tools, an MCP connection, a `/read` the
+user typed — each cancellable on its own, with an all-cancel always within
+reach for someone who just wants out.
+
 ## Commands (via `just`)
 
 ```bash

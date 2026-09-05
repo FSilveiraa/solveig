@@ -42,11 +42,9 @@ class QueuedMessagesDisplay(Vertical):
         super().__init__(**kwargs)
 
     def on_mount(self) -> None:
-        # Self-register the doorbell: any mutation from any consumer
-        # (main loop get, gate drain, typed input put) re-renders the display.
-        @self._queue.on_change
-        def _on_queue_change():
-            self.update_display()
+        # Self-register as a queue observer, any change to pending
+        # messages re-renders the display
+        self._queue.on_change(self.update_display)
 
     def compose(self):
         """Create the widget layout."""

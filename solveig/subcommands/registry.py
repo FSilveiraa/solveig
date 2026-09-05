@@ -18,6 +18,7 @@ whoever declared it.
 
 from __future__ import annotations
 
+import asyncio
 import shlex
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -95,13 +96,10 @@ class SubcommandRegistry:
                 description="Show this help.",
             ),
         )
-        # NOTE: Self-register as the queue's prompt gate: /commands are
+        # Self-register as a prompt filter, /commands are
         # dispatched before insertion; prompts pass through unchanged.
-        @user_message_queue.on_prompt
-        def _handle_prompt(prompt: str):
-            self.handle_prompt(prompt)
-
-        user_message_queue = self.handle_prompt
+        self._user_message_queue = user_message_queue
+        self._user_message_queue.on_prompt(self.handle_prompt)
         # Report a broken declaration where it can still be tied to whoever made
         # it, rather than when someone happens to type the command. Warn rather
         # than raise: one bad plugin command must not stop the app from starting.
@@ -120,8 +118,9 @@ class SubcommandRegistry:
     # ------------------------------------------------------------------
 
     async def handle_prompt(self, text: str) -> str | None:
-        """Decide what actually lands on the queue: a prompt passes through
-        untouched, a /command runs and contributes whatever it returns.
+        """
+        Decide what actually lands on the queue: a prompt returns untouched,
+        a /command spawns a task that may have output put back in the queue.
 
         A tool subcommand returning its result text is how a `/read` the USER
         ran reaches the assistant - the same channel a typed comment uses, so
@@ -134,16 +133,9 @@ class SubcommandRegistry:
         if match is None:
             return text  # not a command - an ordinary prompt
 
-        try:
-            return await self._invoke(*match) or None
-        except UserCancel:
-            return None
-        except Exception as e:
-            await self._interface.print(
-                f"Found {e.__class__.__name__} error when executing sub-command '{text}': {e}",
-                level=Level.ERROR,
-            )
-            return None
+        subcommand, tokens = match
+        asyncio.create_task(self._run_subcommand_with_cancellable(text, subcommand, tokens))
+        return None
 
     # ------------------------------------------------------------------
     # Invocation
@@ -162,7 +154,22 @@ class SubcommandRegistry:
                 + ", ".join(sorted(t.__name__ for t in self._deps))
             ) from None
 
-    async def _invoke(self, sub: Subcommand, tokens: list[str]) -> str | None:
+    async def _run_subcommand_with_cancellable(self, text: str, subcommand: Subcommand, tokens: list[str]) -> None:
+        try:
+            async with self._interface.with_cancellable(f"Running {text}"):
+                await self._run_subcommand(text, subcommand, tokens)
+        except UserCancel:
+            await self._interface.print(
+                f"User cancelled sub-command '{text}'",
+                level=Level.WARNING,
+            )
+        except BaseException as err:
+            await self._interface.print(
+                f"Found {err.__class__.__name__} error when executing sub-command '{text}': {err}",
+                level=Level.ERROR,
+            )
+
+    async def _run_subcommand(self, text: str, subcommand: Subcommand, tokens: list[str]) -> None:
         """Parse, fill in the dependencies, call, and hand back whatever the
         handler wants to CONTRIBUTE - text to send on to the assistant, or None
         for a command whose effect was its own (`/config set`, `/help`).
@@ -177,32 +184,43 @@ class SubcommandRegistry:
         # the handler parses — otherwise argparse (tool path) would print to
         # stdout and raise SystemExit.
         if any(t in ("-h", "--help") for t in tokens):
-            await self._interface.print(f"Usage: {sub.help_line()}", level=Level.INFO)
-            return None
+            await self._interface.print(f"Usage: {subcommand.help_line()}", level=Level.INFO)
+            return
 
         try:
-            parsed = sub.parse(tokens)
+            parsed = subcommand.parse(tokens)
         except (SettingsError, ValidationError) as e:
             await self._interface.print(str(e), level=Level.ERROR)
             await self._interface.print(
-                f"Usage: {sub.subcommands[0]} {sub.usage}".rstrip(), level=Level.INFO
+                f"Usage: {subcommand.subcommands[0]} {subcommand.usage}".rstrip(), level=Level.INFO
             )
-            return None
+            return
 
         try:
             injected = {
                 name: self._resolve_dep(annotation)
-                for name, annotation in sub.dependencies.items()
+                for name, annotation in subcommand.dependencies.items()
             }
         except UnknownDependency as err:
             await self._interface.print(str(err), level=Level.ERROR)
-            return None
+            return
 
         try:
-            return await self._run_handler(sub, injected, parsed, tokens)
+            output = await self._run_handler(subcommand, injected, parsed, tokens)
         except (PluginException, ToolDisabledError) as err:
             await self._interface.print(str(err), level=Level.ERROR)
-            return None
+        else:
+            if output is not None:
+                # await self._interface.print(output, level=Level.INFO)
+
+                # NOTE: We use `put_nowait` to avoid running cyclic subcommands
+                #  from a previous subcommand's output. We can't add a ToolResponsePart
+                #  from a tool ran by the user's subcommand since there's no matching
+                #  ToolCall ID and that apparently causes API-level issues.
+                #  So it has to enter here as user input.
+                # TODO: Review the usage of `put_nowait` as "it's not a subcommand",
+                #  in the future I'll have plugins that run on user input.
+                self._user_message_queue.put_nowait(output)
 
     async def _run_handler(
         self,
@@ -265,7 +283,6 @@ class SubcommandRegistry:
     # Help
     # ------------------------------------------------------------------
 
-    # TODO: wtf is this? The only usage explanation is very weird
     async def _help_handler(self) -> None:
         await self.help()
 
