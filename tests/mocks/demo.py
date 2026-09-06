@@ -15,7 +15,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig import bootstrap
-from solveig.interface.tui.input_bar import GrowingInput
+from solveig.interface.tui.input import GrowingInput
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.run import run_async
 from solveig.session.conversation import Conversation
@@ -49,7 +49,7 @@ class DemoInterface(TerminalInterface):
     async def _type_and_submit(self, sleep_time: float, message: str) -> None:
         """Wait sleep_time, then type each character with a small jitter, then submit."""
         await asyncio.sleep(sleep_time)
-        text_input = self.app._input_widget._text_input
+        text_input = self.app._input_bar._text_input
         for char in message:
             text_input.insert(char)
             jitter = (random.random() * 2 - 1) * 0.02

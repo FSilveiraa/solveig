@@ -10,7 +10,7 @@ from textual.widget import Widget
 from textual.widgets import DataTable
 
 from solveig.interface.base import SolveigInterface, Stat
-from solveig.interface.tui.collapsible_widgets import CustomCollapsible
+from solveig.interface.tui.collapsible import CustomCollapsible
 
 
 class Slot(Enum):

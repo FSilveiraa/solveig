@@ -12,7 +12,7 @@ from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
 from solveig.exceptions import UserCancel
-from .conversation_area import ConversationArea
+from .chat import ChatArea
 
 from .keys import CANCEL_KEYS
 from ...pending.user_message_queue import UserMessageQueue
@@ -70,12 +70,6 @@ class GrowingInput(TextArea):
                 event.stop()
                 self.text = ""
             # If there is no text, let the event bubble up to the app to exit
-
-        elif event.key == "escape":
-            # Check if there's an active operation via the app
-            if self.app._interface.get_active_tasks():
-                event.stop()
-                self.app._interface.cancel_task()
 
         elif (
             event.key == "up"
@@ -143,7 +137,7 @@ class InputBar(Container):
         # The framed box a prompt lives in: title on the border (which operation
         # this is about), question inside. Owns whichever prompt widget is up,
         # so tearing it down removes both.
-        self._conversation_area: ConversationArea
+        self._conversation_area: ChatArea
         self._prompt_box: Container | None = None
         self._question_line: Static | None = None
 
@@ -157,7 +151,7 @@ class InputBar(Container):
 
     def on_mount(self):
         """Initialize styling when mounted."""
-        self._conversation_area = self.app.query_one(ConversationArea)
+        self._conversation_area = self.app.query_one(ChatArea)
         self._text_input.focus()
         self.watch(self.screen, "focused", self._on_screen_focus_changed)
 

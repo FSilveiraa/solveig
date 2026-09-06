@@ -1,17 +1,15 @@
 """Basic UI widgets for the Textual interface."""
-
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
 from textual.containers import Horizontal
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
+from solveig.interface.base import SolveigInterface, MessageBox
 from solveig.interface.base.actions import MessageActions, Role
 
-from .buttons import BranchButton, CopyButton, DeleteButton, EditButton, RetryButton
-
-if TYPE_CHECKING:
-    from solveig.interface.base import SolveigInterface
+from .button import BranchButton, CopyButton, DeleteButton, EditButton, RetryButton
+from .collapsible import TextBoxWidget
 
 
 class EditableComment(Static):
@@ -31,7 +29,7 @@ class EditableComment(Static):
         self,
         comment: str,
         *,
-        interface: "SolveigInterface",
+        interface: SolveigInterface,
         role: Role,
         actions: MessageActions,
     ):
@@ -164,3 +162,34 @@ class EditableComment(Static):
             width: auto;
         }
         """
+
+
+class CommentBox(MessageBox):
+    """A drawn conversational turn."""
+
+    def __init__(self, widget: EditableComment) -> None:
+        self.widget = widget
+
+    async def replace(self, text: str) -> None:
+        # `comment` is what the Copy button and the edit prompt read, so it has
+        # to move with the rendered text or the two disagree after an edit.
+        self.widget.comment = text
+        for markdown in self.widget.query(Markdown):
+            await markdown.update(f"🗩 ⠀{text}")
+            break
+
+    async def remove(self) -> None:
+        await self.widget.remove()
+
+
+class ReasoningBox(MessageBox):
+    """A drawn reasoning block: no role, no actions, folded away by default."""
+
+    def __init__(self, widget: TextBoxWidget) -> None:
+        self.widget = widget
+
+    async def replace(self, text: str) -> None:
+        self.widget.update_content(text)
+
+    async def remove(self) -> None:
+        await self.widget.remove()

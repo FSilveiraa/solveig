@@ -2,18 +2,18 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 
-from solveig.interface.tui.conversation_area import ConversationArea
+from solveig.interface.tui.chat import ChatArea
 
 
 class _HarnessApp(App):
     def compose(self) -> ComposeResult:
-        yield ConversationArea()
+        yield ChatArea()
 
 
 @pytest.mark.anyio
 async def test_add_text_mounts_into_the_given_container_not_a_shared_target():
     async with _HarnessApp().run_test() as pilot:
-        area = pilot.app.query_one(ConversationArea)
+        area = pilot.app.query_one(ChatArea)
         container_a = Vertical()
         container_b = Vertical()
         await area.mount(container_a)
@@ -31,7 +31,7 @@ async def test_add_text_mounts_into_the_given_container_not_a_shared_target():
 @pytest.mark.anyio
 async def test_enter_group_mounts_into_the_given_container_and_exit_group_closes_it():
     async with _HarnessApp().run_test() as pilot:
-        area = pilot.app.query_one(ConversationArea)
+        area = pilot.app.query_one(ChatArea)
 
         group = await area.enter_group("Read foo.txt", container=area)
         assert group in list(area.children)
@@ -47,7 +47,7 @@ async def test_nested_groups_do_not_share_a_global_stack():
     """Two groups entered against different containers stay independent -
     there is no shared stack left to corrupt."""
     async with _HarnessApp().run_test() as pilot:
-        area = pilot.app.query_one(ConversationArea)
+        area = pilot.app.query_one(ChatArea)
 
         group_a = await area.enter_group("A", container=area)
         contents_a = group_a.query_one("Contents")

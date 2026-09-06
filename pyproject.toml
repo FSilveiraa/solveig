@@ -213,12 +213,11 @@ exhaustive = true
 layers = [
     "interface",
     "app",
-    "message_boxes | queued_messages | stats_bar",
-    "conversation_area",
-    "collapsible_widgets",
-    "widgets",
-    "buttons | input_bar | tree_display",
-    "keys",
+    "input | pending | stats",
+    "chat",
+    "message",
+    "collapsible",
+    "button | tree",
 ]
 
 [[tool.importlinter.contracts]]

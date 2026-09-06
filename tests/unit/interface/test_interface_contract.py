@@ -57,11 +57,11 @@ def test_box_handles_inherit_their_protocol_and_are_not_widgets():
     from textual.widget import Widget
 
     from solveig.interface.base import widgets
-    from solveig.interface.tui.collapsible_widgets import (
+    from solveig.interface.tui.collapsible import (
         CollapsibleDiffBox,
         CollapsibleTextBox,
     )
-    from solveig.interface.tui.tree_display import FileTree
+    from solveig.interface.tui.tree import FileTree
 
     for handle, contract in (
         (CollapsibleTextBox, widgets.TextBox),

@@ -44,17 +44,16 @@ from solveig.interface.base import (
     TreeBox,
 )
 from solveig.interface.tui.app import SolveigTextualApp
-from solveig.interface.tui.collapsible_widgets import (
+from solveig.interface.tui.collapsible import (
     CollapsibleDiffBox,
     CustomCollapsible,
     TextBoxWidget,
 )
-from solveig.interface.tui.conversation_area import BANNER
+from solveig.interface.tui.chat import BANNER
 from solveig.interface.tui.keys import cancel_hint
-from solveig.interface.tui.message_boxes import CommentBox, ReasoningBox
-from solveig.interface.tui.stats_bar import TextualStat
-from solveig.interface.tui.tree_display import FileTree
-from solveig.interface.tui.widgets import EditableComment
+from solveig.interface.tui.stats import TextualStat
+from solveig.interface.tui.tree import FileTree
+from solveig.interface.tui.message import EditableComment, CommentBox, ReasoningBox
 from solveig.todo import TodoItem, TodoStatus
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import format_path_info, get_language
@@ -126,7 +125,7 @@ class TerminalInterface(SolveigInterface):
 
     @property
     def _display_container(self):
-        return self.app._conversation_area
+        return self.app._chat
 
     if TYPE_CHECKING:
         # The base can only promise the protocol; inside this frontend the root
@@ -157,7 +156,7 @@ class TerminalInterface(SolveigInterface):
         final_status = (
             final_status
             if final_status is not None
-            else self.app._stats_dashboard._status
+            else self.app._stats_bar._status
         )
         await self.set_status(status)
         await asyncio.sleep(0)
@@ -168,13 +167,13 @@ class TerminalInterface(SolveigInterface):
         # to offer. Derived from the real bindings, so a rebind cannot make it lie.
         suffix = cancel_hint() if self.get_active_tasks() else None
         spinner = random.choice(list(self.root.spinners.values()))
-        self.app._stats_dashboard.start_status_animation(
+        self.app._stats_bar.start_status_animation(
             spinner, timeout=timeout, suffix=suffix
         )
         try:
             yield
         finally:
-            self.app._stats_dashboard.stop_status_animation()
+            self.app._stats_bar.stop_status_animation()
             await self.set_status(final_status)
 
     def _set_code_theme(self, code_theme: str) -> None:
@@ -235,7 +234,7 @@ class TerminalInterface(SolveigInterface):
             to_display = (
                 f"[$primary]{prefix}[/]  {to_display}"
             )
-        await self.app._conversation_area.add_text(
+        await self.app._chat.add_text(
             to_display,
             level=level,
             markup=prefix is not None,
@@ -271,7 +270,7 @@ class TerminalInterface(SolveigInterface):
 
     @property
     def stats(self):
-        return self.app._stats_dashboard
+        return self.app._stats_bar
 
     @override
     async def _set_status(
@@ -279,7 +278,7 @@ class TerminalInterface(SolveigInterface):
         status: str | None,
         duration: float | None = None,
     ) -> None:
-        dashboard = self.app._stats_dashboard
+        dashboard = self.app._stats_bar
         previous_status = dashboard._status if duration else None
         dashboard.set_status(status)
 
@@ -300,12 +299,12 @@ class TerminalInterface(SolveigInterface):
         render: Callable[[Any], str] | None = None,
     ) -> Stat:
         stat = TextualStat(label, read, on_click, render)
-        self.app._stats_dashboard.add_stat(stat)
+        self.app._stats_bar.add_stat(stat)
         return stat
 
     @override
     def _refresh_stats(self) -> None:
-        self.app._stats_dashboard.refresh_stats()
+        self.app._stats_bar.refresh_stats()
 
     # -- transcript verbs ----------------------------------------------------
 
@@ -313,7 +312,7 @@ class TerminalInterface(SolveigInterface):
         self, text: str, role: Role, actions: MessageActions
     ) -> MessageBox:
         widget = EditableComment(text, interface=self, role=role, actions=actions)
-        await self.app._conversation_area.add_element(self._display_container, widget)
+        await self.app._chat.add_element(self._display_container, widget)
         return CommentBox(widget)
 
     async def add_reasoning(self, text: str) -> MessageBox:
@@ -321,7 +320,7 @@ class TerminalInterface(SolveigInterface):
         # thinking, not speech". Another frontend is free to answer differently
         # — which is exactly why the caller no longer passes `italic`.
         widget = TextBoxWidget(text, title="Reasoning", italic=True, collapsed=True)
-        await self.app._conversation_area.add_element(self._display_container, widget)
+        await self.app._chat.add_element(self._display_container, widget)
         return ReasoningBox(widget)
 
     # -- complex display -----------------------------------------------------
@@ -376,7 +375,7 @@ class TerminalInterface(SolveigInterface):
                     theme=self.config.interface.tui.code_theme,
                 )
 
-        return await self.app._conversation_area.add_text_box(
+        return await self.app._chat.add_text_box(
             to_display,
             title=title,
             collapsed=collapsed,
@@ -416,7 +415,7 @@ class TerminalInterface(SolveigInterface):
             new_content=new_content,
             title=title or "Diff",
         )
-        await self.app._conversation_area.add_element(
+        await self.app._chat.add_element(
             self._display_container, box.widget
         )
         return box
@@ -435,7 +434,7 @@ class TerminalInterface(SolveigInterface):
         )
         if title:
             tree.widget.border_title = title
-        await self.app._conversation_area.add_element(
+        await self.app._chat.add_element(
             self._display_container, tree.widget
         )
         return tree
@@ -496,7 +495,7 @@ class GroupInterface(TerminalInterface):
         # always does, and only this frontend knows its parent is one of these.
         assert isinstance(self._parent, TerminalInterface)
         assert self._title is not None
-        self._widget = await self.app._conversation_area.enter_group(
+        self._widget = await self.app._chat.enter_group(
             title=self._title,
             # NOTE: the one place a display container is not this interface's
             # own - a group draws its collapsible INTO whatever contains it.
@@ -506,7 +505,7 @@ class GroupInterface(TerminalInterface):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         assert self._widget is not None  # mypy quirk
-        await self.app._conversation_area.exit_group(
+        await self.app._chat.exit_group(
             group=self._widget,
             # The caller said whether folding this away is acceptable; THIS
             # side says whether the terminal does it. Read at close time, not

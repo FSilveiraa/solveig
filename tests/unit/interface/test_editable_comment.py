@@ -20,13 +20,13 @@ from solveig.exceptions import UserCancel
 from solveig.interface.base import MessageActions, Role
 from solveig.interface.themes import DEFAULT_THEME
 from solveig.interface.tui.app import SolveigTextualApp
-from solveig.interface.tui.buttons import (
+from solveig.interface.tui.button import (
     BranchButton,
     DeleteButton,
     EditButton,
     RetryButton,
 )
-from solveig.interface.tui.widgets import EditableComment
+from solveig.interface.tui.message import EditableComment
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.pending.user_message_queue import UserMessageQueue
@@ -117,7 +117,7 @@ async def test_the_turns_lean_on_opposite_sides():
     )
     app = SolveigTextualApp(theme=DEFAULT_THEME)
     async with app.run_test(size=(80, 40)) as pilot:
-        area = app._conversation_area
+        area = app._chat
         user = EditableComment("hi", interface=None, role=Role.USER, actions=actions)
         assistant = EditableComment(
             "hello", interface=None, role=Role.ASSISTANT, actions=actions

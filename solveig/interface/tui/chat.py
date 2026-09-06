@@ -7,14 +7,14 @@ from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 
-from .buttons import MessageButton
-from .collapsible_widgets import (
+from .button import MessageButton
+from .collapsible import (
     CollapsibleTextBox,
     CustomCollapsible,
     TextBoxWidget,
 )
-from .tree_display import TreeDisplay
-from .widgets import EditableComment
+from .tree import TreeDisplay
+from .message import EditableComment
 from ..base import Level
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
@@ -38,7 +38,7 @@ BANNER = """
 """
 
 
-class ConversationArea(ScrollableContainer):
+class ChatArea(ScrollableContainer):
     """Scrollable area for displaying conversation messages."""
 
     def __init__(self, **kwargs):
@@ -172,7 +172,7 @@ class ConversationArea(ScrollableContainer):
         (the tinted user background) is a theme variable computed per palette."""
         return (
             """
-        ConversationArea {
+        ChatArea {
             height: 1fr;
             scrollbar-gutter: stable;
             scrollbar-size: 1 1;

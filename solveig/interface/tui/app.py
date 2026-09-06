@@ -11,11 +11,11 @@ from solveig.interface.themes import THEMES
 from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
-from .conversation_area import ConversationArea
-from .input_bar import InputBar
+from .chat import ChatArea
+from .input import InputBar
 from .keys import CANCEL_KEYS, QUIT_KEYS
-from .queued_messages import QueuedMessagesDisplay
-from .stats_bar import StatsBar
+from .pending import PendingMessages
+from .stats import StatsBar
 from ...config import SolveigConfig
 
 
@@ -46,10 +46,10 @@ class SolveigTextualApp(TextualApp):
         .warning_message { color: $text-warning; }
         .error_message   { color: $text-error; }
         """
-        + ConversationArea.get_css()
+        + ChatArea.get_css()
         + InputBar.get_css()
         + StatsBar.get_css()
-        + QueuedMessagesDisplay.get_css()
+        + PendingMessages.get_css()
     )
 
     def __init__(
@@ -79,31 +79,31 @@ class SolveigTextualApp(TextualApp):
             self.theme = _config.interface.tui.theme.name
 
         # Cached widget references (set in on_mount)
-        self._conversation_area: ConversationArea
-        self._input_widget: InputBar
-        self._stats_dashboard: StatsBar
-        self._queued_messages_display: QueuedMessagesDisplay
+        self._chat: ChatArea
+        self._input_bar: InputBar
+        self._stats_bar: StatsBar
+        self._queued_messages_display: PendingMessages
 
         # Readiness event
         self.is_ready = asyncio.Event()
 
     def compose(self) -> ComposeResult:
         """Create the main layout."""
-        yield ConversationArea()
-        yield QueuedMessagesDisplay(self._user_message_queue)
+        yield ChatArea()
+        yield PendingMessages(self._user_message_queue)
         yield InputBar(self._user_message_queue)
         yield StatsBar(self._interface)
 
     def on_mount(self) -> None:
         """Called when the app is mounted and widgets are available."""
         # Cache widget references
-        self._conversation_area = self.query_one(ConversationArea)
-        self._input_widget = self.query_one(InputBar)
-        self._stats_dashboard = self.query_one(StatsBar)
-        self._queued_messages_display = self.query_one(QueuedMessagesDisplay)
+        self._chat = self.query_one(ChatArea)
+        self._input_bar = self.query_one(InputBar)
+        self._stats_bar = self.query_one(StatsBar)
+        self._queued_messages_display = self.query_one(PendingMessages)
 
         # Focus the input widget so user can start typing immediately
-        self._input_widget.focus()
+        self._input_bar.focus()
 
     def on_ready(self) -> None:
         # Announce interface is ready
@@ -147,8 +147,8 @@ class SolveigTextualApp(TextualApp):
         self, question: str, default: str = "", title: str | None = None
     ) -> str:
         """Ask for any kind of input with a prompt."""
-        return await self._input_widget.ask_question(question, default, title)
+        return await self._input_bar.ask_question(question, default, title)
 
     async def ask_choice(self, question: str, choices, title: str | None = None) -> int:
         """Ask a multiple-choice question using Select widget."""
-        return await self._input_widget.ask_choice(question, choices, title)
+        return await self._input_bar.ask_choice(question, choices, title)
