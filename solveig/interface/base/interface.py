@@ -590,13 +590,24 @@ class SolveigInterface(ABC):
         answer is echoed via `print`, so it lands in the caller's own scope
         (e.g. inside a tool's group) rather than always at the root."""
         choices_list = list(choices)
+        cancel_index: int | None = None
         if add_cancel:
-            choices_list.append("Cancel processing")
+            cancel_index = len(choices_list)
+            choices_list.append("Cancel")
 
         async with self._cancellable():
-            choice_index = await self._ask_choice(question, choices_list)
+            try:
+                choice_index = await self._ask_choice(question, choices_list)
+            except UserCancel:
+                # NOTE: a frontend responds with either a choice index or
+                # raising a UserCancel, which is only interpreted as an
+                # answer when a Cancel option was added
+                if cancel_index is None:
+                    raise
+                choice_index = cancel_index
+
         await self.print(choices_list[choice_index], prefix=question)
-        if add_cancel and choice_index == len(choices_list) - 1:
+        if add_cancel and choice_index == cancel_index:
             raise UserCancel()
         return choice_index
 

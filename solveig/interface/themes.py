@@ -1,97 +1,133 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from pygments.styles import STYLE_MAP
 from textual.color import Color
 from textual.theme import Theme as TextualTheme
 
 
-def _blend(hex_a: str, hex_b: str, t: float) -> str:
-    """Linearly blend two hex colors."""
-    a = tuple(int(hex_a.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
-    b = tuple(int(hex_b.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
-    mixed = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
-    return "#" + "".join(f"{c:02X}" for c in mixed)
-
-
-@dataclass
+@dataclass(frozen=True)
 class Palette:
     # Info
     name: str
 
-    # UI
-    background: str
-    group: str
-    accent: str
-    border: str
-    input: str
+    # Textual properties
+    background: Color
+    foreground: Color
+    primary: Color
+    accent: Color
+    warning: Color
+    error: Color
 
-    # Messages
-    text: str
-    info: str
-    warning: str
-    error: str
+    # Custom roles
+    border: Color
+    group: Color
+    input: Color
+
+    @property
+    def is_dark(self) -> bool:
+        """Whether this is a dark theme."""
+        return self.background.brightness < 0.5
+
+    @property
+    def group_pending(self) -> Color:
+        """
+        Derives a pending group's tail color from blending the group
+        border's color with the background.
+        """
+        return self.group.blend(self.background, 0.5)
+
+    @property
+    def background_user(self) -> Color:
+        """
+        Derives the background color for user comments from the background.
+        """
+        shift = 0.08
+        return self.background.lighten(shift) if self.is_dark else self.background.darken(shift)
+
+    def to_textual_theme(self) -> TextualTheme:
+        """A registered Textual `Theme` mirroring a `Palette`. The standard slots
+        (background/foreground/primary/warning/error) fill Textual's own chrome, and
+        every Solveig-specific colour is exposed as a CSS variable under its own name
+        so widget CSS can reference `$section`/`$box`/`$group`/`$input`/
+        `$group-pending`/`$user-turn-bg` (with `$background`/`$foreground`/`$primary`/
+        `$warning`/`$error` coming from the slots). Switching themes at runtime is
+        then just `app.theme = palette.name` - Textual re-resolves every `$var`."""
+        return TextualTheme(
+            name=self.name,
+            primary=self.primary.hex,
+            secondary=self.accent.hex,
+            accent=self.accent.hex,
+            foreground=self.foreground.hex,
+            background=self.background.hex,
+            success=self.primary.hex,
+            warning=self.warning.hex,
+            error=self.error.hex,
+            surface=self.background.hex,
+            panel=self.background.hex,
+            dark=self.is_dark,
+            variables={
+                "border": self.border.hex,
+                "group": self.group.hex,
+                "input": self.input.hex,
+                "group-pending": self.group_pending.hex,
+                "background-user": self.background_user.hex,
+            },
+        )
 
 
 terracotta = Palette(
-    # Info
     name="terracotta",
-    # UI
-    background="#231D13",  # dark greyish brown
-    group="#869F89",  # pale green
-    accent="#BE5856",  # clay red
-    border="#CB9D63",  # faded yellow
-    input="#4B2828",  # faded red wine
-    # Messages
-    text="#FFF1DB",  # beige
-    info="#CB9D63",  # faded yellow
-    warning="#BC8F8F",  # rosy brown
-    error="#BE5856",  # clay red
+    background=Color.parse("#231D13"),  # dark greyish brown
+    foreground=Color.parse("#FFF1DB"),  # beige
+    primary=Color.parse("#CB9D63"),  # faded yellow
+    accent=Color.parse("#BE5856"),  # clay red
+    warning=Color.parse("#BC8F8F"),  # rosy brown
+    error=Color.parse("#BE5856"),  # clay red
+    border=Color.parse("#CB9D63"),  # faded yellow
+    group=Color.parse("#869F89"),  # pale green
+    input=Color.parse("#4B2828"),  # faded red wine
 )
 
 
 solarized_dark = Palette(
-    # Info
     name="solarized-dark",
-    # UI
-    background="#002b36",  # base3
-    group="#859900",  # green
-    accent="#D33682",  # magenta
-    border="#268bd2",  # blue
-    input="#2aa198",  # cyan
-    text="#839496",  # base0
-    info="#2aa198",  # cyan
-    warning="#B58900",  # yellow
-    error="#CB4B16",  # orange
+    background=Color.parse("#002b36"),  # base3
+    foreground=Color.parse("#839496"),  # base0
+    primary=Color.parse("#2aa198"),  # cyan
+    accent=Color.parse("#D33682"),  # magenta
+    warning=Color.parse("#B58900"),  # yellow
+    error=Color.parse("#CB4B16"),  # orange
+    border=Color.parse("#268bd2"),  # blue
+    group=Color.parse("#859900"),  # green
+    input=Color.parse("#2aa198"),  # cyan
 )
 
 
 solarized_light = Palette(
     name="solarized-light",
-    background="#fdf6e3",  # base3
-    text="#657b83",  # base00
-    input="#268bd2",  # blue
-    info="#268bd2",  # blue
-    # box="#93a1a1",         # base1 (subtle grey)
-    border="#D33682",  # violet
-    group="#859900",  # green
-    # section="#586e75",     # base01 (muted grey-blue)
-    accent="#2aa198",  # cyan
-    warning="#b58900",  # yellow
-    error="#CB4B16",  # orange
+    background=Color.parse("#fdf6e3"),  # base3
+    foreground=Color.parse("#657b83"),  # base00
+    primary=Color.parse("#268bd2"),  # blue
+    accent=Color.parse("#2aa198"),  # cyan
+    warning=Color.parse("#b58900"),  # yellow
+    error=Color.parse("#CB4B16"),  # orange
+    border=Color.parse("#D33682"),  # violet
+    group=Color.parse("#859900"),  # green
+    input=Color.parse("#268bd2"),  # blue
 )
 
 
 forest = Palette(
     name="forest",
-    background="#13261C",  # algae green
-    text="#d4d4aa",  # sage
-    input="#87ceeb",  # sky blue
-    info="#87ceeb",  # sky blue
-    border="#daa520",  # goldenrod
-    group="#87AC87",  # light green
-    accent="#93AFBA",  # sky blue
-    warning="#ff7f50",  # coral
-    error="#cd5c5c",  # indian red
+    background=Color.parse("#13261C"),  # algae green
+    foreground=Color.parse("#d4d4aa"),  # sage
+    input=Color.parse("#87ceeb"),  # sky blue
+    primary=Color.parse("#87ceeb"),  # sky blue
+    border=Color.parse("#daa520"),  # goldenrod
+    group=Color.parse("#87AC87"),  # light green
+    accent=Color.parse("#93AFBA"),  # sky blue
+    warning=Color.parse("#ff7f50"),  # coral
+    error=Color.parse("#cd5c5c"),  # Indian red
 )
 
 
@@ -99,56 +135,56 @@ midnight = Palette(
     # Info
     name="midnight",
     # UI
-    background="#121414",  # dark grey
-    group="#675DA6",  # brighter purple
-    accent="#3B679C",  # sky blue
-    border="#A46A73",  # low-contrast pink
-    input="#3B679C",  # bright blue
+    background=Color.parse("#121414"),  # dark grey
+    group=Color.parse("#675DA6"),  # brighter purple
+    accent=Color.parse("#3B679C"),  # sky blue
+    border=Color.parse("#A46A73"),  # low-contrast pink
+    input=Color.parse("#3B679C"),  # bright blue
     # Messages
-    text="#e0e0e0",  # light grey
-    info="#9FC7F0",  # bright blue
-    warning="#f39800",  # amber
-    error="#e94560",  # bright pink
+    foreground=Color.parse("#e0e0e0"),  # light grey
+    primary=Color.parse("#9FC7F0"),  # bright blue
+    warning=Color.parse("#f39800"),  # amber
+    error=Color.parse("#e94560"),  # bright pink
 )
 
 
 nord = Palette(
     name="nord",
-    background="#2E3440",  # polar night - dark blue-grey
-    group="#88C0D0",  # frost - light cyan
-    accent="#5E81AC",  # frost - deep blue
-    border="#8B96AA",  # mid blue grey - lighter panel
-    input="#5E81AC",  # frost - deep blue
-    text="#ECEFF4",  # snow storm - near white
-    info="#88C0D0",  # frost - light cyan
-    warning="#EBCB8B",  # aurora - yellow
-    error="#BF616A",  # aurora - red
+    background=Color.parse("#2E3440"),  # polar night - dark blue-grey
+    group=Color.parse("#88C0D0"),  # frost - light cyan
+    accent=Color.parse("#5E81AC"),  # frost - deep blue
+    border=Color.parse("#8B96AA"),  # mid blue grey - lighter panel
+    input=Color.parse("#5E81AC"),  # frost - deep blue
+    foreground=Color.parse("#ECEFF4"),  # snow storm - near white
+    primary=Color.parse("#88C0D0"),  # frost - light cyan
+    warning=Color.parse("#EBCB8B"),  # aurora - yellow
+    error=Color.parse("#BF616A"),  # aurora - red
 )
 
 rose = Palette(
     name="rose",
-    background="#FAF0F0",  # blush white
-    group="#A8547A",  # deep rose
-    accent="#D4688E",  # medium pink
-    border="#C4788E",  # deep rose
-    input="#D4688E",  # medium pink
-    text="#3D2030",  # dark plum
-    info="#A8547A",  # deep rose
-    warning="#B8620A",  # warm amber
-    error="#B02828",  # deep crimson
+    background=Color.parse("#FAF0F0"),  # blush white
+    group=Color.parse("#A8547A"),  # deep rose
+    accent=Color.parse("#D4688E"),  # medium pink
+    border=Color.parse("#C4788E"),  # deep rose
+    input=Color.parse("#D4688E"),  # medium pink
+    foreground=Color.parse("#3D2030"),  # dark plum
+    primary=Color.parse("#A8547A"),  # deep rose
+    warning=Color.parse("#B8620A"),  # warm amber
+    error=Color.parse("#B02828"),  # deep crimson
 )
 
 monochrome = Palette(
     name="monochrome",
-    background="#111111",  # near black
-    group="#888888",  # mid grey
-    accent="#CCCCCC",  # light grey
-    border="#656565",  # mid dark grey
-    input="#CCCCCC",  # light grey
-    text="#E8E8E8",  # off white
-    info="#AAAAAA",  # silver
-    warning="#DDDDDD",  # bright grey
-    error="#FFFFFF",  # pure white
+    background=Color.parse("#111111"),  # near black
+    group=Color.parse("#888888"),  # mid grey
+    accent=Color.parse("#CCCCCC"),  # light grey
+    border=Color.parse("#656565"),  # mid dark grey
+    input=Color.parse("#CCCCCC"),  # light grey
+    foreground=Color.parse("#E8E8E8"),  # off white
+    primary=Color.parse("#AAAAAA"),  # silver
+    warning=Color.parse("#DDDDDD"),  # bright grey
+    error=Color.parse("#FFFFFF"),  # pure white
 )
 
 
@@ -166,50 +202,6 @@ THEMES = {
         monochrome,
     ]
 }
-
-
-def _user_turn_bg(background: str) -> str:
-    """The subtly-tinted background for a user turn: nudge the base background
-    darker (on a light theme) or lighter (on a dark one)."""
-    bg = Color.parse(background)
-    variant = bg.darken(0.08) if bg.brightness >= 0.5 else bg.lighten(0.08)
-    return variant.hex
-
-
-def to_textual_theme(palette: Palette) -> TextualTheme:
-    """A registered Textual `Theme` mirroring a `Palette`. The standard slots
-    (background/foreground/primary/warning/error) fill Textual's own chrome, and
-    every Solveig-specific colour is exposed as a CSS variable under its own name
-    so widget CSS can reference `$section`/`$box`/`$group`/`$input`/
-    `$group-pending`/`$user-turn-bg` (with `$background`/`$foreground`/`$primary`/
-    `$warning`/`$error` coming from the slots). Switching themes at runtime is
-    then just `app.theme = palette.name` - Textual re-resolves every `$var`."""
-    background = Color.parse(palette.background)
-    is_dark = background.brightness < 0.5
-    background_user = background.lighten(0.08) if is_dark else background.darken(0.08)
-    group_pending = _blend(palette.group, palette.background, 0.5)
-    return TextualTheme(
-        name=palette.name,
-        primary=palette.info,
-        secondary=palette.accent,
-        accent=palette.accent,
-        foreground=palette.text,
-        background=palette.background,
-        success=palette.info,
-        warning=palette.warning,
-        error=palette.error,
-        surface=palette.background,
-        panel=palette.background,
-        dark=is_dark,
-        variables={
-            "accent": palette.accent,
-            "border": palette.border,
-            "group": palette.group,
-            "input": palette.input,
-            "group-pending": group_pending,
-            "background-user": background_user.hex,
-        },
-    )
 
 
 DEFAULT_CODE_THEME = "coffee"

@@ -228,7 +228,7 @@ def test_cancel_hint_is_derived_from_the_bindings_that_implement_it():
     """
     from solveig.interface.tui import keys
 
-    assert keys.cancel_hint(keys.TASK_CANCEL_KEYS) == "(Ctrl+C to cancel)"
+    assert keys.cancel_hint(keys.CANCEL_KEYS) == "(Ctrl+C to cancel)"
     assert keys.cancel_hint(keys.PROMPT_CANCEL_KEYS) == "(Esc/Ctrl+C to cancel)"
     # A key nobody labelled still prints, rather than vanishing from the hint.
     assert keys.cancel_hint(("ctrl+q",)) == "(ctrl+q to cancel)"

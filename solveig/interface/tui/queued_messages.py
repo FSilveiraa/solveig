@@ -3,8 +3,6 @@
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from solveig.config import SolveigConfig
-from solveig.interface.themes import Palette
 from solveig.interface.tui.collapsible_widgets import (
     CustomCollapsible,
 )
@@ -54,7 +52,7 @@ class QueuedMessagesDisplay(Vertical):
 
         # Create collapsible with custom title
         # Center section shows the message count, styled with theme color
-        center = f"[$info]{self._get_title()}[/]"
+        center = f"[$primary]{self._get_title()}[/]"
         self._collapsible = CustomCollapsible(
             left_collapsed="Message queue - Click to expand",
             left_expanded="Message queue - Click to collapse",
@@ -106,7 +104,7 @@ class QueuedMessagesDisplay(Vertical):
 
         if count > 0 and self._collapsible is not None:
             # Update title
-            center = f"[$info]{self._get_title()}[/]"
+            center = f"[$primary]{self._get_title()}[/]"
             self._collapsible.update_title(center=center)
             # Refresh message list
             self._refresh_messages()
@@ -133,7 +131,7 @@ class QueuedMessagesDisplay(Vertical):
 
         QueuedMessagesDisplay CollapsibleTitle {
             background: $background;
-            color: $info;
+            color: $primary;
             padding: 0 1;
             margin: 0;
             height: 1;

@@ -127,7 +127,7 @@ class StatsBar(Widget):
             )
         if self._status_suffix:
             status_text = f"{status_text} {self._status_suffix}"
-        return f"[$info]{status_text}[/]" if status_text else ""
+        return f"[$primary]{status_text}[/]" if status_text else ""
 
     def compose(self):
         """Create collapsible with stats tables."""

@@ -65,12 +65,9 @@ if TYPE_CHECKING:
     from solveig.pending.user_message_queue import UserMessageQueue
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
-_LEVEL_STYLES: dict[Level, tuple[str, str]] = {
-    Level.TEXT: ("text", ""),
-    Level.INFO: ("info", ""),
-    Level.WARNING: ("warning", "⚠  Warning: "),
-    Level.ERROR: ("error", "🗙 Error: "),
-    Level.SUCCESS: ("info", "✓ "),
+LEVEL_SYMBOLS: dict[Level, str] = {
+    Level.WARNING: "⚠",
+    Level.ERROR: "🗙",
 }
 
 
@@ -232,15 +229,15 @@ class TerminalInterface(SolveigInterface):
         *,
         prefix: str | None = None,
     ) -> None:
-        style, emoji = _LEVEL_STYLES.get(level, ("text", ""))
-        to_display = f"{emoji}{text}" if emoji else text
+        symbol = LEVEL_SYMBOLS.get(level)
+        to_display = f"{symbol} {text}" if symbol else text
         if prefix:
             to_display = (
-                f"[$info]{prefix}[/]  {to_display}"
+                f"[$primary]{prefix}[/]  {to_display}"
             )
         await self.app._conversation_area.add_text(
             to_display,
-            style,
+            level=level,
             markup=prefix is not None,
             container=self._display_container,
         )

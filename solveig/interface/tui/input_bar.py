@@ -12,8 +12,9 @@ from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
 from solveig.exceptions import UserCancel
+from .conversation_area import ConversationArea
 
-from .keys import PROMPT_CANCEL_KEYS
+from .keys import CANCEL_KEYS
 from ...pending.user_message_queue import UserMessageQueue
 
 
@@ -72,10 +73,9 @@ class GrowingInput(TextArea):
 
         elif event.key == "escape":
             # Check if there's an active operation via the app
-            interface = self.app.interface
-            if interface is not None and interface.get_active_tasks():
+            if self.app._interface.get_active_tasks():
                 event.stop()
-                interface.cancel_task()
+                self.app._interface.cancel_task()
 
         elif (
             event.key == "up"
@@ -143,6 +143,7 @@ class InputBar(Container):
         # The framed box a prompt lives in: title on the border (which operation
         # this is about), question inside. Owns whichever prompt widget is up,
         # so tearing it down removes both.
+        self._conversation_area: ConversationArea
         self._prompt_box: Container | None = None
         self._question_line: Static | None = None
 
@@ -156,6 +157,7 @@ class InputBar(Container):
 
     def on_mount(self):
         """Initialize styling when mounted."""
+        self._conversation_area = self.app.query_one(ConversationArea)
         self._text_input.focus()
         self.watch(self.screen, "focused", self._on_screen_focus_changed)
 
@@ -172,7 +174,7 @@ class InputBar(Container):
         """Escape/Ctrl+C cancel an active question or choice prompt, from either
         the text input or the option list - this is the common ancestor of both.
         """
-        if event.key not in PROMPT_CANCEL_KEYS:
+        if event.key not in CANCEL_KEYS:
             return
         if self._mode == InputMode.QUESTION and self._question_future:
             if not self._question_future.done():
@@ -293,8 +295,7 @@ class InputBar(Container):
         self._select_widget.focus()
 
         # Scroll conversation area to keep context visible after layout
-        conversation = self.app.query_one("#conversation")
-        self.call_after_refresh(conversation.scroll_end)
+        self.call_after_refresh(self._conversation_area.scroll_end)
 
         try:
             selected_index = await self._choice_future
@@ -323,7 +324,7 @@ class InputBar(Container):
         InputBar > GrowingInput {
             height: auto;
             min-height: 3;
-            color: $text;
+            color: $foreground;
             background: $background;
             border: solid $border;
             margin: 0;

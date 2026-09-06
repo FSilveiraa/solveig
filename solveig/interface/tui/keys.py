@@ -12,23 +12,37 @@ a prompt waiting for an answer, and a task already running.
 
 from __future__ import annotations
 
-#: Cancels an in-flight task (a model request, a command). Handled by
-#: `SolveigTextualApp.on_key`, which falls through to quitting when nothing is
-#: running. Escape is deliberately NOT here: at app level it has no meaning, and
-#: claiming it does is what the old hardcoded hint got wrong.
-TASK_CANCEL_KEYS: tuple[str, ...] = ("ctrl+c",)
+from dataclasses import dataclass
 
-#: Cancels a prompt that is waiting for an answer (a question, a choice).
-#: Handled by `InputBar.on_key`, the common ancestor of both input widgets.
-PROMPT_CANCEL_KEYS: tuple[str, ...] = ("escape", "ctrl+c")
 
-#: How a key is written for a human. A key with no entry prints as bound.
+@dataclass(frozen=True)
+class Key:
+    keystroke: str
+    label: str
+
+class Keys(set[Key]):
+    _label_to_key: dict[str, Key] = {}
+
+    def __add__(self, key: str | Key) -> Key:
+        key = Key()
+        return super().__add__()
+
+    def __contains__(self, key: str | Key) -> bool:
+        if isinstance(key, str):
+            return any(key)
+
+# Cancel a question, clear a prompt or cancel running tasks
+CANCEL_KEYS: dict[str, Key] = { "escape", "ctrl+c" }
+# Quit the application
+QUIT_KEYS: set[Key] = { "ctrl+c" }
+
+# How a key is written for a human. A key with no entry prints as bound.
 _KEY_LABELS: dict[str, str] = {
     "escape": "Esc",
     "ctrl+c": "Ctrl+C",
 }
 
 
-def cancel_hint(keys: tuple[str, ...] = TASK_CANCEL_KEYS) -> str:
+def cancel_hint(keys: tuple[str, ...] = CANCEL_KEYS) -> str:
     """The status-line hint for `keys`, built from the bindings themselves."""
     return f"({'/'.join(_KEY_LABELS.get(key, key) for key in keys)} to cancel)"

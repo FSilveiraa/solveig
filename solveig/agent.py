@@ -311,7 +311,7 @@ async def _assemble_tool_returns(
             if not isinstance(event, FunctionToolResultEvent):
                 continue
             parts.append(event.part)
-            for comment in inbox.drain():
+            for comment in await inbox.drain():
                 placed.append(_PlacedComment(comment.text, after=event.part.tool_call_id))
                 parts.append(UserPromptPart(content=comment.text))
             message = ModelRequest(parts=list(parts))

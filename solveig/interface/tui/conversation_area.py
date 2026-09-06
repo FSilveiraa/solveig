@@ -15,6 +15,7 @@ from .collapsible_widgets import (
 )
 from .tree_display import TreeDisplay
 from .widgets import EditableComment
+from ..base import Level
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
 # appears to keep extending down, fading out row by row, until exit_group()
@@ -100,12 +101,12 @@ class ConversationArea(ScrollableContainer):
         self.call_after_refresh(_after_mount)
 
     async def add_text(
-        self, text: str, style: str = "text", markup: bool = False, *, container
+        self, text: str, level: Level = Level.TEXT, markup: bool = False, *, container
     ):
         """Add text with specific styling using semantic style names."""
-        style_class = f"{style}_message" if style != "text" else style
+        level_class = f"{level.name.lower()}_message"
         await self.add_element(
-            container, Static(text, classes=style_class, markup=markup)
+            container, Static(text, classes=level_class, markup=markup)
         )
 
     async def add_text_box(

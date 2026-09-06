@@ -6,18 +6,24 @@ from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
 
-from solveig.interface.base import SolveigInterface
-from solveig.interface.themes import THEMES, to_textual_theme
+from solveig.interface.base import SolveigInterface, Level
+from solveig.interface.themes import THEMES
 from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
 from .conversation_area import ConversationArea
 from .input_bar import InputBar
-from .keys import TASK_CANCEL_KEYS
+from .keys import CANCEL_KEYS, QUIT_KEYS
 from .queued_messages import QueuedMessagesDisplay
 from .stats_bar import StatsBar
 from ...config import SolveigConfig
 
+
+# Level → (style, prefix emoji) mapping for the Textual frontend.
+LEVEL_SYMBOLS: dict[Level, str] = {
+    Level.WARNING: "⚠",
+    Level.ERROR: "🗙",
+}
 
 class SolveigTextualApp(TextualApp):
     """
@@ -34,9 +40,11 @@ class SolveigTextualApp(TextualApp):
             color: $foreground;
         }
 
-        .info_message { color: $info; }
-        .warning_message { color: $warning; }
-        .error_message { color: $error; }
+        .text_message    { color: $foreground; }
+        .info_message    { color: $primary; }
+        .success_message { color: $text-success; }
+        .warning_message { color: $text-warning; }
+        .error_message   { color: $text-error; }
         """
         + ConversationArea.get_css()
         + InputBar.get_css()
@@ -59,8 +67,8 @@ class SolveigTextualApp(TextualApp):
         # Register every palette as a Textual theme and select the configured
         # one, so the widget CSS's $accent/$border/$group/... variables resolve and
         # switching themes at runtime is just `self.theme = name`.
-        for palette in THEMES.values():
-            self.register_theme(to_textual_theme(palette))
+        for theme in THEMES.values():
+            self.register_theme(theme.to_textual_theme())
 
         # This is the actual theme name that Textual will use, not a Palette
         self.theme = self._config.interface.tui.theme.name
@@ -83,13 +91,8 @@ class SolveigTextualApp(TextualApp):
         """Create the main layout."""
         yield ConversationArea()
         yield QueuedMessagesDisplay(self._user_message_queue)
-        yield InputBar(
-            self._user_message_queue,
-        )
-        yield StatsBar(
-            config=self._config,
-            interface=self._interface,
-        )
+        yield InputBar(self._user_message_queue)
+        yield StatsBar(self._interface)
 
     def on_mount(self) -> None:
         """Called when the app is mounted and widgets are available."""
@@ -114,12 +117,12 @@ class SolveigTextualApp(TextualApp):
         - If there's an active network request: cancel it
         - Otherwise: exit the application
         """
-        if event.key in TASK_CANCEL_KEYS:
+        if event.key in CANCEL_KEYS:
             # Check if there's an active operation via the interface
             if self._interface.get_active_tasks():
                 event.stop()
                 self._interface.cancel_task()
-            else:
+        elif event.key in QUIT_KEYS:
                 self.exit()
 
     async def on_event(self, event) -> None:
