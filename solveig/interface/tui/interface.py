@@ -89,17 +89,10 @@ class TerminalInterface(SolveigInterface):
         # The interface that owns the app; the root's is itself.
         # The Textual app
         self._app = SolveigTextualApp(
-            theme=self.config.interface.tui.theme,
-            input_callback=self._handle_input,
-            interface_ref=self,
             config=self.config,
+            interface=self,
             user_message_queue=self.user_message_queue,
         )
-
-        # Create observers for relevant config updates
-        @self.config.on_change("interface.tui.theme")
-        async def _on_theme_change(_config, paths):
-            self.app.theme = _config.interface.tui.theme.name
 
         @self.config.on_change("interface.tui.code_theme")
         async def _on_code_theme_change(_config, paths):
@@ -196,6 +189,7 @@ class TerminalInterface(SolveigInterface):
             return
 
         for box in boxes:
+            box.set_code_theme(code_theme)
             container = getattr(box, "_text_container", None)
             if container is None:
                 continue
@@ -242,7 +236,7 @@ class TerminalInterface(SolveigInterface):
         to_display = f"{emoji}{text}" if emoji else text
         if prefix:
             to_display = (
-                f"[{self.config.interface.tui.theme.info}]{prefix}[/]  {to_display}"
+                f"[$info]{prefix}[/]  {to_display}"
             )
         await self.app._conversation_area.add_text(
             to_display,

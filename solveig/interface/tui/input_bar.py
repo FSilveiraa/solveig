@@ -14,6 +14,7 @@ from textual.widgets import OptionList, Static, TextArea
 from solveig.exceptions import UserCancel
 
 from .keys import PROMPT_CANCEL_KEYS
+from ...pending.user_message_queue import UserMessageQueue
 
 
 class InputMode(Enum):
@@ -60,8 +61,8 @@ class GrowingInput(TextArea):
 
         elif event.key == "ctrl+c":
             if self.mode != InputMode.FREE_FORM:
-                # A question/choice prompt is active - let it bubble to
-                # InputBar, which cancels the prompt rather than clearing text.
+                # No question/choice prompt is active, let event
+                # bubble up to the Textual app
                 pass
             elif self.text:
                 # If there is text, clear it and stop the event
@@ -71,8 +72,7 @@ class GrowingInput(TextArea):
 
         elif event.key == "escape":
             # Check if there's an active operation via the app
-            app = self.app
-            interface = getattr(app, "_interface_ref", None)
+            interface = self.app.interface
             if interface is not None and interface.get_active_tasks():
                 event.stop()
                 interface.cancel_task()
@@ -117,11 +117,12 @@ class InputBar(Container):
     Container that manages different input modes: free-form, questions, and multiple choice.
     """
 
+    DEFAULT_INPUT_PLACEHOLDER = "Type and press Enter to send, '/help' for more"
+
     def __init__(
         self,
-        *,
-        placeholder: str = "",
-        free_form_callback=None,
+        user_message_queue: UserMessageQueue,
+        placeholder: str = DEFAULT_INPUT_PLACEHOLDER,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -132,7 +133,7 @@ class InputBar(Container):
         self._choice_future: asyncio.Future | None = None
 
         # Callbacks
-        self._free_form_callback = free_form_callback
+        self._user_message_queue = user_message_queue
 
         # Child widgets
         self._text_input = GrowingInput(id="text_input", mode_getter=lambda: self._mode)
@@ -196,13 +197,8 @@ class InputBar(Container):
         if self._mode == InputMode.QUESTION and self._question_future:
             if not self._question_future.done():
                 self._question_future.set_result(user_input)
-        elif self._mode == InputMode.FREE_FORM and self._free_form_callback:
-            if asyncio.iscoroutinefunction(self._free_form_callback):
-                # run_worker (not a bare create_task) so Textual tracks it and
-                # auto-cancels on unmount instead of leaking a fire-and-forget task.
-                self.run_worker(self._free_form_callback(user_input))
-            else:
-                self._free_form_callback(user_input)
+        elif self._mode == InputMode.FREE_FORM:
+            await self._user_message_queue.put(user_input)
 
         self._text_input.focus()
 
@@ -329,7 +325,7 @@ class InputBar(Container):
             min-height: 3;
             color: $text;
             background: $background;
-            border: solid $box;
+            border: solid $border;
             margin: 0;
         }
 
@@ -340,13 +336,13 @@ class InputBar(Container):
         .prompt_box {
             height: auto;
             background: $background;
-            border: solid $box;
+            border: solid $border;
             border-title-style: bold;
             margin: 0;
             padding: 0 1;
         }
 
-        /* The free-form input is a plain $box border; when a question prompt
+        /* The free-form input is a plain $border border; when a question prompt
            raises it switches to $input. Both come from the theme via CSS, so
            a runtime theme change re-resolves them (the border can not be set
            inline - that would freeze the init-time Palette). */

@@ -55,6 +55,7 @@ from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import Level, SolveigInterface
+from solveig.pending.user_message import PendingUserMessage
 from solveig.session.conversation import Conversation, MessageId
 from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
@@ -364,7 +365,7 @@ def build_run_capability(
             comments.append(await _hold_for_autonomy(ctx.deps, inbox))
         # Always-on drain: anything typed while tools ran, or while the gate was
         # blocked, rides out with this request in any autonomy mode.
-        comments.extend([message.text for message in inbox.drain()])
+        comments.extend([message.text for message in await inbox.drain()])
         if comments:
             message = ModelRequest(
                 parts=[UserPromptPart(content=comment) for comment in comments]
@@ -389,7 +390,7 @@ async def run_turn(
     agent: Agent[SolveigContext, str],
     conversation: Conversation,
     deps: SolveigContext,
-    prompt: str,
+    prompt: PendingUserMessage,
     inbox: UserMessageQueue,
 ) -> None:
     """Drive one run. pydantic-ai is the engine (model I/O, tool schemas + tool
@@ -414,13 +415,13 @@ async def run_turn(
     Everything else adopts by object identity, and a finally syncs once more so
     a mid-run cancel commits whatever completed."""
     echo_id = await conversation.append(
-        ModelRequest(parts=[UserPromptPart(content=prompt)])
+        ModelRequest(parts=[UserPromptPart(content=prompt.text)])
     )
     history = list(conversation.messages[:-1])  # everything before the echo
     reconciler = _Reconciler(conversation, echo_id, anchor=len(history))
 
     async with agent.iter(
-        prompt,
+        prompt.text,
         message_history=history,
         usage=conversation.usage,
         deps=deps,
@@ -501,7 +502,7 @@ async def run_turn_with_retry(
     interface: SolveigInterface,
     conversation: Conversation,
     system_prompt: str,
-    prompt: str,
+    prompt: PendingUserMessage,
     inbox: UserMessageQueue,
     model: Model | None = None,
 ) -> bool:

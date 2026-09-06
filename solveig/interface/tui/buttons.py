@@ -34,7 +34,7 @@ class MessageButton(Static):
         }
 
         MessageButton:hover {
-            color: $section;
+            color: $accent;
         }
         """
 
@@ -117,6 +117,6 @@ class CopyButton(Static):
         }
 
         CopyButton:hover {
-            color: $section;
+            color: $accent;
         }
         """

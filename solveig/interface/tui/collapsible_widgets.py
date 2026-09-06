@@ -67,7 +67,7 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
         }
 
         .title-left:hover {
-            color: $section;
+            color: $accent;
         }
 
         .title-center {
@@ -182,7 +182,7 @@ class CustomCollapsible(Collapsible):
 
             CustomCollapsible > Contents {
                 padding: 0 1 0 1;
-                border-top: solid $box;
+                border-top: solid $border;
             }
             """ + DividedCollapsibleTitleBar.get_css()
 
@@ -296,7 +296,7 @@ class TextBoxWidget(Widget):
             margin: 1;
             height: auto;
             padding: 0 0;
-            border: solid $box;
+            border: solid $border;
             border-title-style: bold;
             color: $foreground;
             background: $background;

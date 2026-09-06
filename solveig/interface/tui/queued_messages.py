@@ -3,6 +3,7 @@
 from textual.containers import Vertical
 from textual.widgets import Static
 
+from solveig.config import SolveigConfig
 from solveig.interface.themes import Palette
 from solveig.interface.tui.collapsible_widgets import (
     CustomCollapsible,
@@ -34,12 +35,11 @@ class QueuedMessagesDisplay(Vertical):
     from any consumer, no per-call-site notification.
     """
 
-    def __init__(self, queue: UserMessageQueue, theme: Palette, **kwargs):
+    def __init__(self, queue: UserMessageQueue):
+        super().__init__()
         self._queue = queue
-        self._theme = theme
         self._collapsible: CustomCollapsible | None = None
         self._content_container: Vertical | None = None
-        super().__init__(**kwargs)
 
     def on_mount(self) -> None:
         # Self-register as a queue observer, any change to pending
@@ -54,7 +54,7 @@ class QueuedMessagesDisplay(Vertical):
 
         # Create collapsible with custom title
         # Center section shows the message count, styled with theme color
-        center = f"[{self._theme.info}]{self._get_title()}[/]"
+        center = f"[$info]{self._get_title()}[/]"
         self._collapsible = CustomCollapsible(
             left_collapsed="Message queue - Click to expand",
             left_expanded="Message queue - Click to collapse",
@@ -106,7 +106,7 @@ class QueuedMessagesDisplay(Vertical):
 
         if count > 0 and self._collapsible is not None:
             # Update title
-            center = f"[{self._theme.info}]{self._get_title()}[/]"
+            center = f"[$info]{self._get_title()}[/]"
             self._collapsible.update_title(center=center)
             # Refresh message list
             self._refresh_messages()
@@ -133,14 +133,14 @@ class QueuedMessagesDisplay(Vertical):
 
         QueuedMessagesDisplay CollapsibleTitle {
             background: $background;
-            color: $primary;
+            color: $info;
             padding: 0 1;
             margin: 0;
             height: 1;
         }
 
         QueuedMessagesDisplay CollapsibleTitle:hover {
-            color: $section;
+            color: $accent;
         }
 
         QueuedMessagesDisplay .queued-messages-content {

@@ -126,7 +126,7 @@ class EditableComment(Static):
         /* The tint is on the comment TEXT only, never the action buttons under
            it - so it goes on the Markdown child, not the whole comment. */
         EditableComment.role-user > Markdown {
-            background: $user-turn-bg;
+            background: $background-user;
             padding: 0 1;
         }
 
@@ -153,7 +153,7 @@ class EditableComment(Static):
         .comment-actions {
             width: auto;
             height: auto;
-            border-top: solid $box;
+            border-top: solid $border;
         }
 
         /* Each button only as wide as its label, so they pack left-to-right

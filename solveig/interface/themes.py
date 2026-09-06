@@ -21,8 +21,8 @@ class Palette:
     # UI
     background: str
     group: str
-    section: str
-    box: str
+    accent: str
+    border: str
     input: str
 
     # Messages
@@ -31,15 +31,6 @@ class Palette:
     warning: str
     error: str
 
-    # Color of a group's "still open" end cap, shown until the group resolves.
-    # Left unset (None), it's derived from `group` blended toward `background`;
-    # set explicitly per-theme to override.
-    group_pending: str | None = field(default=None)
-
-    def __post_init__(self) -> None:
-        if self.group_pending is None:
-            self.group_pending = _blend(self.group, self.background, 0.5)
-
 
 terracotta = Palette(
     # Info
@@ -47,8 +38,8 @@ terracotta = Palette(
     # UI
     background="#231D13",  # dark greyish brown
     group="#869F89",  # pale green
-    section="#BE5856",  # clay red
-    box="#CB9D63",  # faded yellow
+    accent="#BE5856",  # clay red
+    border="#CB9D63",  # faded yellow
     input="#4B2828",  # faded red wine
     # Messages
     text="#FFF1DB",  # beige
@@ -64,8 +55,8 @@ solarized_dark = Palette(
     # UI
     background="#002b36",  # base3
     group="#859900",  # green
-    section="#D33682",  # magenta
-    box="#268bd2",  # blue
+    accent="#D33682",  # magenta
+    border="#268bd2",  # blue
     input="#2aa198",  # cyan
     text="#839496",  # base0
     info="#2aa198",  # cyan
@@ -81,10 +72,10 @@ solarized_light = Palette(
     input="#268bd2",  # blue
     info="#268bd2",  # blue
     # box="#93a1a1",         # base1 (subtle grey)
-    box="#D33682",  # violet
+    border="#D33682",  # violet
     group="#859900",  # green
     # section="#586e75",     # base01 (muted grey-blue)
-    section="#2aa198",  # cyan
+    accent="#2aa198",  # cyan
     warning="#b58900",  # yellow
     error="#CB4B16",  # orange
 )
@@ -96,9 +87,9 @@ forest = Palette(
     text="#d4d4aa",  # sage
     input="#87ceeb",  # sky blue
     info="#87ceeb",  # sky blue
-    box="#daa520",  # goldenrod
+    border="#daa520",  # goldenrod
     group="#87AC87",  # light green
-    section="#93AFBA",  # sky blue
+    accent="#93AFBA",  # sky blue
     warning="#ff7f50",  # coral
     error="#cd5c5c",  # indian red
 )
@@ -110,8 +101,8 @@ midnight = Palette(
     # UI
     background="#121414",  # dark grey
     group="#675DA6",  # brighter purple
-    section="#3B679C",  # sky blue
-    box="#A46A73",  # low-contrast pink
+    accent="#3B679C",  # sky blue
+    border="#A46A73",  # low-contrast pink
     input="#3B679C",  # bright blue
     # Messages
     text="#e0e0e0",  # light grey
@@ -125,8 +116,8 @@ nord = Palette(
     name="nord",
     background="#2E3440",  # polar night - dark blue-grey
     group="#88C0D0",  # frost - light cyan
-    section="#5E81AC",  # frost - deep blue
-    box="#8B96AA",  # mid blue grey - lighter panel
+    accent="#5E81AC",  # frost - deep blue
+    border="#8B96AA",  # mid blue grey - lighter panel
     input="#5E81AC",  # frost - deep blue
     text="#ECEFF4",  # snow storm - near white
     info="#88C0D0",  # frost - light cyan
@@ -138,8 +129,8 @@ rose = Palette(
     name="rose",
     background="#FAF0F0",  # blush white
     group="#A8547A",  # deep rose
-    section="#D4688E",  # medium pink
-    box="#C4788E",  # deep rose
+    accent="#D4688E",  # medium pink
+    border="#C4788E",  # deep rose
     input="#D4688E",  # medium pink
     text="#3D2030",  # dark plum
     info="#A8547A",  # deep rose
@@ -151,8 +142,8 @@ monochrome = Palette(
     name="monochrome",
     background="#111111",  # near black
     group="#888888",  # mid grey
-    section="#CCCCCC",  # light grey
-    box="#656565",  # mid dark grey
+    accent="#CCCCCC",  # light grey
+    border="#656565",  # mid dark grey
     input="#CCCCCC",  # light grey
     text="#E8E8E8",  # off white
     info="#AAAAAA",  # silver
@@ -193,12 +184,15 @@ def to_textual_theme(palette: Palette) -> TextualTheme:
     `$group-pending`/`$user-turn-bg` (with `$background`/`$foreground`/`$primary`/
     `$warning`/`$error` coming from the slots). Switching themes at runtime is
     then just `app.theme = palette.name` - Textual re-resolves every `$var`."""
-    bg = Color.parse(palette.background)
+    background = Color.parse(palette.background)
+    is_dark = background.brightness < 0.5
+    background_user = background.lighten(0.08) if is_dark else background.darken(0.08)
+    group_pending = _blend(palette.group, palette.background, 0.5)
     return TextualTheme(
         name=palette.name,
         primary=palette.info,
-        secondary=palette.section,
-        accent=palette.section,
+        secondary=palette.accent,
+        accent=palette.accent,
         foreground=palette.text,
         background=palette.background,
         success=palette.info,
@@ -206,14 +200,14 @@ def to_textual_theme(palette: Palette) -> TextualTheme:
         error=palette.error,
         surface=palette.background,
         panel=palette.background,
-        dark=bg.brightness < 0.5,
+        dark=is_dark,
         variables={
-            "section": palette.section,
-            "box": palette.box,
+            "accent": palette.accent,
+            "border": palette.border,
             "group": palette.group,
             "input": palette.input,
-            "group-pending": palette.group_pending or palette.group,
-            "user-turn-bg": _user_turn_bg(palette.background),
+            "group-pending": group_pending,
+            "background-user": background_user.hex,
         },
     )
 

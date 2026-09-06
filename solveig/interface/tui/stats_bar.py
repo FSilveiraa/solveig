@@ -10,7 +10,6 @@ from textual.widget import Widget
 from textual.widgets import DataTable
 
 from solveig.interface.base import SolveigInterface, Stat
-from solveig.interface.themes import Palette
 from solveig.interface.tui.collapsible_widgets import CustomCollapsible
 
 
@@ -87,21 +86,17 @@ class StatsBar(Widget):
 
     def __init__(
         self,
-        theme: Palette,
-        interface_ref: SolveigInterface | None = None,
-        config=None,
+        interface: SolveigInterface,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self._interface_ref = interface_ref
-        self._config = config
+        self._interface = interface
         self._timer: Timer | None = None
         self._spinner = None
         self._status = "Initializing"
         self._animation_start: float | None = None
         self._animation_timeout: float | None = None
         self._status_suffix: str | None = None
-        self._theme = theme
         #: Registered stats, in registration order. Placement (PLACEMENT) is
         #: applied on add; this list is what a redraw walks.
         self._stats: list[TextualStat] = []
@@ -132,7 +127,7 @@ class StatsBar(Widget):
             )
         if self._status_suffix:
             status_text = f"{status_text} {self._status_suffix}"
-        return f"[{self._theme.info}]{status_text}[/]" if status_text else ""
+        return f"[$info]{status_text}[/]" if status_text else ""
 
     def compose(self):
         """Create collapsible with stats tables."""
@@ -237,9 +232,7 @@ class StatsBar(Widget):
         stat = stats[row] if row < len(stats) else None
 
         if stat is None or not stat.clickable:
-            interface = self._interface_ref
-            if interface is not None:
-                await interface.set_status("This stat isn't editable", duration=2)
+            await self._interface.set_status("This stat isn't editable", duration=2)
             return
 
         assert stat.on_click is not None  # narrowed by `clickable`
@@ -330,7 +323,7 @@ class StatsBar(Widget):
             max-height: 8;
             background: $background;
             color: $foreground;
-            border: solid $box;
+            border: solid $border;
         }
 
         /* Stats container responsive layout */
@@ -346,7 +339,7 @@ class StatsBar(Widget):
         }
 
         .stats-table {
-            border-right: solid $box
+            border-right: solid $border
         }
 
         /* Cursor/hover are required for click-to-edit to fire, but shouldn't

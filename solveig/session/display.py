@@ -103,7 +103,7 @@ class SessionDisplay(ConversationObserver):
         self,
         conversation: Conversation,
         interface: SolveigInterface,
-        user_message_queue: UserMessageQueue | None = None,
+        user_message_queue: UserMessageQueue,
     ) -> None:
         self.conversation = conversation
         self.interface = interface
@@ -320,7 +320,7 @@ class SessionDisplay(ConversationObserver):
             None,
         )
         await self.conversation.truncate_from(message_id)
-        if text is not None and self.user_message_queue is not None:
+        if text is not None:
             # check_subcommand=False: this text was already vetted when the user
             # first sent it. Re-gating would let a trigger the registry gained
             # since (a plugin reload, an MCP connect) swallow a stored prompt as

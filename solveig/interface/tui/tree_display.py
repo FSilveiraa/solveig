@@ -197,7 +197,7 @@ class TreeDisplay(Tree):
         """Generate CSS for tree display."""
         return """
         TreeDisplay {
-            border: solid $box;
+            border: solid $border;
             background: $background;
             color: $foreground;
             margin: 1;

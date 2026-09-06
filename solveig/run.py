@@ -314,10 +314,6 @@ async def run_async(
     # as ever - nothing is wired after the fact.
     if interface is None:
         interface = TerminalInterface(config, user_message_queue)
-    else:
-        # Test/demo code injected an interface it already constructed - wire
-        # its output channel to the session queue.
-        interface.user_message_queue = user_message_queue
 
     client = client or Client(config, interface=interface)
 

@@ -175,9 +175,9 @@ class ConversationArea(ScrollableContainer):
             height: 1fr;
             scrollbar-gutter: stable;
             scrollbar-size: 1 1;
-            scrollbar-color: $box;
-            scrollbar-color-hover: $section;
-            scrollbar-color-active: $section;
+            scrollbar-color: $border;
+            scrollbar-color-hover: $accent;
+            scrollbar-color-active: $accent;
             scrollbar-background: $background;
             scrollbar-background-hover: $background;
             scrollbar-background-active: $background;
@@ -215,19 +215,19 @@ class ConversationArea(ScrollableContainer):
         }
 
         .group.-hovering > DividedCollapsibleTitleBar {
-            color: $section;
+            color: $accent;
         }
 
         .group.-hovering > Contents {
-            border-left: heavy $section;
+            border-left: heavy $accent;
         }
 
         .group.-hovering > .group_end {
-            color: $section;
+            color: $accent;
         }
 
         .group.-hovering > .group_pending {
-            color: $section;
+            color: $accent;
         }
         """
             + EditableComment.get_css()
