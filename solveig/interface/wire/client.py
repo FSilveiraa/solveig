@@ -1,24 +1,25 @@
-"""WireClient — the adapter that makes a real interface speak the wire.
+"""
+WireClient — the adapter that makes a real interface speak the wire language.
 
 The daemon side (`WireInterface`) encodes ABC verbs to frames and broadcasts
-them. This is THE OTHER END: it connects to the daemon socket, reads frames and
-calls the matching method on a concrete `SolveigInterface`. So connecting a UI
-to a daemon is "construct a WireClient over that UI" — the interchangeable half
-the design log wants (broadcast interface for a daemon, TUI for a bare agent,
-same protocol, same ABC seam).
+them. This is other end; it connects to the daemon socket, reads frames and
+calls the matching method on a concrete `SolveigInterface`, and sends back
+user input, answers to questions/choices, and calls to message actions.
+So connecting a UI to a daemon is means constructing a WireClient over that
+UI and the design allows swapping between a single process or a daemon with
+broadcast without the app knowing.
 
-Boxes cross as ids: when the daemon creates a box under a handle id, this client
-calls the interface's add verb, stores the returned real box under that id, and
-routes later mutation frames to it. Message actions cross as NAMES, so this
+NOTE: Boxes cross as ids. When the daemon creates a box under a handle id, this
+client calls the interface's add verb, stores the returned real box under that id,
+and routes later mutation frames to it. Message actions cross as names, so this
 client rebuilds a `MessageActions` whose closures forward an `Action` frame back
-to the daemon. The retraction (`AskResolved`) cancels the local pending ask so
-the other interface's winning answer is shown instead.
+to the daemon.
 
-**This client owns no state the agent owns.** It registers as the message
-queue's prompt gate and returns `None` from it, so typed input is forwarded as
-an `Input` frame and never lands in a local queue nobody reads. For the same
-reason it constructs no `SubcommandRegistry`: a client-side `/config set` would
-edit state that lives in the daemon.
+NOTE: Pending questions are resolved through an `AskResolved` frame. The first UI
+to respond is declared winner by the daemon, who broadcasts the question_id+answer.
+Any interfaces with the question pending must cancel it and should show the answer.
+
+TODO: Confirm pending questions are cancelled by ID.
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ class WireClient:
         # The queue's gate, so typed input leaves as a frame instead of landing
         # in a local queue no agent loop is reading. Returning None swallows it
         # here; the daemon's queue is the only real one.
-        interface.user_message_queue.prompt_handler = self._forward_input
+        interface.user_message_queue.on_prompt(self._forward_input)
 
     # -- transport -----------------------------------------------------------
 

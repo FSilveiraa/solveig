@@ -114,7 +114,7 @@ class SubcommandRegistry:
                     )
 
     # ------------------------------------------------------------------
-    # Prompt gate — the queue's prompt_handler
+    # Prompt gate — the queue's `on_prompt` handler
     # ------------------------------------------------------------------
 
     async def handle_prompt(self, text: str) -> str | None:

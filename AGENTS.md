@@ -88,9 +88,19 @@ todo.py       Layer 0, beside utils/file.FileMetadata: TodoItem/TodoStatus. The 
               tool is merely the surface the assistant edits it through. Tools and
               frontends both name it; neither owns it. Its vocabulary is the industry's
               (see Conventions), not ours.
-user_message_queue.py  UserMessageQueue — asyncio.Queue[str] + a prompt gate on
-              put() (routes /commands before insertion) + an on_change doorbell
-              (self-registered by the queued-messages display widget).
+pending/      What the user has typed but not sent. user_message.py holds
+              PendingUserMessage (text + a uuid), at layer 0 beside todo.py for the
+              same reason: the queue holds it, a frontend draws and edits it, the
+              wire will replicate it, and none of them owns it. Its id names a
+              message only while it can still be taken back — a drained message is
+              the Conversation's, under a MessageId of its own, because editing a
+              message nobody has read and rewinding a sent one are different verbs.
+              user_message_queue.py is UserMessageQueue: asyncio.Queue[PendingUserMessage]
+              + prompt filters registered through `on_prompt` (a filter returns the
+              text to enqueue, or None when it has taken responsibility — a
+              /command it dispatched, or a daemon host that owns the real queue) +
+              `on_change` observers. The `*_nowait` verbs run neither, so a batch
+              like `drain` notifies once rather than per message.
 ```
 
 **Loop ownership:** core drives `agent.iter()`; pydantic-ai stays the engine for
@@ -128,9 +138,13 @@ These are not style preferences — they are the seams the codebase is built on.
 - **Constructor injection, not post-init wiring.** If an object needs a
   dependency, it takes it in the constructor — no `setup()`, no `wire_*()`,
   no `__post_init__` that does real work. Objects self-register their
-  observers (`@config.on_change` in `Client.__init__`, `queue.prompt_handler`
-  in `SubcommandRegistry.__init__`, `queue.on_change` in
-  `QueuedMessagesDisplay.on_mount`). The composition root in `run_async`
+  observers (`@config.on_change` in `Client.__init__`, `queue.on_prompt` in
+  `SubcommandRegistry.__init__`, `queue.on_change` in
+  `PendingMessages.on_mount`). Every one of those is a SUBSCRIPTION — an object
+  adding itself to a list the owner already has. Installing a dependency after
+  construction is a different thing and is not allowed: the queue's prompt gate
+  used to be assigned onto a mutable slot, and that is why it is a registration
+  now. The composition root in `run_async`
   constructs objects in dependency order; no closures, no late binding.
 
 - **Signature is the contract.** A subcommand handler declares what it needs in
@@ -282,13 +296,12 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 - `interface/tui/` — the Textual materialization. Named for what it is: "CLI"
   already means argv parsing in this tree (`cli_args`, `CliPositionalArg`,
   `CliSettingsSource`, `from_cli_tokens`), and the package name matches its config
-  section, `interface.tui.*`. `interface.py` holds a
-  three-class split: `TerminalDisplay` (everything that renders into a container of
-  an app it does NOT own — deliberately constructor-free), `TerminalInterface` (the
-  root: owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a
-  scoped display fixed to one collapsible group). `message_boxes.py` holds the two
-  handles the transcript verbs hand back; `app.py` holds the static
-  theme-independent CSS.
+  section, `interface.tui.*`. `interface.py` holds `TerminalInterface` (the root:
+  owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a scoped
+  display fixed to one collapsible group). `message.py` holds the drawn message and
+  the two handles the transcript verbs hand back. Module names are one word for the
+  surface they draw — `chat`, `input`, `message`, `pending`, `stats`, `tree`,
+  `collapsible`, `button`.
 - **Display verbs take domain values, never formatted text.** `display_todos` takes
   `list[TodoItem]`, `display_file_metadata` takes a `FileMetadata`, `add_tree_box`
   takes the metadata. The caller decides WHAT to show and WHEN; the frontend decides
@@ -301,10 +314,27 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   transient imperative UI (consent prompts, status bar, animations) — they never tangle.
 - The **group-as-interface** trick: `interface.with_group(title)` yields a scoped
   interface whose container is fixed, so a tool body writes only within its own
-  collapsible group and stays scope-oblivious. Cancellation uses an innermost-task
-  stack (`_request_tasks`) so Esc/Ctrl+C cancels exactly the in-flight cancellable.
-- **Native Textual theming:** palettes are registered as Textual `Theme`s; CSS is
-  static and theme-independent via `$variables` (no per-widget f-string interpolation).
+  collapsible group and stays scope-oblivious. `_cancellable` registers each scope
+  in `_tasks`, a `dict[CancelScope, asyncio.Task]` — the scope is the handle
+  `cancel_task()` addresses, the task is the strong reference that keeps detached
+  work (a spawned `/command`) from being collected mid-consent. Cancelling is always
+  a scope operation; nothing cancels the task, which is why a caller only ever sees
+  `UserCancel` or a real error.
+- **Keys are declared, not handled.** No `on_key` chains: each widget declares
+  `BINDINGS` and answers `check_action` for whether it wants a key *right now*. A
+  binding that declines does not consume the key — the search continues up the DOM —
+  so precedence is the tree rather than whoever called `event.stop()` first, and a
+  rule like "Esc must never quit" is expressed by not binding it. The status hint
+  reads `App.active_bindings`, the same table dispatch consults, so it cannot
+  describe a key that no longer does that.
+- **Native Textual theming:** palettes are registered as Textual `Theme`s, and a
+  `Palette` field's own name is the CSS variable (`$primary`, `$border`, `$group`),
+  so Solveig CSS never spells a colour or names Textual's chrome slots. Widget CSS
+  lives in `DEFAULT_CSS` on the widget itself: Textual collects it once per class as
+  the DOM is built and inherits it to subclasses, so nothing composes anyone else's
+  styling. The class that applies a class name owns the rule that styles it, and the
+  CSS stays in Python — never a `.tcss` file — so styling is physically beside the
+  widget it styles.
 
 ## Sessions
 
@@ -383,9 +413,15 @@ handler a `None`.
 and orchestrates via `run_tool_and_hooks`, so a hand-typed `/command` runs the same
 hooks a model call does.
 
-The registry also owns the **prompt gate**: it self-registers as the queue's
-`prompt_handler` in its constructor. `/commands` typed as user input are dispatched
-before insertion; prompts pass through unchanged.
+The registry also owns the **prompt gate**: it registers `handle_prompt` through
+`queue.on_prompt` in its constructor. `/commands` typed as user input are dispatched
+before insertion; prompts pass through unchanged. The command is SPAWNED, not
+awaited — the filter runs inside `put()`, whose caller is a frontend's submit
+handler and, on a daemon, a connection's read loop, where awaiting a consent
+prompt would block the very loop that prompt's answer must arrive on. It runs as
+a visible cancellable task like any other work, and whatever it returns goes back
+to the queue through `put_nowait`: that is output, not input, and must not be
+filtered a second time.
 
 `subcommands/base.py` — the `Subcommand` dataclass (`from_handler`), `SubcommandStore`
 / `SubcommandStores`, the module-level stores, and `declaring_into`.
@@ -491,9 +527,9 @@ UI (`solveig/interface/tui/*`) is excluded from coverage.
 
 The live set includes `tools/base.py`'s and `subcommands/base.py`'s
 `CliSettingsSource(cls, …)` (`type: ignore[arg-type]` — typed for `BaseSettings`,
-accepts a `BaseModel` at runtime), `user_message_queue.py`'s `self._queue` peek
-(asyncio.Queue exposes no public read; confined to the class that owns the queue),
-`api/types.py`'s `GoogleProvider(api_key=None)`, the optional-dep
-`_trafilatura = None`, and `interface/tui/collapsible_widgets.py`'s framework-private
+accepts a `BaseModel` at runtime), `pending/user_message_queue.py`'s `self._queue`
+peek (asyncio.Queue exposes no public read; confined to the class that owns the
+queue), `api/types.py`'s `GoogleProvider(api_key=None)`, the optional-dep
+`_trafilatura = None`, and `interface/tui/collapsible.py`'s framework-private
 `CollapsibleTitle` import (marked `# HACK:`, re-verify on Textual upgrades).
 `warn_unused_ignores` keeps them honest — remove an ignore the moment it's stale.

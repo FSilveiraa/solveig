@@ -321,11 +321,8 @@ class SessionDisplay(ConversationObserver):
         )
         await self.conversation.truncate_from(message_id)
         if text is not None:
-            # check_subcommand=False: this text was already vetted when the user
-            # first sent it. Re-gating would let a trigger the registry gained
-            # since (a plugin reload, an MCP connect) swallow a stored prompt as
-            # a command, and the message would simply vanish.
-            await self.user_message_queue.put(text, check_subcommand=False)
+            # put_nowait since this text was already vetted
+            self.user_message_queue.put_nowait(text)
 
     async def _delete(self, message_id: MessageId) -> None:
         if await self._busy():
