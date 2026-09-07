@@ -13,7 +13,6 @@ from textual.containers import Container
 from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
-from solveig.exceptions import UserCancel
 from .chat import ChatArea
 
 from ...pending.user_message_queue import UserMessageQueue
@@ -88,18 +87,20 @@ class UserInput(TextArea):
         Binding("down", "history_next", "Next message", show=False),
     ]
 
-    def __init__(self, *args, mode_getter: Callable[[], InputMode], **kwargs):
-        super().__init__(*args, **kwargs)
-        self._mode_getter = mode_getter
+    def __init__(self, mode: InputMode | Callable[[], InputMode], placeholder: str = "", **kwargs):
+        super().__init__(show_line_numbers = False, **kwargs)
+        self._mode = mode
         self._history = PromptHistory()
+        self.placeholder = placeholder
 
     @property
     def mode(self) -> InputMode:
-        return self._mode_getter()
+        if isinstance(self._mode, InputMode):
+            return self._mode
+        return self._mode()
 
     class Submitted(Message):
         """Posted when the user presses Enter."""
-
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
@@ -130,7 +131,12 @@ class UserInput(TextArea):
         return True
 
     def action_submit(self) -> None:
-        self.post_message(self.Submitted(self.text))
+        if self.text.strip():
+            # Only record user prompts in history, not answers
+            if self.mode == InputMode.FREE_FORM:
+                self._history.append(self.text)
+            self.post_message(self.Submitted(self.text))
+            self.text = ""
 
     def action_clear_prompt(self) -> None:
         self.text = ""
@@ -162,27 +168,24 @@ class InputBar(Container):
 
         # Mode management
         self._mode = InputMode.FREE_FORM
-        self._question_future: asyncio.Future | None = None
-        self._choice_future: asyncio.Future | None = None
+        self._question_lock = asyncio.Lock()
+        self._answer_future: asyncio.Future = asyncio.Future()
 
         # Callbacks
         self._user_message_queue = user_message_queue
 
         # Child widgets
-        self._text_input = UserInput(id="text_input", mode_getter=lambda: self._mode)
+        self._text_input = UserInput(
+            mode=lambda: self._mode,
+            placeholder=placeholder,
+            id="text-input",
+        )
         self._text_input.placeholder = placeholder
         self._text_input.show_line_numbers = False
-        self._select_widget: OptionList | None = None
         # The framed box a prompt lives in: title on the border (which operation
         # this is about), question inside. Owns whichever prompt widget is up,
         # so tearing it down removes both.
         self._chat: ChatArea
-        self._prompt_box: Container | None = None
-        self._question_line: Static | None = None
-
-        # Saved state for question mode
-        self._saved_text: str = ""
-        self._initial_placeholder: str = placeholder
 
     def compose(self):
         """Create the layout with input widgets."""
@@ -192,16 +195,6 @@ class InputBar(Container):
         """Initialize styling when mounted."""
         self._chat = self.app.query_one(ChatArea)
         self._text_input.focus()
-        self.watch(self.screen, "focused", self._on_screen_focus_changed)
-
-    def _on_screen_focus_changed(self, focused) -> None:
-        """Redirect focus back to the active input when it moves elsewhere."""
-        if self._mode == InputMode.MULTIPLE_CHOICE:
-            if self._select_widget and focused is not self._select_widget:
-                self.call_after_refresh(self._select_widget.focus)
-        else:
-            if focused is not self._text_input:
-                self.call_after_refresh(self._text_input.focus)
 
     async def on_user_input_submitted(self, event: UserInput.Submitted) -> None:
         """
@@ -215,14 +208,8 @@ class InputBar(Container):
         if not user_input:
             return
 
-        self._text_input._history.append(user_input)
-        self._text_input._history_index = None
-        self._text_input._history_draft = ""
-        self._text_input.text = ""
-
-        if self._mode == InputMode.QUESTION and self._question_future:
-            if not self._question_future.done():
-                self._question_future.set_result(user_input)
+        if self._mode == InputMode.QUESTION and not self._answer_future.done():
+            self._answer_future.set_result(user_input)
         elif self._mode == InputMode.FREE_FORM:
             await self._user_message_queue.put(user_input)
 
@@ -230,11 +217,8 @@ class InputBar(Container):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Handle option list selection for multiple choice."""
-        if self._mode == InputMode.MULTIPLE_CHOICE and self._choice_future:
-            if not self._choice_future.done():
-                # Get the index from the event
-                selected_index = event.option_index
-                self._choice_future.set_result(selected_index)
+        if self._mode == InputMode.MULTIPLE_CHOICE and not self._answer_future.done():
+            self._answer_future.set_result(event.option_index)
 
     def _apply_free_form_style(self):
         """Apply free-form input styling."""
@@ -253,34 +237,31 @@ class InputBar(Container):
         line inside. It used to live in the input's PLACEHOLDER, which vanished
         the moment you typed - so the thing you were answering disappeared
         exactly when you started answering it."""
-        self._saved_text = self._text_input.text
+        async with self._question_lock:
+            saved_text = self._text_input.text
+            self._mode = InputMode.QUESTION
+            question_box = Container(
+                Static(question, classes="prompt_question"),
+                classes="prompt_box",
+            )
+            if title:
+                question_box.border_title = title
+            await self.mount(question_box, before=self._text_input)
 
-        self._mode = InputMode.QUESTION
-        self._question_future = asyncio.Future()
-
-        self._question_line = Static(question, classes="prompt_question")
-        self._prompt_box = Container(self._question_line, classes="prompt_box")
-        if title:
-            self._prompt_box.border_title = title
-        await self.mount(self._prompt_box, before=self._text_input)
-
-        self._text_input.text = default
-        self._apply_question_style()
-        self._text_input.focus()
-
-        try:
-            response = await self._question_future
-            return response
-        finally:
-            self._mode = InputMode.FREE_FORM
-            self._question_future = None
-            if self._prompt_box is not None:
-                await self._prompt_box.remove()
-                self._prompt_box = None
-                self._question_line = None
-            self._text_input.text = self._saved_text
-            self._apply_free_form_style()
+            self._text_input.text = default
+            self._apply_question_style()
             self._text_input.focus()
+
+            try:
+                return await self._answer_future
+            finally:
+                # Reset the mode and question future
+                self._mode = InputMode.FREE_FORM
+                self._answer_future = asyncio.Future()
+                await question_box.remove()
+                self._text_input.text = saved_text
+                self._apply_free_form_style()
+                self._text_input.focus()
 
     async def ask_choice(
         self, question: str, choices: Iterable[str], title: str | None = None
@@ -294,47 +275,39 @@ class InputBar(Container):
         to the same 40 characters must still be told apart by the thing being
         approved. A prompt raised outside any group has no title and simply
         gets a plain border."""
-        choices_list = list(choices)
+        choices_list = [
+            f"{i + 1}. {choice}"
+            for i, choice in enumerate(choices)
+        ]
 
-        self._mode = InputMode.MULTIPLE_CHOICE
-        self._choice_future = asyncio.Future()
+        async with self._question_lock:
+            self._mode = InputMode.MULTIPLE_CHOICE
+            # Hide text input and show question prompt
+            saved_display = self._text_input.styles.display
+            self._text_input.styles.display = "none"
+            select_widget = OptionList(*choices_list, id="choice_select")
+            choice_box = Container(
+                Static(question, classes="prompt_question"),
+                select_widget,
+                classes="prompt_box",
+            )
+            if title:
+                choice_box.border_title = title
 
-        # Hide text input and show question prompt
-        self._text_input.styles.display = "none"
+            await self.mount(choice_box)
+            choice_box.focus()
 
-        # Create option list widget with choices and mount in place of input
-        options = [f"{i + 1}. {choice}" for i, choice in enumerate(choices_list)]
-        self._select_widget = OptionList(*options, id="choice_select")
-        # The border (and so the title) belongs to the wrapper, not the list:
-        # the question has to sit INSIDE the frame, above the options.
-        self._prompt_box = Container(
-            Static(question, classes="prompt_question"),
-            self._select_widget,
-            classes="prompt_box",
-        )
-        if title:
-            self._prompt_box.border_title = title
-
-        await self.mount(self._prompt_box)
-        self._select_widget.focus()
-
-        # Scroll conversation area to keep context visible after layout
-        self.call_after_refresh(self._chat.scroll_end)
-
-        try:
-            selected_index = await self._choice_future
-            return selected_index
-        finally:
-            # Clean up and restore text input
-            self._mode = InputMode.FREE_FORM
-            self._choice_future = None
-            if self._prompt_box is not None:
+            try:
+                return await self._answer_future
+            finally:
+                # Reset the mode and the future answer
+                self._mode = InputMode.FREE_FORM
+                self._answer_future = asyncio.Future()
                 # Removing the wrapper takes the option list with it.
-                await self._prompt_box.remove()
-                self._prompt_box = None
-                self._select_widget = None
-            self._text_input.styles.display = "block"
-            self._text_input.focus()
+                await choice_box.remove()
+                # Reset the display mode for the text input and restore focus
+                self._text_input.styles.display = saved_display
+                self._text_input.focus()
 
     @classmethod
     def get_css(cls) -> str:

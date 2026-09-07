@@ -99,10 +99,6 @@ class TerminalInterface(SolveigInterface):
         #: group is already `self` wherever it matters.
         self._title: str | None = None
 
-        # CLI prompt serialization: one visible prompt at a time (a terminal
-        # constraint — the protocol leaves this policy to the frontend).
-        self._choice_lock = asyncio.Lock()
-
         # Rich's implementation forces us to create custom spinners by
         # starting from an existing spinner and altering it
         growing_spinner = Spinner("dots", speed=1.0)
@@ -252,14 +248,12 @@ class TerminalInterface(SolveigInterface):
         `self` IS the group the prompt was raised on, so this frontend picks
         what identifies one to a terminal - the group's header. Another could
         pick something else about the same object."""
-        async with self.root._choice_lock:
-            return await self.app.ask_question(question, default, self._title)
+        return await self.app.ask_question(question, default, self._title)
 
     async def _ask_choice(self, question: str, choices: list[str]) -> int:
         """Prompt with the given choices (already final — "Cancel processing"
         appended, if any), returns the raw selected index."""
-        async with self.root._choice_lock:
-            return await self.app.ask_choice(question, choices, self._title)
+        return await self.app.ask_choice(question, choices, self._title)
 
     # -- status & stats ------------------------------------------------------
 
