@@ -50,7 +50,6 @@ from solveig.interface.tui.collapsible import (
     TextBoxWidget,
 )
 from solveig.interface.tui.chat import BANNER
-from solveig.interface.tui.keys import cancel_hint
 from solveig.interface.tui.stats import TextualStat
 from solveig.interface.tui.tree import FileTree
 from solveig.interface.tui.message import EditableComment, CommentBox, ReasoningBox
@@ -161,14 +160,10 @@ class TerminalInterface(SolveigInterface):
         await self.set_status(status)
         await asyncio.sleep(0)
 
-        # The hint is this frontend's to write, and only when there is something
-        # to cancel: `with_cancellable` registers the scope before starting the
-        # animation, so an empty registry means a plain animation with no keys
-        # to offer. Derived from the real bindings, so a rebind cannot make it lie.
-        suffix = cancel_hint() if self.get_active_tasks() else None
+        # The cancel hint is derived from the app's active bindings
         spinner = random.choice(list(self.root.spinners.values()))
         self.app._stats_bar.start_status_animation(
-            spinner, timeout=timeout, suffix=suffix
+            spinner, timeout=timeout, suffix=self.app.cancel_hint()
         )
         try:
             yield

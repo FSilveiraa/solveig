@@ -5,8 +5,10 @@ for any content that needs to be expandable/collapsible (stats, reasoning, logs,
 """
 
 import difflib
+from typing import override
 
 from rich.syntax import Syntax
+from textual.binding import Binding
 from textual.containers import Horizontal, ScrollableContainer
 from textual.css.query import NoMatches
 from textual.widget import Widget
@@ -18,7 +20,8 @@ from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.base.widgets import DiffBox, TextBox
 
-from .button import CopyButton
+from .button import Button, CopyButton
+from ...utils.misc import copy_to_clipboard
 
 
 class DividedCollapsibleTitleBar(CollapsibleTitle):
@@ -148,6 +151,11 @@ class CustomCollapsible(Collapsible):
     with left/center/right sections that can be independently updated.
     """
 
+    can_focus = True
+    BINDINGS = [
+        Binding("escape", "collapse", "Collapse", show=False),
+    ]
+
     def __init__(
         self,
         left_collapsed: str | None = None,
@@ -186,6 +194,15 @@ class CustomCollapsible(Collapsible):
             }
             """ + DividedCollapsibleTitleBar.get_css()
 
+    @override
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "collapse":
+            return not self.collapsed
+        return True
+
+    def action_collapse(self) -> None:
+        self.collapsed = True
+
     def update_title(
         self,
         left_collapsed: str | None = None,
@@ -216,6 +233,10 @@ class TextBoxWidget(Widget):
     boundary crossing and needs no handle.
     """
 
+    BINDINGS = [
+        Binding("ctrl+c", "copy", "Copy", show=False),
+    ]
+
     def __init__(
         self,
         content: str | Syntax | Markdown,
@@ -231,7 +252,21 @@ class TextBoxWidget(Widget):
         self._content_classes = "box-content " + ("italic" if italic else "")
         self._collapsed = collapsed
         self.border_title = title
-        self._text_container: Static | Markdown
+
+        # Widgets
+        self._button_copy: Button = CopyButton(lambda: self.content)
+        self._collapsible = CustomCollapsible(
+            right=self._button_copy,
+            start_collapsed=self._collapsed,
+        )
+        self._text_container = (
+            self._initial_content if isinstance(self._initial_content, Markdown)
+            else Static(
+                content=self._initial_content,
+                markup=False,
+                classes=self._content_classes
+            )
+        )
 
     @property
     def content(self) -> str:
@@ -243,20 +278,11 @@ class TextBoxWidget(Widget):
             return str(self._text_container)
 
     def compose(self):
-        if isinstance(self._initial_content, Markdown):
-            self._text_container = self._initial_content
-        else:
-            self._text_container = Static(
-                self._initial_content, markup=False, classes=self._content_classes
-            )
-
-        self._collapsible = CustomCollapsible(
-            right=CopyButton(lambda: self.content),
-            start_collapsed=self._collapsed,
-        )
-
         with self._collapsible:
             yield self._text_container
+
+    def action_copy(self) -> None:
+        copy_to_clipboard(self.content)
 
     # Note: by coincidence, both Markdown and Static have an update(str) method, so the interface doesn't break
     # and we don't need `isintance()` checks in update_content
@@ -307,7 +333,8 @@ class TextBoxWidget(Widget):
         }
         """
             + CustomCollapsible.get_css()
-            + CopyButton.get_css()
+            # FIXME: double inclusion by virtue of TextualApp ->
+            # + CopyButton.get_css()
         )
 
 

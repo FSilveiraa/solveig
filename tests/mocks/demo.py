@@ -15,7 +15,7 @@ from pydantic_ai.messages import (
 )
 
 from solveig import bootstrap
-from solveig.interface.tui.input import GrowingInput
+from solveig.interface.tui.input import UserInput
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.run import run_async
 from solveig.session.conversation import Conversation
@@ -55,7 +55,7 @@ class DemoInterface(TerminalInterface):
             jitter = (random.random() * 2 - 1) * 0.02
             await asyncio.sleep(0.1 + jitter)
         # Simulate Enter — the InputBar handler clears the box and calls _handle_input
-        text_input.post_message(GrowingInput.Submitted(message))
+        text_input.post_message(UserInput.Submitted(message))
 
     async def set_status(
         self,

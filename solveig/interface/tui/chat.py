@@ -7,14 +7,10 @@ from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 
-from .button import MessageButton
 from .collapsible import (
     CollapsibleTextBox,
     CustomCollapsible,
-    TextBoxWidget,
 )
-from .tree import TreeDisplay
-from .message import EditableComment
 from ..base import Level
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
@@ -166,12 +162,18 @@ class ChatArea(ScrollableContainer):
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
 
-    @classmethod
-    def get_css(cls) -> str:
-        """CSS for the conversation area and group-related widgets. `$user-turn-bg`
-        (the tinted user background) is a theme variable computed per palette."""
-        return (
-            """
+    DEFAULT_CSS =  """
+        .text_message    { color: $foreground; }
+        .info_message    { color: $primary; }
+        .success_message { color: $text-success; }
+        .warning_message { color: $text-warning; }
+        .error_message   { color: $text-error; }
+        
+        Markdown {
+            color: $foreground;
+            padding: 0;
+        }
+        
         ChatArea {
             height: 1fr;
             scrollbar-gutter: stable;
@@ -231,9 +233,3 @@ class ChatArea(ScrollableContainer):
             color: $accent;
         }
         """
-            + EditableComment.get_css()
-            + MessageButton.get_css()
-            + CustomCollapsible.get_css()
-            + TextBoxWidget.get_css()
-            + TreeDisplay.get_css()
-        )

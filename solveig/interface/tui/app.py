@@ -1,10 +1,13 @@
 """Main Textual application class."""
 
 import asyncio
+from typing import override
 
 from textual import events
 from textual.app import App as TextualApp
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.keys import format_key
 
 from solveig.interface.base import SolveigInterface, Level
 from solveig.interface.themes import THEMES
@@ -13,7 +16,6 @@ from solveig.utils.misc import copy_to_clipboard
 
 from .chat import ChatArea
 from .input import InputBar
-from .keys import CANCEL_KEYS, QUIT_KEYS
 from .pending import PendingMessages
 from .stats import StatsBar
 from ...config import SolveigConfig
@@ -30,27 +32,11 @@ class SolveigTextualApp(TextualApp):
     Minimal TextualApp subclass with only essential Solveig customizations.
     """
 
-    # CSS is theme-independent (colours come from $variables resolved against the
-    # active Textual theme), so it's a static class attribute assembled once - no
-    # per-instance rebuild, and runtime theme changes are handled by `self.theme`.
-    CSS = (
-        """
-        Screen {
-            background: $background;
-            color: $foreground;
-        }
-
-        .text_message    { color: $foreground; }
-        .info_message    { color: $primary; }
-        .success_message { color: $text-success; }
-        .warning_message { color: $text-warning; }
-        .error_message   { color: $text-error; }
-        """
-        + ChatArea.get_css()
-        + InputBar.get_css()
-        + StatsBar.get_css()
-        + PendingMessages.get_css()
-    )
+    BINDINGS = [
+        Binding("escape", "focus_input", "Back to input", show=False),
+        Binding("escape", "cancel_tasks", "Cancel"),
+        Binding("ctrl+c", "quit", "Quit"),
+    ]
 
     def __init__(
         self,
@@ -109,31 +95,33 @@ class SolveigTextualApp(TextualApp):
         # Announce interface is ready
         self.is_ready.set()
 
-    async def on_key(self, event) -> None:
-        """Handle key events directly.
+    @override
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Textual method, checks whether an action can run in the current context."""
+        if action == "focus_input":
+            return not self._input_bar.has_focus_within
+        elif action == "cancel_tasks":
+            return bool(self._interface.get_active_tasks())
+        return True
 
-        A task-cancel key (see `keys.TASK_CANCEL_KEYS`, which the status hint is
-        also built from):
-        - If there's an active network request: cancel it
-        - Otherwise: exit the application
-        """
-        if event.key in CANCEL_KEYS:
-            # Check if there's an active operation via the interface
-            if self._interface.get_active_tasks():
-                event.stop()
-                self._interface.cancel_task()
-        elif event.key in QUIT_KEYS:
-                self.exit()
+    def action_focus_input(self) -> None:
+        self._input_bar.focus()
 
-    async def on_event(self, event) -> None:
+    def action_cancel_tasks(self) -> None:
+        self._interface.cancel_task()
+
+    def cancel_hint(self) -> str | None:
+        """Builds the cancellation hint from the active bindings."""
+        keys = [
+            format_key(key)
+            for key, active in self.active_bindings.items()
+            if active.enabled and active.binding.action == "cancel_tasks"
+        ]
+        return f"({"/".join(keys)} to cancel)" if keys else None
+
+    async def on_mouse_up(self, event: events.MouseUp) -> None:
         """Intercept mouse-up to auto-copy a completed click-drag text selection."""
-        await super().on_event(event)
-        # Read live rather than cached at construction, so toggling the setting
-        # takes effect on the next selection instead of the next launch.
-        auto_copy = (
-            self._config is None or self._config.interface.tui.auto_copy_selection
-        )
-        if auto_copy and isinstance(event, events.MouseUp):
+        if self._config.interface.tui.auto_copy_selection:
             selected_text = self.screen.get_selected_text()
             if selected_text:
                 copy_to_clipboard(selected_text)

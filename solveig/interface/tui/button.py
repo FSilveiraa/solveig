@@ -1,30 +1,28 @@
-"""Message action buttons - Edit / Retry / Delete / Branch.
-
+"""
+Each button has
 Each button owns a reference to the message widget it's attached to and,
 on click, calls one method on that owner. No shared dispatch mechanism -
 swap a button's behavior by editing its `on_click` override.
 """
-
+import asyncio
 from collections.abc import Callable
+from typing import override, Self
 
-from textual.events import Click
-from textual.widgets import Static
+from textual.widgets import Button as _Button
 
 from solveig.interface.base import EditableMessage
 from solveig.utils.misc import copy_to_clipboard
 
 
-class MessageButton(Static):
+class Button(_Button):
     """A clickable label owned by a message widget."""
+    LABEL: str
+    DOING_LABEL: str | None = None
+    DONE_LABEL: str | None = None
+    DONE_LABEL_SECONDS = 1.0
 
-    def __init__(self, owner: EditableMessage, label: str, **kwargs):
-        super().__init__(label, markup=False, classes="message-button")
-        self.owner = owner
-
-    @classmethod
-    def get_css(cls) -> str:
-        return """
-        MessageButton {
+    DEFAULT_CSS = """
+        Button {
             color: $foreground;
             /* width: auto so each button is only as wide as its label, packing
                left-to-right in the action row instead of each taking full width. */
@@ -33,90 +31,109 @@ class MessageButton(Static):
             height: 1;
         }
 
-        MessageButton:hover {
+        Button:hover {
             color: $accent;
         }
+    """
+
+    def __init__(self, label: str | None = None):
+        super().__init__(label=label or self.LABEL)
+
+    async def _act(self) -> None:
+        """The actual async work to be accomplished by this button.."""
+        ...
+
+    def press(self) -> Self:
         """
+        Schedules an async action and flashes a success on the button when done.
+
+        This button callback is synchronous, so it can't run async callbacks.
+        `asyncio.create_task/ensure_future` conflict with the Textual thread.
+        `call_after_refresh` schedules after frame computing has finished.
+
+        NOTE: consider an optionally-async `press` as a PR to Textual.
+        """
+        self.call_after_refresh(self._act_in_background)
+        return super().press()
+
+    async def _act_in_background(self) -> None:
+        self.disabled = True
+        try:
+            if self.DOING_LABEL:
+                self.label = self.DOING_LABEL
+            await self._act()
+        finally:
+            # The widget itself may be gone from the DOM,
+            #  like in retry/delete/branch
+            if self.is_mounted:
+                self.disabled = False
+                self.label = self.LABEL
+        if self.DONE_LABEL is not None:
+            self.call_after_refresh(self._display_done)
+
+    async def _display_done(self) -> None:
+        assert self.DONE_LABEL is not None
+        self.label = self.DONE_LABEL
+        await asyncio.sleep(self.DONE_LABEL_SECONDS)
+        self.label = self.LABEL
+
+
+class MessageButton(Button):
+    def __init__(self, message: EditableMessage, label: str | None = None):
+        super().__init__(label)
+        self.message = message
+
+
+class CopyButton(Button):
+    LABEL = "⧉ Copy"
+    DONE_LABEL = "✓ Copied!"
+
+    def __init__(self, content: str | Callable[[], str]):
+        super().__init__()
+        self._content = content
+
+    @property
+    def content(self) -> str:
+        if isinstance(self._content, str):
+            return self._content
+        return self._content()
+
+    @override
+    async def _act(self) -> None:
+        copy_to_clipboard(self.content)
 
 
 class EditButton(MessageButton):
-    def __init__(self, owner: EditableMessage, **kwargs):
-        super().__init__(owner, "✎ Edit", **kwargs)
+    LABEL = "✎ Edit"
+    DOING_LABEL = "… Editing"
+    DONE_LABEL = "✓ Edited!"
 
-    async def on_click(self, event: Click) -> None:
-        event.stop()
-        await self.owner.begin_edit()
+    @override
+    async def _act(self) -> None:
+        await self.message.begin_edit()
 
 
-# Retry/Delete/Branch all truncate the conversation, which removes this button's
-# own owner widget (and thus the button) from the tree. Doing that synchronously
-# from within the button's own click handler is the "remove-during-own-event"
-# trap: Textual can't finish unmounting a widget while its message pump is still
-# running the handler, so the button is left stranded on screen (still showing
-# its hover highlight). call_after_refresh defers the mutation to a Screen-owned
-# callback that runs once the click has fully settled, so the removal is clean.
 class RetryButton(MessageButton):
-    def __init__(self, owner: EditableMessage, **kwargs):
-        super().__init__(owner, "↻ Retry", **kwargs)
+    LABEL = "↻ Retry"
+    DOING_LABEL = "… Retrying"
+    DONE_LABEL = "✓ Retried!"
 
-    def on_click(self, event: Click) -> None:
-        event.stop()
-        self.call_after_refresh(self.owner.retry)
+    @override
+    async def _act(self) -> None:
+        await self.message.retry()
 
 
 class DeleteButton(MessageButton):
-    def __init__(self, owner: EditableMessage, **kwargs):
-        super().__init__(owner, "✕ Delete", **kwargs)
+    LABEL = "✕ Delete"
 
-    def on_click(self, event: Click) -> None:
-        event.stop()
-        self.call_after_refresh(self.owner.delete_from_here)
+    @override
+    async def _act(self) -> None:
+        await self.message.delete_from_here()
 
 
 class BranchButton(MessageButton):
-    def __init__(self, owner: EditableMessage, **kwargs):
-        super().__init__(owner, "⑂ Branch", **kwargs)
+    LABEL = "⑂ Branch"
 
-    def on_click(self, event: Click) -> None:
-        event.stop()
-        self.call_after_refresh(self.owner.branch_from_here)
-
-
-class CopyButton(Static):
-    """A small clickable widget that copies text to the clipboard."""
-
-    def __init__(self, content: str | Callable[[], str], **kwargs):
-        super().__init__("⧉ Copy", markup=False, classes="copy-button")
-        self._copy_content = content
-
-    @property
-    def copy_content(self):
-        return (
-            self._copy_content()
-            if isinstance(self._copy_content, Callable)
-            else self._copy_content
-        )
-
-    def on_click(self, event: Click) -> None:
-        event.stop()
-        # Copy to clipboard
-        copy_to_clipboard(self.copy_content)
-        # Display a success message for 1s
-        _content = self.content
-        self.update("✓ Copied!")
-        self.set_timer(1.0, lambda: self.update(_content))
-
-    @classmethod
-    def get_css(cls) -> str:
-        return """
-        CopyButton {
-            color: $foreground;
-            text-align: right;
-            padding: 0 1;
-            height: 1;
-        }
-
-        CopyButton:hover {
-            color: $accent;
-        }
-        """
+    @override
+    async def _act(self) -> None:
+        await self.message.branch_from_here()

@@ -4,17 +4,18 @@ Unified input widget handling both free-form input and questions.
 
 import asyncio
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import override
 
+from textual.binding import Binding
 from textual.containers import Container
-from textual.events import Key
 from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
 from solveig.exceptions import UserCancel
 from .chat import ChatArea
 
-from .keys import CANCEL_KEYS
 from ...pending.user_message_queue import UserMessageQueue
 
 
@@ -26,19 +27,71 @@ class InputMode(Enum):
     MULTIPLE_CHOICE = "multiple_choice"
 
 
-class GrowingInput(TextArea):
+@dataclass
+class PromptHistory:
+    """
+    Prompt history, aware of its current index.
+    History is kept oldest-first, new entries append at the end, with current
+    prompt saved as the final entry while navigating.
+    Index is negative and iterates from the end (latest) to the start (oldest.
+    """
+
+    entries: list[str] = field(default_factory=list)
+    draft: str = ""
+    index: int = 0
+
+    @property
+    def current(self) -> str:
+        return self.entries[self.index] if self.can_go_forward else self.draft
+
+    @property
+    def can_go_back(self) -> bool:
+        """
+        True if there are any stored entries and either the draft
+        hasn't been stored yet or index isn't at the end.
+        """
+        return abs(self.index) < len(self.entries)
+
+    @property
+    def can_go_forward(self) -> bool:
+        """True if we're accessing history using a negative index."""
+        return self.index < 0
+
+    def append(self, text: str):
+        """Name implies list semantics that inserts at the end."""
+        self.entries.append(text)
+        self.index = 0
+        self.draft = ""
+
+    def back(self, current: str = "") -> str:
+        if self.index == 0:
+            self.draft = current
+        # Prevent index underflow below list length
+        self.index = max(self.index - 1, -len(self.entries))
+        return self.current
+
+    def forward(self) -> str:
+        # Prevent index overflow into positive values
+        self.index = min(0, self.index + 1)
+        return self.current
+
+
+class UserInput(TextArea):
     """A TextArea that grows with content and submits on Enter."""
+
+    BINDINGS = [
+        # Requires priority to override the widget's `on_key` which adds '\n' to text
+        Binding("enter", "submit", "Submit prompt", priority=True),
+        Binding("shift+enter,alt+enter", "insert_newline", "New line", show=False),
+        Binding("ctrl+c", "clear_prompt", "Clear", show=False),
+        Binding("up", "history_previous", "Previous message", show=False),
+        Binding("down", "history_next", "Next message", show=False),
+    ]
 
     def __init__(self, *args, mode_getter: Callable[[], InputMode], **kwargs):
         super().__init__(*args, **kwargs)
         self._mode_getter = mode_getter
-        self._history: list[str] = []  # Submitted messages, old -> new
-        self._history_index: int | None = (
-            None  # Index of message navigation, None = not navigating
-        )
-        self._history_draft: str = (
-            ""  # Caching text typed before entering history navigation
-        )
+        self._history = PromptHistory()
 
     @property
     def mode(self) -> InputMode:
@@ -51,59 +104,45 @@ class GrowingInput(TextArea):
             self.value = value
             super().__init__()
 
-    async def _on_key(self, event: Key) -> None:
-        """
-        Override the private _on_key method to intercept Enter key presses
-        and handle Ctrl+C for clearing input.
-        """
-        if event.key == "enter":
-            event.prevent_default()
-            self.post_message(self.Submitted(self.text))
+    @override
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        # NOTE: always return True for "submit", otherwise it defaults to
+        #  TextArea's `insert_newline`, and we never want Enter == \n
+        if action == "clear_prompt":
+            return bool(self.text)
+        # TextArea binds Ctrl+C to 'copy', if the input is clear it goes up
+        #  and eventually hits the app exit
+        # TODO: review
+        elif action == "copy":
+            return False
+        elif action == "history_previous":
+            return (
+                    self.mode == InputMode.FREE_FORM
+                    and self.cursor_at_start_of_text
+                    and self._history.can_go_back
+            )
+        elif action == "history_next":
+            return (
+                    self.mode is InputMode.FREE_FORM
+                    and self.cursor_at_end_of_text
+                    and self._history.can_go_forward
+            )
+        return True
 
-        elif event.key == "ctrl+c":
-            if self.mode != InputMode.FREE_FORM:
-                # No question/choice prompt is active, let event
-                # bubble up to the Textual app
-                pass
-            elif self.text:
-                # If there is text, clear it and stop the event
-                event.stop()
-                self.text = ""
-            # If there is no text, let the event bubble up to the app to exit
+    def action_submit(self) -> None:
+        self.post_message(self.Submitted(self.text))
 
-        elif (
-            event.key == "up"
-            and self.mode == InputMode.FREE_FORM
-            and self.cursor_location[0] == 0
-        ):
-            event.prevent_default()
-            if self._history_index is None and self._history:
-                self._history_draft = self.text
-                self._history_index = len(self._history) - 1
-            elif self._history_index is not None and self._history_index > 0:
-                self._history_index -= 1
-            if self._history_index is not None:
-                self.load_text(self._history[self._history_index])
-                self.move_cursor(self.get_cursor_line_end_location())
+    def action_clear_prompt(self) -> None:
+        self.text = ""
 
-        elif (
-            event.key == "down"
-            and self.mode == InputMode.FREE_FORM
-            and self.cursor_location[0] == len(self.text.splitlines()) - 1
-        ):
-            if self._history_index is not None:
-                event.prevent_default()
-                if self._history_index < len(self._history) - 1:
-                    self._history_index += 1
-                    self.load_text(self._history[self._history_index])
-                else:
-                    self._history_index = None
-                    self.load_text(self._history_draft)
-                self.move_cursor(self.get_cursor_line_end_location())
+    def action_history_previous(self):
+        self.load_text(self._history.back(self.text))
 
-        else:
-            # Let the parent class handle other keys
-            await super()._on_key(event)
+    def action_history_next(self) -> None:
+        self.load_text(self._history.forward())
+
+    def action_insert_newline(self) -> None:
+        self.insert("\n")
 
 
 class InputBar(Container):
@@ -130,14 +169,14 @@ class InputBar(Container):
         self._user_message_queue = user_message_queue
 
         # Child widgets
-        self._text_input = GrowingInput(id="text_input", mode_getter=lambda: self._mode)
+        self._text_input = UserInput(id="text_input", mode_getter=lambda: self._mode)
         self._text_input.placeholder = placeholder
         self._text_input.show_line_numbers = False
         self._select_widget: OptionList | None = None
         # The framed box a prompt lives in: title on the border (which operation
         # this is about), question inside. Owns whichever prompt widget is up,
         # so tearing it down removes both.
-        self._conversation_area: ChatArea
+        self._chat: ChatArea
         self._prompt_box: Container | None = None
         self._question_line: Static | None = None
 
@@ -151,7 +190,7 @@ class InputBar(Container):
 
     def on_mount(self):
         """Initialize styling when mounted."""
-        self._conversation_area = self.app.query_one(ChatArea)
+        self._chat = self.app.query_one(ChatArea)
         self._text_input.focus()
         self.watch(self.screen, "focused", self._on_screen_focus_changed)
 
@@ -164,23 +203,14 @@ class InputBar(Container):
             if focused is not self._text_input:
                 self.call_after_refresh(self._text_input.focus)
 
-    def on_key(self, event: Key) -> None:
-        """Escape/Ctrl+C cancel an active question or choice prompt, from either
-        the text input or the option list - this is the common ancestor of both.
+    async def on_user_input_submitted(self, event: UserInput.Submitted) -> None:
         """
-        if event.key not in CANCEL_KEYS:
-            return
-        if self._mode == InputMode.QUESTION and self._question_future:
-            if not self._question_future.done():
-                event.stop()
-                self._question_future.set_exception(UserCancel())
-        elif self._mode == InputMode.MULTIPLE_CHOICE and self._choice_future:
-            if not self._choice_future.done():
-                event.stop()
-                self._choice_future.set_exception(UserCancel())
+        Handle the custom Submitted message from the GrowingInput widget.
 
-    async def on_growing_input_submitted(self, event: GrowingInput.Submitted) -> None:
-        """Handle the custom Submitted message from the GrowingInput widget."""
+        HACK: The name is dictated by Textual that translates the classpath
+        from a submission's type into its expected handler. Ex: submitting
+        `UserInput.Submitted` expects `on_user_input_submitted`.
+        """
         user_input = event.value.strip()
         if not user_input:
             return
@@ -289,7 +319,7 @@ class InputBar(Container):
         self._select_widget.focus()
 
         # Scroll conversation area to keep context visible after layout
-        self.call_after_refresh(self._conversation_area.scroll_end)
+        self.call_after_refresh(self._chat.scroll_end)
 
         try:
             selected_index = await self._choice_future
@@ -315,7 +345,7 @@ class InputBar(Container):
             margin: 0;
         }
 
-        InputBar > GrowingInput {
+        InputBar > UserInput {
             height: auto;
             min-height: 3;
             color: $foreground;
@@ -341,7 +371,7 @@ class InputBar(Container):
            raises it switches to $input. Both come from the theme via CSS, so
            a runtime theme change re-resolves them (the border can not be set
            inline - that would freeze the init-time Palette). */
-        InputBar > GrowingInput.prompt_input {
+        InputBar > UserInput.prompt_input {
             border: solid $input;
         }
 
