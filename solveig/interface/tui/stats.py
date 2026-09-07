@@ -313,10 +313,7 @@ class StatsBar(Widget):
                 table.add_row(text)
                 table.row_stats.append(stat)
 
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for stats bar."""
-        return """
+    DEFAULT_CSS = """
         StatsBar {
             dock: bottom;
             height: auto;

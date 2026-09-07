@@ -53,9 +53,7 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
             collapsed=start_collapsed,
         )
 
-    @classmethod
-    def get_css(cls) -> str:
-        return """
+    DEFAULT_CSS = """
         /* Custom title bar responsive layout */
         DividedCollapsibleTitleBar {
             width: 100%;
@@ -178,9 +176,7 @@ class CustomCollapsible(Collapsible):
             start_collapsed=start_collapsed,
         )
 
-    @classmethod
-    def get_css(cls) -> str:
-        return """
+    DEFAULT_CSS = """
             CustomCollapsible {
                 background: $background;
                 border: none;
@@ -192,7 +188,7 @@ class CustomCollapsible(Collapsible):
                 padding: 0 1 0 1;
                 border-top: solid $border;
             }
-            """ + DividedCollapsibleTitleBar.get_css()
+            """
 
     @override
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
@@ -312,11 +308,7 @@ class TextBoxWidget(Widget):
                 break
             parent = parent.parent
 
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for TextBoxWidget."""
-        return (
-            """
+    DEFAULT_CSS = """
         TextBoxWidget {
             /* Section content: 1 on all four sides. */
             margin: 1;
@@ -332,10 +324,6 @@ class TextBoxWidget(Widget):
             text-style: italic;
         }
         """
-            + CustomCollapsible.get_css()
-            # FIXME: double inclusion by virtue of TextualApp ->
-            # + CopyButton.get_css()
-        )
 
 
 class CollapsibleTextBox(TextBox):

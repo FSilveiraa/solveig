@@ -192,10 +192,7 @@ class TreeDisplay(Tree):
     # CSS
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for tree display."""
-        return """
+    DEFAULT_CSS = """
         TreeDisplay {
             border: solid $border;
             background: $background;

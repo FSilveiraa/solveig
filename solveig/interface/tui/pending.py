@@ -110,10 +110,7 @@ class PendingMessages(Vertical):
             # Refresh message list
             self._refresh_messages()
 
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for the queued messages widget."""
-        return """
+    DEFAULT_CSS = """
         PendingMessages {
             height: auto;
             margin: 1 0 0 0;

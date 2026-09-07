@@ -309,10 +309,7 @@ class InputBar(Container):
                 self._text_input.styles.display = saved_display
                 self._text_input.focus()
 
-    @classmethod
-    def get_css(cls) -> str:
-        """Generate CSS for this widget container."""
-        return """
+    DEFAULT_CSS = """
         InputBar {
             height: auto;
             margin: 0;
