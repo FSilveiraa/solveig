@@ -87,8 +87,10 @@ class UserInput(TextArea):
         Binding("down", "history_next", "Next message", show=False),
     ]
 
-    def __init__(self, mode: InputMode | Callable[[], InputMode], placeholder: str = "", **kwargs):
-        super().__init__(show_line_numbers = False, **kwargs)
+    def __init__(
+        self, mode: InputMode | Callable[[], InputMode], placeholder: str = "", **kwargs
+    ):
+        super().__init__(show_line_numbers=False, **kwargs)
         self._mode = mode
         self._history = PromptHistory()
         self.placeholder = placeholder
@@ -101,6 +103,7 @@ class UserInput(TextArea):
 
     class Submitted(Message):
         """Posted when the user presses Enter."""
+
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
@@ -118,15 +121,15 @@ class UserInput(TextArea):
             return False
         elif action == "history_previous":
             return (
-                    self.mode == InputMode.FREE_FORM
-                    and self.cursor_at_start_of_text
-                    and self._history.can_go_back
+                self.mode == InputMode.FREE_FORM
+                and self.cursor_at_start_of_text
+                and self._history.can_go_back
             )
         elif action == "history_next":
             return (
-                    self.mode is InputMode.FREE_FORM
-                    and self.cursor_at_end_of_text
-                    and self._history.can_go_forward
+                self.mode is InputMode.FREE_FORM
+                and self.cursor_at_end_of_text
+                and self._history.can_go_forward
             )
         return True
 
@@ -275,10 +278,7 @@ class InputBar(Container):
         to the same 40 characters must still be told apart by the thing being
         approved. A prompt raised outside any group has no title and simply
         gets a plain border."""
-        choices_list = [
-            f"{i + 1}. {choice}"
-            for i, choice in enumerate(choices)
-        ]
+        choices_list = [f"{i + 1}. {choice}" for i, choice in enumerate(choices)]
 
         async with self._question_lock:
             self._mode = InputMode.MULTIPLE_CHOICE

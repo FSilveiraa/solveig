@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from os import PathLike
-from typing import Any, Callable, Iterable
+from typing import Any
 
 import pyperclip
 from anyio import Path
@@ -129,54 +129,3 @@ def error_to_text(error: Exception | str) -> str:
     if isinstance(error, Exception):
         return f"{error.__class__.__name__}: {error}"
     return str(error)
-
-
-class ChoicesDict[T](dict[str, T]):
-    """
-    Behaves like a dict of name-of-thing-to-actual-thing.
-    Acts as both resolver for names and available options.
-    On missing entries, raises a descriptive exception that is
-    aware of available choices instead of a generic KeyError.
-    """
-    def __init__(
-            self,
-            init: dict[str, T] | Iterable[str | T] | None = None,
-            namer: Callable[[T], str] = str,
-            getter: Callable[[str], T] | None = None,
-            error_label: str | None = None,
-    ):
-        super().__init__()
-        self._getter = getter
-        self._namer = namer
-        self._error_label = error_label
-        if init is not None:
-            if isinstance(init, dict):
-                self.update(init)
-            else:
-                self.add(*init)
-
-    def add(self, *entries: str | T) -> None:
-        """
-        Utility method that allows adding entries using the namer/getter
-        instead of providing the key-value pair
-        """
-        for entry in entries:
-            if isinstance(entry, str):
-                if self._getter:
-                    self[entry] = self._getter(entry)
-                else:
-                    raise ValueError(
-                        "Getter not set, cannot resolve "
-                        f"{self._error_label or "entry"} from '{entry}'."
-                    )
-            else:
-                self[self._namer(entry)] = entry
-
-    def __getitem__(self, name: str) -> T:
-        try:
-            return super().__getitem__(name)
-        except KeyError as error:
-            raise ValueError(
-                f"No {self._error_label or "entry"} found for '{name}'. "
-                f"Use one of {sorted(self.keys())}"
-            ) from error

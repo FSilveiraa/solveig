@@ -9,62 +9,12 @@ from rich.syntax import get_style_by_name
 from textual.color import Color, ColorParseError
 from textual.theme import Theme as TextualTheme
 
-from solveig.utils.misc import ChoicesDict
 
 CodeTheme = type[Style]
 
-
-# class CodeThemes(dict[str, CodeTheme]):
-#     """
-#     Behaves like a dict of name-of-code-theme to actual CodeTheme.
-#     Exists mostly to send a descriptive exception that is aware of
-#     available choices instead of a generic KeyError.
-#     """
-#     def __init__(self, *names: str):
-#         super().__init__()
-#         for code_theme_name in names:
-#             self.add(code_theme_name)
-#
-#     def add(self, code_theme: CodeTheme | str) -> None:
-#         if isinstance(code_theme, str):
-#             self[code_theme] = get_style_by_name(code_theme)
-#         else:
-#             self[code_theme.name] = code_theme
-#
-#     def __setitem__(self, key: str, value: CodeTheme) -> None:
-#         if key == "unnamed":
-#             raise ValueError(
-#                 "Found invalid code theme name 'unnamed', signaling "
-#                 "a partially initialized `pygment.style.Style` class"
-#             )
-#         return super().__setitem__(key, value)
-#
-#     def __getitem__(self, name: str) -> CodeTheme:
-#         try:
-#             return super().__getitem__(name)
-#         except KeyError as error:
-#             raise ValueError(
-#                 f"Unknown code theme '{name}'. "
-#                 f"Use one of {sorted(self.keys())}"
-#             ) from error
-
-# Fill in the SSOT code themes registry with the real values
-# def _get_code_theme_by_name(code_theme_name: str) -> type[Style] | None:
-#     if code_theme_name == "unnamed":
-#         return None
-#     return get_style_by_name(code_theme_name)
-        # raise ValueError(
-        #     "Found invalid code theme name 'unnamed', signaling "
-        #     "a partially initialized `pygment.style.Style` class"
-        # )
-
-CODE_THEMES: ChoicesDict[CodeTheme] = ChoicesDict(
-    getter=get_style_by_name,
-    namer=lambda code_theme: code_theme.name,
-    # Prevent the fake "unnamed" code theme that pygment sets up
-    init=list(STYLE_MAP.keys() - {"unnamed"}),
-    error_label="code theme"
-)
+CODE_THEMES: dict[str, CodeTheme] = {
+    code_theme_name: get_style_by_name(code_theme_name) for code_theme_name in STYLE_MAP
+}
 
 
 class TuiTheme(BaseModel):
@@ -74,24 +24,24 @@ class TuiTheme(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     if TYPE_CHECKING:
-        # HACK: declaration only for mypy. Pydantic generates the  real
+        # HACK: declaration only for mypy. Pydantic generates the real
         # __init__ from the fields above, and its validators accept the
         # written form (hex string, style name) while the attributes
         # hold the parsed instance.
         def __init__(
-                self,
-                name: str,
-                *,
-                background: Color | str,
-                foreground: Color | str,
-                primary: Color | str,
-                accent: Color | str,
-                warning: Color | str,
-                error: Color | str,
-                border: Color | str,
-                group: Color | str,
-                input: Color | str,
-                code_theme: type[Style] | str = ...,
+            self,
+            name: str,
+            *,
+            background: Color | str,
+            foreground: Color | str,
+            primary: Color | str,
+            accent: Color | str,
+            warning: Color | str,
+            error: Color | str,
+            border: Color | str,
+            group: Color | str,
+            input: Color | str,
+            code_theme: type[Style] | str = ...,
         ) -> None: ...
 
     # Info
@@ -110,7 +60,7 @@ class TuiTheme(BaseModel):
     group: Color
     input: Color
 
-    code_theme: type[Style] = CODE_THEMES["material"]
+    code_theme: CodeTheme = CODE_THEMES["material"]
 
     def __str__(self) -> str:
         return self.name
@@ -118,7 +68,10 @@ class TuiTheme(BaseModel):
     @field_validator("*", mode="before")
     @classmethod
     def _parse_color(cls, value: object, info: ValidationInfo) -> object:
-        if info.field_name and cls.model_fields[info.field_name].annotation is not Color:
+        if (
+            info.field_name
+            and cls.model_fields[info.field_name].annotation is not Color
+        ):
             return value
         if isinstance(value, str):
             try:
@@ -161,7 +114,11 @@ class TuiTheme(BaseModel):
         Derives the background color for user comments from the background.
         """
         shift = 0.08
-        return self.background.lighten(shift) if self.is_dark else self.background.darken(shift)
+        return (
+            self.background.lighten(shift)
+            if self.is_dark
+            else self.background.darken(shift)
+        )
 
     def to_textual_theme(self) -> TextualTheme:
         """A registered Textual `Theme` mirroring a `Palette`. The standard slots
@@ -316,29 +273,14 @@ monochrome = TuiTheme(
 
 
 DEFAULT_THEME = terracotta
-# THEMES = {
-#     theme.name: theme
-#     for theme in [
-#         terracotta,
-#         solarized_dark,
-#         solarized_light,
-#         forest,
-#         midnight,
-#         nord,
-#         rose,
-#         monochrome,
-#     ]
-# }
-THEMES: ChoicesDict[TuiTheme] = ChoicesDict[TuiTheme](
-    [
-        terracotta,
-        solarized_dark,
-        solarized_light,
-        forest,
-        midnight,
-        nord,
-        rose,
-        monochrome,
-    ],
-    error_label="TUI theme"
-)
+
+THEMES = [
+    terracotta,
+    solarized_dark,
+    solarized_light,
+    forest,
+    midnight,
+    nord,
+    rose,
+    monochrome,
+]

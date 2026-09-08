@@ -312,7 +312,9 @@ async def _assemble_tool_returns(
                 continue
             parts.append(event.part)
             for comment in await inbox.drain():
-                placed.append(_PlacedComment(comment.text, after=event.part.tool_call_id))
+                placed.append(
+                    _PlacedComment(comment.text, after=event.part.tool_call_id)
+                )
                 parts.append(UserPromptPart(content=comment.text))
             message = ModelRequest(parts=list(parts))
             if conversation.assembling:

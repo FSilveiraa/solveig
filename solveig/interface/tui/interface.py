@@ -149,9 +149,7 @@ class TerminalInterface(SolveigInterface):
         timeout: float | None = None,
     ) -> AsyncGenerator[None]:
         final_status = (
-            final_status
-            if final_status is not None
-            else self.app._stats_bar._status
+            final_status if final_status is not None else self.app._stats_bar._status
         )
         await self.set_status(status)
         await asyncio.sleep(0)
@@ -222,9 +220,7 @@ class TerminalInterface(SolveigInterface):
         symbol = LEVEL_SYMBOLS.get(level)
         to_display = f"{symbol} {text}" if symbol else text
         if prefix:
-            to_display = (
-                f"[$primary]{prefix}[/]  {to_display}"
-            )
+            to_display = f"[$primary]{prefix}[/]  {to_display}"
         await self.app._chat.add_text(
             to_display,
             level=level,
@@ -404,9 +400,7 @@ class TerminalInterface(SolveigInterface):
             new_content=new_content,
             title=title or "Diff",
         )
-        await self.app._chat.add_element(
-            self._display_container, box.widget
-        )
+        await self.app._chat.add_element(self._display_container, box.widget)
         return box
 
     async def add_tree_box(
@@ -423,9 +417,7 @@ class TerminalInterface(SolveigInterface):
         )
         if title:
             tree.widget.border_title = title
-        await self.app._chat.add_element(
-            self._display_container, tree.widget
-        )
+        await self.app._chat.add_element(self._display_container, tree.widget)
         return tree
 
     # -- with (context managers) ---------------------------------------------

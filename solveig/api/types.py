@@ -17,8 +17,6 @@ from typing import override
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
-from solveig.utils.misc import ChoicesDict
-
 
 @dataclass
 class ModelInfo:
@@ -100,6 +98,7 @@ class APIType:
     async def list_models(cls, provider: Provider) -> list[str]:
         raise ProviderCapabilityMissing(f"{cls.name} cannot list models")
 
+
 class OpenAI(APIType):
     name = "openai"
 
@@ -121,7 +120,9 @@ class OpenAI(APIType):
 
     @override
     @classmethod
-    async def get_model_details(cls, provider: Provider, model: str | None) -> ModelInfo | None:
+    async def get_model_details(
+        cls, provider: Provider, model: str | None
+    ) -> ModelInfo | None:
         models_list = await provider.client.models.list()
         model_name = model
         if model_name:
@@ -196,7 +197,4 @@ class Gemini(APIType):
 
 DEFAULT_API_TYPE = OpenAI()
 # Every type of provider Solveig can talk to, keyed by its own `name`.
-API_TYPES = ChoicesDict[APIType](
-    init=[ DEFAULT_API_TYPE, ],
-    error_label="API type",
-)
+API_TYPES = [DEFAULT_API_TYPE]

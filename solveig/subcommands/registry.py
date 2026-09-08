@@ -134,7 +134,9 @@ class SubcommandRegistry:
             return text  # not a command - an ordinary prompt
 
         subcommand, tokens = match
-        asyncio.create_task(self._run_subcommand_with_cancellable(text, subcommand, tokens))
+        asyncio.create_task(
+            self._run_subcommand_with_cancellable(text, subcommand, tokens)
+        )
         return None
 
     # ------------------------------------------------------------------
@@ -154,7 +156,9 @@ class SubcommandRegistry:
                 + ", ".join(sorted(t.__name__ for t in self._deps))
             ) from None
 
-    async def _run_subcommand_with_cancellable(self, text: str, subcommand: Subcommand, tokens: list[str]) -> None:
+    async def _run_subcommand_with_cancellable(
+        self, text: str, subcommand: Subcommand, tokens: list[str]
+    ) -> None:
         try:
             async with self._interface.with_cancellable(f"Running {text}"):
                 await self._run_subcommand(text, subcommand, tokens)
@@ -169,7 +173,9 @@ class SubcommandRegistry:
                 level=Level.ERROR,
             )
 
-    async def _run_subcommand(self, text: str, subcommand: Subcommand, tokens: list[str]) -> None:
+    async def _run_subcommand(
+        self, text: str, subcommand: Subcommand, tokens: list[str]
+    ) -> None:
         """Parse, fill in the dependencies, call, and hand back whatever the
         handler wants to CONTRIBUTE - text to send on to the assistant, or None
         for a command whose effect was its own (`/config set`, `/help`).
@@ -184,7 +190,9 @@ class SubcommandRegistry:
         # the handler parses — otherwise argparse (tool path) would print to
         # stdout and raise SystemExit.
         if any(t in ("-h", "--help") for t in tokens):
-            await self._interface.print(f"Usage: {subcommand.help_line()}", level=Level.INFO)
+            await self._interface.print(
+                f"Usage: {subcommand.help_line()}", level=Level.INFO
+            )
             return
 
         try:
@@ -192,7 +200,8 @@ class SubcommandRegistry:
         except (SettingsError, ValidationError) as e:
             await self._interface.print(str(e), level=Level.ERROR)
             await self._interface.print(
-                f"Usage: {subcommand.subcommands[0]} {subcommand.usage}".rstrip(), level=Level.INFO
+                f"Usage: {subcommand.subcommands[0]} {subcommand.usage}".rstrip(),
+                level=Level.INFO,
             )
             return
 

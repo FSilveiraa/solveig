@@ -256,11 +256,12 @@ class TextBoxWidget(Widget):
             start_collapsed=self._collapsed,
         )
         self._text_container = (
-            self._initial_content if isinstance(self._initial_content, Markdown)
+            self._initial_content
+            if isinstance(self._initial_content, Markdown)
             else Static(
                 content=self._initial_content,
                 markup=False,
-                classes=self._content_classes
+                classes=self._content_classes,
             )
         )
 

@@ -1,4 +1,5 @@
 """Basic UI widgets for the Textual interface."""
+
 from __future__ import annotations
 
 from textual.containers import Horizontal
@@ -8,7 +9,14 @@ from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, MessageBox, EditableMessage
 from solveig.interface.base.actions import MessageActions, Role
 
-from .button import Button, BranchButton, CopyButton, DeleteButton, EditButton, RetryButton
+from .button import (
+    Button,
+    BranchButton,
+    CopyButton,
+    DeleteButton,
+    EditButton,
+    RetryButton,
+)
 from .collapsible import TextBoxWidget
 
 
@@ -46,7 +54,7 @@ class EditableComment(Static):
         self.add_class(f"role-{role}")
 
         # Create a button per existing message action (plus copy)
-        self._buttons: list[Button] = [ CopyButton(lambda: self.comment) ]
+        self._buttons: list[Button] = [CopyButton(lambda: self.comment)]
         _actions = [
             (self.actions.edit, EditButton),
             (self.actions.retry, RetryButton),
@@ -96,8 +104,7 @@ class EditableComment(Static):
         if self.actions.branch is not None:
             await self.actions.branch()
 
-
-    DEFAULT_CSS =  """
+    DEFAULT_CSS = """
         EditableComment {
             margin: 1;
         }

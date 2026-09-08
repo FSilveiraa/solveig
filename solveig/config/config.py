@@ -42,6 +42,8 @@ from solveig.config.models import (
     PreservingConfigSection,
     SessionConfig,
     SystemPromptConfig,
+    _Choice,
+    ChoiceEntry,
 )
 from solveig.interface.themes import TuiTheme, CodeTheme
 from solveig.utils import dotted
@@ -134,9 +136,9 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 
 def display_config_value(value: object) -> str:
     """Format a config value for display, driven by type — never by field name.
-    Owned types (`APIType`, `Palette`) both carry a `name`; third-party types
+    Owned types (`APIType`, `TuiTheme`) both carry a `name`; third-party types
     (SecretStr, ByteSize, re.Pattern) are dispatched below."""
-    if isinstance(value, APIType | TuiTheme | CodeTheme):
+    if isinstance(value, ChoiceEntry):
         return value.name
     if isinstance(value, SecretStr):
         return "***" if value.get_secret_value() else "(not set)"

@@ -4,6 +4,7 @@ Each button owns a reference to the message widget it's attached to and,
 on click, calls one method on that owner. No shared dispatch mechanism -
 swap a button's behavior by editing its `on_click` override.
 """
+
 import asyncio
 from collections.abc import Callable
 from typing import override, Self
@@ -16,6 +17,7 @@ from solveig.utils.misc import copy_to_clipboard
 
 class Button(_Button):
     """A clickable label owned by a message widget."""
+
     LABEL: str
     DOING_LABEL: str | None = None
     DONE_LABEL: str | None = None

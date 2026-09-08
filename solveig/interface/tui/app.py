@@ -27,6 +27,7 @@ LEVEL_SYMBOLS: dict[Level, str] = {
     Level.ERROR: "🗙",
 }
 
+
 class SolveigTextualApp(TextualApp):
     """
     Minimal TextualApp subclass with only essential Solveig customizations.
@@ -53,10 +54,10 @@ class SolveigTextualApp(TextualApp):
         # Register every palette as a Textual theme and select the configured
         # one, so the widget CSS's $accent/$border/$group/... variables resolve and
         # switching themes at runtime is just `self.theme = name`.
-        for theme in THEMES.values():
+        for theme in THEMES:
             self.register_theme(theme.to_textual_theme())
 
-        # This is the actual theme name that Textual will use, not a Palette
+        # This is the actual theme name that Textual will use, not a TuiTheme
         self.theme = self._config.interface.tui.theme.name
 
         # Register an observer for the code value
@@ -117,7 +118,7 @@ class SolveigTextualApp(TextualApp):
             for key, active in self.active_bindings.items()
             if active.enabled and active.binding.action == "cancel_tasks"
         ]
-        return f"({"/".join(keys)} to cancel)" if keys else None
+        return f"({'/'.join(keys)} to cancel)" if keys else None
 
     async def on_mouse_up(self, event: events.MouseUp) -> None:
         """Intercept mouse-up to auto-copy a completed click-drag text selection."""

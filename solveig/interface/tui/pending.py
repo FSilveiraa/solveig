@@ -90,9 +90,7 @@ class PendingMessages(Vertical):
 
         # Add current user comments from queue
         for comment in self._queue.entries:
-            self._content_container.mount(
-                PendingMessage(comment)
-            )
+            self._content_container.mount(PendingMessage(comment))
 
     def update_display(self):
         """Update the display based on current queue state.

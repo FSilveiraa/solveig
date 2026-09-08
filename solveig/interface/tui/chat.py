@@ -162,7 +162,7 @@ class ChatArea(ScrollableContainer):
         self.scroll_end()
         self.call_after_refresh(self.scroll_end)
 
-    DEFAULT_CSS =  """
+    DEFAULT_CSS = """
         .text_message    { color: $foreground; }
         .info_message    { color: $primary; }
         .success_message { color: $text-success; }
