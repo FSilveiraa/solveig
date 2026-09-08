@@ -162,7 +162,7 @@ These are not style preferences — they are the seams the codebase is built on.
 - **Delegation is complete.** No residue wrappers re-implementing pydantic-ai —
   wrap only where Solveig carries real domain semantics (e.g. `ToolResult.private`).
 - **Field behavior lives on the field type.** Parse/display/secrecy go on the
-  type (`SecretStr`, `ByteSize`, `list[re.Pattern]`, `Palette`, `APIType`), not
+  type (`SecretStr`, `ByteSize`, `list[re.Pattern]`, `TuiTheme`, `APIType`), not
   in name-keyed lookup tables.
 
 ## Tools
@@ -327,8 +327,8 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   rule like "Esc must never quit" is expressed by not binding it. The status hint
   reads `App.active_bindings`, the same table dispatch consults, so it cannot
   describe a key that no longer does that.
-- **Native Textual theming:** palettes are registered as Textual `Theme`s, and a
-  `Palette` field's own name is the CSS variable (`$primary`, `$border`, `$group`),
+- **Native Textual theming:** palettes are registered as Textual `TuiTheme`s, and a
+  `TuiTheme` field's own name is the CSS variable (`$primary`, `$border`, `$group`),
   so Solveig CSS never spells a colour or names Textual's chrome slots. Widget CSS
   lives in `DEFAULT_CSS` on the widget itself: Textual collects it once per class as
   the DOM is built and inherits it to subclasses, so nothing composes anyone else's

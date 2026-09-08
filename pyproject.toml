@@ -36,7 +36,16 @@ dependencies = [
     # behaviors a major owes nothing to. tests/unit/test_pydantic_ai_invariants.py
     # is the upgrade gate: run it on any bump (tier labels say how to react).
     "pydantic-ai>=2.17,<3",
+    # Imported at module scope by config/config.py, tools/base.py and
+    # subcommands/base.py, so it is a DIRECT dependency — it used to arrive only
+    # by way of fastmcp/mcp, which meant a clean install could resolve a version
+    # older than the two APIs the code needs: `cli_shortcuts` on the settings
+    # config, and `CliSettingsSource` accepting a plain BaseModel. Floor is the
+    # developed/tested version, same rule as pydantic-ai above.
+    "pydantic-settings>=2.14.2,<3",
     "textual>=6.1.0",
+    # Required for default code themes.
+    "pygments>=2.21.0",
     "rich>=14.0.0",
     # The web frontend is a first-class interface alongside the TUI, so its
     # HTTP server is core, not an optional extra: `pip install solveig` ships

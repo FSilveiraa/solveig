@@ -12,14 +12,15 @@ Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
 from __future__ import annotations
 
 import typing
+from dataclasses import dataclass
+from typing import Any, Iterable
 from collections.abc import Callable
-from typing import Any
 
 import anyconfig
 
-from solveig.api.types import TYPE_BY_NAME, APIType, resolve_api_type
+from solveig.api.types import APIType, API_TYPES
 from solveig.exceptions import UserCancel
-from solveig.interface import themes
+from solveig.interface.themes import THEMES, CODE_THEMES, CodeTheme, TuiTheme
 from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.subcommands import subcommand
 from solveig.utils import dotted
@@ -130,33 +131,46 @@ def parse_config_value(config: SolveigConfig, path: str, raw: str) -> Any:
 # below serves types it knows nothing about - which is what "a third one just works"
 # means. The parse callable is the load-bearing one: without it the loop had to name
 # APIType explicitly and treat everything else as a Palette.
-type _ChoiceEntry = tuple[
-    Any, Callable[[], list[str]], Callable[[Any], str], Callable[[str], Any]
-]
+# @dataclass
+# class ChoiceEntry:
+#     # TODO: should be expressed implicitly by a generic `ChoiceEntry[T]`
+#     # NOTE: needs to be Any instead of type to accommodate type aliases
+#     _type: Any
+#     choices: Iterable[str]
+#     to_name: Callable[[Any], str]
+#     to_choice: Callable[[str], Any]
+#
+#
+# _CHOICES_BY_TYPE: list[ChoiceEntry] = [
+#     ChoiceEntry(
+#         type=TuiTheme,
+#         choices=THEMES,
+#         to_name=lambda theme: theme.name,
+#         to_choice=lambda name: THEMES[name],
+#     ),
+#     ChoiceEntry(
+#         type=CodeTheme,
+#         choices=CODE_THEMES,
+#         to_name=lambda code_theme: code_theme.name,
+#         to_choice=lambda name: CODE_THEMES[name],
+#     ),
+#     ChoiceEntry(
+#         type=APIType,
+#         choices=TYPE_BY_NAME,
+#         to_name=lambda api_type: api_type.name,
+#         to_choice=resolve_api_type,
+#     ),
+# ]
 
-_CHOICES_BY_TYPE: list[_ChoiceEntry] = [
-    (
-        themes.Palette,
-        lambda: sorted(themes.THEMES),
-        lambda palette: palette.name,
-        lambda name: themes.THEMES[name],
-    ),
-    (
-        APIType,
-        lambda: sorted(TYPE_BY_NAME),
-        lambda api_type: api_type.name,
-        resolve_api_type,
-    ),
-]
 
-
-def _resolve_choice(entry: _ChoiceEntry, index: int) -> Any:
-    """The value behind the option at `index`, via the entry's own parser.
-
-    Options are read from the same callable the prompt offered, so the index the
-    user picked and the index parsed here address the same list."""
-    _type, options_of, _display_of, parse = entry
-    return parse(options_of()[index])
+# def _resolve_choice(entry: ChoiceEntry, index: int) -> Any:
+#     """The value behind the option at `index`, via the entry's own parser.
+#
+#     Options are read from the same callable the prompt offered, so the index the
+#     user picked and the index parsed here address the same list."""
+#     return entry.to_choice(list(entry.choices)[index])
+#     _type, options_of, _display_of, parse = entry
+#     return parse(options_of()[index])
 
 
 async def prompt_for_field(
@@ -193,15 +207,15 @@ async def prompt_for_field(
         return declared_choices[idx]
 
     # --- Constrained-choice fields, driven by the leaf's declared type ---
-    for entry in _CHOICES_BY_TYPE:
-        choice_type, options_of, display_of, _parse = entry
-        if raw_type is choice_type:
-            idx = await interface.ask_choice(
-                f"{description} (current: {display_of(current)})",
-                options_of(),
-                add_cancel=True,
-            )
-            return _resolve_choice(entry, idx)
+    # for entry in _CHOICES_BY_TYPE:
+    #     choice_type, options_of, display_of, _parse = entry
+    #     if raw_type is choice_type:
+    #         idx = await interface.ask_choice(
+    #             f"{description} (current: {display_of(current)})",
+    #             options_of(),
+    #             add_cancel=True,
+    #         )
+    #         return _resolve_choice(entry, idx)
 
     # --- Bool fields ---
     if raw_type is bool:

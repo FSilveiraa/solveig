@@ -15,8 +15,8 @@ from pydantic import (
     field_validator,
 )
 
-import solveig.interface.themes as themes
-from solveig.api.types import APIType, OpenAI, resolve_api_type
+from solveig.interface.themes import CodeTheme, DEFAULT_THEME, TuiTheme, THEMES, CODE_THEMES
+from solveig.api.types import APIType, API_TYPES, DEFAULT_API_TYPE
 from solveig.config import DEFAULT_SYSTEM_PROMPT
 from solveig.utils.file import Filesystem
 
@@ -100,15 +100,16 @@ class ApiConfig(ConfigSection):
 
     url: str = Field(default="", description="LLM API endpoint URL")
     type: APIType = Field(
-        default_factory=OpenAI,
+        default_factory=lambda: DEFAULT_API_TYPE,
         description="API provider type (openai, anthropic, gemini)",
+        json_schema_extra={"choices": [*sorted(API_TYPES)]}
     )
 
     @field_validator("type", mode="before")
     @classmethod
     def _parse_type(cls, _apy_type: Any) -> APIType:
         if isinstance(_apy_type, str):
-            return resolve_api_type(_apy_type)
+            return API_TYPES[_apy_type]
         return _apy_type
 
     @field_serializer("type")
@@ -306,15 +307,15 @@ class SessionConfig(ConfigSection):
 class TuiConfig(ConfigSection):
     """Settings only the terminal frontend can honour."""
 
-    theme: themes.Palette = Field(
-        default_factory=lambda: themes.DEFAULT_THEME, description="UI color theme"
+    theme: TuiTheme = Field(
+        default_factory=lambda: DEFAULT_THEME,
+        description="UI color theme",
+        json_schema_extra={"choices": [*sorted(THEMES)]}
     )
-    code_theme: str = Field(
-        default=themes.DEFAULT_CODE_THEME,
-        description="Code syntax highlighting theme",
-        # Choices declared on the FIELD, read generically by the config
-        # editor's prompt.
-        json_schema_extra={"choices": sorted(themes.CODE_THEMES)},
+    code_theme: CodeTheme | None = Field(
+        default=None,
+        description="Syntax highlighting theme (defaults to TUI theme's code theme)",
+        json_schema_extra={"choices": [*sorted(CODE_THEMES)]},
     )
     tree_expand_root: bool = Field(
         default=True, description="Expand the root node of a file tree on display"
@@ -344,16 +345,25 @@ class TuiConfig(ConfigSection):
 
     @field_validator("theme", mode="before")
     @classmethod
-    def _parse_theme(cls, _theme_name: Any) -> Any:
-        return (
-            themes.THEMES[_theme_name.strip().lower()]
-            if isinstance(_theme_name, str)
-            else _theme_name
-        )
+    def _parse_theme(cls, _theme: str | TuiTheme) -> TuiTheme:
+        if isinstance(_theme, str):
+            return THEMES[_theme.strip().lower()]
+        return _theme
+
+    @field_validator("code_theme", mode="before")
+    @classmethod
+    def _parse_code_theme(cls, _code_theme: str | CodeTheme | None) -> CodeTheme | None:
+        if isinstance(_code_theme, str):
+            return CODE_THEMES[_code_theme]
+        return _code_theme
 
     @field_serializer("theme")
-    def _serialize_theme(self, _theme: themes.Palette) -> str:
+    def _serialize_theme(self, _theme: TuiTheme) -> str:
         return _theme.name
+
+    @field_serializer("code_theme")
+    def _serialize_code_theme(self, _code_theme: CodeTheme) -> str | None:
+        return _code_theme.name if _code_theme else None
 
 
 class WebConfig(ConfigSection):

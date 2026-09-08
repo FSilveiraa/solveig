@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
+from typing import override
 
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
+
+from solveig.utils.misc import ChoicesDict
 
 
 @dataclass
@@ -66,45 +69,59 @@ class ModelNotFound(APIError):
 class APIType:
     """Base: override default_url, name and the provider/model methods per API."""
 
-    default_url: str = ""
-    name: str = ""
+    name: str
+    default_url: str | None = None
 
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if not getattr(cls, "name", None):
+            raise TypeError(f"{cls.__name__} must declare `name`")
+
+    def __str__(self) -> str:
+        return self.name
+
+    @classmethod
     def get_provider(
-        self, url: str | None = None, api_key: str | None = None
+        cls, url: str | None = None, api_key: str | None = None
     ) -> Provider:
-        raise ProviderCapabilityMissing(f"{self.name} cannot build a provider")
+        raise ProviderCapabilityMissing(f"{cls.name} cannot build a provider")
 
-    def get_model(self, provider: Provider, model_name: str) -> Model:
-        raise ProviderCapabilityMissing(f"{self.name} cannot build a model")
+    @classmethod
+    def get_model(cls, provider: Provider, model_name: str) -> Model:
+        raise ProviderCapabilityMissing(f"{cls.name} cannot build a model")
 
+    @classmethod
     async def get_model_details(
-        self, provider: Provider, model: str | None
+        cls, provider: Provider, model: str | None
     ) -> ModelInfo | None:
-        raise ProviderCapabilityMissing(f"{self.name} cannot report model details")
+        raise ProviderCapabilityMissing(f"{cls.name} cannot report model details")
 
-    async def list_models(self, provider: Provider) -> list[str]:
-        raise ProviderCapabilityMissing(f"{self.name} cannot list models")
-
+    @classmethod
+    async def list_models(cls, provider: Provider) -> list[str]:
+        raise ProviderCapabilityMissing(f"{cls.name} cannot list models")
 
 class OpenAI(APIType):
     name = "openai"
-    default_url = "https://api.openai.com/v1"
 
+    @override
+    @classmethod
     def get_provider(
-        self, url: str | None = None, api_key: str | None = None
+        cls, url: str | None = None, api_key: str | None = None
     ) -> Provider:
         from pydantic_ai.providers.openai import OpenAIProvider
 
-        return OpenAIProvider(api_key=api_key, base_url=url or self.default_url)
+        return OpenAIProvider(api_key=api_key, base_url=url or cls.default_url)
 
-    def get_model(self, provider: Provider, model_name: str) -> Model:
+    @override
+    @classmethod
+    def get_model(cls, provider: Provider, model_name: str) -> Model:
         from pydantic_ai.models.openai import OpenAIChatModel
 
         return OpenAIChatModel(model_name, provider=provider)
 
-    async def get_model_details(
-        self, provider: Provider, model: str | None
-    ) -> ModelInfo | None:
+    @override
+    @classmethod
+    async def get_model_details(cls, provider: Provider, model: str | None) -> ModelInfo | None:
         models_list = await provider.client.models.list()
         model_name = model
         if model_name:
@@ -128,7 +145,9 @@ class OpenAI(APIType):
             )
         return info
 
-    async def list_models(self, provider: Provider) -> list[str]:
+    @override
+    @classmethod
+    async def list_models(cls, provider: Provider) -> list[str]:
         models_list = await provider.client.models.list()
         return sorted(m.id for m in models_list.data)
 
@@ -137,14 +156,18 @@ class Anthropic(APIType):
     name = "anthropic"
     default_url = "https://api.anthropic.com/v1"
 
+    @override
+    @classmethod
     def get_provider(
-        self, url: str | None = None, api_key: str | None = None
+        cls, url: str | None = None, api_key: str | None = None
     ) -> Provider:
         from pydantic_ai.providers.anthropic import AnthropicProvider
 
-        return AnthropicProvider(api_key=api_key, base_url=url or self.default_url)
+        return AnthropicProvider(api_key=api_key, base_url=url or cls.default_url)
 
-    def get_model(self, provider: Provider, model_name: str) -> Model:
+    @override
+    @classmethod
+    def get_model(cls, provider: Provider, model_name: str) -> Model:
         from pydantic_ai.models.anthropic import AnthropicModel
 
         return AnthropicModel(model_name, provider=provider)
@@ -154,35 +177,26 @@ class Gemini(APIType):
     name = "gemini"
     default_url = "https://generativelanguage.googleapis.com/v1beta"
 
+    @override
+    @classmethod
     def get_provider(
-        self, url: str | None = None, api_key: str | None = None
+        cls, url: str | None = None, api_key: str | None = None
     ) -> Provider:
         from pydantic_ai.providers.google import GoogleProvider
 
         return GoogleProvider(api_key=api_key, base_url=url or None)  # type: ignore[arg-type]
 
-    def get_model(self, provider: Provider, model_name: str) -> Model:
+    @override
+    @classmethod
+    def get_model(cls, provider: Provider, model_name: str) -> Model:
         from pydantic_ai.models.google import GoogleModel
 
         return GoogleModel(model_name, provider=provider)
 
 
-#: Every provider Solveig can talk to, keyed by its own `name`.
-#:
-#: NOTE: Anthropic and Gemini are declared above but deliberately absent here. They
-#: implement provider and model construction, but not the model introspection
-#: (`get_model_details`, `list_models`) the client needs, so selecting one gives a
-#: session with no model info, no price and no context limit. Re-add an entry the
-#: moment its introspection lands - the name comes from the class, so that is the
-#: whole change.
-TYPE_BY_NAME: dict[str, type[APIType]] = {cls.name: cls for cls in (OpenAI,)}
-"""String → subclass for config validation and editor choices."""
-
-
-def resolve_api_type(name: str) -> APIType:
-    """Build an APIType instance from a string name."""
-    cls = TYPE_BY_NAME.get(name.lower())
-    if cls is None:
-        available = ", ".join(TYPE_BY_NAME)
-        raise ValueError(f"Unknown API type: {name}. Available: {available}")
-    return cls()
+DEFAULT_API_TYPE = OpenAI()
+# Every type of provider Solveig can talk to, keyed by its own `name`.
+API_TYPES = ChoicesDict[APIType](
+    init=[ DEFAULT_API_TYPE, ],
+    error_label="API type",
+)

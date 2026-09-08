@@ -16,6 +16,7 @@ from solveig.api.types import (
     ModelInfo,
     ModelNotFound,
     ProviderCapabilityMissing,
+    APIType,
 )
 from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
@@ -53,7 +54,7 @@ class Client:
             api_key=config.api.key.get_secret_value() or None,
             url=config.api.url,
         )
-        self.type = config.api.type
+        self.type: APIType = config.api.type
         self.model_info: ModelInfo | None = None
         #: Told when `model_info` is replaced, because the Price and Context
         #: stats read it. NOT so the client can display anything - it never
@@ -74,7 +75,7 @@ class Client:
             self.model_info
             and self.model_info.model == config.api.model
             and self.provider.base_url == config.api.url
-            and type(self.type) is type(config.api.type)
+            and self.type == config.api.type
         ):
             return
         await self.refresh(config)

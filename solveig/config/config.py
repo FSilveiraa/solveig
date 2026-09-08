@@ -43,7 +43,7 @@ from solveig.config.models import (
     SessionConfig,
     SystemPromptConfig,
 )
-from solveig.interface.themes import Palette
+from solveig.interface.themes import TuiTheme, CodeTheme
 from solveig.utils import dotted
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 from solveig.utils.misc import CLI_SETTINGS_OPTS
@@ -136,7 +136,7 @@ def display_config_value(value: object) -> str:
     """Format a config value for display, driven by type — never by field name.
     Owned types (`APIType`, `Palette`) both carry a `name`; third-party types
     (SecretStr, ByteSize, re.Pattern) are dispatched below."""
-    if isinstance(value, APIType | Palette):
+    if isinstance(value, APIType | TuiTheme | CodeTheme):
         return value.name
     if isinstance(value, SecretStr):
         return "***" if value.get_secret_value() else "(not set)"
