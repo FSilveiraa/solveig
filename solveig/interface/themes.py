@@ -274,13 +274,16 @@ monochrome = TuiTheme(
 
 DEFAULT_THEME = terracotta
 
-THEMES = [
-    terracotta,
-    solarized_dark,
-    solarized_light,
-    forest,
-    midnight,
-    nord,
-    rose,
-    monochrome,
-]
+THEMES = {
+    theme.name: theme
+    for theme in [
+        terracotta,
+        solarized_dark,
+        solarized_light,
+        forest,
+        midnight,
+        nord,
+        rose,
+        monochrome,
+    ]
+}

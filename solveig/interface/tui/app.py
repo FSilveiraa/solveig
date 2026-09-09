@@ -54,7 +54,7 @@ class SolveigTextualApp(TextualApp):
         # Register every palette as a Textual theme and select the configured
         # one, so the widget CSS's $accent/$border/$group/... variables resolve and
         # switching themes at runtime is just `self.theme = name`.
-        for theme in THEMES:
+        for theme in THEMES.values():
             self.register_theme(theme.to_textual_theme())
 
         # This is the actual theme name that Textual will use, not a TuiTheme

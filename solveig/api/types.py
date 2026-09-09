@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from typing import override
+from typing import override, Annotated
 
 from pydantic import Field, SecretStr, field_serializer
 from pydantic_ai.models import Model
@@ -202,17 +202,19 @@ class Gemini(APIType):
         return GoogleModel(model_name, provider=provider)
 
 
-DEFAULT_API_TYPE = OpenAI()
 # Every type of provider Solveig can talk to, keyed by its own `name`.
-API_TYPES = [DEFAULT_API_TYPE]
+API_TYPES = {
+    api_type.name: api_type
+    for api_type in [ OpenAI() ]
+}
+DEFAULT_API_TYPE = API_TYPES["openai"]
 
 
 class ApiConfig(ConfigSection):
     """API configuration"""
 
     url: str = Field(default="", description="LLM API endpoint URL")
-    type: APIType = Choice(
-        *API_TYPES,
+    type: Annotated[APIType, Choice(API_TYPES)] = Field(
         default=DEFAULT_API_TYPE,
         description="API provider type (openai, anthropic, gemini)",
     )

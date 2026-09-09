@@ -8,6 +8,8 @@ config, the frontend that reads it is far above.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field
 
 from solveig.config.models import Choice, ConfigSection
@@ -32,20 +34,17 @@ class TuiConfig(ConfigSection):
         default=True, description="Auto-collapse groups when they complete"
     )
 
-    theme: TuiTheme = Choice(
-        *THEMES,
+    theme: Annotated[TuiTheme, Choice(THEMES)] = Field(
         default=DEFAULT_THEME,
         description="TUI theme",
     )
-    code_theme: CodeTheme | None = Choice(
-        # HACK: pygments ships no type information, so `Style` is `Any` and mypy
-        # will not bind a bounded type var from it - `T` collapses to `Never`.
-        # Drops out on its own if pygments ever ships a py.typed.
-        *CODE_THEMES.values(),  # type: ignore[arg-type]
+    code_theme: Annotated[CodeTheme | None, Choice(CODE_THEMES)] = Field(
+        default=None,
         description="Syntax highlighting theme (defaults to TUI theme's code theme)",
     )
     tree_expand_root: bool = Field(
-        default=True, description="Expand the root node of a file tree on display"
+        default=True,
+        description="Expand the root node of a file tree on display"
     )
     tree_max_depth: int = Field(
         default=-1,

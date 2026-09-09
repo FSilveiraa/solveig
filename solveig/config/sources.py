@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import os
+from collections.abc import Sequence
+from os import PathLike
 
 import anyconfig
 
 from solveig.utils.dotted import to_leaves
+from solveig.utils.file import Filesystem, SyncPath
 
 DEFAULT_CONFIG_SEARCH: list[str] = ["./.solveig/config", "~/.solveig/config"]
 _EXTS: tuple[str, ...] = ("json", "yaml", "yml", "toml")
@@ -41,23 +43,31 @@ LEGACY_KEY_MAP: dict[str, str] = {
 }
 
 
-def resolve_config_files(explicit: list[str]) -> list[str]:
+def _for_anyconfig(path: str | PathLike) -> SyncPath:
+    """Wraps any path-like in the type anyconfig takes."""
+    return SyncPath(path)
+
+
+def resolve_config_files(explicit: Sequence[str | PathLike]) -> list[SyncPath]:
     """Highest precedence first. Any explicit --config FILE (repeatable)
     replaces the default search entirely — passing configs means we do NOT
     also merge the search paths. Among explicit files the LAST one wins
     (and is where /config save writes), so the list comes back reversed.
     Non-existent explicit paths are dropped (the historical record is argv)."""
     if explicit:
-        return [
-            p
-            for p in (os.path.expanduser(x) for x in reversed(explicit))
-            if os.path.isfile(p)
+        explicit_paths = [
+            _for_anyconfig(Filesystem.get_absolute_path(path))
+            for path in explicit
         ]
-    found: list[str] = []
+        return [ path for path in explicit_paths if path.is_file() ]
+
+    found: list[SyncPath] = []
     for base in DEFAULT_CONFIG_SEARCH:
         for ext in _EXTS:
-            path = os.path.expanduser(f"{base}.{ext}")
-            if os.path.isfile(path):
+            # Build the config path, remove possible dots on the default and extension
+            path_str = f"{base.rstrip(".")}.{ext.lstrip(".")}"
+            path = _for_anyconfig(Filesystem.get_absolute_path(path_str))
+            if path.is_file():
                 found.append(path)
     return found
 
@@ -76,12 +86,15 @@ def _check_legacy(data: dict) -> None:
         )
 
 
-def load_paths(paths_high_first: list[str]) -> dict:
+def load_paths(paths_high_first: Sequence[str | PathLike]) -> dict:
     """Merge with HIGHER-precedence paths winning. anyconfig.load merges
     low→high (last wins), so we reverse (highest goes last)."""
     if not paths_high_first:
         return {}
-    low_to_high = list(reversed(paths_high_first))
+    low_to_high = [
+        _for_anyconfig(Filesystem.get_absolute_path(path))
+        for path in reversed(paths_high_first)
+    ]
     merged = anyconfig.load(low_to_high, ac_merge=anyconfig.MS_DICTS)
     data = dict(merged) if isinstance(merged, dict) else {}
     _check_legacy(data)
@@ -102,8 +115,6 @@ def load_paths(paths_high_first: list[str]) -> dict:
     return data
 
 
-def save_config(data: dict, path: str) -> None:
-    parent = os.path.dirname(os.path.expanduser(path))
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    anyconfig.dump(data, os.path.expanduser(path))
+def save_config(data: dict, path: str | PathLike) -> None:
+    abs_path = Filesystem.get_absolute_path(path)
+    anyconfig.dump(data, _for_anyconfig(abs_path))

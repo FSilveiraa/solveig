@@ -10,19 +10,16 @@ heard of Solveig.
 from __future__ import annotations
 
 import operator
+from collections.abc import Mapping, Callable
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
-    Annotated,
     Any,
-    Callable,
-    Protocol,
-    get_args,
-    runtime_checkable, Mapping,
+    get_args, Annotated,
 )
 
-from pydantic import BaseModel, ConfigDict, Field
+from anyio import Path
+from pydantic import BaseModel, ConfigDict, PlainSerializer, BeforeValidator
 from pydantic_core import core_schema
 
 # Model configs - used by pydantic to inform model validation
@@ -48,11 +45,11 @@ _MUTABLE_ALLOW = ConfigDict(
 # TODO: review CLI behavior on init when setting plugin (and other) flags
 
 
-# HACK: allows duck-typing, anything that happens to implement
-# `name: str` is a ChoiceEntry
-@runtime_checkable
-class ChoiceEntry(Protocol):
-    name: str
+ConfigPath = Annotated[
+    Path,
+    BeforeValidator(lambda value: Path(value)),
+    PlainSerializer(str, return_type=str, when_used="json"),
+]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -66,7 +63,6 @@ class Choice:
     def choices(self) -> list[str]:
         return sorted(self.entries)
 
-    # TODO: understand wtf this is doing
     def __get_pydantic_core_schema__(self, source, handler):
         """
         Defines how to validate and serialize `source` using `handler`.

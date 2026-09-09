@@ -9,7 +9,6 @@ import warnings
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
-from anyio import Path
 from pydantic import (
     BaseModel,
     ByteSize,
@@ -33,9 +32,8 @@ from pydantic_settings import (
 from solveig.api.types import ApiConfig
 from solveig.config import sources
 from solveig.config.models import (
-    ChoiceEntry,
     ComposedConfigSection,
-    PreservingConfigSection,
+    PreservingConfigSection, Choice, ConfigPath,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig
@@ -131,12 +129,14 @@ class ConfigFileSource(PydanticBaseSettingsSource):
 # ---------------------------------------------------------------------------
 
 
-def display_config_value(value: object) -> str:
-    """Format a config value for display, driven by type — never by field name.
-    Owned types (`APIType`, `TuiTheme`) both carry a `name`; third-party types
-    (SecretStr, ByteSize, re.Pattern) are dispatched below."""
-    if isinstance(value, ChoiceEntry):
-        return value.name
+def display_config_value(value: object, field_info: FieldInfo | None = None) -> str:
+    """Format a config value for display, driven by type and field name."""
+    choice = next(
+        (m for m in field_info.metadata if isinstance(m, Choice)),
+        None,
+    ) if field_info else None
+    if choice:
+        return choice.key(value)
     if isinstance(value, SecretStr):
         return "***" if value.get_secret_value() else "(not set)"
     if isinstance(value, ByteSize):
@@ -220,11 +220,11 @@ class SolveigConfig(BaseSettings):
         default=ByteSize(1024**3),  # 1 GiB
         description="Minimum free disk space before blocking writes",
     )
-    auto_allowed_paths: list[Path] = Field(
+    auto_allowed_paths: list[ConfigPath] = Field(
         default_factory=list,
         description="Glob patterns for auto-approved file paths",
     )
-    ignored_paths: list[Path] = Field(
+    ignored_paths: list[ConfigPath] = Field(
         default_factory=list,
         description="Glob patterns for paths that are fully blocked from all tool access",
     )
@@ -246,7 +246,7 @@ class SolveigConfig(BaseSettings):
     # for "which config files were loaded", so "nothing loaded" is []. NOT
     # `DEFAULT_CONFIG_PATHS`: that is the SEARCH list, and it holds an
     # unexpanded `~` that no reader here would resolve.
-    config_files: list[str] = Field(default_factory=list, exclude=True)
+    config_files: list[ConfigPath] = Field(default_factory=list, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     startup_mcp_servers: list[str] = Field(
         default_factory=list, exclude=True
