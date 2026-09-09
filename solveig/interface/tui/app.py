@@ -10,15 +10,15 @@ from textual.binding import Binding
 from textual.keys import format_key
 
 from solveig.interface.base import SolveigInterface, Level
-from solveig.interface.themes import THEMES
 from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
+from ..themes import THEMES
 from .chat import ChatArea
+from .config import TuiConfig
 from .input import InputBar
 from .pending import PendingMessages
 from .stats import StatsBar
-from ...config import SolveigConfig
 
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
@@ -41,7 +41,7 @@ class SolveigTextualApp(TextualApp):
 
     def __init__(
         self,
-        config: SolveigConfig,
+        config: TuiConfig,
         interface: SolveigInterface,
         user_message_queue: UserMessageQueue,
         **kwargs,
@@ -58,12 +58,12 @@ class SolveigTextualApp(TextualApp):
             self.register_theme(theme.to_textual_theme())
 
         # This is the actual theme name that Textual will use, not a TuiTheme
-        self.theme = self._config.interface.tui.theme.name
+        self.theme = self._config.theme.name
 
         # Register an observer for the code value
-        @self._config.on_change("interface.tui.theme")
+        @self._config.on_change("theme")
         async def _on_theme_change(_config, paths):
-            self.theme = _config.interface.tui.theme.name
+            self.theme = _config.theme.name
 
         # Cached widget references (set in on_mount)
         self._chat: ChatArea
@@ -122,7 +122,7 @@ class SolveigTextualApp(TextualApp):
 
     async def on_mouse_up(self, event: events.MouseUp) -> None:
         """Intercept mouse-up to auto-copy a completed click-drag text selection."""
-        if self._config.interface.tui.auto_copy_selection:
+        if self._config.auto_copy_selection:
             selected_text = self.screen.get_selected_text()
             if selected_text:
                 copy_to_clipboard(selected_text)

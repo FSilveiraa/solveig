@@ -148,9 +148,9 @@ class SolveigInterface(ABC):
     """
 
     def __init__(
-        self, config: SolveigConfig, user_message_queue: UserMessageQueue
+        self, user_message_queue: UserMessageQueue
     ) -> None:
-        self.config: SolveigConfig = config
+        # self.config: SolveigConfig = config
         self.user_message_queue: UserMessageQueue = user_message_queue
         # Cancellable work started on THIS interface. A group owns its own,
         #  so cancelling addresses a receiver instead of searching one shared

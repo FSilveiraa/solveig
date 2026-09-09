@@ -31,7 +31,10 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Markdown
 
-from solveig.config import SolveigConfig
+from solveig.todo import TodoItem, TodoStatus
+from solveig.utils.file import FileMetadata
+from solveig.utils.misc import format_path_info, get_language
+
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -43,20 +46,20 @@ from solveig.interface.base import (
     TextBox,
     TreeBox,
 )
-from solveig.interface.tui.app import SolveigTextualApp
-from solveig.interface.tui.collapsible import (
+
+from .config import TuiConfig
+from .app import SolveigTextualApp
+from .collapsible import (
     CollapsibleDiffBox,
     CustomCollapsible,
     TextBoxWidget,
 )
-from solveig.interface.tui.chat import BANNER
-from solveig.interface.tui.stats import TextualStat
-from solveig.interface.tui.tree import FileTree
-from solveig.interface.tui.message import EditableComment, CommentBox, ReasoningBox
-from solveig.todo import TodoItem, TodoStatus
-from solveig.utils.file import FileMetadata
-from solveig.utils.misc import format_path_info, get_language
+from .chat import BANNER
+from .stats import TextualStat
+from .tree import FileTree
+from .message import EditableComment, CommentBox, ReasoningBox
 
+# TODO: still needed?
 if TYPE_CHECKING:
     from os import PathLike
 
@@ -77,10 +80,11 @@ class TerminalInterface(SolveigInterface):
 
     def __init__(
         self,
-        config: SolveigConfig,
+        config: TuiConfig,
         user_message_queue: UserMessageQueue,
     ) -> None:
-        super().__init__(config, user_message_queue)
+        super().__init__(user_message_queue)
+        self.config = config
         # The interface that owns the app; the root's is itself.
         # The Textual app
         self._app = SolveigTextualApp(
@@ -357,7 +361,7 @@ class TerminalInterface(SolveigInterface):
                 to_display = Syntax(
                     text,
                     lexer=language_name,
-                    theme=self.config.interface.tui.code_theme,
+                    theme=self.config.code_theme,
                 )
 
         return await self.app._chat.add_text_box(
@@ -382,7 +386,7 @@ class TerminalInterface(SolveigInterface):
                 new_lines,
                 fromfile="original",
                 tofile="modified",
-                n=self.config.interface.tui.diff_context_lines,
+                n=self.config.diff_context_lines,
             )
         )
         diff_text = "".join(diff_lines)
@@ -390,7 +394,8 @@ class TerminalInterface(SolveigInterface):
         to_display: str | Syntax = diff_text
         if diff_text.strip():
             to_display = Syntax(
-                diff_text, lexer="diff", theme=self.config.interface.tui.code_theme
+                # TODO: theme=code_theme still doesn't work
+                diff_text, lexer="diff", theme=self.config.code_theme
             )
         else:
             to_display = "(Same content)"
@@ -412,8 +417,8 @@ class TerminalInterface(SolveigInterface):
         tree = FileTree(
             metadata=metadata,
             display_metadata=display_metadata,
-            expand_root=self.config.interface.tui.tree_expand_root,
-            max_depth=self.config.interface.tui.tree_max_depth,
+            expand_root=self.config.tree_expand_root,
+            max_depth=self.config.tree_max_depth,
         )
         if title:
             tree.widget.border_title = title
@@ -456,7 +461,8 @@ class GroupInterface(TerminalInterface):
     ) -> None:
         # The BASE constructor, not TerminalInterface's - that one builds a
         # SolveigTextualApp, and a group draws into the one its parent owns.
-        SolveigInterface.__init__(self, parent.config, parent.user_message_queue)
+        SolveigInterface.__init__(self, parent.user_message_queue)
+        self.config = parent.config
         self._parent = parent
         self._title = title
         self._widget: CustomCollapsible | None = None
@@ -474,6 +480,7 @@ class GroupInterface(TerminalInterface):
     async def __aenter__(self) -> GroupInterface:
         # The base types both as optional because a ROOT has neither; a group
         # always does, and only this frontend knows its parent is one of these.
+        # HACK: mypy assertions
         assert isinstance(self._parent, TerminalInterface)
         assert self._title is not None
         self._widget = await self.app._chat.enter_group(
@@ -493,5 +500,5 @@ class GroupInterface(TerminalInterface):
             # at open, so toggling the setting mid-run applies to the very next
             # group to finish.
             auto_collapse=self._collapse_when_done
-            and self.config.interface.tui.auto_collapse,
+            and self.config.auto_collapse,
         )

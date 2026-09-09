@@ -9,6 +9,9 @@ heard of Solveig.
 
 from __future__ import annotations
 
+import operator
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -16,7 +19,7 @@ from typing import (
     Callable,
     Protocol,
     get_args,
-    runtime_checkable,
+    runtime_checkable, Mapping,
 )
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,140 +55,56 @@ class ChoiceEntry(Protocol):
     name: str
 
 
-class _Choice(dict[str, ChoiceEntry]):
-    def __init__(
-        self,
-        *entries: ChoiceEntry | str | dict[str, ChoiceEntry],
-        default: ChoiceEntry | None = None,
-        description: str | None = None,
-        getter: Callable[[str], ChoiceEntry] | None = None,
-        error_label: str = "",
-        **field_kwargs: Any,
-    ):
-        super().__init__()
-        self._default = default
-        self._getter = getter
-        self._error_label = error_label
-        self._description = description
-        self._field_kwargs = field_kwargs
-
-        self.add(*entries)
-
-    @property
-    def error_label(self):
-        """
-        NOTE: The error label can't be set to a default on init to allow
-        distinguishing between an explicit value and the default when extracting
-        values inside __set_name__. So the default lives here.
-        """
-        return self._error_label or "entry"
+@dataclass(frozen=True, slots=True, eq=False)
+class Choice:
+    entries: Mapping[str, Any]
+    # How to get the name from an entry
+    key: Callable[[Any], str] = operator.attrgetter("name")
+    label: str = ""
 
     @property
     def choices(self) -> list[str]:
-        return sorted(self.keys())
+        return sorted(self.entries)
 
-    def __set_name__(self, cls: type, name: str) -> None:
-        """
-        Python class hook that allows setting the field annotation
-        Pydantic uses.
-        """
-        # Get the declaration type from the class annotations
-        # Ex: `foo: Foo = Choice("foo")` -> `annotation == Foo`
-        annotation = cls.__annotations__[name]
-        # Set the error label to the declaration's left-side if it wasn't passed
-        if not self._error_label:
-            self._error_label = name
-        # Set the annotation in the class to use an Annotated including self;
-        # meaning this Choice entry will be used for choice listing,
-        # serializing, parsing
-        cls.__annotations__[name] = Annotated[annotation, self]
-        # NOTE: Default is always passed. We can't distinguish default vs
-        # explicit None, while Pydantic can because it resolves the type
-        # based on the declaration signature. If we omit the default, every
-        # Choice field becomes non-optional.
-        field_kwargs = self._field_kwargs | {
-            "default": self._default,
-            "description": self._description,
-            "validate_default": True,
-        }
-        setattr(cls, name, Field(**field_kwargs))
-
-    def __getitem__(self, name: str) -> ChoiceEntry:
-        try:
-            return super().__getitem__(name)
-        except KeyError as error:
-            raise ValueError(
-                f"No {self.error_label} found for '{name}'. Use one of {self.choices}"
-            ) from error
-
+    # TODO: understand wtf this is doing
     def __get_pydantic_core_schema__(self, source, handler):
-        """Tells pydantic how to get and serialize objects"""
-        # Whether this Choice was defined as optional
-        # Ex: `thing: Thing | None = Choice(...)`
-        can_be_optional = type(None) in get_args(source)
+        """
+        Defines how to validate and serialize `source` using `handler`.
+        """
+        args = get_args(source)
+        member = next((a for a in args if a is not type(None)), source)
+        label = self.label or getattr(member, "__name__", "entry")
 
-        def _to_member(value):
-            """
-            Confirms either there's a default value or it can be optional,
-            use self as name-to-instance converter if it's a string,
-            otherwise returns the instance itself
-            """
-            if value is None:
-                if can_be_optional:
-                    return None
+        def to_member(value):
+            if not isinstance(value, str):
+                return value
+            try:
+                return self.entries[value]
+            except KeyError as error:
                 raise ValueError(
-                    f"No {self.error_label} set. Use one of {self.choices}"
-                )
-            return self[value] if isinstance(value, str) else value
+                    f"Not a valid {label}. Use one of {self.choices}"
+                ) from error
 
-        return core_schema.no_info_plain_validator_function(
-            # How pydantic gets instances
-            _to_member,
-            # How pydantic serializes instances: uses namer function
+        schema = core_schema.json_or_python_schema(
+            # On the wire an option is its name, so it validates as a string first.
+            json_schema=core_schema.chain_schema([
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(to_member),
+            ]),
+            # In Python it is usually the member itself, sometimes still a name.
+            python_schema=core_schema.no_info_plain_validator_function(to_member),
+            # How pydantic serializes instances
             serialization=core_schema.plain_serializer_function_ser_schema(
-                lambda value: None if value is None else value.name,
-                return_schema=core_schema.str_schema(),
-                when_used="json",
+                self.key, return_schema=core_schema.str_schema(), when_used="json"
             ),
         )
+        # Whether None is legal is the annotation's to say.
+        return core_schema.nullable_schema(schema) if type(None) in args else schema
 
     def __get_pydantic_json_schema__(self, schema, handler):
-        """Tells pydantic the shape and options for objects"""
-        return {"type": "string", "enum": sorted(self)}
-
-    def add(self, *entries: str | ChoiceEntry | dict[str, ChoiceEntry]) -> None:
-        """
-        Utility method that allows adding entries using the namer/getter
-        instead of providing the key-value pair
-        """
-        for entry in entries:
-            if isinstance(entry, str):
-                if self._getter:
-                    self[entry] = self._getter(entry)
-                else:
-                    raise ValueError(
-                        "Getter not set, cannot resolve "
-                        f"{self.error_label} from '{entry}'."
-                    )
-            elif isinstance(entry, dict):
-                self.update(entry)
-            else:
-                self[entry.name] = entry
-
-
-if TYPE_CHECKING:
-
-    def Choice[T: ChoiceEntry](
-        *entries: T | str | dict[str, T],
-        default: T | None = None,
-        description: str | None = None,
-        getter: Callable[[str], T] | None = None,
-        error_label: str = "",
-        **field_kwargs: Any,
-    ) -> T: ...
-
-else:
-    Choice = _Choice
+        json_schema = handler(core_schema.str_schema())
+        json_schema.update(type="string", enum=self.choices)
+        return json_schema
 
 
 class ConfigSection(BaseModel):
