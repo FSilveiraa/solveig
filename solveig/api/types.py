@@ -4,8 +4,12 @@
 Gemini). Subclasses implement provider construction, model wrapping, and API
 introspection. `config.api.type` holds an instance.
 
-Imports nothing from solveig: `APIType` is a config *field type*, so it has to
-sit below config. The live connection that uses these types is `client.Client`.
+Also home to `ApiConfig`, the `api` config section: the module that knows every
+provider Solveig can talk to is the one that can say which of them a field may
+hold, so `API_TYPES` is declared and consumed in one place. The only thing it
+imports from solveig is the config FRAMEWORK (`ConfigSection`, `Choice`), which
+imports nothing back — the section sits below config, and `client.Client`, the
+live connection that uses these types, sits above it.
 """
 
 from __future__ import annotations

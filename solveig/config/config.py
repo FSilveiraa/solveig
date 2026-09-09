@@ -31,21 +31,18 @@ from pydantic_settings import (
 )
 
 from solveig.api.types import ApiConfig
-from solveig.config import DEFAULT_PLUGIN_PATHS, sources
+from solveig.config import sources
 from solveig.config.models import (
     ChoiceEntry,
     ComposedConfigSection,
     PreservingConfigSection,
 )
-from solveig.config.sections import (
-    CoreToolsConfig,
-    InterfaceConfig,
-    MCPServerConfig,
-    PluginsConfig,
-    SessionConfig,
-    SystemPromptConfig,
-)
-from solveig.interface.themes import TuiTheme, CodeTheme
+from solveig.interface.config import InterfaceConfig
+from solveig.mcp_servers.config import MCPServerConfig
+from solveig.plugins.config import PluginsConfig
+from solveig.session.config import SessionConfig
+from solveig.system_prompt.config import SystemPromptConfig
+from solveig.tools.config import CoreToolsConfig
 from solveig.utils import dotted
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 from solveig.utils.misc import CLI_SETTINGS_OPTS
@@ -209,9 +206,7 @@ class SolveigConfig(BaseSettings):
     # Persisted config fields
     # ------------------------------------------------------------
     api: ApiConfig = Field(default_factory=ApiConfig)
-    plugins: PluginsConfig = Field(
-        default_factory=lambda: PluginsConfig(paths=list(DEFAULT_PLUGIN_PATHS))
-    )
+    plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     mcp: dict[str, MCPServerConfig] = Field(default_factory=dict)
     tools: CoreToolsConfig = Field(default_factory=CoreToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)

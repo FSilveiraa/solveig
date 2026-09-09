@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from pydantic_ai.toolsets import AbstractToolset
 
-from solveig.config import MCPServerConfig
+from solveig.mcp_servers.config import MCPServerConfig
 
 
 @dataclass

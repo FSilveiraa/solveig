@@ -1,6 +1,6 @@
 """System-prompt composition — assemble the final prompt string from its parts.
 
-``DEFAULT_SYSTEM_PROMPT`` lives in ``solveig.config``; this module holds the
+``DEFAULT_SYSTEM_PROMPT`` lives in ``system_prompt.config``; this module holds the
 machinery that reads config + briefing files + stories and composes the string
 sent to the model each turn.
 """

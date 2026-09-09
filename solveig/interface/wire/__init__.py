@@ -9,9 +9,8 @@ to a daemon through the one ABC seam.
 The wire vocabulary is `SolveigInterface` itself (protocol.py holds the value
 (code/decode helpers). A plugin cannot add a verb, so a client renders any stream
 without plugin config.
+
+Deliberately empty, like `tui` and `web`: config names `wire.config` for the
+`interface.broadcast` section, and a re-exporting `__init__` would pull the
+daemon in behind it.
 """
-
-from solveig.interface.wire.client import WireClient
-from solveig.interface.wire.interface import WireInterface
-
-__all__ = ["WireClient", "WireInterface"]

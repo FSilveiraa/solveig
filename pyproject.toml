@@ -145,11 +145,15 @@ layers = [
     "solveig.interface.tui | solveig.session.conversation",
     "solveig.interface.base",
     "solveig.subcommands.base : solveig.pending.user_message_queue",
-    "solveig.config.config : solveig.config.sections : solveig.config.models : solveig.config.sources",
+    "solveig.config.config",
+    # A section that moved out to the module owning its choices: named by the
+    # config tree above, reading the framework below, so it sits between them.
+    "solveig.api.types",
+    "solveig.config.models : solveig.config.sources",
     # `solveig.pending.user_message` sits here for the same reason `todo` does: a
     # pending message is named by the queue that holds it, the frontend that draws
     # and edits it, and the wire that replicates it, and is owned by none of them.
-    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.api.types | solveig.todo | solveig.pending.user_message",
+    "solveig.utils | solveig.exceptions | solveig.interface.themes | solveig.todo | solveig.pending.user_message",
 ]
 
 # --- Coverage: every module in the package is placed ----------------------
@@ -191,15 +195,11 @@ name = "Every solveig.config module is placed"
 type = "layers"
 containers = ["solveig.config"]
 exhaustive = true
-layers = ["editor", "config", "sections", "models | sources"]
-# NOTE: `sections` reads DEFAULT_SYSTEM_PROMPT, a static constant declared in
-# config/__init__ ABOVE the `.config` re-export (the noqa: E402 block) — it does
-# not depend on config.config, but the package edge makes it look that way. Only
-# this shim edge is ignored; a direct `sections -> config.config` import still fails.
-# `models` is below `sections` and imports nothing from solveig at all: it is the
-# framework the sections are declared with, which is what keeps a section free to
-# move out to the module that owns its choices.
-ignore_imports = ["solveig.config.sections -> solveig.config"]
+layers = ["editor", "config", "models | sources"]
+# `models` is the framework and imports nothing from solveig at all, which is
+# what keeps a section free to move out to the module that owns its choices —
+# every section has now done so, which is why there is no `sections` here.
+# `config` is what is left: the root declaration naming them.
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface module is placed"
@@ -208,7 +208,7 @@ containers = ["solveig.interface"]
 exhaustive = true
 # `wire` imports `base` (the protocol) and is imported by nothing internal yet —
 # it sits beside the frontends, speaking the same ABC.
-layers = ["tui", "web", "wire", "base", "themes"]
+layers = ["config", "tui", "web", "wire", "base", "themes"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface.base module is placed"
@@ -230,6 +230,9 @@ layers = [
     "message",
     "collapsible",
     "button | tree",
+    # The bottom of the package, and the one module here that config may name.
+    # Everything above it draws; this only declares what can be configured.
+    "config",
 ]
 
 [[tool.importlinter.contracts]]
@@ -237,7 +240,7 @@ name = "Every solveig.mcp_servers module is placed"
 type = "layers"
 containers = ["solveig.mcp_servers"]
 exhaustive = true
-layers = ["client"]
+layers = ["client", "config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.pending module is placed"
@@ -254,7 +257,7 @@ exhaustive = true
 # `hooks : tools` (siblings that may reach each other) rather than independent:
 # plugins.tools -> tools.orchestration -> plugins.hooks is the designed round
 # trip — orchestration runs the hooks and gives plugin tools their subcommand.
-layers = ["discovery", "utils", "library", "hooks : tools : subcommands"]
+layers = ["discovery", "utils", "library", "hooks : tools : subcommands", "config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.plugins.library module is placed"
@@ -268,7 +271,7 @@ name = "Every solveig.session module is placed"
 type = "layers"
 containers = ["solveig.session"]
 exhaustive = true
-layers = ["display | manager", "conversation"]
+layers = ["display | manager", "conversation", "config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.subcommands module is placed"
@@ -282,14 +285,14 @@ name = "Every solveig.system_prompt module is placed"
 type = "layers"
 containers = ["solveig.system_prompt"]
 exhaustive = true
-layers = ["compose"]
+layers = ["compose", "config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.tools module is placed"
 type = "layers"
 containers = ["solveig.tools"]
 exhaustive = true
-layers = ["available", "core", "orchestration", "base", "result"]
+layers = ["available", "core", "orchestration", "base", "result", "config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.tools.core module is placed"
@@ -332,7 +335,6 @@ name = "Config data models don't import the interface protocol"
 type = "forbidden"
 source_modules = [
     "solveig.config.models",
-    "solveig.config.sections",
     "solveig.config.config",
     "solveig.config.sources",
 ]
