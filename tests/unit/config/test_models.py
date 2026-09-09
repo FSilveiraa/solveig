@@ -5,12 +5,12 @@ pytestmark = pytest.mark.anyio
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
-from solveig.config.models import (
-    ApiConfig,
+from solveig.config.sections import (
     MCPServerConfig,
     SystemPromptConfig,
-    TuiConfig,
 )
+from solveig.interface.tui import TuiConfig
+from solveig.api.types import ApiConfig
 from solveig.interface import themes
 from solveig.tools.base import ToolConfig
 from solveig.tools.core.command import CommandConfig

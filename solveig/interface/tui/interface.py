@@ -493,5 +493,5 @@ class GroupInterface(TerminalInterface):
             # at open, so toggling the setting mid-run applies to the very next
             # group to finish.
             auto_collapse=self._collapse_when_done
-            and self.config.interface.auto_collapse,
+            and self.config.interface.tui.auto_collapse,
         )

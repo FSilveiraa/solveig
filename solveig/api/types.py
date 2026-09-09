@@ -14,8 +14,11 @@ import contextlib
 from dataclasses import dataclass
 from typing import override
 
+from pydantic import Field, SecretStr, field_serializer
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
+
+from solveig.config.models import ConfigSection, Choice
 
 
 @dataclass
@@ -198,3 +201,35 @@ class Gemini(APIType):
 DEFAULT_API_TYPE = OpenAI()
 # Every type of provider Solveig can talk to, keyed by its own `name`.
 API_TYPES = [DEFAULT_API_TYPE]
+
+
+class ApiConfig(ConfigSection):
+    """API configuration"""
+
+    url: str = Field(default="", description="LLM API endpoint URL")
+    type: APIType = Choice(
+        *API_TYPES,
+        default=DEFAULT_API_TYPE,
+        description="API provider type (openai, anthropic, gemini)",
+    )
+
+    # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
+    # for /config save (secrecy is a property of the field, not of display code).
+    key: SecretStr = Field(default=SecretStr(""), description="API authentication key")
+    model: str | None = Field(
+        default=None,
+        description="LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
+    )
+    temperature: float = Field(
+        default=0.0, description="Model temperature (0.0 to 2.0)"
+    )
+    max_context: int = Field(
+        default=-1, description="Max context window in tokens (-1 = model's limit)"
+    )
+    timeout: float = Field(
+        default=60.0, description="LLM API request timeout in seconds"
+    )
+
+    @field_serializer("key")
+    def _ser_key(self, v: SecretStr) -> str:
+        return v.get_secret_value()

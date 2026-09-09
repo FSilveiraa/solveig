@@ -35,7 +35,7 @@ from .config import (  # noqa: E402 — after the static defaults above so .conf
     SolveigConfig,
     display_config_value,
 )
-from .models import MCPServerConfig  # noqa: E402
+from .sections import MCPServerConfig  # noqa: E402
 
 __all__ = [
     "SolveigConfig",

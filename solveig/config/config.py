@@ -30,20 +30,20 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from solveig.api.types import APIType
+from solveig.api.types import ApiConfig
 from solveig.config import DEFAULT_PLUGIN_PATHS, sources
 from solveig.config.models import (
-    ApiConfig,
+    ChoiceEntry,
     ComposedConfigSection,
+    PreservingConfigSection,
+)
+from solveig.config.sections import (
     CoreToolsConfig,
     InterfaceConfig,
     MCPServerConfig,
     PluginsConfig,
-    PreservingConfigSection,
     SessionConfig,
     SystemPromptConfig,
-    _Choice,
-    ChoiceEntry,
 )
 from solveig.interface.themes import TuiTheme, CodeTheme
 from solveig.utils import dotted

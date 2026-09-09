@@ -145,7 +145,7 @@ layers = [
     "solveig.interface.tui | solveig.session.conversation",
     "solveig.interface.base",
     "solveig.subcommands.base : solveig.pending.user_message_queue",
-    "solveig.config.config : solveig.config.models : solveig.config.sources",
+    "solveig.config.config : solveig.config.sections : solveig.config.models : solveig.config.sources",
     # `solveig.pending.user_message` sits here for the same reason `todo` does: a
     # pending message is named by the queue that holds it, the frontend that draws
     # and edits it, and the wire that replicates it, and is owned by none of them.
@@ -191,12 +191,15 @@ name = "Every solveig.config module is placed"
 type = "layers"
 containers = ["solveig.config"]
 exhaustive = true
-layers = ["editor", "config", "models | sources"]
-# NOTE: `models` reads DEFAULT_SYSTEM_PROMPT, a static constant declared in
+layers = ["editor", "config", "sections", "models | sources"]
+# NOTE: `sections` reads DEFAULT_SYSTEM_PROMPT, a static constant declared in
 # config/__init__ ABOVE the `.config` re-export (the noqa: E402 block) — it does
 # not depend on config.config, but the package edge makes it look that way. Only
-# this shim edge is ignored; a direct `models -> config.config` import still fails.
-ignore_imports = ["solveig.config.models -> solveig.config"]
+# this shim edge is ignored; a direct `sections -> config.config` import still fails.
+# `models` is below `sections` and imports nothing from solveig at all: it is the
+# framework the sections are declared with, which is what keeps a section free to
+# move out to the module that owns its choices.
+ignore_imports = ["solveig.config.sections -> solveig.config"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.interface module is placed"
@@ -327,7 +330,12 @@ forbidden_modules = ["solveig.tools"]
 [[tool.importlinter.contracts]]
 name = "Config data models don't import the interface protocol"
 type = "forbidden"
-source_modules = ["solveig.config.models", "solveig.config.config", "solveig.config.sources"]
+source_modules = [
+    "solveig.config.models",
+    "solveig.config.sections",
+    "solveig.config.config",
+    "solveig.config.sources",
+]
 forbidden_modules = ["solveig.interface.base"]
 
 [[tool.importlinter.contracts]]

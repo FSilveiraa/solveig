@@ -11,7 +11,11 @@ import pytest
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
-from solveig.config.models import CoreToolsConfig, PluginHooksConfig, PluginToolsConfig
+from solveig.config.sections import (
+    CoreToolsConfig,
+    PluginHooksConfig,
+    PluginToolsConfig,
+)
 
 pytestmark = pytest.mark.anyio
 
