@@ -261,8 +261,6 @@ class SolveigConfig(BaseSettings, ConfigSection):
     # ------------------------------------------------------------
     # Runtime fields (unpersisted)
     # ------------------------------------------------------------
-    # dotted paths explicitly set via file/CLI/`/config set` — what /config save persists
-    _declared_fields: set[str] = PrivateAttr(default_factory=set)
     # observers for field changes: (callback, paths_filter | None)
     _observers: list[tuple[ConfigObserver, frozenset[str] | None]] = PrivateAttr(
         default_factory=list
@@ -389,7 +387,15 @@ class SolveigConfig(BaseSettings, ConfigSection):
         new = getattr(obj, leaf)
         if old == new:
             return False
-        self._declared_fields.add(path)
+
+        # Mark each object between the root and the changed field as "changed".
+        # Paths are relative. The root can be a config section, not necessarily
+        # the root Solveig Config.
+        obj = self
+        for part in path.split("."):
+            obj.__pydantic_fields_set__.add(part)
+            obj = getattr(obj, part)
+
         if notify:
             await self._notify_changed(frozenset({path}))
         return True
@@ -590,74 +596,8 @@ class SolveigConfig(BaseSettings, ConfigSection):
             composed = PluginsConfig.model_fields[section].annotation
             assert composed is not None  # just installed by _compose_section
             current = getattr(self.plugins, section)
-            setattr(self.plugins, section, composed(**current.model_dump()))
+            setattr(self.plugins, section, composed(**current.model_dump(exclude_unset=True)))
 
-    # ------------------------------------------------------------
-    # Explicitly declared config fields
-    # ------------------------------------------------------------
-
-    @classmethod
-    def opaque_paths(cls) -> frozenset[str]:
-        """The dotted paths that hold a value rather than a section — mappings
-        keyed by the user's own strings. A path stops here: `mcp` is addressable,
-        `mcp.<server>` is not.
-
-        Derived from the live schema, never listed, so a future mapping field is
-        covered the day it is declared.
-        """
-        return frozenset(path for path, _, opaque in walk_schema(cls) if opaque)
-
-    def declared_config(self) -> dict[str, Any]:
-        """The nested dict of only the explicitly-declared fields (file / CLI /
-        `/config set`, tracked in `_declared_fields`) — what `/config save` persists.
-        Each declared path is copied out of `model_dump(mode="json")` (which
-        applies the field serializers: key un-masked, enums → names, byte
-        sizes → their human-readable form, command patterns → source strings).
-
-        NOTE: a declared path whose plugin is not installed still lands here —
-        `PreservingSection` keeps the block and it dumps like any other value.
-        So `MissingPath` out of this loop is not "plugin absent", it is
-        "preservation failed and this value is about to be lost", which is why
-        it propagates instead of being skipped. `/config save` reports it.
-        """
-        full = self.model_dump(mode="json")
-        out: dict[str, Any] = {}
-        for path in sorted(self._declared_fields):
-            dotted.graft(out, path, dotted.extract(full, path))
-        return out
-
-    def _record_declared(self) -> None:
-        """Populate `_declared_fields` with the dotted paths explicitly provided by the
-        config file(s) and the command line (`cli_args`) — what `/config save`
-        persists. Excludes env vars and CLI-only fields (`exclude=True`)
-
-        Flattening stops at the schema's opaque mappings (`walk_schema`): `mcp` is
-        declared as one value, not one path per server, because its keys are the
-        user's names rather than schema segments — and a declared path is only
-        useful if `declared_config` can read it back out of `model_dump`.
-        """
-        opaque = self.opaque_paths()
-        declared = dotted.to_leaves(
-            sources.load_paths(self.config_files), stop_at=opaque
-        )
-        if self.cli_args is not None:
-            _, argv = _split_config_path_from_cli_args(
-                self.cli_args
-            )  # CliSettingsSource rejects --config
-            if argv:
-                cli: CliSettingsSource = CliSettingsSource(
-                    type(self),
-                    cli_parse_args=argv,
-                    cli_shortcuts=_CLI_SHORTCUTS,
-                    **CLI_SETTINGS_OPTS,
-                    cli_avoid_json=True,
-                )
-                declared |= dotted.to_leaves(cli() or {}, stop_at=opaque)
-        self._declared_fields = {
-            path
-            for path in declared
-            if not type(self).model_fields[path.split(".", 1)[0]].exclude
-        }
 
     # ------------------------------------------------------------
     # Construction
@@ -690,13 +630,14 @@ class SolveigConfig(BaseSettings, ConfigSection):
         lives in `solveig.bootstrap`, above tools and plugins.
         """
         cfg = cls.parse(cli_args)
-        # config_files is already stamped (resolved paths) by ConfigFileSource.
-        cfg._record_declared()
         # `--mcp-url` names a server only by address, so it gets the same derived
         # identifier an ad-hoc `/mcp connect <url>` would give it — and setdefault
         # means a config block already using that name wins, rather than the flag
         # silently replacing a configured server's allow/block lists.
         for url in cfg.startup_mcp_servers:
+            # TODO: this should be absorbed some other way
+            #  The fact that an MCP config is built from a URL is a fact
+            #  that the MCP config class itself needs to express, not root.
             server = MCPServerConfig.from_url(url)
             cfg.mcp.setdefault(server.name, server)
         return cfg

@@ -23,44 +23,6 @@ from typing import Any
 from pydantic import BaseModel
 
 
-class MissingPath(KeyError):
-    """A dotted path did not resolve. Carries the path and the segment that
-    failed, so the report can point at the actual break rather than the whole
-    path."""
-
-    def __init__(self, path: str, segment: str) -> None:
-        self.path = path
-        self.segment = segment
-        super().__init__(f"{path!r} has no {segment!r}")
-
-
-def to_leaves(
-    data: dict[str, Any] | None,
-    prefix: str = "",
-    stop_at: frozenset[str] = frozenset(),
-) -> set[str]:
-    """Flatten a nested dict into dotted leaf paths. An empty dict is itself a
-    leaf (it carries no children to describe).
-
-    `stop_at` names paths whose dict IS the value — a mapping keyed by the
-    user's own strings rather than by schema. Descending into one would mint
-    path segments out of arbitrary text, and a key containing the separator
-    yields a path nothing can read back: `extract` would split it and look for
-    a key that was never there.
-
-    The caller supplies the set because only a schema can say which dicts are
-    sections and which are values; this module stays pure and knows neither.
-    """
-    out: set[str] = set()
-    for key, value in (data or {}).items():
-        path = f"{prefix}{key}"
-        if isinstance(value, dict) and value and path not in stop_at:
-            out |= to_leaves(value, f"{path}.", stop_at)
-        else:
-            out.add(path)
-    return out
-
-
 def matches_prefix(path: str, prefix: str) -> bool:
     """Whether `path` is `prefix` itself or sits underneath it.
 
@@ -71,17 +33,11 @@ def matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}.")
 
 
-def split(path: str) -> tuple[list[str], str]:
-    """`("tools.http.timeout")` -> `(["tools", "http"], "timeout")`."""
-    *parents, leaf = path.split(".")
-    return parents, leaf
-
-
 def owner_of(root: BaseModel, path: str) -> tuple[BaseModel, str]:
     """The object holding `path`'s leaf, and the leaf name. Raises
     `AttributeError` if an intermediate segment is missing - use `resolves` when
     absence is an expected answer rather than an error."""
-    parents, leaf = split(path)
+    *parents, leaf = path.split(".")
     obj = root
     for part in parents:
         obj = getattr(obj, part)
@@ -101,32 +57,3 @@ def resolves(root: Any, path: str) -> bool:
             return False
         obj = getattr(obj, part)
     return True
-
-
-def extract(data: dict[str, Any], path: str) -> Any:
-    """The value at `path` in a nested dict. Raises `MissingPath`.
-
-    Loud on purpose. A value can be legitimately absent from the SCHEMA - an
-    uninstalled plugin's block - and still be present here, because a
-    `PreservingSection` keeps it and it dumps like any other value. So a path
-    that reaches nothing means the preservation itself failed, and the value is
-    about to be lost. Returning a sentinel would turn that into a save that
-    quietly got smaller.
-
-    Use `resolves` when absence is a question rather than a fault.
-    """
-    node: Any = data
-    for part in path.split("."):
-        if not isinstance(node, dict) or part not in node:
-            raise MissingPath(path, part)
-        node = node[part]
-    return node
-
-
-def graft(dest: dict[str, Any], path: str, value: Any) -> None:
-    """Write `value` at `path` in `dest`, creating intermediate dicts."""
-    parents, leaf = split(path)
-    node = dest
-    for part in parents:
-        node = node.setdefault(part, {})
-    node[leaf] = value

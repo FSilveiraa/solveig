@@ -323,20 +323,14 @@ async def config_save(
     No-arg target = the highest-precedence loaded config file. By default saves
     only explicitly-set fields. Pass --full/--all to dump the complete config
     including defaults.
+    :param full: Whether to export the entire config, including defaults, or
+     just the explicitly set parameters
     """
     target = path or (config.config_files or DEFAULT_CONFIG_PATHS)[0]
-    try:
-        data = config.model_dump(mode="json") if full else config.declared_config()
-    except dotted.MissingPath as e:
-        # A declared path with nothing behind it means preservation failed, not
-        # that a plugin is absent — an absent plugin's block is kept and dumps
-        # normally. Refuse rather than write a file that silently lost a value.
-        await interface.print(
-            f"Refusing to save: {e.path} was set but has no value to write "
-            f"(missing '{e.segment}'). Saving now would drop it.",
-            level=Level.ERROR,
-        )
-        return
+    data = config.model_dump(
+        mode="json",
+        exclude_unset=not full
+    )
     try:
         sources.save_config(data, target)
     except anyconfig.UnknownFileTypeError:
