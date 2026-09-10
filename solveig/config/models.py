@@ -1,10 +1,17 @@
-"""The config framework — how a config section is declared, not what Solveig's are.
+"""
+The config models - config sections, Choice fields.
 
-Imports nothing from solveig: a section names this module, never the reverse.
-That one-way direction is what lets `solveig.api` or the TUI define their own
-section without a cycle, and it is why the sections themselves live next door in
-`sections.py`. Everything here would still make sense in a project that had never
-heard of Solveig.
+Project modules import ConfigSection and define their own.
+Example usage:
+```python
+class ApiConfig(ConfigSection):
+    url: str = Field(default="", description="LLM API endpoint URL")
+    type: Annotated[APIType, Choice(API_TYPES)] = Field(
+        default=DEFAULT_API_TYPE,
+        description="API provider type (openai, anthropic, gemini)",
+    )
+    key: SecretStr = Field(default=SecretStr(""), description="API authentication key")
+```
 """
 
 from __future__ import annotations
@@ -31,11 +38,11 @@ _MUTABLE = ConfigDict(
     # The config holds non-pydantic types. Without this flag,
     # pydantic rejects a field whose type isn't a BaseModel/builtin.
     arbitrary_types_allowed=True,
+    # Ensures that unknown keys raise an error
+    extra="forbid",
 )
 # Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow").
-_MUTABLE_ALLOW = ConfigDict(
-    validate_assignment=True,
-    arbitrary_types_allowed=True,
+_MUTABLE_ALLOW = _MUTABLE | ConfigDict(
     # Allows preserving config keys that did not validate against the model.
     # Used for the composed `plugins.tools` section so a config file's block for a
     # missing plugin still gets exported through `/config save` instead of being dropped
@@ -108,7 +115,7 @@ class ConfigSection(BaseModel):
     Base class for all config sections.
 
     Ensures fields accept arbitrary types and validate the pydantic model
-    on re-assignment
+    on re-assignment, and unknown fields raise.
     """
 
     model_config = _MUTABLE

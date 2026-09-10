@@ -25,6 +25,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
+from solveig.config.models import ConfigSection
 from solveig.context import SolveigContext
 from solveig.interface.base import Level
 from solveig.tools.result import ToolResult
@@ -85,7 +86,7 @@ async def warn_ignored_within(
     )
 
 
-class ToolConfig(BaseModel):
+class ToolConfig(ConfigSection):
     """Base config every tool's config extends — the universal `enabled` flag
     (on by default). A tool with extra settings subclasses it (e.g. `HttpConfig`
     in http.py) and names it in its `BaseTool[HttpConfig]` generic argument; a
@@ -95,7 +96,6 @@ class ToolConfig(BaseModel):
     which is what makes "add a core tool" == "add a plugin tool"."""
 
     # arbitrary_types_allowed for subclasses carrying e.g. re.Pattern (CommandConfig).
-    model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
     enabled: bool = Field(default=True, description="Enable this tool")
 
 

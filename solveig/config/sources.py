@@ -5,42 +5,10 @@ from os import PathLike
 
 import anyconfig
 
-from solveig.utils.dotted import to_leaves
 from solveig.utils.file import Filesystem, SyncPath
 
 DEFAULT_CONFIG_SEARCH: list[str] = ["./.solveig/config", "~/.solveig/config"]
 _EXTS: tuple[str, ...] = ("json", "yaml", "yml", "toml")
-
-# Old key -> where it lives now. Either side may be dotted: the check runs over
-# the loaded config's leaf paths, so a key that MOVED BETWEEN SECTIONS is caught
-# the same way a pre-nesting flat key is. Presence of any is a hard error.
-LEGACY_KEY_MAP: dict[str, str] = {
-    "url": "api.url",
-    "api_type": "api.type",
-    "api_key": "api.key",
-    "model": "api.model",
-    "temperature": "api.temperature",
-    "max_context": "api.max_context",
-    "timeout": "api.timeout",
-    "http_timeout": "tools.http.timeout",
-    "http_max_response_bytes": "tools.http.maximum_response_size",
-    "no_commands": "tools.command.enabled (inverted)",
-    "auto_execute_commands": "tools.command.auto_execute",
-    "sessions_dir": "session.path",
-    "auto_save_session": "session.auto_save",
-    "theme": "interface.tui.theme",
-    "code_theme": "interface.tui.code_theme",
-    "auto_collapse_tools": "interface.tui.auto_collapse",
-    "auto_copy_selection": "interface.tui.auto_copy_selection",
-    "interface.theme": "interface.tui.theme",
-    "interface.code_theme": "interface.tui.code_theme",
-    "interface.auto_copy_selection": "interface.tui.auto_copy_selection",
-    "interface.auto_collapse": "interface.tui.auto_collapse",
-    "interface.stream": "stream",
-    "mcp_servers": "mcp.servers",
-    "ignore_paths": "ignored_paths",
-    "verbose": "(removed)",
-}
 
 
 def _for_anyconfig(path: str | PathLike) -> SyncPath:
@@ -72,20 +40,6 @@ def resolve_config_files(explicit: Sequence[str | PathLike]) -> list[SyncPath]:
     return found
 
 
-def _check_legacy(data: dict) -> None:
-    # Top-level keys AND leaf paths: a flat pre-nesting key is a leaf of its
-    # own, and a key that moved between sections is only visible as a path.
-    present = to_leaves(data) | set(data)
-    legacy = sorted(present & LEGACY_KEY_MAP.keys())
-    if legacy:
-        lines = "\n".join(f"  - '{k}'  ->  {LEGACY_KEY_MAP[k]}" for k in legacy)
-        raise ValueError(
-            "This config uses the old flat layout. Keys moved:\n"
-            f"{lines}\n"
-            "Update your config to the nested schema (see README / CLAUDE.md)."
-        )
-
-
 def load_paths(paths_high_first: Sequence[str | PathLike]) -> dict:
     """Merge with HIGHER-precedence paths winning. anyconfig.load merges
     low→high (last wins), so we reverse (highest goes last)."""
@@ -97,7 +51,6 @@ def load_paths(paths_high_first: Sequence[str | PathLike]) -> dict:
     ]
     merged = anyconfig.load(low_to_high, ac_merge=anyconfig.MS_DICTS)
     data = dict(merged) if isinstance(merged, dict) else {}
-    _check_legacy(data)
     # plugins.paths UNIONS across every config file (order-preserving dedupe)
     # — each layer contributes a discovery dir. Re-reading individual files
     # here is a second pass; configs are kilobyte-scale so the double-IO is

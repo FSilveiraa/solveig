@@ -33,7 +33,7 @@ from solveig.api.types import ApiConfig
 from solveig.config import sources
 from solveig.config.models import (
     ComposedConfigSection,
-    PreservingConfigSection, Choice, ConfigPath,
+    PreservingConfigSection, Choice, ConfigPath, ConfigSection,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig
@@ -180,7 +180,9 @@ def _compose_section(
     target.model_rebuild(force=True)
 
 
-class SolveigConfig(BaseSettings):
+class SolveigConfig(BaseSettings, ConfigSection):
+    # NOTE: SolveigConfig inherits ConfigSection to get the validation and
+    # `extra="forbid"` behavior from its model_config
     # ------------------------------------------------------------
     # Pydantic model config
     # ------------------------------------------------------------
@@ -191,8 +193,6 @@ class SolveigConfig(BaseSettings):
     # CLI_SETTINGS_OPTS — these model_config copies are a mypy formality,
     # not the runtime config.
     model_config = SettingsConfigDict(
-        validate_assignment=True,
-        arbitrary_types_allowed=True,
         env_prefix="SOLVEIG_",
         env_nested_delimiter="__",
         cli_avoid_json=True,
