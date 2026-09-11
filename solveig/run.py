@@ -61,6 +61,12 @@ def _register_stats(
     - Price: pushed by `Client` when it swaps `model_info`
     - MCP: pushed by `connect`/`disconnect`
     """
+    # TODO: keep composition root for stats, but keep their display determined
+    #  by the interface. The emoji works well for TUI, but maybe the web UI
+    #  wants an <img>. This means making all/some stats known by the base
+    #  interface, and I think it's justified since it's better than the app
+    #  dictating UI details for all UI types.
+
     # The process cwd IS where Solveig is - a `cd` inside a command moved it -
     # so there is no shell to ask and no "no shell has started yet" case to
     # handle. `CommandTool` pushes `refresh_stats()` when a command ends, which
@@ -88,12 +94,12 @@ def _register_stats(
     # not have expressed: usage is pushed, max_context is observed.
     context = interface.add_stat(
         "Context",
-        read=lambda: (conversation.usage.input_tokens, config.api.max_context),
-        render=lambda c: f"{c[0]} / {c[1] if c[1] else 'Unlimited'}",
+        read=lambda: (conversation.usage.input_tokens, client.max_context),
+        render=lambda c: f"{c[0]} / {'Unlimited' if c[1] is None else c[1]}",
     )
 
-    @config.on_change("api.max_context")
-    async def _max_context_changed(_c: SolveigConfig, _p: frozenset[str]) -> None:
+    @config.on_change("api.max_context", "api.model_info")
+    def _context_changed(_config: SolveigConfig, _paths: frozenset[str]) -> None:
         context.refresh()
 
     # The two usage-driven stats, handed to the loop that knows when a turn
@@ -114,15 +120,19 @@ def _register_stats(
 
     # Never displayed before this: the price parameters were threaded through
     # the protocol, the interface and the widget, and no producer ever set them.
-    interface.add_stat(
+    price_stat = interface.add_stat(
         "Price",
-        read=lambda: client.model_info,
+        read=lambda: config.api.model_info,
         render=lambda info: (
             f"${info.input_price or 0}/M↑ / ${info.output_price or 0}/M↓"
             if info
-            else "unknown"
+            else "Unknown"
         ),
     )
+
+    @config.on_change("api.model_info")
+    def _model_info_changed(_config: SolveigConfig, _path: frozenset[str]) -> None:
+        price_stat.refresh()
 
 
 async def _display_setup(

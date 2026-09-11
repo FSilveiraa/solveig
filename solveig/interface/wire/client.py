@@ -202,6 +202,7 @@ class WireClient:
             case protocol.RefreshStats():
                 self.interface.refresh_stats()
             case protocol.ConfigUpdate():
+                # TODO: how to fix this one without config.set()?
                 for path, value in frame.updates.items():
                     await self.interface.config.set(path, value)
 

@@ -520,6 +520,8 @@ class SolveigInterface(ABC):
         duration: float | None = None,
     ) -> None: ...
 
+    # TODO: delete, stats should be refreshable on their own, individually
+    #  We should not offer easy ways to blanket-update the entire stats bar
     def refresh_stats(self) -> None:
         """Re-read every stat and redraw. Sync, not async: an owner calls it
         from a config observer or a timer tick, and a redraw should never be

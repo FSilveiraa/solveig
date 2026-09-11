@@ -16,7 +16,7 @@ from solveig.api.types import (
     ModelInfo,
     ModelNotFound,
     ProviderCapabilityMissing,
-    APIType,
+    ApiConfig,
 )
 from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
@@ -46,66 +46,68 @@ class Client:
 
     def __init__(
         self,
-        config: SolveigConfig,
+        config: ApiConfig,
+        interface: SolveigInterface,
         provider: Provider | None = None,
-        interface: SolveigInterface | None = None,
     ) -> None:
-        self.provider = provider or config.api.type.get_provider(
-            api_key=config.api.key.get_secret_value() or None,
-            url=config.api.url,
+        self.config = config
+        self.provider = provider or config.type.get_provider(
+            api_key=config.key.get_secret_value() or None,
+            url=config.url,
         )
-        self.type: APIType = config.api.type
-        self.model_info: ModelInfo | None = None
-        #: Told when `model_info` is replaced, because the Price and Context
-        #: stats read it. NOT so the client can display anything - it never
-        #: does. The alternative was registering the price stat's observer
-        #: after this one and relying on observer ORDER: a config-change
-        #: listener firing before `refresh` has swapped `model_info` would read
-        #: the previous model's prices. Optional so a headless Client works.
-        self._interface = interface
+        # self.type: APIType = config.type
+        # self.model_info: ModelInfo | None = None
 
-        @config.on_change("api.model", "api.url", "api.type")
-        async def _on_api_change(_config: SolveigConfig, paths: frozenset[str]):
-            return await self._on_api_change(_config, paths)
+        self.interface = interface
 
-    async def _on_api_change(
-        self, config: SolveigConfig, paths: frozenset[str]
-    ) -> None:
-        if (
-            self.model_info
-            and self.model_info.model == config.api.model
-            and self.provider.base_url == config.api.url
-            and self.type == config.api.type
-        ):
-            return
-        await self.refresh(config)
+        # TODO: review refresh behavior, does it make sense to just react to any of these with a blanket "reconnect"?
+        #  The contract promises that we only get changes that actually changed anything, so we don't need per-field checking of "did the model really change, so I know if it's worth to reconnect"
 
-    async def fetch_model_info(
-        self, config: SolveigConfig
-    ) -> tuple[Provider, ModelInfo]:
+        @config.on_change("model", "url", "type", "key")
+        async def on_change(_config: SolveigConfig, paths: frozenset[str]):
+            await self.refresh()
+
+
+    @property
+    def max_context(self) -> int | None:
+        config_limit = self.config.max_context
+        if config_limit is not None and config_limit < 0:
+            config_limit = None
+        model_limit = (
+            self.config.model_info.context_length
+            if self.config.model_info else None
+        )
+        if model_limit is None:
+            return config_limit
+        if config_limit is None:
+            return model_limit
+        return min(config_limit, model_limit)
+
+
+    async def fetch_model_info(self) -> tuple[Provider, ModelInfo]:
         """Build a provider from config and ask it about the configured model.
 
         Raises a classified `APIError`; the caller decides whether to display, revert,
         or both. Classification lives here because this is the only place holding both
         the request and the provider that made it."""
-        api_type = config.api.type
-        provider = api_type.get_provider(
-            url=config.api.url,
-            api_key=config.api.key.get_secret_value() or None,
+        provider = self.config.type.get_provider(
+            url=self.config.url,
+            api_key=self.config.key.get_secret_value() or None,
         )
         try:
-            info = await api_type.get_model_details(
-                provider=provider, model=config.api.model
+            info = await self.config.type.get_model_details(
+                provider=provider,
+                model=self.config.model,
             )
         except APIError:
             raise
         except Exception as err:
             raise _classify(err) from err
         if info is None:
-            raise ModelNotFound(config.api.model or "(unset)")
+            raise ModelNotFound(self.config.model or "(unset)")
         return provider, info
 
-    async def refresh(self, config: SolveigConfig) -> None:
+    async def refresh(self) -> None:
         """Build provider from config, fetch model details, atomic swap.
 
         On failure the model reverts to the last one that actually WORKED, held
@@ -114,36 +116,28 @@ class Client:
         made the revert set the failing model back over itself: equal values,
         so `config.set` returned early, no notification, and the bad name stayed
         on screen as though it had been accepted."""
-        last_good = self.model_info.model if self.model_info else None
+        previous_model = self.config.model_info.model if self.config.model_info else None
         try:
-            new_provider, info = await self.fetch_model_info(config)
+            new_provider, info = await self.fetch_model_info()
         except APIError as err:
-            if self._interface is not None:
-                await self._interface.print(str(err), level=Level.ERROR)
-            await self._revert(config, last_good)
+            # TODO: this is triggered when config.model is changed, confirm
+            #  resetting it to the previous config model works for triggering
+            #  another model refresh.
+            #  Also this is an explicit config.model = something set, so
+            #  exporting the config will include the model name.
+            if previous_model is not None:
+                self.config.model = previous_model
+            # TODO: raise instead, the above will call the interface to print
+            if self.interface is not None:
+                await self.interface.print(str(err), level=Level.ERROR)
             return
 
         self.provider = new_provider
-        self.type = config.api.type
-        self.model_info = info
+        # NOTE: writing an excluded field
+        self.config.model_info = info
         # model_info is now the new model's - stats reading it (price, context)
         # are stale until told, and this is the moment it stopped being true.
-        if self._interface is not None:
-            self._interface.refresh_stats()
-        # Apply the model's max context length if the user didn't specify a
-        # limit (-1 is the "model's limit" sentinel; None can never occur).
-        if info.context_length is not None and config.api.max_context == -1:
-            await config.set("api.max_context", info.context_length)
-
-    @staticmethod
-    async def _revert(config: SolveigConfig, last_good: str | None) -> None:
-        """Put the last working model back, if there was one.
-
-        `None` means nothing has ever resolved (a bad model at startup), so there is
-        nothing to revert TO - leaving the failing name in place is better than
-        blanking the config even though it keeps a broken name on screen."""
-        if last_good is not None:
-            await config.set("api.model", last_good)
+        # self.interface.refresh_stats()
 
 
 # ---------------------------------------------------------------------------
@@ -183,21 +177,21 @@ async def model_list(
 
 
 @subcommand("/model set", section="model", detail=True)
-async def model_set(
+def model_set(
     config: SolveigConfig,
     model: str,
 ) -> None:
     """Set the active model."""
-    await config.set("api.model", model.strip())
+    config.api.model = model.strip()
 
 
 @subcommand("/model info", section="model", detail=True)
 async def model_info(
-    client: Client,
+    config: SolveigConfig,
     interface: SolveigInterface,
 ) -> None:
     """Show current model details."""
-    info = client.model_info
+    info = config.api.model_info
     if info is None:
         await interface.print(
             "No model info loaded. Run /model refresh.", level=Level.INFO
@@ -221,5 +215,7 @@ async def model_refresh(
     client: Client,
 ) -> None:
     """Refresh model details from the API."""
-    client.model_info = None
-    await client.refresh(config)
+    # TODO: likely a bad idea to reset model_info, review needs.
+    #  Also if it's set within the init chain it can use self.client
+    config.api.model_info = None
+    await client.refresh()

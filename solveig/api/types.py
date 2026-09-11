@@ -221,19 +221,31 @@ class ApiConfig(ConfigSection):
 
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).
-    key: SecretStr = Field(default=SecretStr(""), description="API authentication key")
+    key: SecretStr = Field(
+        default=SecretStr(""),
+        description="API authentication key",
+   )
     model: str | None = Field(
         default=None,
         description="LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
     )
     temperature: float = Field(
-        default=0.0, description="Model temperature (0.0 to 2.0)"
+        default=0.0,
+        description="Model temperature (0.0 to 2.0)",
     )
-    max_context: int = Field(
-        default=-1, description="Max context window in tokens (-1 = model's limit)"
+    max_context: int | None = Field(
+        default=None,
+        description="Max context window in tokens (defaults to None, meaning the model's limit)",
     )
     timeout: float = Field(
-        default=60.0, description="LLM API request timeout in seconds"
+        default=60.0,
+        description="LLM API request timeout in seconds",
+    )
+
+    # Private field, for reacting to changes in stats whenever model_info changes
+    model_info: ModelInfo | None = Field(
+        default=None,
+        exclude=True,
     )
 
     @field_serializer("key")
