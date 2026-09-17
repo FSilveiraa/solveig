@@ -18,19 +18,7 @@ Two things are easy to get wrong and are therefore solved once, here:
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
-
-
-def matches_prefix(path: str, prefix: str) -> bool:
-    """Whether `path` is `prefix` itself or sits underneath it.
-
-    The boundary is the point: a bare `startswith` makes `interface` match
-    `interface_theme`, so an observer subscribed to a section would be woken by
-    an unrelated top-level field.
-    """
-    return path == prefix or path.startswith(f"{prefix}.")
 
 
 def owner_of(root: BaseModel, path: str) -> tuple[BaseModel, str]:
@@ -44,16 +32,26 @@ def owner_of(root: BaseModel, path: str) -> tuple[BaseModel, str]:
     return obj, leaf
 
 
-def resolves(root: Any, path: str) -> bool:
-    """Whether `path` reaches anything on `root` - a field OR a section.
+def matches_prefix(path: str, prefix: str) -> bool:
+    """Whether `path` is `prefix` itself or sits underneath it.
 
-    A section is a legitimate target: an observer may subscribe to `api` to hear
-    about every field under it. So this asks "does the walk arrive somewhere",
-    not "does it arrive at a leaf".
+    The boundary is the point: a bare `startswith` makes `interface` match
+    `interface_theme`, so an observer subscribed to a section would be woken by
+    an unrelated top-level field.
     """
-    obj = root
-    for part in path.split("."):
-        if not hasattr(obj, part):
-            return False
-        obj = getattr(obj, part)
-    return True
+    return path == prefix or path.startswith(f"{prefix}.")
+
+
+# def resolves(root: Any, path: str) -> bool:
+#     """Whether `path` reaches anything on `root` - a field OR a section.
+#
+#     A section is a legitimate target: an observer may subscribe to `api` to hear
+#     about every field under it. So this asks "does the walk arrive somewhere",
+#     not "does it arrive at a leaf".
+#     """
+#     obj = root
+#     for part in path.split("."):
+#         if not hasattr(obj, part):
+#             return False
+#         obj = getattr(obj, part)
+#     return True

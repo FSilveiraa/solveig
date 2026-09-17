@@ -41,7 +41,6 @@ from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
 from solveig.tools.config import CoreToolsConfig
-from solveig.utils import dotted
 from solveig.utils.file import Filesystem  # path normalization, not config I/O
 from solveig.utils.misc import CLI_SETTINGS_OPTS
 
@@ -99,10 +98,6 @@ def _split_config_path_from_cli_args(
     parser.add_argument("--config", action="append", dest="config", default=[])
     ns, rest = parser.parse_known_args(argv)
     return ns.config, rest
-
-
-# An async callback (config, changed_paths) — registered via @config.on_change.
-ConfigObserver = Callable[["SolveigConfig", frozenset[str]], Awaitable[None] | None]
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
@@ -258,147 +253,56 @@ class SolveigConfig(BaseSettings, ConfigSection):
     # so the field is a truthful durable record at every read site.
     cli_args: list[str] | None = Field(default=None, exclude=True)
 
-    # ------------------------------------------------------------
-    # Runtime fields (unpersisted)
-    # ------------------------------------------------------------
-    # observers for field changes: (callback, paths_filter | None)
-    _observers: list[tuple[ConfigObserver, frozenset[str] | None]] = PrivateAttr(
-        default_factory=list
-    )
+    # TODO: delete, never called, only caller of `dotted.resolves`
+    #  and I want to get rid of dotted.py
+    # def unresolved_paths(self) -> dict[str, list[str]]:
+    #     """Subscribed paths that currently reach nothing, keyed by handler.
+    #
+    #     Derived, never stored: the answer depends on the schema as it stands
+    #     right now, and the schema changes when plugins are discovered or
+    #     reloaded. Computing it on demand means a subscription to a not-yet-
+    #     installed plugin reports as unresolved and then quietly stops doing so
+    #     once the plugin arrives — with no invalidation hook to forget.
+    #
+    #     A section counts as resolved: subscribing to `api` is legitimate.
+    #     """
+    #     out: dict[str, list[str]] = {}
+    #     for handler, filter_paths in self._observers:
+    #         if not filter_paths:
+    #             continue
+    #         missing = sorted(p for p in filter_paths if not dotted.resolves(self, p))
+    #         if missing:
+    #             name = (
+    #                 f"{handler.__module__}.{getattr(handler, '__qualname__', handler)}"
+    #             )
+    #             out.setdefault(name, []).extend(missing)
+    #     return out
 
-    # ------------------------------------------------------------
-    # Config change observers — @config.on_change(*paths) decorator
-    # ------------------------------------------------------------
-
-    async def _notify_changed(self, paths: frozenset[str]) -> None:
-        """Notify all observers, filtered by registered config path.
-
-        NOTE: iterates a COPY — a handler is allowed to register another
-        observer (a reloaded plugin module doing so at import is the live case),
-        and mutating the list mid-iteration would raise.
-
-        NOTE: a handler that mutates the schema it is being notified about (e.g.
-        recomposing `plugins.tools` in response to `plugins.paths`) changes the
-        shape of the object described by the very notification in flight. Rare
-        enough to document rather than engineer around; if it spreads, the
-        answer is to defer the recomposition, not to reorder this loop.
-
-        NOTE: handlers are isolated from each other — one that raises no longer
-        cancels the ones after it. Plugin reload subscribes here, so a handler
-        now runs filesystem I/O and arbitrary plugin code; without isolation one
-        bad plugin would stop the stats bar and the theme from updating. The
-        failures are re-raised together afterwards rather than swallowed: every
-        observer gets its turn AND nothing goes quiet.
-        """
-        failures: list[Exception] = []
-        for handler, filter_paths in list(self._observers):
-            # An observer that named no paths hears about everything. One that
-            # did hears only its own matches — which may be exact
-            # (`api.url`) or a whole section (`api`, `tools.http`).
-            paths_to_notify = (
-                frozenset(
-                    path
-                    for path in paths
-                    if any(dotted.matches_prefix(path, p) for p in filter_paths)
-                )
-                if filter_paths
-                else paths
-            )
-            if paths_to_notify:
-                try:
-                    _coroutine = handler(self, paths_to_notify)
-                    if asyncio.iscoroutine(_coroutine):
-                        await _coroutine
-                except Exception as e:  # noqa: BLE001 - isolation, see above
-                    failures.append(e)
-        if failures:
-            raise ExceptionGroup("config observers failed", failures)
-
-    def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
-        """Decorator: register a callback for the given dotted *paths, which may
-        be exact fields or section prefixes. Empty *paths means every change::
-
-            @config.on_change("api.model", "api.url")
-            async def _on_api_change(config, paths): ...
-
-        Typed against `ConfigObserver` so a mis-shaped handler is a type error
-        where it is written, rather than a TypeError inside an await later.
-        """
-        filt = frozenset(paths) if paths else None
-
-        def register(fn: ConfigObserver) -> ConfigObserver:
-            self._observers.append((fn, filt))
-            return fn
-
-        return register
-
-    def unresolved_paths(self) -> dict[str, list[str]]:
-        """Subscribed paths that currently reach nothing, keyed by handler.
-
-        Derived, never stored: the answer depends on the schema as it stands
-        right now, and the schema changes when plugins are discovered or
-        reloaded. Computing it on demand means a subscription to a not-yet-
-        installed plugin reports as unresolved and then quietly stops doing so
-        once the plugin arrives — with no invalidation hook to forget.
-
-        A section counts as resolved: subscribing to `api` is legitimate.
-        """
-        out: dict[str, list[str]] = {}
-        for handler, filter_paths in self._observers:
-            if not filter_paths:
-                continue
-            missing = sorted(p for p in filter_paths if not dotted.resolves(self, p))
-            if missing:
-                name = (
-                    f"{handler.__module__}.{getattr(handler, '__qualname__', handler)}"
-                )
-                out.setdefault(name, []).extend(missing)
-        return out
-
-    def get(self, path: str, *, as_field: bool = False) -> Any:
-        """
-        Find a config field given its path.
-
-        Some config objects are complex to serialize (like Palette which is an object,
-        serialized to/from single theme name). A caller that received an object and
-        wanted its field representation would have to be aware of pydantic serialization
-        intricacies, so that choice lives on `as_field` using `@field_serializer` as the
-        single source of truth for serialized representation.
-
-        :param path: The dotted path for the target field
-        :param as_field: Whether to return the target as its config object or serialized representation
-        :return: The target object in the config at `path`
-        """
-        owner, leaf = dotted.owner_of(self, path)
-        if not as_field:
-            return getattr(owner, leaf)
-        # Serialize the owner object, return the target
-        dumped = owner.model_dump(mode="json", include={leaf})
-        return dumped[leaf]
-
-    async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
-        """The single user-edit write seam.  Record in *_declared_fields* and — when
-        the value actually changed — notify observers.  Pass *notify=False* for
-        internal writes (e.g. max_context from a model-fetch) that must be
-        visible but shouldn't re-trigger dependent observers."""
-        obj, leaf = dotted.owner_of(self, path)
-        old = getattr(obj, leaf)
-        setattr(obj, leaf, value)
-        new = getattr(obj, leaf)
-        if old == new:
-            return False
-
-        # Mark each object between the root and the changed field as "changed".
-        # Paths are relative. The root can be a config section, not necessarily
-        # the root Solveig Config.
-        obj = self
-        for part in path.split("."):
-            obj.__pydantic_fields_set__.add(part)
-            obj = getattr(obj, part)
-
-        if notify:
-            await self._notify_changed(frozenset({path}))
-        return True
+    # TODO: delete, config should be declarative, `config.foo = "bar"`
+    #  should trigger everything
+    # async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
+    #     """The single user-edit write seam.  Record in *_declared_fields* and — when
+    #     the value actually changed — notify observers.  Pass *notify=False* for
+    #     internal writes (e.g. max_context from a model-fetch) that must be
+    #     visible but shouldn't re-trigger dependent observers."""
+    #     obj, leaf = dotted.owner_of(self, path)
+    #     old = getattr(obj, leaf)
+    #     setattr(obj, leaf, value)
+    #     new = getattr(obj, leaf)
+    #     if old == new:
+    #         return False
+    #
+    #     # Mark each object between the root and the changed field as "changed".
+    #     # Paths are relative. The root can be a config section, not necessarily
+    #     # the root Solveig Config.
+    #     obj = self
+    #     for part in path.split("."):
+    #         obj.__pydantic_fields_set__.add(part)
+    #         obj = getattr(obj, part)
+    #
+    #     if notify:
+    #         await self._notify_changed(frozenset({path}))
+    #     return True
 
     # ------------------------------------------------------------
     # Pydantic overrides/validators
@@ -536,68 +440,6 @@ class SolveigConfig(BaseSettings, ConfigSection):
         if hook_name in type(hooks).model_fields:
             return bool(getattr(hooks, hook_name).enabled)
         return True
-
-    # ------------------------------------------------------------
-    # Runtime schema composition
-    # ------------------------------------------------------------
-    # Config knows HOW to build these sections — it owns the models and the
-    # mutability rules. It does not know WHAT goes in them: the caller supplies
-    # (name, config_model) pairs. That keeps config from importing tools or
-    # plugins, which sit above it. `solveig.bootstrap` gathers the pairs.
-
-    @classmethod
-    def compose_tools(cls, pairs: list[tuple[str, type]]) -> None:
-        """Build `config.tools` — one field per core tool, so adding a core
-        tool needs no change here."""
-        _compose_section(cls, "tools", pairs, "CoreToolsConfig")
-
-    @classmethod
-    def compose_plugin_tools(cls, pairs: list[tuple[str, type]]) -> None:
-        """Build `config.plugins.tools` — the plugin parallel of
-        `compose_tools`. Each entry's config type is a declared field (BaseTool
-        generic arg or FunctionTool.config_model), so plugin config validates
-        like core config."""
-        _compose_section(
-            PluginsConfig, "tools", pairs, "PluginToolsConfig", PreservingConfigSection
-        )
-        cls.model_rebuild(force=True)
-
-    @classmethod
-    def compose_plugin_hooks(cls, pairs: list[tuple[str, type]]) -> None:
-        """Build `config.plugins.hooks` — the hook parallel of
-        `compose_plugin_tools`. A hook's config type comes from its
-        `@before_tool/@after_tool(config_model=…)`, defaulting to bare `ToolConfig`."""
-        _compose_section(
-            PluginsConfig,
-            "hooks",
-            pairs,
-            "PluginHooksConfig",
-            PreservingConfigSection,
-        )
-        cls.model_rebuild(force=True)
-
-    def rebuild_plugin_sections(self) -> None:
-        """Re-validate the live plugin sections against the classes a recompose
-        just installed. Call after `compose_plugin_tools`/`compose_plugin_hooks`
-        on an already-built config — i.e. on a plugin reload; startup composes
-        before anything is built and needs this not at all.
-
-        Recomposition swaps the CLASS behind `plugins.tools`/`plugins.hooks`, so
-        a live instance keeps holding objects of the previous class. The fix is
-        NOT to build a fresh SolveigConfig: every `@config.on_change` observer
-        is registered against this object, and replacing it would leave them
-        subscribed to a corpse. So the sections are rebuilt and `self` survives.
-
-        Dumping and re-validating carries the configured values across and
-        routes a block whose plugin just disappeared into `model_extra`, where
-        PRESERVE keeps it for `/config save`.
-        """
-        for section in ("tools", "hooks"):
-            composed = PluginsConfig.model_fields[section].annotation
-            assert composed is not None  # just installed by _compose_section
-            current = getattr(self.plugins, section)
-            setattr(self.plugins, section, composed(**current.model_dump(exclude_unset=True)))
-
 
     # ------------------------------------------------------------
     # Construction
