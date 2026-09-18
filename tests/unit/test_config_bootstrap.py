@@ -11,7 +11,7 @@ import pytest
 
 from solveig import bootstrap
 from solveig.config import SolveigConfig
-from solveig.plugins.config import PluginHooksConfig, PluginToolsConfig
+from solveig.plugins.config import PluginHooks, PluginTools
 from solveig.tools.config import CoreToolsConfig
 
 pytestmark = pytest.mark.anyio
@@ -23,8 +23,8 @@ def _schema_snapshot() -> dict[str, set[str]]:
     assert tools_annotation is not None
     return {
         "tools": set(tools_annotation.model_fields),
-        "plugins.tools": set(PluginToolsConfig.model_fields),
-        "plugins.hooks": set(PluginHooksConfig.model_fields),
+        "plugins.tools": set(PluginTools.model_fields),
+        "plugins.hooks": set(PluginHooks.model_fields),
     }
 
 

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
-    get_args, Annotated, Awaitable,
+    get_args, Annotated, Awaitable, Iterator,
 )
 
 from anyio import Path
@@ -178,7 +178,7 @@ class ConfigSection(BaseModel):
         return self
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """The fire-and-forget write seam: `config.api.model = "x"`.
+        """Plain assignment (`config.api.model = "x"`),
 
         Shares `_apply` with `update()` below — this only decides how the
         resulting notification runs: spawned, not awaited, because a plain
@@ -195,12 +195,25 @@ class ConfigSection(BaseModel):
         if name not in type(self).model_fields:
             super().__setattr__(name, value)
             return
-        levels = self._apply(name, value)
-        if levels is None:
+        ascendants = self._apply(name, value)
+        if ascendants is None:
             return
-        task = asyncio.create_task(self._propagate(levels))
-        _NOTIFYING.add(task)
-        task.add_done_callback(_NOTIFYING.discard)
+
+        for section, path in ascendants:
+            task = asyncio.create_task(section._notify_changed(frozenset({path})))
+            _NOTIFYING.add(task)
+            task.add_done_callback(_NOTIFYING.discard)
+
+    def __contains__(self, name: str) -> bool:
+        """Whether `name` is a field of this section."""
+        return name in type(self).model_fields
+
+    def walk(self, path) -> Iterator[tuple[str, ConfigSection]]:
+        """Yields (name, section) per dotted segment of `path`."""
+        section = self
+        for name in path.split("."):
+            yield name, section
+            section = getattr(section, name)
 
     async def set(self, *args, **fields: Any) -> None:
         """
@@ -225,8 +238,8 @@ class ConfigSection(BaseModel):
         to_notify: list[tuple[ConfigSection, str]] = []
         for name, value in fields_to_change.items():
             section, leaf_name = self.owner_of(name)
-            if (ascendants_to_notify := section._apply(leaf_name, value)) is not None:
-                to_notify.extend(ascendants_to_notify)
+            if (ascendants := section._apply(leaf_name, value)) is not None:
+                to_notify.extend(ascendants)
         if not to_notify:
             return
 
@@ -237,10 +250,30 @@ class ConfigSection(BaseModel):
             _, notifications = ascendants_to_notifications.setdefault(ascendant._path, (ascendant, set()))
             notifications.add(path_to_notify)
 
-        # For each section, notify its observers once about
-        # all paths changed across all updates
-        for ascendant, paths_to_notify in ascendants_to_notifications.values():
-            await ascendant._notify_changed(frozenset(paths_to_notify))
+        # Run all notifications in parallel, gather and raise exceptions
+        observer_notifications = await asyncio.gather(
+            *(
+                ascendant._notify_changed(frozenset(paths))
+                for ascendant, paths in ascendants_to_notifications.values()
+            ),
+            return_exceptions=True,
+        )
+
+        failures: list[Exception] = []
+        for result in observer_notifications:
+            if isinstance(result, Exception):
+                failures.append(result)
+            # User cancellation or similar, propagate immediately
+            # NOTE: a Solveig UserCancellation hits this, gets re-raised
+            #  only after all exceptions are caught.
+            # TODO: can a solveig user cancellation hit inside of this? How?
+            #  What does that mean for the cancellable task flow?
+            #  If it can, does it make sense to filter explicitly for that?
+            elif isinstance(result, BaseException):
+                raise result
+
+        if failures:
+            raise ExceptionGroup("Config observers failed", failures)
 
     def _apply(self, name: str, value: Any) -> list[tuple[ConfigSection, str]] | None:
         """Validate + assign one field and mark every ancestor as touched.
@@ -263,36 +296,25 @@ class ConfigSection(BaseModel):
             return None
         super().__setattr__(name, value)
 
-        levels: list[tuple[ConfigSection, str]] = [(self, name)]
+        ascendants: list[tuple[ConfigSection, str]] = [(self, name)]
         section, path = self, name
         while section._parent is not None:
             section._parent.__pydantic_fields_set__.add(section._name)
             path = f"{section._name}.{path}"
             section = section._parent
-            levels.append((section, path))
-        return levels
-
-    async def _propagate(self, levels: list[tuple[ConfigSection, str]]) -> None:
-        for section, path in levels:
-            await section._notify_changed(frozenset({path}))
+            ascendants.append((section, path))
+        return ascendants
 
     # TODO: review need and usage across project, review as_field default
-    def get(self, path: str, *, as_field: bool = False) -> Any:
+    def get(self, path: str, *, as_json: bool = False) -> Any:
         """
         Find a config field given its path.
 
-        Some config objects are complex to serialize (like Palette which is an object,
-        serialized to/from single theme name). A caller that received an object and
-        wanted its field representation would have to be aware of pydantic serialization
-        intricacies, so that choice lives on `as_field` using `@field_serializer` as the
-        single source of truth for serialized representation.
-
-        :param path: The dotted path for the target field
-        :param as_field: Whether to return the target as its config object or serialized representation
-        :return: The target object in the config at `path`
+        `as_json` allows serializing the nested Pydantic structure and complex
+         objects according to their own `@field_serializer` rules.
         """
         parent, leaf = self.owner_of(path)
-        if not as_field:
+        if not as_json:
             return getattr(parent, leaf)
         # Serialize the owner object, return the target
         dumped = parent.model_dump(mode="json", include={leaf})
@@ -348,6 +370,7 @@ class ConfigSection(BaseModel):
     def owner_of(self, path: str) -> tuple[ConfigSection, str]:
         """
         Resolves `path` into a leaf, returns its parent and name.
+        Exists as a wrapper of `walk` that checks
 
         This is the only place where a "." in a name is interpreted as a path
         separator rather than part of a field name. It's only called by get/set
@@ -355,33 +378,55 @@ class ConfigSection(BaseModel):
         (b = config.a, config.a = b) cannot use dots in the field names.
         Instead of raising an exception in get/set, they're conveniently
         resolved as paths using this method.
+        # TODO: update docstring to not mention a static set of callers
         """
-        *parents, leaf_name = path.split(".")
-        section = self
-        for part in parents:
-            # NOTE: getattr.  Justifiable, understood, need to access
-            # field by name after ensuring it doesn't contain dots
-            section = getattr(section, part)
-        if leaf_name not in type(section).model_fields:
-            raise AttributeError(
-                f"{type(section).__name__!r} has no field {leaf_name!r} (from path {path!r})"
-            )
-        return section, leaf_name
+        # Exhaust the walk
+        leaf_name, owner_section = "", self
+        for leaf_name, owner_section in self.walk(path):
+            pass
+        # Confirm the leaf name exists, then return
+        if leaf_name not in owner_section:
+            raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
+        return owner_section, leaf_name
+
+    def _check_path(self, path) -> None:
+        """
+        Checks whether a path can exist on the tree.
+        Raises AttributeError when reaching a missing entry that does not belong to a DynamicSection.
+        """
+        # HACK: re-uses most of the body of `owner_of's checks here.
+        #  Review design overall, there should be an easy way to abstract
+        #  "finish the walk, interrogate the final assignment"
+        leaf_name, owner_section = "", self
+        try:
+            for leaf_name, owner_section in self.walk(path):
+                pass
+        except AttributeError:
+            # Dynamic sections can get re-composed anytime, not finding
+            #  a field name inside them is within expected behavior.
+            if not isinstance(owner_section, DynamicSection):
+                raise
+            return
+        if leaf_name not in owner_section:
+            raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
-        """Decorator: register a callback for the given dotted *paths, which may
-        be exact fields or section prefixes. Empty *paths means every change::
-
+        """
+        Decorator: register a callback for the changes to provided dotted *paths,
+        which may be exact fields or section prefixes. Empty *paths means every change.
+        ```python
             @config.on_change("api.model", "api.url")
             async def _on_api_change(config, paths): ...
-
-        Typed against `ConfigObserver` so a mis-shaped handler is a type error
-        where it is written, rather than a TypeError inside an await later.
+        ```
         """
-        filt = frozenset(paths) if paths else None
+        # TODO: add '*' to path semantics, discuss meaning first
+        for path in paths:
+            self._check_path(path)
+
+        frozen_paths = frozenset(paths) if paths else None
 
         def register(fn: ConfigObserver) -> ConfigObserver:
-            self._observers.append((fn, filt))
+            self._observers.append((fn, frozen_paths))
             return fn
 
         return register
@@ -391,11 +436,11 @@ class ConfigSection(BaseModel):
 ConfigObserver = Callable[[ConfigSection, frozenset[str]], Awaitable[None] | None]
 
 
-class ComposedConfigSection(ConfigSection):
+class DynamicSection(ConfigSection):
     """
     Base for config sections built at runtime (namely from a tool/hook list).
 
-    Placeholder classes (CoreToolsConfig, PluginToolsConfig) subclass this;
+    Placeholder classes (CoreToolsConfig, PluginTools) subclass this;
     `compose` installs their real fields, one per tool or hook.
 
     The TYPE_CHECKING `__getattr__` types untyped `config.tools.<name>` reads
@@ -432,7 +477,7 @@ class ComposedConfigSection(ConfigSection):
         Needed because the class changed underneath a live section: a block that
         was raw config becomes the plugin's typed model, and one whose plugin
         just disappeared goes back to being unrecognised config that
-        `PreservingConfigSection` keeps for `/config save`.
+        `PreservingSection` keeps for `/config save`.
 
         NOTE: reads `__dict__` rather than dumping, because a field that was
         just removed is no longer dumpable - it would vanish silently, which is
@@ -447,7 +492,7 @@ class ComposedConfigSection(ConfigSection):
         self.__pydantic_fields_set__.update(declared)
 
 
-class PreservingConfigSection(ComposedConfigSection):
+class PreservingSection(DynamicSection):
     """
     A composed section that preserves config for entries it has no field for.
 

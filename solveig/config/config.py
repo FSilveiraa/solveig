@@ -32,8 +32,8 @@ from pydantic_settings import (
 from solveig.api.types import ApiConfig
 from solveig.config import sources
 from solveig.config.models import (
-    ComposedConfigSection,
-    PreservingConfigSection, Choice, ConfigPath, ConfigSection,
+    DynamicSection,
+    PreservingSection, Choice, ConfigPath, ConfigSection,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig
@@ -148,7 +148,7 @@ def _compose_section(
     field_name: str,
     pairs: list[tuple[str, type]],
     model_name: str,
-    base: type[BaseModel] = ComposedConfigSection,
+    base: type[BaseModel] = DynamicSection,
 ) -> None:
     """Build a composed model from (name, config_model) pairs and swap it into
     `target.<field_name>` — one field per entry, so adding a tool/hook needs

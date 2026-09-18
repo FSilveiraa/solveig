@@ -193,7 +193,7 @@ class WireInterface(SolveigInterface):
                 protocol.ConfigUpdate(
                     updates={
                         # get the string representation of the field, not its object
-                        path: _config.get(path, as_field=True)
+                        path: _config.get(path, as_json=True)
                         for path in changed_paths
                     }
                 )
