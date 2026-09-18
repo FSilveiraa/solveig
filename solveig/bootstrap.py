@@ -19,7 +19,9 @@ against.
 from __future__ import annotations
 
 from solveig.config import SolveigConfig
-from solveig.interface.base import SolveigInterface
+from solveig.config.editor import prompt_for_field
+from solveig.exceptions import UserCancel
+from solveig.interface.base import SolveigInterface, Stat
 from solveig.plugins.discovery import ON_SCANNED, discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
@@ -98,3 +100,41 @@ async def parse_config_and_prompt(
     discover_plugins(SolveigConfig.parse(cli_args=cli_args).plugins.paths)
 
     return SolveigConfig.build(cli_args=cli_args)
+
+
+def register_config_stat(
+    interface: SolveigInterface,
+    config: SolveigConfig,
+    label: str,
+    path: str,
+) -> Stat:
+    """Show `path` in the stats display, editable by clicking it.
+
+    `path` is a full dotted path (`api.model`, not `model`) - the same one
+    `config.set` takes, so a short name will not resolve.
+
+    Reads through the path on every render rather than caching, so `config` stays
+    the single home for the value; the observer below only says "redraw", never
+    "here is the new value".
+    """
+
+    async def edit() -> None:
+        # Type-aware: prompt_for_field picks the widget from the FIELD's type
+        # (constrained -> choices, bool -> yes/no, list -> comma-separated).
+        try:
+            new_value = await prompt_for_field(path, config, interface)
+        except UserCancel:
+            return
+        await config.set(**{path: new_value})
+
+    stat = interface.add_stat(label, read=lambda: config.get(path), on_click=edit)
+
+    @config.on_change(path)
+    async def _redraw(_config: SolveigConfig, _paths: frozenset[str]) -> None:
+        # Whoever changed it - this stat's own click, a /config set, an API
+        # client correcting a bad model - the display follows the config rather
+        # than the edit path, so there is one refresh rule instead of one per
+        # writer.
+        stat.refresh()
+
+    return stat

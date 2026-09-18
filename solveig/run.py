@@ -19,7 +19,6 @@ from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
 from solveig.config import SolveigConfig
-from solveig.config.editor import register_config_stat
 from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
@@ -77,7 +76,7 @@ def _register_stats(
         render=lambda cwd: f"🗁  {cwd}",
     )
 
-    register_config_stat(interface, config, "Endpoint", "api.url")
+    bootstrap.register_config_stat(interface, config, "Endpoint", "api.url")
 
     tokens = interface.add_stat(
         "Tokens",
@@ -88,7 +87,7 @@ def _register_stats(
         render=lambda t: f"{t[0]}↑ / {t[1]}↓",
     )
 
-    register_config_stat(interface, config, "Model", "api.model")
+    bootstrap.register_config_stat(interface, config, "Model", "api.model")
 
     # Two sources in one cell, which is exactly what a value-holding stat could
     # not have expressed: usage is pushed, max_context is observed.

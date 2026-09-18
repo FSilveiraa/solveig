@@ -253,57 +253,6 @@ class SolveigConfig(BaseSettings, ConfigSection):
     # so the field is a truthful durable record at every read site.
     cli_args: list[str] | None = Field(default=None, exclude=True)
 
-    # TODO: delete, never called, only caller of `dotted.resolves`
-    #  and I want to get rid of dotted.py
-    # def unresolved_paths(self) -> dict[str, list[str]]:
-    #     """Subscribed paths that currently reach nothing, keyed by handler.
-    #
-    #     Derived, never stored: the answer depends on the schema as it stands
-    #     right now, and the schema changes when plugins are discovered or
-    #     reloaded. Computing it on demand means a subscription to a not-yet-
-    #     installed plugin reports as unresolved and then quietly stops doing so
-    #     once the plugin arrives — with no invalidation hook to forget.
-    #
-    #     A section counts as resolved: subscribing to `api` is legitimate.
-    #     """
-    #     out: dict[str, list[str]] = {}
-    #     for handler, filter_paths in self._observers:
-    #         if not filter_paths:
-    #             continue
-    #         missing = sorted(p for p in filter_paths if not dotted.resolves(self, p))
-    #         if missing:
-    #             name = (
-    #                 f"{handler.__module__}.{getattr(handler, '__qualname__', handler)}"
-    #             )
-    #             out.setdefault(name, []).extend(missing)
-    #     return out
-
-    # TODO: delete, config should be declarative, `config.foo = "bar"`
-    #  should trigger everything
-    # async def set(self, path: str, value: Any, *, notify: bool = True) -> bool:
-    #     """The single user-edit write seam.  Record in *_declared_fields* and — when
-    #     the value actually changed — notify observers.  Pass *notify=False* for
-    #     internal writes (e.g. max_context from a model-fetch) that must be
-    #     visible but shouldn't re-trigger dependent observers."""
-    #     obj, leaf = dotted.owner_of(self, path)
-    #     old = getattr(obj, leaf)
-    #     setattr(obj, leaf, value)
-    #     new = getattr(obj, leaf)
-    #     if old == new:
-    #         return False
-    #
-    #     # Mark each object between the root and the changed field as "changed".
-    #     # Paths are relative. The root can be a config section, not necessarily
-    #     # the root Solveig Config.
-    #     obj = self
-    #     for part in path.split("."):
-    #         obj.__pydantic_fields_set__.add(part)
-    #         obj = getattr(obj, part)
-    #
-    #     if notify:
-    #         await self._notify_changed(frozenset({path}))
-    #     return True
-
     # ------------------------------------------------------------
     # Pydantic overrides/validators
     # ------------------------------------------------------------

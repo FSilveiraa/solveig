@@ -12,18 +12,12 @@ Fields are addressed by DOTTED PATH into the nested schema (`api.model`,
 from __future__ import annotations
 
 import typing
-from dataclasses import dataclass
-from typing import Any, Iterable
-from collections.abc import Callable
+from typing import Any
 
 import anyconfig
 
-from solveig.api.types import APIType, API_TYPES
-from solveig.exceptions import UserCancel
-from solveig.interface.themes import THEMES, CODE_THEMES, CodeTheme, TuiTheme
-from solveig.interface.base import Level, SolveigInterface, Stat
+from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
-from solveig.utils import dotted
 
 from . import DEFAULT_CONFIG_PATHS, sources
 from .config import SolveigConfig, display_config_value, walk_schema
@@ -81,8 +75,11 @@ def _leaf_type(config: SolveigConfig, path: str) -> tuple[Any, bool]:
     which evaluates every annotation on the class and dies on unresolvable forward refs
     (e.g. `CliPositionalArg[str]` on `prompt`), taking `/config set` down with it.
     """
-    obj, leaf = dotted.owner_of(config, path)
-    annotation = type(obj).model_fields[leaf].annotation
+    # TODO: review using `get` instead
+    obj, name = config.owner_of(path)
+    # TODO: accessing pydantic internals from outside(-ish, this is
+    #  still within config/, but very hacky)
+    annotation = type(obj).model_fields[name].annotation
     unwrapped = _unwrap_optional(annotation)
     return unwrapped, unwrapped is not annotation
 
@@ -197,6 +194,7 @@ async def prompt_for_field(
     # the generic case: any field whose options live in its declaration prompts
     # as a menu, no type- or name-keying in the editor.
     info = _field_infos(config).get(field_name)
+    # TODO: wire into Choices annotation
     declared_choices = (info.json_schema_extra or {}).get("choices") if info else None
     if declared_choices:
         idx = await interface.ask_choice(
@@ -308,7 +306,7 @@ async def config_set(
     else:
         new_value = parse_config_value(config, field_name, " ".join(value))
 
-    await config.set(field_name, new_value)
+    await config.set(**{field_name: new_value})
 
 
 @subcommand("/config save", section="config", detail=True)
@@ -342,45 +340,3 @@ async def config_save(
         await interface.print(f"Could not save config: {e}", level=Level.ERROR)
     else:
         await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
-
-
-def register_config_stat(
-    interface: SolveigInterface,
-    config: SolveigConfig,
-    label: str,
-    path: str,
-) -> Stat:
-    """Show `path` in the stats display, editable by clicking it.
-
-    `path` is a full dotted path (`api.model`, not `model`) - the same one
-    `config.set` takes, so a short name will not resolve.
-
-    Reads through the path on every render rather than caching, so `config` stays
-    the single home for the value; the observer below only says "redraw", never
-    "here is the new value".
-    """
-
-    async def edit() -> None:
-        # Type-aware: prompt_for_field picks the widget from the FIELD's type
-        # (constrained -> choices, bool -> yes/no, list -> comma-separated).
-        try:
-            new_value = await prompt_for_field(path, config, interface)
-        except UserCancel:
-            return
-        await config.set(path, new_value)
-
-    def current() -> object:
-        owner, leaf = dotted.owner_of(config, path)
-        return getattr(owner, leaf)
-
-    stat = interface.add_stat(label, read=current, on_click=edit)
-
-    @config.on_change(path)
-    async def _redraw(_config: SolveigConfig, _paths: frozenset[str]) -> None:
-        # Whoever changed it - this stat's own click, a /config set, an API
-        # client correcting a bad model - the display follows the config rather
-        # than the edit path, so there is one refresh rule instead of one per
-        # writer.
-        stat.refresh()
-
-    return stat

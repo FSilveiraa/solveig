@@ -14,8 +14,8 @@ DEFAULT_CONFIG_PATHS: list[str] = [
     "~/.solveig/config.yaml",
 ]
 
+from .models import ConfigObserver
 from .config import (  # noqa: E402 — after the static defaults above so .config can import them back
-    ConfigObserver,
     SolveigConfig,
     display_config_value,
 )

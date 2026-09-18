@@ -38,14 +38,9 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_core import core_schema
 
-from solveig.utils import dotted
-
 # Notification tasks in flight. A task is only weakly held by the loop, so
 # without a strong reference here a notification can be collected mid-await.
 _NOTIFYING: set[asyncio.Task] = set()
-
-# "no value yet", distinct from a field whose value is None.
-_UNSET = object()
 
 # Model configs - used by pydantic to inform model validation
 # Forces model re-validation on re-assignment and allows arbitrary types
@@ -128,6 +123,16 @@ class Choice:
         return json_schema
 
 
+def matches_prefix(path: str, prefix: str) -> bool:
+    """Whether `path` is `prefix` itself or sits underneath it.
+
+    The boundary is the point: a bare `startswith` makes `interface` match
+    `interface_theme`, so an observer subscribed to a section would be woken by
+    an unrelated top-level field.
+    """
+    return path == prefix or path.startswith(f"{prefix}.")
+
+
 class ConfigSection(BaseModel):
     """
     Base class for all config sections.
@@ -150,10 +155,10 @@ class ConfigSection(BaseModel):
     )
 
     @property
-    def path(self) -> str:
-        if self._parent is None or not self._parent.path:
+    def _path(self) -> str:
+        if self._parent is None or not self._parent._path:
             return self._name
-        return f"{self._parent.path}.{self._name}"
+        return f"{self._parent._path}.{self._name}"
 
     @model_validator(mode="after")
     def _bind(self) -> ConfigSection:
@@ -197,23 +202,30 @@ class ConfigSection(BaseModel):
         _NOTIFYING.add(task)
         task.add_done_callback(_NOTIFYING.discard)
 
-    async def update(self, **fields: Any) -> None:
+    async def set(self, *args, **fields: Any) -> None:
         """
         Async writing that holds/raises until observers are notified.
 
-        `await config.api.update(model="x", url="y")`.
+        `await config.api.set(model="x", url="y")`.
 
-        Use this instead if you want to update multiple fields at once
-        and wait until all observers are notified.
-        Notifying can raise exceptions.
+        Use this instead if you want to update multiple fields at once and
+        wait until all observers are notified. Notifying can raise exceptions.
         """
         # List of (ascendant, path), containing each parent that needs
         # to be notified and the path of that notification.
         # Ex:  api_config.update(model="x", url="y")
         #  -> [(api_config, "model"), (root, "api.model"), (api_config, "url"), (root, "api.url")]
+        fields_to_change = fields
+        if args:
+            if len(args) == 2:
+                fields_to_change |= { args[0]: args[1] }
+            else:
+                raise ValueError(f"`set` expects exactly 2 or no positional arguments, found {len(args)}: {args}.")
+
         to_notify: list[tuple[ConfigSection, str]] = []
-        for name, value in fields.items():
-            if (ascendants_to_notify := self._apply(name, value)) is not None:
+        for name, value in fields_to_change.items():
+            section, leaf_name = self.owner_of(name)
+            if (ascendants_to_notify := section._apply(leaf_name, value)) is not None:
                 to_notify.extend(ascendants_to_notify)
         if not to_notify:
             return
@@ -222,7 +234,7 @@ class ConfigSection(BaseModel):
         # to its config section and set of paths to notify about
         ascendants_to_notifications: dict[str, tuple[ConfigSection, set[str]]] = {}
         for ascendant, path_to_notify in to_notify:
-            _, notifications = ascendants_to_notifications.setdefault(ascendant.path, (ascendant, set()))
+            _, notifications = ascendants_to_notifications.setdefault(ascendant._path, (ascendant, set()))
             notifications.add(path_to_notify)
 
         # For each section, notify its observers once about
@@ -264,7 +276,7 @@ class ConfigSection(BaseModel):
         for section, path in levels:
             await section._notify_changed(frozenset({path}))
 
-    # TODO: delete, fields
+    # TODO: review need and usage across project, review as_field default
     def get(self, path: str, *, as_field: bool = False) -> Any:
         """
         Find a config field given its path.
@@ -279,11 +291,11 @@ class ConfigSection(BaseModel):
         :param as_field: Whether to return the target as its config object or serialized representation
         :return: The target object in the config at `path`
         """
-        owner, leaf = dotted.owner_of(self, path)
+        parent, leaf = self.owner_of(path)
         if not as_field:
-            return getattr(owner, leaf)
+            return getattr(parent, leaf)
         # Serialize the owner object, return the target
-        dumped = owner.model_dump(mode="json", include={leaf})
+        dumped = parent.model_dump(mode="json", include={leaf})
         return dumped[leaf]
 
     async def _notify_changed(self, paths: frozenset[str]) -> None:
@@ -316,7 +328,7 @@ class ConfigSection(BaseModel):
                     path
                     for path in paths
                     if any(
-                        dotted.matches_prefix(path, prefix)
+                        matches_prefix(path, prefix)
                         for prefix in filter_paths
                     )
                 )
@@ -332,6 +344,29 @@ class ConfigSection(BaseModel):
                     failures.append(e)
         if failures:
             raise ExceptionGroup("config observers failed", failures)
+
+    def owner_of(self, path: str) -> tuple[ConfigSection, str]:
+        """
+        Resolves `path` into a leaf, returns its parent and name.
+
+        This is the only place where a "." in a name is interpreted as a path
+        separator rather than part of a field name. It's only called by get/set
+        which accept paths as names. Plain python reference and assignment
+        (b = config.a, config.a = b) cannot use dots in the field names.
+        Instead of raising an exception in get/set, they're conveniently
+        resolved as paths using this method.
+        """
+        *parents, leaf_name = path.split(".")
+        section = self
+        for part in parents:
+            # NOTE: getattr.  Justifiable, understood, need to access
+            # field by name after ensuring it doesn't contain dots
+            section = getattr(section, part)
+        if leaf_name not in type(section).model_fields:
+            raise AttributeError(
+                f"{type(section).__name__!r} has no field {leaf_name!r} (from path {path!r})"
+            )
+        return section, leaf_name
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
         """Decorator: register a callback for the given dotted *paths, which may
