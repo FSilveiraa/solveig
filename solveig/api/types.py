@@ -22,7 +22,7 @@ from pydantic import Field, SecretStr, field_serializer
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
-from solveig.config.models import ConfigSection, Choice
+from solveig.config.models import ConfigSection, Choice, CliFlags
 
 
 @dataclass
@@ -213,27 +213,29 @@ DEFAULT_API_TYPE = API_TYPES["openai"]
 class ApiConfig(ConfigSection):
     """API configuration"""
 
-    url: str = Field(default="", description="LLM API endpoint URL")
-    type: Annotated[APIType, Choice(API_TYPES)] = Field(
+    url: Annotated[str, CliFlags("u", "url")] = Field(
+        default="", description="LLM API endpoint URL"
+    )
+    type: Annotated[APIType, Choice(API_TYPES), CliFlags("api-type")] = Field(
         default=DEFAULT_API_TYPE,
-        description="API provider type (openai, anthropic, gemini)",
+        description="API provider type",
     )
 
     # SecretStr so the key masks itself in repr/str/logs; the serializer un-masks
     # for /config save (secrecy is a property of the field, not of display code).
-    key: SecretStr = Field(
+    key: Annotated[SecretStr, CliFlags("k", "key")] = Field(
         default=SecretStr(""),
         description="API authentication key",
    )
-    model: str | None = Field(
+    model: Annotated[str | None, CliFlags("m", "model")] = Field(
         default=None,
         description="LLM model identifier (e.g. gpt-4o, claude-sonnet-4-5)",
     )
-    temperature: float = Field(
+    temperature: Annotated[float, CliFlags("temperature")] = Field(
         default=0.0,
         description="Model temperature (0.0 to 2.0)",
     )
-    max_context: int | None = Field(
+    max_context: Annotated[int | None, CliFlags("max-context")] = Field(
         default=None,
         description="Max context window in tokens (defaults to None, meaning the model's limit)",
     )

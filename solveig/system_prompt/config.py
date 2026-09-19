@@ -8,9 +8,11 @@ say that this section exists.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field
 
-from solveig.config.models import ConfigSection
+from solveig.config.models import ConfigSection, CliFlags
 
 DEFAULT_SYSTEM_PROMPT = """
 You are an AI assistant working in a user's terminal through Solveig.
@@ -41,9 +43,9 @@ class SystemPromptConfig(ConfigSection):
     content: str = Field(
         default=DEFAULT_SYSTEM_PROMPT, description="Raw system prompt template"
     )
-    add_examples: bool = Field(
+    add_examples: Annotated[bool, CliFlags("add-examples")] = Field(
         default=False, description="Include few-shot examples in system prompt"
     )
-    add_os_info: bool = Field(
+    add_os_info: Annotated[bool, CliFlags("add-os-info")] = Field(
         default=False, description="Include OS info in system prompt"
     )

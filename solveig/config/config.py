@@ -4,7 +4,7 @@ import argparse
 import re
 import sys
 import warnings
-from typing import Any
+from typing import Any, Annotated
 
 from pydantic import (
     BaseModel,
@@ -241,7 +241,7 @@ class SolveigConfig(BaseSettings, ConfigSection):
     # unexpanded `~` that no reader here would resolve.
     config_files: list[ConfigPath] = Field(default_factory=list, exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
-    startup_mcp_servers: list[str] = Field(
+    startup_mcp_servers: Annotated[list[str], CliFlags("mcp-url")] = Field(
         default_factory=list, exclude=True
     )  # use `--mcp-url URL`
     # The CLI args this instance was booted from — always a list after
