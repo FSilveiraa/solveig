@@ -20,12 +20,28 @@ from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
 
 from . import DEFAULT_CONFIG_PATHS, sources
-from .config import SolveigConfig, display_config_value, walk_schema
+from .config import SolveigConfig, display_config_value
+
 
 # ---------------------------------------------------------------------------
 # Editable fields — DERIVED from the live schema, never hand-maintained.
 # ---------------------------------------------------------------------------
 # A field with `exclude=True` opts out of runtime editing (one source of truth).
+
+# TODO: obviously when/before extracting the config to its own sub-project,
+#  move these private-ish helpers into classmethods of ConfigSection or the
+#  base config class. Overall simplify, schema investigation shouldn't require
+#  3 methods and if it does they belong on the class they all operate on.
+
+def _field_infos(config: SolveigConfig) -> dict[str, Any]:
+    return {
+        path: info
+        for path, info in config.walk_schema()
+        # HACK: the way to identify "this section is a dict" is through
+        #  dict-typing. This was made to accomodate the `solveig.mcp`
+        #  module, investigate DynamicSection instead - this isn't correct
+        if typing.get_origin(info.annotation) is not dict
+    }
 
 
 def editable_fields(config: SolveigConfig) -> dict[str, str]:
@@ -35,21 +51,8 @@ def editable_fields(config: SolveigConfig) -> dict[str, str]:
     undescribed leaves fall back to their dotted path.
     """
     return {
-        path: info.description or path for path, info in _field_infos(config).items()
-    }
-
-
-def _field_infos(config: SolveigConfig) -> dict[str, Any]:
-    """The same walk as `editable_fields`, returning each leaf's FieldInfo
-    for readers that need more than the description (e.g. prompt choices).
-
-    An opaque path is dropped rather than offered: a mapping keyed by user data
-    (`mcp`) is edited through its own flow (`/mcp connect`), never one dotted
-    path per entry. `walk_schema` is where that rule lives — the same one
-    `_record_declared` reads, so the two cannot disagree about where a path ends.
-    """
-    return {
-        path: info for path, info, opaque in walk_schema(type(config)) if not opaque
+        path: info.description or path
+        for path, info in _field_infos(config).items()
     }
 
 
@@ -122,53 +125,6 @@ def parse_config_value(config: SolveigConfig, path: str, raw: str) -> Any:
 # Type-aware UI prompting
 # ---------------------------------------------------------------------------
 
-# Constrained choices are a property of the field's TYPE, not its name. Each entry is
-# (type, options, display, parse): what to offer, how to show the current value, and how
-# to turn the chosen option back into a value. All four come from the entry, so the loop
-# below serves types it knows nothing about - which is what "a third one just works"
-# means. The parse callable is the load-bearing one: without it the loop had to name
-# APIType explicitly and treat everything else as a Palette.
-# @dataclass
-# class ChoiceEntry:
-#     # TODO: should be expressed implicitly by a generic `ChoiceEntry[T]`
-#     # NOTE: needs to be Any instead of type to accommodate type aliases
-#     _type: Any
-#     choices: Iterable[str]
-#     to_name: Callable[[Any], str]
-#     to_choice: Callable[[str], Any]
-#
-#
-# _CHOICES_BY_TYPE: list[ChoiceEntry] = [
-#     ChoiceEntry(
-#         type=TuiTheme,
-#         choices=THEMES,
-#         to_name=lambda theme: theme.name,
-#         to_choice=lambda name: THEMES[name],
-#     ),
-#     ChoiceEntry(
-#         type=CodeTheme,
-#         choices=CODE_THEMES,
-#         to_name=lambda code_theme: code_theme.name,
-#         to_choice=lambda name: CODE_THEMES[name],
-#     ),
-#     ChoiceEntry(
-#         type=APIType,
-#         choices=TYPE_BY_NAME,
-#         to_name=lambda api_type: api_type.name,
-#         to_choice=resolve_api_type,
-#     ),
-# ]
-
-
-# def _resolve_choice(entry: ChoiceEntry, index: int) -> Any:
-#     """The value behind the option at `index`, via the entry's own parser.
-#
-#     Options are read from the same callable the prompt offered, so the index the
-#     user picked and the index parsed here address the same list."""
-#     return entry.to_choice(list(entry.choices)[index])
-#     _type, options_of, _display_of, parse = entry
-#     return parse(options_of()[index])
-
 
 async def prompt_for_field(
     field_name: str,
@@ -194,7 +150,7 @@ async def prompt_for_field(
     # the generic case: any field whose options live in its declaration prompts
     # as a menu, no type- or name-keying in the editor.
     info = _field_infos(config).get(field_name)
-    # TODO: wire into Choices annotation
+    # TODO: wire into Choices annotation, drop json_extra_schema
     declared_choices = (info.json_schema_extra or {}).get("choices") if info else None
     if declared_choices:
         idx = await interface.ask_choice(
@@ -203,17 +159,6 @@ async def prompt_for_field(
             add_cancel=True,
         )
         return declared_choices[idx]
-
-    # --- Constrained-choice fields, driven by the leaf's declared type ---
-    # for entry in _CHOICES_BY_TYPE:
-    #     choice_type, options_of, display_of, _parse = entry
-    #     if raw_type is choice_type:
-    #         idx = await interface.ask_choice(
-    #             f"{description} (current: {display_of(current)})",
-    #             options_of(),
-    #             add_cancel=True,
-    #         )
-    #         return _resolve_choice(entry, idx)
 
     # --- Bool fields ---
     if raw_type is bool:

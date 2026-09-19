@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import operator
+import typing
 from collections.abc import Mapping, Callable
 from dataclasses import dataclass
 from typing import (
@@ -33,17 +34,18 @@ from pydantic import (
     ConfigDict,
     PlainSerializer,
     PrivateAttr,
-    model_validator,
+    model_validator, GetCoreSchemaHandler, GetJsonSchemaHandler,
 )
 from pydantic.fields import FieldInfo
-from pydantic_core import core_schema
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema, CoreSchema
 
 # Notification tasks in flight. A task is only weakly held by the loop, so
-# without a strong reference here a notification can be collected mid-await.
-_NOTIFYING: set[asyncio.Task] = set()
+#  without a strong reference here a notification can be collected mid-await.
+_NOTIFICATIONS_IN_COURSE: set[asyncio.Task] = set()
 
-# Model configs - used by pydantic to inform model validation
-# Forces model re-validation on re-assignment and allows arbitrary types
+# Model configs used by pydantic to inform model validation.
+# Forces model re-validation on re-assignment and allows arbitrary types.
 _MUTABLE = ConfigDict(
     # Every config.api.url = "..." re-validates at assignment time, not just
     # at parse. So a bad value can't beset live mid-run and corrupt state.
@@ -54,15 +56,14 @@ _MUTABLE = ConfigDict(
     # Ensures that unknown keys raise an error
     extra="forbid",
 )
-# Like _MUTABLE but PRESERVES unknown keys as `model_extra` (extra="allow").
-_MUTABLE_ALLOW = _MUTABLE | ConfigDict(
-    # Allows preserving config keys that did not validate against the model.
-    # Used for the composed `plugins.tools` section so a config file's block for a
-    # missing plugin still gets exported through `/config save` instead of being dropped
-    # (which would strip a teammate's plugin config on a machine lacking that plugin)
-    extra="allow",
-)
+
+# Like _MUTABLE, but allows preserving config keys that did not validate against the model.
+# Used by preserving sections to keep declared-but-missing fields under `model_extra`.
+_MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
+
 # TODO: review CLI behavior on init when setting plugin (and other) flags
+#  that land inside dynamic sections. Does my CLI flag change for
+#  `plugins.tools.tree` end up in TreeConfig? What if I reload the plugins?
 
 
 ConfigPath = Annotated[
@@ -72,10 +73,45 @@ ConfigPath = Annotated[
 ]
 
 
+def _walk_schema(
+        model: type[BaseModel],
+        *,
+        prefix: str = "",
+        skip_excluded: bool = True,
+) -> Iterator[tuple[str, FieldInfo]]:
+    """
+    Walks the schema and yields each field's name and  FieldInfo.
+
+    :param `path`: dotted-path address of the field starting from the provided root.
+    :param `skip_excluded`: whether to honor a field's `exclude=True`, if False walks
+        into them. Fields may want to be excluded from editing/model dumping, but
+        still need to be traversed for ex. for CLI flag gathering.
+    :return yields a tuple of: that field's name and its pydantic FieldInfo
+    """
+    for name, info in model.model_fields.items():
+        if skip_excluded and info.exclude:
+            continue
+        annotation = info.annotation
+        path = f"{prefix}{name}"
+        if typing.get_origin(annotation) is dict:
+            yield path, info
+        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield from _walk_schema(
+                annotation,
+                prefix=f"{path}.",
+                skip_excluded=skip_excluded
+            )
+        else:
+            yield (path, info)
+
+
+# `eq=False` is important to maintain. Without it, pydantic can try to derive __eq__/__hash__
+#  from fields (for caching on schema generation), and since `entries` is a Mapping it would
+#  raise on an unhashable dict. `eq=False` maintains identity through object.__hash__.
 @dataclass(frozen=True, slots=True, eq=False)
 class Choice:
     entries: Mapping[str, Any]
-    # How to get the name from an entry
+    # Optional reverse mapping: how to get the name from an entry
     key: Callable[[Any], str] = operator.attrgetter("name")
     label: str = ""
 
@@ -83,10 +119,8 @@ class Choice:
     def choices(self) -> list[str]:
         return sorted(self.entries)
 
-    def __get_pydantic_core_schema__(self, source, handler):
-        """
-        Defines how to validate and serialize `source` using `handler`.
-        """
+    def __get_pydantic_core_schema__(self, source: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+        """Defines how to validate and serialize `source` using `handler`."""
         args = get_args(source)
         member = next((a for a in args if a is not type(None)), source)
         label = self.label or getattr(member, "__name__", "entry")
@@ -117,10 +151,23 @@ class Choice:
         # Whether None is legal is the annotation's to say.
         return core_schema.nullable_schema(schema) if type(None) in args else schema
 
-    def __get_pydantic_json_schema__(self, schema, handler):
+    def __get_pydantic_json_schema__(self, schema: dict[str, Any], handler: GetJsonSchemaHandler) -> JsonSchemaValue:
         json_schema = handler(core_schema.str_schema())
         json_schema.update(type="string", enum=self.choices)
         return json_schema
+
+
+# `init=False` ensures the dataclass doesn't auto-generate an __init__.
+# Without it, we'd be forced to instantiate with `CliShortcuts(["-u", "--url"])`
+#  instead of `CliShortcuts("-u", "--url")`
+@dataclass(frozen=True, slots=True, init=False)
+class CliFlags:
+    flags: tuple[str, ...]
+
+    def __init__(self, *flags) -> None:
+        # NOTE: Not a real hack, this is the documented way to expose an alternative
+        #  constructor with a frozen dataclass. The alternative is using `.of(*flags)`
+        object.__setattr__(self, "flags", flags)
 
 
 def matches_prefix(path: str, prefix: str) -> bool:
@@ -201,15 +248,20 @@ class ConfigSection(BaseModel):
 
         for section, path in ascendants:
             task = asyncio.create_task(section._notify_changed(frozenset({path})))
-            _NOTIFYING.add(task)
-            task.add_done_callback(_NOTIFYING.discard)
+            _NOTIFICATIONS_IN_COURSE.add(task)
+            task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
 
     def __contains__(self, name: str) -> bool:
         """Whether `name` is a field of this section."""
         return name in type(self).model_fields
 
+    @classmethod
+    def walk_schema(cls, *, skip_excluded: bool = True) -> Iterator[tuple[str, FieldInfo]]:
+        """Walks this sections schema, yielding each field's (name, field_info)."""
+        yield from _walk_schema(cls, skip_excluded=skip_excluded)
+
     def walk(self, path) -> Iterator[tuple[str, ConfigSection]]:
-        """Yields (name, section) per dotted segment of `path`."""
+        """Walks `path` starting from `self`, yielding each field's (name, owner)."""
         section = self
         for name in path.split("."):
             yield name, section
@@ -370,15 +422,8 @@ class ConfigSection(BaseModel):
     def owner_of(self, path: str) -> tuple[ConfigSection, str]:
         """
         Resolves `path` into a leaf, returns its parent and name.
-        Exists as a wrapper of `walk` that checks
-
-        This is the only place where a "." in a name is interpreted as a path
-        separator rather than part of a field name. It's only called by get/set
-        which accept paths as names. Plain python reference and assignment
-        (b = config.a, config.a = b) cannot use dots in the field names.
-        Instead of raising an exception in get/set, they're conveniently
-        resolved as paths using this method.
-        # TODO: update docstring to not mention a static set of callers
+        Raises AttributeError raised by `walk`, or if somehow
+        the penultimate segment of `path` isn't a ConfigSection.
         """
         # Exhaust the walk
         leaf_name, owner_section = "", self

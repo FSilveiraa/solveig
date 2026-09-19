@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import re
 import sys
-import typing
 import warnings
-from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
 from pydantic import (
     BaseModel,
     ByteSize,
     Field,
-    PrivateAttr,
     SecretStr,
     create_model,
     field_serializer,
@@ -33,7 +29,10 @@ from solveig.api.types import ApiConfig
 from solveig.config import sources
 from solveig.config.models import (
     DynamicSection,
-    PreservingSection, Choice, ConfigPath, ConfigSection,
+    Choice,
+    ConfigPath,
+    ConfigSection,
+    PreservingSection, CliFlags,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig
@@ -46,47 +45,10 @@ from solveig.utils.misc import CLI_SETTINGS_OPTS
 
 __all__ = [
     "SolveigConfig",
+    "ConfigSection",
+    "DynamicSection",
+    "PreservingSection",
 ]
-
-# Friendly namespace-dropping LONG aliases (bare names -> --url etc). NOT -x short flags.
-_CLI_SHORTCUTS: dict[str, str] = {
-    "api.url": "url",
-    "api.model": "model",
-    "api.key": "key",
-    "api.type": "api-type",
-    "api.temperature": "temperature",
-    "api.max_context": "max-context",
-    "system_prompt.add_examples": "add-examples",
-    "system_prompt.add_os_info": "add-os-info",
-    "startup_mcp_servers": "mcp-url",  # --mcp is taken by the mcp submodel
-}
-
-
-def walk_schema(
-    model: type[BaseModel], prefix: str = ""
-) -> Iterator[tuple[str, FieldInfo, bool]]:
-    """Every dotted path the config schema offers, with its `FieldInfo` and
-    whether the path is OPAQUE — a mapping keyed by user data rather than by
-    schema (`mcp`), which the walk names but does not descend into.
-
-    NOTE: the one home for where a dotted path stops. Two callers need that same
-    answer for unrelated reasons, and keeping a copy each is how they drifted:
-    `editable_fields` must not offer `mcp.<server>.timeout` as a settable field,
-    and `_record_declared` must not mint a declared path out of a key it cannot
-    read back — an MCP server was once keyed by URL, whose dots the path
-    language splits on, so `/config save` refused to save at all.
-    """
-    for name, info in model.model_fields.items():
-        if info.exclude:
-            continue
-        annotation = info.annotation
-        path = f"{prefix}{name}"
-        if typing.get_origin(annotation) is dict:
-            yield path, info, True
-        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
-            yield from walk_schema(annotation, f"{path}.")
-        else:
-            yield path, info, False
 
 
 def _split_config_path_from_cli_args(
@@ -98,6 +60,42 @@ def _split_config_path_from_cli_args(
     parser.add_argument("--config", action="append", dest="config", default=[])
     ns, rest = parser.parse_known_args(argv)
     return ns.config, rest
+
+
+def _cli_flags_from_schema(model: type[ConfigSection]) -> dict[str, list[str]]:
+    """
+    Finds all CLI shortcut flags for a config root, returns a mapping of  maps their paths to their CLI flags.
+    :return Mapping of each field's path to their CLI shortcut flags.
+    :raises ValueError if 2 fields declare the same shortcut.
+    """
+    path_to_flags: dict[str, list[str]] = {}
+    claimed_by: dict[str, str] = {}
+    # `skip_excluded_fields=False`, un-exported fields can still declare CLI shortcuts
+    for path, field_info in model.walk_schema(skip_excluded=False):
+        cli_flags = [
+            flag
+            for metadata in field_info.metadata
+            if isinstance(metadata, CliFlags)
+            for flag in metadata.flags
+        ]
+        if not cli_flags:
+            continue
+
+        # Check whether this flag was previously used, raise on conflicts
+        # NOTE: this design allows defining multiple groups of flags, but nothing
+        #  prevents them from defining the same flag 5 times, and then the error
+        #  message will say "Flag 'x' is claimed by both MyClass and MyClass".
+        for flag in cli_flags:
+            if flag in claimed_by:
+                raise ValueError(
+                    f"Flag {flag!r} is claimed by both "
+                    f"{claimed_by[flag]} and {path!r}"
+                )
+            claimed_by[flag] = path
+        # Add all the found flags to the result map
+        path_to_flags.setdefault(path, []).extend(cli_flags)
+
+    return path_to_flags
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
@@ -283,7 +281,7 @@ class SolveigConfig(BaseSettings, ConfigSection):
         cli = CliSettingsSource(
             settings_cls,
             cli_parse_args=argv,
-            cli_shortcuts=_CLI_SHORTCUTS,
+            cli_shortcuts=_cli_flags_from_schema(settings_cls),
             **CLI_SETTINGS_OPTS,
             cli_avoid_json=True,
         )
@@ -365,6 +363,10 @@ class SolveigConfig(BaseSettings, ConfigSection):
         # /config save path grafts the exact original from _declared_fields, so
         # a user's "1GiB" is preserved verbatim there, not re-normalized here.
         return v.human_readable()
+
+
+
+
 
     # ------------------------------------------------------------
     # Tool/Hook section schema
