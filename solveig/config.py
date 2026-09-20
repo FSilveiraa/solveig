@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Annotated
 
 import anyconfig
 from pydantic import (
     ByteSize,
     Field,
-    SecretStr,
     field_serializer,
     field_validator,
-    model_validator,
+    model_validator, PlainSerializer,
 )
-from pydantic.fields import FieldInfo
 from pydantic_settings import (
     CliPositionalArg,
     SettingsConfigDict,
@@ -23,10 +20,9 @@ from config.sources import EXTENSIONS
 from solveig.api.types import ApiConfig
 from config.models import (
     DynamicSection,
-    Choice,
-    ConfigPath,
+    Path,
     ConfigSection,
-    PreservingSection, CliFlags,
+    PreservingSection, CliFlags, CommaSeparated, PathPattern, AbsolutePath,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig
@@ -49,23 +45,23 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-def display_config_value(value: object, field_info: FieldInfo | None = None) -> str:
-    """Format a config value for display, driven by type and field name."""
-    choice = next(
-        (m for m in field_info.metadata if isinstance(m, Choice)),
-        None,
-    ) if field_info else None
-    if choice:
-        return choice.key(value)
-    if isinstance(value, SecretStr):
-        return "***" if value.get_secret_value() else "(not set)"
-    if isinstance(value, ByteSize):
-        return value.human_readable()
-    if isinstance(value, re.Pattern):
-        return value.pattern
-    if isinstance(value, list):
-        return ", ".join(display_config_value(v) for v in value) if value else "(empty)"
-    return repr(value)
+# def display_config_value(value: object, field_info: FieldInfo | None = None) -> str:
+#     """Format a config value for display, driven by type and field name."""
+#     choice = next(
+#         (m for m in field_info.metadata if isinstance(m, Choice)),
+#         None,
+#     ) if field_info else None
+#     if choice:
+#         return choice.key(value)
+#     if isinstance(value, SecretStr):
+#         return "***" if value.get_secret_value() else "(not set)"
+#     if isinstance(value, ByteSize):
+#         return value.human_readable()
+#     if isinstance(value, re.Pattern):
+#         return value.pattern
+#     if isinstance(value, list):
+#         return ", ".join(display_config_value(v) for v in value) if value else "(empty)"
+#     return repr(value)
 
 
 # def _default_config_paths():
@@ -124,19 +120,22 @@ class SolveigConfig(Config):
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
     system_prompt: SystemPromptConfig = Field(default_factory=SystemPromptConfig)
-    briefing: list[str] = Field(
+    briefing: CommaSeparated[AbsolutePath] = Field(
         default_factory=lambda: ["AGENTS.md"],
         description="Markdown files appended to the system prompt in order",
     )
-    minimum_disk_space_left: ByteSize = Field(
+    minimum_disk_space_left: Annotated[
+        ByteSize,
+        PlainSerializer(lambda v: v.human_readable())
+    ] = Field(
         default=ByteSize(1024**3),  # 1 GiB
         description="Minimum free disk space before blocking writes",
     )
-    auto_allowed_paths: list[ConfigPath] = Field(
+    auto_allowed_paths: CommaSeparated[PathPattern] = Field(
         default_factory=list,
         description="Glob patterns for auto-approved file paths",
     )
-    ignored_paths: list[ConfigPath] = Field(
+    ignored_paths: CommaSeparated[PathPattern] = Field(
         default_factory=list,
         description="Glob patterns for paths that are fully blocked from all tool access",
     )
@@ -152,7 +151,7 @@ class SolveigConfig(Config):
     # CLI-only fields
     # ------------------------------------------------------------
     # Override from Config
-    config_files: list[ConfigPath] = Field(
+    config_files: Annotated[list[Path], CliFlags("c", "config")] = Field(
         default_factory=lambda: [
             SyncPath(f"{base}.{extension}")
             for base in ("~/.solveig/config", "./.solveig/config")
@@ -182,32 +181,11 @@ class SolveigConfig(Config):
     # Pydantic overrides/validators
     # ------------------------------------------------------------
 
-    @field_validator("auto_allowed_paths", "ignored_paths", mode="before")
-    @classmethod
-    def _abs_paths(cls, v: Any) -> Any:
-        """Anchor the safety patterns the moment they are set.
-
-        NOTE: load-bearing, not tidiness. Solveig's working directory MOVES - a
-        `cd` inside a command takes the file tools with it - so a pattern that
-        resolved lazily would mean something different after every `cd`, and
-        `cd ..` would be an escape from an ignored subtree. A rule the subject
-        can move by walking is not a rule. `resolve()` keeps glob metacharacters
-        intact, so `*.log` anchors without being expanded.
-
-        `resolve_pattern` owns the one exception (a bare name like `node_modules`
-        is stored as written, so it keeps meaning "wherever this appears"); config
-        states WHEN patterns are settled, not what a pattern means.
-        """
-        return [Filesystem.resolve_pattern(p) for p in v] if v else []
-
-    @field_validator("briefing", mode="before")
-    @classmethod
-    def _abs_briefing(cls, v: Any) -> Any:
-        """Anchored for the same reason, plus one of its own: the briefing is
-        re-read every turn, so a relative `AGENTS.md` would silently become
-        `docs/AGENTS.md` once the assistant moved, changing its own instructions
-        mid-session."""
-        return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
+    # @field_validator("briefing", mode="before")
+    # @classmethod
+    # def _abs_briefing(cls, v: Any) -> Any:
+    #     """Anchors the briefing paths to the starting directory"""
+    #     return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
 
     @field_validator("mcp", mode="before")
     @classmethod
@@ -275,13 +253,13 @@ class SolveigConfig(Config):
         self.plugins.paths = list(plugin_paths)
         return self
 
-    @field_serializer("minimum_disk_space_left")
-    def _ser_min_disk(self, v: ByteSize) -> str:
-        # Human-readable so a --full/--all config dump exports the default as
-        # "1.0GiB" rather than 1073741824 (round-trips to the same value). The
-        # /config save path grafts the exact original from _declared_fields, so
-        # a user's "1GiB" is preserved verbatim there, not re-normalized here.
-        return v.human_readable()
+    # @field_serializer("minimum_disk_space_left")
+    # def _ser_min_disk(self, v: ByteSize) -> str:
+    #     # Human-readable so a --full/--all config dump exports the default as
+    #     # "1.0GiB" rather than 1073741824 (round-trips to the same value). The
+    #     # /config save path grafts the exact original from _declared_fields, so
+    #     # a user's "1GiB" is preserved verbatim there, not re-normalized here.
+    #     return v.human_readable()
 
 
     # ------------------------------------------------------------

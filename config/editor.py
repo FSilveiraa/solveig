@@ -79,7 +79,7 @@ def _leaf_type(config: SolveigConfig, path: str) -> tuple[Any, bool]:
     (e.g. `CliPositionalArg[str]` on `prompt`), taking `/config set` down with it.
     """
     # TODO: review using `get` instead
-    obj, name = config.owner_of(path)
+    obj, name, schema = config.leaf_parent_name_and_schema(path)
     # TODO: accessing pydantic internals from outside(-ish, this is
     #  still within config/, but very hacky)
     annotation = type(obj).model_fields[name].annotation

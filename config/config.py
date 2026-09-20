@@ -1,25 +1,13 @@
 import argparse
+import pathlib
 import sys
 from typing import override
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, CliSettingsSource, SettingsConfigDict
 
-from config.models import ConfigSection, ConfigPath
+from config.models import ConfigSection, Path, CliFlags
 from config.sources import ConfigFileSource
-
-
-def _split_config_paths_from_cli_args(
-    argv: list[str],
-) -> tuple[list[str], list[str]]:
-    """
-    Pull every `--config FILE` out of argv, returning (config_paths,
-    remaining_argv). `--config` is consumed by the config-file source.
-    """
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--config", action="append", dest="config", default=[])
-    ns, rest = parser.parse_known_args(argv)
-    return ns.config, rest
 
 
 class Config(BaseSettings, ConfigSection):
@@ -33,8 +21,26 @@ class Config(BaseSettings, ConfigSection):
 
     parse_cli: bool = True
     # Sorted lowest -> highest priority
-    config_files: list[ConfigPath] = Field(default_factory=list, exclude=True)
+    config_files: list[Path] = Field(default_factory=list, exclude=True)
     # cli_args: list[str] = Field(default_factory=lambda: sys.argv[1:], exclude=True)
+
+    @classmethod
+    def _split_config_paths_from_cli_args(
+            cls,
+            argv: list[str],
+    ) -> tuple[list[str], list[str]]:
+        """
+        Pull every `--config FILE` out of argv, returning (config_paths,
+        remaining_argv). `--config` is consumed by the config-file source.
+        """
+        # Find the flags for `config_files`
+        config_flags: list[CliFlags] = cls._cli_flags_from_schema("config_files")["config_files"]
+        all_flags = [flag for cli_flags in config_flags for flag in cli_flags.prefixed()]
+        # Create an argparse parser to extract them from the CLI args
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument(*all_flags, action="append", dest="config", default=[])
+        ns, rest = parser.parse_known_args(argv)
+        return ns.config, rest
 
     @override
     @classmethod
@@ -57,9 +63,10 @@ class Config(BaseSettings, ConfigSection):
 
         # Parse config file flags. Remove `--config` from CLI args so
         # it doesn't get parsed by pydantic, use it to parse file sources
-        config_paths, argv = _split_config_paths_from_cli_args(argv)
+        config_paths, argv = cls._split_config_paths_from_cli_args(argv)
         if not config_paths:
             config_paths = settings_cls.model_fields["config_files"].get_default(call_default_factory=True)
+        config_paths = [ pathlib.Path(p).expanduser().resolve() for p in config_paths ]
 
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files.
         cli_settings = CliSettingsSource(
@@ -83,3 +90,5 @@ class Config(BaseSettings, ConfigSection):
             env_settings,
             file_settings,
         )
+
+

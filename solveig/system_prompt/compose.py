@@ -21,7 +21,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import parse_conversation_blob
 from solveig.utils.file import Filesystem

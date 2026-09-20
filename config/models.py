@@ -27,7 +27,7 @@ from typing import (
     get_args, Annotated, Awaitable, Iterator,
 )
 
-from anyio import Path
+import pathlib
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -61,16 +61,80 @@ _MUTABLE = ConfigDict(
 # Used by preserving sections to keep declared-but-missing fields under `model_extra`.
 _MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
 
+
+class PathNotFound(AttributeError):
+    def __init__(self, model: type[BaseModel], path: str) -> None:
+        super().__init__(f"{model.__name__!r} does not contain {path!r}")
+
+class NotASection(AttributeError):
+    def __init__(self, name: str, path: str | None = None) -> None:
+        msg = f"{name} is not a section"
+        if path:
+            msg = f"{path!r}: {msg}"
+        super().__init__(msg)
+
 # TODO: review CLI behavior on init when setting plugin (and other) flags
 #  that land inside dynamic sections. Does my CLI flag change for
 #  `plugins.tools.tree` end up in TreeConfig? What if I reload the plugins?
 
 
-ConfigPath = Annotated[
-    Path,
-    BeforeValidator(lambda value: Path(value)),
+Path = Annotated[
+    pathlib.Path,
+    BeforeValidator(lambda value: pathlib.Path(value)),
     PlainSerializer(str, return_type=str, when_used="json"),
 ]
+
+AbsolutePath = Annotated[
+    pathlib.Path,
+    BeforeValidator(lambda value: pathlib.Path(value).expanduser().resolve()),
+    PlainSerializer(str, return_type=str, when_used="json"),
+]
+
+def _resolve_pattern(value) -> pathlib.Path:
+    path = pathlib.Path(value)
+    # Don't expand bare names, unlike AbsolutePath
+    if str(path) == path.name:
+        return path
+    return path.expanduser().resolve()
+
+PathPattern = Annotated[
+    pathlib.Path,
+    BeforeValidator(_resolve_pattern),
+]
+
+T = typing.TypeVar("T")
+
+CommaSeparated = Annotated[
+    list[T],
+    # Converts "a, bb,c," -> ["a", "bb", "c"]
+    BeforeValidator(
+        lambda value: [
+            token.strip() for token in value.split(",")
+            if token.strip()
+        ] if isinstance(value, str) else value
+    ),
+    # Serializes ["a", "bb", "c"] -> "a,bb,c"
+    PlainSerializer(
+        lambda seq: ",".join(str(token) for token in seq),
+        when_used="json",
+    ),
+]
+
+def _schema_for(model: type[BaseModel], path: str) -> FieldInfo:
+    """Given a dotted `path`, returns the FieldInfo of its leaf on `model`."""
+    *parents, leaf = path.split(".")
+    # Walk the path and validate each segment
+    for segment in parents:
+        if segment not in model.model_fields:
+            raise PathNotFound(model, segment)
+        annotation = model.model_fields[segment].annotation
+        if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
+            raise NotASection(segment, path)
+        model = annotation
+    # Validate the leaf, then return its FieldInfo
+    if leaf not in model.model_fields:
+        raise PathNotFound(model, leaf)
+    return model.model_fields[leaf]
 
 
 def _walk_schema(
@@ -103,6 +167,21 @@ def _walk_schema(
             )
         else:
             yield (path, info)
+
+
+def _unwrap_optional(_type: type) -> tuple[Any, bool]:
+    """
+    Finds whether `_type` is a union of a type with None.
+    Union[X, None] -> (X, True). Anything else -> (_type, False).
+    :param _type:
+    :return:
+    """
+    origin = typing.get_origin(_type)
+    if origin is typing.Union:
+        non_none = [arg for arg in typing.get_args(_type) if arg is not type(None)]
+        if len(non_none) == 1:
+            return (non_none[0], True)
+    return (_type, False)
 
 
 # `eq=False` is important to maintain. Without it, pydantic can try to derive __eq__/__hash__
@@ -168,6 +247,16 @@ class CliFlags:
         # NOTE: Not a real hack, this is the documented way to expose an alternative
         #  constructor with a frozen dataclass. The alternative is using `.of(*flags)`
         object.__setattr__(self, "flags", flags)
+
+    # def kebab_case(self) -> list[str]:
+    #     return [flag.replace("_", "-") for flag in self.flags]
+
+    def prefixed(self) -> list[str]:
+        return [
+            (f"{'-' if len(flag) == 1 else '--'}"
+             f"{flag.replace("_", "-")}")
+            for flag in self.flags
+        ]
 
 
 def matches_prefix(path: str, prefix: str) -> bool:
@@ -260,12 +349,25 @@ class ConfigSection(BaseModel):
         """Walks this sections schema, yielding each field's (name, field_info)."""
         yield from _walk_schema(cls, skip_excluded=skip_excluded)
 
+    @classmethod
+    def schema_for(cls, path):
+        return _schema_for(cls, path)
+
     def walk(self, path) -> Iterator[tuple[str, ConfigSection]]:
         """Walks `path` starting from `self`, yielding each field's (name, owner)."""
         section = self
         for name in path.split("."):
             yield name, section
             section = getattr(section, name)
+
+    @classmethod
+    def editable_fields(cls) -> dict[str, str]:
+        return {
+            path: info.description or path
+            for path, info in cls.walk_schema()
+            # HACK: gone once mcp is a DynamicSection
+            if typing.get_origin(info.annotation) is not dict
+        }
 
     async def set(self, *args, **fields: Any) -> None:
         """
@@ -289,7 +391,7 @@ class ConfigSection(BaseModel):
 
         to_notify: list[tuple[ConfigSection, str]] = []
         for name, value in fields_to_change.items():
-            section, leaf_name = self.owner_of(name)
+            section, leaf_name, _ = self.leaf_parent_name_and_schema(name)
             if (ascendants := section._apply(leaf_name, value)) is not None:
                 to_notify.extend(ascendants)
         if not to_notify:
@@ -357,7 +459,7 @@ class ConfigSection(BaseModel):
             ascendants.append((section, path))
         return ascendants
 
-    # TODO: review need and usage across project, review as_field default
+    # TODO: review need and usage across project
     def get(self, path: str, *, as_json: bool = False) -> Any:
         """
         Find a config field given its path.
@@ -365,7 +467,7 @@ class ConfigSection(BaseModel):
         `as_json` allows serializing the nested Pydantic structure and complex
          objects according to their own `@field_serializer` rules.
         """
-        parent, leaf = self.owner_of(path)
+        parent, leaf, _ = self.leaf_parent_name_and_schema(path)
         if not as_json:
             return getattr(parent, leaf)
         # Serialize the owner object, return the target
@@ -373,37 +475,46 @@ class ConfigSection(BaseModel):
         return dumped[leaf]
 
     @classmethod
-    def _cli_flags_from_schema(cls) -> dict[str, list[str]]:
+    def _cli_flags_from_schema(cls, *paths) -> dict[str, list[CliFlags]]:
         """
         Finds all CLI shortcut flags for a config root, returns a mapping of  maps their paths to their CLI flags.
         :return Mapping of each field's path to their CLI shortcut flags.
         :raises ValueError if 2 fields declare the same shortcut.
         """
-        path_to_flags: dict[str, list[str]] = {}
+        # Generator for fields to check for flags
+        # TODO: this uses model_fields, which doesn't understand paths.
+        #  Add a method to get schema by path
+        fields = (
+            ((path, cls.schema_for(path)) for path in paths)
+            if paths
+            else cls.walk_schema(skip_excluded=False)
+        )
+        path_to_flags: dict[str, list[CliFlags]] = {}
         claimed_by: dict[str, str] = {}
         # `skip_excluded_fields=False`, un-exported fields can still declare CLI shortcuts
-        for path, field_info in cls.walk_schema(skip_excluded=False):
-            cli_flags = [
-                flag for metadata in field_info.metadata
-                if isinstance(metadata, CliFlags)
-                for flag in metadata.flags
+        for path, field_info in fields:
+            all_cli_flags = [
+                flags for flags in field_info.metadata
+                if isinstance(flags, CliFlags)
+                # for flag in metadata.flags
             ]
-            if not cli_flags:
+            if not all_cli_flags:
                 continue
 
             # Check whether this flag was previously used, raise on conflicts
             # NOTE: this design allows defining multiple groups of flags, but nothing
             #  prevents them from defining the same flag 5 times, and then the error
             #  message will say "Flag 'x' is claimed by both MyClass and MyClass".
-            for flag in cli_flags:
-                if flag in claimed_by:
-                    raise ValueError(
-                        f"Flag {flag!r} is claimed by both "
-                        f"{claimed_by[flag]} and {path!r}"
-                    )
-                claimed_by[flag] = path
-            # Add all the found flags to the result map
-            path_to_flags.setdefault(path, []).extend(cli_flags)
+            for cli_flags in all_cli_flags:
+                for flag in cli_flags.flags:
+                    if flag in claimed_by:
+                        raise ValueError(
+                            f"Flag {flag!r} is claimed by both "
+                            f"{claimed_by[flag]} and {path!r}"
+                        )
+                    claimed_by[flag] = path
+                # Add all the found flags to the result map
+                path_to_flags.setdefault(path, []).append(cli_flags)
 
         return path_to_flags
 
@@ -454,11 +565,11 @@ class ConfigSection(BaseModel):
         if failures:
             raise ExceptionGroup("config observers failed", failures)
 
-    def owner_of(self, path: str) -> tuple[ConfigSection, str]:
+    def leaf_parent_name_and_schema(self, path: str) -> tuple[ConfigSection, str, FieldInfo]:
         """
-        Resolves `path` into a leaf, returns its parent and name.
-        Raises AttributeError raised by `walk`, or if somehow
-        the penultimate segment of `path` isn't a ConfigSection.
+        Resolves `path` into a leaf, returns its parent, name and FieldInfo.
+        Raises AttributeError raised by `walk`, or if somehow the penultimate
+         segment of `path` isn't a ConfigSection.
         """
         # Exhaust the walk
         leaf_name, owner_section = "", self
@@ -466,13 +577,14 @@ class ConfigSection(BaseModel):
             pass
         # Confirm the leaf name exists, then return
         if leaf_name not in owner_section:
-            raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
-        return owner_section, leaf_name
+            raise PathNotFound(type(owner_section), leaf_name)
+        return (owner_section, leaf_name, type(owner_section).model_fields[leaf_name])
 
     def _check_path(self, path) -> None:
         """
         Checks whether a path can exist on the tree.
-        Raises AttributeError when reaching a missing entry that does not belong to a DynamicSection.
+        Raises AttributeError when reaching a missing entry that does not
+         belong to a DynamicSection.
         """
         # HACK: re-uses most of the body of `owner_of's checks here.
         #  Review design overall, there should be an easy way to abstract
@@ -488,7 +600,8 @@ class ConfigSection(BaseModel):
                 raise
             return
         if leaf_name not in owner_section:
-            raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
+            raise PathNotFound(type(owner_section), leaf_name)
+            # raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
         """
@@ -531,9 +644,12 @@ class DynamicSection(ConfigSection):
 
         def __getattr__(self, name: str) -> Any: ...
 
+    # TODO: why is there no delete method? How do we remove missing plugins?
+
     @classmethod
     def compose(cls, entries: Mapping[str, type[BaseModel]]) -> None:
         """Install one field per entry, replacing whatever was there.
+        # TODO: bad name, maybe `add`|`add_sections`|`install`? Also, **kwargs.
 
         NOTE: mutates THIS class rather than building a new one. A new class
         would make every live section an instance of the old one, so a caller
