@@ -116,15 +116,6 @@ def _camel_to_snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-CLI_SETTINGS_OPTS: dict[str, Any] = {
-    "cli_exit_on_error": False,
-    "cli_kebab_case": False,
-    "cli_implicit_flags": True,
-    "case_sensitive": True,
-    "cli_enforce_required": False,
-}
-
-
 def error_to_text(error: Exception | str) -> str:
     if isinstance(error, Exception):
         return f"{error.__class__.__name__}: {error}"

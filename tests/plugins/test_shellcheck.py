@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from solveig import bootstrap
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.plugins.discovery import discover_plugins
 from solveig.plugins.hooks import HOOKS, HookKind, clear_hooks, hook_name, hooks_for

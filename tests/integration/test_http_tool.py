@@ -27,7 +27,7 @@ import httpx
 import pytest
 from aiohttp import web
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.tools.core.http import HttpTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

@@ -4,13 +4,13 @@ from pydantic import ValidationError
 pytestmark = pytest.mark.anyio
 
 from solveig import bootstrap
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.mcp_servers.config import MCPServerConfig
 from solveig.system_prompt.config import SystemPromptConfig
 from solveig.interface.tui.config import TuiConfig
 from solveig.api.types import ApiConfig
 from solveig.interface import themes
-from solveig.tools.base import ToolConfig
+from solveig.tools.config import ToolConfig
 from solveig.tools.core.command import CommandConfig
 from solveig.tools.core.http import HttpConfig
 
@@ -109,7 +109,7 @@ async def test_http_and_command_inherit_enabled_from_base():
 
 
 async def test_system_prompt_defaults():
-    from solveig.config import DEFAULT_SYSTEM_PROMPT
+    from config import DEFAULT_SYSTEM_PROMPT
 
     sp = SystemPromptConfig()
     assert sp.content == DEFAULT_SYSTEM_PROMPT

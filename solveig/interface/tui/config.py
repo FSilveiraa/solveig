@@ -12,7 +12,7 @@ from typing import Annotated
 
 from pydantic import Field
 
-from solveig.config.models import Choice, ConfigSection
+from config.models import Choice, ConfigSection
 from solveig.interface.themes import (
     CODE_THEMES,
     DEFAULT_THEME,

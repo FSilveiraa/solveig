@@ -19,7 +19,7 @@ from solveig.api.types import (
     OpenAI,
     resolve_api_type,
 )
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from tests.mocks import MockInterface
 
 

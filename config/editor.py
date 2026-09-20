@@ -20,7 +20,7 @@ from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
 
 from . import DEFAULT_CONFIG_PATHS, sources
-from .config import SolveigConfig, display_config_value
+from solveig.config import SolveigConfig, display_config_value
 
 
 # ---------------------------------------------------------------------------
@@ -269,13 +269,19 @@ async def config_save(
     :param full: Whether to export the entire config, including defaults, or
      just the explicitly set parameters
     """
-    target = path or (config.config_files or DEFAULT_CONFIG_PATHS)[0]
+    # target = path or (config._config_files or DEFAULT_CONFIG_PATHS)[0]
+    if not (config_save_path := path):
+        if config.config_files:
+            config_save_path = config.config_files[-1]
+        else:
+            raise ValueError("Cannot save config, no path was provided and no file was previously loaded.")
+
     data = config.model_dump(
         mode="json",
         exclude_unset=not full
     )
     try:
-        sources.save_config(data, target)
+        sources.save_config(data, config_save_path)
     except anyconfig.UnknownFileTypeError:
         await interface.print(
             "Could not save config to a file with an invalid extension. The exported config format is defined by the path extension. Use .json, .yaml or .toml",
@@ -284,4 +290,4 @@ async def config_save(
     except OSError as e:
         await interface.print(f"Could not save config: {e}", level=Level.ERROR)
     else:
-        await interface.print(f"Config saved to {target}", level=Level.SUCCESS)
+        await interface.print(f"Config saved to {config_save_path}", level=Level.SUCCESS)

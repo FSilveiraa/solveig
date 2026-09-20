@@ -22,7 +22,7 @@ from typing import Any
 import anyio
 from pydantic import BaseModel
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
     Level,

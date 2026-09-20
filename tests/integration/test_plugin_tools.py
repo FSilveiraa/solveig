@@ -5,10 +5,10 @@ from unittest.mock import patch
 import pytest
 
 from solveig import bootstrap
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.plugins.discovery import discover_plugins
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
-from solveig.tools.base import ToolConfig
+from solveig.tools.config import ToolConfig
 
 pytestmark = pytest.mark.anyio
 

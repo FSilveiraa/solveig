@@ -4,7 +4,7 @@ import anyconfig
 import pytest
 
 from solveig import bootstrap
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.utils.file import Filesystem
 from tests.mocks import DEFAULT_CONFIG
 
@@ -83,11 +83,11 @@ async def test_direct_construction_is_hermetic(tmp_path, monkeypatch):
     )
     c = SolveigConfig(cli_args=[], api={"url": "http://direct"})
     assert c.api.url == "http://direct"
-    assert c.prompt == "" and c.config_files == []
+    assert c.prompt == "" and c._config_files == []
 
 
 async def test_system_prompt_is_its_own_category():
-    from solveig.config import DEFAULT_SYSTEM_PROMPT
+    from config import DEFAULT_SYSTEM_PROMPT
 
     c = await bootstrap.parse_config_and_prompt(["--url", "http://x"])
     assert c.system_prompt.content == DEFAULT_SYSTEM_PROMPT
@@ -263,5 +263,5 @@ async def test_build_with_no_config_file_anywhere(tmp_path, monkeypatch):
 
     # Nothing was found, so nothing should be recorded as a loaded file --
     # and crucially no unexpanded '~' path should survive into config_files.
-    assert not any("~" in path for path in config.config_files)
+    assert not any("~" in path for path in config._config_files)
     assert config._declared_fields == set()

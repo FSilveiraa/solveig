@@ -18,7 +18,7 @@ from pydantic_ai.models import Model
 from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
@@ -309,7 +309,8 @@ async def run_async(
         # plugins.tools/hooks - this INSTANCE was built before it and still
         # holds whatever the old schema made of its plugin config, which for an
         # undeclared section is a raw dict. Same reason reload_plugins rebuilds.
-        config.rebuild_plugin_sections()
+        config.plugins.tools.rebuild()
+        config.plugins.hooks.rebuild()
 
     assert config is not None  # narrow for mypy after the if-not-config branch
     user_prompt = user_prompt or config.prompt.strip()

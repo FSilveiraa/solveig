@@ -23,7 +23,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import RunUsage
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager
 from solveig.utils.file import Filesystem

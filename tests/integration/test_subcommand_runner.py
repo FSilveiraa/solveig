@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from solveig.api.client import Client
-from solveig.config import SolveigConfig
-from solveig.config.editor import config_list  # noqa: F401 — triggers @subcommand
+from config import SolveigConfig
+from config.editor import config_list  # noqa: F401 — triggers @subcommand
 from solveig.mcp_servers.client import mcp_list  # noqa: F401 — triggers @subcommand
 from solveig.session.conversation import Conversation
 from solveig.session.manager import SessionManager, session_list  # noqa: F401

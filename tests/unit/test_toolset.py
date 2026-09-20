@@ -32,7 +32,7 @@ from solveig.agent import (
     build_tool_execution_capability,
     run_turn,
 )
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.exceptions import PluginException
 from solveig.plugins.hooks import after_tool, before_tool, clear_hooks

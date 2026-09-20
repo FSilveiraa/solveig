@@ -197,7 +197,7 @@ These are not style preferences — they are the seams the codebase is built on.
 
 ## Config — nested pydantic-settings
 
-`SolveigConfig(BaseSettings)` (`config/config.py`) with nested sub-models in
+`SolveigConfig(BaseSettings)` (`solveig/config.py`) with nested sub-models in
 `config/models.py`: `api`, `system_prompt`, `tools`, `plugins`, `mcp`, `session`,
 `interface`, plus top-level `briefing`/`min_disk_space_left`/`auto_allowed_paths`/
 `ignore_paths`/`disable_autonomy`/`stream`.
@@ -220,7 +220,7 @@ These are not style preferences — they are the seams the codebase is built on.
   PATHS so a key that moved between sections (`interface.theme` →
   `interface.tui.theme`) reports the same way a pre-nesting flat key does.
 - **Runtime schema composition:** config never hand-enumerates tools.
-  `_compose_section` (`config/config.py`) builds each section; `bootstrap.py` is what
+  `_compose_section` (`solveig/config.py`) builds each section; `bootstrap.py` is what
   feeds it, because config must not import the tool or plugin packages back —
   `compose_core_tools()` from `CORE_TOOLS`, and `compose_plugin_sections()` for
   `config.plugins.tools`/`config.plugins.hooks`, the latter subscribed to plugin
@@ -294,7 +294,7 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
   closures too — it is app policy. The observer that decides *what* to show, decodes
   parts and builds those closures is `session/display.py`, not the interface.
 - `interface/tui/` — the Textual materialization. Named for what it is: "CLI"
-  already means argv parsing in this tree (`cli_args`, `CliPositionalArg`,
+  already means argv parsing in this tree (`_cli_args`, `CliPositionalArg`,
   `CliSettingsSource`, `from_cli_tokens`), and the package name matches its config
   section, `interface.tui.*`. `interface.py` holds `TerminalInterface` (the root:
   owns the app, status, stats, prompts, lifecycle) and `GroupInterface` (a scoped

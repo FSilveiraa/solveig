@@ -96,14 +96,14 @@ class TestDefaultSystemPrompt:
         "phrase", ["Response format", "`comment`", "comment:", "tools:"]
     )
     def test_does_not_describe_the_retired_response_schema(self, phrase):
-        from solveig.config import DEFAULT_SYSTEM_PROMPT
+        from config import DEFAULT_SYSTEM_PROMPT
 
         assert phrase not in DEFAULT_SYSTEM_PROMPT
 
     def test_names_the_todo_tool_as_it_is_actually_registered(self):
         """The prompt tells the model to call `todo`; a rename would make that
         instruction point at nothing, and nothing else would fail."""
-        from solveig.config import DEFAULT_SYSTEM_PROMPT
+        from config import DEFAULT_SYSTEM_PROMPT
         from solveig.tools.available import CORE_TOOLS
 
         assert "todo" in {tool.tool_name() for tool in CORE_TOOLS}

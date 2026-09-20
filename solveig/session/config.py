@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from solveig.config.models import ConfigSection
+from config.models import ConfigSection
 from solveig.utils.file import Filesystem
 
 

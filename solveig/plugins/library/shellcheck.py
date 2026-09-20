@@ -8,11 +8,11 @@ import tempfile
 
 from pydantic import Field
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import before_tool
-from solveig.tools.base import ToolConfig
+from solveig.tools.config import ToolConfig
 from solveig.tools.core.command import CommandTool
 
 DANGEROUS_PATTERNS = [

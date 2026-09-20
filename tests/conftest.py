@@ -209,7 +209,7 @@ def default_config_file():
     empty the default-search list for the test run so ambient config never
     leaks in; an explicit `--config <path>` still short-circuits the search and
     reads for real (those tests are marked `no_file_mocking`)."""
-    from solveig.config import sources
+    from config import sources
 
     with patch.object(sources, "DEFAULT_CONFIG_SEARCH", []):
         yield

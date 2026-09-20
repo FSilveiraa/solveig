@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from solveig.config.models import ConfigSection
+from config.models import ConfigSection
 from solveig.interface.tui.config import TuiConfig
 from solveig.interface.web.config import WebConfig
 from solveig.interface.wire.config import BroadcastConfig

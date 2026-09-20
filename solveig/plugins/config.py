@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from solveig.config.models import ConfigSection, PreservingSection
+from config.models import ConfigSection, PreservingSection
 from solveig.utils.file import Filesystem
 
 DEFAULT_PLUGIN_PATHS: list[str] = [
@@ -21,14 +21,14 @@ DEFAULT_PLUGIN_PATHS: list[str] = [
 ]
 
 
-class PluginTools(PreservingSection):
+class PluginToolsConfig(PreservingSection):
     """
     Placeholder for `config.plugins.tools` — composed from discovered plugin tools
     Tools declare config types at class declaration (MyTool(BaseTool[MyConfig])).
     """
 
 
-class PluginHooks(PreservingSection):
+class PluginHooksConfig(PreservingSection):
     """
     Placeholder for `config.plugins.hooks` — composed from discovered plugin hooks.
     Hooks declare config types through their class's `config_model`
@@ -52,8 +52,8 @@ class PluginsConfig(ConfigSection):
     # TODO: review plugin config structure, does the tools/hooks distinction still make sense,
     #  should we instead simplify by enabling/disabling everything under a plugin's file,
     #  or does an allow-by-default + per-tool disabling policy make more sense
-    tools: PluginTools = Field(default_factory=PluginTools)
-    hooks: PluginHooks = Field(default_factory=PluginHooks)
+    tools: PluginToolsConfig = Field(default_factory=PluginToolsConfig)
+    hooks: PluginHooksConfig = Field(default_factory=PluginHooksConfig)
 
     @field_validator("paths", mode="before")
     @classmethod

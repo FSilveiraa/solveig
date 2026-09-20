@@ -1,7 +1,7 @@
 import anyconfig
 import pytest
 
-from solveig.config import sources
+from config import sources
 
 
 def test_load_paths_highest_first_wins(tmp_path):

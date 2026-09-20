@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from solveig.api.client import Client
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 from solveig.session.conversation import Conversation
 from solveig.subcommands.base import (

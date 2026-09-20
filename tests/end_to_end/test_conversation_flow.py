@@ -18,7 +18,7 @@ import pytest
 from anyio import Path
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.run import run_async
 from tests.mocks import DEFAULT_CONFIG, MockInterface, create_mock_model
 

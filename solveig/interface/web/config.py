@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from solveig.config.models import ConfigSection
+from config.models import ConfigSection
 
 
 class WebConfig(ConfigSection):

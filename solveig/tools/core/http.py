@@ -7,15 +7,15 @@ import httpx
 from pydantic import ByteSize, Field, field_serializer, field_validator
 from pydantic_settings import CliPositionalArg
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base import Level
 from solveig.tools.base import (
     BaseTool,
     ConsentDecision,
-    ToolConfig,
     check_path_security,
 )
+from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path

@@ -5,7 +5,7 @@ import typing
 import pytest
 
 from solveig import bootstrap
-from solveig.config.editor import _parse_field_value, _unwrap_optional, editable_fields
+from config.editor import _parse_field_value, _unwrap_optional, editable_fields
 from tests.mocks import DEFAULT_CONFIG
 
 pytestmark = pytest.mark.anyio

@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from pydantic_settings.exceptions import SettingsError
 
 from solveig.api.client import Client
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.session.conversation import Conversation

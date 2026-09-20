@@ -20,7 +20,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast, overload
 
 from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
-from solveig.tools.base import BaseTool, ToolConfig
+from solveig.tools.base import BaseTool
+from solveig.tools.config import ToolConfig
 from solveig.tools.orchestration import tool_subcommand
 
 

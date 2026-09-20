@@ -27,7 +27,7 @@ from unittest.mock import patch
 import pytest
 
 from solveig import bootstrap
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.plugins.discovery import clear_plugins, discover_plugins
 from solveig.plugins.hooks import (
     HOOKS,

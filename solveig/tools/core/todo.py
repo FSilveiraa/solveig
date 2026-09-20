@@ -18,7 +18,7 @@ from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
 
 if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
+    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 

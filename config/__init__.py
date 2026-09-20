@@ -14,15 +14,15 @@ DEFAULT_CONFIG_PATHS: list[str] = [
     "~/.solveig/config.yaml",
 ]
 
-from .models import ConfigObserver
-from .config import (  # noqa: E402 — after the static defaults above so .config can import them back
-    SolveigConfig,
-    display_config_value,
-)
+from .config import Config
+from .models import ConfigSection, DynamicSection, PreservingSection, ConfigObserver
+
 
 __all__ = [
-    "SolveigConfig",
-    "ConfigObserver",
     "DEFAULT_CONFIG_PATHS",
-    "display_config_value",
+    "Config",
+    "ConfigObserver",
+    "ConfigSection",
+    "DynamicSection",
+    "PreservingSection",
 ]

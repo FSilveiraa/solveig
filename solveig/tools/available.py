@@ -21,7 +21,7 @@ from typing import Any
 from pydantic_ai import FunctionToolset, RunContext, ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.mcp_servers.config import MCPServerConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers import MCP_CONNECTIONS

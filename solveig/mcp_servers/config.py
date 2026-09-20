@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
-from solveig.config.models import ConfigSection
+from config.models import ConfigSection
 
 # An MCP server name is announced to the model as `<name>_<tool>`, so it is held
 # to the charset tool names are allowed across providers — letters, digits, `_`

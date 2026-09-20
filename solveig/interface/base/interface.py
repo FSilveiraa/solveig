@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Any
 
 from anyio import CancelScope
 
-from solveig.config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base.actions import MessageActions, Role
 from solveig.interface.base.widgets import DiffBox, MessageBox, TextBox, TreeBox

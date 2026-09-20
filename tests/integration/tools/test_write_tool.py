@@ -25,7 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.tools.core.write import WriteTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

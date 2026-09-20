@@ -8,8 +8,8 @@ coarse string → Python coercion for CLI-typed values. The old
 
 import pytest
 
-from solveig.config import SolveigConfig
-from solveig.config.editor import parse_config_value
+from config import SolveigConfig
+from config.editor import parse_config_value
 
 pytestmark = pytest.mark.anyio
 

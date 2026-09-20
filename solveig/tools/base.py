@@ -20,14 +20,14 @@ from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
-from solveig.config.models import ConfigSection
 from solveig.context import SolveigContext
 from solveig.interface.base import Level
+from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
@@ -35,7 +35,7 @@ from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
 if TYPE_CHECKING:
     from anyio import Path
 
-    from solveig.config import SolveigConfig
+    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
@@ -84,19 +84,6 @@ async def warn_ignored_within(
         f"ignored path(s) inside {Filesystem.get_simple_path(abs_path)}: {shown}",
         level=Level.WARNING,
     )
-
-
-class ToolConfig(ConfigSection):
-    """Base config every tool's config extends — the universal `enabled` flag
-    (on by default). A tool with extra settings subclasses it (e.g. `HttpConfig`
-    in http.py) and names it in its `BaseTool[HttpConfig]` generic argument; a
-    plugin tool does the same.
-    `bootstrap.compose_core_tools()` reads each tool's `config_model` to build
-    the `tools` section at runtime, so core and plugin tools are identical here —
-    which is what makes "add a core tool" == "add a plugin tool"."""
-
-    # arbitrary_types_allowed for subclasses carrying e.g. re.Pattern (CommandConfig).
-    enabled: bool = Field(default=True, description="Enable this tool")
 
 
 # The private marker `CliPositionalArg[T]` injects into a field's Annotated

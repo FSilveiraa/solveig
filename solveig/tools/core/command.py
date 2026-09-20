@@ -8,12 +8,13 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.exceptions import UserCancel
 from solveig.interface.base import Level
-from solveig.tools.base import BaseTool, ToolConfig
+from solveig.tools.base import BaseTool
+from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 if TYPE_CHECKING:
-    from solveig.config import SolveigConfig
+    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 

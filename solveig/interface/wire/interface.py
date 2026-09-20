@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
     Level,

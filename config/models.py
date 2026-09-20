@@ -372,6 +372,41 @@ class ConfigSection(BaseModel):
         dumped = parent.model_dump(mode="json", include={leaf})
         return dumped[leaf]
 
+    @classmethod
+    def _cli_flags_from_schema(cls) -> dict[str, list[str]]:
+        """
+        Finds all CLI shortcut flags for a config root, returns a mapping of  maps their paths to their CLI flags.
+        :return Mapping of each field's path to their CLI shortcut flags.
+        :raises ValueError if 2 fields declare the same shortcut.
+        """
+        path_to_flags: dict[str, list[str]] = {}
+        claimed_by: dict[str, str] = {}
+        # `skip_excluded_fields=False`, un-exported fields can still declare CLI shortcuts
+        for path, field_info in cls.walk_schema(skip_excluded=False):
+            cli_flags = [
+                flag for metadata in field_info.metadata
+                if isinstance(metadata, CliFlags)
+                for flag in metadata.flags
+            ]
+            if not cli_flags:
+                continue
+
+            # Check whether this flag was previously used, raise on conflicts
+            # NOTE: this design allows defining multiple groups of flags, but nothing
+            #  prevents them from defining the same flag 5 times, and then the error
+            #  message will say "Flag 'x' is claimed by both MyClass and MyClass".
+            for flag in cli_flags:
+                if flag in claimed_by:
+                    raise ValueError(
+                        f"Flag {flag!r} is claimed by both "
+                        f"{claimed_by[flag]} and {path!r}"
+                    )
+                claimed_by[flag] = path
+            # Add all the found flags to the result map
+            path_to_flags.setdefault(path, []).extend(cli_flags)
+
+        return path_to_flags
+
     async def _notify_changed(self, paths: frozenset[str]) -> None:
         """Notify all observers, filtered by registered config path.
 

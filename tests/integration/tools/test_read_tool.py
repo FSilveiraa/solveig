@@ -17,7 +17,7 @@ not `execute()`, so header assertions target it directly rather than the
 
 import pytest
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.tools.core.read import ReadTool
 from solveig.utils.file import FileMetadata
 from tests.mocks import DEFAULT_CONFIG, MockInterface

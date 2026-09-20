@@ -27,7 +27,7 @@ from fastmcp.client.transports import StdioTransport
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.mcp_servers.config import MCPServerConfig
 from solveig.context import SolveigContext, get_introspection_context
 from solveig.exceptions import UserCancel

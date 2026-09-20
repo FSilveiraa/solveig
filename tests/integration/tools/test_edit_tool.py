@@ -18,7 +18,7 @@ tests call `display_header` directly - that's the unit actually under test.
 
 import pytest
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.tools.core.edit import EditTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

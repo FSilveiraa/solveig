@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.tools.core.move import MoveTool
 from tests.mocks import DEFAULT_CONFIG, MockInterface
 

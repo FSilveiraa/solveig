@@ -40,7 +40,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import HookKind, hook_name, hooks_for

@@ -22,7 +22,7 @@ from pydantic import Field, SecretStr, field_serializer
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
-from solveig.config.models import ConfigSection, Choice, CliFlags
+from config.models import ConfigSection, Choice, CliFlags
 
 
 @dataclass

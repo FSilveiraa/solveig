@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
-from solveig.config import SolveigConfig
+from config import SolveigConfig
 from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
 from solveig.tools.result import ToolResult

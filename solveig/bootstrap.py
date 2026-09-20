@@ -18,21 +18,25 @@ against.
 
 from __future__ import annotations
 
-from solveig.config import SolveigConfig
-from solveig.config.editor import prompt_for_field
+from config import SolveigConfig
+from config.editor import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
+from solveig.plugins.config import PluginToolsConfig, PluginHooksConfig
 from solveig.plugins.discovery import ON_SCANNED, discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
+from solveig.tools.config import CoreToolsConfig
 from solveig.tools.core import CORE_TOOLS
 
 
 def compose_core_tools() -> None:
     """Feed config the core tool list — one config field per tool."""
-    SolveigConfig.compose_tools(
-        [(tool.tool_name(), tool.config_model) for tool in CORE_TOOLS]
-    )
+    CoreToolsConfig.compose({
+        tool.tool_name(): tool.config_model
+        for tool in CORE_TOOLS
+    })
+
 
 
 def compose_plugin_sections() -> None:
@@ -48,10 +52,11 @@ def compose_plugin_sections() -> None:
     Config cannot subscribe to this itself: it is imported by nearly everything
     and must not import the plugin packages back. So the wiring lives here, one
     layer above both, and neither module learns about the other."""
-    SolveigConfig.compose_plugin_tools(
-        [(plugin_tool_name(e), config_model_of(e)) for e in PLUGIN_TOOLS]
-    )
-    SolveigConfig.compose_plugin_hooks(list(hooks_config_map().items()))
+    PluginToolsConfig.compose({
+        plugin_tool_name(e): config_model_of(e)
+        for e in PLUGIN_TOOLS
+    })
+    PluginHooksConfig.compose(hooks_config_map())
 
 
 ON_SCANNED.append(compose_plugin_sections)
@@ -76,10 +81,9 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     # two by hand any more - and neither does anything else that scans.
     discover_plugins(config.plugins.paths)
 
-    # Only the LIVE config needs bringing up to the new classes: recomposition
-    # swaps the class behind plugins.tools/hooks, and this instance still holds
-    # objects of the old one. It keeps its identity, and its subscriptions.
-    config.rebuild_plugin_sections()
+    # Re-build the sections
+    config.plugins.tools.rebuild()
+    config.plugins.hooks.rebuild()
 
     # NOTE: nothing re-registers subcommands here. `discover_plugins` empties the
     # plugin store before the rescan, and every `@tool`/`@subcommand` in a
