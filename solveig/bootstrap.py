@@ -18,7 +18,7 @@ against.
 
 from __future__ import annotations
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from config.editor import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
@@ -79,11 +79,9 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     """
     # Recomposition rides on the scan (ON_SCANNED), so this does not pair the
     # two by hand any more - and neither does anything else that scans.
+    # compose_plugin_sections() itself rebuilds every live instance now, so
+    # there is nothing left to do here.
     discover_plugins(config.plugins.paths)
-
-    # Re-build the sections
-    config.plugins.tools.rebuild()
-    config.plugins.hooks.rebuild()
 
     # NOTE: nothing re-registers subcommands here. `discover_plugins` empties the
     # plugin store before the rescan, and every `@tool`/`@subcommand` in a

@@ -9,13 +9,17 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
-from config.models import ConfigSection
+from config.models import ConfigSection, DynamicSection
 
 # An MCP server name is announced to the model as `<name>_<tool>`, so it is held
 # to the charset tool names are allowed across providers — letters, digits, `_`
 # and `-`. Notably NOT `.`, which every dotted-path language in this tree treats
 # as a separator.
 _MCP_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+class MCPConfigSection(DynamicSection):
+    """Dynamic section where each entry is a mapping of server_name: server_config"""
 
 
 class MCPServerConfig(ConfigSection):

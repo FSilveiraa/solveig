@@ -19,11 +19,13 @@ from __future__ import annotations
 import asyncio
 import operator
 import typing
+import weakref
 from collections.abc import Mapping, Callable
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
+    ClassVar,
     get_args, Annotated, Awaitable, Iterator,
 )
 
@@ -634,30 +636,62 @@ class DynamicSection(ConfigSection):
     Base for config sections built at runtime (namely from a tool/hook list).
 
     Placeholder classes (CoreToolsConfig, PluginTools) subclass this;
-    `compose` installs their real fields, one per tool or hook.
+    `compose` installs their real fields, one per tool or hook, and
+    auto-rebuilds every live instance right there - a class's schema and
+    any instance already built from it can never drift apart, since there
+    is no separate step for a caller to remember or forget.
 
     The TYPE_CHECKING `__getattr__` types untyped `config.tools.<name>` reads
     as `Any` at declaration time; the typed path is a tool's `self.settings(config)`.
     """
+
+    # NOTE: each subclass needs its OWN registry - a class attribute holding a
+    #  mutable container is otherwise shared by every subclass, which would
+    #  rebuild PluginToolsConfig instances when PluginHooksConfig composes.
+    # Uses a weakref so it's possible to reference each instance without
+    #  the reference keeping them from being deleted when no longer held
+    #  by anything else. WeakSet would need to hash, which BaseModel can't
+    #  do by default apparently, a dict only needs to hash keys.
+    _instances: ClassVar[weakref.WeakValueDictionary]
 
     if TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any: ...
 
     # TODO: why is there no delete method? How do we remove missing plugins?
+    #  Confirmed: compose() shrinking the entries then auto-rebuilding a live,
+    #  non-preserving (extra="forbid") instance raises extra_forbidden on the
+    #  stale field - PreservingSection (extra="allow") already handles this by
+    #  keeping it under model_extra. A future non-preserving DynamicSection
+    #  whose entries can shrink needs this fixed first.
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        cls._instances = weakref.WeakValueDictionary()
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        # NOTE: pydantic models are unhashable by default (no __hash__ once
+        #  __eq__ is generated - see Choice's own eq=False above), so a
+        #  WeakSet can't hold them directly. id() as the key sidesteps
+        #  hashing the instance itself; only a dict's VALUES are held weakly.
+        type(self)._instances[id(self)] = self
 
     @classmethod
-    def compose(cls, entries: Mapping[str, type[BaseModel]]) -> None:
-        """Install one field per entry, replacing whatever was there.
-        # TODO: bad name, maybe `add`|`add_sections`|`install`? Also, **kwargs.
+    def _install_fields(cls, entries: Mapping[str, type[BaseModel]]) -> None:
+        """Install one field per entry, replacing whatever was there. Mutates
+        THIS class rather than building a new one - a new class would make
+        every live section an instance of the old one, so a caller holding
+        `config.plugins.tools` would be left with a detached object every
+        time the plugin set changed. Nothing a module holds goes stale.
 
-        NOTE: mutates THIS class rather than building a new one. A new class
-        would make every live section an instance of the old one, so a caller
-        holding `config.plugins.tools` would be left with a detached object
-        every time the plugin set changed. Nothing a module holds goes stale.
-
-        Sections already built are not updated here - call `rebuild` on them,
-        from wherever the config is in scope.
+        Does NOT touch any other live instance - see `compose` for that.
+        A section composing itself from its OWN data (one instance, its own
+        entries) uses this directly: calling `compose` from inside a
+        validator on the same class would recurse (compose rebuilds every
+        instance, which re-runs that very validator), and syncing OTHER
+        instances would be actively wrong when different instances legitimately
+        want different entries (MCP servers, not a shared environment fact).
         """
         cls.model_fields.clear()
         for name, model in entries.items():
@@ -666,6 +700,22 @@ class DynamicSection(ConfigSection):
                 default_factory=model,
             )
         cls.model_rebuild(force=True)
+
+    @classmethod
+    def compose(cls, entries: Mapping[str, type[BaseModel]]) -> None:
+        """`_install_fields`, plus rebuilding every OTHER live instance so
+        nothing is left validated against a schema this class no longer has.
+
+        For sections that describe a SHARED environment fact (what tools or
+        plugins exist) - every live instance should converge on the same
+        entries, which is exactly what compose provides. Called from outside
+        the section being composed (`bootstrap.py`, never a validator on
+        CoreToolsConfig/PluginToolsConfig itself) — composing from within
+        would recurse through this same rebuild loop.
+        """
+        cls._install_fields(entries)
+        for instance in list(cls._instances.values()):
+            instance.rebuild()
 
     def rebuild(self) -> None:
         """Re-validate this section against the fields `compose` just installed.

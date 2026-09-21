@@ -25,7 +25,7 @@ from config.models import (
     PreservingSection, CliFlags, CommaSeparated, PathPattern, AbsolutePath,
 )
 from solveig.interface.config import InterfaceConfig
-from solveig.mcp_servers.config import MCPServerConfig
+from solveig.mcp_servers.config import MCPServerConfig, MCPConfigSection
 from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
@@ -115,7 +115,7 @@ class SolveigConfig(Config):
     # ------------------------------------------------------------
     api: ApiConfig = Field(default_factory=ApiConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
-    mcp: dict[str, MCPServerConfig] = Field(default_factory=dict)
+    mcp: MCPConfigSection = Field(default_factory=MCPConfigSection)
     tools: CoreToolsConfig = Field(default_factory=CoreToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)

@@ -16,32 +16,52 @@ triggers it but an explicit import of this module.
 
 import warnings
 
+from pydantic import Field
+
+from config import ConfigSection
 from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import tool_subcommand
 
-from .command import CommandTool
+from .command import CommandTool, CommandConfig
 from .copy import CopyTool
 from .delete import DeleteTool
 from .edit import EditTool
-from .http import HttpTool
+from .http import HttpTool, HttpConfig
 from .move import MoveTool
 from .read import ReadTool
 from .todo import TodoTool
 from .write import WriteTool
+from ..config import ToolConfig
 
-CORE_TOOLS: list[type[BaseTool]] = [
-    ReadTool,
-    WriteTool,
-    EditTool,
-    DeleteTool,
-    CopyTool,
-    MoveTool,
-    CommandTool,
-    HttpTool,
-    TodoTool,
-]
 
+# CORE_TOOLS: list[type[BaseTool]] = [
+#     ReadTool,
+#     WriteTool,
+#     EditTool,
+#     DeleteTool,
+#     CopyTool,
+#     MoveTool,
+#     CommandTool,
+#     HttpTool,
+#     TodoTool,
+# ]
+
+
+# TODO: second source-of-truth for tool names
+class CoreToolsConfig(ConfigSection):
+    read: ToolConfig = Field(default_factory=ToolConfig)
+    write: ToolConfig = Field(default_factory=ToolConfig)
+    edit: ToolConfig = Field(default_factory=ToolConfig)
+    delete: ToolConfig = Field(default_factory=ToolConfig)
+    copy: ToolConfig = Field(default_factory=ToolConfig)
+    move: ToolConfig = Field(default_factory=ToolConfig)
+    command: CommandConfig = Field(default_factory=CommandConfig)
+    http: HttpConfig = Field(default_factory=HttpConfig)
+    todo: ToolConfig = Field(default_factory=ToolConfig)
+
+
+# TODO: move this to some class validator or something
 for _tool in CORE_TOOLS:
     _sub = tool_subcommand(_tool)
     if _sub is not None:

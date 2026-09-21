@@ -154,7 +154,10 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         # repeats its config type. A bare `BaseTool` subclass keeps the default.
         args = getattr(cls, "__pydantic_generic_metadata__", {}).get("args", ())
         if args and isinstance(args[0], type) and issubclass(args[0], ToolConfig):
+            # This tool class points to its tool config class
             cls.config_model = args[0]
+            # The reverse pointer: the tool config class points to the tool class
+            args[0].tool_cls = cls
 
     @classmethod
     def tool_name(cls) -> str:

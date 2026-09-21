@@ -304,13 +304,10 @@ async def run_async(
         # Scan here rather than in _display_setup: the plugin set has to match
         # this config before anything reads it, and _display_setup runs after
         # the interface is up, which is far too late for a config already in use.
+        # The scan recomposes the schema (ON_SCANNED -> compose_plugin_sections),
+        # which now rebuilds every live instance itself - including this config,
+        # already built before the scan - so there is nothing further to do here.
         discover_plugins(config.plugins.paths)
-        # The scan recomposes the schema, but that swaps the CLASS behind
-        # plugins.tools/hooks - this INSTANCE was built before it and still
-        # holds whatever the old schema made of its plugin config, which for an
-        # undeclared section is a raw dict. Same reason reload_plugins rebuilds.
-        config.plugins.tools.rebuild()
-        config.plugins.hooks.rebuild()
 
     assert config is not None  # narrow for mypy after the if-not-config branch
     user_prompt = user_prompt or config.prompt.strip()
