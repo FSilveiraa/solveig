@@ -5,9 +5,10 @@ from __future__ import annotations
 import fnmatch
 import re
 import shlex
+# from typing import Annotated
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, PlainValidator
 
 from config.models import ConfigSection, DynamicSection
 
@@ -16,10 +17,6 @@ from config.models import ConfigSection, DynamicSection
 # and `-`. Notably NOT `.`, which every dotted-path language in this tree treats
 # as a separator.
 _MCP_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
-
-
-class MCPConfigSection(DynamicSection):
-    """Dynamic section where each entry is a mapping of server_name: server_config"""
 
 
 class MCPServerConfig(ConfigSection):
@@ -36,6 +33,15 @@ class MCPServerConfig(ConfigSection):
     #  and at least pinning with a test. In which situations is an MCP config even disagreeing
     #  about being dict vs model? Is re-deriving an MCP server's name a necessary thing?
 
+    # name: Annotated[
+    #     str,
+    #     PlainValidator(
+    #         lambda v: assert _MCP_NAME.match(v), (
+    #             f"MCP server name {v!r} is not a valid identifier. "
+    #             "Server names may use letters, digits, '_' and '-'."
+    #         )
+    #     )
+    # ] = Field(
     name: str = Field(
         # exclude=True` is necessary since `SolveigConfig._normalize_mcp` re-creates the value
         # at runtime, replaces it here and indexes the config entry by it. If this section's `name`
@@ -95,3 +101,7 @@ class MCPServerConfig(ConfigSection):
         ):
             return False
         return True
+
+
+class MCPConfigSection(DynamicSection[MCPServerConfig]):
+    """Dynamic section where each entry is a mapping of server_name: server_config"""

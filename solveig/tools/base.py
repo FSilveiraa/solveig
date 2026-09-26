@@ -30,7 +30,7 @@ from solveig.interface.base import Level
 from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
-from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
+from solveig.utils.misc import _camel_to_snake
 
 if TYPE_CHECKING:
     from anyio import Path
@@ -132,46 +132,39 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     # so the tool contract stays unchanged while `/read foo` still works.
     cli_defaults: ClassVar[dict[str, Any]] = {}
 
-    # The tool's config type, read by `compose_*_tools()` to build this tool's
-    # slice of `config.tools` / `config.plugins.tools`. AUTO-DERIVED from the
-    # `BaseTool[SomeConfig]` generic arg in `__pydantic_init_subclass__` below (so
-    # the config type is declared ONCE, in the generic — never repeated here).
-    # Defaults to bare `ToolConfig` (just `enabled`) for a plain `BaseTool`; a
-    # plugin callable, having no generic, sets it via `@tool(config_model=...)`,
-    # which also overrides the derived value on a class.
-    config_model: ClassVar[type[ToolConfig]] = ToolConfig
+    # This tool's config class.
+    #  `MyTool(BaseTool[MyConfig])` -> `MyTool.config_model == MyConfig`
+    #  `MyTool(BaseTool)` -> `MyTool.config_model == ToolConfig[MyTool]`
+    config_model: ClassVar[type[ToolConfig]]
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        # Runs *after* pydantic has populated `model_fields` (unlike
-        # `__init_subclass__`, where they're not yet available) - so
-        # `_generate_usage()` can see the fields.
         super().__pydantic_init_subclass__(**kwargs)
+        metadata = cls.__pydantic_generic_metadata__
+        # NOTE: pydantic runs this hook for the parametrized
+        #  `BaseTool[MyConfig]` class too, and a subclass's own metadata
+        #  comes back empty — so the config type is recorded here, and the
+        #  real subclass inherits it.
+        if metadata["origin"] is not None:
+            cls.config_model = metadata["args"][0]
+            return
 
-        # Recover the concrete `BaseTool[SomeConfig]` argument from pydantic's own
-        # generic metadata (populated at subclass-init time) and record it as
-        # `config_model` — the runtime half of the generic, so the tool never
-        # repeats its config type. A bare `BaseTool` subclass keeps the default.
-        args = getattr(cls, "__pydantic_generic_metadata__", {}).get("args", ())
-        if args and isinstance(args[0], type) and issubclass(args[0], ToolConfig):
-            # This tool class points to its tool config class
-            cls.config_model = args[0]
-            # The reverse pointer: the tool config class points to the tool class
-            args[0].tool_cls = cls
+        # Bare `MyTool(BaseTool)` inheritance, no parameter provided.
+        # Check if the class explicitly sets it, otherwise define it
+        if not hasattr(cls, "config_model"):
+            # HACK: mypy won't accept a runtime `cls` as a class parameter
+            cls.config_model = ToolConfig[cls]  # type: ignore[valid-type]
+        # Regardless of where the config_model came from (explicit parameter or
+        #  dynamic class creation), stamp this tool as that config's tool class
+        # NOTE: for a bare tool `ToolConfig[cls]` already stamped this, for a tool
+        #  with its own config class (`CommandConfig`) this is the only stamp.
+        cls.config_model.tool_class = cls
 
     @classmethod
     def tool_name(cls) -> str:
         if cls.name is not None:
             return cls.name
         return _camel_to_snake(cls.__name__.removesuffix("Tool"))
-
-    def settings(self, config: "SolveigConfig") -> ToolConfigType:
-        """This tool's own slice of `config.tools`, statically typed to its
-        `config_model` via the `BaseTool[ToolConfigType]` generic (so `HttpTool`
-        sees `HttpConfig`). The composed `config.tools` model is dynamic, so a
-        direct `config.tools.<name>` read is Any — go through here for the typed
-        view."""
-        return getattr(config.tools, self.tool_name())
 
     # ------------------------------------------------------------------
     # `/tool` subcommand support
@@ -316,8 +309,10 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         )
         return metadata
 
+    # TODO: fix type annotation, should return BaseTool, Pycharm warns:
+    #  Expected type (...) -> BaseTool[Any], got (ctx: {deps}, params: {execute}) -> CoroutineType[Any, Any, Any] instead
     @classmethod
-    def as_tool(cls) -> Callable[..., Any]:
+    def as_tool(cls) -> Callable[..., BaseTool]:
         """Produce the plain pydantic-ai callable for this tool class.
 
         The single value parameter is annotated with `cls`, so pydantic-ai

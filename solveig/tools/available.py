@@ -21,13 +21,13 @@ from typing import Any
 from pydantic_ai import FunctionToolset, RunContext, ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.mcp_servers.config import MCPServerConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.plugins.tools import PLUGIN_TOOLS
 from solveig.tools.base import BaseTool
-from solveig.tools.core import CORE_TOOLS
+from solveig.tools.core import CoreToolsConfig
 
 
 def _as_callable(tool: Any) -> Any:
@@ -83,8 +83,10 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
     # same class of "no way to express a dynamic tool union to mypy"
     # noted elsewhere in this codebase.
     function_tools: list[Any] = [
-        _as_callable(tool) for tool in (*CORE_TOOLS, *PLUGIN_TOOLS)
-    ]
+        _as_callable(tool_config.tool_class)
+        for _, tool_config in config.tools
+        if tool_config.enabled
+    ] + [_as_callable(tool) for tool in PLUGIN_TOOLS]
 
     if not function_tools and not mcp_toolsets:
         raise ValueError("No tools available: the tool list is empty.")
@@ -110,7 +112,10 @@ def tool_classes() -> dict[str, type[BaseTool]]:
     tool function (should a plugin author write one that way) has no entry
     here; replay falls back to a generic render for those.
     """
-    classes: dict[str, type[BaseTool]] = {cls.tool_name(): cls for cls in CORE_TOOLS}
+    classes: dict[str, type[BaseTool]] = {
+        name: field.annotation.tool_class
+        for name, field in CoreToolsConfig.model_fields.items()
+    }
     for tool in PLUGIN_TOOLS:
         if isinstance(tool, type) and issubclass(tool, BaseTool):
             classes[tool.tool_name()] = tool

@@ -1,13 +1,12 @@
 """HTTP tool - makes HTTP requests."""
 
 import json
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 import httpx
 from pydantic import ByteSize, Field, field_serializer, field_validator
 from pydantic_settings import CliPositionalArg
 
-from config import SolveigConfig
 from solveig.exceptions import UserCancel
 from solveig.interface.base import Level
 from solveig.tools.base import (
@@ -20,8 +19,7 @@ from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
-if TYPE_CHECKING:
-    from solveig.interface.base import SolveigInterface
+from solveig.interface.base import SolveigInterface
 
 
 def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
@@ -108,7 +106,9 @@ class HttpTool(BaseTool[HttpConfig]):
             await interface.print(self.output_file, prefix="Output file:")
 
     async def execute(
-        self, config: SolveigConfig, interface: "SolveigInterface"
+            self,
+            config: HttpConfig,
+            interface: "SolveigInterface"
     ) -> ToolResult:
         if (
             await interface.ask_choice("Send HTTP request?", ["Send", "Don't send"])
@@ -116,7 +116,7 @@ class HttpTool(BaseTool[HttpConfig]):
             await interface.print("Rejected", level=Level.WARNING)
             return ToolResult(content="User declined to send the request.")
 
-        response = await self._send_request(interface, self.settings(config).timeout)
+        response = await self._send_request(interface, config.timeout)
         if isinstance(response, ToolResult):  # error
             return response
 
@@ -162,8 +162,8 @@ class HttpTool(BaseTool[HttpConfig]):
 
     async def _handle_output_file(
         self,
-        interface: "SolveigInterface",
-        config: SolveigConfig,
+        interface: SolveigInterface,
+        config: HttpConfig,
         response: httpx.Response,
         status_code: int,
         response_headers: dict[str, str],
@@ -181,6 +181,7 @@ class HttpTool(BaseTool[HttpConfig]):
             await Filesystem.validate_write_access(
                 path=abs_path,
                 content=response.content,
+                # TODO: map top-level field, maybe just kwargs
                 min_disk_size_left=config.minimum_disk_space_left,
             )
         except (OSError, PermissionError) as e:
@@ -219,13 +220,13 @@ class HttpTool(BaseTool[HttpConfig]):
     async def _handle_inline_response(
         self,
         interface: "SolveigInterface",
-        config: SolveigConfig,
+        config: HttpConfig,
         response: httpx.Response,
         status_code: int,
         response_headers: dict[str, str],
     ) -> ToolResult:
         raw = response.text
-        max_response_size = self.settings(config).maximum_response_size
+        max_response_size = config.maximum_response_size
         truncated = len(raw) > max_response_size
         if truncated:
             raw = raw[:max_response_size]

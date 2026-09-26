@@ -26,19 +26,10 @@ from solveig.plugins.config import PluginToolsConfig, PluginHooksConfig
 from solveig.plugins.discovery import ON_SCANNED, discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
-from solveig.tools.config import CoreToolsConfig
-from solveig.tools.core import CORE_TOOLS
 
 
-def compose_core_tools() -> None:
-    """Feed config the core tool list — one config field per tool."""
-    CoreToolsConfig.compose({
-        tool.tool_name(): tool.config_model
-        for tool in CORE_TOOLS
-    })
-
-
-
+# TODO: delete, `compose()` is getting deleted, replace with
+#  `plugin_tools_config.set({tool.name for tool in ...})`
 def compose_plugin_sections() -> None:
     """Rebuild `plugins.tools` and `plugins.hooks` from whatever is registered.
 
@@ -94,7 +85,6 @@ async def parse_config_and_prompt(
     cli_args: list[str] | None = None,
 ) -> SolveigConfig:
     """The full two-phase startup parse. See the module docstring."""
-    compose_core_tools()
     # Discovery needs exactly one setting, and the plugin schema does not exist
     # yet — so read that setting through the normal source stack and let the
     # object die on this line. Nothing is handed a half-composed config, which

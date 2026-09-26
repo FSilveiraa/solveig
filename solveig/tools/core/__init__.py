@@ -35,48 +35,30 @@ from .write import WriteTool
 from ..config import ToolConfig
 
 
-# CORE_TOOLS: list[type[BaseTool]] = [
-#     ReadTool,
-#     WriteTool,
-#     EditTool,
-#     DeleteTool,
-#     CopyTool,
-#     MoveTool,
-#     CommandTool,
-#     HttpTool,
-#     TodoTool,
-# ]
-
-
-# TODO: second source-of-truth for tool names
-class CoreToolsConfig(ConfigSection):
-    read: ToolConfig = Field(default_factory=ToolConfig)
-    write: ToolConfig = Field(default_factory=ToolConfig)
-    edit: ToolConfig = Field(default_factory=ToolConfig)
-    delete: ToolConfig = Field(default_factory=ToolConfig)
-    copy: ToolConfig = Field(default_factory=ToolConfig)
-    move: ToolConfig = Field(default_factory=ToolConfig)
-    command: CommandConfig = Field(default_factory=CommandConfig)
-    http: HttpConfig = Field(default_factory=HttpConfig)
-    todo: ToolConfig = Field(default_factory=ToolConfig)
+class CoreToolsConfig(ConfigSection[ToolConfig]):
+    read: ToolConfig[ReadTool] = Field(default_factory=ReadTool.config_model)
+    write: ToolConfig[WriteTool] = Field(default_factory=WriteTool.config_model)
+    edit: ToolConfig[EditTool] = Field(default_factory=EditTool.config_model)
+    delete: ToolConfig[DeleteTool] = Field(default_factory=DeleteTool.config_model)
+    copy: ToolConfig[CopyTool] = Field(default_factory=CopyTool.config_model)
+    move: ToolConfig[MoveTool] = Field(default_factory=MoveTool.config_model)
+    command: CommandConfig = Field(default_factory=CommandTool.config_model)
+    http: HttpConfig = Field(default_factory=HttpTool.config_model)
+    todo: ToolConfig[TodoTool] = Field(default_factory=TodoTool.config_model)
 
 
 # TODO: move this to some class validator or something
-for _tool in CORE_TOOLS:
+# TODO: there should be a cleaner way to `walk` a config's fields,
+#  especially for dynamic sections where it's structurally implied
+#  their entries are kv mappings. However this is schema, not instance.
+for _tool in CoreToolsConfig.model_fields:
+    # TODO: Review this method, why is something external allowed to
+    #  interrogate a tool for its sub-commands?
     _sub = tool_subcommand(_tool)
     if _sub is not None:
         for _refused in SUBCOMMANDS.add(CORE_TOOL_SUBCOMMANDS, _sub):
             warnings.warn(_refused, stacklevel=2)
 
 __all__ = [
-    "CORE_TOOLS",
-    "ReadTool",
-    "WriteTool",
-    "EditTool",
-    "DeleteTool",
-    "CopyTool",
-    "MoveTool",
-    "CommandTool",
-    "HttpTool",
-    "TodoTool",
+    "CoreToolsConfig",
 ]

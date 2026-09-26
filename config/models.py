@@ -26,7 +26,9 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    get_args, Annotated, Awaitable, Iterator,
+    TypeVar,
+    Union,
+    Annotated, Awaitable, Generator, Iterator,
 )
 
 import pathlib
@@ -104,7 +106,7 @@ PathPattern = Annotated[
     BeforeValidator(_resolve_pattern),
 ]
 
-T = typing.TypeVar("T")
+T = TypeVar("T")
 
 CommaSeparated = Annotated[
     list[T],
@@ -179,7 +181,7 @@ def _unwrap_optional(_type: type) -> tuple[Any, bool]:
     :return:
     """
     origin = typing.get_origin(_type)
-    if origin is typing.Union:
+    if origin is Union:
         non_none = [arg for arg in typing.get_args(_type) if arg is not type(None)]
         if len(non_none) == 1:
             return (non_none[0], True)
@@ -202,7 +204,7 @@ class Choice:
 
     def __get_pydantic_core_schema__(self, source: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
         """Defines how to validate and serialize `source` using `handler`."""
-        args = get_args(source)
+        args = typing.get_args(source)
         member = next((a for a in args if a is not type(None)), source)
         label = self.label or getattr(member, "__name__", "entry")
 
@@ -271,13 +273,23 @@ def matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}.")
 
 
-class ConfigSection(BaseModel):
+class ConfigSection[T](BaseModel):
     """
     Base class for all config sections.
 
     Ensures fields accept arbitrary types and validate the pydantic model
-    on re-assignment, and unknown fields raise.
+     on re-assignment, and unknown fields raise.
+     Supports plain assignment (`section.foo = "bar`) and multi-path awaitable
+     (`await section.set(foo="bar", **options)`).
+     Iterating yields fields through (name, value).
+     Supports dict operators OR and IN: `if field in (section1 | section2)`.
     """
+
+    # HACK: mypy dictating code
+    if TYPE_CHECKING:
+        # Inform the type checker of the types yielded by iterating
+        #  `for field, value` on a parametrized Pydantic model
+        def __iter__(self) -> Generator[tuple[str, T], None, None]: ...
 
     model_config = _MUTABLE
 
@@ -343,8 +355,10 @@ class ConfigSection(BaseModel):
             task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
 
     def __contains__(self, name: str) -> bool:
-        """Whether `name` is a field of this section."""
-        return name in type(self).model_fields
+        return name in type(self).model_fields or name in (self.model_extra or {})
+
+    def __or__(self, other: ConfigSection) -> dict[str, T]:
+       return dict(self) | dict(other)
 
     @classmethod
     def walk_schema(cls, *, skip_excluded: bool = True) -> Iterator[tuple[str, FieldInfo]]:
@@ -631,7 +645,7 @@ class ConfigSection(BaseModel):
 ConfigObserver = Callable[[ConfigSection, frozenset[str]], Awaitable[None] | None]
 
 
-class DynamicSection(ConfigSection):
+class DynamicSection[T](ConfigSection[T]):
     """
     Base for config sections built at runtime (namely from a tool/hook list).
 
@@ -654,8 +668,8 @@ class DynamicSection(ConfigSection):
     #  do by default apparently, a dict only needs to hash keys.
     _instances: ClassVar[weakref.WeakValueDictionary]
 
+    # TODO: explain why this is necessary
     if TYPE_CHECKING:
-
         def __getattr__(self, name: str) -> Any: ...
 
     # TODO: why is there no delete method? How do we remove missing plugins?
@@ -701,44 +715,8 @@ class DynamicSection(ConfigSection):
             )
         cls.model_rebuild(force=True)
 
-    @classmethod
-    def compose(cls, entries: Mapping[str, type[BaseModel]]) -> None:
-        """`_install_fields`, plus rebuilding every OTHER live instance so
-        nothing is left validated against a schema this class no longer has.
 
-        For sections that describe a SHARED environment fact (what tools or
-        plugins exist) - every live instance should converge on the same
-        entries, which is exactly what compose provides. Called from outside
-        the section being composed (`bootstrap.py`, never a validator on
-        CoreToolsConfig/PluginToolsConfig itself) — composing from within
-        would recurse through this same rebuild loop.
-        """
-        cls._install_fields(entries)
-        for instance in list(cls._instances.values()):
-            instance.rebuild()
-
-    def rebuild(self) -> None:
-        """Re-validate this section against the fields `compose` just installed.
-
-        Needed because the class changed underneath a live section: a block that
-        was raw config becomes the plugin's typed model, and one whose plugin
-        just disappeared goes back to being unrecognised config that
-        `PreservingSection` keeps for `/config save`.
-
-        NOTE: reads `__dict__` rather than dumping, because a field that was
-        just removed is no longer dumpable - it would vanish silently, which is
-        exactly the preservation this section exists to provide.
-        """
-        data = {**(self.__pydantic_extra__ or {}), **self.__dict__}
-        # Validating marks everything it was handed as explicitly set, which
-        # would make `/config save` grow by every default on each reload.
-        declared = set(self.__pydantic_fields_set__)
-        type(self).__pydantic_validator__.validate_python(data, self_instance=self)
-        self.__pydantic_fields_set__.clear()
-        self.__pydantic_fields_set__.update(declared)
-
-
-class PreservingSection(DynamicSection):
+class PreservingSection[T](DynamicSection[T]):
     """
     A composed section that preserves config for entries it has no field for.
 

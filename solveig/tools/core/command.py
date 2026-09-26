@@ -78,13 +78,13 @@ class CommandTool(BaseTool[CommandConfig]):
         await interface.add_text_box(self.command, title="Command")
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: CommandConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         is_detached = self.timeout <= 0
         run = False
         inspect = False
 
-        for pattern in self.settings(config).auto_execute:
+        for pattern in config.auto_execute:
             if pattern.match(self.command):
                 run = True
                 await interface.print(

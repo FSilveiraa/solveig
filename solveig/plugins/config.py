@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from config.models import ConfigSection, PreservingSection
+from solveig.tools.config import ToolConfig
 from solveig.utils.file import Filesystem
 
 DEFAULT_PLUGIN_PATHS: list[str] = [
@@ -21,14 +22,18 @@ DEFAULT_PLUGIN_PATHS: list[str] = [
 ]
 
 
-class PluginToolsConfig(PreservingSection):
+class HookConfig(ConfigSection):
+    enabled: bool = Field(default=True, description="Enable this hook")
+
+
+class PluginToolsConfig(PreservingSection[ToolConfig]):
     """
     Placeholder for `config.plugins.tools` — composed from discovered plugin tools
     Tools declare config types at class declaration (MyTool(BaseTool[MyConfig])).
     """
 
 
-class PluginHooksConfig(PreservingSection):
+class PluginHooksConfig(PreservingSection[HookConfig]):
     """
     Placeholder for `config.plugins.hooks` — composed from discovered plugin hooks.
     Hooks declare config types through their class's `config_model`

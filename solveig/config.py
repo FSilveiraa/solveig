@@ -29,7 +29,7 @@ from solveig.mcp_servers.config import MCPServerConfig, MCPConfigSection
 from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
-from solveig.tools.config import CoreToolsConfig
+from solveig.tools.core import CoreToolsConfig
 from solveig.utils.file import Filesystem, SyncPath  # path normalization, not config I/O
 
 __all__ = [
@@ -271,10 +271,10 @@ class SolveigConfig(Config):
         # plugin tools, defaults to True for an unknown name.
         tools = self.tools
         if tool_name in type(tools).model_fields:
-            return bool(getattr(tools, tool_name).enabled)
+            return tools.get(tool_name).enabled
         plugin_tools = self.plugins.tools
-        if tool_name in type(plugin_tools).model_fields:
-            return bool(getattr(plugin_tools, tool_name).enabled)
+        if tool_name in plugin_tools:
+            return plugin_tools.tool_name.enabled
         return True
 
     def is_hook_enabled(self, hook_name: str) -> bool:
