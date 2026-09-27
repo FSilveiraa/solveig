@@ -35,7 +35,7 @@ from .write import WriteTool
 from ..config import ToolConfig
 
 
-class CoreToolsConfig(ConfigSection[ToolConfig]):
+class CoreToolsConfig(ConfigSection):
     read: ToolConfig[ReadTool] = Field(default_factory=ReadTool.config_model)
     write: ToolConfig[WriteTool] = Field(default_factory=WriteTool.config_model)
     edit: ToolConfig[EditTool] = Field(default_factory=EditTool.config_model)

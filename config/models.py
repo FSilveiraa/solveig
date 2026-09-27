@@ -226,7 +226,7 @@ def matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}.")
 
 
-class ConfigSection[T](BaseModel):
+class ConfigSection(BaseModel):
     """
     Base class for all config sections.
 
@@ -237,12 +237,6 @@ class ConfigSection[T](BaseModel):
      Iterating yields fields through (name, value).
      Supports dict operators OR and IN: `if field in (section1 | section2)`.
     """
-
-    # HACK: mypy dictating code
-    if TYPE_CHECKING:
-        # Inform the type checker of the types yielded by iterating
-        #  `for field, value` on a parametrized Pydantic model
-        def __iter__(self) -> Generator[tuple[str, T], None, None]: ...
 
     model_config = _MUTABLE
 
@@ -297,7 +291,7 @@ class ConfigSection[T](BaseModel):
     #   timeout: int
     # ```
     #  `MyConfig()["timeout"]` will resolve to `int`, type checker expects `str`
-    def __getitem__(self, name: str) -> T:
+    def __getitem__(self, name: str) -> Any:
         if name not in self:
             raise KeyError(name)
         return getattr(self, name)
@@ -321,7 +315,7 @@ class ConfigSection[T](BaseModel):
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
 
-    def __or__(self, other: ConfigSection) -> dict[str, T]:
+    def __or__(self, other: ConfigSection) -> dict[str, Any]:
        return dict(self) | dict(other)
 
     @classmethod
@@ -656,7 +650,7 @@ def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
 ConfigObserver = Callable[[ConfigSection, frozenset[str]], Awaitable[None] | None]
 
 
-class DynamicSection[T](ConfigSection[T]):
+class DynamicSection[T](ConfigSection):
     """
     Base for config sections built at runtime (namely from a tool/hook list).
 

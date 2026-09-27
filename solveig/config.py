@@ -25,7 +25,7 @@ from config.models import (
     PreservingSection, CliFlags, CommaSeparated, PathPattern, AbsolutePath,
 )
 from solveig.interface.config import InterfaceConfig
-from solveig.mcp_servers.config import MCPServerConfig, MCPConfigSection
+from solveig.mcp_servers.config import MCPServerConfig, MCPConfig
 from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
@@ -115,7 +115,7 @@ class SolveigConfig(Config):
     # ------------------------------------------------------------
     api: ApiConfig = Field(default_factory=ApiConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
-    mcp: MCPConfigSection = Field(default_factory=MCPConfigSection)
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
     tools: CoreToolsConfig = Field(default_factory=CoreToolsConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     interface: InterfaceConfig = Field(default_factory=InterfaceConfig)
@@ -162,9 +162,6 @@ class SolveigConfig(Config):
 
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
-    startup_mcp_servers: Annotated[list[str], CliFlags("mcp-url")] = Field(
-        default_factory=list, exclude=True
-    )  # use `--mcp-url URL`
     # The CLI args this instance was booted from — always a list after
     # construction (never None). The source hook reads this as a constructor
     # kwarg: None → use sys.argv[1:], a list → use that, [] → hermetic.
@@ -187,28 +184,6 @@ class SolveigConfig(Config):
     #     """Anchors the briefing paths to the starting directory"""
     #     return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
 
-    @field_validator("mcp", mode="before")
-    @classmethod
-    def _normalize_mcp(cls, v: Any) -> Any:
-        # A server block is keyed by NAME and does not repeat it inside
-        # (`[mcp.parallel]` / `url = "…"`); inject the key so every
-        # MCPServerConfig is complete and can be handed around on its own. The
-        # mirror of this is `name`'s `exclude=True` — the key is where the name
-        # lives on disk, so dumping it back into the block would create a second
-        # home for it.
-        if not isinstance(v, dict):
-            return v
-        out: dict[str, Any] = {}
-        for name, cfg in v.items():
-            if isinstance(cfg, MCPServerConfig):
-                out[name] = cfg
-            else:
-                # Re-create the MCP server config from a dict to a config model instance
-                mcp_config_nameless = dict(cfg)
-                mcp_config_nameless.pop("name", None)
-                out[name] = MCPServerConfig(name=name, **mcp_config_nameless)
-        return out
-
     @model_validator(mode="after")
     def _default_api_url(self):
         # api.type always has a default (OPENAI); when no url is given, derive it
@@ -222,14 +197,6 @@ class SolveigConfig(Config):
                     f"API type {self.api.type.name} has no default URL; pass --url."
                 )
             self.api.url = default
-        return self
-
-    @model_validator(mode="after")
-    def _merge_startup_mcp_servers(self) -> SolveigConfig:
-        """Adds the MCP URLs provided from CLI flags to the MCP config."""
-        for url in self.startup_mcp_servers:
-            server = MCPServerConfig.from_url(url)
-            self.mcp.setdefault(server.name, server)
         return self
 
     @model_validator(mode="after")
