@@ -17,18 +17,18 @@ class ApiConfig(ConfigSection):
 from __future__ import annotations
 
 import asyncio
+import inspect
 import operator
 import typing
 from types import GenericAlias
 from collections.abc import Mapping, Callable
 from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
     TypeVar,
     Union,
-    Annotated, Awaitable, Generator, Iterator, TypeIs,
+    Annotated, Awaitable, Iterator, TypeIs,
     override,
 )
 
@@ -47,7 +47,7 @@ from pydantic_core import core_schema, CoreSchema
 
 # Notification tasks in flight. A task is only weakly held by the loop, so
 #  without a strong reference here a notification can be collected mid-await.
-_NOTIFICATIONS_IN_COURSE: set[asyncio.Task] = set()
+_NOTIFICATIONS_IN_COURSE: set[asyncio.Future] = set()
 
 # Model configs used by pydantic to inform model validation.
 # Forces model re-validation on re-assignment and allows arbitrary types.
@@ -257,17 +257,6 @@ class ConfigSection(BaseModel):
             return self._name
         return f"{self._parent._path}.{self._name}"
 
-    def _ascendants_of(self, name) -> list[tuple[ConfigSection, str]]:
-        """Mark every ancestor as set, return who to notify about `name` changing."""
-        ascendants: list[tuple[ConfigSection, str]] = [(self, name)]
-        section, path = self, name
-        while section._parent is not None:
-            section._parent.__pydantic_fields_set__.add(section._name)
-            path = f"{section._name}.{path}"
-            section = section._parent
-            ascendants.append((section, path))
-        return ascendants
-
     @model_validator(mode="after")
     def _bind(self) -> ConfigSection:
         """
@@ -285,12 +274,6 @@ class ConfigSection(BaseModel):
                 value._name = name
         return self
 
-    # NOTE: declared fields aren't matched against `T`
-    # ```
-    # class MyConfig(ConfigSection[str]):
-    #   timeout: int
-    # ```
-    #  `MyConfig()["timeout"]` will resolve to `int`, type checker expects `str`
     def __getitem__(self, name: str) -> Any:
         if name not in self:
             raise KeyError(name)
@@ -307,10 +290,7 @@ class ConfigSection(BaseModel):
             return
 
         if self._set(name, value):
-            for section, path in self._ascendants_of(name):
-                task = asyncio.create_task(section._notify_changed(frozenset({path})))
-                _NOTIFICATIONS_IN_COURSE.add(task)
-                task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
+            self._notify_relatives_sync(name)
 
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
@@ -415,47 +395,14 @@ class ConfigSection(BaseModel):
             else:
                 raise ValueError(f"`set` expects exactly 2 or no positional arguments, found {len(args)}: {args}.")
 
-        to_notify: list[tuple[ConfigSection, str]] = []
-        for name, value in fields_to_change.items():
-            section, leaf_name, _ = self.leaf_parent_name_and_schema(name)
+        # Only paths whose value actually changed are notified about
+        changed: list[str] = []
+        for path, value in fields_to_change.items():
+            section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
             if section._set(leaf_name, value):
-                to_notify.extend(section._ascendants_of(leaf_name))
-        if to_notify:
-            await self._notify_ascendants(to_notify)
-
-    @staticmethod
-    async def _notify_ascendants(to_notify: list[tuple[ConfigSection, str]]) -> None:
-        # Aggregate the list into a dict of each ascendant's path
-        # to its config section and set of paths to notify about
-        ascendants_to_notifications: dict[str, tuple[ConfigSection, set[str]]] = {}
-        for ascendant, path_to_notify in to_notify:
-            _, notifications = ascendants_to_notifications.setdefault(ascendant._path, (ascendant, set()))
-            notifications.add(path_to_notify)
-
-        # Run all notifications in parallel, gather and raise exceptions
-        observer_notifications = await asyncio.gather(
-            *(
-                ascendant._notify_changed(frozenset(paths))
-                for ascendant, paths in ascendants_to_notifications.values()
-            ),
-            return_exceptions=True,
-        )
-
-        failures: list[Exception] = []
-        for result in observer_notifications:
-            if isinstance(result, Exception):
-                failures.append(result)
-            # User cancellation or similar, propagate immediately
-            # NOTE: a Solveig UserCancellation hits this, gets re-raised
-            #  only after all exceptions are caught.
-            # TODO: can a solveig user cancellation hit inside of this? How?
-            #  What does that mean for the cancellable task flow?
-            #  If it can, does it make sense to filter explicitly for that?
-            elif isinstance(result, BaseException):
-                raise result
-
-        if failures:
-            raise ExceptionGroup("Config observers failed", failures)
+                changed.append(path)
+        if changed:
+            await self._notify_relatives_async(*changed)
 
     def _set(self, name: str, value: Any) -> bool:
         """Writes `self.name=value` only if `value` changed. Returns whether it wrote."""
@@ -463,6 +410,7 @@ class ConfigSection(BaseModel):
         if name in self and getattr(self, name) == value:
             return False
         super().__setattr__(name, value)
+        self._mark_ancestors_as_set()
         return True
 
     # TODO: review need and usage across project
@@ -525,52 +473,112 @@ class ConfigSection(BaseModel):
 
         return path_to_flags
 
-    async def _notify_changed(self, paths: frozenset[str]) -> None:
-        """Notify all observers, filtered by registered config path.
-
-        NOTE: iterates a COPY — a handler is allowed to register another
-        observer (a reloaded plugin module doing so at import is the live case),
-        and mutating the list mid-iteration would raise.
-
-        NOTE: a handler that mutates the schema it is being notified about (e.g.
-        recomposing `plugins.tools` in response to `plugins.paths`) changes the
-        shape of the object described by the very notification in flight. Rare
-        enough to document rather than engineer around; if it spreads, the
-        answer is to defer the recomposition, not to reorder this loop.
-
-        NOTE: handlers are isolated from each other — one that raises no longer
-        cancels the ones after it. Plugin reload subscribes here, so a handler
-        now runs filesystem I/O and arbitrary plugin code; without isolation one
-        bad plugin would stop the stats bar and the theme from updating. The
-        failures are re-raised together afterwards rather than swallowed: every
-        observer gets its turn AND nothing goes quiet.
+    def _notify(self, *paths: str) -> tuple[list[Awaitable], list[Exception]]:
         """
+        Calls every observer that should hear about changes at `paths`,
+        above and below self, from root to each changed path's owner.
+
+        Runs sync observer handlers, returns async ones plus the failures found
+        """
+        # Who needs notifications about what. Maps a section's python ID to itself
+        # and the paths it needs updates for.
+        to_notify: dict[int, tuple[ConfigSection, set[str]]] = {}
+        for path in paths:
+            _self, my_own_paths = to_notify.setdefault(id(self), (self, set()))
+            my_own_paths.add(path)
+            # Down: every section between self and the owner of the changed field
+            path_to_parent, _delimiter, _leaf_name = path.rpartition(".")
+            if path_to_parent:
+                for sub_path, section in self.walk(path_to_parent):
+                    _section, section_paths = to_notify.setdefault(id(section), (section, set()))
+                    # Ex: change happened at `interface.tui.theme`, there's an observer
+                    #  at `interface`, it needs to be notified about `tui.theme`.
+                    section_paths.add(path.removeprefix(f"{sub_path}."))
+            # Up: every section above self
+            parent, path_from_leaf_to_parent = self, path
+            while parent._parent is not None:
+                path_from_leaf_to_parent = f"{parent._name}.{path_from_leaf_to_parent}"
+                parent = parent._parent
+                _parent, paths_for_parent = to_notify.setdefault(id(parent), (parent, set()))
+                paths_for_parent.add(path_from_leaf_to_parent)
+
+        # Call sync observers, keep awaitables for async ones plus failures
+        pending: list[Awaitable] = []
         failures: list[Exception] = []
-        for handler, filter_paths in list(self._observers):
-            # An observer that named no paths hears about everything. One that
-            # did hears only its own matches — which may be exact
-            # (`api.url`) or a whole section (`api`, `tools.http`).
-            paths_to_notify = (
-                frozenset(
+        for section, changed_paths in to_notify.values():
+            # NOTE: iterates a copy, an observer may register another observer
+            for handler, observer_paths in list(section._observers):
+                # NOTE: if later we introduce glob pattern semantics to
+                #  observer paths, this is the place to parse it
+                paths_to_notify = changed_paths if not observer_paths else [
                     path
-                    for path in paths
+                    for path in changed_paths
                     if any(
-                        matches_prefix(path, prefix)
-                        for prefix in filter_paths
+                        matches_prefix(path, registered_path)     # Below: watching `foo.bar`, change happened in `foo.bar.baz`
+                        or matches_prefix(registered_path, path)  # Above: watching `foo.bar.baz`, change happened in `foo.bar`
+                        for registered_path in observer_paths
                     )
-                )
-                if filter_paths
-                else paths
-            )
-            if paths_to_notify:
+                ]
+                if not paths_to_notify:
+                    continue
+                # NOTE: observers are isolated, a failing one doesn't stop the rest
                 try:
-                    _coroutine = handler(self, paths_to_notify)
-                    if asyncio.iscoroutine(_coroutine):
-                        await _coroutine
-                except Exception as e:  # noqa: BLE001 - isolation, see above
-                    failures.append(e)
+                    result = handler(section, frozenset(paths_to_notify))
+                except Exception as error:  # noqa: BLE001
+                    failures.append(error)
+                    continue
+                # An async observer hands back its work instead of doing it
+                if inspect.isawaitable(result):
+                    pending.append(result)
+        return pending, failures
+
+    def _notify_relatives_sync(self, *paths: str) -> None:
+        """Call all sync observers, schedule async observers as background tasks."""
+        pending, failures = self._notify(*paths)
+        if pending:
+            # NOTE: the only place a plain assignment needs an event loop, and
+            #  only when an async observer is listening. Checked here rather than
+            #  on registration: a loop may only start after the config is built.
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # Close the observers' coroutines, which can no longer run,
+                #  so Python doesn't also warn they were never awaited
+                for awaitable in pending:
+                    if inspect.iscoroutine(awaitable):
+                        awaitable.close()
+                failures.append(RuntimeError(
+                    f"Async observers of {', '.join(map(repr, paths))} need a running "
+                    "event loop. Use sync observers, or `await section.set(...)`."
+                ))
+            else:
+                notifications = asyncio.gather(*pending)
+                _NOTIFICATIONS_IN_COURSE.add(notifications)
+                notifications.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
         if failures:
-            raise ExceptionGroup("config observers failed", failures)
+            raise ExceptionGroup("Config observers failed", failures)
+
+    async def _notify_relatives_async(self, *paths: str) -> None:
+        """Call all observers, await async ones."""
+        pending, failures = self._notify(*paths)
+        for result in await asyncio.gather(*pending, return_exceptions=True):
+            if isinstance(result, Exception):
+                failures.append(result)
+            # Cancellation or similar: propagate, don't collect
+            elif isinstance(result, BaseException):
+                raise result
+        if failures:
+            raise ExceptionGroup("Config observers failed", failures)
+
+    def _mark_ancestors_as_set(self):
+        """
+        Marks every section above self as explicitly set in the config,
+        ensuring an export with `model_dump(exclude_unset=True)` keeps it.
+        """
+        section = self
+        while section._parent is not None:
+            section._parent.__pydantic_fields_set__.add(section._name)
+            section = section._parent
 
     def leaf_parent_name_and_schema(self, path: str) -> tuple[ConfigSection, str, FieldInfo]:
         """
@@ -622,24 +630,20 @@ class ConfigSection(BaseModel):
             raise PathNotFound(type(self), name)
         super().__delattr__(name)
         self.__pydantic_fields_set__.discard(name)
+        self._mark_ancestors_as_set()
 
     def __delattr__(self, name: str) -> None:
         if name in self.__private_attributes__:
             super().__delattr__(name)
         else:
             self._delete(name)
-            for ascendant, path in self._ascendants_of(name):
-                task = asyncio.create_task(ascendant._notify_changed(frozenset({path})))
-                _NOTIFICATIONS_IN_COURSE.add(task)
-                task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
+            self._notify_relatives_sync(name)
 
     async def delete(self, *paths: str) -> None:
-        to_notify: list[tuple[ConfigSection, str]] = []
         for path in paths:
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
             section._delete(leaf_name)
-            to_notify.extend(section._ascendants_of(leaf_name))
-        await self._notify_ascendants(to_notify)
+        await self._notify_relatives_async(*paths)
 
 
 def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
@@ -663,22 +667,6 @@ class DynamicSection[T](ConfigSection):
 
     model_config = _MUTABLE_ALLOW
     _entry_type: ClassVar[Any] = Any  # T in `DynamicSection[T]`
-
-    # NOTE: each subclass needs its OWN registry - a class attribute holding a
-    #  mutable container is otherwise shared by every subclass, which would
-    #  rebuild PluginToolsConfig instances when PluginHooksConfig composes.
-    # Uses a weakref so it's possible to reference each instance without
-    #  the reference keeping them from being deleted when no longer held
-    #  by anything else. WeakSet would need to hash, which BaseModel can't
-    #  do by default apparently, a dict only needs to hash keys.
-    # _instances: ClassVar[weakref.WeakValueDictionary]
-
-    # TODO: why is there no delete method? How do we remove missing plugins?
-    #  Confirmed: compose() shrinking the entries then auto-rebuilding a live,
-    #  non-preserving (extra="forbid") instance raises extra_forbidden on the
-    #  stale field - PreservingSection (extra="allow") already handles this by
-    #  keeping it under model_extra. A future non-preserving DynamicSection
-    #  whose entries can shrink needs this fixed first.
 
     @override
     @classmethod
