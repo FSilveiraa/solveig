@@ -263,6 +263,17 @@ class ConfigSection[T](BaseModel):
             return self._name
         return f"{self._parent._path}.{self._name}"
 
+    def _ascendants_of(self, name) -> list[tuple[ConfigSection, str]]:
+        """Mark every ancestor as set, return who to notify about `name` changing."""
+        ascendants: list[tuple[ConfigSection, str]] = [(self, name)]
+        section, path = self, name
+        while section._parent is not None:
+            section._parent.__pydantic_fields_set__.add(section._name)
+            path = f"{section._name}.{path}"
+            section = section._parent
+            ascendants.append((section, path))
+        return ascendants
+
     @model_validator(mode="after")
     def _bind(self) -> ConfigSection:
         """
@@ -292,31 +303,20 @@ class ConfigSection[T](BaseModel):
         return getattr(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Plain assignment (`config.api.model = "x"`),
+        """Plain assignment (`config.api.model = "x"`).
 
-        Shares `_apply` with `update()` below — this only decides how the
-        resulting notification runs: spawned, not awaited, because a plain
-        assignment is a statement, not an expression, so there is nowhere to
-        await. Use `await section.update(...)` when the caller needs to know
-        the reaction has actually run (a chained edit, a test).
-
-        NOTE: spawned tasks are not the project's "visible cancellable work" —
-        the handler may itself START such work (an MCP connect, an endpoint
-        reconnect) and register that separately. `asyncio.create_task` raises
-        if there is no running loop, which here means a real bug, not a
-        recoverable case.
+        Notifies observers through background tasks.
+        NOTE: no current way to cancel notification tasks.
         """
-        if name not in type(self).model_fields:
+        if name in self.__private_attributes__:
             super().__setattr__(name, value)
             return
-        ascendants = self._apply(name, value)
-        if ascendants is None:
-            return
 
-        for section, path in ascendants:
-            task = asyncio.create_task(section._notify_changed(frozenset({path})))
-            _NOTIFICATIONS_IN_COURSE.add(task)
-            task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
+        if self._set(name, value):
+            for section, path in self._ascendants_of(name):
+                task = asyncio.create_task(section._notify_changed(frozenset({path})))
+                _NOTIFICATIONS_IN_COURSE.add(task)
+                task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
 
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
@@ -424,11 +424,13 @@ class ConfigSection[T](BaseModel):
         to_notify: list[tuple[ConfigSection, str]] = []
         for name, value in fields_to_change.items():
             section, leaf_name, _ = self.leaf_parent_name_and_schema(name)
-            if (ascendants := section._apply(leaf_name, value)) is not None:
-                to_notify.extend(ascendants)
-        if not to_notify:
-            return
+            if section._set(leaf_name, value):
+                to_notify.extend(section._ascendants_of(leaf_name))
+        if to_notify:
+            await self._notify_ascendants(to_notify)
 
+    @staticmethod
+    async def _notify_ascendants(to_notify: list[tuple[ConfigSection, str]]) -> None:
         # Aggregate the list into a dict of each ascendant's path
         # to its config section and set of paths to notify about
         ascendants_to_notifications: dict[str, tuple[ConfigSection, set[str]]] = {}
@@ -461,35 +463,13 @@ class ConfigSection[T](BaseModel):
         if failures:
             raise ExceptionGroup("Config observers failed", failures)
 
-    def _apply(self, name: str, value: Any) -> list[tuple[ConfigSection, str]] | None:
-        """Validate + assign one field and mark every ancestor as touched.
-
-        Returns the (section, relative-path) pairs to notify, outward from
-        self to the root — or `None` if the value didn't change, so there is
-        nothing to notify.
-
-        NOTE: an unchanged value is not a write. Observers may act on a change
-        by writing back — the API client reverts to the last working model
-        when a new one fails — and that only terminates because writing the
-        same value twice notifies nobody.
-
-        NOTE: pydantic records a write on the model it happened to and does
-        not propagate upward, so `interface.tui.theme = x` would leave the
-        root considering `interface` untouched and `model_dump(exclude_unset=True)`
-        would drop the whole subtree — losing the edit from `/config save`.
-        """
-        if getattr(self, name) == value:
-            return None
+    def _set(self, name: str, value: Any) -> bool:
+        """Writes `self.name=value` only if `value` changed. Returns whether it wrote."""
+        # Only apply changes for new names, or new values for existing names
+        if name in self and getattr(self, name) == value:
+            return False
         super().__setattr__(name, value)
-
-        ascendants: list[tuple[ConfigSection, str]] = [(self, name)]
-        section, path = self, name
-        while section._parent is not None:
-            section._parent.__pydantic_fields_set__.add(section._name)
-            path = f"{section._name}.{path}"
-            section = section._parent
-            ascendants.append((section, path))
-        return ascendants
+        return True
 
     # TODO: review need and usage across project
     def get(self, path: str, *, as_json: bool = False) -> Any:
@@ -636,6 +616,36 @@ class ConfigSection[T](BaseModel):
             return fn
 
         return register
+
+    def _delete(self, name: str) -> None:
+        """Remove one dynamic entry, mark every ancestor as touched."""
+        if name in type(self).model_fields:
+            raise AttributeError(
+                f"{name!r} is a declared field of "
+                f"{type(self).__name__!r} and can't be deleted"
+            )
+        if name not in self:
+            raise PathNotFound(type(self), name)
+        super().__delattr__(name)
+        self.__pydantic_fields_set__.discard(name)
+
+    def __delattr__(self, name: str) -> None:
+        if name in self.__private_attributes__:
+            super().__delattr__(name)
+        else:
+            self._delete(name)
+            for ascendant, path in self._ascendants_of(name):
+                task = asyncio.create_task(ascendant._notify_changed(frozenset({path})))
+                _NOTIFICATIONS_IN_COURSE.add(task)
+                task.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
+
+    async def delete(self, *paths: str) -> None:
+        to_notify: list[tuple[ConfigSection, str]] = []
+        for path in paths:
+            section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
+            section._delete(leaf_name)
+            to_notify.extend(section._ascendants_of(leaf_name))
+        await self._notify_ascendants(to_notify)
 
 
 def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
