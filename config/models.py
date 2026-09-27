@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import operator
 import typing
-import weakref
+from types import GenericAlias
 from collections.abc import Mapping, Callable
 from dataclasses import dataclass
 from typing import (
@@ -28,7 +28,8 @@ from typing import (
     ClassVar,
     TypeVar,
     Union,
-    Annotated, Awaitable, Generator, Iterator,
+    Annotated, Awaitable, Generator, Iterator, TypeIs,
+    override,
 )
 
 import pathlib
@@ -123,54 +124,6 @@ CommaSeparated = Annotated[
         when_used="json",
     ),
 ]
-
-def _schema_for(model: type[BaseModel], path: str) -> FieldInfo:
-    """Given a dotted `path`, returns the FieldInfo of its leaf on `model`."""
-    *parents, leaf = path.split(".")
-    # Walk the path and validate each segment
-    for segment in parents:
-        if segment not in model.model_fields:
-            raise PathNotFound(model, segment)
-        annotation = model.model_fields[segment].annotation
-        if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
-            raise NotASection(segment, path)
-        model = annotation
-    # Validate the leaf, then return its FieldInfo
-    if leaf not in model.model_fields:
-        raise PathNotFound(model, leaf)
-    return model.model_fields[leaf]
-
-
-def _walk_schema(
-        model: type[BaseModel],
-        *,
-        prefix: str = "",
-        skip_excluded: bool = True,
-) -> Iterator[tuple[str, FieldInfo]]:
-    """
-    Walks the schema and yields each field's name and  FieldInfo.
-
-    :param `path`: dotted-path address of the field starting from the provided root.
-    :param `skip_excluded`: whether to honor a field's `exclude=True`, if False walks
-        into them. Fields may want to be excluded from editing/model dumping, but
-        still need to be traversed for ex. for CLI flag gathering.
-    :return yields a tuple of: that field's name and its pydantic FieldInfo
-    """
-    for name, info in model.model_fields.items():
-        if skip_excluded and info.exclude:
-            continue
-        annotation = info.annotation
-        path = f"{prefix}{name}"
-        if typing.get_origin(annotation) is dict:
-            yield path, info
-        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
-            yield from _walk_schema(
-                annotation,
-                prefix=f"{path}.",
-                skip_excluded=skip_excluded
-            )
-        else:
-            yield (path, info)
 
 
 def _unwrap_optional(_type: type) -> tuple[Any, bool]:
@@ -327,6 +280,17 @@ class ConfigSection[T](BaseModel):
                 value._name = name
         return self
 
+    # NOTE: declared fields aren't matched against `T`
+    # ```
+    # class MyConfig(ConfigSection[str]):
+    #   timeout: int
+    # ```
+    #  `MyConfig()["timeout"]` will resolve to `int`, type checker expects `str`
+    def __getitem__(self, name: str) -> T:
+        if name not in self:
+            raise KeyError(name)
+        return getattr(self, name)
+
     def __setattr__(self, name: str, value: Any) -> None:
         """Plain assignment (`config.api.model = "x"`),
 
@@ -361,26 +325,78 @@ class ConfigSection[T](BaseModel):
        return dict(self) | dict(other)
 
     @classmethod
-    def walk_schema(cls, *, skip_excluded: bool = True) -> Iterator[tuple[str, FieldInfo]]:
-        """Walks this sections schema, yielding each field's (name, field_info)."""
-        yield from _walk_schema(cls, skip_excluded=skip_excluded)
+    def walk_schema(cls, path: str) -> Iterator[tuple[str, FieldInfo]]:
+        """
+        Walks this section's schema depth-first, yielding each visited field's
+        (dotted path, field_info), ending at the leaf.
+
+        A segment is a field name, `*` (every field at this level, the rest of
+        the path continuing from each) or `**` (every field from here down,
+        only as the last segment).
+        """
+        segment, _delimiter, rest = path.partition(".")
+        if segment == "**" and rest:
+            raise ValueError(f"'**' must be the last segment: {path!r}")
+        names = list(cls.model_fields) if segment in ("*", "**") else [segment]
+        for name in names:
+            if name not in cls.model_fields:
+                raise PathNotFound(cls, name)
+            field_info = cls.model_fields[name]
+            section = field_info.annotation
+            if rest and not _is_section(section):
+                # `*.url` skips the fields that can't contain `url`
+                if segment == "*":
+                    continue
+                raise NotASection(name, path)
+            yield name, field_info
+            # `**` keeps going to the bottom
+            next_path = "**" if segment == "**" else rest
+            if next_path and _is_section(section):
+                for sub_path, sub_info in section.walk_schema(next_path):
+                    yield f"{name}.{sub_path}", sub_info
 
     @classmethod
-    def schema_for(cls, path):
-        return _schema_for(cls, path)
+    def get_schema(cls, path) -> FieldInfo:
+        *_rest, (_leaf_name, leaf_field_info) = cls.walk_schema(path)
+        return leaf_field_info
 
-    def walk(self, path) -> Iterator[tuple[str, ConfigSection]]:
-        """Walks `path` starting from `self`, yielding each field's (name, owner)."""
-        section = self
-        for name in path.split("."):
-            yield name, section
-            section = getattr(section, name)
+    def walk(self, path: str) -> Iterator[tuple[str, Any]]:
+        """
+        Walks `path` starting from `self` depth-first, yielding each visited
+        field's (dotted path, value), ending at the leaf.
+
+        Segments are read like in `walk_schema`, except `*` and `**` also
+        visit dynamic entries, which only exist on instances.
+        """
+        segment, _delimiter, rest = path.partition(".")
+        if segment == "**" and rest:
+            raise ValueError(f"'**' must be the last segment: {path!r}")
+        if segment in ("*", "**"):
+            # Iterating a section yields its dynamic entries too
+            matches = list(self)
+        elif segment in self:
+            matches = [(segment, getattr(self, segment))]
+        else:
+            raise PathNotFound(type(self), segment)
+        for name, value in matches:
+            is_section = isinstance(value, ConfigSection)
+            if rest and not is_section:
+                # `*.url` skips the fields that can't contain `url`
+                if segment == "*":
+                    continue
+                raise NotASection(name, path)
+            yield name, value
+            # `**` keeps going to the bottom
+            next_path = "**" if segment == "**" else rest
+            if next_path and is_section:
+                for sub_path, sub_value in value.walk(next_path):
+                    yield f"{name}.{sub_path}", sub_value
 
     @classmethod
     def editable_fields(cls) -> dict[str, str]:
         return {
             path: info.description or path
-            for path, info in cls.walk_schema()
+            for path, info in cls.walk_schema("**")
             # HACK: gone once mcp is a DynamicSection
             if typing.get_origin(info.annotation) is not dict
         }
@@ -483,9 +499,10 @@ class ConfigSection[T](BaseModel):
         `as_json` allows serializing the nested Pydantic structure and complex
          objects according to their own `@field_serializer` rules.
         """
-        parent, leaf, _ = self.leaf_parent_name_and_schema(path)
         if not as_json:
-            return getattr(parent, leaf)
+            *_rest, (_leaf_path, value) = self.walk(path)
+            return value
+        parent, leaf, _ = self.leaf_parent_name_and_schema(path)
         # Serialize the owner object, return the target
         dumped = parent.model_dump(mode="json", include={leaf})
         return dumped[leaf]
@@ -501,9 +518,9 @@ class ConfigSection[T](BaseModel):
         # TODO: this uses model_fields, which doesn't understand paths.
         #  Add a method to get schema by path
         fields = (
-            ((path, cls.schema_for(path)) for path in paths)
+            ((path, cls.get_schema(path)) for path in paths)
             if paths
-            else cls.walk_schema(skip_excluded=False)
+            else cls.walk_schema("**")
         )
         path_to_flags: dict[str, list[CliFlags]] = {}
         claimed_by: dict[str, str] = {}
@@ -587,37 +604,15 @@ class ConfigSection[T](BaseModel):
         Raises AttributeError raised by `walk`, or if somehow the penultimate
          segment of `path` isn't a ConfigSection.
         """
-        # Exhaust the walk
-        leaf_name, owner_section = "", self
-        for leaf_name, owner_section in self.walk(path):
-            pass
-        # Confirm the leaf name exists, then return
-        if leaf_name not in owner_section:
-            raise PathNotFound(type(owner_section), leaf_name)
-        return (owner_section, leaf_name, type(owner_section).model_fields[leaf_name])
-
-    def _check_path(self, path) -> None:
-        """
-        Checks whether a path can exist on the tree.
-        Raises AttributeError when reaching a missing entry that does not
-         belong to a DynamicSection.
-        """
-        # HACK: re-uses most of the body of `owner_of's checks here.
-        #  Review design overall, there should be an easy way to abstract
-        #  "finish the walk, interrogate the final assignment"
-        leaf_name, owner_section = "", self
-        try:
-            for leaf_name, owner_section in self.walk(path):
-                pass
-        except AttributeError:
-            # Dynamic sections can get re-composed anytime, not finding
-            #  a field name inside them is within expected behavior.
-            if not isinstance(owner_section, DynamicSection):
-                raise
-            return
-        if leaf_name not in owner_section:
-            raise PathNotFound(type(owner_section), leaf_name)
-            # raise AttributeError(f"{type(owner_section).__name__!r} does not contain field {leaf_name!r}")
+        parent_section = self
+        # "a.b.c.d" -> "a.b.c", "d"
+        path_to_parent, _delimiter, leaf_name = path.rpartition(".")
+        if path_to_parent:
+            # Exhaust the walk
+            *_rest, (_, parent_section) = self.walk(path_to_parent)
+            if not isinstance(parent_section, ConfigSection):
+                raise NotASection(path_to_parent, path)
+        return (parent_section, leaf_name, parent_section.get_schema(leaf_name)) # type(parent_section).model_fields[leaf_name])
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
         """
@@ -628,9 +623,11 @@ class ConfigSection[T](BaseModel):
             async def _on_api_change(config, paths): ...
         ```
         """
-        # TODO: add '*' to path semantics, discuss meaning first
+        # Validate that registered paths exist, or stop existing
+        #  at a DynamicSection
         for path in paths:
-            self._check_path(path)
+            for _subpath in self.walk_schema(path):
+                pass
 
         frozen_paths = frozenset(paths) if paths else None
 
@@ -639,6 +636,10 @@ class ConfigSection[T](BaseModel):
             return fn
 
         return register
+
+
+def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
+    return isinstance(cls, type) and issubclass(cls, ConfigSection)
 
 
 # An async callback (config, changed_paths) — registered via @config.on_change.
@@ -654,10 +655,10 @@ class DynamicSection[T](ConfigSection[T]):
     auto-rebuilds every live instance right there - a class's schema and
     any instance already built from it can never drift apart, since there
     is no separate step for a caller to remember or forget.
-
-    The TYPE_CHECKING `__getattr__` types untyped `config.tools.<name>` reads
-    as `Any` at declaration time; the typed path is a tool's `self.settings(config)`.
     """
+
+    model_config = _MUTABLE_ALLOW
+    _entry_type: ClassVar[Any] = Any  # T in `DynamicSection[T]`
 
     # NOTE: each subclass needs its OWN registry - a class attribute holding a
     #  mutable container is otherwise shared by every subclass, which would
@@ -666,11 +667,7 @@ class DynamicSection[T](ConfigSection[T]):
     #  the reference keeping them from being deleted when no longer held
     #  by anything else. WeakSet would need to hash, which BaseModel can't
     #  do by default apparently, a dict only needs to hash keys.
-    _instances: ClassVar[weakref.WeakValueDictionary]
-
-    # TODO: explain why this is necessary
-    if TYPE_CHECKING:
-        def __getattr__(self, name: str) -> Any: ...
+    # _instances: ClassVar[weakref.WeakValueDictionary]
 
     # TODO: why is there no delete method? How do we remove missing plugins?
     #  Confirmed: compose() shrinking the entries then auto-rebuilding a live,
@@ -679,41 +676,48 @@ class DynamicSection[T](ConfigSection[T]):
     #  keeping it under model_extra. A future non-preserving DynamicSection
     #  whose entries can shrink needs this fixed first.
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        cls._instances = weakref.WeakValueDictionary()
-
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
-        # NOTE: pydantic models are unhashable by default (no __hash__ once
-        #  __eq__ is generated - see Choice's own eq=False above), so a
-        #  WeakSet can't hold them directly. id() as the key sidesteps
-        #  hashing the instance itself; only a dict's VALUES are held weakly.
-        type(self)._instances[id(self)] = self
-
+    @override
     @classmethod
-    def _install_fields(cls, entries: Mapping[str, type[BaseModel]]) -> None:
-        """Install one field per entry, replacing whatever was there. Mutates
-        THIS class rather than building a new one - a new class would make
-        every live section an instance of the old one, so a caller holding
-        `config.plugins.tools` would be left with a detached object every
-        time the plugin set changed. Nothing a module holds goes stale.
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Enforce type for `model_extra` entries from the class parameter."""
+        super().__pydantic_init_subclass__(**kwargs)
+        metadata = cls.__pydantic_generic_metadata__
+        # If we got here through `DynamicSection[T]`, force everything
+        # in `model_extra` to be of type T
+        if metadata["origin"] is not None:
+            # Skip actual `T` in `DynamicSection[T]` since it's not a real type
+            if not isinstance((parameter_type := metadata["args"][0]), TypeVar):
+                cls._entry_type = parameter_type
+                # `dict[str, parameter_type]` fails with "Parameters to generic
+                #  types must be types", this evaluates to the same
+                cls.__annotations__["__pydantic_extra__"] = GenericAlias(
+                    dict,
+                    (str, parameter_type)
+                )
+                cls.model_rebuild(force=True)
 
-        Does NOT touch any other live instance - see `compose` for that.
-        A section composing itself from its OWN data (one instance, its own
-        entries) uses this directly: calling `compose` from inside a
-        validator on the same class would recurse (compose rebuilds every
-        instance, which re-runs that very validator), and syncing OTHER
-        instances would be actively wrong when different instances legitimately
-        want different entries (MCP servers, not a shared environment fact).
+    @override
+    @classmethod
+    def walk_schema(cls, path: str) -> Iterator[tuple[str, FieldInfo]]:
         """
-        cls.model_fields.clear()
-        for name, model in entries.items():
-            cls.model_fields[name] = FieldInfo(
-                annotation=model,
-                default_factory=model,
-            )
-        cls.model_rebuild(force=True)
+        Like `ConfigSection.walk_schema`, and a name that isn't declared is a
+        dynamic entry of type T. `*` and `**` only cover declared fields:
+        dynamic entries exist on instances, not on the class.
+        """
+        name, _delimiter, rest = path.partition(".")
+        # Patterns, or a declared field: the base class walks these
+        if name in ("*", "**") or name in cls.model_fields:
+            yield from super().walk_schema(path)
+            return
+
+        # Any other name is a dynamic entry of type T,
+        #  create a FieldInfo from the annotation
+        if rest and not _is_section(cls._entry_type):
+            raise NotASection(name, path)
+        yield name, FieldInfo.from_annotation(cls._entry_type)
+        if rest:
+            for sub_path, sub_info in cls._entry_type.walk_schema(rest):
+                yield f"{name}.{sub_path}", sub_info
 
 
 class PreservingSection[T](DynamicSection[T]):
@@ -723,8 +727,6 @@ class PreservingSection[T](DynamicSection[T]):
     Used for the plugin sections: a block for a plugin absent on this machine
     remains available through `undiscovered` for exporting through `/config save`.
     """
-
-    model_config = _MUTABLE_ALLOW
 
     @property
     def undiscovered(self) -> dict[str, Any]:

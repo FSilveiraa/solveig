@@ -36,7 +36,7 @@ from solveig.config import SolveigConfig, display_config_value
 def _field_infos(config: SolveigConfig) -> dict[str, Any]:
     return {
         path: info
-        for path, info in config.walk_schema()
+        for path, info in config.walk_schema("**")
         # HACK: the way to identify "this section is a dict" is through
         #  dict-typing. This was made to accomodate the `solveig.mcp`
         #  module, investigate DynamicSection instead - this isn't correct
