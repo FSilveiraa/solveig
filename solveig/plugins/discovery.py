@@ -133,9 +133,9 @@ async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
                         f"'{name}': loaded (disabled)", level=Level.INFO
                     )
             # PRESERVE + WARN: config for a plugin that wasn't discovered is kept
-            # (see PreservingSection.undiscovered) so /config save never strips it, but is
+            # (see DynamicSection.unresolved) so /config save never strips it, but is
             # flagged here — a typo or a plugin missing on this machine, not an error.
-            for name in sorted(config.plugins.tools.undiscovered):
+            for name in sorted(config.plugins.tools.unresolved):
                 await tools_group.print(
                     f"'{name}': config present but plugin not discovered (preserved)",
                     level=Level.WARNING,
@@ -150,8 +150,8 @@ async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
                         f"'{name}': loaded (disabled)", level=Level.INFO
                     )
             # Same PRESERVE + WARN as tools: a hook config block for an undiscovered
-            # hook is kept (PreservingSection) and flagged, never silently dropped.
-            for name in sorted(config.plugins.hooks.undiscovered):
+            # hook is kept (DynamicSection.unresolved) and flagged, never silently dropped.
+            for name in sorted(config.plugins.hooks.unresolved):
                 await hooks_group.print(
                     f"'{name}': config present but hook not discovered (preserved)",
                     level=Level.WARNING,

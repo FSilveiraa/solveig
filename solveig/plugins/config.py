@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from config.models import ConfigSection, PreservingSection
+from config.models import ConfigSection, DynamicSection
 from solveig.tools.config import ToolConfig
 from solveig.utils.file import Filesystem
 
@@ -26,18 +26,24 @@ class HookConfig(ConfigSection):
     enabled: bool = Field(default=True, description="Enable this hook")
 
 
-class PluginToolsConfig(PreservingSection[ToolConfig]):
+class PluginToolsConfig(DynamicSection[ToolConfig]):
     """
-    Placeholder for `config.plugins.tools` — composed from discovered plugin tools
-    Tools declare config types at class declaration (MyTool(BaseTool[MyConfig])).
+    `config.plugins.tools`: one entry per plugin tool. Each entry's type is the
+    tool's own `config_model`, known only once the plugin is discovered, so
+    entries wait as written until `resolve()` gives them their type.
     """
 
+    _types_resolved_later = True
 
-class PluginHooksConfig(PreservingSection[HookConfig]):
+
+class PluginHooksConfig(DynamicSection[HookConfig]):
     """
-    Placeholder for `config.plugins.hooks` — composed from discovered plugin hooks.
-    Hooks declare config types through their class's `config_model`
+    `config.plugins.hooks`: one entry per plugin hook. Each entry's type is the
+    hook's own `config_model`, known only once the plugin is discovered, so
+    entries wait as written until `resolve()` gives them their type.
     """
+
+    _types_resolved_later = True
 
 
 class PluginsConfig(ConfigSection):

@@ -39,7 +39,8 @@ from pydantic import (
     ConfigDict,
     PlainSerializer,
     PrivateAttr,
-    model_validator, GetCoreSchemaHandler, GetJsonSchemaHandler,
+    model_validator, GetCoreSchemaHandler, GetJsonSchemaHandler, model_serializer,
+    ValidationError,
 )
 from pydantic.fields import FieldInfo
 from pydantic.json_schema import JsonSchemaValue
@@ -58,6 +59,10 @@ _MUTABLE = ConfigDict(
     # The config holds non-pydantic types. Without this flag,
     # pydantic rejects a field whose type isn't a BaseModel/builtin.
     arbitrary_types_allowed=True,
+    # Models are serialized by their runtime class, not their declared one.
+    # Ensures a `DynamicSection[MyBaseClass]` will serialize entries according
+    #  to their actual class serialization, not their base class.
+    polymorphic_serialization=True,
     # Ensures that unknown keys raise an error
     extra="forbid",
 )
@@ -668,6 +673,15 @@ class DynamicSection[T](ConfigSection):
     model_config = _MUTABLE_ALLOW
     _entry_type: ClassVar[Any] = Any  # T in `DynamicSection[T]`
 
+    # Whether entries get their type later through `resolve()`.
+    #  Until then, an entry's data is kept as a dict inside
+    #  `unresolved` and can't be accessed normally.
+    #  If off, expects types available at init.
+    _types_resolved_later: ClassVar[bool] = False
+
+    # Per-instance contained for untyped entries, and known types so far
+    _unresolved: dict[str, Any] = PrivateAttr(default_factory=dict)
+
     @override
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
@@ -688,6 +702,100 @@ class DynamicSection[T](ConfigSection):
                 )
                 cls.model_rebuild(force=True)
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def _keep_untyped_entries_aside(cls, data: Any, handler) -> Any:
+        """
+        Ensures entries read from a file with no known type yet are kept
+        in `_unresolved` until `resolve()` gives them a type.
+        """
+        if not cls._types_resolved_later or not isinstance(data, dict):
+            return handler(data)
+        typed_entries = {
+            name: value for name, value in data.items()
+            if name in cls.model_fields or isinstance(value, cls._entry_type)
+        }
+        section = handler(typed_entries)
+        section._unresolved.update({name: value for name, value in data.items() if name not in typed_entries})
+        return section
+
+    @model_serializer(mode="wrap")
+    def _save_unresolved_entries(self, handler) -> dict[str, Any]:
+        """Write unresolved entries when serializing."""
+        return {**self._unresolved, **handler(self)}
+
+    def resolve(self, types: Mapping[str, type]) -> None:
+        """
+        Gives entries their types.
+        Data whose type is known becomes an entry of that types.
+        Known types without data get a default entry.
+        Entries without types go back to being data dicts.
+        Data that doesn't match its type is kept, and failures are raised together at the end.
+        """
+        changed: list[str] = []
+        failures: list[Exception] = []
+        # Types that left or changed: the entry goes back to being a data dict
+        for name, entry in list((self.model_extra or {}).items()):
+            if types.get(name) is not type(entry):
+                self._unresolved[name] = entry.model_dump(exclude_unset=True)
+                BaseModel.__delattr__(self, name)
+                changed.append(name)
+        # Types that arrived: their data becomes an entry
+        for name, entry_type in types.items():
+            if isinstance((self.model_extra or {}).get(name), entry_type):
+                continue
+            data = self._unresolved.get(name, {})
+            try:
+                entry = entry_type.model_validate(data)
+            except ValidationError as error:
+                failures.append(error)
+                continue
+            self._unresolved.pop(name, None)
+            BaseModel.__setattr__(self, name, entry)
+            # A default entry isn't something the user set
+            if not data:
+                self.__pydantic_fields_set__.discard(name)
+            changed.append(name)
+        # NOTE: notified once for everything, so the writes above bypass `_set`
+        if changed:
+            self._notify_relatives_sync(*changed)
+        if failures:
+            raise ExceptionGroup(f"{type(self).__name__}: entries that don't match their type", failures)
+
+    @property
+    def unresolved(self) -> list[str]:
+        """Names of entries still waiting for their type."""
+        return list(self._unresolved)
+
+    @override
+    def _set(self, name: str, value: Any) -> bool:
+        """
+        On a section whose types arrive later, a resolved entry's own class
+        types the value, and a name without a type keeps its value as written.
+        """
+        if not self._types_resolved_later or name in type(self).model_fields:
+            return super()._set(name, value)
+        entries = self.model_extra or {}
+        if name in entries:
+            entry_type = type(entries[name])
+            if not isinstance(value, entry_type):
+                value = entry_type.model_validate(value)
+            return super()._set(name, value)
+        if self._unresolved.get(name) == value:
+            return False
+        self._unresolved[name] = value
+        self._mark_ancestors_as_set()
+        return True
+
+    @override
+    def _delete(self, name: str) -> None:
+        """Entries waiting for their type can be deleted too."""
+        if name in self._unresolved:
+            del self._unresolved[name]
+            self._mark_ancestors_as_set()
+            return
+        super()._delete(name)
+
     @override
     @classmethod
     def walk_schema(cls, path: str) -> Iterator[tuple[str, FieldInfo]]:
@@ -702,6 +810,14 @@ class DynamicSection[T](ConfigSection):
             yield from super().walk_schema(path)
             return
 
+        # Below an entry whose type arrives later, the schema can't be known
+        #  yet, so any path there is accepted (an observer of a plugin's own
+        #  setting can register before the plugin is loaded)
+        if cls._types_resolved_later and rest:
+            yield name, FieldInfo.from_annotation(cls._entry_type)
+            yield f"{name}.{rest}", FieldInfo.from_annotation(Any)
+            return
+
         # Any other name is a dynamic entry of type T,
         #  create a FieldInfo from the annotation
         if rest and not _is_section(cls._entry_type):
@@ -710,20 +826,3 @@ class DynamicSection[T](ConfigSection):
         if rest:
             for sub_path, sub_info in cls._entry_type.walk_schema(rest):
                 yield f"{name}.{sub_path}", sub_info
-
-
-class PreservingSection[T](DynamicSection[T]):
-    """
-    A composed section that preserves config for entries it has no field for.
-
-    Used for the plugin sections: a block for a plugin absent on this machine
-    remains available through `undiscovered` for exporting through `/config save`.
-    """
-
-    @property
-    def undiscovered(self) -> dict[str, Any]:
-        """
-        Config blocks kept for entries that were never discovered.
-        Cleanly abstracts pydantic's `model_extra` private storage.
-        """
-        return dict(self.model_extra or {})

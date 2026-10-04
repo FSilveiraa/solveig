@@ -22,7 +22,7 @@ from config.models import (
     DynamicSection,
     Path,
     ConfigSection,
-    PreservingSection, CliFlags, CommaSeparated, PathPattern, AbsolutePath,
+    CliFlags, CommaSeparated, PathPattern, AbsolutePath,
 )
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig, MCPConfig
@@ -36,7 +36,6 @@ __all__ = [
     "SolveigConfig",
     "ConfigSection",
     "DynamicSection",
-    "PreservingSection",
 ]
 
 

@@ -22,35 +22,9 @@ from solveig.config import SolveigConfig
 from config.editor import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
-from solveig.plugins.config import PluginToolsConfig, PluginHooksConfig
-from solveig.plugins.discovery import ON_SCANNED, discover_plugins, report_plugins
+from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
 from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
-
-
-# TODO: delete, `compose()` is getting deleted, replace with
-#  `plugin_tools_config.set({tool.name for tool in ...})`
-def compose_plugin_sections() -> None:
-    """Rebuild `plugins.tools` and `plugins.hooks` from whatever is registered.
-
-    Subscribed to `ON_SCANNED` below, so it is a REACTION to the plugin set
-    changing rather than a step a caller has to remember after
-    `discover_plugins`. That pairing was the bug: the registry and the schema
-    are two globals, nothing kept them in sync, and a stale schema does not
-    fail - `extra="allow"` hands back a raw dict for the plugin's section and
-    the mismatch only surfaces as an AttributeError deep inside a hook.
-
-    Config cannot subscribe to this itself: it is imported by nearly everything
-    and must not import the plugin packages back. So the wiring lives here, one
-    layer above both, and neither module learns about the other."""
-    PluginToolsConfig.compose({
-        plugin_tool_name(e): config_model_of(e)
-        for e in PLUGIN_TOOLS
-    })
-    PluginHooksConfig.compose(hooks_config_map())
-
-
-ON_SCANNED.append(compose_plugin_sections)
 
 
 async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
@@ -68,11 +42,18 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     deleted modules and re-imports changed ones, so working out which file moved
     would buy nothing a full rescan doesn't already give.
     """
-    # Recomposition rides on the scan (ON_SCANNED), so this does not pair the
-    # two by hand any more - and neither does anything else that scans.
-    # compose_plugin_sections() itself rebuilds every live instance now, so
-    # there is nothing left to do here.
     discover_plugins(config.plugins.paths)
+
+    # The plugin sections learn every config type that exists now: blocks for
+    # discovered plugins become typed entries, and entries of plugins that are
+    # gone go back to their data, kept but out of reach.
+    # NOTE: this lives here, above config and plugins both, because config
+    #  must not import the plugin packages.
+    config.plugins.tools.resolve({
+        plugin_tool_name(entry): config_model_of(entry)
+        for entry in PLUGIN_TOOLS
+    })
+    config.plugins.hooks.resolve(hooks_config_map())
 
     # NOTE: nothing re-registers subcommands here. `discover_plugins` empties the
     # plugin store before the rescan, and every `@tool`/`@subcommand` in a

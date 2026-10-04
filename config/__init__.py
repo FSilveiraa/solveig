@@ -15,7 +15,7 @@ DEFAULT_CONFIG_PATHS: list[str] = [
 ]
 
 from .config import Config
-from .models import ConfigSection, DynamicSection, PreservingSection, ConfigObserver
+from .models import ConfigSection, DynamicSection, ConfigObserver
 
 
 __all__ = [
@@ -24,5 +24,4 @@ __all__ = [
     "ConfigObserver",
     "ConfigSection",
     "DynamicSection",
-    "PreservingSection",
 ]
