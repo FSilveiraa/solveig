@@ -1,7 +1,7 @@
 import argparse
 import pathlib
 import sys
-from typing import override
+from typing import Annotated, override
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, CliSettingsSource, SettingsConfigDict
@@ -19,9 +19,12 @@ class Config(BaseSettings, ConfigSection):
         cli_enforce_required=False,
     )
 
-    parse_cli: bool = True
+    # Whether to read `sys.argv`. An internal switch, never saved or edited
+    parse_cli: bool = Field(default=True, exclude=True)
     # Sorted lowest -> highest priority
-    config_files: list[Path] = Field(default_factory=list, exclude=True)
+    # `--config FILE`, repeatable. A subclass may add its own shortcuts
+    #  (`CliFlags("c", "config")`) by redeclaring the field.
+    config_files: Annotated[list[Path], CliFlags("config")] = Field(default_factory=list, exclude=True)
     # cli_args: list[str] = Field(default_factory=lambda: sys.argv[1:], exclude=True)
 
     @classmethod
@@ -34,13 +37,21 @@ class Config(BaseSettings, ConfigSection):
         remaining_argv). `--config` is consumed by the config-file source.
         """
         # Find the flags for `config_files`
-        config_flags: list[CliFlags] = cls._cli_flags_from_schema("config_files")["config_files"]
-        all_flags = [flag for cli_flags in config_flags for flag in cli_flags.prefixed()]
+        all_config_file_flags: list[CliFlags] = cls._cli_flags_from_schema("config_files")["config_files"]
+        flat_config_file_flags = [
+            flag
+            for cli_flags in all_config_file_flags
+            for flag in cli_flags.to_argparse()
+        ]
         # Create an argparse parser to extract them from the CLI args
-        parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument(*all_flags, action="append", dest="config", default=[])
-        ns, rest = parser.parse_known_args(argv)
-        return ns.config, rest
+        config_file_path_parser = argparse.ArgumentParser(add_help=False)
+        config_file_path_parser.add_argument(
+            *flat_config_file_flags,
+            action="append",
+            dest="config", default=[]
+        )
+        namespace, rest = config_file_path_parser.parse_known_args(argv)
+        return namespace.config, rest
 
     @override
     @classmethod
@@ -68,11 +79,24 @@ class Config(BaseSettings, ConfigSection):
             config_paths = settings_cls.model_fields["config_files"].get_default(call_default_factory=True)
         config_paths = [ pathlib.Path(p).expanduser().resolve() for p in config_paths ]
 
+        # For some reason pydantic-settings expect the keys (paths) to use kebab-case,
+        #  and the values (cli flags) to use underscores. Expected:
+        #  {"path.to.my-section": ["my-section", "m"]}
+        #  Creates: `--my-section` and `-m`
+        cli_flags = {
+            path.replace("_", "-"): [
+                flag
+                for cli_flags in flags
+                for flag in cli_flags.flags
+            ]
+            for path, flags in cls._cli_flags_from_schema().items()
+        }
+
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files.
         cli_settings = CliSettingsSource(
             settings_cls,
             cli_parse_args=argv,
-            cli_shortcuts=cls._cli_flags_from_schema(),
+            cli_shortcuts=cli_flags,
         )
         # TODO: ConfigFileSource contains its own internal defaults,
         #  built from default name templates and known extensions. This

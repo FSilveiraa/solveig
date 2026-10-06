@@ -24,6 +24,7 @@ from types import GenericAlias
 from collections.abc import Mapping, Callable
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     TypeVar,
@@ -213,7 +214,7 @@ class CliFlags:
     # def kebab_case(self) -> list[str]:
     #     return [flag.replace("_", "-") for flag in self.flags]
 
-    def prefixed(self) -> list[str]:
+    def to_argparse(self) -> list[str]:
         return [
             (f"{'-' if len(flag) == 1 else '--'}"
              f"{flag.replace("_", "-")}")
@@ -284,18 +285,23 @@ class ConfigSection(BaseModel):
             raise KeyError(name)
         return getattr(self, name)
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Plain assignment (`config.api.model = "x"`).
+    # NOTE: hidden from type checkers. A visible `__setattr__(name: str, ...)`
+    #  tells them any attribute may be assigned, so `config.api.modle = "x"`
+    #  would type-check. Hidden, they check writes against the declared fields.
+    #  The same pattern pydantic uses for its own `__getattr__`.
+    if not TYPE_CHECKING:
+        def __setattr__(self, name: str, value: Any) -> None:
+            """Plain assignment (`config.api.model = "x"`).
 
-        Notifies observers through background tasks.
-        NOTE: no current way to cancel notification tasks.
-        """
-        if name in self.__private_attributes__:
-            super().__setattr__(name, value)
-            return
+            Notifies observers through background tasks.
+            NOTE: no current way to cancel notification tasks.
+            """
+            if name in self.__private_attributes__:
+                super().__setattr__(name, value)
+                return
 
-        if self._set(name, value):
-            self._notify_relatives_sync(name)
+            if self._set(name, value):
+                self._notify_relatives_sync(name)
 
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
@@ -370,15 +376,6 @@ class ConfigSection(BaseModel):
             if next_path and is_section:
                 for sub_path, sub_value in value.walk(next_path):
                     yield f"{name}.{sub_path}", sub_value
-
-    @classmethod
-    def editable_fields(cls) -> dict[str, str]:
-        return {
-            path: info.description or path
-            for path, info in cls.walk_schema("**")
-            # HACK: gone once mcp is a DynamicSection
-            if typing.get_origin(info.annotation) is not dict
-        }
 
     async def set(self, *args, **fields: Any) -> None:
         """
@@ -724,7 +721,7 @@ class DynamicSection[T](ConfigSection):
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
 
-    def resolve(self, types: Mapping[str, type]) -> None:
+    def resolve(self, types: Mapping[str, type[BaseModel]]) -> None:
         """
         Gives entries their types.
         Data whose type is known becomes an entry of that types.

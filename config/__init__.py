@@ -9,17 +9,11 @@ stays the thing that composes them rather than the thing that knows them all.
 
 from __future__ import annotations
 
-DEFAULT_CONFIG_PATHS: list[str] = [
-    "./.solveig/config.yaml",
-    "~/.solveig/config.yaml",
-]
-
 from .config import Config
 from .models import ConfigSection, DynamicSection, ConfigObserver
 
 
 __all__ = [
-    "DEFAULT_CONFIG_PATHS",
     "Config",
     "ConfigObserver",
     "ConfigSection",
