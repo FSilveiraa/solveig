@@ -10,7 +10,17 @@ stays the thing that composes them rather than the thing that knows them all.
 from __future__ import annotations
 
 from .config import Config
-from .models import ConfigSection, DynamicSection, ConfigObserver
+from .section.static import ConfigSection, ConfigObserver
+from .section.dynamic import DynamicSection
+from .annotations import (
+    Choice,
+    CliFlags,
+    CommaSeparated,
+    Path,
+    AbsolutePath,
+    PathPattern,
+)
+from .exceptions import PathNotFound, NotASection
 
 
 __all__ = [
@@ -18,4 +28,12 @@ __all__ = [
     "ConfigObserver",
     "ConfigSection",
     "DynamicSection",
+    "Choice",
+    "CliFlags",
+    "CommaSeparated",
+    "Path",
+    "AbsolutePath",
+    "PathPattern",
+    "PathNotFound",
+    "NotASection",
 ]
