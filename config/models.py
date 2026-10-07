@@ -133,19 +133,20 @@ CommaSeparated = Annotated[
 ]
 
 
-def _unwrap_optional(_type: type) -> tuple[Any, bool]:
+def unwrap_optional(_type: type | FieldInfo) -> tuple[bool, Any]:
     """
     Finds whether `_type` is a union of a type with None.
     Union[X, None] -> (X, True). Anything else -> (_type, False).
     :param _type:
     :return:
     """
-    origin = typing.get_origin(_type)
+    annotation = _type.annotation if isinstance(_type, FieldInfo) else _type
+    origin = typing.get_origin(annotation)
     if origin is Union:
-        non_none = [arg for arg in typing.get_args(_type) if arg is not type(None)]
+        non_none = [arg for arg in typing.get_args(annotation) if arg is not type(None)]
         if len(non_none) == 1:
-            return (non_none[0], True)
-    return (_type, False)
+            return (True, non_none[0])
+    return (False, annotation)
 
 
 # `eq=False` is important to maintain. Without it, pydantic can try to derive __eq__/__hash__
@@ -158,8 +159,16 @@ class Choice:
     key: Callable[[Any], str] = operator.attrgetter("name")
     label: str = ""
 
+    @classmethod
+    def of(cls, field_info: FieldInfo) -> Choice | None:
+        """Returns the Choice for a field, if it exists."""
+        for annotation in field_info.metadata:
+            if isinstance(annotation, Choice):
+                return annotation
+        return None
+
     @property
-    def choices(self) -> list[str]:
+    def options(self) -> list[str]:
         return sorted(self.entries)
 
     def __get_pydantic_core_schema__(self, source: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
@@ -175,7 +184,7 @@ class Choice:
                 return self.entries[value]
             except KeyError as error:
                 raise ValueError(
-                    f"Not a valid {label}. Use one of {self.choices}"
+                    f"Not a valid {label}. Use one of {self.options}"
                 ) from error
 
         schema = core_schema.json_or_python_schema(
@@ -196,7 +205,7 @@ class Choice:
 
     def __get_pydantic_json_schema__(self, schema: dict[str, Any], handler: GetJsonSchemaHandler) -> JsonSchemaValue:
         json_schema = handler(core_schema.str_schema())
-        json_schema.update(type="string", enum=self.choices)
+        json_schema.update(type="string", enum=self.options)
         return json_schema
 
 
