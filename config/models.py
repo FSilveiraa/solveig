@@ -377,6 +377,29 @@ class ConfigSection(BaseModel):
                 for sub_path, sub_value in value.walk(next_path):
                     yield f"{name}.{sub_path}", sub_value
 
+    def editable_fields(self) -> dict[str, str]:
+        """
+        Every editable field below this section, as {dotted path: description}.
+
+        Walks the instance, so typed dynamic entries are included.
+        Sections are walked into rather than edited, and a field excluded from
+        exports (`exclude=True`) isn't editable, nor is anything inside it.
+        Undescribed fields fall back to their path.
+        """
+        fields: dict[str, str] = {}
+        excluded: list[str] = []
+        for path, value in self.walk("**"):
+            # `**` visits a section before what's inside it
+            if any(matches_prefix(path, prefix) for prefix in excluded):
+                continue
+            _parent, _name, field_info = self.leaf_parent_name_and_schema(path)
+            if field_info.exclude:
+                excluded.append(path)
+                continue
+            if not isinstance(value, ConfigSection):
+                fields[path] = field_info.description or path
+        return fields
+
     async def set(self, *args, **fields: Any) -> None:
         """
         Async writing that holds/raises until observers are notified.

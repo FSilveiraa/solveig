@@ -124,7 +124,17 @@ warn_unused_ignores = true
 # A module may only import its own layer or below. "|" = independent siblings,
 # ":" = siblings that may import each other. TYPE_CHECKING and function-local
 # imports both count.
-root_package = "solveig"
+root_packages = ["solveig", "config"]
+
+[[tool.importlinter.contracts]]
+id = "config-independent"
+name = "The config library never imports Solveig"
+# `config/` is a library Solveig uses, not part of Solveig: an app depends on
+# it, never the other way around. Any import of `solveig` from inside `config`
+# (TYPE_CHECKING and function-local included) fails here.
+type = "forbidden"
+source_modules = ["config"]
+forbidden_modules = ["solveig"]
 
 [[tool.importlinter.contracts]]
 name = "Solveig layers"

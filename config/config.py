@@ -98,11 +98,12 @@ class Config(BaseSettings, ConfigSection):
             cli_parse_args=argv,
             cli_shortcuts=cli_flags,
         )
-        # TODO: ConfigFileSource contains its own internal defaults,
-        #  built from default name templates and known extensions. This
-        #  is not reflected in the field's default at all, and there's
-        #  no way to fully ignore the default configs anymore. Needs
-        #  urgent fixing, most tests likely broken.
+        # NOTE: `config_files` is the record of which files were read. Files are
+        #  chosen with `--config` on the command line, or by the field's default
+        #  otherwise. The record is still an ordinary field, so a value given in
+        #  code or through the environment replaces it without changing what was
+        #  read: `App(config_files=[])` reads the default files but records none.
+        #  Kept settable on purpose (files may later chain other files).
         file_settings = ConfigFileSource(
             settings_cls,
             requested=config_paths,
