@@ -1,60 +1,33 @@
-import argparse
-import pathlib
 import sys
-from typing import Annotated, override
+from typing import override
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, CliSettingsSource, SettingsConfigDict
+from pydantic_settings import BaseSettings, CliSettingsSource
 
+from config.meta import ConfigDict
 from config.section.static import ConfigSection
 from config.annotations.comma_list import CommaSeparated
-from config.annotations.path import Path, AbsolutePath
-from config.annotations.cli_flags import CliFlags
+from config.annotations.path import AbsolutePath
 from config.sources import ConfigFileSource
 
 
 class Config(BaseSettings, ConfigSection):
-    model_config = SettingsConfigDict(
+    model_config = ConfigDict(
         cli_avoid_json=True,
         cli_exit_on_error=False,
         cli_kebab_case=True,
         cli_implicit_flags=True,
         cli_enforce_required=False,
+        default_config_files=[]
     )
 
     # Whether to read `sys.argv`. An internal switch, never saved or edited
     parse_cli: bool = Field(default=True, exclude=True)
-    # Sorted lowest -> highest priority
-    # `--config FILE`, repeatable. A subclass may add its own shortcuts
-    #  (`CliFlags("c", "config")`) by redeclaring the field.
-    config_files: Annotated[CommaSeparated[AbsolutePath], CliFlags("config")] = Field(default_factory=list, exclude=True)
-    # cli_args: list[str] = Field(default_factory=lambda: sys.argv[1:], exclude=True)
+    # Config file paths read, sorted lowest -> highest priority.
+    # Add flags and defaults for this field using:
+    #  `ConfigDict(cli_shortcuts={"config_files":["c", "config"]}, default_config_files=["~/config.json"])`
+    config_files: CommaSeparated[AbsolutePath] = Field(default_factory=list, exclude=True)
 
-    # @classmethod
-    # def _split_config_paths_from_cli_args(
-    #         cls,
-    #         argv: list[str],
-    # ) -> tuple[list[str], list[str]]:
-    #     """
-    #     Pull every `--config FILE` out of argv, returning (config_paths,
-    #     remaining_argv). `--config` is consumed by the config-file source.
-    #     """
-    #     # Find the flags for `config_files`
-    #     all_config_file_flags: list[CliFlags] = cls._cli_flags_from_schema("config_files")["config_files"]
-    #     flat_config_file_flags = [
-    #         flag
-    #         for cli_flags in all_config_file_flags
-    #         for flag in cli_flags.to_argparse()
-    #     ]
-    #     # Create an argparse parser to extract them from the CLI args
-    #     config_file_path_parser = argparse.ArgumentParser(add_help=False)
-    #     config_file_path_parser.add_argument(
-    #         *flat_config_file_flags,
-    #         action="append",
-    #         dest="config", default=[]
-    #     )
-    #     namespace, rest = config_file_path_parser.parse_known_args(argv)
-    #     return namespace.config, rest
 
     @override
     @classmethod
@@ -74,22 +47,32 @@ class Config(BaseSettings, ConfigSection):
         if parse_cli is None:
             parse_cli = settings_cls.model_fields["parse_cli"].get_default()
         argv = sys.argv[1:] if parse_cli else []
-        # Parse config file flags even if the values won't be used.
-        # Pydantic-settings would try to parse the flag anyway, so strip it.
-        # cli_config_paths, argv = cls._split_config_paths_from_cli_args(argv)
 
         # For some reason pydantic-settings expect the keys (paths) to use kebab-case,
         #  and the values (cli flags) to use underscores. Expected:
         #  {"path.to.my-section": ["my-section", "m"]}
         #  Creates: `--my-section` and `-m`
-        cli_flags = {
-            path.replace("_", "-"): [
+        # Shortcuts from `model_config` (for inherited fields), then from each
+        #  field's own `CliFlags`. A value may be one flag or a list of them.
+        shortcuts: dict[str, list[str]] = {}
+        for path, flags in (cls.model_config.get("cli_shortcuts") or {}).items():
+            shortcuts[path.replace("_", "-")] = [flags] if isinstance(flags, str) else list(flags)
+        for path, all_cli_flags in cls._cli_flags_from_schema().items():
+            shortcuts.setdefault(path.replace("_", "-"), []).extend(
                 flag
-                for cli_flags in flags
+                for cli_flags in all_cli_flags
                 for flag in cli_flags.flags
-            ]
-            for path, flags in cls._cli_flags_from_schema().items()
-        }
+            )
+        # A flag can only belong to one field, wherever it was declared
+        claimed_by: dict[str, str] = {}
+        for path, flags in shortcuts.items():
+            for flag in flags:
+                if flag in claimed_by:
+                    raise ValueError(
+                        f"Flag {flag!r} is claimed by both "
+                        f"{claimed_by[flag]!r} and {path!r}"
+                    )
+                claimed_by[flag] = path
 
         # Precedence high->low: CLI, env (SOLVEIG_*), then config files.
         return (
@@ -97,7 +80,7 @@ class Config(BaseSettings, ConfigSection):
             CliSettingsSource(
                 settings_cls,
                 cli_parse_args=argv,
-                cli_shortcuts=cli_flags,
+                cli_shortcuts=shortcuts,
             ),
             env_settings,
             ConfigFileSource(settings_cls),

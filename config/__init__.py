@@ -10,6 +10,7 @@ stays the thing that composes them rather than the thing that knows them all.
 from __future__ import annotations
 
 from .config import Config
+from .meta import ConfigDict
 from .section.static import ConfigSection, ConfigObserver
 from .section.dynamic import DynamicSection
 from .annotations import (
@@ -21,10 +22,12 @@ from .annotations import (
     PathPattern,
 )
 from .exceptions import PathNotFound, NotASection
+from .sources import FILE_EXTENSIONS
 
 
 __all__ = [
     "Config",
+    "ConfigDict",
     "ConfigObserver",
     "ConfigSection",
     "DynamicSection",
@@ -36,4 +39,5 @@ __all__ = [
     "PathPattern",
     "PathNotFound",
     "NotASection",
+    "FILE_EXTENSIONS",
 ]

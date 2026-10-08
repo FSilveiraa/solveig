@@ -9,8 +9,10 @@ import anyconfig
 from pydantic import TypeAdapter
 from pydantic_settings import PydanticBaseSettingsSource, BaseSettings
 
+from config.meta import ConfigDict
+
 # DEFAULT_CONFIG_SEARCH: list[str] = ["./.solveig/config", "~/.solveig/config"]
-EXTENSIONS: tuple[str, ...] = ("json", "yaml", "yml", "toml")
+FILE_EXTENSIONS: tuple[str, ...] = ("json", "yaml", "yml", "toml")
 
 
 def load_and_merge_configs(paths_low_to_high: Sequence[str | PathLike]) -> dict:
@@ -31,6 +33,8 @@ def save_config(data: dict, path: str | PathLike) -> None:
 class ConfigFileSource(PydanticBaseSettingsSource):
     """A pydantic-settings class modeling one config file passed through `--config FILE`.
     Resolved paths get loaded by pydantic-settings and stored in `config.config_files`."""
+
+    config: ConfigDict
 
     def __init__(
             self,
@@ -53,7 +57,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
         # Non-default paths (code, CLI flags , env vars) are required to exist
         required = found_paths is not None
         if found_paths is None:
-            found_paths = field.get_default(call_default_factory=True)
+            found_paths = self.config["default_config_files"]
 
         # Parsed by the field's own type: "a,b" from env or CLI, paths from code
         paths = TypeAdapter(field.rebuild_annotation()).validate_python(found_paths)
