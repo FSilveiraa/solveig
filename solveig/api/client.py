@@ -18,7 +18,7 @@ from solveig.api.types import (
     ProviderCapabilityMissing,
     ApiConfig,
 )
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
 

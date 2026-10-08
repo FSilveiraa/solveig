@@ -14,7 +14,7 @@ from solveig.tools.base import (
     ConsentDecision,
     check_path_security,
 )
-from solveig.tools.config import ToolConfig
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -35,7 +35,7 @@ def _format_body(body: str, content_type: str | None) -> tuple[str, str]:
     return body, ""
 
 
-class HttpConfig(ToolConfig):
+class HttpConfig[T: BaseTool = BaseTool](FileToolConfig[T]):
     timeout: float = Field(default=10.0, description="HTTP request timeout in seconds")
     maximum_response_size: ByteSize = Field(
         default=ByteSize(1024**3),  # 1 GiB

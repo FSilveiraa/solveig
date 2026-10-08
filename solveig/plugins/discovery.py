@@ -16,7 +16,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
 
 from .hooks import clear_hooks, hooks_config_map

@@ -6,16 +6,16 @@ from pydantic import Field, field_validator
 
 from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
-class WriteTool(BaseTool):
+class WriteTool(BaseTool[FileToolConfig]):
     """Create a new file or directory, or update an existing file."""
 
     path: str = Field(
@@ -44,7 +44,7 @@ class WriteTool(BaseTool):
         )
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         decision, abs_path = check_path_security(self.path, config)
         if decision == ConsentDecision.BLOCKED:

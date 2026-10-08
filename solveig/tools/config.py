@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, Any
 
-from pydantic import Field
+from pydantic import ByteSize, Field
 
-from config.models import ConfigSection
+from config import ConfigSection, Link, PathPattern
 
 if TYPE_CHECKING:
     from solveig.tools.base import BaseTool
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 # Pydantic forces that if the sub-class is parametrized, the parent's
 #  parameters must be defined.
-class ToolConfig[T: BaseTool = BaseTool](ConfigSection[Any]):
+class ToolConfig[T: BaseTool = BaseTool](ConfigSection):
     """Base config every tool's config extends — the universal `enabled` flag
     (on by default), plus `tool_cls`: the class that implements this config,
     stamped automatically by `BaseTool.__pydantic_init_subclass__` the moment a
@@ -39,3 +39,13 @@ class ToolConfig[T: BaseTool = BaseTool](ConfigSection[Any]):
         metadata = cls.__pydantic_generic_metadata__
         if metadata["origin"] is not None:  # this is ToolConfig[X] itself
             cls.tool_class = metadata["args"][0]
+
+
+class FileToolConfig[T: BaseTool = BaseTool](ToolConfig[T]):
+    """Config for a tool that acts on files: the user's path and disk-space
+    rules, linked from the top level so every file tool reads the same values.
+    A plugin tool that touches files gets them by using this config."""
+
+    ignored_paths: ClassVar[Link[list[PathPattern]]] = Link("/ignored_paths")
+    auto_allowed_paths: ClassVar[Link[list[PathPattern]]] = Link("/auto_allowed_paths")
+    minimum_disk_space_left: ClassVar[Link[ByteSize]] = Link("/minimum_disk_space_left")

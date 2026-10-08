@@ -14,11 +14,11 @@ from solveig.tools.result import ToolResult
 from solveig.utils.shell import ShellExecution, get_persistent_shell
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
+    from solveig.config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
-class CommandConfig(ToolConfig):
+class CommandConfig[T: BaseTool = BaseTool](ToolConfig[T]):
     # Compiled patterns: pydantic validates each string into a re.Pattern (compiled
     # once, at parse time — invalid regexes are rejected declaratively) and
     # serializes them back to their source strings for /config save. "It's a regex"

@@ -25,17 +25,15 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
-from solveig.context import SolveigContext
 from solveig.interface.base import Level
-from solveig.tools.config import ToolConfig
+from solveig.tools.config import FileToolConfig, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
-from solveig.utils.misc import _camel_to_snake
+from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
 
 if TYPE_CHECKING:
     from anyio import Path
 
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
@@ -48,7 +46,7 @@ class ConsentDecision(Enum):
 
 
 def check_path_security(
-    path: str, config: "SolveigConfig"
+    path: str, config: FileToolConfig
 ) -> tuple[ConsentDecision, "Path"]:
     """Check a filesystem path against ignored_paths and auto_allowed_paths.
     Returns (decision, absolute_path).  Caller handles display and consent UI."""
@@ -61,7 +59,7 @@ def check_path_security(
 
 
 async def warn_ignored_within(
-    abs_path: "Path", config: "SolveigConfig", interface: "SolveigInterface"
+    abs_path: "Path", config: FileToolConfig, interface: "SolveigInterface"
 ) -> None:
     """Say so when a whole-directory operation will act on ignored paths.
 
@@ -132,8 +130,8 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     # so the tool contract stays unchanged while `/read foo` still works.
     cli_defaults: ClassVar[dict[str, Any]] = {}
 
-    # This tool's config class.
-    #  `MyTool(BaseTool[MyConfig])` -> `MyTool.config_model == MyConfig`
+    # This tool's config class, made for this tool alone.
+    #  `MyTool(BaseTool[MyConfig])` -> `MyTool.config_model == MyConfig[MyTool]`
     #  `MyTool(BaseTool)` -> `MyTool.config_model == ToolConfig[MyTool]`
     config_model: ClassVar[type[ToolConfig]]
 
@@ -149,16 +147,24 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
             cls.config_model = metadata["args"][0]
             return
 
-        # Bare `MyTool(BaseTool)` inheritance, no parameter provided.
-        # Check if the class explicitly sets it, otherwise define it
-        if not hasattr(cls, "config_model"):
-            # HACK: mypy won't accept a runtime `cls` as a class parameter
-            cls.config_model = ToolConfig[cls]  # type: ignore[valid-type]
-        # Regardless of where the config_model came from (explicit parameter or
-        #  dynamic class creation), stamp this tool as that config's tool class
-        # NOTE: for a bare tool `ToolConfig[cls]` already stamped this, for a tool
-        #  with its own config class (`CommandConfig`) this is the only stamp.
-        cls.config_model.tool_class = cls
+        # Bare `MyTool(BaseTool)`: no config class named, so the plain one
+        config_model = getattr(cls, "config_model", ToolConfig)
+        # NOTE: several tools may name the same config class (`FileToolConfig`),
+        #  but each entry must know its own tool. So the tool parametrizes the
+        #  class with itself, and `ToolConfig`'s hook sets the result's
+        #  `tool_class`. A class already bound to a tool would be shared.
+        # NOTE: "bound" means made by subscripting (it has an origin). Checking
+        #  for free parameters isn't enough: a tool class is itself a generic
+        #  model, so `FileToolConfig[ReadTool]` still reports one.
+        if config_model.__pydantic_generic_metadata__["origin"] is not None:
+            bound_to = getattr(config_model, "tool_class", None)
+            raise TypeError(
+                f"{cls.__name__}'s config {config_model.__name__} is already bound to "
+                f"{getattr(bound_to, '__name__', 'another tool')}; declare it with an open "
+                f"config class instead (e.g. `BaseTool[FileToolConfig]`)"
+            )
+        # HACK: mypy won't accept a runtime `cls` as a class parameter
+        cls.config_model = config_model[cls]  # type: ignore[assignment]
 
     @classmethod
     def tool_name(cls) -> str:
@@ -225,7 +231,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
 
     @abstractmethod
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: ToolConfigType, interface: "SolveigInterface"
     ) -> ToolResult:
         """Run the tool live: consent, side effects, banners.  The group is
         already open and ``display_header()`` has already been called (by the
@@ -312,7 +318,7 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
     # TODO: fix type annotation, should return BaseTool, Pycharm warns:
     #  Expected type (...) -> BaseTool[Any], got (ctx: {deps}, params: {execute}) -> CoroutineType[Any, Any, Any] instead
     @classmethod
-    def as_tool(cls) -> Callable[..., BaseTool]:
+    def as_tool(cls, config: ToolConfigType) -> Callable[..., BaseTool]:
         """Produce the plain pydantic-ai callable for this tool class.
 
         The single value parameter is annotated with `cls`, so pydantic-ai
@@ -330,11 +336,13 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         per toolset build. `ToolReturn` is both accurate downstream and
         schema-clean."""
 
+        # NOTE: `config` is the tool's own entry, and stays current: sections
+        #  are mutated in place, never replaced.
         async def run(ctx, params):
-            return await params.execute(ctx.deps.config, ctx.deps.interface)
+            return await params.execute(config, ctx.deps.interface)
 
         run.__annotations__ = {
-            "ctx": RunContext[SolveigContext],
+            "ctx": RunContext[Any],
             "params": cls,
             "return": PydanticAIToolReturn,
         }

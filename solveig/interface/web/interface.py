@@ -50,7 +50,7 @@ from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from .bus import EventStream
 
 if TYPE_CHECKING:

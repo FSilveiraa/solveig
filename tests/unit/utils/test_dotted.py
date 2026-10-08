@@ -7,6 +7,7 @@ dict is a value rather than a section.
 
 import pytest
 
+from config.section import static
 from solveig.utils import dotted
 
 
@@ -67,7 +68,7 @@ def test_extract_raises_at_the_segment_that_broke():
     ],
 )
 def test_matches_prefix_respects_segment_boundaries(path, prefix, expected):
-    assert dotted.matches_prefix(path, prefix) is expected
+    assert static.matches_prefix(path, prefix) is expected
 
 
 def test_graft_creates_intermediate_sections():

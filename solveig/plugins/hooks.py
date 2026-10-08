@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from enum import Enum, auto
 from typing import Any
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 from solveig.tools.base import BaseTool
 from solveig.tools.config import ToolConfig

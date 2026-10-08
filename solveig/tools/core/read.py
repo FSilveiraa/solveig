@@ -7,6 +7,7 @@ from pydantic_settings import CliPositionalArg
 
 from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
 from solveig.utils.misc import validate_non_empty_path
@@ -14,11 +15,10 @@ from solveig.utils.misc import validate_non_empty_path
 if TYPE_CHECKING:
     from anyio import Path
 
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
-class ReadTool(BaseTool):
+class ReadTool(BaseTool[FileToolConfig]):
     """Read a file or directory.
 
     Files can be read for metadata only, full contents, or specific line ranges.
@@ -81,7 +81,7 @@ class ReadTool(BaseTool):
         )
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         decision, abs_path = check_path_security(self.path, config)
         if decision == ConsentDecision.BLOCKED:

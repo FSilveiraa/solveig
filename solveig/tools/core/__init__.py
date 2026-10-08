@@ -18,7 +18,7 @@ import warnings
 
 from pydantic import Field
 
-from config import ConfigSection
+from config.section.static import ConfigSection
 from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import tool_subcommand
@@ -32,19 +32,19 @@ from .move import MoveTool
 from .read import ReadTool
 from .todo import TodoTool
 from .write import WriteTool
-from ..config import ToolConfig
+from ..config import FileToolConfig, ToolConfig
 
 
 class CoreToolsConfig(ConfigSection):
-    read: ToolConfig[ReadTool] = Field(default_factory=ReadTool.config_model)
-    write: ToolConfig[WriteTool] = Field(default_factory=WriteTool.config_model)
-    edit: ToolConfig[EditTool] = Field(default_factory=EditTool.config_model)
-    delete: ToolConfig[DeleteTool] = Field(default_factory=DeleteTool.config_model)
-    copy: ToolConfig[CopyTool] = Field(default_factory=CopyTool.config_model)
-    move: ToolConfig[MoveTool] = Field(default_factory=MoveTool.config_model)
-    command: CommandConfig = Field(default_factory=CommandTool.config_model)
-    http: HttpConfig = Field(default_factory=HttpTool.config_model)
-    todo: ToolConfig[TodoTool] = Field(default_factory=TodoTool.config_model)
+    read: FileToolConfig[ReadTool] = Field(default_factory=FileToolConfig[ReadTool])
+    write: FileToolConfig[WriteTool] = Field(default_factory=FileToolConfig[WriteTool])
+    edit: FileToolConfig[EditTool] = Field(default_factory=FileToolConfig[EditTool])
+    delete: FileToolConfig[DeleteTool] = Field(default_factory=FileToolConfig[DeleteTool])
+    copy: FileToolConfig[CopyTool] = Field(default_factory=FileToolConfig[CopyTool])
+    move: FileToolConfig[MoveTool] = Field(default_factory=FileToolConfig[MoveTool])
+    command: CommandConfig[CommandTool] = Field(default_factory=CommandConfig[CommandTool])
+    http: HttpConfig[HttpTool] = Field(default_factory=HttpConfig[HttpTool])
+    todo: ToolConfig[TodoTool] = Field(default_factory=ToolConfig[TodoTool])
 
 
 # TODO: move this to some class validator or something

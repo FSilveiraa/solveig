@@ -15,10 +15,10 @@ from pydantic import Field
 
 from solveig.todo import TodoItem
 from solveig.tools.base import BaseTool
+from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
@@ -41,7 +41,7 @@ class TodoTool(BaseTool):
         return "Todo"
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: ToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         # NOTE: the tool decides WHAT to show and WHEN; the frontend decides how it
         # looks. A terminal draws a marker and an arrow, a web UI may animate the

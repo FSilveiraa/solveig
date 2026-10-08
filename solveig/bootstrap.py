@@ -19,7 +19,7 @@ against.
 from __future__ import annotations
 
 from solveig.config import SolveigConfig
-from config.editor import prompt_for_field
+from solveig.config.subcommands import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
 from solveig.plugins.discovery import discover_plugins, report_plugins

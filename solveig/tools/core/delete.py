@@ -12,16 +12,16 @@ from solveig.tools.base import (
     check_path_security,
     warn_ignored_within,
 )
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
-class DeleteTool(BaseTool):
+class DeleteTool(BaseTool[FileToolConfig]):
     """Permanently delete a file or directory."""
 
     subcommands: ClassVar[list[str]] = ["/delete"]
@@ -43,7 +43,7 @@ class DeleteTool(BaseTool):
         await self.display_path_info(interface, self.path)
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         decision, abs_path = check_path_security(self.path, config)
         if decision == ConsentDecision.BLOCKED:

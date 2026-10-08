@@ -5,16 +5,15 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field, field_validator
 from pydantic_settings import CliPositionalArg
 
-from config import SolveigConfig
 from solveig.interface.base import Level
 from solveig.tools.base import BaseTool, ConsentDecision, check_path_security
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
     from anyio import Path
-
     from solveig.interface.base import SolveigInterface
 
 
@@ -22,7 +21,7 @@ def _preview(text: str) -> str:
     return repr(text[:60] + "..." if len(text) > 60 else text)
 
 
-class EditTool(BaseTool):
+class EditTool(BaseTool[FileToolConfig]):
     """Edit a file by replacing exact string matches.
 
     old_string must exist in the file. new_string can be empty for deletion.
@@ -62,14 +61,14 @@ class EditTool(BaseTool):
             await interface.print("(all occurrences)", prefix="Mode:")
 
     async def execute(
-        self, config: SolveigConfig, interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         if not self.old_string:
             raise ValueError("old_string cannot be empty")
 
         abs_path = Filesystem.get_absolute_path(self.path)
 
-        access_error = await self._validate_access(interface, config, abs_path)
+        access_error = await self._validate_access(config, interface, abs_path)
         if access_error is not None:
             return access_error
 
@@ -83,10 +82,10 @@ class EditTool(BaseTool):
             new_content=new_content,
             title=f"Edit: {abs_path}",
         )
-        return await self._apply(interface, config, abs_path, new_content, occurrences)
+        return await self._apply(config, interface, abs_path, new_content, occurrences)
 
     async def _validate_access(
-        self, interface: "SolveigInterface", config: SolveigConfig, abs_path: "Path"
+        self, config: FileToolConfig, interface: "SolveigInterface", abs_path: "Path"
     ) -> ToolResult | None:
         """Reject the edit up front (blocked path, unreadable, directory, or
         unwritable); return the error `ToolResult`, or `None` to proceed."""
@@ -154,8 +153,8 @@ class EditTool(BaseTool):
 
     async def _apply(
         self,
+        config: FileToolConfig,
         interface: "SolveigInterface",
-        config: SolveigConfig,
         abs_path: "Path",
         new_content: str,
         occurrences_replaced: int,

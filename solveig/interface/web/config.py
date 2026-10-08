@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from config.models import ConfigSection
+from config.section.static import ConfigSection
 
 
 class WebConfig(ConfigSection):

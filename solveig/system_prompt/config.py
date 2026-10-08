@@ -12,7 +12,8 @@ from typing import Annotated
 
 from pydantic import Field
 
-from config.models import ConfigSection, CliFlags
+from config.section.static import ConfigSection
+from config.annotations.cli_flags import CliFlags
 
 DEFAULT_SYSTEM_PROMPT = """
 You are an AI assistant working in a user's terminal through Solveig.

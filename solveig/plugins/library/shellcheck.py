@@ -8,7 +8,7 @@ import tempfile
 
 from pydantic import Field
 
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import before_tool

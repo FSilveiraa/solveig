@@ -41,7 +41,7 @@ from solveig.utils.file import Filesystem
 from solveig.utils.misc import format_age
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
+    from solveig.config import SolveigConfig
 
 
 class SessionManager(ConversationObserver):

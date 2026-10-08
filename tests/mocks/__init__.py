@@ -2,7 +2,7 @@ from pydantic import ByteSize, SecretStr
 
 from solveig import bootstrap
 from solveig.api.types import OpenAI, ApiConfig
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.session.config import SessionConfig
 
 from .client import create_mock_model

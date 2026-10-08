@@ -8,17 +8,17 @@ from pydantic_settings import CliPositionalArg
 from solveig.interface.base import Level
 from solveig.plugins.tools import tool
 from solveig.tools.base import BaseTool
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
 @tool
-class TreeTool(BaseTool):
+class TreeTool(BaseTool[FileToolConfig]):
     """Generate a directory tree listing showing file structure."""
 
     subcommands: ClassVar[list[str]] = ["/tree"]
@@ -41,7 +41,7 @@ class TreeTool(BaseTool):
         return f"Tree: {self.path}"
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         abs_path = Filesystem.get_absolute_path(self.path)
 

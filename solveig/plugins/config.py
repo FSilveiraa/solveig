@@ -12,7 +12,8 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from config.models import ConfigSection, DynamicSection
+from config.section.static import ConfigSection
+from config.section.dynamic import DynamicSection
 from solveig.tools.config import ToolConfig
 from solveig.utils.file import Filesystem
 

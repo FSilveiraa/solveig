@@ -18,7 +18,7 @@ from pydantic_ai.models import Model
 from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS

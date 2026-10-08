@@ -51,7 +51,7 @@ from pydantic_ai.tools import ToolDefinition
 from pydantic_graph import End
 
 from solveig.api.client import Client
-from config import SolveigConfig
+from solveig.config import SolveigConfig
 from solveig.context import SolveigContext
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import Level, SolveigInterface

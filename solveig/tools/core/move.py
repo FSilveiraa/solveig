@@ -12,16 +12,16 @@ from solveig.tools.base import (
     check_path_security,
     warn_ignored_within,
 )
+from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
-    from config import SolveigConfig
     from solveig.interface.base import SolveigInterface
 
 
-class MoveTool(BaseTool):
+class MoveTool(BaseTool[FileToolConfig]):
     """Move a file or directory."""
 
     subcommands: ClassVar[list[str]] = ["/move"]
@@ -52,7 +52,7 @@ class MoveTool(BaseTool):
         )
 
     async def execute(
-        self, config: "SolveigConfig", interface: "SolveigInterface"
+        self, config: FileToolConfig, interface: "SolveigInterface"
     ) -> ToolResult:
         abs_source_path = Filesystem.get_absolute_path(self.source_path)
         abs_destination_path = Filesystem.get_absolute_path(self.destination_path)

@@ -6,108 +6,35 @@ import anyconfig
 from pydantic import (
     ByteSize,
     Field,
-    field_serializer,
-    field_validator,
     model_validator, PlainSerializer,
 )
 from pydantic_settings import (
     CliPositionalArg,
-    SettingsConfigDict,
 )
 
-from config import Config
-from config.sources import EXTENSIONS
+from config import Config, ConfigDict
+from config.sources import FILE_EXTENSIONS
 from solveig.api.types import ApiConfig
-from config.models import (
-    DynamicSection,
-    Path,
-    ConfigSection,
-    CliFlags, CommaSeparated, PathPattern, AbsolutePath,
-)
+from config.annotations.comma_list import CommaSeparated
+from config.annotations.path import AbsolutePath, PathPattern
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPServerConfig, MCPConfig
 from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
 from solveig.tools.core import CoreToolsConfig
-from solveig.utils.file import Filesystem, SyncPath  # path normalization, not config I/O
-
-__all__ = [
-    "SolveigConfig",
-    "ConfigSection",
-    "DynamicSection",
-]
-
-
-# ---------------------------------------------------------------------------
-# Utils
-# ---------------------------------------------------------------------------
-
-
-# def display_config_value(value: object, field_info: FieldInfo | None = None) -> str:
-#     """Format a config value for display, driven by type and field name."""
-#     choice = next(
-#         (m for m in field_info.metadata if isinstance(m, Choice)),
-#         None,
-#     ) if field_info else None
-#     if choice:
-#         return choice.key(value)
-#     if isinstance(value, SecretStr):
-#         return "***" if value.get_secret_value() else "(not set)"
-#     if isinstance(value, ByteSize):
-#         return value.human_readable()
-#     if isinstance(value, re.Pattern):
-#         return value.pattern
-#     if isinstance(value, list):
-#         return ", ".join(display_config_value(v) for v in value) if value else "(empty)"
-#     return repr(value)
-
-
-# def _default_config_paths():
-#     paths = []
-#     for base in ("./.solveig/config", "~/.solveig/config"):
-#         for extension in EXTENSIONS:
-#             path = SyncPath(Filesystem.get_absolute_path(f"{base}.{extension}"))
-#             if path.is_file():
-#                 paths.append(path)
-#     return paths
-
-
-# TODO: isn't called, doesn't belong here, review
-# def _compose_section(
-#     target: type[BaseModel],
-#     field_name: str,
-#     pairs: list[tuple[str, type]],
-#     model_name: str,
-#     base: type[BaseModel] = DynamicSection,
-# ) -> None:
-#     """Build a composed model from (name, config_model) pairs and swap it into
-#     `target.<field_name>` — one field per entry, so adding a tool/hook needs
-#     no change here.
-#
-#     NOTE: the composed model SUBCLASSES the placeholder rather than copying its
-#     `model_config`, so the section's semantics travel with it — plugin sections
-#     inherit `PreservingSection` and keep both `extra="allow"` and the
-#     `undiscovered` accessor. (pydantic forbids `__base__` and `__config__`
-#     together, which is why the base carries the config.)
-#     """
-#     fields: dict[str, Any] = {
-#         name: (config_model, Field(default_factory=config_model))
-#         for name, config_model in pairs
-#     }
-#     with warnings.catch_warnings():
-#         # HACK: `copy` (CopyTool) deliberately shadows the deprecated BaseModel.copy.
-#         warnings.filterwarnings(
-#             "ignore", message=r'Field name "copy".*shadows', category=UserWarning
-#         )
-#         composed = create_model(model_name, __base__=base, **fields)
-#     target.model_fields[field_name].annotation = composed
-#     target.model_fields[field_name].default_factory = composed
-#     target.model_rebuild(force=True)
 
 
 class SolveigConfig(Config):
-    model_config = SettingsConfigDict(env_prefix="SOLVEIG_")
+    model_config = ConfigDict(
+        env_prefix="SOLVEIG_",
+        cli_shortcuts={"config_files": ["c", "config"]},
+        default_config_files = [
+            f"{base}.{extension}"
+            for base in ("~/.solveig/config", "./.solveig/config")
+            for extension in FILE_EXTENSIONS
+        ],
+    )
 
     # ------------------------------------------------------------
     # Persisted config fields
@@ -149,16 +76,6 @@ class SolveigConfig(Config):
     # ------------------------------------------------------------
     # CLI-only fields
     # ------------------------------------------------------------
-    # Override from Config
-    config_files: Annotated[list[Path], CliFlags("c", "config")] = Field(
-        default_factory=lambda: [
-            SyncPath(f"{base}.{extension}")
-            for base in ("~/.solveig/config", "./.solveig/config")
-            for extension in EXTENSIONS
-        ],
-        exclude=True,
-    )
-
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
     # The CLI args this instance was booted from — always a list after
@@ -176,12 +93,6 @@ class SolveigConfig(Config):
     # ------------------------------------------------------------
     # Pydantic overrides/validators
     # ------------------------------------------------------------
-
-    # @field_validator("briefing", mode="before")
-    # @classmethod
-    # def _abs_briefing(cls, v: Any) -> Any:
-    #     """Anchors the briefing paths to the starting directory"""
-    #     return [str(Filesystem.get_absolute_path(p)) for p in v] if v else []
 
     @model_validator(mode="after")
     def _default_api_url(self):
@@ -219,14 +130,6 @@ class SolveigConfig(Config):
         self.plugins.paths = list(plugin_paths)
         return self
 
-    # @field_serializer("minimum_disk_space_left")
-    # def _ser_min_disk(self, v: ByteSize) -> str:
-    #     # Human-readable so a --full/--all config dump exports the default as
-    #     # "1.0GiB" rather than 1073741824 (round-trips to the same value). The
-    #     # /config save path grafts the exact original from _declared_fields, so
-    #     # a user's "1GiB" is preserved verbatim there, not re-normalized here.
-    #     return v.human_readable()
-
 
     # ------------------------------------------------------------
     # Tool/Hook section schema
@@ -251,47 +154,3 @@ class SolveigConfig(Config):
         if hook_name in type(hooks).model_fields:
             return bool(getattr(hooks, hook_name).enabled)
         return True
-
-
-    # ------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------
-
-    # @classmethod
-    # def parse(cls, cli_args: list[str] | None = None) -> SolveigConfig:
-    #     """One pass over the layered sources (CLI > env > files), nothing more.
-    #
-    #     NOTE: the result is TRANSIENT. Startup uses it to read `plugins.paths`
-    #     before the plugin schema exists, and drops it on the same line — the
-    #     config that survives is the one `build()` returns, after composition.
-    #     Anything that keeps a `parse()` result is holding an object whose plugin
-    #     sections may no longer match the class, and whose observers nothing will
-    #     ever notify. Use `build()`.
-    #     """
-    #     cfg = cls(cli_args=cli_args)
-    #     if cfg.cli_args is None:
-    #         cfg.cli_args = list(sys.argv[1:])
-    #     return cfg
-    #
-    # @classmethod
-    # def build(cls, cli_args: list[str] | None = None) -> SolveigConfig:
-    #     """`parse()` plus the finishing touches for the config that is kept:
-    #     declared-field tracking (what `/config save` persists) and startup MCP
-    #     servers.
-    #
-    #     The two-phase dance around this (compose core tools → discover plugins
-    #     → compose plugin sections → parse again) is startup sequencing and
-    #     lives in `solveig.bootstrap`, above tools and plugins.
-    #     """
-    #     cfg = cls.parse(cli_args)
-    #     # `--mcp-url` names a server only by address, so it gets the same derived
-    #     # identifier an ad-hoc `/mcp connect <url>` would give it — and setdefault
-    #     # means a config block already using that name wins, rather than the flag
-    #     # silently replacing a configured server's allow/block lists.
-    #     for url in cfg.startup_mcp_servers:
-    #         # TODO: this should be absorbed some other way
-    #         #  The fact that an MCP config is built from a URL is a fact
-    #         #  that the MCP config class itself needs to express, not root.
-    #         server = MCPServerConfig.from_url(url)
-    #         cfg.mcp.setdefault(server.name, server)
-    #     return cfg

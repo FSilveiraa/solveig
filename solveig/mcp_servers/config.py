@@ -11,7 +11,9 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, PlainValidator, model_validator, PrivateAttr
 
-from config.models import ConfigSection, DynamicSection, CliFlags
+from config.section.static import ConfigSection
+from config.section.dynamic import DynamicSection
+from config.annotations.cli_flags import CliFlags
 
 # An MCP server name is announced to the model as `<name>_<tool>`, so it is held
 # to the charset tool names are allowed across providers — letters, digits, `_`
