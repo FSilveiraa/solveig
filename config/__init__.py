@@ -1,10 +1,15 @@
-"""Config: the framework in `models`, the root declaration in `config`.
+"""
+This project exists to allow a living Config to exist as the single
+source-of-truth for every persistent value in a project's settings.
 
-No section lives here any more. Each one is declared by the module it
-configures — `ApiConfig` in `solveig.api.types`, `TuiConfig` in the TUI,
-`SessionConfig` in `session`, and so on — and `SolveigConfig` names them.
-So a subsystem's settings arrive and leave with the subsystem, and config
-stays the thing that composes them rather than the thing that knows them all.
+It's built on modern pyton with strict pydantic typing and
+highly declarative, reactive principles. Declaration is behavior.
+
+It can interact with several file formats for saving/loading,
+supports both plain python syntax as well as config path semantics,
+offers sync and async update notifications, declarative CLI flags,
+field values restricted by Choice, static and dynamic section entries,
+field links.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from .annotations import (
     Choice,
     CliFlags,
     CommaSeparated,
+    Link,
     Path,
     AbsolutePath,
     PathPattern,
@@ -34,6 +40,7 @@ __all__ = [
     "Choice",
     "CliFlags",
     "CommaSeparated",
+    "Link",
     "Path",
     "AbsolutePath",
     "PathPattern",
