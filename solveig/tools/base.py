@@ -14,18 +14,19 @@ This is a first-class pydantic-ai mechanism (`_function_schema._build_schema`'s
 `is_model_like` branch), not an accident.
 """
 
+import inspect
 import typing
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Self, Awaitable
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 from pydantic_settings import CliPositionalArg, CliSettingsSource
 
-from solveig.interface.base import Level
+from solveig.interface.base import Level, SolveigInterface
 from solveig.tools.config import FileToolConfig, ToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import FileMetadata, Filesystem
@@ -33,8 +34,6 @@ from solveig.utils.misc import CLI_SETTINGS_OPTS, _camel_to_snake
 
 if TYPE_CHECKING:
     from anyio import Path
-
-    from solveig.interface.base import SolveigInterface
 
 
 class ConsentDecision(Enum):
@@ -316,7 +315,9 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         return metadata
 
     @classmethod
-    def as_pydantic_ai_tool(cls, config: ToolConfigType) -> Callable[..., Awaitable[PydanticAIToolReturn]]:
+    def as_pydantic_ai_tool(
+        cls, config: ToolConfigType
+    ) -> Callable[..., Awaitable[PydanticAIToolReturn]]:
         """
         Produce a callable that exposes this tool class to pydantic-ai.
 
@@ -336,8 +337,9 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
 
         async def run_tool(ctx: RunContext[Any], tool) -> PydanticAIToolReturn:
             return await tool.execute(config, ctx.deps.interface)
-        # NOTE: `tool` must be labelled `cls`, or pydantic-ai has nothing to
-        #  instantiate the model's JSON into. `tool: cls` would work in the
+
+        # NOTE: `tool` must be typed `cls` so pydantic-ai understands the schema
+        #  to instantiate the model's JSON into. `tool: cls` would work in the
         #  signature today, but it is stored as the STRING "cls" the moment
         #  this module gains `from __future__ import annotations`, and
         #  pydantic-ai cannot resolve that. Attaching the class object
@@ -347,3 +349,92 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         run_tool.__name__ = cls.tool_name()
         run_tool.__doc__ = cls.__doc__
         return run_tool
+
+
+def _handed_in_parameter(annotation: Any, config_model: type[ToolConfig]) -> str | None:
+    """Whether a callable's parameter is handed a dependency instead of being one
+    of the tool's arguments: `"config"` for the tool's own config entry,
+    `"interface"` for the UI, or None when the parameter is an argument.
+
+    Matches the type itself, or its name - a plugin module using
+    `from __future__ import annotations` hands `inspect` the name, not the type.
+    """
+    for kind, candidate in (("config", config_model), ("interface", SolveigInterface)):
+        if annotation is candidate:
+            return kind
+        if isinstance(annotation, str) and annotation == candidate.__name__:
+            return kind
+    return None
+
+
+def tool_from_callable(
+    fn: Callable[..., Any],
+    config_model: type[ToolConfig] = ToolConfig,
+) -> type[BaseTool]:
+    """Build a `BaseTool` subclass from a plain callable.
+
+    A second way to DECLARE a tool, not a second kind of tool: what comes back is
+    an ordinary `BaseTool`, so `tool_name()`, `/help`, replay and the config
+    schema treat it like any other, and nothing downstream branches on how it was
+    made.
+
+    The callable's parameters ARE the tool's arguments - its signature is what
+    the model is offered and what pydantic validates. Two parameters are handed
+    in rather than exposed: one annotated with `config_model` (this tool's own
+    config entry) and one annotated with `SolveigInterface`. A parameter with a
+    default is an optional argument.
+
+    The callable is the tool's body - sync or async - returning either a
+    `ToolResult` or any value, which is wrapped in one.
+    """
+    fields: dict[str, Any] = {}
+    handed_in: dict[str, str] = {}
+
+    for name, parameter in inspect.signature(fn).parameters.items():
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+            raise TypeError(
+                f"{fn.__name__}: a tool callable can't take *{name} - its parameters "
+                "are the tool's arguments, and the model has to be told each one."
+            )
+        handed = _handed_in_parameter(parameter.annotation, config_model)
+        if handed is not None:
+            handed_in[name] = handed
+            continue
+        empty = parameter.empty
+        annotation = parameter.annotation if parameter.annotation is not empty else Any
+        default = Field(...) if parameter.default is empty else parameter.default
+        fields[name] = (annotation, default)
+
+    async def execute(
+        self: BaseTool, config: ToolConfig, interface: SolveigInterface
+    ) -> ToolResult:
+        arguments: dict[str, Any] = {name: getattr(self, name) for name in fields}
+        for name, handed in handed_in.items():
+            arguments[name] = config if handed == "config" else interface
+        result = fn(**arguments)
+        if inspect.isawaitable(result):
+            result = await result
+        return result if isinstance(result, ToolResult) else ToolResult(content=result)
+
+    # `execute` is declared IN the class namespace rather than attached after the
+    # class exists: `BaseTool.execute` is abstract, and `ABCMeta` settles what is
+    # still abstract when the class is built - so a method attached afterwards
+    # leaves the class abstract, and an abstract tool can't be instantiated.
+    namespace: dict[str, Any] = {
+        "__annotations__": {
+            name: annotation for name, (annotation, _) in fields.items()
+        },
+        "__module__": fn.__module__,
+        "__doc__": fn.__doc__,
+        "name": fn.__name__,
+        "execute": execute,
+        **{name: default for name, (_, default) in fields.items()},
+    }
+    # `tool_name()` reads the `name` ClassVar set above; the class name below only
+    # appears in reprs and error messages.
+    class_name = "".join(part.capitalize() for part in fn.__name__.split("_")) or "Tool"
+    # NOTE: mypy can't read a runtime value as a class parameter - `config_model`
+    #  is a variable, not a type alias. The same limitation
+    #  `__pydantic_init_subclass__` above works around with an ignore.
+    base: type[BaseTool] = BaseTool[config_model]  # type: ignore[valid-type, type-abstract]
+    return typing.cast(type[BaseTool], type(class_name, (base,), namespace))
