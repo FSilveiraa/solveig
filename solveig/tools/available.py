@@ -16,28 +16,17 @@ and rendering each `ToolResult` into a `ToolReturn` - is the `Hooks` capability
 `Agent` alongside the toolset (not wrapped around it).
 """
 
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from pydantic_ai import FunctionToolset, RunContext, ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset, CombinedToolset
+from pydantic_ai.messages import ToolReturn as PydanticAIToolReturn
 
 from solveig.config import SolveigConfig
 from solveig.mcp_servers.config import MCPServerConfig
 from solveig.context import SolveigContext
 from solveig.mcp_servers import MCP_CONNECTIONS
-from solveig.plugins.tools import PLUGIN_TOOLS
 from solveig.tools.base import BaseTool
-from solveig.tools.core import CoreToolsConfig
-
-
-def _as_callable(tool: Any) -> Any:
-    """Normalize a tool source to a plain pydantic-ai callable. `BaseTool`
-    subclasses (all 9 core tools plus every current plugin tool, e.g. `tree`)
-    are bridged via `.as_tool()`; a plain tool function passes through
-    unchanged - kept for any future plugin author who writes one that way."""
-    if isinstance(tool, type) and issubclass(tool, BaseTool):
-        return tool.as_tool()
-    return tool
 
 
 def build_toolset(config: SolveigConfig) -> AbstractToolset:
@@ -74,19 +63,13 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
         ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
         mcp_toolsets.append(ts)
 
-    # Every discovered plugin tool is included here; the FilteredToolset
-    # below decides core-tool visibility live from `tools.<name>.enabled`
-    # (plugin tools are enabled-by-default in the current schema).
-    # Untyped on purpose: CORE_TOOLS/PLUGIN_TOOLS's specific callable
-    # types don't unify into anything FunctionToolset's constructor (or
-    # the .filtered() predicate's deps type below) accepts precisely -
-    # same class of "no way to express a dynamic tool union to mypy"
-    # noted elsewhere in this codebase.
-    function_tools: list[Any] = [
-        _as_callable(tool_config.tool_class)
-        for _, tool_config in config.tools
+    # Generate pydantic-ai callables for each tool model in core/plugin tools
+    #  that is enabled in the config
+    function_tools: list[Callable[..., Awaitable[PydanticAIToolReturn]]] = [
+        tool_config.tool_class.as_pydantic_ai_tool(tool_config)
+        for _, tool_config in (config.tools | config.plugins.tools)
         if tool_config.enabled
-    ] + [_as_callable(tool) for tool in PLUGIN_TOOLS]
+    ]
 
     if not function_tools and not mcp_toolsets:
         raise ValueError("No tools available: the tool list is empty.")
@@ -103,20 +86,9 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
     return CombinedToolset([base, *mcp_toolsets])
 
 
-def tool_classes() -> dict[str, type[BaseTool]]:
-    """Tool name -> class, for every `BaseTool`-based tool (core + plugin).
-
-    Used by session replay to reconstruct a stored call's typed instance from
-    its persisted args (`cls.model_validate(call.args_as_dict())`) - the only
-    other place besides `build_toolset()` that needs a full tool listing. A plain
-    tool function (should a plugin author write one that way) has no entry
-    here; replay falls back to a generic render for those.
-    """
-    classes: dict[str, type[BaseTool]] = {
-        name: field.annotation.tool_class
-        for name, field in CoreToolsConfig.model_fields.items()
+def tool_classes(config: SolveigConfig) -> dict[str, type[BaseTool]]:
+    """All available tool classes, including disabled tools, excluding MCP."""
+    return {
+        tool_name: tool_config.tool_class
+        for tool_name, tool_config in (config.tools | config.plugins.tools)
     }
-    for tool in PLUGIN_TOOLS:
-        if isinstance(tool, type) and issubclass(tool, BaseTool):
-            classes[tool.tool_name()] = tool
-    return classes
