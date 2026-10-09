@@ -18,7 +18,7 @@ import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self, Awaitable
 
 from pydantic import BaseModel
 from pydantic_ai import RunContext
@@ -315,37 +315,35 @@ class BaseTool[ToolConfigType: ToolConfig](BaseModel, ABC):
         )
         return metadata
 
-    # TODO: fix type annotation, should return BaseTool, Pycharm warns:
-    #  Expected type (...) -> BaseTool[Any], got (ctx: {deps}, params: {execute}) -> CoroutineType[Any, Any, Any] instead
     @classmethod
-    def as_tool(cls, config: ToolConfigType) -> Callable[..., BaseTool]:
-        """Produce the plain pydantic-ai callable for this tool class.
+    def as_pydantic_ai_tool(cls, config: ToolConfigType) -> Callable[..., Awaitable[PydanticAIToolReturn]]:
+        """
+        Produce a callable that exposes this tool class to pydantic-ai.
 
-        The single value parameter is annotated with `cls`, so pydantic-ai
-        flattens the model's fields to top-level tool arguments and hands the
-        body a validated `cls` instance. Annotations are bound as real objects
-        (not strings) so they resolve regardless of `from __future__ import
-        annotations` in the defining module.
+        pydantic-ai reads the callable's signature to describe the tool to the
+        model and, when the model calls it, to validate the model's JSON into a
+        `cls` instance. The body itself does not run on the normal path: the
+        `tool_execute` hook in agent.py overrides that to attach hooks, retry,
+        consent and UI groups. It would only run if a toolset were built without
+        that capability.
 
-        The `return` annotation is `ToolReturn` - the type the model actually
-        ends up receiving, since the tool-execution capability wraps the result
-        before it goes out. It is deliberately NOT `ToolResult` (the
-        dataclass `run` literally returns): pydantic-ai tries to build a return
+        The `return` annotation is `PydanticAIToolReturn`, deliberately not the
+        `ToolResult` the body actually returns: pydantic-ai builds a return
         schema from this annotation, and a plain dataclass makes it emit a
         `UserWarning` and fall back to an unconstrained schema, once per tool
-        per toolset build. `ToolReturn` is both accurate downstream and
-        schema-clean."""
+        per toolset build.
+        """
 
-        # NOTE: `config` is the tool's own entry, and stays current: sections
-        #  are mutated in place, never replaced.
-        async def run(ctx, params):
-            return await params.execute(config, ctx.deps.interface)
-
-        run.__annotations__ = {
-            "ctx": RunContext[Any],
-            "params": cls,
-            "return": PydanticAIToolReturn,
-        }
-        run.__name__ = cls.tool_name()
-        run.__doc__ = cls.__doc__
-        return run
+        async def run_tool(ctx: RunContext[Any], tool) -> PydanticAIToolReturn:
+            return await tool.execute(config, ctx.deps.interface)
+        # NOTE: `tool` must be labelled `cls`, or pydantic-ai has nothing to
+        #  instantiate the model's JSON into. `tool: cls` would work in the
+        #  signature today, but it is stored as the STRING "cls" the moment
+        #  this module gains `from __future__ import annotations`, and
+        #  pydantic-ai cannot resolve that. Attaching the class object
+        #  afterwards keeps it a real object either way.
+        run_tool.__annotations__.update(tool=cls)
+        # Re-name `run_tool` after the tool itself, and add its docstring.
+        run_tool.__name__ = cls.tool_name()
+        run_tool.__doc__ = cls.__doc__
+        return run_tool
