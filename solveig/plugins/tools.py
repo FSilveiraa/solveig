@@ -16,79 +16,56 @@ demand (`tool_name()`/`__name__`) — no separate index.
 """
 
 import warnings
-from collections.abc import Awaitable, Callable
-from typing import Any, cast, overload
+from collections.abc import Callable
+from typing import Any, overload
 
 from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
-from solveig.tools.base import BaseTool
+from solveig.tools.base import BaseTool, tool_from_callable
 from solveig.tools.config import ToolConfig
 from solveig.tools.orchestration import tool_subcommand
 
-
-class FunctionTool:
-    """A plain callable plugin tool as a callable object — the parallel of a
-    `BaseTool` subclass for the function case. `config_model` is DECLARED on
-    the wrapper (default bare ToolConfig = enabled-only), so schema compose
-    reads it the same way for both kinds of plugin tool."""
-
-    def __init__(
-        self,
-        fn: Callable[..., Awaitable[object]],
-        config_model: type[ToolConfig] = ToolConfig,
-    ):
-        self.fn = fn
-        self.config_model = config_model
-        self.__name__ = fn.__name__
-        self.__module__ = fn.__module__
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.fn(*args, **kwargs)
-
-
-# A plugin tool as registered: a BaseTool subclass, a plain callable (pre-
-# wrap, only ever seen at the `@tool` boundary), or a FunctionTool (post-wrap —
-# what PLUGIN_TOOLS actually holds for the callable case).
-type PluginTool = Callable[..., Awaitable[object]] | type[BaseTool] | FunctionTool
-
-# Discovered plugin tools, populated by `@tool` self-registration during discovery.
-PLUGIN_TOOLS: list[PluginTool] = []
+#: Discovered plugin tools, populated by `@tool` self-registration during
+#: discovery. Every element is a tool CLASS: a `BaseTool` subclass as declared, or
+#: the class `tool_from_callable` builds from a plain callable - so nothing
+#: downstream sees a second kind of thing.
+PLUGIN_TOOLS: list[type[BaseTool]] = []
 
 
 @overload
-def tool(entry: PluginTool) -> PluginTool: ...
+def tool(entry: type[BaseTool]) -> type[BaseTool]: ...
 @overload
-def tool(*, config_model: type[ToolConfig]) -> Callable[[PluginTool], PluginTool]: ...
+def tool(entry: Callable[..., Any]) -> type[BaseTool]: ...
+@overload
+def tool(
+    *, config_model: type[ToolConfig]
+) -> Callable[[Callable[..., Any]], type[BaseTool]]: ...
 def tool(entry=None, *, config_model=None):
     """Register a plugin tool into `PLUGIN_TOOLS`. Usable bare (`@tool`) or with a
     config type (`@tool(config_model=MyConfig)`).
 
-    A `BaseTool[SomeConfig]` subclass already has its `config_model` auto-derived
-    from the generic (and typed `self.settings(config)`), so it registers as-is;
-    a plain callable is wrapped in `FunctionTool` so its config type is declared
-    on the wrapper rather than stashed. Without `config_model=` a callable gets
-    bare `ToolConfig` (enabled-only) and reads its config Any-style via
-    `ctx.deps.config`."""
+    A `BaseTool` subclass already carries its own `config_model` and registers as
+    it is. A plain callable is built into a tool class by `tool_from_callable`,
+    which also owns which config type a callable gets when none is named here."""
 
-    def register(e: PluginTool) -> PluginTool:
-        if isinstance(e, type) and issubclass(e, BaseTool):
-            pass  # BaseTool: config_model auto-derived from the generic
-        elif isinstance(e, FunctionTool):
-            if config_model is not None:
-                e.config_model = config_model
-        elif callable(e):
-            e = FunctionTool(
-                cast(Callable[..., Awaitable[object]], e), config_model or ToolConfig
+    def register(tool: type[BaseTool] | Callable[..., Any]) -> type[BaseTool]:
+        # `BaseTool` subclasses are callable too, so the class check comes first:
+        #  only something that isn't already a tool gets built into one.
+        if not (isinstance(tool, type) and issubclass(tool, BaseTool)):
+            tool = (
+                tool_from_callable(tool)
+                if config_model is None
+                else tool_from_callable(tool, config_model)
             )
-        PLUGIN_TOOLS.append(e)
+
+        PLUGIN_TOOLS.append(tool)
         # A tool's `/command` is built and stored the moment the tool is
         # declared, through the same entrypoint the core tool list uses. The
         # plugin store is emptied before each rescan, so re-declaring on reload
         # replaces rather than duplicates.
-        sub = tool_subcommand(e)
-        if sub is not None:
-            for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, sub):
+        if (subcommands := tool_subcommand(tool)) is not None:
+            for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, subcommands):
                 warnings.warn(refused, stacklevel=2)
-        return e
+        return tool
 
     return register(entry) if entry is not None else register
 
@@ -97,32 +74,8 @@ def clear_tools() -> None:
     PLUGIN_TOOLS.clear()
 
 
-def plugin_tool_name(entry: PluginTool) -> str:
-    """The name a call dispatches under: `.tool_name()` for a `BaseTool`
-    subclass (e.g. `TreeTool` -> `"tree"`), `__name__` for a FunctionTool."""
-    if isinstance(entry, type) and issubclass(entry, BaseTool):
-        return entry.tool_name()
-    return entry.__name__
-
-
-def config_model_of(entry: PluginTool) -> type[ToolConfig]:
-    """The tool's config type for schema composition — declared on both kinds
-    (a BaseTool ClassVar auto-derived from the generic, a FunctionTool field),
-    so compose reads it uniformly."""
-    if isinstance(entry, type) and issubclass(entry, BaseTool):
-        return entry.config_model
-    if isinstance(entry, FunctionTool):
-        return entry.config_model
-    # Bare callable that was never wrapped (registered without @tool's factory).
-    return ToolConfig
-
-
 __all__ = [
     "PLUGIN_TOOLS",
-    "PluginTool",
-    "FunctionTool",
     "tool",
     "clear_tools",
-    "plugin_tool_name",
-    "config_model_of",
 ]
