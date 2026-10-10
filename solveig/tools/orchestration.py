@@ -40,10 +40,11 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
+from config import PathNotFound
 from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import Level, SolveigInterface
-from solveig.plugins.hooks import HookKind, hook_name, hooks_for
+from solveig.plugins.hooks import HookKind, hooks_for
 from solveig.session.conversation import Conversation
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
@@ -69,7 +70,7 @@ def open_tool_group(
 
 
 async def run_tool_and_hooks(
-    instance: BaseTool,
+    tool: BaseTool,
     config: SolveigConfig,
     interface: SolveigInterface,
 ) -> ToolResult:
@@ -83,36 +84,44 @@ async def run_tool_and_hooks(
     and `UserCancel` propagates as a real cancellation. This function's job is
     to run the tool, not to decide what a failure means to whoever asked.
     """
-    tool_name = instance.tool_name()
+    tool_name = tool.tool_name()
+    try:
+        tool_config = config.tools.get(tool_name)
+    except PathNotFound:
+        tool_config = config.plugins.tools.get(tool_name)
     # The single enable/disable enforcement point: both the LLM path and the
     # /tool subcommand path reach a tool through here, so a disabled tool is
     # refused uniformly (each caller translates ToolDisabledError). The LLM path
     # also filters disabled tools out of the schema upstream, making this a
     # belt-and-suspenders guard there and the *only* guard for the subcommand.
-    if not config.is_tool_enabled(tool_name):
+    if not tool_config.enabled:
         raise ToolDisabledError(
             f"Tool '{tool_name}' is disabled (tools.{tool_name}.enabled=false)."
         )
     async with open_tool_group(
         interface,
-        instance.title,
-        collapse_when_done=instance.auto_collapse,
+        tool.title,
+        collapse_when_done=tool.auto_collapse,
     ) as group:
         # Intent first (file header, command text, URL) so a @before hook's
         # prompt appears with the operation already visible above it.
-        await instance.display_header(group)
+        await tool.display_header(group)
 
         # Hooks are enabled-by-default; a hook disabled via plugins.hooks.<name>.
         # enabled=false is skipped here (the one gate, parallel to is_tool_enabled).
+        # TODO: read from config
         for before_hook in hooks_for(HookKind.BEFORE_TOOL, tool_name):
-            if config.is_hook_enabled(hook_name(before_hook)):
-                await before_hook(instance.model_dump(), config, group)
+            hook_config = config.plugins.hooks.get(before_hook.name)
+            if hook_config.enabled:
+                await before_hook(tool.model_dump(), hook_config, group)
 
-        result = await instance.execute(config, group)
+        result = await tool.execute(tool_config, group)
 
+        # TODO: read from config
         for after_hook in hooks_for(HookKind.AFTER_TOOL, tool_name):
-            if config.is_hook_enabled(hook_name(after_hook)):
-                result = await after_hook(result, config, group)
+            hook_config = config.plugins.hooks.get(after_hook.name)
+            if hook_config.enabled:
+                result = await after_hook(result, hook_config, group)
         return result
 
 

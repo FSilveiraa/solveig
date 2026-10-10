@@ -1,12 +1,14 @@
 """trafilatura hook - converts HTML response bodies to markdown after an HTTP request."""
 
-from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
+from solveig.plugins.config import HookConfig
 from solveig.plugins.hooks import after_tool
 from solveig.tools.core.http import HttpTool
 from solveig.tools.result import ToolResult
 
 try:
+    # TODO: this just fully fails at least in the IDE,
+    #  we're importing this file itself
     import trafilatura as _trafilatura
 except ImportError:
     _trafilatura = None
@@ -14,7 +16,7 @@ except ImportError:
 
 @after_tool(tools=(HttpTool,))
 async def trafilatura(
-    result: ToolResult, config: SolveigConfig, interface: SolveigInterface
+    result: ToolResult, config: HookConfig, interface: SolveigInterface
 ) -> ToolResult:
     """Offer to convert an HTML response body to markdown.
 

@@ -8,7 +8,6 @@ import tempfile
 
 from pydantic import Field
 
-from solveig.config import SolveigConfig
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import before_tool
@@ -59,7 +58,7 @@ def detect_shell(shell_override: str | None) -> str:
 
 @before_tool(tools=(CommandTool,), config_model=ShellcheckConfig)
 async def shellcheck(
-    tool_args: dict, config: SolveigConfig, interface: SolveigInterface
+    tool_args: dict, config: ShellcheckConfig, interface: SolveigInterface
 ) -> None:
     """Lint the requested command with `shellcheck`, raising to block execution.
 
@@ -70,12 +69,11 @@ async def shellcheck(
     command_str = tool_args["command"]
     # Any-style read of this hook's own typed config section (keyed by the hook's
     # __name__). Composed onto config.plugins.hooks during the two-phase bootstrap.
-    settings = config.plugins.hooks.shellcheck
 
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")
 
-    shell_name = detect_shell(settings.shell)
+    shell_name = detect_shell(config.shell)
 
     # NOTE: delete=False + explicit os.remove() (not delete=True) so the file stays
     # on disk for the external shellcheck process to read.
@@ -94,8 +92,8 @@ async def shellcheck(
             f"--shell={shell_name}",
         ]
 
-        if settings.ignore_codes:
-            cmd.extend(["--exclude", ",".join(settings.ignore_codes)])
+        if config.ignore_codes:
+            cmd.extend(["--exclude", ",".join(config.ignore_codes)])
 
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -158,7 +156,7 @@ async def shellcheck(
                             await group.print(message, level=Level.WARNING)
 
                 # Ask the user if they want to proceed
-                if settings.ask_to_execute:
+                if config.ask_to_execute:
                     run_anyway_choice = await interface.ask_choice(
                         "Shellcheck found issues with this command. Execute anyway?",
                         choices=["Yes", "No"],

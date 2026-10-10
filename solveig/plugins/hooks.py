@@ -144,12 +144,6 @@ def _tool_key(target: "str | type[BaseTool] | Callable[..., Any]") -> str:
     return target.__name__
 
 
-def hook_name(hook: Hook) -> str:
-    """The name a hook is configured/gated under: `plugins.hooks.<hook_name>`.
-    One file may export several hooks, each its own config entry."""
-    return hook.name
-
-
 def hooks_config_map() -> dict[str, type[ToolConfig]]:
     """Every distinct hook as {hook_name: config_model} for schema composition
     (`bootstrap.compose_plugin_hooks`). A hook registered for several tools appears
@@ -241,7 +235,6 @@ __all__ = [
     "before_tool",
     "clear_hooks",
     "declaring_hook",
-    "hook_name",
     "hooks_config_map",
     "hooks_for",
 ]
