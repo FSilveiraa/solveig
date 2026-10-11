@@ -14,6 +14,7 @@ from pydantic import Field, field_validator
 
 from config.section.static import ConfigSection
 from config.section.dynamic import DynamicSection
+from solveig.plugins.hooks import HookConfig
 from solveig.tools.config import ToolConfig
 from solveig.utils.file import Filesystem
 
@@ -21,10 +22,6 @@ DEFAULT_PLUGIN_PATHS: list[str] = [
     "./.solveig/plugins",
     "~/.solveig/plugins",
 ]
-
-
-class HookConfig(ConfigSection):
-    enabled: bool = Field(default=True, description="Enable this hook")
 
 
 class PluginToolsConfig(DynamicSection[ToolConfig]):

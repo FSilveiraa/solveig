@@ -21,7 +21,7 @@ from solveig.interface.base import Level, SolveigInterface
 
 from .hooks import clear_hooks, hooks_config_map
 from .subcommands import clear_subcommands
-from .tools import PLUGIN_TOOLS, clear_tools, plugin_tool_name
+from .tools import PLUGIN_TOOLS, clear_tools
 from .utils import register_external_plugin_paths, rescan_and_load_plugins
 
 #: The one package the scan walks. External dirs are folded into its `__path__`,
@@ -125,7 +125,7 @@ async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
             await group.print(collision, level=Level.WARNING)
 
         async with group.with_group("Tools") as tools_group:
-            for name in sorted(plugin_tool_name(entry) for entry in PLUGIN_TOOLS):
+            for name in sorted(entry.tool_name() for entry in PLUGIN_TOOLS):
                 if config.is_tool_enabled(name):
                     await tools_group.print(f"'{name}': loaded", level=Level.SUCCESS)
                 else:

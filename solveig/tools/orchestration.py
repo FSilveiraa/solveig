@@ -29,7 +29,7 @@ reacts), the subcommand displays an error (no model to answer);
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from pydantic import ValidationError
 from pydantic_ai.messages import (
@@ -41,7 +41,6 @@ from pydantic_ai.messages import (
 )
 
 from config import PathNotFound
-from solveig.config import SolveigConfig
 from solveig.exceptions import ToolDisabledError
 from solveig.interface.base import Level, SolveigInterface
 from solveig.plugins.hooks import HookKind, hooks_for
@@ -49,6 +48,9 @@ from solveig.session.conversation import Conversation
 from solveig.subcommands.base import Subcommand
 from solveig.tools.base import BaseTool
 from solveig.tools.result import ToolResult
+
+if TYPE_CHECKING:
+    from solveig.config import SolveigConfig
 
 
 def open_tool_group(
@@ -71,7 +73,7 @@ def open_tool_group(
 
 async def run_tool_and_hooks(
     tool: BaseTool,
-    config: SolveigConfig,
+    config: "SolveigConfig",
     interface: SolveigInterface,
 ) -> ToolResult:
     """Open *instance*'s group, run it with its `@before_tool`/`@after_tool` hooks,
@@ -126,7 +128,7 @@ async def run_tool_and_hooks(
 
 
 async def run_untyped_tool(
-    config: SolveigConfig,
+    config: "SolveigConfig",
     interface: SolveigInterface,
     call: ToolCallPart,
     args: dict[str, Any],
@@ -220,7 +222,7 @@ def _tool_subcommand_handler(
     its own copy of the usage line."""
 
     async def handler(
-        config: SolveigConfig,
+        config: "SolveigConfig",
         interface: SolveigInterface,
         conversation: Conversation,
         *tokens: str,

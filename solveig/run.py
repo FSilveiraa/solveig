@@ -299,6 +299,7 @@ async def run_async(
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
     else:
+        bootstrap.register_plugin_tool_subcommands(config)
         # An INJECTED config (tests, the mock demo, an embedder) never went
         # through the startup parse, so nothing has scanned for its plugins.
         # Scan here rather than in _display_setup: the plugin set has to match

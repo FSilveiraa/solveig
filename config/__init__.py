@@ -29,6 +29,7 @@ from .annotations import (
 )
 from .exceptions import PathNotFound, NotASection
 from .sources import FILE_EXTENSIONS
+from .changes import ConfigChange, Updated, Deleted, Created
 
 
 __all__ = [
@@ -46,4 +47,8 @@ __all__ = [
     "PathNotFound",
     "NotASection",
     "FILE_EXTENSIONS",
+    "ConfigChange",
+    "Updated",
+    "Deleted",
+    "Created",
 ]

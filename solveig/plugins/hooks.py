@@ -19,23 +19,31 @@ another module-level dict. A hook is identified by its own function name (`hook_
 (`plugins.hooks.<name>`) - never by the file it came from. Nothing here derives
 anything from a module path.
 """
+from __future__ import annotations
 
 import warnings
 from collections.abc import Awaitable, Callable, Iterator
 from enum import Enum, auto
 from typing import Any
 
-from solveig.config import SolveigConfig
+from pydantic import Field
+
+from config import ConfigSection
 from solveig.interface.base import SolveigInterface
 from solveig.tools.base import BaseTool
 from solveig.tools.config import ToolConfig
 from solveig.tools.result import ToolResult
 
+
+class HookConfig(ConfigSection):
+    enabled: bool = Field(default=True, description="Enable this hook")
+
+
 BeforeHookFn = Callable[
-    [dict[str, Any], SolveigConfig, SolveigInterface], Awaitable[None]
+    [dict[str, Any], HookConfig, SolveigInterface], Awaitable[None]
 ]
 AfterHookFn = Callable[
-    [ToolResult, SolveigConfig, SolveigInterface], Awaitable[ToolResult]
+    [ToolResult, HookConfig, SolveigInterface], Awaitable[ToolResult]
 ]
 
 
@@ -45,7 +53,7 @@ class Hook:
     `@before_tool`/`@after_tool` build these from plain functions; an author may also
     subclass directly. Identity is the instance (its `name`)."""
 
-    config_model: type[ToolConfig] = ToolConfig
+    config_model: type[HookConfig] = HookConfig
 
     def __init__(self, fn: Callable[..., Any], name: str | None = None):
         self.fn = fn
@@ -194,7 +202,7 @@ def declaring_hook[HookT: Hook](
     def decorate(
         tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]" = (),
         *,
-        config_model: type[ToolConfig] | None = None,
+        config_model: type[HookConfig] | None = None,
     ) -> Callable[[Callable[..., Any]], HookT]:
         """`config_model=` declares a typed `plugins.hooks.<hook_name>` config
         schema on the hook class; without it the hook gets bare `ToolConfig`

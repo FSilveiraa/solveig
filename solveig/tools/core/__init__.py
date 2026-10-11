@@ -20,7 +20,6 @@ from pydantic import Field
 
 from config.section.static import ConfigSection
 from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
-from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import tool_subcommand
 
 from .command import CommandTool, CommandConfig
@@ -51,12 +50,9 @@ class CoreToolsConfig(ConfigSection):
 # TODO: there should be a cleaner way to `walk` a config's fields,
 #  especially for dynamic sections where it's structurally implied
 #  their entries are kv mappings. However this is schema, not instance.
-for _tool in CoreToolsConfig.model_fields:
-    # TODO: Review this method, why is something external allowed to
-    #  interrogate a tool for its sub-commands?
-    _sub = tool_subcommand(_tool)
-    if _sub is not None:
-        for _refused in SUBCOMMANDS.add(CORE_TOOL_SUBCOMMANDS, _sub):
+for field in CoreToolsConfig.model_fields.values():
+    if (subcommand := tool_subcommand(field.annotation.tool_class)) is not None:
+        for _refused in SUBCOMMANDS.add(CORE_TOOL_SUBCOMMANDS, subcommand):
             warnings.warn(_refused, stacklevel=2)
 
 __all__ = [

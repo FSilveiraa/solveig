@@ -10,8 +10,7 @@ from pydantic import Field
 
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import Level, SolveigInterface
-from solveig.plugins.hooks import before_tool
-from solveig.tools.config import ToolConfig
+from solveig.plugins.hooks import before_tool, HookConfig
 from solveig.tools.core.command import CommandTool
 
 DANGEROUS_PATTERNS = [
@@ -21,7 +20,7 @@ DANGEROUS_PATTERNS = [
 ]
 
 
-class ShellcheckConfig(ToolConfig):
+class ShellcheckConfig(HookConfig):
     """Typed `plugins.hooks.shellcheck` config — declared via
     `@before_tool(config_model=ShellcheckConfig)` (a hook is a function, so it opts into
     a schema through the decorator, the callable parallel of `@tool(config_model=…)`).

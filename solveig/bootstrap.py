@@ -18,13 +18,18 @@ against.
 
 from __future__ import annotations
 
+import warnings
+
+from config import ConfigSection, ConfigChange, Deleted, Created, Updated
 from solveig.config import SolveigConfig
 from solveig.config.subcommands import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
 from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
-from solveig.plugins.tools import PLUGIN_TOOLS, config_model_of, plugin_tool_name
+from solveig.plugins.tools import PLUGIN_TOOLS
+from solveig.subcommands.base import SUBCOMMANDS, PLUGIN_SUBCOMMANDS
+from solveig.tools.orchestration import tool_subcommand
 
 
 async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
@@ -50,8 +55,8 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     # NOTE: this lives here, above config and plugins both, because config
     #  must not import the plugin packages.
     config.plugins.tools.resolve({
-        plugin_tool_name(entry): config_model_of(entry)
-        for entry in PLUGIN_TOOLS
+        tool.tool_name(): tool.config_model
+        for tool in PLUGIN_TOOLS
     })
     config.plugins.hooks.resolve(hooks_config_map())
 
@@ -59,6 +64,9 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     # plugin store before the rescan, and every `@tool`/`@subcommand` in a
     # scanned module refills it on import - so a plugin deleted from disk loses
     # its command by simply never declaring it again.
+
+    # HACK: bad composition, we call discovery.discover_plugins,
+    # resolve the types ourselves, then call discovery.report_plugins.
     await report_plugins(config, interface)
 
 
@@ -111,3 +119,28 @@ def register_config_stat(
         stat.refresh()
 
     return stat
+
+
+# TODO: find an appropriate home for this, ideally something that
+#  receives/declares PluginToolsConfig
+def register_plugin_tool_subcommands(config: SolveigConfig) -> None:
+    def _add_subcommand(tool_cls):
+        if (sub := tool_subcommand(tool_cls)) is not None:
+            for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, sub):
+                warnings.warn(refused)
+
+    def _delete_subcommand(tool_cls):
+        for trigger in tool_cls.subcommands:
+            PLUGIN_SUBCOMMANDS.pop(trigger, None)
+
+    @config.plugins.tools.on_change
+    async def update_subcommands_for_plugin_tools(_config: ConfigSection, changes: frozenset[ConfigChange]) -> None:
+        for change in changes:
+            match change:
+                case Created(value=entry):
+                    _add_subcommand(entry.tool_class)
+                case Updated(before=old, after=new):
+                    _delete_subcommand(old.tool_class)
+                    _add_subcommand(new.tool_class)
+                case Deleted(value=entry):
+                    _delete_subcommand(entry.tool_class)

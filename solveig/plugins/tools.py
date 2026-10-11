@@ -1,28 +1,17 @@
-"""Registry for dynamically discovered plugin tools.
+"""
+Registry for dynamically discovered plugin tools.
 
-Unlike core tools (hand-listed in `CORE_TOOLS`, no marker needed), plugin tools
-are found by scanning `solveig.plugins.library` at runtime (`discover_plugins`),
-so there's no static list anyone edits by hand. `@tool` is that missing piece: a
-plugin author's only job is to decorate their tool so it self-registers into
-`PLUGIN_TOOLS` — and, if it declared trigger names, into the plugin subcommand
-store at the same moment.
+Exposes an `@tool` decorator that accepts both BaseTool subclasses and
+plain callables.
 
-`PLUGIN_TOOLS` mirrors `CORE_TOOLS`'s shape: a plain list. Its elements are
-`BaseTool` subclasses (typed config via `settings()`, like core) OR
-`FunctionTool` wrappers around plain callables — both kinds carry a DECLARED
-`config_model`, so schema compose reads `entry.config_model` directly (no
-getattr fallback, no stash). `plugin_tool_name` derives the dispatch name on
-demand (`tool_name()`/`__name__`) — no separate index.
+PLUGIN_TOOLS is the current list of known plugin tools.
 """
 
-import warnings
 from collections.abc import Callable
 from typing import Any, overload
 
-from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.base import BaseTool, tool_from_callable
 from solveig.tools.config import ToolConfig
-from solveig.tools.orchestration import tool_subcommand
 
 #: Discovered plugin tools, populated by `@tool` self-registration during
 #: discovery. Every element is a tool CLASS: a `BaseTool` subclass as declared, or
@@ -48,8 +37,9 @@ def tool(entry=None, *, config_model=None):
     which also owns which config type a callable gets when none is named here."""
 
     def register(tool: type[BaseTool] | Callable[..., Any]) -> type[BaseTool]:
-        # `BaseTool` subclasses are callable too, so the class check comes first:
-        #  only something that isn't already a tool gets built into one.
+        # Tools are callables, so check if it's a plain method by checking
+        #  if it's not a tool
+        # TODO: this check happens elsewhere, review why several places need it
         if not (isinstance(tool, type) and issubclass(tool, BaseTool)):
             tool = (
                 tool_from_callable(tool)
@@ -58,13 +48,6 @@ def tool(entry=None, *, config_model=None):
             )
 
         PLUGIN_TOOLS.append(tool)
-        # A tool's `/command` is built and stored the moment the tool is
-        # declared, through the same entrypoint the core tool list uses. The
-        # plugin store is emptied before each rescan, so re-declaring on reload
-        # replaces rather than duplicates.
-        if (subcommands := tool_subcommand(tool)) is not None:
-            for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, subcommands):
-                warnings.warn(refused, stacklevel=2)
         return tool
 
     return register(entry) if entry is not None else register
