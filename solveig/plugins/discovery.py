@@ -11,18 +11,19 @@ An `__init__` runs whenever anything under it is imported, so re-exporting here
 would put `plugins.tools` in front of `plugins.hooks` for every importer —
 including `orchestration`, which `plugins.tools` imports back for `@tool`.
 """
-
+import importlib
+import os
+import pkgutil
+import sys
 import warnings
+from contextvars import ContextVar
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
+from .config import PluginsConfig
 
-from .hooks import clear_hooks, hooks_config_map
-from .subcommands import clear_subcommands
-from .tools import PLUGIN_TOOLS, clear_tools
-from .utils import register_external_plugin_paths, rescan_and_load_plugins
+from .hooks import clear_hooks
 
 #: The one package the scan walks. External dirs are folded into its `__path__`,
 #: so a bundled and an external plugin are indistinguishable from here on.
@@ -56,7 +57,8 @@ LAST_SCAN = ScanResult()
 #: Fired once per scan, after the registries are refilled. Plain callables, so
 #: this module needs to know nothing about its subscribers - the doorbell
 #: pattern `UserMessageQueue.on_change` already uses.
-#:
+
+# TODO: fully unused, config should be SSOT, review+remove
 #: Batched BY CONSTRUCTION: the notification lives on the scan, not on each
 #: registration, because a scan is the only thing that changes the plugin set.
 #: Firing per registration would make each subscriber's work quadratic - one
@@ -64,8 +66,72 @@ LAST_SCAN = ScanResult()
 #: 200 hooks - and the registry could not stop a subscriber holding it wrong.
 ON_SCANNED: list[Callable[[], None]] = []
 
+PLUGIN_TARGETS: ContextVar[PluginsConfig | None] = ContextVar("plugin_scan_targets", default=None)
 
-def discover_plugins(paths: list[str]) -> list[str]:
+
+def rescan_and_load_plugins(
+        plugins_config: PluginsConfig,
+        plugin_module_path: str = "solveig.plugins.library"
+) -> tuple[int, int, list[str], set[str] | None]:
+    # 1. Add external plugin dirs to the process context so the scan can find them
+    import solveig.plugins.library as library
+
+    for base in plugins_config.paths:
+        path = os.path.expanduser(base)
+        if os.path.isdir(path) and path not in library.__path__:
+            library.__path__.append(path)
+
+    succeeded, failed = (0, 0)
+    errors: list[str] = []
+
+    # 2. Find all modules currently on the filesystem.
+    on_disk_modules = set()
+    try:
+        module = importlib.import_module(plugin_module_path)
+        for _, module_name, _ in pkgutil.iter_modules(
+            module.__path__, f"{module.__name__}."
+        ):
+            on_disk_modules.add(module_name)
+    except (ImportError, FileNotFoundError):
+        # Return the found paths as None to differentiate "path does not exit"
+        #  from "nothing was found inside this path"
+        return 0, 0, [f"Plugin discovery path not found: {plugin_module_path}"], None
+
+    # 3. Find all relevant modules already in memory.
+    in_memory_modules = {
+        name for name in sys.modules
+        if name.startswith(f"{plugin_module_path}.")
+    }
+
+    # 4. Remove any modules from memory that are no longer on disk.
+    modules_to_unload = in_memory_modules - on_disk_modules
+    for module_name in modules_to_unload:
+        del sys.modules[module_name]
+
+    # 5. Iterate through what's on disk and sync memory.
+    #  What these imports declare lands on `TARGETS`, for as long as they run.
+    token = PLUGIN_TARGETS.set(plugins_config)
+    try:
+        for module_name in on_disk_modules:
+            try:
+                if module_name in in_memory_modules:
+                    # Module exists, so reload it to pick up changes
+                    importlib.reload(sys.modules[module_name])
+                else:
+                    # New module, import it for the first time
+                    importlib.import_module(module_name)
+                succeeded += 1
+            except Exception as e:
+                errors.append(f"Failed to load or reload plugin module {module_name}: {e}")
+                failed += 1
+    finally:
+        PLUGIN_TARGETS.reset(token)
+
+    return succeeded, failed, errors, on_disk_modules
+
+
+
+def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
     """Load every plugin into the registries it declares into — idempotent and
     UI-free. Folds the external dirs in `paths` into the library package first,
     then scans it once. Returns discovery error messages; the caller surfaces
@@ -87,17 +153,29 @@ def discover_plugins(paths: list[str]) -> list[str]:
     a second one — leaving a discarded object that looked usable. Narrowing the
     signature is what lets `SolveigConfig` be built once, fully composed.
     """
-    register_external_plugin_paths(paths)
-    clear_plugins()
+    # TODO: get rid of this. The SSOT is the config, everything derives from altering it.
+    #  Plugin tools no longer have `clear` method, subcommands don't use theirs at all,
+    #  hooks will follow to also not have it.
+    clear_hooks()
     # A refused declaration warns from inside the import - caught here rather
     # than by a caller, so every scan records it whether or not anyone is
     # listening yet.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _succeeded, _failed, errors = rescan_and_load_plugins(PLUGIN_PACKAGE)
+        _succeeded, _failed, errors, _on_disk_modules = rescan_and_load_plugins(plugins_config)
 
     LAST_SCAN.errors = errors
     LAST_SCAN.collisions = [str(w.message) for w in caught]
+
+    # An entry whose file is gone keeps its value and loses its type.
+    # `tool_class` is the class the plugin file defined, so its `__module__`
+    # is that file, and the scan just listed which files still exist.
+    # NOTE: wrap the dict iteration in a list since we call `remove_type`
+    #  which alters the thing being iterated
+    for name, entry in list((plugins_config.tools.model_extra or {}).items()):
+        if entry.tool_class.__module__ not in _on_disk_modules:
+            plugins_config.tools.remove_type(name)
+
     # Whatever derives from the plugin set updates itself now, before anything
     # can read a stale derivation. The config schema is the one that matters:
     # a config built against an un-recomposed schema silently hands back a raw
@@ -107,7 +185,7 @@ def discover_plugins(paths: list[str]) -> list[str]:
     return errors
 
 
-async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
+async def report_plugins(plugins_config: PluginsConfig, interface: SolveigInterface) -> None:
     """Render discovered plugins in the Plugins dialog: every discovered tool is
     listed, a config-disabled one marked rather than hidden (list-all-mark-disabled),
     so a disabled plugin is visible instead of looking un-discovered. Any discovery
@@ -125,46 +203,37 @@ async def report_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
             await group.print(collision, level=Level.WARNING)
 
         async with group.with_group("Tools") as tools_group:
-            for name in sorted(entry.tool_name() for entry in PLUGIN_TOOLS):
-                if config.is_tool_enabled(name):
-                    await tools_group.print(f"'{name}': loaded", level=Level.SUCCESS)
+            for tool_name, tool_config in sorted(plugins_config.tools):
+                if tool_config.enabled:
+                    await tools_group.print(f"'{tool_name}': loaded", level=Level.SUCCESS)
                 else:
                     await tools_group.print(
-                        f"'{name}': loaded (disabled)", level=Level.INFO
+                        f"'{tool_name}': loaded (disabled)", level=Level.INFO
                     )
             # PRESERVE + WARN: config for a plugin that wasn't discovered is kept
             # (see DynamicSection.unresolved) so /config save never strips it, but is
             # flagged here — a typo or a plugin missing on this machine, not an error.
-            for name in sorted(config.plugins.tools.unresolved):
+            for unresolved_tool_name in sorted(plugins_config.tools.unresolved):
                 await tools_group.print(
-                    f"'{name}': config present but plugin not discovered (preserved)",
+                    f"'{unresolved_tool_name}': config present but plugin not discovered (preserved)",
                     level=Level.WARNING,
                 )
 
         async with group.with_group("Hooks") as hooks_group:
-            for name in sorted(hooks_config_map()):
-                if config.is_hook_enabled(name):
-                    await hooks_group.print(f"'{name}': loaded", level=Level.SUCCESS)
+            for hook_name, hook_config in sorted(plugins_config.hooks):
+                if hook_config.enabled:
+                    await hooks_group.print(f"'{hook_name}': loaded", level=Level.SUCCESS)
                 else:
                     await hooks_group.print(
-                        f"'{name}': loaded (disabled)", level=Level.INFO
+                        f"'{hook_name}': loaded (disabled)", level=Level.INFO
                     )
             # Same PRESERVE + WARN as tools: a hook config block for an undiscovered
             # hook is kept (DynamicSection.unresolved) and flagged, never silently dropped.
-            for name in sorted(config.plugins.hooks.unresolved):
+            for unresolved_hook_name in sorted(plugins_config.hooks.unresolved):
                 await hooks_group.print(
-                    f"'{name}': config present but hook not discovered (preserved)",
+                    f"'{unresolved_hook_name}': config present but hook not discovered (preserved)",
                     level=Level.WARNING,
                 )
 
 
-def clear_plugins() -> None:
-    """Empty every registry a plugin can declare into. Run before each scan (and
-    in tests) — one call, because a plugin is one file that may have declared
-    into all three."""
-    clear_hooks()
-    clear_tools()
-    clear_subcommands()
-
-
-__all__ = ["discover_plugins", "report_plugins", "clear_plugins"]
+__all__ = ["discover_plugins", "report_plugins", "PLUGIN_TARGETS"]
