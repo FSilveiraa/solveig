@@ -162,7 +162,7 @@ def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
     # listening yet.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _succeeded, _failed, errors, _on_disk_modules = rescan_and_load_plugins(plugins_config)
+        _succeeded, _failed, errors, on_disk_modules = rescan_and_load_plugins(plugins_config)
 
     LAST_SCAN.errors = errors
     LAST_SCAN.collisions = [str(w.message) for w in caught]
@@ -170,11 +170,14 @@ def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
     # An entry whose file is gone keeps its value and loses its type.
     # `tool_class` is the class the plugin file defined, so its `__module__`
     # is that file, and the scan just listed which files still exist.
+    # A None list means the scan never ran (the package is not importable) - that
+    #  is not an empty one, and only an empty one means every plugin is gone.
     # NOTE: wrap the dict iteration in a list since we call `remove_type`
     #  which alters the thing being iterated
-    for name, entry in list((plugins_config.tools.model_extra or {}).items()):
-        if entry.tool_class.__module__ not in _on_disk_modules:
-            plugins_config.tools.remove_type(name)
+    if on_disk_modules is not None:
+        for name, entry in list((plugins_config.tools.model_extra or {}).items()):
+            if entry.tool_class.__module__ not in on_disk_modules:
+                plugins_config.tools.remove_type(name)
 
     # Whatever derives from the plugin set updates itself now, before anything
     # can read a stale derivation. The config schema is the one that matters:

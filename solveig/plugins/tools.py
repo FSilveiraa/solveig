@@ -15,8 +15,6 @@ from solveig.tools.base import BaseTool, tool_from_callable
 from solveig.tools.config import ToolConfig
 
 
-
-
 @overload
 def tool(entry: type[BaseTool]) -> type[BaseTool]: ...
 @overload
