@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from types import GenericAlias
-from typing import ClassVar, Any, override, TypeVar, Mapping, Iterator
+from typing import ClassVar, Any, override, TypeVar, Iterator
 
-from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ValidationError, ConfigDict
+from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ConfigDict
 from pydantic.fields import FieldInfo
 
-from ..exceptions import NotASection
+from ..exceptions import NotASection, PathNotFound
 from .static import ConfigSection, _is_section, _MUTABLE
-from ..changes import Created, Deleted, Updated, ConfigChange
+from ..changes import Created, Deleted, Updated
 
 # Like _MUTABLE, but allows preserving config keys that did not validate against the model.
 # Used by preserving sections to keep declared-but-missing fields under `model_extra`.
@@ -28,7 +28,7 @@ class DynamicSection[T](ConfigSection):
     model_config = _MUTABLE_ALLOW
     _entry_type: ClassVar[Any] = Any  # T in `DynamicSection[T]`
 
-    # Whether entries get their type later through `resolve()`.
+    # Whether entries get their type later through `set_type()`.
     #  Until then, an entry's data is kept as a dict inside
     #  `unresolved` and can't be accessed normally.
     #  If off, expects types available at init.
@@ -62,7 +62,7 @@ class DynamicSection[T](ConfigSection):
     def _keep_untyped_entries_aside(cls, data: Any, handler) -> Any:
         """
         Ensures entries read from a file with no known type yet are kept
-        in `_unresolved` until `resolve()` gives them a type.
+        in `_unresolved` until `set_type()` gives them a type.
         """
         if not cls._types_resolved_later or not isinstance(data, dict):
             return handler(data)
@@ -79,63 +79,70 @@ class DynamicSection[T](ConfigSection):
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
 
-    def resolve(self, types: Mapping[str, Any]) -> None:
+    def set_type(self, name: str, model: Any) -> None:
         """
-        Gives entries their types, given every type that exists now. A type can
-        be anything pydantic validates: a model, `int`, `tuple[int, ...]`...
-        Data whose type is known becomes an entry of that type.
-        Known model types without data get a default entry.
-        Entries whose type is gone go back to being data, keeping their values.
-        Data that doesn't match its type is kept, and failures are raised together at the end.
+        Give `self.name` a type `model`.
+
+        The existing value for `name` from `unresolved` (or empty args) is
+        validated against the model. Entries already of this type are kept,
+        not rebuilt - it wouldn't really do anything meaningful and replacing
+        a section would clear its observers.
         """
-        failures: list[Exception] = []
-        before = dict(self.model_extra or {})
-        # Every entry goes back to its data, except a section whose type is
-        #  unchanged: it may hold observers, so it's kept, never replaced.
-        #  A plain value holds none, so it's just rebuilt from its data below.
-        for name, entry in before.items():
-            if isinstance(entry, ConfigSection) and type(entry) is types.get(name):
-                continue
-            self._unresolved[name] = TypeAdapter(type(entry)).dump_python(
-                entry, mode="json", exclude_unset=True
+        current = (self.model_extra or {}).get(name)
+        if current is not None and type(current) is model:
+            return  # Same type, don't rebuild so sections don't lose observers
+
+        had_data = True
+        if current is not None:
+            # Different type for existing typed entry,
+            # serialize to data and rebuild
+            data = TypeAdapter(type(current)).dump_python(
+                current,
+                mode="json",
+                exclude_unset=True,
             )
             BaseModel.__delattr__(self, name)
-        # Data whose type is known becomes an entry
-        for name, entry_type in types.items():
-            if name in (self.model_extra or {}):
-                continue
-            if name in self._unresolved:
-                data = self._unresolved[name]
-            # A model without data gets a default entry; a plain value has no default
-            elif isinstance(entry_type, type) and issubclass(entry_type, BaseModel):
-                data = {}
-            else:
-                continue
-            try:
-                entry = TypeAdapter(entry_type).validate_python(data)
-            except ValidationError as error:
-                failures.append(error)
-                continue
-            self._unresolved.pop(name, None)
-            BaseModel.__setattr__(self, name, entry)
-            # A default entry isn't something the user set
-            if name not in before and not data:
-                self.__pydantic_fields_set__.discard(name)
-        # Notified once, only about entries that appeared, left or changed.
-        #  NOTE: the writes above bypass `_set`, which would notify per entry.
-        after = dict(self.model_extra or {})
-        changed: list[ConfigChange] = []
-        for path in before.keys() | after.keys():
-            if path not in before:
-                changed.append(Created(path=path, value=after[path]))
-            elif path not in after:
-                changed.append(Deleted(path=path, value=before[path]))
-            elif before[path] is not after[path] and before[path] != after[path]:
-                changed.append(Updated(path=path, before=before[path], after=after[path]))
-        if changed:
-            self._notify_relatives_sync(*changed)
-        if failures:
-            raise ExceptionGroup(f"{type(self).__name__}: entries that don't match their type", failures)
+        elif name in self._unresolved:
+            # New type for untyped entry, use data from `_unresolved`
+            data = self._unresolved.pop(name)
+        elif isinstance(model, type) and issubclass(model, BaseModel):
+            # No data available, but the type is a pydantic model,
+            #  build it from defaults (empty args)
+            data = {}
+            had_data = False
+        else:
+            # Nothing matches `name`, raise
+            raise PathNotFound(type(self), name)
+        new_entry = TypeAdapter(model).validate_python(data)
+        BaseModel.__setattr__(self, name, new_entry)
+
+        # If the new entry was built from model defaults, unmark it
+        #  as user-set after the __setattr__ marks it as set.
+        if not had_data:
+            self.__pydantic_fields_set__.discard(name)  # a default is not user-set
+
+        notification = (
+            Created(path=name, value=new_entry) if current is None
+            else Updated(path=name, before=current, after=new_entry)
+        )
+        self._notify_relatives_sync(notification)
+
+
+    def remove_type(self, name) -> None:
+        """
+        Send `self.name` back to `unresolved` as untyped data.
+        Distinct from `delete/__delattr__` which also remove the data.
+        """
+        entry = (self.model_extra or {}).get(name)
+        if entry is None:
+            raise PathNotFound(type(self), name)
+        self._unresolved[name] = TypeAdapter(type(entry)).dump_python(
+            entry,
+            mode="json",
+            exclude_unset=True,
+        )
+        BaseModel.__delattr__(self, name)
+        self._notify_relatives_sync(Deleted(path=name, value=entry))
 
     @property
     def unresolved(self) -> list[str]:
@@ -155,7 +162,7 @@ class DynamicSection[T](ConfigSection):
             entry_type = type(entries[name])
             # NOTE: `type()` of a value from a parametrized container only gives
             #  the container: a `tuple[int, ...]` entry is checked as a `tuple`,
-            #  not its items. The next `resolve()` rebuilds it with the full type.
+            #  not its items. The next `set_type()` rebuilds it with the full type.
             if not isinstance(value, entry_type):
                 value = TypeAdapter(entry_type).validate_python(value)
             return super()._set(name, value)
