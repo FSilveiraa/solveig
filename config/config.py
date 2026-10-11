@@ -4,11 +4,10 @@ from typing import override
 from pydantic import Field
 from pydantic_settings import BaseSettings, CliSettingsSource
 
-from config.meta import ConfigDict
-from config.section.static import ConfigSection
-from config.annotations.comma_list import CommaSeparated
-from config.annotations.path import AbsolutePath
-from config.sources import ConfigFileSource
+from .meta import ConfigDict
+from .section.static import ConfigSection
+from .annotations import AbsolutePath, CommaSeparated
+from .sources import ConfigFileSource
 
 
 class Config(BaseSettings, ConfigSection):

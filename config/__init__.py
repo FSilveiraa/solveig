@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from .config import Config
 from .meta import ConfigDict
-from .section.static import ConfigSection, ConfigObserver
+from .section.static import ConfigSection
 from .section.dynamic import DynamicSection
 from .annotations import (
     Choice,
@@ -34,7 +34,6 @@ from .sources import FILE_EXTENSIONS
 __all__ = [
     "Config",
     "ConfigDict",
-    "ConfigObserver",
     "ConfigSection",
     "DynamicSection",
     "Choice",

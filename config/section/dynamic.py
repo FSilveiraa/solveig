@@ -6,8 +6,9 @@ from typing import ClassVar, Any, override, TypeVar, Mapping, Iterator
 from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ValidationError, ConfigDict
 from pydantic.fields import FieldInfo
 
-from config.exceptions import NotASection
+from ..exceptions import NotASection
 from .static import ConfigSection, _is_section, _MUTABLE
+from ..changes import Created, Deleted, Updated, ConfigChange
 
 # Like _MUTABLE, but allows preserving config keys that did not validate against the model.
 # Used by preserving sections to keep declared-but-missing fields under `model_extra`.
@@ -123,11 +124,14 @@ class DynamicSection[T](ConfigSection):
         # Notified once, only about entries that appeared, left or changed.
         #  NOTE: the writes above bypass `_set`, which would notify per entry.
         after = dict(self.model_extra or {})
-        changed = [
-            name for name in before.keys() | after.keys()
-            if name not in before or name not in after
-            or (before[name] is not after[name] and before[name] != after[name])
-        ]
+        changed: list[ConfigChange] = []
+        for path in before.keys() | after.keys():
+            if path not in before:
+                changed.append(Created(path=path, value=after[path]))
+            elif path not in after:
+                changed.append(Deleted(path=path, value=before[path]))
+            elif before[path] is not after[path] and before[path] != after[path]:
+                changed.append(Updated(path=path, before=before[path], after=after[path]))
         if changed:
             self._notify_relatives_sync(*changed)
         if failures:
@@ -139,7 +143,7 @@ class DynamicSection[T](ConfigSection):
         return list(self._unresolved)
 
     @override
-    def _set(self, name: str, value: Any) -> bool:
+    def _set(self, name: str, value: Any) -> Any:
         """
         On a section whose types arrive later, a resolved entry's own class
         types the value, and a name without a type keeps its value as written.
@@ -155,20 +159,27 @@ class DynamicSection[T](ConfigSection):
             if not isinstance(value, entry_type):
                 value = TypeAdapter(entry_type).validate_python(value)
             return super()._set(name, value)
-        if self._unresolved.get(name) == value:
-            return False
+        # NOTE: this returns a `before` for an unresolved type,
+        #  not sure that this should trigger observer notifications.
+        before = self._unresolved.get(name)
         self._unresolved[name] = value
         self._mark_ancestors_as_set()
-        return True
+        return before
 
     @override
-    def _delete(self, name: str) -> None:
-        """Entries waiting for their type can be deleted too."""
+    def _delete(self, name: str) -> Any:
         if name in self._unresolved:
-            del self._unresolved[name]
+            value = self._unresolved.pop(name)
             self._mark_ancestors_as_set()
-            return
-        super()._delete(name)
+            return value
+        if name in (self.model_extra or {}):
+            value = self[name]
+            # not super().__delattr__ since that routes back into _delete
+            BaseModel.__delattr__(self, name)
+            self.__pydantic_fields_set__.discard(name)
+            self._mark_ancestors_as_set()
+            return value
+        return super()._delete(name)  # declared or absent: the base's refusal
 
     @override
     @classmethod

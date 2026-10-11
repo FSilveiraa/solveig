@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any, TYPE_CHECKING
+from typing import Any
 import pathlib
 
 import anyconfig
 from pydantic import TypeAdapter
 from pydantic_settings import PydanticBaseSettingsSource, BaseSettings
 
-from config.meta import ConfigDict
+from .meta import ConfigDict
 
 # DEFAULT_CONFIG_SEARCH: list[str] = ["./.solveig/config", "~/.solveig/config"]
 FILE_EXTENSIONS: tuple[str, ...] = ("json", "yaml", "yml", "toml")

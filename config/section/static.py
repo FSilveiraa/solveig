@@ -3,13 +3,15 @@ from __future__ import annotations
 import asyncio
 import inspect
 import typing
+from dataclasses import replace
 from typing import Any, Union, TYPE_CHECKING, Iterator, Awaitable, Callable, TypeIs
 
 from pydantic import ConfigDict, BaseModel, PrivateAttr, model_validator
 from pydantic.fields import FieldInfo
 
-from config.annotations.cli_flags import CliFlags
-from config.exceptions import PathNotFound, NotASection
+from ..annotations.cli_flags import CliFlags
+from ..exceptions import PathNotFound, NotASection
+from ..changes import ConfigChange, Deleted, Updated
 
 # Notification tasks in flight. A task is only weakly held by the loop, so
 #  without a strong reference here a notification can be collected mid-await.
@@ -127,8 +129,9 @@ class ConfigSection(BaseModel):
                 super().__setattr__(name, value)
                 return
 
-            if self._set(name, value):
-                self._notify_relatives_sync(name)
+            before = self._set(name, value)
+            if before != value:
+                self._notify_relatives_sync(Updated(path=name, before=before, after=value))
 
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
@@ -248,22 +251,32 @@ class ConfigSection(BaseModel):
                 raise ValueError(f"`set` expects exactly 2 or no positional arguments, found {len(args)}: {args}.")
 
         # Only paths whose value actually changed are notified about
-        changed: list[str] = []
+        changes: list[ConfigChange] = []
         for path, value in fields_to_change.items():
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
-            if section._set(leaf_name, value):
-                changed.append(path)
-        if changed:
-            await self._notify_relatives_async(*changed)
+            before = section._set(leaf_name, value)
+            if before != value:
+                changes.append(Updated(path=path, before=before, after=value))
+        if changes:
+            await self._notify_relatives_async(*changes)
 
-    def _set(self, name: str, value: Any) -> bool:
-        """Writes `self.name=value` only if `value` changed. Returns whether it wrote."""
-        # Only apply changes for new names, or new values for existing names
-        if name in self and getattr(self, name) == value:
-            return False
-        super().__setattr__(name, value)
-        self._mark_ancestors_as_set()
-        return True
+    def _set(self, name: str, value: Any) -> Any:
+        """Writes `self.name=value` only if `value` changed. Returns the previous value."""
+        try:
+            before = self[name]
+        except KeyError:
+            return None
+        else:
+            super().__setattr__(name, value)
+            self._mark_ancestors_as_set()
+            return before
+
+        # # Only apply changes for new names, or new values for existing names
+        # if name in self and getattr(self, name) == value:
+        #     return False
+        # super().__setattr__(name, value)
+        # self._mark_ancestors_as_set()
+        # return True
 
     # TODO: review need and usage across project
     def get(self, path: str, *, as_json: bool = False) -> Any:
@@ -325,49 +338,50 @@ class ConfigSection(BaseModel):
 
         return path_to_flags
 
-    def _notify(self, *paths: str) -> tuple[list[Awaitable], list[Exception]]:
+    def _notify(self, *changes: ConfigChange) -> tuple[list[Awaitable], list[Exception]]:
         """
         Calls every observer that should hear about changes at `paths`,
         above and below self, from root to each changed path's owner.
 
-        Runs sync observer handlers, returns async ones plus the failures found
+        Runs sync observer handlers, returns async ones plus the failures found.
         """
         # Who needs notifications about what. Maps a section's python ID to itself
-        # and the paths it needs updates for.
-        to_notify: dict[int, tuple[ConfigSection, set[str]]] = {}
-        for path in paths:
-            _self, my_own_paths = to_notify.setdefault(id(self), (self, set()))
-            my_own_paths.add(path)
+        # and the dict of path->ConfigChange for that section.
+        to_notify: dict[int, tuple[ConfigSection, dict[str, ConfigChange]]] = {}
+        for change in changes:
+            _self, my_own_changes = to_notify.setdefault(id(self), (self, dict()))
+            my_own_changes[change.path] = change
             # Down: every section between self and the owner of the changed field
-            path_to_parent, _delimiter, _leaf_name = path.rpartition(".")
+            path_to_parent, _delimiter, _leaf_name = change.path.rpartition(".")
             if path_to_parent:
                 for sub_path, section in self.walk(path_to_parent):
-                    _section, section_paths = to_notify.setdefault(id(section), (section, set()))
+                    _section, section_paths = to_notify.setdefault(id(section), (section, dict()))
+                    # Create a new ConfigChange with the path for the sub-section
                     # Ex: change happened at `interface.tui.theme`, there's an observer
                     #  at `interface`, it needs to be notified about `tui.theme`.
-                    section_paths.add(path.removeprefix(f"{sub_path}."))
+                    path_to_notify = change.path.removeprefix(f"{sub_path}.")
+                    section_paths[path_to_notify] = replace(change, path=path_to_notify)
             # Up: every section above self
-            parent, path_from_leaf_to_parent = self, path
+            parent, path_from_leaf_to_parent = self, change.path
             while parent._parent is not None:
                 path_from_leaf_to_parent = f"{parent._name}.{path_from_leaf_to_parent}"
                 parent = parent._parent
-                _parent, paths_for_parent = to_notify.setdefault(id(parent), (parent, set()))
-                paths_for_parent.add(path_from_leaf_to_parent)
+                _parent, paths_for_parent = to_notify.setdefault(id(parent), (parent, dict()))
+                paths_for_parent[path_from_leaf_to_parent] = replace(change, path=path_from_leaf_to_parent)
 
         # Call sync observers, keep awaitables for async ones plus failures
         pending: list[Awaitable] = []
         failures: list[Exception] = []
-        for section, changed_paths in to_notify.values():
+        for section, changes_by_path in to_notify.values():
             # NOTE: iterates a copy, an observer may register another observer
             for handler, observer_paths in list(section._observers):
                 # NOTE: if later we introduce glob pattern semantics to
                 #  observer paths, this is the place to parse it
-                paths_to_notify = changed_paths if not observer_paths else [
-                    path
-                    for path in changed_paths
+                paths_to_notify = list(changes_by_path.values()) if not observer_paths else [
+                    change for change in changes_by_path.values()
                     if any(
-                        matches_prefix(path, registered_path)     # Below: watching `foo.bar`, change happened in `foo.bar.baz`
-                        or matches_prefix(registered_path, path)  # Above: watching `foo.bar.baz`, change happened in `foo.bar`
+                        matches_prefix(change.path, registered_path)     # Below: watching `foo.bar`, change happened in `foo.bar.baz`
+                        or matches_prefix(registered_path, change.path)  # Above: watching `foo.bar.baz`, change happened in `foo.bar`
                         for registered_path in observer_paths
                     )
                 ]
@@ -375,7 +389,7 @@ class ConfigSection(BaseModel):
                     continue
                 # NOTE: observers are isolated, a failing one doesn't stop the rest
                 try:
-                    result = handler(section, frozenset(paths_to_notify))
+                    result = handler(section, tuple(paths_to_notify))
                 except Exception as error:  # noqa: BLE001
                     failures.append(error)
                     continue
@@ -384,9 +398,9 @@ class ConfigSection(BaseModel):
                     pending.append(result)
         return pending, failures
 
-    def _notify_relatives_sync(self, *paths: str) -> None:
+    def _notify_relatives_sync(self, *changes: ConfigChange) -> None:
         """Call all sync observers, schedule async observers as background tasks."""
-        pending, failures = self._notify(*paths)
+        pending, failures = self._notify(*changes)
         if pending:
             # NOTE: the only place a plain assignment needs an event loop, and
             #  only when an async observer is listening. Checked here rather than
@@ -400,7 +414,7 @@ class ConfigSection(BaseModel):
                     if inspect.iscoroutine(awaitable):
                         awaitable.close()
                 failures.append(RuntimeError(
-                    f"Async observers of {', '.join(map(repr, paths))} need a running "
+                    f"Async observers of {', '.join(map(repr, changes))} need a running "
                     "event loop. Use sync observers, or `await section.set(...)`."
                 ))
             else:
@@ -410,9 +424,9 @@ class ConfigSection(BaseModel):
         if failures:
             raise ExceptionGroup("Config observers failed", failures)
 
-    async def _notify_relatives_async(self, *paths: str) -> None:
+    async def _notify_relatives_async(self, *changes: ConfigChange) -> None:
         """Call all observers, await async ones."""
-        pending, failures = self._notify(*paths)
+        pending, failures = self._notify(*changes)
         for result in await asyncio.gather(*pending, return_exceptions=True):
             if isinstance(result, Exception):
                 failures.append(result)
@@ -471,31 +485,26 @@ class ConfigSection(BaseModel):
 
         return register
 
-    def _delete(self, name: str) -> None:
-        """Remove one dynamic entry, mark every ancestor as touched."""
+    def _delete(self, name: str) -> Any:
+        """A plain section declares everything it holds, so deletion always raises."""
         if name in type(self).model_fields:
-            raise AttributeError(
-                f"{name!r} is a declared field of "
-                f"{type(self).__name__!r} and can't be deleted"
-            )
-        if name not in self:
-            raise PathNotFound(type(self), name)
-        super().__delattr__(name)
-        self.__pydantic_fields_set__.discard(name)
-        self._mark_ancestors_as_set()
+            raise AttributeError(f"{name!r} is a declared field of {type(self).__name__!r} and can't be deleted")
+        raise PathNotFound(type(self), name)
 
     def __delattr__(self, name: str) -> None:
         if name in self.__private_attributes__:
             super().__delattr__(name)
         else:
-            self._delete(name)
-            self._notify_relatives_sync(name)
+            value = self._delete(name)
+            self._notify_relatives_sync(Deleted(path=name, value=value))
 
     async def delete(self, *paths: str) -> None:
+        changes = []
         for path in paths:
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
-            section._delete(leaf_name)
-        await self._notify_relatives_async(*paths)
+            value = section._delete(leaf_name)
+            changes.append(Deleted(path=path, value=value))
+        await self._notify_relatives_async(*changes)
 
 
 def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
@@ -503,4 +512,4 @@ def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
 
 
 # An async callback (config, changed_paths) — registered via @config.on_change.
-ConfigObserver = Callable[[ConfigSection, frozenset[str]], Awaitable[None] | None]
+ConfigObserver = Callable[[ConfigSection, tuple[ConfigChange, ...]], Awaitable[None] | None]
