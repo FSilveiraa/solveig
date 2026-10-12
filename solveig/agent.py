@@ -550,7 +550,6 @@ async def run_turn_with_retry(
         except UserCancel:
             return False
 
-
 async def _ask_retry(interface: SolveigInterface) -> bool:
     choice = await interface.ask_choice(
         "The API call failed. Do you want to retry?",

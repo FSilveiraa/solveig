@@ -22,7 +22,6 @@ from typing import Any
 import anyio
 from pydantic import BaseModel
 
-from solveig.config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -162,13 +161,15 @@ class MockInterface(SolveigInterface):
         timeout_seconds: float | None = 10,
         **kwargs,
     ) -> None:
-        config = kwargs.pop("config", None) or SolveigConfig(cli_args=[])
-        # TODO: wouldn't it make more sense to use the default test config,
-        #  or just actually expect it to be passed non-optionally?
+        # `config=` is accepted for call-site symmetry with TerminalInterface and
+        # ignored: the interface contract itself holds no config, only the queue
+        # (see SolveigInterface.__init__). Left as a pop rather than dropped so a
+        # caller passing it is not silently relying on it.
+        kwargs.pop("config", None)
         user_message_queue = (
             kwargs.pop("user_message_queue", None) or UserMessageQueue()
         )
-        super().__init__(config, user_message_queue)
+        super().__init__(user_message_queue)
         #: The messages currently up, in draw order. Boxes, not text: removal
         #: goes through the handle, exactly as it does for a real frontend.
         self.shown: list[_MockMessageBox] = []

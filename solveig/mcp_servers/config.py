@@ -62,6 +62,7 @@ class MCPServerConfig(ConfigSection):
     #     exclude=True
     # )
     url: str
+    enabled: bool = Field(default=True)
     allowed_tools: list[str] = Field(default_factory=list)
     blocked_tools: list[str] = Field(default_factory=list)
     headers: dict[str, str] = Field(default_factory=dict)
@@ -129,7 +130,8 @@ class MCPConfig(DynamicSection[MCPServerConfig]):
     def _add_startup_urls(self) -> Any:
         """Adds each MCP URl provided as a CLI flag as a parsed and named entry."""
         for url in self.startup_urls:
-            self.add_from_url(url)
+            server_name = name_from_url(url)
+            setattr(self, server_name, MCPServerConfig(url=url))
         return self
 
     @model_validator(mode="before")
@@ -150,10 +152,10 @@ class MCPConfig(DynamicSection[MCPServerConfig]):
                     )
         return data
 
-    def add_from_url(self, url: str, name: str = "") -> MCPServerConfig:
+    async def add_from_url(self, url: str, name: str = "") -> MCPServerConfig:
         name = name or name_from_url(url)
         if not name:
             raise ValueError(f"MCP server name {name!r} for URL {url!r} is not a valid identifier.")
         if name not in self:
-            setattr(self, name, MCPServerConfig(url=url))
+            await self.set(name, MCPServerConfig(url=url))
         return self[name]

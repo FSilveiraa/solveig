@@ -73,7 +73,7 @@ class SubcommandRegistry:
         session_manager: SessionManager,
         user_message_queue: UserMessageQueue,
     ) -> None:
-        self._config = config
+        self._config: SolveigConfig = config
         self._interface = interface
         # What a handler can ask for by annotating a parameter with the type.
         self._deps: dict[type, Any] = {
@@ -315,7 +315,7 @@ class SubcommandRegistry:
     def _is_disabled(self, sub: Subcommand) -> bool:
         if sub.tool_name is None:
             return False
-        return not self._config.is_tool_enabled(sub.tool_name)
+        return not self._config.tool_map[sub.tool_name].enabled
 
 
 @subcommand("/exit", section="basic")

@@ -41,10 +41,13 @@ class EditableComment(Static):
         role: Role,
         actions: MessageActions,
     ):
-        # NOTE: no content passed up. This is a CONTAINER - the text is drawn by
-        # the Markdown child in compose(). Handing it to Static as well would
-        # render it twice, once unstyled behind the other.
-        super(Static, self).__init__()
+        # NOTE: no CONTENT is handed up - the text is drawn by the Markdown
+        # child in compose(), and passing it to `Static` too would render it
+        # twice, once unstyled behind the other. The base initializer itself
+        # still has to run: `Static.__init__` is what sets its `__content`/
+        # `__visual` privates, and a widget that skips it renders once and then
+        # dies inside `Static.visual` the first time it is drawn.
+        super().__init__()
         self.comment = comment
         self.interface = interface
         self.role = role

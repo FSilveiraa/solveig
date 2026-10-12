@@ -85,7 +85,7 @@ Roadmap = "https://github.com/FSilveiraa/solveig/discussions/2"
 solveig = "solveig.run:main"
 
 [tool.setuptools.packages.find]
-include = ["solveig*"]
+include = ["solveig*", "config*"]
 
 [tool.setuptools.package-data]
 solveig = [

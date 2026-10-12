@@ -16,6 +16,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
+from config import ConfigSection
 from solveig.config import SolveigConfig
 from solveig.interface.base import SolveigInterface
 
@@ -25,6 +26,7 @@ class SolveigContext:
     config: SolveigConfig
     interface: SolveigInterface
 
+    # TODO: review
     cancelled: bool = False
     """The user asked to stop, and the run has not unwound yet.
 
@@ -43,13 +45,24 @@ class SolveigContext:
     tool return, so its `UserCancel` just propagates to whoever owns it."""
 
 
-def get_introspection_context(deps: SolveigContext) -> RunContext[SolveigContext]:
+# NOTE: this currently exists only so MCP servers can check the details for
+#  a server without necessarily having the full SolveigContext in their scope.
+#  Review whether it's reasonable to have, otherwise consider moving SolveigContext
+#  instantiation to composition root.
+def context_from(config: ConfigSection, interface: SolveigInterface) -> RunContext:
     """A RunContext wrapping real deps, for toolset introspection (e.g.
     `MCPToolset.get_tools()`) outside a real agent run. The model and usage
     are stand-ins, but deps are real, so `ctx.deps`-reading predicates (like
     the FilteredToolset's `is_tool_active`) behave as they would mid-run."""
+    _config = config
+    _interface = interface
+
+    class DynamicDependencies:
+        config: ConfigSection = _config
+        interface: SolveigInterface = _interface
+
     return RunContext(
-        deps=deps,
+        deps=DynamicDependencies(),
         model=TestModel(),
         usage=RunUsage(),
         max_retries=1,

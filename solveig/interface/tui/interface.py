@@ -93,7 +93,7 @@ class TerminalInterface(SolveigInterface):
             user_message_queue=self.user_message_queue,
         )
 
-        @self.config.on_change("interface.tui.code_theme")
+        @self.config.on_change("code_theme")
         async def _on_code_theme_change(_config, paths):
             self._set_code_theme(_config.interface.tui.code_theme)
 

@@ -67,7 +67,7 @@ async def shellcheck(
     """
     command_str = tool_args["command"]
     # Any-style read of this hook's own typed config section (keyed by the hook's
-    # __name__), handed to config.plugins.hooks by `bootstrap.compose_plugin_sections`.
+    # __name__), handed to config.plugins.hooks by `bootstrap.compose_hook_section`.
 
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")

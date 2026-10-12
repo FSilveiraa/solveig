@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 
 from pydantic_ai.toolsets import AbstractToolset
 
+# from solveig.context import context_from
+# from solveig.interface.base import SolveigInterface, Level
 from solveig.mcp_servers.config import MCPServerConfig
 
 
@@ -45,6 +47,20 @@ class MCPConnection:
     @property
     def url(self) -> str:
         return self.server_config.url
+
+    def get_tool_names(self) -> list[str]:
+        return self.tool_names
+
+    # TODO: replace `tool_names/get_tool_names` with this
+    # async def get_tool_names(self, interface: SolveigInterface) -> list[str] | None:
+    #     try:
+    #         return list((await self.toolset.get_tools(context_from(config=self.server_config, interface=interface))).keys())
+    #     except Exception as err:
+    #         await self.toolset.__aexit__(None, None, None)
+    #         await interface.print(
+    #             f"MCP '{self.server_config.name}': failed to list tools: {err}", level=Level.ERROR
+    #         )
+    #         return None
 
 
 #: Connected servers, keyed by name — the same key `config.mcp` uses, so a

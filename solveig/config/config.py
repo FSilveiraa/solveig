@@ -18,10 +18,11 @@ from solveig.api.types import ApiConfig
 from config.annotations.comma_list import CommaSeparated
 from config.annotations.path import AbsolutePath, PathPattern
 from solveig.interface.config import InterfaceConfig
-from solveig.mcp_servers.config import MCPServerConfig, MCPConfig
+from solveig.mcp_servers.config import MCPConfig
 from solveig.plugins.config import PluginsConfig
 from solveig.session.config import SessionConfig
 from solveig.system_prompt.config import SystemPromptConfig
+from solveig.tools.config import ToolConfig
 from solveig.tools.core import CoreToolsConfig
 
 
@@ -78,17 +79,6 @@ class SolveigConfig(Config):
     # ------------------------------------------------------------
     prompt: CliPositionalArg[str] = Field(default="", exclude=True)
     resume: str | None = Field(default=None, exclude=True)  # --resume [name]
-    # The CLI args this instance was booted from — always a list after
-    # construction (never None). The source hook reads this as a constructor
-    # kwarg: None → use sys.argv[1:], a list → use that, [] → hermetic.
-    # parse_config_and_prompt stamps sys.argv[1:] when the kwarg was None,
-    # so the field is a truthful durable record at every read site.
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(**kwargs)
-        for url in self.startup_mcp_servers:
-            server = MCPServerConfig.from_url(url)
-            self.mcp.setdefault(server.name, server)
 
     # ------------------------------------------------------------
     # Pydantic overrides/validators
@@ -130,27 +120,6 @@ class SolveigConfig(Config):
         self.plugins.paths = list(plugin_paths)
         return self
 
-
-    # ------------------------------------------------------------
-    # Tool/Hook section schema
-    # ------------------------------------------------------------
-
-    def is_tool_enabled(self, tool_name: str) -> bool:
-        # The one home for "is this tool on?" — checks core tools, then
-        # plugin tools, defaults to True for an unknown name.
-        tools = self.tools
-        if tool_name in type(tools).model_fields:
-            return tools.get(tool_name).enabled
-        plugin_tools = self.plugins.tools
-        if tool_name in plugin_tools:
-            return plugin_tools.tool_name.enabled
-        return True
-
-    def is_hook_enabled(self, hook_name: str) -> bool:
-        # The one home for "is this hook on?" — checks plugins.hooks.<name>,
-        # defaults to True for an unknown name. run_tool_and_hooks consults
-        # this before firing each registered hook.
-        hooks = self.plugins.hooks
-        if hook_name in type(hooks).model_fields:
-            return bool(getattr(hooks, hook_name).enabled)
-        return True
+    @property
+    def tool_map(self) -> dict[str, ToolConfig]:
+        return dict(self.tools) | dict(self.plugins.tools)

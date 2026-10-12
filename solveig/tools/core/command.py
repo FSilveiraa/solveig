@@ -84,6 +84,8 @@ class CommandTool(BaseTool[CommandConfig]):
         run = False
         inspect = False
 
+        config.copy()
+
         for pattern in config.auto_execute:
             if pattern.match(self.command):
                 run = True

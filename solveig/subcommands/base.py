@@ -232,22 +232,6 @@ class SubcommandStores:
             store[name] = sub
         return warnings
 
-    def register(
-        self, store: SubcommandStore, subcommands: Iterable[Subcommand]
-    ) -> list[str]:
-        """Make `subcommands` the complete contents of `store`, through `add`.
-
-        Replacing wholesale is for a source handed over in one piece — the core
-        tool list. A source that arrives one declaration at a time (either
-        `@subcommand`, or `@tool` as plugins are scanned) uses `add` directly,
-        and is emptied by whoever owns its lifecycle.
-        """
-        store.clear()
-        warnings: list[str] = []
-        for sub in subcommands:
-            warnings += self.add(store, sub)
-        return warnings
-
     @property
     def longest_trigger(self) -> int:
         """Word count of the longest registered trigger — how many leading

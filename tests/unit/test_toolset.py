@@ -144,7 +144,7 @@ async def test_building_toolset_emits_no_return_schema_warning():
     `filterwarnings` config catching it otherwise)."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        FunctionToolset([cls.as_tool() for cls in tool_classes().values()])
+        FunctionToolset([cls.as_pydantic_ai_tool() for cls in tool_classes().values()])
     offending = [
         str(w.message)
         for w in caught
@@ -158,7 +158,7 @@ async def test_as_tool_flattens_model_fields():
     top-level tool arguments (single-model-parameter flattening), not a single
     nested `params` object. A pydantic-ai change that broke this would collapse
     every tool's schema - this pins it."""
-    toolset = FunctionToolset([EditTool.as_tool()])
+    toolset = FunctionToolset([EditTool.as_pydantic_ai_tool()])
     model = TestModel(call_tools=[])  # returns text, never calls the tool
     agent = Agent(model, deps_type=SolveigContext, toolsets=[toolset])
 
@@ -291,7 +291,7 @@ async def test_capability_renders_tool_result_to_tool_return():
     """`content` (assistant text) -> `return_value`, and `private` -> `metadata`
     (kept in history, never shown to the model). Drives the real capability."""
     result = await drive_tool_call(
-        FunctionToolset([EchoTool.as_tool()]),
+        FunctionToolset([EchoTool.as_pydantic_ai_tool()]),
         _echo_call(),
         capabilities=[build_tool_execution_capability()],
     )
@@ -317,7 +317,7 @@ async def test_before_and_after_hooks_fire_and_are_gated_by_config_plugins():
         fired.append("after")
         return ToolResult(content="transformed", private=result.private)
 
-    toolset = FunctionToolset([EchoTool.as_tool()])
+    toolset = FunctionToolset([EchoTool.as_pydantic_ai_tool()])
 
     # Hooks are enabled by default — no config.plugins.hooks → all hooks fire.
     off = await drive_tool_call(
@@ -353,7 +353,7 @@ async def test_before_hook_plugin_exception_becomes_model_retry():
         raise PluginException("blocked by guard")
 
     result = await drive_tool_call(
-        FunctionToolset([EchoTool.as_tool()]),
+        FunctionToolset([EchoTool.as_pydantic_ai_tool()]),
         _echo_call(),
         config=SolveigConfig(cli_args=[], api=DEFAULT_CONFIG.api.model_dump(), plugins={"hooks": {"block": {}}}),
         capabilities=[build_tool_execution_capability()],
@@ -413,7 +413,7 @@ def _two_round_agent(config, interface):
     agent = Agent(
         model,
         deps_type=SolveigContext,
-        toolsets=[FunctionToolset([EchoTool.as_tool()])],
+        toolsets=[FunctionToolset([EchoTool.as_pydantic_ai_tool()])],
         capabilities=[
             build_loop_capability(),
             build_tool_execution_capability(),

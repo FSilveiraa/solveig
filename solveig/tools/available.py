@@ -58,7 +58,7 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
             # reconnect — but fall back to the config the connection was opened
             # with, because `/mcp connect <url>` connects a server that no
             # config block names and `config.mcp[name]` would raise.
-            return ctx.deps.config.mcp.get(name, ad_hoc).is_tool_allowed(td.name)
+            return ctx.deps.config.mcp.servers.get(name, ad_hoc).is_tool_allowed(td.name)
 
         ts = ts.filtered(_mcp_active)  # type: ignore[arg-type]
         mcp_toolsets.append(ts)
@@ -67,7 +67,7 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
     #  that is enabled in the config
     function_tools: list[Callable[..., Awaitable[PydanticAIToolReturn]]] = [
         tool_config.tool_class.as_pydantic_ai_tool(tool_config)
-        for _, tool_config in (config.tools | config.plugins.tools)
+        for _tool_name, tool_config in config.tool_map.items()
         if tool_config.enabled
     ]
 
@@ -77,10 +77,7 @@ def build_toolset(config: SolveigConfig) -> AbstractToolset:
     def is_tool_active(
         ctx: RunContext[SolveigContext], tool_def: ToolDefinition
     ) -> bool:
-        # Same rule the run_tool_and_hooks guard uses
-        # (SolveigConfig.is_tool_enabled): a core tool is on iff its
-        # `tools.<name>.enabled` flag is set; plugin tools are on by default.
-        return ctx.deps.config.is_tool_enabled(tool_def.name)
+        return ctx.deps.config.tool_map[tool_def.name].enabled
 
     base = FunctionToolset(function_tools).filtered(is_tool_active)
     return CombinedToolset([base, *mcp_toolsets])
@@ -90,5 +87,5 @@ def tool_classes(config: SolveigConfig) -> dict[str, type[BaseTool]]:
     """All available tool classes, including disabled tools, excluding MCP."""
     return {
         tool_name: tool_config.tool_class
-        for tool_name, tool_config in (config.tools | config.plugins.tools)
+        for tool_name, tool_config in config.tool_map
     }

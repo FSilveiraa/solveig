@@ -1,10 +1,11 @@
 """Finding plugins, and saying what was found.
 
-Discovery is split from reporting: `discover_plugins(paths)` populates the tool,
-hook and subcommand registries (idempotent, UI-free, callable on demand — so it
-can run before the interface exists, which the config bootstrap needs in order to
-compose `plugins.tools` before the config is threaded anywhere). `report_plugins`
-renders the outcome in the Plugins dialog afterwards.
+`discover_plugins(plugins_config)` imports whatever is on disk and fills the
+plugin sections of that config: `@tool` types its own entry while its module is
+imported, and the scan removes the type of an entry whose file is gone. It is
+UI-free and synchronous, so it can run wherever the plugin set has to be settled.
+`report_plugins(config.plugins, interface, scan)` renders the outcome in the
+Plugins dialog, taking the scan's result rather than re-reading a module global.
 
 NOTE: this is a real module rather than the package `__init__`, which is empty.
 An `__init__` runs whenever anything under it is imported, so re-exporting here
@@ -32,14 +33,13 @@ PLUGIN_PACKAGE = "solveig.plugins.library"
 
 @dataclass
 class ScanResult:
-    """What the last scan produced, kept so it can be REPORTED later.
+    """What a scan produced: the modules that failed to import, and the
+    declarations it refused.
 
-    Discovery runs before the interface exists (the config bootstrap needs the
-    schema composed before anything is threaded anywhere), so whatever it has to
-    say has nowhere to go at the time. Handing the errors back to the caller
-    made every caller responsible for carrying them to a display, and the only
-    way to report at startup was to run the whole scan a second time once the
-    interface was up.
+    Returned to the caller rather than parked in a module global. A scan and the
+    report that renders it happen in the same call now, so the errors have
+    somewhere to go at the time they exist — and nobody has to remember that a
+    module-level store is holding the previous scan's worth.
 
     `errors` are modules that failed to import. `collisions` are refused
     declarations - a plugin claiming a trigger another store already holds -
@@ -51,8 +51,6 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
     collisions: list[str] = field(default_factory=list)
 
-
-LAST_SCAN = ScanResult()
 
 #: Fired once per scan, after the registries are refilled. Plain callables, so
 #: this module needs to know nothing about its subscribers - the doorbell
@@ -131,12 +129,12 @@ def rescan_and_load_plugins(
 
 
 
-def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
+def discover_plugins(plugins_config: PluginsConfig) -> ScanResult:
     """Load every plugin into the registries it declares into — idempotent and
     UI-free. Folds the external dirs in `paths` into the library package first,
-    then scans it once. Returns discovery error messages; the caller surfaces
-    them (via `report_plugins`). Kept reporting-free so discovery can run
-    before the interface exists.
+    then scans it once. Returns a `ScanResult` for the caller to surface (via
+    `report_plugins`); kept reporting-free so the caller can decide when the
+    interface is ready to draw.
 
     ONE scan, not one per surface. A plugin declares tools, hooks and
     subcommands with decorators, and a decorator does not care where the file
@@ -164,8 +162,7 @@ def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
         warnings.simplefilter("always")
         _succeeded, _failed, errors, on_disk_modules = rescan_and_load_plugins(plugins_config)
 
-    LAST_SCAN.errors = errors
-    LAST_SCAN.collisions = [str(w.message) for w in caught]
+    scan = ScanResult(errors=errors, collisions=[str(w.message) for w in caught])
 
     # An entry whose file is gone keeps its value and loses its type.
     # `tool_class` is the class the plugin file defined, so its `__module__`
@@ -185,24 +182,25 @@ def discover_plugins(plugins_config: PluginsConfig) -> list[str]:
     # dict for a plugin's section instead of its typed model.
     for subscriber in ON_SCANNED:
         subscriber()
-    return errors
+    return scan
 
 
-async def report_plugins(plugins_config: PluginsConfig, interface: SolveigInterface) -> None:
+async def report_plugins(
+    plugins_config: PluginsConfig, interface: SolveigInterface, scan: ScanResult
+) -> None:
     """Render discovered plugins in the Plugins dialog: every discovered tool is
     listed, a config-disabled one marked rather than hidden (list-all-mark-disabled),
     so a disabled plugin is visible instead of looking un-discovered. Any discovery
     errors surface first.
 
-    Reads the registries and `LAST_SCAN` live rather than taking them as
-    arguments, so reporting can happen whenever an interface exists - which is
-    what lets startup scan ONCE and report later, instead of scanning a second
-    time just to have the errors in hand."""
+    `scan` is passed in rather than read off a module global: it is the result of
+    the scan that filled the sections this renders, and the caller that ran it is
+    the caller that has it."""
     async with interface.with_group("Plugins") as group:
-        for error in LAST_SCAN.errors:
+        for error in scan.errors:
             await group.print(error, level=Level.ERROR)
         # A refused trigger is not a failed load, so it is a warning, not an error.
-        for collision in LAST_SCAN.collisions:
+        for collision in scan.collisions:
             await group.print(collision, level=Level.WARNING)
 
         async with group.with_group("Tools") as tools_group:

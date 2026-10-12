@@ -27,9 +27,9 @@ from fastmcp.client.transports import StdioTransport
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset
 
-from config import SolveigConfig
-from solveig.mcp_servers.config import MCPServerConfig
-from solveig.context import SolveigContext, get_introspection_context
+from solveig.config import SolveigConfig
+from solveig.mcp_servers.config import MCPServerConfig, name_from_url, MCPConfig
+from solveig.context import SolveigContext, context_from
 from solveig.exceptions import UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
@@ -55,11 +55,7 @@ def _build_mcp_toolset(server_config: MCPServerConfig) -> MCPToolset:
     )
 
 
-async def connect(
-    server_config: MCPServerConfig,
-    config: SolveigConfig,
-    interface: SolveigInterface,
-) -> MCPConnection | None:
+async def connect(server_config: MCPServerConfig, interface: SolveigInterface) -> MCPConnection | None:
     """Connect to an MCP server and register its tools.
 
     Displays success or error directly. Returns None on failure/cancellation
@@ -74,7 +70,7 @@ async def connect(
     name = server_config.name
     toolset: AbstractToolset = _build_mcp_toolset(server_config).prefixed(name)
 
-    conn = MCPConnection(server_config=server_config, toolset=toolset)
+    connection = MCPConnection(server_config=server_config, toolset=toolset)
 
     try:
         async with interface.with_cancellable(status=f"MCP connecting to {name}"):
@@ -87,8 +83,7 @@ async def connect(
         return None
 
     try:
-        deps = SolveigContext(config=config, interface=interface)
-        tools = await toolset.get_tools(get_introspection_context(deps))
+        tools = await toolset.get_tools(context_from(config=server_config, interface=interface))
     except Exception as err:
         await toolset.__aexit__(None, None, None)
         await interface.print(
@@ -96,22 +91,20 @@ async def connect(
         )
         return None
 
-    conn.tool_names = list(tools.keys())
+    connection.tool_names = list(tools.keys())
 
     # Only reached on success — replace any existing connection under this name
     if name in MCP_CONNECTIONS:
-        await disconnect(name, config, interface)
+        await disconnect(name, interface)
 
-    MCP_CONNECTIONS[name] = conn
+    MCP_CONNECTIONS[name] = connection
 
     await interface.set_status(f"MCP connected to {name}", duration=2)
     interface.refresh_stats()
-    return conn
+    return connection
 
 
-async def disconnect(
-    name: str, config: SolveigConfig, interface: SolveigInterface
-) -> None:
+async def disconnect(name: str, interface: SolveigInterface) -> None:
     """Disconnect from an MCP server by name."""
     conn = MCP_CONNECTIONS.pop(name, None)
     if conn is None:
@@ -121,14 +114,19 @@ async def disconnect(
     await interface.set_status(f"MCP disconnected from {name}", duration=2)
 
 
-async def connect_all(config: SolveigConfig, interface: SolveigInterface) -> None:
-    """Connect to all servers listed in config.mcp, concurrently."""
-    await asyncio.gather(
-        *(
-            connect(server_config, config, interface)
-            for server_config in config.mcp.values()
-        )
-    )
+async def sync_connections_with_config(config: MCPConfig, interface: SolveigInterface):
+    stale_servers = [
+        name for name in MCP_CONNECTIONS
+        if name not in config.servers
+        or not config.servers[name].enabled
+    ]
+    await asyncio.gather(*(disconnect(name, interface) for name in stale_servers))
+    new_servers = [
+        server_config for name, server_config in config.servers.items()
+        if name not in MCP_CONNECTIONS
+        and server_config.enabled
+    ]
+    await asyncio.gather(*(connect(server_config, interface) for server_config in new_servers))
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +141,7 @@ async def mcp_list(
     interface: SolveigInterface,
 ) -> None:
     """List configured and connected MCP servers."""
-    if not config.mcp and not MCP_CONNECTIONS:
+    if not config.mcp.servers and not MCP_CONNECTIONS:
         await interface.print(
             "No MCP servers configured. Use /mcp connect <url> to connect.",
             level=Level.INFO,
@@ -151,14 +149,15 @@ async def mcp_list(
         return
 
     lines: list[str] = []
-    for name, conn in MCP_CONNECTIONS.items():
-        lines.append(f"● {name}  ({len(conn.tool_names)} tools)")
-        for tool in conn.tool_names:
-            lines.append(f"    {tool}")
-
-    for name in config.mcp:
-        if name not in MCP_CONNECTIONS:
-            lines.append(f"○ {name}  (configured, not connected)")
+    # Connected servers
+    for server_name, conn in MCP_CONNECTIONS.items():
+        lines.append(f"● {server_name}  ({len(conn.get_tool_names())} tools)")
+        for tool_name in conn.get_tool_names():
+            lines.append(f"    {tool_name}")
+    # Configured but unconnected servers
+    for server_name in config.mcp.servers:
+        if server_name not in MCP_CONNECTIONS:
+            lines.append(f"○ {server_name}  (configured, not connected)")
 
     await interface.add_text_box("\n".join(lines), title="MCP Servers")
 
@@ -176,12 +175,26 @@ async def mcp_connect(
     taken as a URL and connected ad hoc, under `name` if one was given and
     otherwise under an identifier derived from the URL.
     """
-    target = target.strip()
-    server_config = config.mcp.get(target) or MCPServerConfig.from_url(
-        target, name.strip()
-    )
-    await connect(server_config, config, interface)
-
+    stale_servers: list[str] = [
+        name for name in MCP_CONNECTIONS
+        if name not in config.servers
+        or not config.servers[name].enabled
+    ]
+    await asyncio.gather(*(disconnect(name, interface) for name in stale_servers))
+    # TODO: this doesn't do anything
+    new_servers = [
+        name for name, server_config in config.servers.items()
+        if name not in MCP_CONNECTIONS
+        and server_config.enabled
+    ]
+    if target in config.mcp.servers:
+        # `target` is a configured MCP server name
+        await connect(config.mcp.servers[target], interface)
+    else:
+        # `target` is a URL
+        await config.mcp.add_from_url(target, name)
+    server_config = config.mcp.get(name) if name else await config.mcp.add_from_url(url.strip())
+    await connect(server_config, interface)
 
 @subcommand("/mcp disconnect", section="mcp", detail=True)
 async def mcp_disconnect(
@@ -196,4 +209,4 @@ async def mcp_disconnect(
             f"No connected MCP server named '{name}'.", level=Level.ERROR
         )
         return
-    await disconnect(name, config, interface)
+    await disconnect(name, interface)

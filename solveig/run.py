@@ -15,6 +15,7 @@ import warnings
 
 from pydantic_ai.models import Model
 
+from config import ConfigChange, ConfigSection
 from solveig import bootstrap
 from solveig.agent import run_turn_with_retry
 from solveig.api.client import Client
@@ -22,8 +23,7 @@ from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
-from solveig.mcp_servers.client import connect_all
-from solveig.plugins.discovery import discover_plugins, report_plugins
+from solveig.mcp_servers.client import sync_connections_with_config
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
@@ -98,7 +98,9 @@ def _register_stats(
     )
 
     @config.on_change("api.max_context", "api.model_info")
-    def _context_changed(_config: SolveigConfig, _paths: frozenset[str]) -> None:
+    def _context_changed(
+        _section: ConfigSection, _changes: tuple[ConfigChange, ...]
+    ) -> None:
         context.refresh()
 
     # The two usage-driven stats, handed to the loop that knows when a turn
@@ -130,7 +132,9 @@ def _register_stats(
     )
 
     @config.on_change("api.model_info")
-    def _model_info_changed(_config: SolveigConfig, _path: frozenset[str]) -> None:
+    def _model_info_changed(
+        _section: ConfigSection, _changes: tuple[ConfigChange, ...]
+    ) -> None:
         price_stat.refresh()
 
 
@@ -156,17 +160,14 @@ async def _display_setup(
     for warning in startup_warnings:
         await interface.print(warning, level=Level.WARNING)
 
-    # Plugins are already loaded and composed - `parse_config_and_prompt` scanned
-    # before the config was built, because the schema has to exist before the
-    # config validates against it. All that is left is to SAY what was found,
-    # which needs the interface and so could not happen back there.
-    #
-    # This used to call reload_plugins, which scanned a second time purely to
-    # have the errors in hand at display time. The scan records them
-    # (`LAST_SCAN`) instead, so startup scans once.
-    await report_plugins(config, interface)
+    # The one scan of the run, and the one report of it. Both live here because
+    # the report needs an interface, and the interface is ready only now — while
+    # nothing before this point has read the plugin set, so the sections are
+    # still filled before the first thing that needs them: the toolset built per
+    # turn, and the startup prompt put into the queue just below.
+    await bootstrap.reload_plugins(config, interface)
     # MCP servers, which also need the interface for display.
-    await connect_all(config=config, interface=interface)
+    await sync_connections_with_config(config=config.mcp, interface=interface)
 
     sys_prompt = await get_system_prompt(config, interface)
     await interface.add_text_box(
@@ -190,7 +191,7 @@ async def _display_setup(
             level=Level.WARNING,
         )
     else:
-        await client.refresh(config)
+        await client.refresh()
 
     await interface.set_status("Ready")
     _register_stats(
@@ -214,6 +215,7 @@ async def main_loop(
     model: Model | None = None,
     resume_session: str | None = None,
     startup_warnings: tuple[str, ...] = (),
+    startup_prompt: str = "",
 ) -> None:
     """Main async conversation loop.
 
@@ -239,6 +241,13 @@ async def main_loop(
         startup_warnings=startup_warnings,
         usage_stats=usage_stats,
     )
+
+    # After _display_setup, never before: the plugin sections are filled by the
+    # scan in there, and the queue's prompt gate dispatches a /command on the way
+    # IN - so a plugin command given as the startup prompt would otherwise look
+    # like a prompt, and reach the model as text.
+    if startup_prompt:
+        await user_message_queue.put(startup_prompt)
 
     while True:
         if user_message_queue.empty():
@@ -289,28 +298,23 @@ async def run_async(
     runs the interface in the foreground. Accepts injected mocks for testing.
     """
     startup_warnings: tuple[str, ...] = ()
-    if not config:
+    if config is None:
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                config = await bootstrap.parse_config_and_prompt()
+                config = SolveigConfig()
             startup_warnings = tuple(str(w.message) for w in caught)
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             raise SystemExit(1) from e
-    else:
-        bootstrap.register_plugin_tool_subcommands(config)
-        # An INJECTED config (tests, the mock demo, an embedder) never went
-        # through the startup parse, so nothing has scanned for its plugins.
-        # Scan here rather than in _display_setup: the plugin set has to match
-        # this config before anything reads it, and _display_setup runs after
-        # the interface is up, which is far too late for a config already in use.
-        # The scan recomposes the schema (ON_SCANNED -> compose_plugin_sections),
-        # which now rebuilds every live instance itself - including this config,
-        # already built before the scan - so there is nothing further to do here.
-        discover_plugins(config.plugins.paths)
 
     assert config is not None  # narrow for mypy after the if-not-config branch
+
+    # One wiring step per execution, and it has to precede the scan in
+    # `_display_setup`: the mirror must already be listening when
+    # `config.plugins.tools` learns its first type, or that arrival is notified
+    # to nobody.
+    bootstrap.register_plugin_tool_subcommand_observer(config)
     user_prompt = user_prompt or config.prompt.strip()
     resume_session = resume_session or config.resume
     user_message_queue = UserMessageQueue()
@@ -321,9 +325,9 @@ async def run_async(
     # replaced, because the price and context stats read that. Dependency order,
     # as ever - nothing is wired after the fact.
     if interface is None:
-        interface = TerminalInterface(config, user_message_queue)
+        interface = TerminalInterface(config.interface.tui, user_message_queue)
 
-    client = client or Client(config, interface=interface)
+    client = client or Client(config.api, interface=interface)
 
     # The conversation's two observers, both self-registering: one shows it,
     # one saves it. SessionDisplay is built after the interface because it
@@ -358,12 +362,13 @@ async def run_async(
     # here: it is checked live at call time, and disabled never means gone.
     @config.on_change("plugins.paths")
     async def _reload_on_plugin_paths_change(
-        changed: SolveigConfig, _paths: frozenset[str]
+        _section: ConfigSection, _changes: tuple[ConfigChange, ...]
     ) -> None:
-        await bootstrap.reload_plugins(changed, interface)
-
-    if user_prompt:
-        await user_message_queue.put(user_prompt)
+        # `_section` is this same root config - the handler is registered on a
+        # top-level field, so the argument and the closure are one object. Taking
+        # it from the closure is what lets `reload_plugins` keep its
+        # `SolveigConfig` parameter instead of widening to `ConfigSection`.
+        await bootstrap.reload_plugins(config, interface)
 
     loop_task = None
     try:
@@ -377,6 +382,7 @@ async def run_async(
                 model=model,
                 resume_session=resume_session,
                 startup_warnings=startup_warnings,
+                startup_prompt=user_prompt,
                 session_manager=session_manager,
             )
         )

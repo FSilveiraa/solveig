@@ -278,7 +278,7 @@ class ConfigSection(BaseModel):
         # self._mark_ancestors_as_set()
         # return True
 
-    # TODO: review need and usage across project
+    # TODO: review need and usage across project. Remove the *args so any users expecting a default break loudly
     def get(self, path: str, *, as_json: bool = False) -> Any:
         """
         Find a config field given its path.
@@ -498,7 +498,7 @@ class ConfigSection(BaseModel):
             value = self._delete(name)
             self._notify_relatives_sync(Deleted(path=name, value=value))
 
-    async def delete(self, *paths: str) -> None:
+    async def unset(self, *paths: str) -> None:
         changes = []
         for path in paths:
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)

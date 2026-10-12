@@ -476,7 +476,7 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   or `on_mount`.
 - **Seam comments explain *why*.** The load-bearing, non-obvious invariants are
   documented at the seam (see `Conversation.adopt`'s object-identity note,
-  `compose_plugin_sections`'s why-it-lives-in-bootstrap note, `_thinking`'s
+  `compose_hook_section`'s why-it-lives-in-bootstrap note, `_thinking`'s
   two-sites rationale). A seam comment says why the code is CORRECT — it never
   narrates how it got that way. Keep them accurate when you change the code.
 - **Highlighted comment prefixes** project-wide (PyCharm highlights all four).
