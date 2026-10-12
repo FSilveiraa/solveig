@@ -295,7 +295,7 @@ class InputBar(Container):
                 choice_box.border_title = title
 
             await self.mount(choice_box)
-            choice_box.focus()
+            select_widget.focus()
 
             try:
                 return await self._answer_future
@@ -320,7 +320,13 @@ class InputBar(Container):
             min-height: 3;
             color: $foreground;
             background: $background;
-            border: solid $border;
+            /* `!important` because Textual's own `TextArea:focus { border: tall
+               $border }` outranks this rule — an ancestor's selector loses the
+               specificity tie to the widget's own pseudo-class rule — so without
+               it the border changed STYLE (full box -> top/bottom only) the
+               moment the input was clicked, which reads as the input resizing
+               and its border thickening. */
+            border: solid $border !important;
             margin: 0;
         }
 
@@ -342,7 +348,7 @@ class InputBar(Container):
            a runtime theme change re-resolves them (the border can not be set
            inline - that would freeze the init-time Palette). */
         InputBar > UserInput.prompt_input {
-            border: solid $input;
+            border: solid $input !important;
         }
 
         /* The question itself, inside the frame and never shortened - it names
@@ -355,18 +361,34 @@ class InputBar(Container):
             padding: 0;
         }
 
+        /* Textual's own OptionList rule is `border: tall $border-blurred`, plus a
+           `&:focus` variant that swaps in `tall $border`. Both sit at the SAME
+           specificity as this rule, and a component's own stylesheet wins that
+           tie over an ancestor widget's — which is why an unfocused list looked
+           right (this rule) and a focused one grew a box (Textual's). `!important`
+           is the mechanism for beating a component's own stylesheet, not a
+           shortcut: there is no higher-specificity selector available from out
+           here. `max-height: 100vh` undoes Textual's `max-height: 100%`, which
+           resolves against this auto-height parent to less than one option and is
+           what made that box enclose a single row — and it has to be a scalar with
+           a unit, since Textual's parser rejects `none` for these properties. */
         .prompt_box > OptionList {
             height: auto;
+            max-height: 100vh;
             color: $foreground;
             background: $background;
-            border: none;
+            border: none !important;
             margin: 0;
             padding: 0;
         }
 
+        /* Textual sets background/color/text-style for the highlighted option and
+           repeats all three under `&:focus`, so ours has to be as loud as theirs
+           or the highlight flips look when the list takes focus. */
         .prompt_box > OptionList > *.option-list--option-highlighted {
-            background: $input;
-            color: $foreground;
+            background: $input !important;
+            color: $foreground !important;
+            text-style: none !important;
         }
 
         InputBar > Static {

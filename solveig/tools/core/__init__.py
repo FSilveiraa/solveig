@@ -34,6 +34,23 @@ from .write import WriteTool
 from ..config import FileToolConfig, ToolConfig
 
 
+# A tool may be named `copy`, and a field with that name necessarily shadows
+# pydantic's deprecated v1 `BaseModel.copy()` — pydantic warns about the shadow
+# with no way to opt out (its check in `_internal/_fields.py` has no config
+# switch). The shadow is inert here: nothing calls `.copy()` on THIS section
+# (the one `.copy()` left in the tree is on a tool's own config, and even that
+# call discards its result), the code uses `model_copy`, and this section's own
+# verbs are path-based. `delete` was fixed properly — the verb is now `unset` —
+# so this filter is anchored on the exact message instead of quieting the class
+# wholesale: a new shadowing name would still be reported. The filter is
+# process-wide from this import onward, which is why the message names the class.
+warnings.filterwarnings(
+    "ignore",
+    message=r'Field name "copy" in "CoreToolsConfig" shadows an attribute in parent',
+    category=UserWarning,
+)
+
+
 class CoreToolsConfig(ConfigSection):
     read: FileToolConfig[ReadTool] = Field(default_factory=FileToolConfig[ReadTool])
     write: FileToolConfig[WriteTool] = Field(default_factory=FileToolConfig[WriteTool])

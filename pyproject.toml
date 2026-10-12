@@ -30,8 +30,8 @@ keywords = ["ai", "automation", "security", "llm", "assistant"]
 requires-python = ">=3.13"
 dependencies = [
     "distro>=1.9.0",
-    "openai>=1.108.0",
-    "pydantic>=2.11.0",
+    "openai>=2.47.0",
+    "pydantic>=2.13.4",
     # Floor = developed/tested version; ceiling <3 because solveig pins framework
     # behaviors a major owes nothing to. tests/unit/test_pydantic_ai_invariants.py
     # is the upgrade gate: run it on any bump (tier labels say how to react).
@@ -43,21 +43,30 @@ dependencies = [
     # config, and `CliSettingsSource` accepting a plain BaseModel. Floor is the
     # developed/tested version, same rule as pydantic-ai above.
     "pydantic-settings>=2.14.2,<3",
-    "textual>=6.1.0",
+    # The ceiling matters as much as the floor here: solveig styles Textual's own
+    # components (Button's chrome, OptionList's borders and focus rules) and
+    # imports a framework-private `CollapsibleTitle` (see collapsible.py), so a
+    # major is free to break us in ways no dependency graph would show. The floor
+    # used to read 6.1.0 while the code had only ever run on 8.x — three separate
+    # breakages in one afternoon (`Static.__init__`'s privates read at render,
+    # OptionList's focused border, Button's min-width/line-pad) all came from
+    # that gap. An honest floor is what turns "our CSS broke" into "the CSS was
+    # written for an older Textual".
+    "textual>=8.2.8,<9",
     # Required for default code themes.
     "pygments>=2.21.0",
-    "rich>=14.0.0",
+    "rich>=15.0.0",
     # The web frontend is a first-class interface alongside the TUI, so its
     # HTTP server is core, not an optional extra: `pip install solveig` ships
     # all three renderable surfaces. `build_app`/`serve` import these.
-    "blacksheep>=2.6.0",
+    "blacksheep>=2.6.3",
     "uvicorn>=0.51.0",
-    "httpx>=0.28.0",
-    "fastmcp>=3.2.0",
-    "pyperclip>=1.9.0",
-    "anyconfig>=0.15.0",
-    "pyyaml>=6.0",
-    "toml>=0.10",
+    "httpx>=0.28.1",
+    "fastmcp>=3.4.4",
+    "pyperclip>=1.11.0",
+    "anyconfig>=0.15.1",
+    "pyyaml>=6.0.3",
+    "toml>=0.10.2",
 ]
 
 [project.optional-dependencies]

@@ -32,6 +32,14 @@ class DividedCollapsibleTitleBar(CollapsibleTitle):
     Widget sections are never overwritten by update_sections.
     """
 
+    # Textual's CollapsibleTitle is declared `can_focus=True` and paints that
+    # state with `background: $block-cursor-background` (plus a `$foreground 5%`
+    # tint on the Collapsible via `:focus-within`), so clicking a header left a
+    # cursor-block and a tint on a bar that is always on screen. The collapsible
+    # ITSELF stays focusable - its `escape` binding needs to be - and the title
+    # has nothing to do when focused, so it never takes focus.
+    can_focus = False
+
     def __init__(
         self,
         left_collapsed: str | None,
@@ -182,6 +190,17 @@ class CustomCollapsible(Collapsible):
                 border: none;
                 margin: 0;
                 padding: 0;
+            }
+
+            /* Textual paints the focused subtree with `background-tint: $foreground
+               5%`, and a click on a header focuses the collapsible — whose
+               `can_focus` is deliberate, since the `escape` binding needs focus
+               inside it. So the one thing a header click used to leave behind was
+               a tint on a bar that is always on screen. Tinting toward this
+               section's own background is what makes it a no-op: an expanded
+               header is not a mode the user is in. */
+            CustomCollapsible:focus-within {
+                background-tint: $background;
             }
 
             CustomCollapsible > Contents {

@@ -26,15 +26,28 @@ class Button(_Button):
     DEFAULT_CSS = """
         Button {
             color: $foreground;
-            /* width: auto so each button is only as wide as its label, packing
-               left-to-right in the action row instead of each taking full width. */
+            $background;
+            /* Everything below is here because Textual's own Button rule sizes
+               itself: `min-width: 16` makes every button 16 cells wide whatever
+               its label, and its height is auto with chrome. With the label
+               clipped for so long (a `height: 1` against that chrome), none of it
+               had ever been visible. `border` needs `!important` because Textual
+               styles it through its variant selectors (`Button:ansi.-style-default`
+               and friends), which outrank a plain `Button` rule — and a `tall`
+               border is 2 of the 3 rows the label needs. `line-pad` is
+               deliberately NOT overridden: it is Textual's horizontal padding and
+               must be a positive integer, so its default 1 cell a side is what
+               pads these labels. */
+            min-width: 0;
+            border: none !important;
             width: auto;
-            padding: 0 1;
+            padding: 0;
             height: 1;
         }
 
         Button:hover {
             color: $accent;
+            background: $background;
         }
     """
 

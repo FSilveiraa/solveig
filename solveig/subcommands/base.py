@@ -90,7 +90,7 @@ class Subcommand:
     """
 
     subcommands: list[str]
-    handler: Callable[..., Awaitable[Any]]
+    handler: Callable[..., None | Awaitable[None]]
     dependencies: dict[str, Any] = field(default_factory=dict)
     cli_model: type[BaseModel] | None = None
     var_positional: str | None = None
@@ -104,7 +104,7 @@ class Subcommand:
     @classmethod
     def from_handler(
         cls,
-        handler: Callable[..., Awaitable[Any]],
+        handler: Callable[..., None | Awaitable[None]],
         *,
         subcommands: list[str],
         section: str = "basic",

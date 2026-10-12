@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import shlex
 import warnings
+from inspect import isawaitable
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -215,11 +216,11 @@ class SubcommandRegistry:
             return
 
         try:
-            output = await self._run_handler(subcommand, injected, parsed, tokens)
+            await self._run_handler(subcommand, injected, parsed, tokens)
         except (PluginException, ToolDisabledError) as err:
             await self._interface.print(str(err), level=Level.ERROR)
-        else:
-            if output is not None:
+        # else:
+        #     if output is not None:
                 # await self._interface.print(output, level=Level.INFO)
 
                 # NOTE: We use `put_nowait` to avoid running cyclic subcommands
@@ -229,7 +230,7 @@ class SubcommandRegistry:
                 #  So it has to enter here as user input.
                 # TODO: Review the usage of `put_nowait` as "it's not a subcommand",
                 #  in the future I'll have plugins that run on user input.
-                self._user_message_queue.put_nowait(output)
+                # self._user_message_queue.put_nowait(output)
 
     async def _run_handler(
         self,
@@ -237,26 +238,27 @@ class SubcommandRegistry:
         injected: dict[str, Any],
         parsed: dict[str, Any],
         tokens: list[str],
-    ) -> str | None:
+    ) -> None:
         """Call the handler, positionally when it declares a greedy tail."""
         if sub.var_positional is None:
-            return await sub.handler(**injected, **parsed)
-
-        # A *rest handler is called positionally, so the tail can be handed over
-        # RAW - CliSettingsSource would coerce it (a trailing "false" becoming a
-        # bool), and a greedy tail is exactly the case where the user's literal
-        # words matter. Count what the leading parameters consumed to find it.
-        leading: list[Any] = []
-        consumed = 0
-        for name in sub.parameters:
-            if name == sub.var_positional:
-                break
-            if name in injected:
-                leading.append(injected[name])
-            else:
-                leading.append(parsed[name])
-                consumed += 1
-        return await sub.handler(*leading, *tokens[consumed:])
+            result = sub.handler(**injected, **parsed)
+        else:
+            # A *rest handler is called positionally, so the tail can be handed over
+            # RAW - CliSettingsSource would coerce it (a trailing "false" becoming a
+            # bool), and a greedy tail is exactly the case where the user's literal
+            # words matter. Count what the leading parameters consumed to find it.
+            leading: list[Any] = []
+            consumed = 0
+            for name in sub.parameters:
+                if name == sub.var_positional:
+                    break
+                if name in injected:
+                    leading.append(injected[name])
+                else:
+                    leading.append(parsed[name])
+                    consumed += 1
+            result = sub.handler(*leading, *tokens[consumed:])
+        return await result if isawaitable(result) else result
 
     # ------------------------------------------------------------------
     # Dispatch

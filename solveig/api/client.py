@@ -145,7 +145,7 @@ class Client:
 # ---------------------------------------------------------------------------
 
 
-@subcommand("/model list", section="model")
+@subcommand("/model", "/model list", section="model")
 async def model_list(
     config: SolveigConfig,
     client: Client,
