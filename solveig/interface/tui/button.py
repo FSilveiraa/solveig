@@ -26,7 +26,7 @@ class Button(_Button):
     DEFAULT_CSS = """
         Button {
             color: $foreground;
-            $background;
+            background: $background;
             /* Everything below is here because Textual's own Button rule sizes
                itself: `min-width: 16` makes every button 16 cells wide whatever
                its label, and its height is auto with chrome. With the label
