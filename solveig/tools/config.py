@@ -6,7 +6,7 @@ Empty by declaration: the fields are one per tool, composed at runtime from
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import ByteSize, Field
 

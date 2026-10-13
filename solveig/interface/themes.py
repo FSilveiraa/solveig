@@ -1,14 +1,17 @@
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, field_validator, field_serializer
-from pydantic import ValidationInfo
-
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+)
 from pygments.style import Style
 from pygments.styles import STYLE_MAP
 from rich.syntax import get_style_by_name
 from textual.color import Color, ColorParseError
 from textual.theme import Theme as TextualTheme
-
 
 CodeTheme = type[Style]
 

@@ -28,11 +28,11 @@ from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.toolsets import AbstractToolset
 
 from solveig.config import SolveigConfig
-from solveig.mcp_servers.config import MCPServerConfig, name_from_url, MCPConfig
-from solveig.context import SolveigContext, context_from
+from solveig.context import context_from
 from solveig.exceptions import UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.mcp_servers import MCP_CONNECTIONS, MCPConnection
+from solveig.mcp_servers.config import MCPConfig, MCPServerConfig
 from solveig.subcommands import subcommand
 
 

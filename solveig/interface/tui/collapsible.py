@@ -20,8 +20,8 @@ from textual.widgets._collapsible import CollapsibleTitle
 
 from solveig.interface.base.widgets import DiffBox, TextBox
 
-from .button import Button, CopyButton
 from ...utils.misc import copy_to_clipboard
+from .button import Button, CopyButton
 
 
 class DividedCollapsibleTitleBar(CollapsibleTitle):

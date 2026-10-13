@@ -6,12 +6,12 @@ from textual.containers import Horizontal
 from textual.widgets import Markdown, Static
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import SolveigInterface, MessageBox, EditableMessage
+from solveig.interface.base import MessageBox, SolveigInterface
 from solveig.interface.base.actions import MessageActions, Role
 
 from .button import (
-    Button,
     BranchButton,
+    Button,
     CopyButton,
     DeleteButton,
     EditButton,
@@ -78,8 +78,7 @@ class EditableComment(Static):
         # full-width parent of its own to move inside.
         with Horizontal(classes="comment-actions-row"):
             with Horizontal(classes="comment-actions"):
-                for button in self._buttons:
-                    yield button
+                yield from self._buttons
 
     async def begin_edit(self) -> None:
         """Collect the new text - HOW to ask is this frontend's alone - and
@@ -116,14 +115,14 @@ class EditableComment(Static):
         EditableComment.role-user {
             margin: 2 1 2 12;
         }
-        
+
         /* Set Markdown background for user comments */
         EditableComment.role-user > Markdown {
             background: $background-user;
             padding: 0 1;
         }
 
-        /* Actions buttons for user comments align to the right */ 
+        /* Actions buttons for user comments align to the right */
         EditableComment.role-user .comment-actions-row {
             align-horizontal: right;
         }

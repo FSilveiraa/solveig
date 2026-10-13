@@ -10,13 +10,13 @@ from __future__ import annotations
 from pydantic_ai.providers import Provider
 
 from solveig.api.types import (
+    ApiConfig,
     APIError,
     APIRejected,
     APIUnreachable,
     ModelInfo,
     ModelNotFound,
     ProviderCapabilityMissing,
-    ApiConfig,
 )
 from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface

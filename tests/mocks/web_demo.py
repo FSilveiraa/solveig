@@ -20,8 +20,8 @@ from pydantic_ai.messages import ModelResponse
 
 from solveig import bootstrap
 from solveig.interface.web import WebInterface
-from solveig.run import run_async
 from solveig.pending.user_message_queue import UserMessageQueue
+from solveig.run import run_async
 
 from .client import create_mock_model
 from .demo import load_session_for_demo

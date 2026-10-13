@@ -8,7 +8,7 @@ from pydantic import ByteSize, Field, field_serializer, field_validator
 from pydantic_settings import CliPositionalArg
 
 from solveig.exceptions import UserCancel
-from solveig.interface.base import Level
+from solveig.interface.base import Level, SolveigInterface
 from solveig.tools.base import (
     BaseTool,
     ConsentDecision,
@@ -18,8 +18,6 @@ from solveig.tools.config import FileToolConfig
 from solveig.tools.result import ToolResult
 from solveig.utils.file import Filesystem
 from solveig.utils.misc import validate_non_empty_path
-
-from solveig.interface.base import SolveigInterface
 
 
 def _format_body(body: str, content_type: str | None) -> tuple[str, str]:

@@ -12,13 +12,12 @@ from typing import Any
 import anyconfig
 from pydantic import SecretStr
 
-from config.section.static import unwrap_optional, ConfigSection
 from config.annotations.choice import Choice
+from config.section.static import ConfigSection, unwrap_optional
 from config.sources import save_config
 from solveig.config import SolveigConfig
 from solveig.interface.base import Level, SolveigInterface
 from solveig.subcommands import subcommand
-
 
 
 def _get_config_display_value(config: ConfigSection, path: str) -> str:

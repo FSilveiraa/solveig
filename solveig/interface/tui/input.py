@@ -13,9 +13,8 @@ from textual.containers import Container
 from textual.message import Message
 from textual.widgets import OptionList, Static, TextArea
 
-from .chat import ChatArea
-
 from ...pending.user_message_queue import UserMessageQueue
+from .chat import ChatArea
 
 
 class InputMode(Enum):

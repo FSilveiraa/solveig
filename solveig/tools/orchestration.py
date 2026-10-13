@@ -29,7 +29,7 @@ reacts), the subcommand displays an error (no model to answer);
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from pydantic_ai.messages import (

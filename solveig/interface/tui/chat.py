@@ -7,11 +7,11 @@ from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Collapsible, Markdown, Static
 
+from ..base import Level
 from .collapsible import (
     CollapsibleTextBox,
     CustomCollapsible,
 )
-from ..base import Level
 
 # Bottom marker for a group that hasn't resolved yet: the border-left
 # appears to keep extending down, fading out row by row, until exit_group()
@@ -168,12 +168,12 @@ class ChatArea(ScrollableContainer):
         .success_message { color: $text-success; }
         .warning_message { color: $text-warning; }
         .error_message   { color: $text-error; }
-        
+
         Markdown {
             color: $foreground;
             padding: 0;
         }
-        
+
         ChatArea {
             height: 1fr;
             scrollbar-gutter: stable;

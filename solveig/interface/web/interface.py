@@ -35,6 +35,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from solveig.config import SolveigConfig
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -50,7 +51,6 @@ from solveig.todo import TodoItem
 from solveig.utils.file import FileMetadata
 from solveig.utils.misc import get_language
 
-from solveig.config import SolveigConfig
 from .bus import EventStream
 
 if TYPE_CHECKING:

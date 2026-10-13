@@ -17,13 +17,13 @@ import os
 import pkgutil
 import sys
 import warnings
-from contextvars import ContextVar
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from solveig.interface.base import Level, SolveigInterface
-from .config import PluginsConfig
 
+from .config import PluginsConfig
 from .hooks import clear_hooks
 
 #: The one package the scan walks. External dirs are folded into its `__path__`,

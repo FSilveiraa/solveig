@@ -56,12 +56,12 @@ from solveig.context import SolveigContext
 from solveig.exceptions import PluginException, ToolDisabledError, UserCancel
 from solveig.interface.base import Level, SolveigInterface
 from solveig.pending.user_message import PendingUserMessage
+from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.session.conversation import Conversation, MessageId
 from solveig.tools.available import build_toolset
 from solveig.tools.base import BaseTool
 from solveig.tools.orchestration import run_tool_and_hooks, run_untyped_tool
 from solveig.tools.result import ToolResult
-from solveig.pending.user_message_queue import UserMessageQueue
 
 
 def build_agent(

@@ -22,17 +22,16 @@ from config.section.static import ConfigSection
 from solveig.subcommands.base import CORE_TOOL_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.orchestration import tool_subcommand
 
-from .command import CommandTool, CommandConfig
+from ..config import FileToolConfig, ToolConfig
+from .command import CommandConfig, CommandTool
 from .copy import CopyTool
 from .delete import DeleteTool
 from .edit import EditTool
-from .http import HttpTool, HttpConfig
+from .http import HttpConfig, HttpTool
 from .move import MoveTool
 from .read import ReadTool
 from .todo import TodoTool
 from .write import WriteTool
-from ..config import FileToolConfig, ToolConfig
-
 
 # A tool may be named `copy`, and a field with that name necessarily shadows
 # pydantic's deprecated v1 `BaseModel.copy()` — pydantic warns about the shadow

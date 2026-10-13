@@ -31,10 +31,6 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from textual.widgets import Markdown
 
-from solveig.todo import TodoItem, TodoStatus
-from solveig.utils.file import FileMetadata
-from solveig.utils.misc import format_path_info, get_language
-
 from solveig.interface.base import (
     DiffBox,
     Level,
@@ -46,18 +42,21 @@ from solveig.interface.base import (
     TextBox,
     TreeBox,
 )
+from solveig.todo import TodoItem, TodoStatus
+from solveig.utils.file import FileMetadata
+from solveig.utils.misc import format_path_info, get_language
 
-from .config import TuiConfig
 from .app import SolveigTextualApp
+from .chat import BANNER
 from .collapsible import (
     CollapsibleDiffBox,
     CustomCollapsible,
     TextBoxWidget,
 )
-from .chat import BANNER
+from .config import TuiConfig
+from .message import CommentBox, EditableComment, ReasoningBox
 from .stats import TextualStat
 from .tree import FileTree
-from .message import EditableComment, CommentBox, ReasoningBox
 
 # TODO: still needed?
 if TYPE_CHECKING:

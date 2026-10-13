@@ -7,7 +7,7 @@ swap a button's behavior by editing its `on_click` override.
 
 import asyncio
 from collections.abc import Callable
-from typing import override, Self
+from typing import Self, override
 
 from textual.widgets import Button as _Button
 

@@ -24,12 +24,12 @@ from solveig.interface.base import Level, SolveigInterface, Stat
 from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import sync_connections_with_config
+from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
 from solveig.subcommands.registry import SubcommandRegistry
 from solveig.system_prompt.compose import get_system_prompt
-from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.file import Filesystem
 
 

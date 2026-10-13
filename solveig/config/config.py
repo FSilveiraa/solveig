@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-from typing import Any, Annotated
+from typing import Annotated
 
 import anyconfig
 from pydantic import (
     ByteSize,
     Field,
-    model_validator, PlainSerializer,
+    PlainSerializer,
+    model_validator,
 )
 from pydantic_settings import (
     CliPositionalArg,
 )
 
 from config import Config, ConfigDict
-from config.sources import FILE_EXTENSIONS
-from solveig.api.types import ApiConfig
 from config.annotations.comma_list import CommaSeparated
 from config.annotations.path import AbsolutePath, PathPattern
+from config.sources import FILE_EXTENSIONS
+from solveig.api.types import ApiConfig
 from solveig.interface.config import InterfaceConfig
 from solveig.mcp_servers.config import MCPConfig
 from solveig.plugins.config import PluginsConfig

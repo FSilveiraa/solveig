@@ -10,7 +10,7 @@ from pydantic import Field
 
 from solveig.exceptions import SecurityError, ValidationError
 from solveig.interface.base import Level, SolveigInterface
-from solveig.plugins.hooks import before_tool, HookConfig
+from solveig.plugins.hooks import HookConfig, before_tool
 from solveig.tools.core.command import CommandTool
 
 DANGEROUS_PATTERNS = [

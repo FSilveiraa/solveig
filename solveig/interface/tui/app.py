@@ -9,7 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.keys import format_key
 
-from solveig.interface.base import SolveigInterface, Level
+from solveig.interface.base import Level, SolveigInterface
 from solveig.pending.user_message_queue import UserMessageQueue
 from solveig.utils.misc import copy_to_clipboard
 
@@ -19,7 +19,6 @@ from .config import TuiConfig
 from .input import InputBar
 from .pending import PendingMessages
 from .stats import StatsBar
-
 
 # Level → (style, prefix emoji) mapping for the Textual frontend.
 LEVEL_SYMBOLS: dict[Level, str] = {

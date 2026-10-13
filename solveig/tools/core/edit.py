@@ -14,6 +14,7 @@ from solveig.utils.misc import validate_non_empty_path
 
 if TYPE_CHECKING:
     from anyio import Path
+
     from solveig.interface.base import SolveigInterface
 
 

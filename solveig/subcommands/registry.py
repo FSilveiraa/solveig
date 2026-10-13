@@ -132,7 +132,12 @@ class SubcommandRegistry:
         nothing to report."""
         match = self._match(text)
         if match is None:
-            return text  # not a command - an ordinary prompt
+            # HACK: this prevents misformed commands from being sent as user input,
+            #  but it also doesn't warn about it. Ideally subcommands have some form
+            #  of token hierarchy and errors at a sub-level, so `/model lst` shows
+            #  the help for `/model`
+            return None if text.startswith("/") else text
+            # return text  # not a command - an ordinary prompt
 
         subcommand, tokens = match
         asyncio.create_task(

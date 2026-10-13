@@ -1,6 +1,6 @@
 from pydantic import ByteSize, SecretStr
 
-from solveig.api.types import OpenAI, ApiConfig
+from solveig.api.types import ApiConfig, OpenAI
 from solveig.config import SolveigConfig
 from solveig.session.config import SessionConfig
 

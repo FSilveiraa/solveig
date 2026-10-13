@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import warnings
 
-from config import ConfigSection, ConfigChange, Deleted, Created, Updated
+from config import ConfigChange, ConfigSection, Created, Deleted, Updated
 from solveig.config import SolveigConfig
 from solveig.config.subcommands import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
 from solveig.plugins.discovery import discover_plugins, report_plugins
 from solveig.plugins.hooks import hooks_config_map
-from solveig.subcommands.base import SUBCOMMANDS, PLUGIN_SUBCOMMANDS
+from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.orchestration import tool_subcommand
 
 

@@ -139,7 +139,7 @@ def _walk_hooks(node: HookTree) -> Iterator[Hook]:
         yield from _walk_hooks(child)
 
 
-def _tool_key(target: "str | type[BaseTool] | Callable[..., Any]") -> str:
+def _tool_key(target: str | type[BaseTool] | Callable[..., Any]) -> str:
     """The registry key for a hook target: the actual tool name a call is
     dispatched under (`call.tool_name`), not a Python identifier. A `BaseTool`
     subclass keys by `.tool_name()` (e.g. `CommandTool` -> `"command"`); a
@@ -200,7 +200,7 @@ def declaring_hook[HookT: Hook](
     argument they pass."""
 
     def decorate(
-        tools: "tuple[str | type[BaseTool] | Callable[..., Any], ...]" = (),
+        tools: tuple[str | type[BaseTool] | Callable[..., Any], ...] = (),
         *,
         config_model: type[HookConfig] | None = None,
     ) -> Callable[[Callable[..., Any]], HookT]:

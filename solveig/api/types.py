@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from typing import override, Annotated
+from typing import Annotated, override
 
 from pydantic import Field, SecretStr, field_serializer
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
-from config import ConfigSection, Choice, CliFlags
+from config import Choice, CliFlags, ConfigSection
 
 
 @dataclass
