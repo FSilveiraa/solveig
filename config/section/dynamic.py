@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import GenericAlias
 from typing import ClassVar, Any, override, TypeVar, Iterator
 
-from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ConfigDict
+from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ConfigDict, create_model
 from pydantic.fields import FieldInfo
 
 from ..exceptions import NotASection, PathNotFound
@@ -14,48 +14,90 @@ from ..changes import Created, Deleted, Updated
 # Used by preserving sections to keep declared-but-missing fields under `model_extra`.
 _MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
 
+# HACK: fuck sentinels
+# NOTE: python 3.15 has some relevant improvement to this
+_NOT_AN_ENTRY = object()
+
+
 class DynamicSection[T](ConfigSection):
     """
-    Base for config sections built at runtime (namely from a tool/hook list).
+    Config section that allows inserting, removing and re-typing
+    entries at runtime.
 
-    Placeholder classes (CoreToolsConfig, PluginTools) subclass this;
-    `compose` installs their real fields, one per tool or hook, and
-    auto-rebuilds every live instance right there - a class's schema and
-    any instance already built from it can never drift apart, since there
-    is no separate step for a caller to remember or forget.
+    The section expects each entry to be an instance of `T` and will
+    try to instantiate it as such as soon as data is available. If
+    it can't, it raises an AttributeError and the data remains in
+    `_unresolved`.
+
+    If `T` is a pydantic BaseModel, then validation will reject fields
+    not present in `T`'s schema unless `T` has `extra="allow"` in its
+    `model_config`. This allows using `T` as a strict model for dynamic
+    sections where entries are of a single known type, and `T` with
+    `allow="extra"` for sections with dynamic entries sub-classing `T`.
+
+    It's also possible to force the extra fields to be preserver in an
+    entry typed after a model that does not allow extra fields by setting
+    `force_preserve_extra` either in the subclass:
+    ```python
+    class MyDynamicSection(DynamicSection[MyStrictType]):
+        force_preserve_extra: ClassVar[bool] = True
+    ```python
+    or in the section inheritance:
+    ```
+    class MyDynamicSection(DynamicSection[MyStrictType], force_preserve_extra=True):
+        ...
+    ```
     """
 
     model_config = _MUTABLE_ALLOW
-    _entry_type: ClassVar[Any] = Any  # T in `DynamicSection[T]`
 
-    # Whether entries get their type later through `set_type()`.
-    #  Until then, an entry's data is kept as a dict inside
-    #  `unresolved` and can't be accessed normally.
-    #  If off, expects types available at init.
-    _types_resolved_later: ClassVar[bool] = False
-
-    # Per-instance contained for untyped entries, and known types so far
+    # DynamicSection-of-type, the `T` in `DynamicSection[T]`
+    _entry_type: ClassVar[type[BaseModel]] = Any
+    # Whether extra fields should be preserved on the dynamic entry model
+    force_preserve_extra: ClassVar[bool] = False
+    # Data that failed to validate for the entry type
     _unresolved: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+
+    def __init_subclass__(
+        cls, *, force_preserve_extra: bool | None = None, **kwargs: Any
+    ) -> None:
+        super().__init_subclass__(**kwargs)
+        if force_preserve_extra is not None:
+            cls.force_preserve_extra = force_preserve_extra
 
     @override
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         """Enforce type for `model_extra` entries from the class parameter."""
         super().__pydantic_init_subclass__(**kwargs)
-        metadata = cls.__pydantic_generic_metadata__
-        # If we got here through `DynamicSection[T]`, force everything
-        # in `model_extra` to be of type T
-        if metadata["origin"] is not None:
-            # Skip actual `T` in `DynamicSection[T]` since it's not a real type
-            if not isinstance((parameter_type := metadata["args"][0]), TypeVar):
-                cls._entry_type = parameter_type
-                # `dict[str, parameter_type]` fails with "Parameters to generic
-                #  types must be types", this evaluates to the same
-                cls.__annotations__["__pydantic_extra__"] = GenericAlias(
-                    dict,
-                    (str, parameter_type)
-                )
-                cls.model_rebuild(force=True)
+
+        # If we got here through `DynamicSection[T]` with `T` being an actual class,
+        #  make this class expect dynamic entries (in `model_extra`) to be of type T
+        if (
+                (class_args := cls.__pydantic_generic_metadata__["args"])
+                and not isinstance(class_args[0], TypeVar)
+            ):
+                cls._entry_type = class_args[0]
+        # If `T` is a pydantic model, and we want to force it to allow extra fields,
+        #  (to allow entries typed after subclasses of `T`) then rebuild `T` with `extra="allow"`
+        # HACK: there are reasons I don't understand why `cls.__dict__.get("thing)"`
+        # is necessary over `cls.thing`, they have to do with using a literal `T` TypeVar
+        if _is_pydantic_model(cls._entry_type) and cls.__dict__.get("force_preserve_extra"):
+            cls._entry_type = create_model(
+                f"{cls._entry_type.__name__}_Preserving",
+                __base__=cls._entry_type,
+                __config__=ConfigDict(extra="allow"),
+            )
+
+        # `dict[str, parameter_type]` fails with "Parameters to generic
+        #  types must be types", this evaluates to the same
+        cls.__annotations__["__pydantic_extra__"] = GenericAlias(
+            dict,
+            (str, cls._entry_type)
+        )
+        cls.model_rebuild(force=True)
+
 
     @model_validator(mode="wrap")
     @classmethod
@@ -64,20 +106,38 @@ class DynamicSection[T](ConfigSection):
         Ensures entries read from a file with no known type yet are kept
         in `_unresolved` until `set_type()` gives them a type.
         """
-        if not cls._types_resolved_later or not isinstance(data, dict):
+        # If the current entry is a pydantic model, or if the data isn'a dict,
+        #  let pydantic and the section validation take over
+        if _is_pydantic_model(cls._entry_type) or not isinstance(data, dict):
             return handler(data)
-        # NOTE: no types have arrived while a section is being built, so every
-        #  undeclared entry waits. (Raw data and a built value can't be told
-        #  apart anyway: a list read from a file looks like a resolved list.)
-        declared = {name: value for name, value in data.items() if name in cls.model_fields}
+
+        # Otherwise, create the model only from the declared fields and
+        #  insert the undeclared ones manually
+        declared, pending = {}, {}
+        for name, value in data.items():
+            if name in cls.model_fields:
+                declared[name] = value
+            else:
+                pending[name] = value
+
         section = handler(declared)
-        section._unresolved.update({name: value for name, value in data.items() if name not in declared})
+        for name, value in pending.items():
+            section[name] = value
         return section
+
 
     @model_serializer(mode="wrap")
     def _save_unresolved_entries(self, handler) -> dict[str, Any]:
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
+
+
+    @classmethod
+    def _entry_from(cls, value: Any) -> Any:
+        if not _is_pydantic_model(value):
+            return _NOT_AN_ENTRY
+        return TypeAdapter(cls._entry_type).validate_python(value)
+
 
     def set_type(self, name: str, model: Any) -> None:
         """
@@ -149,6 +209,7 @@ class DynamicSection[T](ConfigSection):
         """Names of entries still waiting for their type."""
         return list(self._unresolved)
 
+
     @override
     def _set(self, name: str, value: Any) -> Any:
         """
@@ -218,3 +279,6 @@ class DynamicSection[T](ConfigSection):
         if rest:
             for sub_path, sub_info in cls._entry_type.walk_schema(rest):
                 yield f"{name}.{sub_path}", sub_info
+
+def _is_pydantic_model(t: Any) -> bool:
+    return isinstance(t, type) and issubclass(t, BaseModel)

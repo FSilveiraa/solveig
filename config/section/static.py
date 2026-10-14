@@ -114,6 +114,9 @@ class ConfigSection(BaseModel):
             raise KeyError(name)
         return getattr(self, name)
 
+    def __setitem__(self, name: str, value: Any) -> None:
+        setattr(self, name, value)
+
     # NOTE: hidden from type checkers. A visible `__setattr__(name: str, ...)`
     #  tells them any attribute may be assigned, so `config.api.modle = "x"`
     #  would type-check. Hidden, they check writes against the declared fields.
@@ -133,6 +136,8 @@ class ConfigSection(BaseModel):
             if before != value:
                 self._notify_relatives_sync(Updated(path=name, before=before, after=value))
 
+    # `model_extra` will be None for static sections, available for dynamic ones.
+    # I could have made an override in DynamicSection, but this isn't worse design.
     def __contains__(self, name: str) -> bool:
         return name in type(self).model_fields or name in (self.model_extra or {})
 
