@@ -84,10 +84,9 @@ class DynamicSection[T](ConfigSection):
                 __base__=cls._entry_type,
                 __config__=ConfigDict(extra="allow"),
             )
-            # The entry type of this section. pydantic reads this line while it
-            #  finishes building the model, so it has to be written here; the same
-            #  write from `__pydantic_init_subclass__` arrives too late for this
-            #  class (and is still the one the sections built after it inherit).
+            # The entry type of this section. pydantic reads this line while it is
+            #  still building the model, and never looks at the value again — a write
+            #  from `__pydantic_init_subclass__` is too late to be read at all.
             cls.__annotations__["__pydantic_extra__"] = GenericAlias(
                 dict,
                 (str, cls._entry_type | cls._declared_entry_type)
@@ -99,9 +98,10 @@ class DynamicSection[T](ConfigSection):
         """
         Runs after the section's pydantic model is built.
 
-        Captures `T` from `DynamicSection[T]`, then publishes the entry type that
-        sections built after this one inherit. This class's own entry type was already
-        decided in `__init_subclass__`, while it was still being built.
+        Captures `T` from `DynamicSection[T]` — the only moment the parameter can
+        be read. The entry type's own annotation was written by `__init_subclass__`
+        while the class was still being built, and pydantic never reads that value
+        again, so there is nothing to write here.
         """
         super().__pydantic_init_subclass__(**kwargs)
 
@@ -113,14 +113,6 @@ class DynamicSection[T](ConfigSection):
             ):
                 cls._entry_type = class_args[0]
                 cls._declared_entry_type = class_args[0]
-
-        # `dict[str, parameter_type]` fails with "Parameters to generic
-        #  types must be types", this evaluates to the same
-        cls.__annotations__["__pydantic_extra__"] = GenericAlias(
-            dict,
-            (str, cls._entry_type | cls._declared_entry_type)
-        )
-        cls.model_rebuild(force=True)
 
 
     @model_validator(mode="wrap")
@@ -179,10 +171,9 @@ class DynamicSection[T](ConfigSection):
                 mode="json",
                 exclude_unset=True,
             )
-            BaseModel.__delattr__(self, name)
         elif name in self._unresolved:
             # New type for untyped entry, use data from `_unresolved`
-            data = self._unresolved.pop(name)
+            data = self._unresolved[name]
         elif isinstance(model, type) and issubclass(model, BaseModel):
             # No data available, but the type is a pydantic model,
             #  build it from defaults (empty args)
@@ -191,7 +182,13 @@ class DynamicSection[T](ConfigSection):
         else:
             # Nothing matches `name`, raise
             raise PathNotFound(type(self), name)
+        # Build the entry before removing what it replaces: a model that refuses
+        #  the data has to leave the section exactly as it was.
         new_entry = TypeAdapter(model).validate_python(data)
+        if current is not None:
+            BaseModel.__delattr__(self, name)
+        else:
+            self._unresolved.pop(name, None)
         BaseModel.__setattr__(self, name, new_entry)
 
         # If the new entry was built from model defaults, unmark it
