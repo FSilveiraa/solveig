@@ -14,10 +14,6 @@ from ..changes import Created, Deleted, Updated
 # Used by preserving sections to keep declared-but-missing fields under `model_extra`.
 _MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
 
-# HACK: fuck sentinels
-# NOTE: python 3.15 has some relevant improvement to this
-_NOT_AN_ENTRY = object()
-
 
 class DynamicSection[T](ConfigSection):
     """
@@ -52,7 +48,11 @@ class DynamicSection[T](ConfigSection):
     model_config = _MUTABLE_ALLOW
 
     # DynamicSection-of-type, the `T` in `DynamicSection[T]`
-    _entry_type: ClassVar[type[BaseModel]] = Any
+    _entry_type: ClassVar[Any] = Any
+    # The `T` in `DynamicSection[T]` as the author wrote it. `_entry_type` may be
+    #  that type rebuilt to allow extra keys, and a rebuilt copy refuses an instance
+    #  of a subclass of the original, so `model_extra` must accept either.
+    _declared_entry_type: ClassVar[Any] = Any
     # Whether extra fields should be preserved on the dynamic entry model
     force_preserve_extra: ClassVar[bool] = False
     # Data that failed to validate for the entry type
@@ -88,7 +88,7 @@ class DynamicSection[T](ConfigSection):
             #  class (and is still the one the sections built after it inherit).
             cls.__annotations__["__pydantic_extra__"] = GenericAlias(
                 dict,
-                (str, cls._entry_type)
+                (str, cls._entry_type | cls._declared_entry_type)
             )
 
     @override
@@ -110,12 +110,13 @@ class DynamicSection[T](ConfigSection):
                 and not isinstance(class_args[0], TypeVar)
             ):
                 cls._entry_type = class_args[0]
+                cls._declared_entry_type = class_args[0]
 
         # `dict[str, parameter_type]` fails with "Parameters to generic
         #  types must be types", this evaluates to the same
         cls.__annotations__["__pydantic_extra__"] = GenericAlias(
             dict,
-            (str, cls._entry_type)
+            (str, cls._entry_type | cls._declared_entry_type)
         )
         cls.model_rebuild(force=True)
 
@@ -151,13 +152,6 @@ class DynamicSection[T](ConfigSection):
     def _save_unresolved_entries(self, handler) -> dict[str, Any]:
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
-
-
-    @classmethod
-    def _entry_from(cls, value: Any) -> Any:
-        if not _is_pydantic_model(value):
-            return _NOT_AN_ENTRY
-        return TypeAdapter(cls._entry_type).validate_python(value)
 
 
     def set_type(self, name: str, model: Any) -> None:

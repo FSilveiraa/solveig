@@ -11,7 +11,7 @@ from pydantic.fields import FieldInfo
 
 from ..annotations.cli_flags import CliFlags
 from ..exceptions import PathNotFound, NotASection
-from ..changes import ConfigChange, Deleted, Updated
+from ..changes import ConfigChange, Created, Deleted, Updated
 
 # Notification tasks in flight. A task is only weakly held by the loop, so
 #  without a strong reference here a notification can be collected mid-await.
@@ -132,9 +132,19 @@ class ConfigSection(BaseModel):
                 super().__setattr__(name, value)
                 return
 
+            was_present = name in self
             before = self._set(name, value)
-            if before != value:
-                self._notify_relatives_sync(Updated(path=name, before=before, after=value))
+            # What the section holds now, which is not always what was written: a
+            #  dynamic entry is built from the value, a validated field is coerced.
+            # A name waiting for its type holds the value as written, not an entry.
+            after = self[name] if name in self else value
+            if before != after:
+                # A name that was already there is an update; one that was not is a
+                #  creation, and its observer needs the entry that was built.
+                self._notify_relatives_sync(
+                    Updated(path=name, before=before, after=after) if was_present
+                    else Created(path=name, value=after)
+                )
 
     # `model_extra` will be None for static sections, available for dynamic ones.
     # I could have made an override in DynamicSection, but this isn't worse design.
@@ -259,9 +269,14 @@ class ConfigSection(BaseModel):
         changes: list[ConfigChange] = []
         for path, value in fields_to_change.items():
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
+            was_present = leaf_name in section
             before = section._set(leaf_name, value)
-            if before != value:
-                changes.append(Updated(path=path, before=before, after=value))
+            after = section[leaf_name] if leaf_name in section else value
+            if before != after:
+                changes.append(
+                    Updated(path=path, before=before, after=after) if was_present
+                    else Created(path=path, value=after)
+                )
         if changes:
             await self._notify_relatives_async(*changes)
 
