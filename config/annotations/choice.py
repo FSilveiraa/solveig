@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import operator
 import typing
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Mapping, Any, Callable
+from typing import Any
 
 from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic.fields import FieldInfo
@@ -33,7 +34,9 @@ class Choice:
     def options(self) -> list[str]:
         return sorted(self.entries)
 
-    def __get_pydantic_core_schema__(self, source: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+    def __get_pydantic_core_schema__(
+        self, source: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
         """Defines how to validate and serialize `source` using `handler`."""
         args = typing.get_args(source)
         member = next((a for a in args if a is not type(None)), source)
@@ -51,10 +54,12 @@ class Choice:
 
         schema = core_schema.json_or_python_schema(
             # On the wire an option is its name, so it validates as a string first.
-            json_schema=core_schema.chain_schema([
-                core_schema.str_schema(),
-                core_schema.no_info_plain_validator_function(to_member),
-            ]),
+            json_schema=core_schema.chain_schema(
+                [
+                    core_schema.str_schema(),
+                    core_schema.no_info_plain_validator_function(to_member),
+                ]
+            ),
             # In Python it is usually the member itself, sometimes still a name.
             python_schema=core_schema.no_info_plain_validator_function(to_member),
             # How pydantic serializes instances
@@ -65,7 +70,9 @@ class Choice:
         # Whether None is legal is the annotation's to say.
         return core_schema.nullable_schema(schema) if type(None) in args else schema
 
-    def __get_pydantic_json_schema__(self, schema: dict[str, Any], handler: GetJsonSchemaHandler) -> JsonSchemaValue:
+    def __get_pydantic_json_schema__(
+        self, schema: dict[str, Any], handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
         json_schema = handler(core_schema.str_schema())
         json_schema.update(type="string", enum=self.options)
         return json_schema

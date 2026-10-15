@@ -5,7 +5,6 @@ from typing import Annotated
 
 from pydantic import BeforeValidator, PlainSerializer
 
-
 Path = Annotated[
     pathlib.Path,
     BeforeValidator(lambda value: pathlib.Path(value)),
@@ -25,6 +24,7 @@ def _resolve_pattern(value) -> pathlib.Path:
     if str(path) == path.name:
         return path
     return path.expanduser().resolve()
+
 
 PathPattern = Annotated[
     pathlib.Path,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar, Annotated
+from typing import Annotated, TypeVar
 
 from pydantic import BeforeValidator, PlainSerializer
 from pydantic_settings import NoDecode
@@ -12,10 +12,11 @@ CommaSeparated = Annotated[
     NoDecode,
     # Converts "a, bb,c," -> ["a", "bb", "c"]
     BeforeValidator(
-        lambda value: [
-            token.strip() for token in value.split(",")
-            if token.strip()
-        ] if isinstance(value, str) else value
+        lambda value: (
+            [token.strip() for token in value.split(",") if token.strip()]
+            if isinstance(value, str)
+            else value
+        )
     ),
     # Serializes ["a", "bb", "c"] -> "a,bb,c"
     PlainSerializer(

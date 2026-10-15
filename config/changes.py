@@ -8,15 +8,18 @@ from typing import Any
 class ConfigChange:
     path: str
 
+
 @dataclass(frozen=True)
 class Created(ConfigChange):
-    value: Any            # what appeared
+    value: Any  # what appeared
+
 
 @dataclass(frozen=True)
 class Updated(ConfigChange):
     before: Any
     after: Any
 
+
 @dataclass(frozen=True)
 class Deleted(ConfigChange):
-    value: Any            # what left
+    value: Any  # what left

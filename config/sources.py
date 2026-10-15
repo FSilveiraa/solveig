@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Sequence
 from os import PathLike
 from typing import Any
-import pathlib
 
 import anyconfig
 from pydantic import TypeAdapter
-from pydantic_settings import PydanticBaseSettingsSource, BaseSettings
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
 from .meta import ConfigDict
 
@@ -38,9 +38,9 @@ class ConfigFileSource(PydanticBaseSettingsSource):
     config: ConfigDict
 
     def __init__(
-            self,
-            settings_cls: type[BaseSettings],
-            field_name: str = "config_files",
+        self,
+        settings_cls: type[BaseSettings],
+        field_name: str = "config_files",
     ):
         super().__init__(settings_cls)
         self._field_name = field_name

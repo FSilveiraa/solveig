@@ -3,15 +3,16 @@ from __future__ import annotations
 import asyncio
 import inspect
 import typing
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import replace
-from typing import Any, Union, TYPE_CHECKING, Iterator, Awaitable, Callable, TypeIs
+from typing import TYPE_CHECKING, Any, TypeIs, Union
 
-from pydantic import ConfigDict, BaseModel, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 from pydantic.fields import FieldInfo
 
 from ..annotations.cli_flags import CliFlags
-from ..exceptions import PathNotFound, NotASection
 from ..changes import ConfigChange, Created, Deleted, Updated
+from ..exceptions import NotASection, PathNotFound
 
 # Notification tasks in flight. A task is only weakly held by the loop, so
 #  without a strong reference here a notification can be collected mid-await.
@@ -122,6 +123,7 @@ class ConfigSection(BaseModel):
     #  would type-check. Hidden, they check writes against the declared fields.
     #  The same pattern pydantic uses for its own `__getattr__`.
     if not TYPE_CHECKING:
+
         def __setattr__(self, name: str, value: Any) -> None:
             """Plain assignment (`config.api.model = "x"`).
 
@@ -142,7 +144,8 @@ class ConfigSection(BaseModel):
                 # A name that was already there is an update; one that was not is a
                 #  creation, and its observer needs the entry that was built.
                 self._notify_relatives_sync(
-                    Updated(path=name, before=before, after=after) if was_present
+                    Updated(path=name, before=before, after=after)
+                    if was_present
                     else Created(path=name, value=after)
                 )
 
@@ -152,7 +155,7 @@ class ConfigSection(BaseModel):
         return name in type(self).model_fields or name in (self.model_extra or {})
 
     def __or__(self, other: ConfigSection) -> dict[str, Any]:
-       return dict(self) | dict(other)
+        return dict(self) | dict(other)
 
     @classmethod
     def walk_schema(cls, path: str) -> Iterator[tuple[str, FieldInfo]]:
@@ -259,9 +262,11 @@ class ConfigSection(BaseModel):
         fields_to_change = fields
         if args:
             if len(args) == 2:
-                fields_to_change |= { args[0]: args[1] }
+                fields_to_change |= {args[0]: args[1]}
             else:
-                raise ValueError(f"`set` expects exactly 2 or no positional arguments, found {len(args)}: {args}.")
+                raise ValueError(
+                    f"`set` expects exactly 2 or no positional arguments, found {len(args)}: {args}."
+                )
 
         # Only paths whose value actually changed are notified about
         changes: list[ConfigChange] = []
@@ -272,7 +277,8 @@ class ConfigSection(BaseModel):
             after = section[leaf_name] if leaf_name in section else value
             if before != after:
                 changes.append(
-                    Updated(path=path, before=before, after=after) if was_present
+                    Updated(path=path, before=before, after=after)
+                    if was_present
                     else Created(path=path, value=after)
                 )
         if changes:
@@ -335,7 +341,8 @@ class ConfigSection(BaseModel):
         # A field excluded from exports can still declare CLI shortcuts
         for path, field_info in fields:
             all_cli_flags = [
-                flags for flags in field_info.metadata
+                flags
+                for flags in field_info.metadata
                 if isinstance(flags, CliFlags)
                 # for flag in metadata.flags
             ]
@@ -359,7 +366,9 @@ class ConfigSection(BaseModel):
 
         return path_to_flags
 
-    def _notify(self, *changes: ConfigChange) -> tuple[list[Awaitable], list[Exception]]:
+    def _notify(
+        self, *changes: ConfigChange
+    ) -> tuple[list[Awaitable], list[Exception]]:
         """
         Calls every observer that should hear about each change, above and
         below self, from root to each changed path's owner.
@@ -370,13 +379,15 @@ class ConfigSection(BaseModel):
         # and the dict of path->ConfigChange for that section.
         to_notify: dict[int, tuple[ConfigSection, dict[str, ConfigChange]]] = {}
         for change in changes:
-            _self, my_own_changes = to_notify.setdefault(id(self), (self, dict()))
+            _self, my_own_changes = to_notify.setdefault(id(self), (self, {}))
             my_own_changes[change.path] = change
             # Down: every section between self and the owner of the changed field
             path_to_parent, _delimiter, _leaf_name = change.path.rpartition(".")
             if path_to_parent:
                 for sub_path, section in self.walk(path_to_parent):
-                    _section, section_paths = to_notify.setdefault(id(section), (section, dict()))
+                    _section, section_paths = to_notify.setdefault(
+                        id(section), (section, {})
+                    )
                     # Create a new ConfigChange with the path for the sub-section
                     # Ex: change happened at `interface.tui.theme`, there's an observer
                     #  at `interface`, it needs to be notified about `tui.theme`.
@@ -387,8 +398,12 @@ class ConfigSection(BaseModel):
             while parent._parent is not None:
                 path_from_leaf_to_parent = f"{parent._name}.{path_from_leaf_to_parent}"
                 parent = parent._parent
-                _parent, paths_for_parent = to_notify.setdefault(id(parent), (parent, dict()))
-                paths_for_parent[path_from_leaf_to_parent] = replace(change, path=path_from_leaf_to_parent)
+                _parent, paths_for_parent = to_notify.setdefault(
+                    id(parent), (parent, {})
+                )
+                paths_for_parent[path_from_leaf_to_parent] = replace(
+                    change, path=path_from_leaf_to_parent
+                )
 
         # Call sync observers, keep awaitables for async ones plus failures
         pending: list[Awaitable] = []
@@ -398,14 +413,23 @@ class ConfigSection(BaseModel):
             for handler, observer_paths in list(section._observers):
                 # NOTE: if later we introduce glob pattern semantics to
                 #  observer paths, this is the place to parse it
-                paths_to_notify = list(changes_by_path.values()) if not observer_paths else [
-                    change for change in changes_by_path.values()
-                    if any(
-                        matches_prefix(change.path, registered_path)     # Below: watching `foo.bar`, change happened in `foo.bar.baz`
-                        or matches_prefix(registered_path, change.path)  # Above: watching `foo.bar.baz`, change happened in `foo.bar`
-                        for registered_path in observer_paths
-                    )
-                ]
+                paths_to_notify = (
+                    list(changes_by_path.values())
+                    if not observer_paths
+                    else [
+                        change
+                        for change in changes_by_path.values()
+                        if any(
+                            matches_prefix(
+                                change.path, registered_path
+                            )  # Below: watching `foo.bar`, change happened in `foo.bar.baz`
+                            or matches_prefix(
+                                registered_path, change.path
+                            )  # Above: watching `foo.bar.baz`, change happened in `foo.bar`
+                            for registered_path in observer_paths
+                        )
+                    ]
+                )
                 if not paths_to_notify:
                     continue
                 # NOTE: observers are isolated, a failing one doesn't stop the rest
@@ -434,10 +458,12 @@ class ConfigSection(BaseModel):
                 for awaitable in pending:
                     if inspect.iscoroutine(awaitable):
                         awaitable.close()
-                failures.append(RuntimeError(
-                    f"Async observers of {', '.join(map(repr, changes))} need a running "
-                    "event loop. Use sync observers, or `await section.set(...)`."
-                ))
+                failures.append(
+                    RuntimeError(
+                        f"Async observers of {', '.join(map(repr, changes))} need a running "
+                        "event loop. Use sync observers, or `await section.set(...)`."
+                    )
+                )
             else:
                 notifications = asyncio.gather(*pending)
                 _NOTIFICATIONS_IN_COURSE.add(notifications)
@@ -467,7 +493,9 @@ class ConfigSection(BaseModel):
             section._parent.__pydantic_fields_set__.add(section._name)
             section = section._parent
 
-    def leaf_parent_name_and_schema(self, path: str) -> tuple[ConfigSection, str, FieldInfo]:
+    def leaf_parent_name_and_schema(
+        self, path: str
+    ) -> tuple[ConfigSection, str, FieldInfo]:
         """
         Resolves `path` into a leaf, returns its parent, name and FieldInfo.
         Raises AttributeError raised by `walk`, or if somehow the penultimate
@@ -481,7 +509,11 @@ class ConfigSection(BaseModel):
             *_rest, (_, parent_section) = self.walk(path_to_parent)
             if not isinstance(parent_section, ConfigSection):
                 raise NotASection(path_to_parent, path)
-        return (parent_section, leaf_name, parent_section.get_schema(leaf_name)) # type(parent_section).model_fields[leaf_name])
+        return (
+            parent_section,
+            leaf_name,
+            parent_section.get_schema(leaf_name),
+        )  # type(parent_section).model_fields[leaf_name])
 
     def on_change(self, *paths: str) -> Callable[[ConfigObserver], ConfigObserver]:
         """
@@ -509,7 +541,9 @@ class ConfigSection(BaseModel):
     def _delete(self, name: str) -> Any:
         """A plain section declares everything it holds, so deletion always raises."""
         if name in type(self).model_fields:
-            raise AttributeError(f"{name!r} is a declared field of {type(self).__name__!r} and can't be deleted")
+            raise AttributeError(
+                f"{name!r} is a declared field of {type(self).__name__!r} and can't be deleted"
+            )
         raise PathNotFound(type(self), name)
 
     def __delattr__(self, name: str) -> None:
@@ -533,4 +567,6 @@ def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
 
 
 # A config observer: (section, the changes it hears about), sync or async.
-ConfigObserver = Callable[[ConfigSection, tuple[ConfigChange, ...]], Awaitable[None] | None]
+ConfigObserver = Callable[
+    [ConfigSection, tuple[ConfigChange, ...]], Awaitable[None] | None
+]

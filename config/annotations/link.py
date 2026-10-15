@@ -28,7 +28,9 @@ class Link[T]:
 
     def __post_init__(self) -> None:
         if not self.source_path.removeprefix("/"):
-            raise ValueError(f"A link needs a path to a field, got {self.source_path!r}")
+            raise ValueError(
+                f"A link needs a path to a field, got {self.source_path!r}"
+            )
 
     # NOTE: Python calls `__get__` on attribute lookup: `section.link` passes the
     #  instance, `SectionClass.link` passes None and gets the Link itself.

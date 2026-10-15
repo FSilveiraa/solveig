@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from types import GenericAlias
-from typing import ClassVar, Any, override, TypeVar, Iterator
+from typing import Any, ClassVar, TypeVar, override
 
-from pydantic import PrivateAttr, model_validator, model_serializer, TypeAdapter, BaseModel, ConfigDict, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PrivateAttr,
+    TypeAdapter,
+    create_model,
+    model_serializer,
+    model_validator,
+)
 from pydantic.fields import FieldInfo
 
-from ..exceptions import NotASection, PathNotFound
-from .static import ConfigSection, _is_section, _MUTABLE
 from ..changes import Created, Deleted, Updated
+from ..exceptions import PathNotFound
+from .static import _MUTABLE, ConfigSection
 
 # Like _MUTABLE, but the section accepts keys it does not declare. A dynamic
 #  section keeps its entries there, so they can't be rejected as unknown.
-_MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
+_MUTABLE_ALLOW = _MUTABLE | ConfigDict(
+    extra="allow",
+)
 
 
 class DynamicSection[T](ConfigSection):
@@ -60,7 +71,6 @@ class DynamicSection[T](ConfigSection):
     #  model, and sent back here by `remove_type`.
     _unresolved: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-
     def __init_subclass__(
         cls, *, force_preserve_extra: bool | None = None, **kwargs: Any
     ) -> None:
@@ -78,7 +88,9 @@ class DynamicSection[T](ConfigSection):
         #  attribute would also be true for a section that inherits it, and
         #  that section would then rebuild an already-rebuilt type
         #  (`ToolConfig_Preserving_Preserving`).
-        if _is_pydantic_model(cls._entry_type) and cls.__dict__.get("force_preserve_extra"):
+        if _is_pydantic_model(cls._entry_type) and cls.__dict__.get(
+            "force_preserve_extra"
+        ):
             cls._entry_type = create_model(
                 f"{cls._entry_type.__name__}_Preserving",
                 __base__=cls._entry_type,
@@ -88,8 +100,7 @@ class DynamicSection[T](ConfigSection):
             #  still building the model, and never looks at the value again — a write
             #  from `__pydantic_init_subclass__` is too late to be read at all.
             cls.__annotations__["__pydantic_extra__"] = GenericAlias(
-                dict,
-                (str, cls._entry_type | cls._declared_entry_type)
+                dict, (str, cls._entry_type | cls._declared_entry_type)
             )
 
     @override
@@ -107,13 +118,11 @@ class DynamicSection[T](ConfigSection):
 
         # If we got here through `DynamicSection[T]` with `T` being an actual class,
         #  make this class expect dynamic entries (in `model_extra`) to be of type T
-        if (
-                (class_args := cls.__pydantic_generic_metadata__["args"])
-                and not isinstance(class_args[0], TypeVar)
-            ):
-                cls._entry_type = class_args[0]
-                cls._declared_entry_type = class_args[0]
-
+        if (class_args := cls.__pydantic_generic_metadata__["args"]) and not isinstance(
+            class_args[0], TypeVar
+        ):
+            cls._entry_type = class_args[0]
+            cls._declared_entry_type = class_args[0]
 
     @model_validator(mode="wrap")
     @classmethod
@@ -141,12 +150,10 @@ class DynamicSection[T](ConfigSection):
             section[name] = value
         return section
 
-
     @model_serializer(mode="wrap")
     def _save_unresolved_entries(self, handler) -> dict[str, Any]:
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
-
 
     def set_type(self, name: str, model: Any) -> None:
         """
@@ -197,11 +204,11 @@ class DynamicSection[T](ConfigSection):
             self.__pydantic_fields_set__.discard(name)  # a default is not user-set
 
         notification = (
-            Created(path=name, value=new_entry) if current is None
+            Created(path=name, value=new_entry)
+            if current is None
             else Updated(path=name, before=current, after=new_entry)
         )
         self._notify_relatives_sync(notification)
-
 
     def remove_type(self, name) -> None:
         """
@@ -224,12 +231,15 @@ class DynamicSection[T](ConfigSection):
         """Names of entries still waiting for their type."""
         return list(self._unresolved)
 
-
     @override
     def _set(self, name: str, value: Any) -> Any:
         """
-        On a section whose types arrive later, a resolved entry's own class
-        types the value, and a name without a type keeps its value as written.
+        Writes `self.name = value` on a dynamic section.
+
+        A declared field goes to the base. An entry that already exists is typed
+        by its own class. A name the section doesn't hold is built as the
+        section's entry type, or, if that type isn't a model, kept in
+        `_unresolved` as written.
         """
         # 1. A declared field
         if name in type(self).model_fields:
@@ -253,7 +263,7 @@ class DynamicSection[T](ConfigSection):
             self._mark_ancestors_as_set()
             return before
 
-        # 4. An unresolved pydantic model
+        # 4. Otherwise the entry type is a model: build the entry from the value
         entry = TypeAdapter(self._entry_type).validate_python(value)
         before = self._unresolved.pop(name, None)
         # `BaseModel.__setattr__` on purpose: it re-runs `validate_assignment`, which is
@@ -293,22 +303,14 @@ class DynamicSection[T](ConfigSection):
             yield from super().walk_schema(path)
             return
 
-        # Below an entry whose type arrives later, the schema can't be known
-        #  yet, so any path there is accepted (an observer of a plugin's own
-        #  setting can register before the plugin is loaded)
-        if cls._types_resolved_later and rest:
-            yield name, FieldInfo.from_annotation(cls._entry_type)
-            yield f"{name}.{rest}", FieldInfo.from_annotation(Any)
-            return
-
-        # Any other name is a dynamic entry of type T,
-        #  create a FieldInfo from the annotation
-        if rest and not _is_section(cls._entry_type):
-            raise NotASection(name, path)
+        # An undeclared name is a dynamic entry, and the class cannot say which
+        #  class that entry is — a subclass carries fields of its own. So the
+        #  entry is yielded as the annotated type, and any path below it is
+        #  accepted rather than guessed from a type the entry may not be.
         yield name, FieldInfo.from_annotation(cls._entry_type)
         if rest:
-            for sub_path, sub_info in cls._entry_type.walk_schema(rest):
-                yield f"{name}.{sub_path}", sub_info
+            yield f"{name}.{rest}", FieldInfo.from_annotation(Any)
+
 
 def _is_pydantic_model(t: Any) -> bool:
     return isinstance(t, type) and issubclass(t, BaseModel)

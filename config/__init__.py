@@ -14,23 +14,22 @@ field links.
 
 from __future__ import annotations
 
-from .config import Config
-from .meta import ConfigDict
-from .section.static import ConfigSection
-from .section.dynamic import DynamicSection
 from .annotations import (
+    AbsolutePath,
     Choice,
     CliFlags,
     CommaSeparated,
     Link,
     Path,
-    AbsolutePath,
     PathPattern,
 )
-from .exceptions import PathNotFound, NotASection
+from .changes import ConfigChange, Created, Deleted, Updated
+from .config import Config
+from .exceptions import NotASection, PathNotFound
+from .meta import ConfigDict
+from .section.dynamic import DynamicSection
+from .section.static import ConfigSection
 from .sources import FILE_EXTENSIONS
-from .changes import ConfigChange, Updated, Deleted, Created
-
 
 __all__ = [
     "Config",

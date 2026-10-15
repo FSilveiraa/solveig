@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 # `init=False` ensures the dataclass doesn't auto-generate an __init__.
 # Without it, we'd be forced to instantiate with `CliFlags(["-u", "--url"])`
 #  instead of `CliFlags("-u", "--url")`
@@ -16,7 +17,6 @@ class CliFlags:
 
     def to_argparse(self) -> list[str]:
         return [
-            (f"{'-' if len(flag) == 1 else '--'}"
-             f"{flag.replace("_", "-")}")
+            (f"{'-' if len(flag) == 1 else '--'}{flag.replace('_', '-')}")
             for flag in self.flags
         ]

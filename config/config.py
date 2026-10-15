@@ -4,9 +4,9 @@ from typing import override
 from pydantic import Field
 from pydantic_settings import BaseSettings, CliSettingsSource
 
+from .annotations import AbsolutePath, CommaSeparated
 from .meta import ConfigDict
 from .section.static import ConfigSection
-from .annotations import AbsolutePath, CommaSeparated
 from .sources import ConfigFileSource
 
 
@@ -17,7 +17,7 @@ class Config(BaseSettings, ConfigSection):
         cli_kebab_case=True,
         cli_implicit_flags=True,
         cli_enforce_required=False,
-        default_config_files=[]
+        default_config_files=[],
     )
 
     # Whether to read `sys.argv`. An internal switch, never saved or edited
@@ -25,18 +25,19 @@ class Config(BaseSettings, ConfigSection):
     # Config file paths read, sorted lowest -> highest priority.
     # Add flags and defaults for this field using:
     #  `ConfigDict(cli_shortcuts={"config_files":["c", "config"]}, default_config_files=["~/config.json"])`
-    config_files: CommaSeparated[AbsolutePath] = Field(default_factory=list, exclude=True)
-
+    config_files: CommaSeparated[AbsolutePath] = Field(
+        default_factory=list, exclude=True
+    )
 
     @override
     @classmethod
     def settings_customise_sources(
-            cls,
-            settings_cls,
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            file_secret_settings,
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
     ):
         """Build the settings-source stack. CLI args flow through `cli_parse_args`;
         `--config` flags are split out for ConfigFileSource."""
@@ -57,12 +58,12 @@ class Config(BaseSettings, ConfigSection):
         #  field's own `CliFlags`. A value may be one flag or a list of them.
         shortcuts: dict[str, list[str]] = {}
         for path, flags in (cls.model_config.get("cli_shortcuts") or {}).items():
-            shortcuts[path.replace("_", "-")] = [flags] if isinstance(flags, str) else list(flags)
+            shortcuts[path.replace("_", "-")] = (
+                [flags] if isinstance(flags, str) else list(flags)
+            )
         for path, all_cli_flags in cls._cli_flags_from_schema().items():
             shortcuts.setdefault(path.replace("_", "-"), []).extend(
-                flag
-                for cli_flags in all_cli_flags
-                for flag in cli_flags.flags
+                flag for cli_flags in all_cli_flags for flag in cli_flags.flags
             )
         # A flag can only belong to one field, wherever it was declared
         claimed_by: dict[str, str] = {}
