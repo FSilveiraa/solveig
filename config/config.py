@@ -38,17 +38,19 @@ class Config(BaseSettings, ConfigSection):
             dotenv_settings,
             file_secret_settings,
     ):
-        """Build the settings-source stack. CLI args flow through cli_args;
-        --config flags are split out for ConfigFileSource."""
-        # Parse CLI args list. If `cli_args` is absent from init_kwargs,
+        """Build the settings-source stack. CLI args flow through `cli_parse_args`;
+        `--config` flags are split out for ConfigFileSource."""
+        # Parse CLI args list. If `parse_cli` is absent from init_kwargs,
         # then it wasn't passed, use field default
         parse_cli: bool | None = init_settings.init_kwargs.get("parse_cli")
         if parse_cli is None:
             parse_cli = settings_cls.model_fields["parse_cli"].get_default()
         argv = sys.argv[1:] if parse_cli else []
 
-        # For some reason pydantic-settings expect the keys (paths) to use kebab-case,
-        #  and the values (cli flags) to use underscores. Expected:
+        # A key must match the flag name pydantic-settings generated for the field,
+        #  which `cli_kebab_case` makes kebab-case: `max_context` -> `max-context`,
+        #  a nested field -> `api.max-context`. Values are used verbatim, with no
+        #  case conversion, and a one-character value gets a single dash. Expected:
         #  {"path.to.my-section": ["my-section", "m"]}
         #  Creates: `--my-section` and `-m`
         # Shortcuts from `model_config` (for inherited fields), then from each
@@ -73,7 +75,7 @@ class Config(BaseSettings, ConfigSection):
                     )
                 claimed_by[flag] = path
 
-        # Precedence high->low: CLI, env (SOLVEIG_*), then config files.
+        # Precedence high->low: init kwargs, CLI, env, then config files.
         return (
             init_settings,
             CliSettingsSource(

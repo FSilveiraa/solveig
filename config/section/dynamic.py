@@ -10,8 +10,8 @@ from ..exceptions import NotASection, PathNotFound
 from .static import ConfigSection, _is_section, _MUTABLE
 from ..changes import Created, Deleted, Updated
 
-# Like _MUTABLE, but allows preserving config keys that did not validate against the model.
-# Used by preserving sections to keep declared-but-missing fields under `model_extra`.
+# Like _MUTABLE, but the section accepts keys it does not declare. A dynamic
+#  section keeps its entries there, so they can't be rejected as unknown.
 _MUTABLE_ALLOW = _MUTABLE | ConfigDict(extra="allow",)
 
 
@@ -21,23 +21,23 @@ class DynamicSection[T](ConfigSection):
     entries at runtime.
 
     The section expects each entry to be an instance of `T` and will
-    try to instantiate it as such as soon as data is available. If
-    it can't, it raises an AttributeError and the data remains in
-    `_unresolved`.
+    try to instantiate it as such as soon as data is available. Data
+    `T` can't hold raises; a parameter that isn't a model has nothing
+    to instantiate with, so entries wait in `_unresolved` as written.
 
     If `T` is a pydantic BaseModel, then validation will reject fields
     not present in `T`'s schema unless `T` has `extra="allow"` in its
     `model_config`. This allows using `T` as a strict model for dynamic
     sections where entries are of a single known type, and `T` with
-    `allow="extra"` for sections with dynamic entries sub-classing `T`.
+    `extra="allow"` for sections with dynamic entries sub-classing `T`.
 
-    It's also possible to force the extra fields to be preserver in an
+    It's also possible to force the extra fields to be preserved in an
     entry typed after a model that does not allow extra fields by setting
     `force_preserve_extra` either in the subclass:
     ```python
     class MyDynamicSection(DynamicSection[MyStrictType]):
         force_preserve_extra: ClassVar[bool] = True
-    ```python
+    ```
     or in the section inheritance:
     ```
     class MyDynamicSection(DynamicSection[MyStrictType], force_preserve_extra=True):
@@ -47,7 +47,8 @@ class DynamicSection[T](ConfigSection):
 
     model_config = _MUTABLE_ALLOW
 
-    # DynamicSection-of-type, the `T` in `DynamicSection[T]`
+    # What an entry value is validated into: the `T` in `DynamicSection[T]`,
+    #  or that type rebuilt to allow extra keys.
     _entry_type: ClassVar[Any] = Any
     # The `T` in `DynamicSection[T]` as the author wrote it. `_entry_type` may be
     #  that type rebuilt to allow extra keys, and a rebuilt copy refuses an instance
@@ -55,7 +56,8 @@ class DynamicSection[T](ConfigSection):
     _declared_entry_type: ClassVar[Any] = Any
     # Whether extra fields should be preserved on the dynamic entry model
     force_preserve_extra: ClassVar[bool] = False
-    # Data that failed to validate for the entry type
+    # Data waiting for an entry type: written when the parameter isn't a
+    #  model, and sent back here by `remove_type`.
     _unresolved: dict[str, Any] = PrivateAttr(default_factory=dict)
 
 
@@ -128,7 +130,7 @@ class DynamicSection[T](ConfigSection):
         Ensures entries read from a file with no known type yet are kept
         in `_unresolved` until `set_type()` gives them a type.
         """
-        # If the current entry is a pydantic model, or if the data isn'a dict,
+        # If the current entry is a pydantic model, or if the data isn't a dict,
         #  let pydantic and the section validation take over
         if _is_pydantic_model(cls._entry_type) or not isinstance(data, dict):
             return handler(data)
@@ -158,10 +160,11 @@ class DynamicSection[T](ConfigSection):
         """
         Give `self.name` a type `model`.
 
-        The existing value for `name` from `unresolved` (or empty args) is
-        validated against the model. Entries already of this type are kept,
-        not rebuilt - it wouldn't really do anything meaningful and replacing
-        a section would clear its observers.
+        The new entry is built from the existing value for `name`: the entry it
+        already holds (re-serialized), else its data in `_unresolved`, else the
+        model's own defaults. Entries already of this type are kept, not rebuilt -
+        it wouldn't really do anything meaningful and replacing a section would
+        clear its observers.
         """
         current = (self.model_extra or {}).get(name)
         if current is not None and type(current) is model:

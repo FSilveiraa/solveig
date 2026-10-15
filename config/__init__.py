@@ -2,7 +2,7 @@
 This project exists to allow a living Config to exist as the single
 source-of-truth for every persistent value in a project's settings.
 
-It's built on modern pyton with strict pydantic typing and
+It's built on modern python with strict pydantic typing and
 highly declarative, reactive principles. Declaration is behavior.
 
 It can interact with several file formats for saving/loading,

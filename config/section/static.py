@@ -21,7 +21,7 @@ _NOTIFICATIONS_IN_COURSE: set[asyncio.Future] = set()
 # Forces model re-validation on re-assignment and allows arbitrary types.
 _MUTABLE = ConfigDict(
     # Every config.api.url = "..." re-validates at assignment time, not just
-    # at parse. So a bad value can't beset live mid-run and corrupt state.
+    # at parse. So a bad value can't be set live mid-run and corrupt state.
     validate_assignment=True,
     # The config holds non-pydantic types. Without this flag,
     # pydantic rejects a field whose type isn't a BaseModel/builtin.
@@ -67,7 +67,7 @@ class ConfigSection(BaseModel):
 
     Ensures fields accept arbitrary types and validate the pydantic model
      on re-assignment, and unknown fields raise.
-     Supports plain assignment (`section.foo = "bar`) and multi-path awaitable
+     Supports plain assignment (`section.foo = "bar"`) and multi-path awaitable
      (`await section.set(foo="bar", **options)`).
      Iterating yields fields through (name, value).
      Supports dict operators OR and IN: `if field in (section1 | section2)`.
@@ -254,10 +254,8 @@ class ConfigSection(BaseModel):
         Use this instead if you want to update multiple fields at once and
         wait until all observers are notified. Notifying can raise exceptions.
         """
-        # List of (ascendant, path), containing each parent that needs
-        # to be notified and the path of that notification.
-        # Ex:  api_config.update(model="x", url="y")
-        #  -> [(api_config, "model"), (root, "api.model"), (api_config, "url"), (root, "api.url")]
+        # Each path resolves to the section that holds it, and to the leaf's
+        #  name there, so a write is notified through whatever section has observers.
         fields_to_change = fields
         if args:
             if len(args) == 2:
@@ -281,7 +279,11 @@ class ConfigSection(BaseModel):
             await self._notify_relatives_async(*changes)
 
     def _set(self, name: str, value: Any) -> Any:
-        """Writes `self.name=value` only if `value` changed. Returns the previous value."""
+        """Writes `self.name = value` and returns the previous value.
+
+        A name this section doesn't hold raises `PathNotFound`; whether the new
+        value differs is the caller's question.
+        """
         try:
             before = self[name]
         except KeyError as error:
@@ -299,7 +301,7 @@ class ConfigSection(BaseModel):
         # self._mark_ancestors_as_set()
         # return True
 
-    # TODO: review need and usage across project. Remove the *args so any users expecting a default break loudly
+    # TODO: review need and usage across project, replace with [] where it makes sense
     def get(self, path: str, *, as_json: bool = False) -> Any:
         """
         Find a config field given its path.
@@ -318,13 +320,11 @@ class ConfigSection(BaseModel):
     @classmethod
     def _cli_flags_from_schema(cls, *paths) -> dict[str, list[CliFlags]]:
         """
-        Finds all CLI shortcut flags for a config root, returns a mapping of  maps their paths to their CLI flags.
-        :return Mapping of each field's path to their CLI shortcut flags.
+        Finds every `CliFlags` declared under this section, mapped by field path.
+        :return Mapping of each field's path to its CLI shortcut flags.
         :raises ValueError if 2 fields declare the same shortcut.
         """
         # Generator for fields to check for flags
-        # TODO: this uses model_fields, which doesn't understand paths.
-        #  Add a method to get schema by path
         fields = (
             ((path, cls.get_schema(path)) for path in paths)
             if paths
@@ -332,7 +332,7 @@ class ConfigSection(BaseModel):
         )
         path_to_flags: dict[str, list[CliFlags]] = {}
         claimed_by: dict[str, str] = {}
-        # `skip_excluded_fields=False`, un-exported fields can still declare CLI shortcuts
+        # A field excluded from exports can still declare CLI shortcuts
         for path, field_info in fields:
             all_cli_flags = [
                 flags for flags in field_info.metadata
@@ -361,8 +361,8 @@ class ConfigSection(BaseModel):
 
     def _notify(self, *changes: ConfigChange) -> tuple[list[Awaitable], list[Exception]]:
         """
-        Calls every observer that should hear about changes at `paths`,
-        above and below self, from root to each changed path's owner.
+        Calls every observer that should hear about each change, above and
+        below self, from root to each changed path's owner.
 
         Runs sync observer handlers, returns async ones plus the failures found.
         """
@@ -532,5 +532,5 @@ def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:
     return isinstance(cls, type) and issubclass(cls, ConfigSection)
 
 
-# An async callback (config, changed_paths) — registered via @config.on_change.
+# A config observer: (section, the changes it hears about), sync or async.
 ConfigObserver = Callable[[ConfigSection, tuple[ConfigChange, ...]], Awaitable[None] | None]

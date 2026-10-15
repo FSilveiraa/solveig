@@ -31,8 +31,9 @@ def save_config(data: dict, path: str | PathLike) -> None:
 
 
 class ConfigFileSource(PydanticBaseSettingsSource):
-    """A pydantic-settings class modeling one config file passed through `--config FILE`.
-    Resolved paths get loaded by pydantic-settings and stored in `config.config_files`."""
+    """A pydantic-settings source for the files named by `--config FILE` (repeatable).
+    They are read and merged in the order given, the last file winning, and the
+    resolved paths are stored in the `config_files` field."""
 
     config: ConfigDict
 
@@ -44,7 +45,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
         super().__init__(settings_cls)
         self._field_name = field_name
 
-    # pydantic base-class override
+    # pydantic-settings base-class override
     def get_field_value(self, field, field_name):
         return None, "", False
 
@@ -54,7 +55,7 @@ class ConfigFileSource(PydanticBaseSettingsSource):
         # `current_state` holds what every higher-priority source produced,
         #  already merged in priority order
         found_paths = self.current_state.get(self._field_name)
-        # Non-default paths (code, CLI flags , env vars) are required to exist
+        # Non-default paths (code, CLI flags, env vars) are required to exist
         required = found_paths is not None
         if found_paths is None:
             found_paths = self.config["default_config_files"]
