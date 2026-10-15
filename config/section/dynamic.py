@@ -62,14 +62,45 @@ class DynamicSection[T](ConfigSection):
     def __init_subclass__(
         cls, *, force_preserve_extra: bool | None = None, **kwargs: Any
     ) -> None:
+        """Decide the entry type, and absorb the `force_preserve_extra` keyword.
+
+        Runs while the section's pydantic model is being built, which is the only
+        moment a change to its entry type is read.
+        """
         super().__init_subclass__(**kwargs)
         if force_preserve_extra is not None:
             cls.force_preserve_extra = force_preserve_extra
+        # If `T` is a pydantic model, and we want to force it to allow extra fields,
+        #  (to allow entries typed after subclasses of `T`) then rebuild `T` with `extra="allow"`
+        # NOTE: `cls.__dict__` asks whether THIS class declares the flag. The plain
+        #  attribute would also be true for a section that inherits it, and
+        #  that section would then rebuild an already-rebuilt type
+        #  (`ToolConfig_Preserving_Preserving`).
+        if _is_pydantic_model(cls._entry_type) and cls.__dict__.get("force_preserve_extra"):
+            cls._entry_type = create_model(
+                f"{cls._entry_type.__name__}_Preserving",
+                __base__=cls._entry_type,
+                __config__=ConfigDict(extra="allow"),
+            )
+            # The entry type of this section. pydantic reads this line while it
+            #  finishes building the model, so it has to be written here; the same
+            #  write from `__pydantic_init_subclass__` arrives too late for this
+            #  class (and is still the one the sections built after it inherit).
+            cls.__annotations__["__pydantic_extra__"] = GenericAlias(
+                dict,
+                (str, cls._entry_type)
+            )
 
     @override
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        """Enforce type for `model_extra` entries from the class parameter."""
+        """
+        Runs after the section's pydantic model is built.
+
+        Captures `T` from `DynamicSection[T]`, then publishes the entry type that
+        sections built after this one inherit. This class's own entry type was already
+        decided in `__init_subclass__`, while it was still being built.
+        """
         super().__pydantic_init_subclass__(**kwargs)
 
         # If we got here through `DynamicSection[T]` with `T` being an actual class,
@@ -79,16 +110,6 @@ class DynamicSection[T](ConfigSection):
                 and not isinstance(class_args[0], TypeVar)
             ):
                 cls._entry_type = class_args[0]
-        # If `T` is a pydantic model, and we want to force it to allow extra fields,
-        #  (to allow entries typed after subclasses of `T`) then rebuild `T` with `extra="allow"`
-        # HACK: there are reasons I don't understand why `cls.__dict__.get("thing)"`
-        # is necessary over `cls.thing`, they have to do with using a literal `T` TypeVar
-        if _is_pydantic_model(cls._entry_type) and cls.__dict__.get("force_preserve_extra"):
-            cls._entry_type = create_model(
-                f"{cls._entry_type.__name__}_Preserving",
-                __base__=cls._entry_type,
-                __config__=ConfigDict(extra="allow"),
-            )
 
         # `dict[str, parameter_type]` fails with "Parameters to generic
         #  types must be types", this evaluates to the same
