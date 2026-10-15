@@ -269,8 +269,9 @@ class ConfigSection(BaseModel):
         """Writes `self.name=value` only if `value` changed. Returns the previous value."""
         try:
             before = self[name]
-        except KeyError:
-            return None
+        except KeyError as error:
+            # If `name` doesn't already exist on a static section, it's not settable
+            raise PathNotFound(type(self), name) from error
         else:
             super().__setattr__(name, value)
             self._mark_ancestors_as_set()

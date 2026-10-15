@@ -237,21 +237,36 @@ class DynamicSection[T](ConfigSection):
         On a section whose types arrive later, a resolved entry's own class
         types the value, and a name without a type keeps its value as written.
         """
-        if not self._types_resolved_later or name in type(self).model_fields:
+        # 1. A declared field
+        if name in type(self).model_fields:
             return super()._set(name, value)
+
+        # 2. An entry that already exists: its own class types the value
         entries = self.model_extra or {}
         if name in entries:
             entry_type = type(entries[name])
             # NOTE: `type()` of a value from a parametrized container only gives
-            #  the container: a `tuple[int, ...]` entry is checked as a `tuple`,
-            #  not its items. The next `set_type()` rebuilds it with the full type.
+            #  the container; a `tuple[int, ...]` entry is checked as a `tuple`,
+            #  not its items.
             if not isinstance(value, entry_type):
                 value = TypeAdapter(entry_type).validate_python(value)
             return super()._set(name, value)
-        # NOTE: this returns a `before` for an unresolved type,
-        #  not sure that this should trigger observer notifications.
-        before = self._unresolved.get(name)
-        self._unresolved[name] = value
+
+        # 3. If the entry type isn't a model, update `unresolved`
+        if not _is_pydantic_model(self._entry_type):
+            before = self._unresolved.get(name)
+            self._unresolved[name] = value
+            self._mark_ancestors_as_set()
+            return before
+
+        # 4. An unresolved pydantic model
+        entry = TypeAdapter(self._entry_type).validate_python(value)
+        before = self._unresolved.pop(name, None)
+        # `BaseModel.__setattr__` on purpose: it re-runs `validate_assignment`, which is
+        #  what stamps the entry's `_name` through `_bind` and what puts the name into
+        #  `__pydantic_fields_set__` so `/config save` keeps it. Through
+        #  `self.__setattr__` it would route straight back into this method.
+        BaseModel.__setattr__(self, name, entry)
         self._mark_ancestors_as_set()
         return before
 
