@@ -9,6 +9,7 @@ from pydantic import (
     ConfigDict,
     PrivateAttr,
     TypeAdapter,
+    ValidationError,
     create_model,
     model_serializer,
     model_validator,
@@ -16,7 +17,7 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 
 from ..changes import Created, Deleted, Updated
-from ..exceptions import PathNotFound
+from ..exceptions import EntryRequiresData, PathNotFound
 from .static import _MUTABLE, ConfigSection
 
 # Like _MUTABLE, but the section accepts keys it does not declare. A dynamic
@@ -33,8 +34,11 @@ class DynamicSection[T](ConfigSection):
 
     The section expects each entry to be an instance of `T` and will
     try to instantiate it as such as soon as data is available. Data
-    `T` can't hold raises; a parameter that isn't a model has nothing
-    to instantiate with, so entries wait in `_unresolved` as written.
+    `T` refuses raises a `ValidationError`; data that carries no value
+    for a field `T` declares with no default raises `EntryRequiresData`,
+    so a caller can tell "never given" from "given and wrong". A
+    parameter that isn't a model has nothing to instantiate with, so
+    entries wait in `_unresolved` as written.
 
     If `T` is a pydantic BaseModel, then validation will reject fields
     not present in `T`'s schema unless `T` has `extra="allow"` in its
@@ -91,14 +95,22 @@ class DynamicSection[T](ConfigSection):
         if _is_pydantic_model(cls._entry_type) and cls.__dict__.get(
             "force_preserve_extra"
         ):
-            cls._entry_type = create_model(
-                f"{cls._entry_type.__name__}_Preserving",
-                __base__=cls._entry_type,
-                __config__=ConfigDict(extra="allow"),
-            )
+            # A type that already allows extras needs no copy: the copy's only job is
+            #  to let a surplus dict through, and this type lets it through already.
+            #  Rebuilding it would add a second class with a synthetic name, visible
+            #  in reprs and validation errors, for exactly the same behaviour.
+            if cls._entry_type.model_config.get("extra") != "allow":
+                cls._entry_type = create_model(
+                    f"{cls._entry_type.__name__}_Preserving",
+                    __base__=cls._entry_type,
+                    __config__=ConfigDict(extra="allow"),
+                )
             # The entry type of this section. pydantic reads this line while it is
             #  still building the model, and never looks at the value again — a write
             #  from `__pydantic_init_subclass__` is too late to be read at all.
+            # NOTE: the union collapses to `T` itself when no copy was needed, and
+            #  that is what the permissive `T` accepts: a surplus dict and a subclass
+            #  of `T` are both `T` there.
             cls.__annotations__["__pydantic_extra__"] = GenericAlias(
                 dict, (str, cls._entry_type | cls._declared_entry_type)
             )
@@ -164,6 +176,11 @@ class DynamicSection[T](ConfigSection):
         model's own defaults. Entries already of this type are kept, not rebuilt -
         it wouldn't really do anything meaningful and replacing a section would
         clear its observers.
+
+        Raises `EntryRequiresData` when the data available carries no value for a
+        field `model` declares with no default, and `ValidationError` when the data
+        is there and `model` refuses it. Either way the section is left as it was,
+        so the caller decides whether the entry can simply wait for data.
         """
         current = (self.model_extra or {}).get(name)
         if current is not None and type(current) is model:
@@ -191,7 +208,17 @@ class DynamicSection[T](ConfigSection):
             raise PathNotFound(type(self), name)
         # Build the entry before removing what it replaces: a model that refuses
         #  the data has to leave the section exactly as it was.
-        new_entry = TypeAdapter(model).validate_python(data)
+        try:
+            new_entry = TypeAdapter(model).validate_python(data)
+        except ValidationError as error:
+            # A field with no default that the data doesn't carry is a type this
+            #  data cannot build, and a caller is allowed to decide what that
+            #  means; a value the type actually refuses is the data's own error
+            #  and stays a ValidationError.
+            missing_fields = _missing_fields(error)
+            if not missing_fields:
+                raise
+            raise EntryRequiresData(model, name, missing_fields) from error
         if current is not None:
             BaseModel.__delattr__(self, name)
         else:
@@ -314,3 +341,16 @@ class DynamicSection[T](ConfigSection):
 
 def _is_pydantic_model(t: Any) -> bool:
     return isinstance(t, type) and issubclass(t, BaseModel)
+
+
+def _missing_fields(error: ValidationError) -> list[str]:
+    """Dotted names of fields the data didn't carry, when that is all that's wrong.
+
+    A model that refuses a value it was given is a different failure from a model
+    that was given nothing for a field: the first belongs to the data, the second
+    is an entry waiting for data its caller may not have. Empty means the first.
+    """
+    errors = error.errors()
+    if not errors or any(item["type"] != "missing" for item in errors):
+        return []
+    return [".".join(str(part) for part in item["loc"]) for item in errors]
