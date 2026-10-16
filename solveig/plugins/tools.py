@@ -10,7 +10,7 @@ PLUGIN_TOOLS is the current list of known plugin tools.
 from collections.abc import Callable
 from typing import Any, overload
 
-from solveig.plugins.discovery import PLUGIN_TARGETS
+from solveig.plugins.discovery import PENDING_NOTIFICATIONS, PLUGIN_TARGETS
 from solveig.tools.base import BaseTool, tool_from_callable
 from solveig.tools.config import ToolConfig
 
@@ -45,10 +45,18 @@ def tool(entry=None, *, config_model=None):
         if (plugins_config := PLUGIN_TARGETS.get()) is None:
             # NOTE: this can't happen, and it's an example of why
             # PLUGIN_TARGETS may be a bad design
-            raise RuntimeError(f"{tool_class.tool_name()!r} declared outside a plugin scan")
+            raise RuntimeError(
+                f"{tool_class.tool_name()!r} declared outside a plugin scan"
+            )
         else:
-            # Type `my_tool: MyToolConfig` in the plugin tools config
-            plugins_config.tools.set_type(tool_class.tool_name(), tool_class.config_model)
+            # Type `my_tool: MyToolConfig` in the plugin tools config. The typing
+            #  may reach async observers, which an import cannot await, so the
+            #  coroutines land in `PENDING_NOTIFICATIONS` for the scan to drain.
+            PENDING_NOTIFICATIONS.extend(
+                plugins_config.tools.set_type(
+                    tool_class.tool_name(), tool_class.config_model
+                )
+            )
         return tool_class
 
     return register(entry) if entry is not None else register

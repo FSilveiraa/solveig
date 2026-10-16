@@ -12,11 +12,7 @@ from pydantic.fields import FieldInfo
 
 from ..annotations.cli_flags import CliFlags
 from ..changes import ConfigChange, Created, Deleted, Updated
-from ..exceptions import NotASection, PathNotFound
-
-# Notification tasks in flight. A task is only weakly held by the loop, so
-#  without a strong reference here a notification can be collected mid-await.
-_NOTIFICATIONS_IN_COURSE: set[asyncio.Future] = set()
+from ..exceptions import AsyncObserversNotCalled, NotASection, PathNotFound
 
 # Model configs used by pydantic to inform model validation.
 # Forces model re-validation on re-assignment and allows arbitrary types.
@@ -127,14 +123,35 @@ class ConfigSection(BaseModel):
         def __setattr__(self, name: str, value: Any) -> None:
             """Plain assignment (`config.api.model = "x"`).
 
-            Notifies observers through background tasks.
-            NOTE: no current way to cancel notification tasks.
+            Refuses before applying when the change would reach an async observer,
+            because a plain assignment can neither run nor return one: write this
+            path with `set` and await what it returns, or `set_and_wait`.
             """
             if name in self.__private_attributes__:
                 super().__setattr__(name, value)
                 return
 
             was_present = name in self
+            # A write that changes nothing notifies nobody, so it never refuses.
+            #  Exact for fields and built entries; a raw dict that would build into
+            #  the same entry still asks, and errs loud.
+            if not was_present or self[name] != value:
+                # The walk reads only the change's path, so these are the written
+                #  values, not the entry they would build into.
+                change = (
+                    Updated(path=name, before=self[name], after=value)
+                    if was_present
+                    else Created(path=name, value=value)
+                )
+                reached = [
+                    handler
+                    for _section, handler, _paths in self._observers_for(change)
+                    if inspect.iscoroutinefunction(handler)
+                ]
+                if reached:
+                    raise AsyncObserversNotCalled(
+                        name, [getattr(h, "__name__", repr(h)) for h in reached]
+                    )
             before = self._set(name, value)
             # What the section holds now, which is not always what was written: a
             #  dynamic entry is built from the value, a validated field is coerced.
@@ -143,11 +160,22 @@ class ConfigSection(BaseModel):
             if before != after:
                 # A name that was already there is an update; one that was not is a
                 #  creation, and its observer needs the entry that was built.
-                self._notify_relatives_sync(
+                async_callbacks = self._notify(
                     Updated(path=name, before=before, after=after)
                     if was_present
                     else Created(path=name, value=after)
                 )
+                if async_callbacks:
+                    # The pre-check approved this write on the promise that no async
+                    #  observer would hear it; one registered itself mid-notification.
+                    for awaitable in async_callbacks:
+                        if inspect.iscoroutine(awaitable):
+                            awaitable.close()
+                    raise AsyncObserversNotCalled(
+                        name,
+                        [getattr(a, "__name__", repr(a)) for a in async_callbacks],
+                        applied=True,
+                    )
 
     # `model_extra` will be None for static sections, available for dynamic ones.
     # I could have made an override in DynamicSection, but this isn't worse design.
@@ -248,14 +276,14 @@ class ConfigSection(BaseModel):
                 fields[path] = field_info.description or path
         return fields
 
-    async def set(self, *args, **fields: Any) -> None:
+    def set(self, *args, **fields: Any) -> list[Awaitable]:
         """
-        Async writing that holds/raises until observers are notified.
+        Write dotted paths and call the sync observers; returns the async
+        observers' coroutines for the caller to await.
 
-        `await config.api.set(model="x", url="y")`.
-
-        Use this instead if you want to update multiple fields at once and
-        wait until all observers are notified. Notifying can raise exceptions.
+        `config.api.set(model="x", url="y")` — await what it returns to also run
+        the async observers, or `await config.api.set_and_wait(model="x")` to have
+        that done for you. Notifying can raise exceptions.
         """
         # Each path resolves to the section that holds it, and to the leaf's
         #  name there, so a write is notified through whatever section has observers.
@@ -281,8 +309,27 @@ class ConfigSection(BaseModel):
                     if was_present
                     else Created(path=path, value=after)
                 )
-        if changes:
-            await self._notify_relatives_async(*changes)
+        return self._notify(*changes)
+
+    async def set_and_wait(self, *args, **fields: Any) -> None:
+        """
+        `set`, and also run the async observers it returns.
+
+        The one async surface of this library: every other writer is sync and
+        hands the async observers back to the caller.
+        """
+        pending = self.set(*args, **fields)
+        if not pending:
+            return
+        failures: list[Exception] = []
+        for result in await asyncio.gather(*pending, return_exceptions=True):
+            if isinstance(result, Exception):
+                failures.append(result)
+            # Cancellation or similar: propagate, don't collect
+            elif isinstance(result, BaseException):
+                raise result
+        if failures:
+            raise ExceptionGroup("Config observers failed", failures)
 
     def _set(self, name: str, value: Any) -> Any:
         """Writes `self.name = value` and returns the previous value.
@@ -366,14 +413,15 @@ class ConfigSection(BaseModel):
 
         return path_to_flags
 
-    def _notify(
+    def _observers_for(
         self, *changes: ConfigChange
-    ) -> tuple[list[Awaitable], list[Exception]]:
+    ) -> list[tuple[ConfigSection, ConfigObserver, tuple[ConfigChange, ...]]]:
         """
-        Calls every observer that should hear about each change, above and
+        Every (section, observer, changes) triple these changes reach, above and
         below self, from root to each changed path's owner.
 
-        Runs sync observer handlers, returns async ones plus the failures found.
+        Pure: it calls nothing, so a writer can ask who would hear a change
+        before applying it.
         """
         # Who needs notifications about what. Maps a section's python ID to itself
         # and the dict of path->ConfigChange for that section.
@@ -405,9 +453,7 @@ class ConfigSection(BaseModel):
                     change, path=path_from_leaf_to_parent
                 )
 
-        # Call sync observers, keep awaitables for async ones plus failures
-        pending: list[Awaitable] = []
-        failures: list[Exception] = []
+        listeners = []
         for section, changes_by_path in to_notify.values():
             # NOTE: iterates a copy, an observer may register another observer
             for handler, observer_paths in list(section._observers):
@@ -432,56 +478,33 @@ class ConfigSection(BaseModel):
                 )
                 if not paths_to_notify:
                     continue
-                # NOTE: observers are isolated, a failing one doesn't stop the rest
-                try:
-                    result = handler(section, tuple(paths_to_notify))
-                except Exception as error:  # noqa: BLE001
-                    failures.append(error)
-                    continue
-                # An async observer hands back its work instead of doing it
-                if inspect.isawaitable(result):
-                    pending.append(result)
-        return pending, failures
+                listeners.append((section, handler, tuple(paths_to_notify)))
+        return listeners
 
-    def _notify_relatives_sync(self, *changes: ConfigChange) -> None:
-        """Call all sync observers, schedule async observers as background tasks."""
-        pending, failures = self._notify(*changes)
-        if pending:
-            # NOTE: the only place a plain assignment needs an event loop, and
-            #  only when an async observer is listening. Checked here rather than
-            #  on registration: a loop may only start after the config is built.
+    def _notify(self, *changes: ConfigChange) -> list[Awaitable]:
+        """
+        Call the sync observers of these changes and collect the async ones.
+
+        Returns the async observers' coroutines, for a caller that can carry them
+        to await; raises `ExceptionGroup("Config observers failed", ...)` when a
+        sync observer raised. An observer that must be awaited is `async def`.
+        """
+        pending_async: list[Awaitable] = []
+        failures: list[Exception] = []
+        for section, handler, paths in self._observers_for(*changes):
+            # NOTE: observers are isolated, a failing one doesn't stop the rest
+            if inspect.iscoroutinefunction(handler):
+                # Calling an async handler only builds the coroutine; its body
+                #  runs when the caller awaits it.
+                pending_async.append(handler(section, paths))
+                continue
             try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                # Close the observers' coroutines, which can no longer run,
-                #  so Python doesn't also warn they were never awaited
-                for awaitable in pending:
-                    if inspect.iscoroutine(awaitable):
-                        awaitable.close()
-                failures.append(
-                    RuntimeError(
-                        f"Async observers of {', '.join(map(repr, changes))} need a running "
-                        "event loop. Use sync observers, or `await section.set(...)`."
-                    )
-                )
-            else:
-                notifications = asyncio.gather(*pending)
-                _NOTIFICATIONS_IN_COURSE.add(notifications)
-                notifications.add_done_callback(_NOTIFICATIONS_IN_COURSE.discard)
+                handler(section, paths)
+            except Exception as error:  # noqa: BLE001
+                failures.append(error)
         if failures:
             raise ExceptionGroup("Config observers failed", failures)
-
-    async def _notify_relatives_async(self, *changes: ConfigChange) -> None:
-        """Call all observers, await async ones."""
-        pending, failures = self._notify(*changes)
-        for result in await asyncio.gather(*pending, return_exceptions=True):
-            if isinstance(result, Exception):
-                failures.append(result)
-            # Cancellation or similar: propagate, don't collect
-            elif isinstance(result, BaseException):
-                raise result
-        if failures:
-            raise ExceptionGroup("Config observers failed", failures)
+        return pending_async
 
     def _mark_ancestors_as_set(self):
         """
@@ -550,16 +573,40 @@ class ConfigSection(BaseModel):
         if name in self.__private_attributes__:
             super().__delattr__(name)
         else:
+            if name in self:
+                # Ask before deleting, so a refusal leaves the entry in place.
+                reached = [
+                    handler
+                    for _section, handler, _paths in self._observers_for(
+                        Deleted(path=name, value=self[name])
+                    )
+                    if inspect.iscoroutinefunction(handler)
+                ]
+                if reached:
+                    raise AsyncObserversNotCalled(
+                        name, [getattr(h, "__name__", repr(h)) for h in reached]
+                    )
             value = self._delete(name)
-            self._notify_relatives_sync(Deleted(path=name, value=value))
+            async_callbacks = self._notify(Deleted(path=name, value=value))
+            if async_callbacks:
+                # Only an observer registering another one mid-notification
+                #  can get here; the deletion already happened.
+                for awaitable in async_callbacks:
+                    if inspect.iscoroutine(awaitable):
+                        awaitable.close()
+                raise AsyncObserversNotCalled(
+                    name,
+                    [getattr(a, "__name__", repr(a)) for a in async_callbacks],
+                    applied=True,
+                )
 
-    async def unset(self, *paths: str) -> None:
+    def unset(self, *paths: str) -> list[Awaitable]:
         changes = []
         for path in paths:
             section, leaf_name, _ = self.leaf_parent_name_and_schema(path)
             value = section._delete(leaf_name)
             changes.append(Deleted(path=path, value=value))
-        await self._notify_relatives_async(*changes)
+        return self._notify(*changes)
 
 
 def _is_section(cls: Any) -> TypeIs[type[ConfigSection]]:

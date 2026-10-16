@@ -204,7 +204,7 @@ class WireClient:
             case protocol.ConfigUpdate():
                 # TODO: how to fix this one without config.set()?
                 for path, value in frame.updates.items():
-                    await self.interface.config.set(path, value)
+                    await self.interface.config.set_and_wait(path, value)
 
     def _target(self, frame: protocol.ServerFrame) -> SolveigInterface:
         """The interface a frame draws into: its group's scope, or the root."""

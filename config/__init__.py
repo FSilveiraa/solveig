@@ -25,7 +25,12 @@ from .annotations import (
 )
 from .changes import ConfigChange, Created, Deleted, Updated
 from .config import Config
-from .exceptions import EntryRequiresData, NotASection, PathNotFound
+from .exceptions import (
+    AsyncObserversNotCalled,
+    EntryRequiresData,
+    NotASection,
+    PathNotFound,
+)
 from .meta import ConfigDict
 from .section.dynamic import DynamicSection
 from .section.static import ConfigSection
@@ -46,6 +51,7 @@ __all__ = [
     "PathNotFound",
     "NotASection",
     "EntryRequiresData",
+    "AsyncObserversNotCalled",
     "FILE_EXTENSIONS",
     "ConfigChange",
     "Updated",

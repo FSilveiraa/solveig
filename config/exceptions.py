@@ -45,3 +45,31 @@ class EntryRequiresData(ValueError):
             f"entry carries no value for {'them' if plural else 'it'}. Declare a "
             f"default, or let {'them' if plural else 'it'} accept absence."
         )
+
+
+class AsyncObserversNotCalled(RuntimeError):
+    """
+    At least one async observer was found when attempting to set a value in a
+    context that cannot return or call it (ex: `section[name]=value`).
+    """
+
+    def __init__(
+        self, path: str, callbacks: Sequence[str], applied: bool = False
+    ) -> None:
+        self.path = path
+        self.callbacks = list(callbacks)
+        if applied:
+            tail = (
+                "The change was applied and sync observers were notified; the async "
+                "observers were not called and will not run until the next change "
+                "to this path."
+            )
+        else:
+            tail = (
+                "Nothing was applied. Write this path with `section.set(...)` and "
+                "await what it returns, or `await section.set_and_wait(...)`."
+            )
+        super().__init__(
+            f"the {path!r} change reaches async observer(s) {', '.join(self.callbacks)}, "
+            f"which a plain assignment can neither run nor return. {tail}"
+        )

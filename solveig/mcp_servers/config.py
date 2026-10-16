@@ -161,5 +161,5 @@ class MCPConfig(DynamicSection[MCPServerConfig]):
         if not name:
             raise ValueError(f"MCP server name {name!r} for URL {url!r} is not a valid identifier.")
         if name not in self:
-            await self.set(name, MCPServerConfig(url=url))
+            self[name] = MCPServerConfig(url=url)
         return self[name]

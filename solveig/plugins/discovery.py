@@ -12,12 +12,13 @@ An `__init__` runs whenever anything under it is imported, so re-exporting here
 would put `plugins.tools` in front of `plugins.hooks` for every importer —
 including `orchestration`, which `plugins.tools` imports back for `@tool`.
 """
+
 import importlib
 import os
 import pkgutil
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
@@ -50,6 +51,9 @@ class ScanResult:
 
     errors: list[str] = field(default_factory=list)
     collisions: list[str] = field(default_factory=list)
+    # The async observers' coroutines the scan's config writes reached. An import
+    #  cannot await them, so the scan collects and its async caller gathers.
+    pending: list[Awaitable] = field(default_factory=list)
 
 
 #: Fired once per scan, after the registries are refilled. Plain callables, so
@@ -64,13 +68,20 @@ class ScanResult:
 #: 200 hooks - and the registry could not stop a subscriber holding it wrong.
 ON_SCANNED: list[Callable[[], None]] = []
 
-PLUGIN_TARGETS: ContextVar[PluginsConfig | None] = ContextVar("plugin_scan_targets", default=None)
+PLUGIN_TARGETS: ContextVar[PluginsConfig | None] = ContextVar(
+    "plugin_scan_targets", default=None
+)
+
+# The async observers' coroutines that declarations produced while the scan ran.
+#  A decorator fires inside the plugin module's import, where nothing can be
+#  awaited, so `set_type`'s return lands here and `rescan_and_load_plugins`
+#  drains it into the `ScanResult` its async caller gathers.
+PENDING_NOTIFICATIONS: list[Awaitable] = []
 
 
 def rescan_and_load_plugins(
-        plugins_config: PluginsConfig,
-        plugin_module_path: str = "solveig.plugins.library"
-) -> tuple[int, int, list[str], set[str] | None]:
+    plugins_config: PluginsConfig, plugin_module_path: str = "solveig.plugins.library"
+) -> tuple[int, int, list[str], set[str] | None, list[Awaitable]]:
     # 1. Add external plugin dirs to the process context so the scan can find them
     import solveig.plugins.library as library
 
@@ -93,12 +104,17 @@ def rescan_and_load_plugins(
     except (ImportError, FileNotFoundError):
         # Return the found paths as None to differentiate "path does not exit"
         #  from "nothing was found inside this path"
-        return 0, 0, [f"Plugin discovery path not found: {plugin_module_path}"], None
+        return (
+            0,
+            0,
+            [f"Plugin discovery path not found: {plugin_module_path}"],
+            None,
+            [],
+        )
 
     # 3. Find all relevant modules already in memory.
     in_memory_modules = {
-        name for name in sys.modules
-        if name.startswith(f"{plugin_module_path}.")
+        name for name in sys.modules if name.startswith(f"{plugin_module_path}.")
     }
 
     # 4. Remove any modules from memory that are no longer on disk.
@@ -120,13 +136,16 @@ def rescan_and_load_plugins(
                     importlib.import_module(module_name)
                 succeeded += 1
             except Exception as e:
-                errors.append(f"Failed to load or reload plugin module {module_name}: {e}")
+                errors.append(
+                    f"Failed to load or reload plugin module {module_name}: {e}"
+                )
                 failed += 1
     finally:
         PLUGIN_TARGETS.reset(token)
 
-    return succeeded, failed, errors, on_disk_modules
-
+    pending = PENDING_NOTIFICATIONS.copy()
+    PENDING_NOTIFICATIONS.clear()
+    return succeeded, failed, errors, on_disk_modules, pending
 
 
 def discover_plugins(plugins_config: PluginsConfig) -> ScanResult:
@@ -160,9 +179,13 @@ def discover_plugins(plugins_config: PluginsConfig) -> ScanResult:
     # listening yet.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _succeeded, _failed, errors, on_disk_modules = rescan_and_load_plugins(plugins_config)
+        _succeeded, _failed, errors, on_disk_modules, scan_pending = (
+            rescan_and_load_plugins(plugins_config)
+        )
 
-    scan = ScanResult(errors=errors, collisions=[str(w.message) for w in caught])
+    scan = ScanResult(
+        errors=errors, collisions=[str(w.message) for w in caught], pending=scan_pending
+    )
 
     # An entry whose file is gone keeps its value and loses its type.
     # `tool_class` is the class the plugin file defined, so its `__module__`
@@ -172,9 +195,13 @@ def discover_plugins(plugins_config: PluginsConfig) -> ScanResult:
     # NOTE: wrap the dict iteration in a list since we call `remove_type`
     #  which alters the thing being iterated
     if on_disk_modules is not None:
-        for name, entry in list((plugins_config.tools.model_extra or {}).items()):
-            if entry.tool_class.__module__ not in on_disk_modules:
-                plugins_config.tools.remove_type(name)
+        gone = [
+            name
+            for name, entry in list((plugins_config.tools.model_extra or {}).items())
+            if entry.tool_class.__module__ not in on_disk_modules
+        ]
+        if gone:
+            scan.pending.extend(plugins_config.tools.remove_type(*gone))
 
     # Whatever derives from the plugin set updates itself now, before anything
     # can read a stale derivation. The config schema is the one that matters:
@@ -206,7 +233,9 @@ async def report_plugins(
         async with group.with_group("Tools") as tools_group:
             for tool_name, tool_config in sorted(plugins_config.tools):
                 if tool_config.enabled:
-                    await tools_group.print(f"'{tool_name}': loaded", level=Level.SUCCESS)
+                    await tools_group.print(
+                        f"'{tool_name}': loaded", level=Level.SUCCESS
+                    )
                 else:
                     await tools_group.print(
                         f"'{tool_name}': loaded (disabled)", level=Level.INFO
@@ -223,7 +252,9 @@ async def report_plugins(
         async with group.with_group("Hooks") as hooks_group:
             for hook_name, hook_config in sorted(plugins_config.hooks):
                 if hook_config.enabled:
-                    await hooks_group.print(f"'{hook_name}': loaded", level=Level.SUCCESS)
+                    await hooks_group.print(
+                        f"'{hook_name}': loaded", level=Level.SUCCESS
+                    )
                 else:
                     await hooks_group.print(
                         f"'{hook_name}': loaded (disabled)", level=Level.INFO

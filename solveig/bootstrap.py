@@ -12,7 +12,9 @@ those models to the plugin sections.
 
 from __future__ import annotations
 
+import asyncio
 import warnings
+from collections.abc import Awaitable
 
 from config import ConfigChange, ConfigSection, Created, Deleted, Updated
 from solveig.config import SolveigConfig
@@ -40,11 +42,13 @@ async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> 
     would buy nothing a full rescan doesn't already give.
     """
     scan = discover_plugins(config.plugins)
-    compose_hook_section(config)
+    pending = [*compose_hook_section(config), *scan.pending]
+    if pending:
+        await asyncio.gather(*pending)
     await report_plugins(config.plugins, interface, scan)
 
 
-def compose_hook_section(config: SolveigConfig) -> None:
+def compose_hook_section(config: SolveigConfig) -> list[Awaitable]:
     """Give `plugins.hooks` the types the discovered hooks provide.
 
     The private step of `reload_plugins`, so `discover_plugins` has already run —
@@ -53,15 +57,20 @@ def compose_hook_section(config: SolveigConfig) -> None:
     whose file is gone. Hooks are the other way round — they stay plain
     callables in `HOOKS`, and `hooks_config_map` is what says which of them exist.
 
+    Returns the async observers' coroutines the re-typing reaches, for the async
+    caller to gather.
+
     NOTE: it lives here, above config and plugins both, because config must not
     import the plugin packages to learn what fills its own sections.
     """
+    pending: list[Awaitable] = []
     live_hooks = hooks_config_map()
-    for hook_name, hook_model in live_hooks.items():
-        config.plugins.hooks.set_type(hook_name, hook_model)
-    for hook_name, _ in list(config.plugins.hooks):
-        if hook_name not in live_hooks:
-            config.plugins.hooks.remove_type(hook_name)
+    # One notification for the whole re-type, like `set` gives a batch of writes.
+    pending.extend(config.plugins.hooks.set_type(**dict(live_hooks)))
+    gone = [name for name, _ in list(config.plugins.hooks) if name not in live_hooks]
+    if gone:
+        pending.extend(config.plugins.hooks.remove_type(*gone))
+    return pending
 
 
 def register_config_stat(
@@ -87,7 +96,7 @@ def register_config_stat(
             new_value = await prompt_for_field(path, config, interface)
         except UserCancel:
             return
-        await config.set(**{path: new_value})
+        await config.set_and_wait(**{path: new_value})
 
     stat = interface.add_stat(label, read=lambda: config.get(path), on_click=edit)
 

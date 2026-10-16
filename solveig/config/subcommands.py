@@ -124,7 +124,7 @@ async def config_set(
     else:
         new_value = " ".join(value)
 
-    await config.set(**{field_name: new_value})
+    await config.set_and_wait(**{field_name: new_value})
 
 
 @subcommand("/config save", section="config", detail=True)

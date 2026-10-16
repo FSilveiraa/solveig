@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+import asyncio
+from collections.abc import Awaitable, Iterator
 from types import GenericAlias
 from typing import Any, ClassVar, TypeVar, override
 
@@ -16,7 +17,7 @@ from pydantic import (
 )
 from pydantic.fields import FieldInfo
 
-from ..changes import Created, Deleted, Updated
+from ..changes import ConfigChange, Created, Deleted, Updated
 from ..exceptions import EntryRequiresData, PathNotFound
 from .static import _MUTABLE, ConfigSection
 
@@ -167,91 +168,126 @@ class DynamicSection[T](ConfigSection):
         """Write unresolved entries when serializing."""
         return {**self._unresolved, **handler(self)}
 
-    def set_type(self, name: str, model: Any) -> None:
+    def set_type(self, *args, **types: Any) -> list[Awaitable]:
         """
-        Give `self.name` a type `model`.
+        Give entries their types: `set_type(my_entry=MyModel)`, or
+        `set_type(my_entry, MyModel)` for a single one, mirroring `set`.
 
-        The new entry is built from the existing value for `name`: the entry it
+        Each new entry is built from the existing value for its name: the entry it
         already holds (re-serialized), else its data in `_unresolved`, else the
-        model's own defaults. Entries already of this type are kept, not rebuilt -
+        model's own defaults. Entries already of their type are kept, not rebuilt -
         it wouldn't really do anything meaningful and replacing a section would
-        clear its observers.
+        clear its observers. Notified once for the whole batch; returns the async
+        observers' coroutines for the caller to await.
 
-        Raises `EntryRequiresData` when the data available carries no value for a
-        field `model` declares with no default, and `ValidationError` when the data
-        is there and `model` refuses it. Either way the section is left as it was,
-        so the caller decides whether the entry can simply wait for data.
+        An entry the data cannot build raises `EntryRequiresData` when the data
+        carries no value for a field its model declares with no default, and
+        `ValidationError` when the data is there and the model refuses it. Either
+        way that entry is left as it was; entries earlier in the batch are already
+        applied, like a `set` whose later path fails.
         """
-        current = (self.model_extra or {}).get(name)
-        if current is not None and type(current) is model:
-            return  # Same type, don't rebuild so sections don't lose observers
+        types_to_set = types
+        if args:
+            if len(args) == 2:
+                types_to_set |= {args[0]: args[1]}
+            else:
+                raise ValueError(
+                    f"`set_type` expects exactly 2 or no positional arguments, found {len(args)}: {args}."
+                )
 
-        had_data = True
-        if current is not None:
-            # Different type for existing typed entry,
-            # serialize to data and rebuild
-            data = TypeAdapter(type(current)).dump_python(
-                current,
+        changes: list[ConfigChange] = []
+        for name, model in types_to_set.items():
+            current = (self.model_extra or {}).get(name)
+            if current is not None and type(current) is model:
+                continue  # Same type, don't rebuild so sections don't lose observers
+
+            had_data = True
+            if current is not None:
+                # Different type for existing typed entry,
+                # serialize to data and rebuild
+                data = TypeAdapter(type(current)).dump_python(
+                    current,
+                    mode="json",
+                    exclude_unset=True,
+                )
+            elif name in self._unresolved:
+                # New type for untyped entry, use data from `_unresolved`
+                data = self._unresolved[name]
+            elif isinstance(model, type) and issubclass(model, BaseModel):
+                # No data available, but the type is a pydantic model,
+                #  build it from defaults (empty args)
+                data = {}
+                had_data = False
+            else:
+                # Nothing matches `name`, raise
+                raise PathNotFound(type(self), name)
+            # Build the entry before removing what it replaces: a model that refuses
+            #  the data has to leave the section exactly as it was.
+            try:
+                new_entry = TypeAdapter(model).validate_python(data)
+            except ValidationError as error:
+                # A field with no default that the data doesn't carry is a type this
+                #  data cannot build, and a caller is allowed to decide what that
+                #  means; a value the type actually refuses is the data's own error
+                #  and stays a ValidationError.
+                missing_fields = _missing_fields(error)
+                if not missing_fields:
+                    raise
+                raise EntryRequiresData(model, name, missing_fields) from error
+            if current is not None:
+                BaseModel.__delattr__(self, name)
+            else:
+                self._unresolved.pop(name, None)
+            BaseModel.__setattr__(self, name, new_entry)
+
+            # If the new entry was built from model defaults, unmark it
+            #  as user-set after the __setattr__ marks it as set.
+            if not had_data:
+                self.__pydantic_fields_set__.discard(name)  # a default is not user-set
+
+            changes.append(
+                Created(path=name, value=new_entry)
+                if current is None
+                else Updated(path=name, before=current, after=new_entry)
+            )
+        return self._notify(*changes)
+
+    async def set_type_and_wait(self, *args, **types: Any) -> None:
+        """
+        `set_type`, and also run the async observers it returns.
+        """
+        pending = self.set_type(*args, **types)
+        if not pending:
+            return
+        failures: list[Exception] = []
+        for result in await asyncio.gather(*pending, return_exceptions=True):
+            if isinstance(result, Exception):
+                failures.append(result)
+            # Cancellation or similar: propagate, don't collect
+            elif isinstance(result, BaseException):
+                raise result
+        if failures:
+            raise ExceptionGroup("Config observers failed", failures)
+
+    def remove_type(self, *names: str) -> list[Awaitable]:
+        """
+        Send entries back to `unresolved` as untyped data, keeping their values.
+        Distinct from `delete/__delattr__` which also remove the data. Notified
+        once for the whole batch; returns the async observers' coroutines.
+        """
+        changes: list[ConfigChange] = []
+        for name in names:
+            entry = (self.model_extra or {}).get(name)
+            if entry is None:
+                raise PathNotFound(type(self), name)
+            self._unresolved[name] = TypeAdapter(type(entry)).dump_python(
+                entry,
                 mode="json",
                 exclude_unset=True,
             )
-        elif name in self._unresolved:
-            # New type for untyped entry, use data from `_unresolved`
-            data = self._unresolved[name]
-        elif isinstance(model, type) and issubclass(model, BaseModel):
-            # No data available, but the type is a pydantic model,
-            #  build it from defaults (empty args)
-            data = {}
-            had_data = False
-        else:
-            # Nothing matches `name`, raise
-            raise PathNotFound(type(self), name)
-        # Build the entry before removing what it replaces: a model that refuses
-        #  the data has to leave the section exactly as it was.
-        try:
-            new_entry = TypeAdapter(model).validate_python(data)
-        except ValidationError as error:
-            # A field with no default that the data doesn't carry is a type this
-            #  data cannot build, and a caller is allowed to decide what that
-            #  means; a value the type actually refuses is the data's own error
-            #  and stays a ValidationError.
-            missing_fields = _missing_fields(error)
-            if not missing_fields:
-                raise
-            raise EntryRequiresData(model, name, missing_fields) from error
-        if current is not None:
             BaseModel.__delattr__(self, name)
-        else:
-            self._unresolved.pop(name, None)
-        BaseModel.__setattr__(self, name, new_entry)
-
-        # If the new entry was built from model defaults, unmark it
-        #  as user-set after the __setattr__ marks it as set.
-        if not had_data:
-            self.__pydantic_fields_set__.discard(name)  # a default is not user-set
-
-        notification = (
-            Created(path=name, value=new_entry)
-            if current is None
-            else Updated(path=name, before=current, after=new_entry)
-        )
-        self._notify_relatives_sync(notification)
-
-    def remove_type(self, name) -> None:
-        """
-        Send `self.name` back to `unresolved` as untyped data.
-        Distinct from `delete/__delattr__` which also remove the data.
-        """
-        entry = (self.model_extra or {}).get(name)
-        if entry is None:
-            raise PathNotFound(type(self), name)
-        self._unresolved[name] = TypeAdapter(type(entry)).dump_python(
-            entry,
-            mode="json",
-            exclude_unset=True,
-        )
-        BaseModel.__delattr__(self, name)
-        self._notify_relatives_sync(Deleted(path=name, value=entry))
+            changes.append(Deleted(path=name, value=entry))
+        return self._notify(*changes)
 
     @property
     def unresolved(self) -> list[str]:
