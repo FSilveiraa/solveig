@@ -154,9 +154,9 @@ These are not style preferences — they are the seams the codebase is built on.
   No hand-rolled argv parsing, no ambient state reach-throughs.
 
 - **One rule, one home.** Every cross-cutting concern has exactly one named seam —
-  `is_tool_enabled`/`is_hook_enabled` (enablement), `run_tool_and_hooks`
-  (execution), `open_tool_group` (auto-collapse), `_compose_section` (schema
-  composition), `to_tool_return()` (the pydantic-ai crossover). When you add a
+  `_notify`/`_observers_for` (the config's one notification step), `run_tool_and_hooks`
+  (execution), `open_tool_group` (auto-collapse), `set_type` (giving a dynamic entry
+  its type), `to_tool_return()` (the pydantic-ai crossover). When you add a
   rule, put it on the existing seam — never a second copy.
 
 - **Delegation is complete.** No residue wrappers re-implementing pydantic-ai —
@@ -197,10 +197,13 @@ These are not style preferences — they are the seams the codebase is built on.
 
 ## Config — nested pydantic-settings
 
-`SolveigConfig(BaseSettings)` (`solveig/config/config.py`) with nested sub-models in
-`config/models.py`: `api`, `system_prompt`, `tools`, `plugins`, `mcp`, `session`,
-`interface`, plus top-level `briefing`/`min_disk_space_left`/`auto_allowed_paths`/
-`ignore_paths`/`disable_autonomy`/`stream`.
+`SolveigConfig` (`solveig/config/config.py`) extends the config library's `Config`
+(`config/config.py`). Each subsystem owns its own section model next to its code —
+`solveig/api/types.py` (`ApiConfig`), `solveig/tools/core.py` (`CoreToolsConfig`),
+`solveig/plugins/config.py`, `solveig/mcp_servers/config.py`, `solveig/session/config.py`,
+`solveig/system_prompt/config.py`, `solveig/interface/config.py` — and `SolveigConfig`
+declares them as nested fields plus top-level `briefing`/`min_disk_space_left`/
+`auto_allowed_paths`/`ignore_paths`/`disable_autonomy`/`stream`.
 
 - **A section is named after the subsystem it configures, never the technology.**
   `interface.*` holds ONE SECTION PER FRONTEND — `interface.tui` (theme, code_theme,
@@ -219,21 +222,38 @@ These are not style preferences — they are the seams the codebase is built on.
   **hard break** with an explicit old→new map, checked over the loaded config's LEAF
   PATHS so a key that moved between sections (`interface.theme` →
   `interface.tui.theme`) reports the same way a pre-nesting flat key does.
-- **Runtime schema composition:** config never hand-enumerates tools.
-  `_compose_section` (`solveig/config/config.py`) builds each section; `bootstrap.py` is what
-  feeds it, because config must not import the tool or plugin packages back —
-  `compose_core_tools()` from `CORE_TOOLS`, and `compose_plugin_sections()` for
-  `config.plugins.tools`/`config.plugins.hooks`, the latter subscribed to plugin
-  discovery's `ON_SCANNED` so the schema is a REACTION to the plugin set changing,
-  not a step a caller must remember. The **two-phase bootstrap** in
-  `parse_config_and_prompt` is parse → `discover_plugins` → compose → reparse.
-  Adding a core tool == adding a plugin tool == adding a hook: config is untouched.
-- **Enablement:** `is_tool_enabled(name)` spans `tools.*` + `plugins.tools.*`;
-  `is_hook_enabled(name)` covers `plugins.hooks.*`. One rule each, consulted by both
-  the schema filter and the execution guard.
-- **PRESERVE+WARN:** the composed plugin sections use `extra="allow"` — a config block
-  for an undiscovered plugin survives in `model_extra`, round-trips `/config save`,
-  and gets a load-time warning (never silently dropped). CLI stays strict.
+- **Sections are declared, not composed.** There is no schema composer and no
+  two-phase bootstrap. Each subsystem declares its own section model; a dynamic
+  section (`plugins.tools`, `plugins.hooks`) is a `DynamicSection[EntryType]` that
+  instantiates a config block into an entry the moment the block arrives, and
+  re-types it with `set_type(name, model)` when the owning plugin's config model
+  becomes known — the section knows how to re-model and instantiate from data, so
+  nobody transcribes registries into it. Adding a core tool == adding a plugin tool
+  == adding a hook: config is untouched.
+- **The write contract:** every writer is sync and atomic. `set`/`unset`/
+  `set_type`/`remove_type` apply the value, run sync observers, and RETURN the async
+  observers' coroutines for the caller to await (`set_and_wait`/`set_type_and_wait`
+  are the library's only `async def`). Plain assignment (`section[name] = value`,
+  `__setattr__`, `__delattr__`) cannot return anything, so it pre-checks every
+  observer the change would reach and raises `AsyncObserversNotCalled` BEFORE
+  applying if any of them is async. `set_type` raises `EntryRequiresData` when an
+  entry's model cannot be built because required fields have no value in the data.
+  Access convention: `section[name]` / `section[name] = value` for a name on that
+  section; `.get(path)` / `.set(path, value)` for a dotted path that walks nested
+  sections.
+- **Enablement is per-entry `enabled`, read live at use.** `build_toolset` builds
+  the function toolset from the `config.tool_map` entries whose `enabled` is true
+  and re-filters per step (`ctx.deps.config.tool_map[name].enabled`); MCP servers
+  gate per tool via `MCPServerConfig.is_tool_allowed`; a hook's entry `enabled`
+  gates its execution. No global name registry decides this — the config entries
+  are the registry.
+- **Orphan blocks are kept, not warned into existence.** A config block for a plugin
+  that isn't (yet) discovered becomes an entry of the section's entry type —
+  visible, editable, round-trips `/config save`. A section may opt into
+  `force_preserve_extra` so the copied entry type keeps a block's surplus keys
+  until `set_type` re-validates them against the real model (without it, surplus
+  keys are refused, which is correct for a discovered plugin and lossy for a
+  not-yet-loaded one).
 - **`/config save` persists only `_declared_fields`** (explicitly set via file/CLI/
   `/config set`), tracked as dotted paths; `declared_config()` copies those leaves out
   of `model_dump`. Pass `--full`/`--all` to dump the complete config including defaults
@@ -245,11 +265,8 @@ These are not style preferences — they are the seams the codebase is built on.
   documented exception; every other file op (tools, sessions) goes through
   `utils/file.py`.
 
-### Known config gaps (carry-over, Task 10)
+### Known config quirks
 
-- **CLI phase-1 gap:** `--plugins.tools.<x>.<f>` / `--plugins.hooks.<x>.<f>` startup
-  flags fail — the strict phase-1 `CliSettingsSource` parses argv before the plugin
-  schema is composed. Env / file / `/config set` all work; core `--tools.*` works.
 - Bool flags are `--flag/--no-flag` (`cli_implicit_flags`), not `--flag false`.
 - `--mcp` → `--mcp-server` (repeatable); `--resume` requires a value (no bare ⇒ latest).
   There is no `--no-commands` sugar — use `--no-tools.command.enabled`.
@@ -266,10 +283,19 @@ Dual architecture in `solveig/plugins/`:
   `@before_tool/@after_tool(config_model=…)` or bare `ToolConfig`. Hooks target a tool
   by name and are enabled-by-default.
 
-`discover_plugins(config)` is idempotent and UI-free (folds external `plugins.paths`
-into the built-in packages, then scans); `report_plugins` renders the Plugins dialog
-list-all-mark-disabled (a disabled plugin is shown, never hidden). Discovery runs in
-the config bootstrap (phase 1) and again in `_display_setup` for reporting.
+`reload_plugins(config, interface)` (`bootstrap.py`) is the ONE path a change to the
+plugin set travels — startup, a `plugins.paths` change, and (later) `/plugins reload`
+all take it. It runs `discover_plugins(config.plugins)` (idempotent and UI-free:
+folds external `plugins.paths` into the built-in packages, imports what is on disk,
+and removes the type of an entry whose module is gone), gathers the async observers
+the typing reached, and `report_plugins` renders the Plugins dialog
+list-all-mark-disabled (a disabled plugin is shown, never hidden). Discovery must
+stay owned by `reload_plugins`: it writes config, and a sync caller could not gather
+the async observers its writes reach.
+
+The declaration mechanism is being reworked — decorators will stop writing config
+during imports and the scan will type what they declared instead. The settled shape
+and step order live in `ignore/project-logs/2026-10-17-scan-types-declared-plugins.md`.
 
 ## Interface
 
@@ -339,7 +365,7 @@ the config bootstrap (phase 1) and again in `_display_setup` for reporting.
 ## Sessions
 
 `session/manager.py` — one append-only JSONL file per session in
-`config.session.dir` (default `.solveig/sessions`): one message per line, plus a
+`config.session.path` (default `.solveig/sessions`): one message per line, plus a
 trailing `session_meta` line with the token totals. `SessionManager` is itself a
 `ConversationObserver`, so nothing has to remember to save: a finished message
 appends (O(new content)), and only the rare destructive events (an edit, a rewind)
@@ -462,7 +488,7 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   expects when it moves. The rule for paths: **what the human typed at startup means
   what it meant at startup; what the assistant types means where the assistant is.**
   So every human-configured path (`ignored_paths`, `auto_allowed_paths`,
-  `session.dir`, `briefing`, `plugins.paths`) resolves to absolute in a validator
+  `session.path`, `briefing`, `plugins.paths`) resolves to absolute in a validator
   *when set*, and only the assistant's tool arguments resolve against the current
   directory. That anchoring is load-bearing for the safety patterns, not tidiness —
   a pattern that resolved lazily would make `cd ..` an escape from an ignored
@@ -475,9 +501,8 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   over objects created later. Objects self-register their observers in `__init__`
   or `on_mount`.
 - **Seam comments explain *why*.** The load-bearing, non-obvious invariants are
-  documented at the seam (see `Conversation.adopt`'s object-identity note,
-  `compose_hook_section`'s why-it-lives-in-bootstrap note, `_thinking`'s
-  two-sites rationale). A seam comment says why the code is CORRECT — it never
+  documented at the seam (see `Conversation.adopt`'s object-identity note and
+  `_thinking`'s two-sites rationale). A seam comment says why the code is CORRECT — it never
   narrates how it got that way. Keep them accurate when you change the code.
 - **Highlighted comment prefixes** project-wide (PyCharm highlights all four).
   Each means a different thing and they are not interchangeable:
@@ -495,9 +520,10 @@ longest-prefix match, generates `/help`, self-registers as the queue's prompt ga
   Prefer fixing over annotating: a problem raised and acknowledged gets fixed
   now, not banked (see "Never bank an improper shape" in the philosophy above).
   An annotation is the floor, not the goal.
-- **Import-cycle law:** tools top-level-import `solveig.config`; config must not
-  import tools or plugins at all — `bootstrap.py` sits above both and does the
-  feeding. Respect the two-phase bootstrap ordering.
+- **Import-cycle law:** the config library (`config/`) never imports `solveig` — a
+  lint contract enforces it. Inside solveig, a subsystem declares its own config
+  section and `solveig.config.config` names those models; the layers contract in
+  `pyproject.toml` is the machine check for which way imports may point.
 - **Every module appears in the layers.** `[tool.importlinter]` carries one
   `exhaustive` layers contract per package, so a module that is not placed in a
   layer fails `just import` instead of sitting silently unchecked. A new module
