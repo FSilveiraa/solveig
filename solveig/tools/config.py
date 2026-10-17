@@ -20,16 +20,21 @@ if TYPE_CHECKING:
 #  parameters must be defined.
 class ToolConfig[T: BaseTool = BaseTool](ConfigSection):
     """Base config every tool's config extends — the universal `enabled` flag
-    (on by default), plus `tool_cls`: the class that implements this config,
+    (on by default), plus `tool_class`: the class that implements this config,
     stamped automatically by `BaseTool.__pydantic_init_subclass__` the moment a
     tool declares `BaseTool[SomeConfig]` — never set here, never repeated.
     A tool with extra settings subclasses `ToolConfig` (e.g. `HttpConfig` in
     http.py) and names it in its `BaseTool[HttpConfig]` generic argument; a
     plugin tool does the same. `build_toolset` reads `config.tools`/
-    `config.plugins.tools` alone — enabled entries' own `tool_cls` is the
-    implementation, no separate list of tool classes needed at runtime."""
+    `config.plugins.tools` alone — enabled entries' own `tool_class` is the
+    implementation, no separate list of tool classes needed at runtime.
 
-    tool_class: ClassVar[type[T]]
+    `None` means the declaring tool was never bound to this config — the entry
+    is an unowned block, config for a tool that was never discovered. It is
+    kept (it is the user's saved settings), shown by the Plugins report, and
+    every reader that needs an implementation skips it."""
+
+    tool_class: ClassVar[type[T] | None] = None
     enabled: bool = Field(default=True, description="Enable this tool")
 
     @classmethod

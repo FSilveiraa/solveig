@@ -123,7 +123,7 @@ class TestLoadAndFilterHooks:
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
-            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
+                "solveig.plugins.discovery._rescan_and_load_plugins", side_effect=fake_rescan
         ):
             errors = discover_plugins([])
 
@@ -143,7 +143,7 @@ class TestLoadAndFilterHooks:
             plugins={"hooks": {"my_hook": {}}},
         )
         with patch(
-            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
+                "solveig.plugins.discovery._rescan_and_load_plugins", side_effect=fake_rescan
         ):
             errors = discover_plugins([])
 
@@ -160,7 +160,7 @@ class TestLoadAndFilterHooks:
 
         config = SolveigConfig(cli_args=[], api={"url":"http://x","key":"k"})
         with patch(
-            "solveig.plugins.discovery.rescan_and_load_plugins", side_effect=fake_rescan
+                "solveig.plugins.discovery._rescan_and_load_plugins", side_effect=fake_rescan
         ):
             errors = discover_plugins([])
 

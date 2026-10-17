@@ -13,7 +13,8 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
-from solveig.plugins.discovery import clear_plugins, discover_plugins
+from solveig.plugins.config import PluginsConfig
+from solveig.plugins.discovery import discover_plugins
 from solveig.utils import shell
 from solveig.utils.shell import get_persistent_shell, stop_persistent_shell
 
@@ -199,19 +200,24 @@ def mock_filesystem(request):
 
 @pytest.fixture(autouse=True)
 def default_config_file():
-    """Keep `parse_config_and_prompt` hermetic against the developer's real
-    ambient config for *every* test, without touching disk.
+    """Keep the config parse hermetic against the developer's real ambient
+    config for *every* test, without touching disk.
 
-    With the nested pydantic-settings cutover, the file layer is loaded by
-    `ConfigFileSource`, which searches `sources.DEFAULT_CONFIG_SEARCH` when no
-    explicit `--config` is given. Left alone that reads the developer's real
-    `~/.config/solveig.json` (and would trip the legacy-flat-key guard). We
-    empty the default-search list for the test run so ambient config never
-    leaks in; an explicit `--config <path>` still short-circuits the search and
-    reads for real (those tests are marked `no_file_mocking`)."""
-    from config import sources
+    The file layer is loaded by the config library's `ConfigFileSource`, which
+    falls back to the `default_config_files` entry of the model's
+    `model_config` when no explicit `--config` is given. Left alone that reads
+    the developer's real `~/.solveig/config.*` (and would trip the
+    legacy-flat-key guard). We empty the default list for the test run so
+    ambient config never leaks in; an explicit `--config <path>` still
+    short-circuits the search and reads for real (those tests are marked
+    `no_file_mocking`)."""
+    from solveig.config import SolveigConfig
 
-    with patch.object(sources, "DEFAULT_CONFIG_SEARCH", []):
+    with patch.object(
+        SolveigConfig,
+        "model_config",
+        {**SolveigConfig.model_config, "default_config_files": []},
+    ):
         yield
 
 
@@ -280,7 +286,7 @@ def mock_asyncio_subprocess(request):
 
 
 @pytest.fixture
-async def load_plugins():
+def load_plugins():
     """
     Provides a factory function to load plugins for a specific test.
 
@@ -289,15 +295,20 @@ async def load_plugins():
     """
 
     # The factory function that will be yielded to the test. Takes the plugin
-    # search paths, matching discover_plugins - passing a whole config stopped
-    # working when discovery was narrowed to the one setting it uses.
+    # search paths, matching discover_plugins, which reads exactly that one
+    # setting. ASYNC, like discovery itself — the entrypoint owns the whole
+    # job (types the sections, gathers the observers, reports), so a test that
+    # registers no async config observers still sees the gather be a no-op.
+    # A MockInterface absorbs the report. Nothing needs teardown: declarations
+    # live in the scan's context, plugin modules stay in sys.modules for
+    # discovery's stale-module eviction to handle, and the registries are the
+    # config sections each test builds its own of.
+    from tests.mocks import MockInterface
+
     async def _loader(paths: list[str] | None = None):
-        discover_plugins(paths or [])
+        await discover_plugins(PluginsConfig(paths=paths or []), MockInterface())
 
     yield _loader
-
-    # Teardown: Clean up plugin state after each test
-    clear_plugins()
 
 
 @pytest.fixture

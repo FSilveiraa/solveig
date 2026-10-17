@@ -174,7 +174,10 @@ These are not style preferences — they are the seams the codebase is built on.
   (`display_header` + `ToolResult.display_content`), and the config-schema
   contributor. `config_model` is **auto-derived** from the `BaseTool[SomeConfig]`
   generic arg — declared once, never repeated. `self.settings(config)` returns the
-  tool's config statically typed.
+  tool's config statically typed. The tool binds its config by SUBSCRIPTING
+  (`BaseTool[MyConfig]` builds `MyConfig[MyTool]`), which stamps `tool_class` onto
+  the config model — the entry knows its implementation with no side-channel
+  registry, and `None` on an unbound config marks an unowned block.
 - **`tools/orchestration.py` — the single execution seam.** `run_tool_and_hooks`
   opens the call's collapsible group (`open_tool_group`, the one auto-collapse
   policy), shows the header, runs `@before_tool`/`@after_tool` plugin hooks, runs the body —
@@ -280,22 +283,34 @@ Dual architecture in `solveig/plugins/`:
 - **Hook plugins** (`plugins/hooks/`, e.g. `shellcheck.py` `@before_tool`,
   `trafilatura.py` `@after_tool`) — intercept a tool call for validation/transformation.
   A hook is a plain function; its config type comes from
-  `@before_tool/@after_tool(config_model=…)` or bare `ToolConfig`. Hooks target a tool
-  by name and are enabled-by-default.
+  `@before_tool/@after_tool(config_model=…)` or a generated `HookConfig` subclass
+  (one per bare hook, so the stamp is never shared). Hooks target tools by name and
+  are enabled-by-default.
+
+**Declaration happens at import; the config write happens after it.** A decorator
+fires inside the plugin module's import, where nothing can be awaited and errors
+would escape attribution — so it only RECORDS: `@tool` builds the tool class and
+`solveig.plugins.scan.declare` records `(name, config_model, module)` under the
+`SCAN_DECLARATIONS` context variable the scan sets around its import loop (a
+decorator finding no scan raises). After the imports, `discover_plugins` is the
+only config writer: it groups the declarations by module and calls one batched
+`set_type` per module on the section the config model belongs to (`HookConfig`
+subclass → `plugins.hooks`, anything else → `plugins.tools`), so a plugin is
+notified as a whole and a failure names its module; the returned coroutines go
+into `ScanResult.pending` for the caller to gather. The config models are stamped
+with their declarer (`ToolConfig.tool_class` from the subscript binding,
+`HookConfig.hook` from the decorator) — `None` marks an unowned block, config for
+a plugin that was never discovered: kept, shown by the report, skipped by every
+reader that needs the implementation, and adopted by `set_type` when the plugin
+arrives.
 
 `reload_plugins(config, interface)` (`bootstrap.py`) is the ONE path a change to the
 plugin set travels — startup, a `plugins.paths` change, and (later) `/plugins reload`
-all take it. It runs `discover_plugins(config.plugins)` (idempotent and UI-free:
-folds external `plugins.paths` into the built-in packages, imports what is on disk,
-and removes the type of an entry whose module is gone), gathers the async observers
-the typing reached, and `report_plugins` renders the Plugins dialog
-list-all-mark-disabled (a disabled plugin is shown, never hidden). Discovery must
-stay owned by `reload_plugins`: it writes config, and a sync caller could not gather
-the async observers its writes reach.
-
-The declaration mechanism is being reworked — decorators will stop writing config
-during imports and the scan will type what they declared instead. The settled shape
-and step order live in `ignore/project-logs/2026-10-17-scan-types-declared-plugins.md`.
+all take it. It runs `discover_plugins(config.plugins)`, gathers `scan.pending`,
+and `_report_plugins` renders the Plugins dialog list-all-mark-disabled (a disabled
+plugin is shown, never hidden). Discovery must stay owned by `reload_plugins`: it
+writes config, and a sync caller could not gather the async observers its writes
+reach.
 
 ## Interface
 

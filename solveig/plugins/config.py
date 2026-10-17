@@ -1,9 +1,9 @@
 """`plugins` — where to discover them, and a section per discovered plugin.
 
 `tools` and `hooks` are empty by declaration for the same reason `config.tools`
-is: their fields are one per discovered plugin, composed after discovery. They
-PRESERVE unknown blocks, so config for a plugin absent on this machine survives
-a `/config save` instead of being dropped.
+is: their entries are one per discovered plugin, typed by the scan that imports
+the plugin's module. They keep blocks whose plugin is absent on this machine,
+so config for one survives a `/config save` instead of being dropped.
 """
 
 from __future__ import annotations
@@ -24,30 +24,29 @@ DEFAULT_PLUGIN_PATHS: list[str] = [
 ]
 
 
-class PluginToolsConfig(DynamicSection[ToolConfig]):
+class PluginToolsConfig(DynamicSection[ToolConfig], force_preserve_extra=True):
     """
     `config.plugins.tools`: one entry per plugin tool. Each entry's type is the
-    tool's own `config_model`, known only once the plugin is discovered, so
-    entries wait as written until `resolve()` gives them their type.
+    tool's own `config_model`, known only once the plugin is discovered: until
+    then the entry is typed as `ToolConfig` itself, and the entry type's copy
+    with `extra="allow"` keeps a block's plugin-specific keys alive so
+    `set_type` can re-validate them against the real model on discovery.
     """
 
-    _types_resolved_later = True
 
-
-class PluginHooksConfig(DynamicSection[HookConfig]):
+class PluginHooksConfig(DynamicSection[HookConfig], force_preserve_extra=True):
     """
     `config.plugins.hooks`: one entry per plugin hook. Each entry's type is the
-    hook's own `config_model`, known only once the plugin is discovered, so
-    entries wait as written until `resolve()` gives them their type.
+    hook's own `config_model`, known only once the plugin is discovered: until
+    then the entry is typed as `HookConfig` itself, and the entry type's copy
+    with `extra="allow"` keeps a block's hook-specific keys alive so
+    `set_type` can re-validate them against the real model on discovery.
     """
-
-    _types_resolved_later = True
 
 
 class PluginsConfig(ConfigSection):
-    """`paths` = discovery dirs; `tools`/`hooks` = per-plugin config, both composed
-    at runtime from the discovered plugins (empty placeholders until then, same as
-    core's `config.tools`)."""
+    """`paths` = discovery dirs; `tools`/`hooks` = per-plugin config, both typed
+    by the plugin scan (empty until then, same as core's `config.tools`)."""
 
     # Directories where to discover plugins
     paths: list[str] = Field(

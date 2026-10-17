@@ -287,7 +287,7 @@ def declaring_into(store: SubcommandStore) -> Callable[..., Callable]:
     already builds a finished `Subcommand`, and it knows its store, so there is
     nothing left for a later pass to decide. A refused trigger goes out as a
     `UserWarning` — the only surface available at import, and the caller that
-    triggered the import (`reload_plugins`) is what turns it back into a
+    triggered the import (`discover_plugins`) is what turns it back into a
     displayed warning.
     """
 

@@ -152,9 +152,6 @@ layers = [
     "solveig.run",
     "solveig.bootstrap",
     "solveig.agent",
-    # Assembles what the agent may call from tools, plugins and MCP, so it sits
-    # above all three.
-    "solveig.toolset",
     "solveig.subcommands.registry",
     "solveig.session.display : solveig.session.manager : solveig.tools : solveig.mcp_servers : solveig.plugins : solveig.system_prompt : solveig.config.subcommands",
     "solveig.context : solveig.api.client",
@@ -200,7 +197,6 @@ layers = [
     "run",
     "bootstrap",
     "agent",
-    "toolset",
     "subcommands : session : tools : mcp_servers : plugins : system_prompt : config : interface : context : api : pending",
     "utils | exceptions | todo",
 ]
@@ -276,10 +272,12 @@ name = "Every solveig.plugins module is placed"
 type = "layers"
 containers = ["solveig.plugins"]
 exhaustive = true
-# `hooks : tools` (siblings that may reach each other) rather than independent:
-# plugins.tools -> tools.orchestration -> plugins.hooks is the designed round
-# trip — orchestration runs the hooks and gives plugin tools their subcommand.
-layers = ["discovery", "utils", "library", "hooks : tools : subcommands", "config"]
+# `config` names `HookConfig` and `ToolConfig`, so it sits above the modules
+# that declare them; `library` (the plugins themselves) imports the decorators,
+# and `discovery` — which types the sections — sits at the top.
+# `hooks : tools : scan` may reach each other: hooks and tools declare through
+# scan, and orchestration (outside this package) imports hooks to run them.
+layers = ["discovery", "config", "library", "hooks : tools : scan", "subcommands"]
 
 [[tool.importlinter.contracts]]
 name = "Every solveig.plugins.library module is placed"
@@ -350,7 +348,7 @@ forbidden_modules = ["solveig.api.client"]
 name = "Toolset assembly reads MCP, not the other way round"
 type = "forbidden"
 source_modules = ["solveig.mcp_servers.client"]
-forbidden_modules = ["solveig.tools", "solveig.toolset"]
+forbidden_modules = ["solveig.tools"]
 
 [[tool.importlinter.contracts]]
 name = "The config declaration doesn't import the interface protocol"

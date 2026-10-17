@@ -25,6 +25,7 @@ from solveig.interface.tui.interface import TerminalInterface
 from solveig.mcp_servers import MCP_CONNECTIONS
 from solveig.mcp_servers.client import sync_connections_with_config
 from solveig.pending.user_message_queue import UserMessageQueue
+from solveig.plugins.discovery import discover_plugins
 from solveig.session.conversation import Conversation
 from solveig.session.display import SessionDisplay
 from solveig.session.manager import SessionManager
@@ -165,7 +166,7 @@ async def _display_setup(
     # nothing before this point has read the plugin set, so the sections are
     # still filled before the first thing that needs them: the toolset built per
     # turn, and the startup prompt put into the queue just below.
-    await bootstrap.reload_plugins(config, interface)
+    await discover_plugins(config.plugins, interface)
     # MCP servers, which also need the interface for display.
     await sync_connections_with_config(config=config.mcp, interface=interface)
 
@@ -365,10 +366,8 @@ async def run_async(
         _section: ConfigSection, _changes: tuple[ConfigChange, ...]
     ) -> None:
         # `_section` is this same root config - the handler is registered on a
-        # top-level field, so the argument and the closure are one object. Taking
-        # it from the closure is what lets `reload_plugins` keep its
-        # `SolveigConfig` parameter instead of widening to `ConfigSection`.
-        await bootstrap.reload_plugins(config, interface)
+        # top-level field, so the argument and the closure are one object.
+        await discover_plugins(config.plugins, interface)
 
     loop_task = None
     try:

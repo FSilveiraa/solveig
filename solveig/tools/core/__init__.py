@@ -54,10 +54,14 @@ class CoreToolsConfig(ConfigSection):
     read: FileToolConfig[ReadTool] = Field(default_factory=FileToolConfig[ReadTool])
     write: FileToolConfig[WriteTool] = Field(default_factory=FileToolConfig[WriteTool])
     edit: FileToolConfig[EditTool] = Field(default_factory=FileToolConfig[EditTool])
-    delete: FileToolConfig[DeleteTool] = Field(default_factory=FileToolConfig[DeleteTool])
+    delete: FileToolConfig[DeleteTool] = Field(
+        default_factory=FileToolConfig[DeleteTool]
+    )
     copy: FileToolConfig[CopyTool] = Field(default_factory=FileToolConfig[CopyTool])
     move: FileToolConfig[MoveTool] = Field(default_factory=FileToolConfig[MoveTool])
-    command: CommandConfig[CommandTool] = Field(default_factory=CommandConfig[CommandTool])
+    command: CommandConfig[CommandTool] = Field(
+        default_factory=CommandConfig[CommandTool]
+    )
     http: HttpConfig[HttpTool] = Field(default_factory=HttpConfig[HttpTool])
     todo: ToolConfig[TodoTool] = Field(default_factory=ToolConfig[TodoTool])
 
@@ -67,7 +71,11 @@ class CoreToolsConfig(ConfigSection):
 #  especially for dynamic sections where it's structurally implied
 #  their entries are kv mappings. However this is schema, not instance.
 for field in CoreToolsConfig.model_fields.values():
-    if (subcommand := tool_subcommand(field.annotation.tool_class)) is not None:
+    # Every field above is parametrized, so `tool_class` is stamped — the None
+    #  branch is for mypy (and would mean a tool forgot its generic argument).
+    if (tool_cls := field.annotation.tool_class) is not None and (
+        subcommand := tool_subcommand(tool_cls)
+    ) is not None:
         for _refused in SUBCOMMANDS.add(CORE_TOOL_SUBCOMMANDS, subcommand):
             warnings.warn(_refused, stacklevel=2)
 

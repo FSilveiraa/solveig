@@ -1,16 +1,16 @@
-"""
-Registry for dynamically discovered plugin tools.
+"""Plugin tool declaration.
 
 Exposes an `@tool` decorator that accepts both BaseTool subclasses and
-plain callables.
-
-PLUGIN_TOOLS is the current list of known plugin tools.
-"""
+plain callables. The decorator only DECLARES — it builds the tool class and
+records `(name, config_model, module)` for the scan that imported this module,
+which is what types the `plugins.tools` entry after the imports. It never
+touches the config: an import cannot await the observers a write would reach,
+and the scan types once per plugin instead of once per decorator."""
 
 from collections.abc import Callable
 from typing import Any, overload
 
-from solveig.plugins.discovery import PENDING_NOTIFICATIONS, PLUGIN_TARGETS
+from solveig.plugins.scan import declare
 from solveig.tools.base import BaseTool, tool_from_callable
 from solveig.tools.config import ToolConfig
 
@@ -24,12 +24,14 @@ def tool(
     *, config_model: type[ToolConfig]
 ) -> Callable[[Callable[..., Any]], type[BaseTool]]: ...
 def tool(entry=None, *, config_model=None):
-    """Register a plugin tool into `PLUGIN_TOOLS`. Usable bare (`@tool`) or with a
-    config type (`@tool(config_model=MyConfig)`).
+    """Declare a plugin tool. Usable bare (`@tool`) or with a config type
+    (`@tool(config_model=MyConfig)`).
 
-    A `BaseTool` subclass already carries its own `config_model` and registers as
-    it is. A plain callable is built into a tool class by `tool_from_callable`,
-    which also owns which config type a callable gets when none is named here."""
+    A `BaseTool` subclass already carries its own `config_model` and declares
+    as it is. A plain callable is built into a tool class by
+    `tool_from_callable`, which also owns which config type a callable gets
+    when none is named here. The `plugins.tools` entry itself is typed by the
+    scan, after every plugin module has been imported."""
 
     def register(tool_class: type[BaseTool] | Callable[..., Any]) -> type[BaseTool]:
         # Tools are callables, so check if it's a plain method by checking
@@ -42,21 +44,9 @@ def tool(entry=None, *, config_model=None):
                 else tool_from_callable(tool_class, config_model)
             )
 
-        if (plugins_config := PLUGIN_TARGETS.get()) is None:
-            # NOTE: this can't happen, and it's an example of why
-            # PLUGIN_TARGETS may be a bad design
-            raise RuntimeError(
-                f"{tool_class.tool_name()!r} declared outside a plugin scan"
-            )
-        else:
-            # Type `my_tool: MyToolConfig` in the plugin tools config. The typing
-            #  may reach async observers, which an import cannot await, so the
-            #  coroutines land in `PENDING_NOTIFICATIONS` for the scan to drain.
-            PENDING_NOTIFICATIONS.extend(
-                plugins_config.tools.set_type(
-                    tool_class.tool_name(), tool_class.config_model
-                )
-            )
+        # The recording raises `RuntimeError` when no scan is running — there
+        #  would be no scan to type the entry with.
+        declare(tool_class.tool_name(), tool_class.config_model, tool_class.__module__)
         return tool_class
 
     return register(entry) if entry is not None else register

@@ -66,8 +66,8 @@ async def shellcheck(
     NOTE: Windows/PowerShell support is untested.
     """
     command_str = tool_args["command"]
-    # Any-style read of this hook's own typed config section (keyed by the hook's
-    # __name__), handed to config.plugins.hooks by `bootstrap.compose_hook_section`.
+    # Any-style read of this hook's own typed config entry (keyed by the hook's
+    # __name__), typed by the plugin scan from what the decorator declared.
 
     if is_obviously_dangerous(command_str):
         raise SecurityError(f"Command contains dangerous pattern: {command_str}")

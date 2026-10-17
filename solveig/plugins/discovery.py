@@ -1,11 +1,21 @@
-"""Finding plugins, and saying what was found.
+"""Finding plugins, typing what they declare, and saying what was found.
 
-`discover_plugins(plugins_config)` imports whatever is on disk and fills the
-plugin sections of that config: `@tool` types its own entry while its module is
-imported, and the scan removes the type of an entry whose file is gone. It is
-UI-free and synchronous, so it can run wherever the plugin set has to be settled.
-`report_plugins(config.plugins, interface, scan)` renders the outcome in the
-Plugins dialog, taking the scan's result rather than re-reading a module global.
+`discover_plugins(plugins_config, interface)` is the ONE path a change to the
+plugin set travels — startup, a `plugins.paths` change, and (later)
+`/plugins reload` all take it. It is `async`, and it owns the whole job: it
+imports whatever is on disk, types the plugin sections of that config, gathers
+the async observers its writes reached, and reports the outcome. The import
+itself writes nothing — the decorators record their declarations (name, config
+model, module) under `solveig.plugins.scan.SCAN_DECLARATIONS`, and after the
+imports this module types the sections, one batched `set_type` per plugin
+module, so a failure is attributable to the plugin that caused it and a plugin
+is notified as a whole. It also removes the type of an entry whose file is
+gone.
+
+The entrypoint being `async` is what makes the observer contract structural:
+discovery writes to the config, and a write that reaches an async observer
+needs a context that can await — there is no sync caller to get this wrong,
+and a forgotten `await` is Python's own `RuntimeWarning`.
 
 NOTE: this is a real module rather than the package `__init__`, which is empty.
 An `__init__` runs whenever anything under it is imported, so re-exporting here
@@ -13,75 +23,36 @@ would put `plugins.tools` in front of `plugins.hooks` for every importer —
 including `orchestration`, which `plugins.tools` imports back for `@tool`.
 """
 
+import asyncio
 import importlib
 import os
 import pkgutil
 import sys
 import warnings
-from collections.abc import Awaitable, Callable
-from contextvars import ContextVar
-from dataclasses import dataclass, field
+from collections.abc import Awaitable
 
 from solveig.interface.base import Level, SolveigInterface
+from solveig.plugins.scan import SCAN_DECLARATIONS
 
 from .config import PluginsConfig
-from .hooks import clear_hooks
+from .hooks import HookConfig
 
 #: The one package the scan walks. External dirs are folded into its `__path__`,
 #: so a bundled and an external plugin are indistinguishable from here on.
 PLUGIN_PACKAGE = "solveig.plugins.library"
 
 
-@dataclass
-class ScanResult:
-    """What a scan produced: the modules that failed to import, and the
-    declarations it refused.
-
-    Returned to the caller rather than parked in a module global. A scan and the
-    report that renders it happen in the same call now, so the errors have
-    somewhere to go at the time they exist — and nobody has to remember that a
-    module-level store is holding the previous scan's worth.
-
-    `errors` are modules that failed to import. `collisions` are refused
-    declarations - a plugin claiming a trigger another store already holds -
-    which arrive as warnings from inside the import, the only channel available
-    there. They are kept apart: a refused trigger is not a failure to load, and
-    rendering it as one misreports a working plugin.
-    """
-
-    errors: list[str] = field(default_factory=list)
-    collisions: list[str] = field(default_factory=list)
-    # The async observers' coroutines the scan's config writes reached. An import
-    #  cannot await them, so the scan collects and its async caller gathers.
-    pending: list[Awaitable] = field(default_factory=list)
-
-
-#: Fired once per scan, after the registries are refilled. Plain callables, so
-#: this module needs to know nothing about its subscribers - the doorbell
-#: pattern `UserMessageQueue.on_change` already uses.
-
-# TODO: fully unused, config should be SSOT, review+remove
-#: Batched BY CONSTRUCTION: the notification lives on the scan, not on each
-#: registration, because a scan is the only thing that changes the plugin set.
-#: Firing per registration would make each subscriber's work quadratic - one
-#: full `model_rebuild` per hook over a growing field set, measured at 3.4s for
-#: 200 hooks - and the registry could not stop a subscriber holding it wrong.
-ON_SCANNED: list[Callable[[], None]] = []
-
-PLUGIN_TARGETS: ContextVar[PluginsConfig | None] = ContextVar(
-    "plugin_scan_targets", default=None
-)
-
-# The async observers' coroutines that declarations produced while the scan ran.
-#  A decorator fires inside the plugin module's import, where nothing can be
-#  awaited, so `set_type`'s return lands here and `rescan_and_load_plugins`
-#  drains it into the `ScanResult` its async caller gathers.
-PENDING_NOTIFICATIONS: list[Awaitable] = []
-
-
-def rescan_and_load_plugins(
+def _rescan_and_load_plugins(
     plugins_config: PluginsConfig, plugin_module_path: str = "solveig.plugins.library"
-) -> tuple[int, int, list[str], set[str] | None, list[Awaitable]]:
+) -> tuple[int, int, list[str], set[str] | None, dict]:
+    """Import every module on disk under `plugin_module_path`, collecting what
+    their decorators declare.
+
+    Writes no config: the declarations come back as a `dict[name ->
+    PluginDeclaration]` for the caller (`discover_plugins`) to type the
+    sections with, grouped however it likes. The scan's context is set around
+    the import loop only — a decorator outside it is an error, because there
+    would be no scan to type the entry with."""
     # 1. Add external plugin dirs to the process context so the scan can find them
     import solveig.plugins.library as library
 
@@ -109,7 +80,7 @@ def rescan_and_load_plugins(
             0,
             [f"Plugin discovery path not found: {plugin_module_path}"],
             None,
-            [],
+            {},
         )
 
     # 3. Find all relevant modules already in memory.
@@ -122,9 +93,10 @@ def rescan_and_load_plugins(
     for module_name in modules_to_unload:
         del sys.modules[module_name]
 
-    # 5. Iterate through what's on disk and sync memory.
-    #  What these imports declare lands on `TARGETS`, for as long as they run.
-    token = PLUGIN_TARGETS.set(plugins_config)
+    # 5. Iterate through what's on disk and sync memory. What these imports
+    #  declare lands on the scan's context, for as long as they run.
+    declarations: dict = {}
+    token = SCAN_DECLARATIONS.set(declarations)
     try:
         for module_name in on_disk_modules:
             try:
@@ -141,93 +113,136 @@ def rescan_and_load_plugins(
                 )
                 failed += 1
     finally:
-        PLUGIN_TARGETS.reset(token)
+        SCAN_DECLARATIONS.reset(token)
 
-    pending = PENDING_NOTIFICATIONS.copy()
-    PENDING_NOTIFICATIONS.clear()
-    return succeeded, failed, errors, on_disk_modules, pending
+    return succeeded, failed, errors, on_disk_modules, declarations
 
 
-def discover_plugins(plugins_config: PluginsConfig) -> ScanResult:
-    """Load every plugin into the registries it declares into — idempotent and
-    UI-free. Folds the external dirs in `paths` into the library package first,
-    then scans it once. Returns a `ScanResult` for the caller to surface (via
-    `report_plugins`); kept reporting-free so the caller can decide when the
-    interface is ready to draw.
+async def discover_plugins(
+    plugins_config: PluginsConfig, interface: SolveigInterface
+) -> None:
+    """The ONE path a change to the plugin set travels — startup, a
+    `plugins.paths` change, and (later) `/plugins reload` all take it.
+
+    Discovery alone was never the whole job: whoever ran it also had to await
+    the async observers its writes reached and render the report, and each call
+    site had to remember a different subset. That is the fetch → check → act
+    shape this project is written against, so the obligations live here — the
+    same argument that makes `Conversation.load()` fire the events a live turn
+    fires. Folding them in is also what makes the async-observer contract
+    structural: an entrypoint that must be awaited cannot be called from a
+    context that cannot await, so there is no sync caller for a config write to
+    strand coroutines with.
 
     ONE scan, not one per surface. A plugin declares tools, hooks and
     subcommands with decorators, and a decorator does not care where the file
     sits — so scanning per surface only meant a plugin wanting two of them had
     to be two files, imported by two passes and cleared by two calls.
 
-    Every registry is emptied before the scan, never inside a loader: the scan
-    re-imports each module and every decorator fires again, so anything left
-    behind would be a duplicate.
-
-    NOTE: takes the paths, NOT the config. Discovery needs exactly this one
-    list, and asking for the whole config meant startup had to build a config
-    before the plugin schema existed, hand it over, then throw it away and build
-    a second one — leaving a discarded object that looked usable. Narrowing the
-    signature is what lets `SolveigConfig` be built once, fully composed.
-    """
-    # TODO: get rid of this. The SSOT is the config, everything derives from altering it.
-    #  Plugin tools no longer have `clear` method, subcommands don't use theirs at all,
-    #  hooks will follow to also not have it.
-    clear_hooks()
+    NOTE: takes the plugin section, NOT the whole config. Discovery needs
+    exactly the plugin settings, and asking for the whole config meant startup
+    had to build a config before the plugin schema existed, hand it over, then
+    throw it away and build a second one — leaving a discarded object that
+    looked usable. Narrowing the signature is what lets `SolveigConfig` be
+    built once."""
     # A refused declaration warns from inside the import - caught here rather
     # than by a caller, so every scan records it whether or not anyone is
     # listening yet.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _succeeded, _failed, errors, on_disk_modules, scan_pending = (
-            rescan_and_load_plugins(plugins_config)
+        _succeeded, _failed, errors, on_disk_modules, declarations = (
+            _rescan_and_load_plugins(plugins_config)
         )
 
-    scan = ScanResult(
-        errors=errors, collisions=[str(w.message) for w in caught], pending=scan_pending
-    )
+    collisions = [str(w.message) for w in caught or []]
+
+    # Type the declared entries: one batched `set_type` per plugin module, so a
+    # plugin is notified as a whole and a failure names the module it came
+    # from (the declaration carried it; the write no longer runs inside the
+    # import, where that attribution was free). Earlier entries of a failing
+    # module stay applied, like a `set` whose later path fails.
+    #
+    # The config model's own base says which section an entry belongs to — a
+    # `HookConfig` subclass is a hook, anything else is a tool — so the scan
+    # routes without the decorator having to name a section.
+    tools_by_module: dict[str, dict[str, type]] = {}
+    hooks_by_module: dict[str, dict[str, type]] = {}
+    for declaration in declarations.values():
+        by_module = (
+            hooks_by_module
+            if issubclass(declaration.config_model, HookConfig)
+            else tools_by_module
+        )
+        by_module.setdefault(declaration.module, {})[declaration.name] = (
+            declaration.config_model
+        )
+    pending: list[Awaitable] = []
+    for section, by_module in (
+        (plugins_config.tools, tools_by_module),
+        (plugins_config.hooks, hooks_by_module),
+    ):
+        for module, types in by_module.items():
+            try:
+                pending.extend(section.set_type(**types))
+            except Exception as error:
+                errors.append(
+                    f"Plugin module {module} failed to type its entries: {error}"
+                )
 
     # An entry whose file is gone keeps its value and loses its type.
     # `tool_class` is the class the plugin file defined, so its `__module__`
-    # is that file, and the scan just listed which files still exist.
-    # A None list means the scan never ran (the package is not importable) - that
-    #  is not an empty one, and only an empty one means every plugin is gone.
-    # NOTE: wrap the dict iteration in a list since we call `remove_type`
-    #  which alters the thing being iterated
+    # is that file, and the scan just listed which files still exist. An entry
+    # with no `tool_class` is an unowned block — config for a tool that was
+    # never discovered — and belongs to nothing on disk: kept until its tool
+    # appears. A None module set means the scan never ran (the package is not
+    # importable) - that is not an empty one, and only an empty one means every
+    # plugin is gone.
     if on_disk_modules is not None:
-        gone = [
+        # NOTE: wrap the section iteration in a list, since `remove_type`
+        #  alters the thing being iterated
+        tool_gone = [
             name
             for name, entry in list((plugins_config.tools.model_extra or {}).items())
-            if entry.tool_class.__module__ not in on_disk_modules
+            if entry.tool_class and entry.tool_class.__module__ not in on_disk_modules
         ]
-        if gone:
-            scan.pending.extend(plugins_config.tools.remove_type(*gone))
+        # A hook wrapper stores the plugin file it came from as `module`
+        #  (its class lives in `plugins.hooks`, so `__module__` would lie).
+        hook_gone = [
+            name
+            for name, entry in list((plugins_config.hooks.model_extra or {}).items())
+            if entry.hook and entry.hook.module not in on_disk_modules
+        ]
+        if tool_gone:
+            pending.extend(plugins_config.tools.remove_type(*tool_gone))
+        if hook_gone:
+            pending.extend(plugins_config.hooks.remove_type(*hook_gone))
 
-    # Whatever derives from the plugin set updates itself now, before anything
-    # can read a stale derivation. The config schema is the one that matters:
-    # a config built against an un-recomposed schema silently hands back a raw
-    # dict for a plugin's section instead of its typed model.
-    for subscriber in ON_SCANNED:
-        subscriber()
-    return scan
+    # Whatever the writes reached runs before anything can read a half-updated
+    #  derivation; the report follows, so what it renders is post-observer.
+    if pending:
+        await asyncio.gather(*pending)
+    await _report_plugins(plugins_config, interface, errors, collisions)
 
 
-async def report_plugins(
-    plugins_config: PluginsConfig, interface: SolveigInterface, scan: ScanResult
+async def _report_plugins(
+    plugins_config: PluginsConfig,
+    interface: SolveigInterface,
+    errors: list[str],
+    collisions: list[str],
 ) -> None:
     """Render discovered plugins in the Plugins dialog: every discovered tool is
     listed, a config-disabled one marked rather than hidden (list-all-mark-disabled),
     so a disabled plugin is visible instead of looking un-discovered. Any discovery
     errors surface first.
 
-    `scan` is passed in rather than read off a module global: it is the result of
-    the scan that filled the sections this renders, and the caller that ran it is
-    the caller that has it."""
+    Private to this module: `discover_plugins` is the one caller, and the lists
+    it passes are the ones this same call produced — nothing travels farther
+    than the function boundary that created them."""
     async with interface.with_group("Plugins") as group:
-        for error in scan.errors:
+        for error in errors:
             await group.print(error, level=Level.ERROR)
         # A refused trigger is not a failed load, so it is a warning, not an error.
-        for collision in scan.collisions:
+        for collision in collisions:
             await group.print(collision, level=Level.WARNING)
 
         async with group.with_group("Tools") as tools_group:
@@ -268,4 +283,4 @@ async def report_plugins(
                 )
 
 
-__all__ = ["discover_plugins", "report_plugins", "PLUGIN_TARGETS"]
+__all__ = ["discover_plugins"]

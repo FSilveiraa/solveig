@@ -31,7 +31,7 @@ class SolveigConfig(Config):
     model_config = ConfigDict(
         env_prefix="SOLVEIG_",
         cli_shortcuts={"config_files": ["c", "config"]},
-        default_config_files = [
+        default_config_files=[
             f"{base}.{extension}"
             for base in ("~/.solveig/config", "./.solveig/config")
             for extension in FILE_EXTENSIONS
@@ -53,8 +53,7 @@ class SolveigConfig(Config):
         description="Markdown files appended to the system prompt in order",
     )
     minimum_disk_space_left: Annotated[
-        ByteSize,
-        PlainSerializer(lambda v: v.human_readable())
+        ByteSize, PlainSerializer(lambda v: v.human_readable())
     ] = Field(
         default=ByteSize(1024**3),  # 1 GiB
         description="Minimum free disk space before blocking writes",
@@ -108,17 +107,13 @@ class SolveigConfig(Config):
         precedence file. This validator re-reads the config files and
         merges their plugin paths.
         """
-        plugin_paths = set()
+        plugin_paths = set(self.plugins.paths)
         for path in self.config_files:
             config_file = anyconfig.load(path)
             if isinstance(config_file, dict):
-                for plugins_path in (
-                        config_file
-                        .get("plugins", {})
-                        .get("paths", [])
-                ):
+                for plugins_path in config_file.get("plugins", {}).get("paths", []):
                     plugin_paths.add(plugins_path)
-        self.plugins.paths = list(plugin_paths)
+        self.plugins.paths = sorted(plugin_paths)
         return self
 
     @property

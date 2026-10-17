@@ -109,21 +109,19 @@ async def run_tool_and_hooks(
         # prompt appears with the operation already visible above it.
         await tool.display_header(group)
 
-        # Hooks are enabled-by-default; a hook disabled via plugins.hooks.<name>.
-        # enabled=false is skipped here (the one gate, parallel to is_tool_enabled).
-        # TODO: read from config
-        for before_hook in hooks_for(HookKind.BEFORE_TOOL, tool_name):
-            hook_config = config.plugins.hooks.get(before_hook.name)
-            if hook_config.enabled:
-                await before_hook(tool.model_dump(), hook_config, group)
+        # `hooks_for` filters the config section itself, so an entry's own
+        #  `enabled` gate is applied there — one gate, not one here plus one.
+        for before_hook, hook_config in hooks_for(
+            config.plugins.hooks, HookKind.BEFORE_TOOL, tool_name
+        ):
+            await before_hook(tool.model_dump(), hook_config, group)
 
         result = await tool.execute(tool_config, group)
 
-        # TODO: read from config
-        for after_hook in hooks_for(HookKind.AFTER_TOOL, tool_name):
-            hook_config = config.plugins.hooks.get(after_hook.name)
-            if hook_config.enabled:
-                result = await after_hook(result, hook_config, group)
+        for after_hook, hook_config in hooks_for(
+            config.plugins.hooks, HookKind.AFTER_TOOL, tool_name
+        ):
+            result = await after_hook(result, hook_config, group)
         return result
 
 

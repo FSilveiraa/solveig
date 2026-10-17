@@ -6,71 +6,21 @@ section, never what goes in one.
 
 The one ordering rule: a plugin's config model cannot exist until the plugin has
 been imported. So the config is built from the sources first (`plugins.paths`
-among them), and `reload_plugins` then imports whatever is on disk and hands
-those models to the plugin sections.
+among them), and `discover_plugins` then imports whatever is on disk and types
+the plugin sections.
 """
 
 from __future__ import annotations
 
-import asyncio
 import warnings
-from collections.abc import Awaitable
 
 from config import ConfigChange, ConfigSection, Created, Deleted, Updated
 from solveig.config import SolveigConfig
 from solveig.config.subcommands import prompt_for_field
 from solveig.exceptions import UserCancel
 from solveig.interface.base import SolveigInterface, Stat
-from solveig.plugins.discovery import discover_plugins, report_plugins
-from solveig.plugins.hooks import hooks_config_map
 from solveig.subcommands.base import PLUGIN_SUBCOMMANDS, SUBCOMMANDS
 from solveig.tools.orchestration import tool_subcommand
-
-
-async def reload_plugins(config: SolveigConfig, interface: SolveigInterface) -> None:
-    """The ONE path a change to the plugin set travels — startup, a
-    `plugins.paths` change, and (later) `/plugins reload` all take it.
-
-    Discovery alone was never the whole job: whoever called it also had to
-    recompose the config sections and render the report, and each call site had
-    to remember a different subset. That is the fetch → check → act shape this
-    project is written against, so the obligations live here instead — the same
-    argument that makes `Conversation.load()` fire the events a live turn fires.
-
-    A reload reloads EVERYTHING plugin-related: `rescan_and_load_plugins` evicts
-    deleted modules and re-imports changed ones, so working out which file moved
-    would buy nothing a full rescan doesn't already give.
-    """
-    scan = discover_plugins(config.plugins)
-    pending = [*compose_hook_section(config), *scan.pending]
-    if pending:
-        await asyncio.gather(*pending)
-    await report_plugins(config.plugins, interface, scan)
-
-
-def compose_hook_section(config: SolveigConfig) -> list[Awaitable]:
-    """Give `plugins.hooks` the types the discovered hooks provide.
-
-    The private step of `reload_plugins`, so `discover_plugins` has already run —
-    this only says which types exist. Tools need no equivalent: `@tool` types its
-    own entry while the scan imports it, and the scan removes the type of a tool
-    whose file is gone. Hooks are the other way round — they stay plain
-    callables in `HOOKS`, and `hooks_config_map` is what says which of them exist.
-
-    Returns the async observers' coroutines the re-typing reaches, for the async
-    caller to gather.
-
-    NOTE: it lives here, above config and plugins both, because config must not
-    import the plugin packages to learn what fills its own sections.
-    """
-    pending: list[Awaitable] = []
-    live_hooks = hooks_config_map()
-    # One notification for the whole re-type, like `set` gives a batch of writes.
-    pending.extend(config.plugins.hooks.set_type(**dict(live_hooks)))
-    gone = [name for name, _ in list(config.plugins.hooks) if name not in live_hooks]
-    if gone:
-        pending.extend(config.plugins.hooks.remove_type(*gone))
-    return pending
 
 
 def register_config_stat(
@@ -129,7 +79,7 @@ def register_plugin_tool_subcommand_observer(config: SolveigConfig) -> None:
     def _add_subcommand(tool_cls):
         if (sub := tool_subcommand(tool_cls)) is not None:
             for refused in SUBCOMMANDS.add(PLUGIN_SUBCOMMANDS, sub):
-                warnings.warn(refused)
+                warnings.warn(refused, stacklevel=2)
 
     def _delete_subcommand(tool_cls):
         for trigger in tool_cls.subcommands:
@@ -141,10 +91,16 @@ def register_plugin_tool_subcommand_observer(config: SolveigConfig) -> None:
     ) -> None:
         for change in changes:
             match change:
-                case Created(value=entry):
+                # An entry with no `tool_class` is an unowned block — config
+                #  for a tool that was never discovered. It offers no
+                #  `/command`; when its tool arrives, the `Updated` that
+                #  re-types it registers one.
+                case Created(value=entry) if entry.tool_class is not None:
                     _add_subcommand(entry.tool_class)
                 case Updated(before=old, after=new):
-                    _delete_subcommand(old.tool_class)
-                    _add_subcommand(new.tool_class)
-                case Deleted(value=entry):
+                    if old.tool_class is not None:
+                        _delete_subcommand(old.tool_class)
+                    if new.tool_class is not None:
+                        _add_subcommand(new.tool_class)
+                case Deleted(value=entry) if entry.tool_class is not None:
                     _delete_subcommand(entry.tool_class)

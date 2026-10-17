@@ -37,7 +37,7 @@ class TestToolPluginFiltering:
             cli_args=[], api={"url": "http://x", "key": "k"}
         )
         with patch(
-            "solveig.plugins.discovery.rescan_and_load_plugins",
+                "solveig.plugins.discovery._rescan_and_load_plugins",
             side_effect=fake_rescan,
         ):
             discover_plugins([])
@@ -60,7 +60,7 @@ class TestToolPluginFiltering:
             cli_args=[], api={"url": "http://x", "key": "k"}
         )
         with patch(
-            "solveig.plugins.discovery.rescan_and_load_plugins",
+                "solveig.plugins.discovery._rescan_and_load_plugins",
             side_effect=fake_rescan,
         ):
             discover_plugins([])
